@@ -43,7 +43,7 @@ def _clone_grad_value(value: Any) -> Any:
 
 @dataclass
 class GradFnLog:
-    """Metadata and runtime passes for one autograd ``grad_fn`` node."""
+    """Metadata and runtime ops for one autograd ``grad_fn`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "grad_fn_id": FieldPolicy.KEEP,
@@ -54,10 +54,10 @@ class GradFnLog:
         "grad_fn_type": FieldPolicy.KEEP,
         "grad_fn_type_num": FieldPolicy.KEEP,
         "grad_fn_total_num": FieldPolicy.KEEP,
-        "is_intervening": FieldPolicy.KEEP,
-        "corresponding_layer": FieldPolicy.KEEP,
+        "has_op": FieldPolicy.KEEP,
+        "op": FieldPolicy.KEEP,
         "next_grad_fn_ids": FieldPolicy.KEEP,
-        "passes": FieldPolicy.KEEP,
+        "ops": FieldPolicy.KEEP,
     }
 
     grad_fn_id: int
@@ -68,10 +68,10 @@ class GradFnLog:
     grad_fn_type: str
     grad_fn_type_num: int
     grad_fn_total_num: int
-    is_intervening: bool = True
-    corresponding_layer: "LayerLog | None" = None
+    has_op: bool = True
+    op: "LayerLog | None" = None
     next_grad_fn_ids: list[int] = field(default_factory=list)
-    passes: dict[int, GradFnCallLog] = field(default_factory=dict)
+    ops: dict[int, GradFnCallLog] = field(default_factory=dict)
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -88,20 +88,20 @@ class GradFnLog:
             state,
             defaults={
                 "next_grad_fn_ids": [],
-                "passes": {},
+                "ops": {},
             },
         )
         self.__dict__.update(state)
 
     @property
-    def num_passes(self) -> int:
-        """Number of times this grad_fn has executed during captured backward passes."""
-        return len(self.passes)
+    def num_calls(self) -> int:
+        """Number of times this grad_fn has executed during captured backward ops."""
+        return len(self.ops)
 
     @property
-    def pass_labels(self) -> list[str]:
+    def call_labels(self) -> list[str]:
         """Pass-qualified labels for this grad_fn."""
-        return [f"{self.label}:{pass_num}" for pass_num in self.passes]
+        return [f"{self.label}:{call_index}" for call_index in self.ops]
 
     def log_pass(self, grad_inputs: Any, grad_outputs: Any, timestamp: float) -> None:
         """Append one runtime hook firing to this grad_fn log.
@@ -115,9 +115,9 @@ class GradFnLog:
         timestamp:
             Wall-clock time when the hook fired.
         """
-        pass_num = len(self.passes) + 1
-        self.passes[pass_num] = GradFnCallLog(
-            pass_num=pass_num,
+        call_index = len(self.ops) + 1
+        self.ops[call_index] = GradFnCallLog(
+            call_index=call_index,
             grad_inputs=_clone_grad_value(grad_inputs),
             grad_outputs=_clone_grad_value(grad_outputs),
             time_started=timestamp,
@@ -184,8 +184,8 @@ class GradFnAccessor:
             base, _, pass_str = key.rpartition(":")
             if base in self._dict:
                 try:
-                    pass_num = int(pass_str)
-                    return self._dict[base].passes[pass_num]
+                    call_index = int(pass_str)
+                    return self._dict[base].ops[call_index]
                 except (ValueError, KeyError):
                     pass
         matches = [grad_fn for grad_fn in self._list if key in grad_fn.label]
@@ -205,7 +205,7 @@ class GradFnAccessor:
             base, _, pass_str = key.rpartition(":")
             if base in self._dict:
                 try:
-                    return int(pass_str) in self._dict[base].passes
+                    return int(pass_str) in self._dict[base].ops
                 except ValueError:
                     return False
         return any(key in grad_fn.label for grad_fn in self._list)
@@ -224,7 +224,7 @@ class GradFnAccessor:
             return "GradFnAccessor({})"
         items = [
             f"  '{grad_fn.label}': {grad_fn.name} "
-            f"(passes={grad_fn.num_passes}, intervening={grad_fn.is_intervening})"
+            f"(ops={grad_fn.num_calls}, intervening={grad_fn.has_op})"
             for grad_fn in self._list
         ]
         return f"GradFnAccessor({len(self)} grad_fns):\n" + "\n".join(items)

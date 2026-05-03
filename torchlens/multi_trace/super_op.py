@@ -12,7 +12,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only
     from ..data_classes.op_log import OpLog
     from .topology import SupergraphNode
 
-_TENSOR_FIELD_LITERAL = Literal["activation", "gradient"]
+_TENSOR_FIELD_LITERAL = Literal["out", "grad"]
 
 
 class SuperOp:
@@ -62,7 +62,7 @@ class SuperOp:
 
     @classmethod
     def from_members(cls, query: Any, members: dict[str, "OpLog"]) -> "SuperOp":
-        """Build a SuperOp from resolved member layer passes.
+        """Build a SuperOp from resolved member layer ops.
 
         Parameters
         ----------
@@ -170,7 +170,7 @@ class SuperOp:
         if self._node is not None:
             return self._node.module_path
         first = next(iter(self._members.values()), None)
-        module = None if first is None else getattr(first, "containing_module", None)
+        module = None if first is None else getattr(first, "module", None)
         return None if module is None else str(module)
 
     @property
@@ -186,7 +186,7 @@ class SuperOp:
         shapes = {
             self._shape_excluding_batch(layer)
             for layer in self._members.values()
-            if getattr(layer, "tensor_shape", None) is not None
+            if getattr(layer, "shape", None) is not None
         }
         if len(shapes) > 1:
             raise ValueError(
@@ -196,32 +196,32 @@ class SuperOp:
         return next(iter(shapes), ())
 
     @property
-    def activations(self) -> dict[str, torch.Tensor | None]:
-        """Return activation tensors keyed by member name.
+    def outs(self) -> dict[str, torch.Tensor | None]:
+        """Return out tensors keyed by member name.
 
         Returns
         -------
         dict[str, torch.Tensor | None]
-            Per-member activations.
+            Per-member outs.
         """
 
-        return self._tensor_dict("activation")
+        return self._tensor_dict("out")
 
     @property
-    def gradients(self) -> dict[str, torch.Tensor | None]:
-        """Return gradient tensors keyed by member name.
+    def grads(self) -> dict[str, torch.Tensor | None]:
+        """Return grad tensors keyed by member name.
 
         Returns
         -------
         dict[str, torch.Tensor | None]
-            Per-member gradients.
+            Per-member grads.
         """
 
-        return self._tensor_dict("gradient")
+        return self._tensor_dict("grad")
 
     @property
-    def activation(self) -> torch.Tensor:
-        """Return a stacked activation tensor.
+    def out(self) -> torch.Tensor:
+        """Return a stacked out tensor.
 
         Returns
         -------
@@ -229,11 +229,11 @@ class SuperOp:
             Activations concatenated along batch dimension when possible.
         """
 
-        return self._stacked("activation")
+        return self._stacked("out")
 
     @property
-    def gradient(self) -> torch.Tensor:
-        """Return a stacked gradient tensor.
+    def grad(self) -> torch.Tensor:
+        """Return a stacked grad tensor.
 
         Returns
         -------
@@ -241,13 +241,13 @@ class SuperOp:
             Gradients concatenated along batch dimension when possible.
         """
 
-        return self._stacked("gradient")
+        return self._stacked("grad")
 
     def diff(
         self,
         other: str | None = None,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
-        on: _TENSOR_FIELD_LITERAL = "activation",
+        on: _TENSOR_FIELD_LITERAL = "out",
     ) -> torch.Tensor:
         """Return pairwise distances between member tensors at this node.
 
@@ -282,7 +282,7 @@ class SuperOp:
     def aggregate(
         self,
         statistic: Literal["mean", "std", "var", "norm"] = "mean",
-        on: _TENSOR_FIELD_LITERAL = "activation",
+        on: _TENSOR_FIELD_LITERAL = "out",
     ) -> torch.Tensor:
         """Aggregate member tensors at this node.
 
@@ -329,12 +329,12 @@ class SuperOp:
 
         output: dict[str, torch.Tensor | None] = {}
         for name, layer in self._members.items():
-            if field == "activation":
-                has_value = getattr(layer, "has_saved_activations", False)
-                value = getattr(layer, "activation", None) if has_value else None
+            if field == "out":
+                has_value = getattr(layer, "has_saved_outs", False)
+                value = getattr(layer, "out", None) if has_value else None
             else:
-                has_value = getattr(layer, "has_gradient", False)
-                value = getattr(layer, "gradient", None) if has_value else None
+                has_value = getattr(layer, "has_grad", False)
+                value = getattr(layer, "grad", None) if has_value else None
             output[name] = value if isinstance(value, torch.Tensor) else None
         return output
 
@@ -376,7 +376,7 @@ class SuperOp:
             Non-batch shape.
         """
 
-        shape = tuple(getattr(layer, "tensor_shape", ()) or ())
+        shape = tuple(getattr(layer, "shape", ()) or ())
         return () if len(shape) <= 1 else shape[1:]
 
     @staticmethod

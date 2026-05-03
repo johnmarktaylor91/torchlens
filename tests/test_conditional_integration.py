@@ -810,7 +810,7 @@ class ShapePredicateModel(nn.Module):
 
 
 class SaveSourceContextOffAssertModel(nn.Module):
-    """Model that combines ``assert`` with ``save_source_context=False``."""
+    """Model that combines ``assert`` with ``save_code_context=False``."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the forward pass.
@@ -886,7 +886,7 @@ def _log_model(
     model: nn.Module,
     x: torch.Tensor,
     *,
-    save_source_context: bool = True,
+    save_code_context: bool = True,
     keep_unsaved_layers: bool = True,
     layers_to_save: str | Sequence[str] | None = "all",
 ) -> Trace:
@@ -898,7 +898,7 @@ def _log_model(
         Model to execute.
     x:
         Input tensor.
-    save_source_context:
+    save_code_context:
         Whether rich source loading is enabled during capture.
     keep_unsaved_layers:
         Whether unsaved layers remain in the final log.
@@ -913,7 +913,7 @@ def _log_model(
     return trace_fn(
         model,
         x,
-        save_source_context=save_source_context,
+        save_code_context=save_code_context,
         keep_unsaved_layers=keep_unsaved_layers,
         layers_to_save=layers_to_save,
     )
@@ -932,9 +932,7 @@ def _get_terminal_bool_layers(trace: Trace) -> list[OpLog]:
     list[OpLog]
         Terminal scalar bool layers in execution order.
     """
-    return [
-        layer for layer in trace.layer_list if layer.is_terminal_bool_layer and layer.is_scalar_bool
-    ]
+    return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
 def _find_only_layer(
@@ -1261,8 +1259,8 @@ def test_reconverging_branches_model_clears_branch_stack_after_merge() -> None:
 
     positive_add = _find_only_layer(positive_log, "add")
     negative_add = _find_only_layer(negative_log, "add")
-    positive_parent = positive_log[positive_add.parent_layers[0]]
-    negative_parent = negative_log[negative_add.parent_layers[0]]
+    positive_parent = positive_log[positive_add.parents[0]]
+    negative_parent = negative_log[negative_add.parents[0]]
 
     assert positive_add.conditional_branch_stack == []
     assert negative_add.conditional_branch_stack == []
@@ -1606,7 +1604,7 @@ def test_documented_false_negative_scalar_predicates_do_not_materialise_events(
     branch_layer = next(
         layer
         for layer in trace.layer_list
-        if layer.func_name in {"relu", "sigmoid"} and not layer.is_output_layer
+        if layer.func_name in {"relu", "sigmoid"} and not layer.is_output
     )
 
     _assert_branchless_log(trace)
@@ -1641,12 +1639,12 @@ def test_torch_where_model_stays_outside_branch_attribution() -> None:
     assert _get_terminal_bool_layers(trace) == []
 
 
-def test_save_source_context_off_assert_model_has_no_false_positive_if_edges() -> None:
+def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> None:
     """Disabled source loading plus ``assert`` must not fabricate branch metadata."""
     trace = _log_model(
         SaveSourceContextOffAssertModel(),
         torch.ones(2, 2),
-        save_source_context=False,
+        save_code_context=False,
     )
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
@@ -1665,14 +1663,14 @@ def test_keep_unsaved_layers_false_model_scrubs_removed_labels_from_all_conditio
     full_log = _log_model(
         KeepUnsavedLayersFalseModel(),
         input_tensor,
-        save_source_context=True,
+        save_code_context=True,
         keep_unsaved_layers=True,
         layers_to_save=[-1],
     )
     pruned_log = _log_model(
         KeepUnsavedLayersFalseModel(),
         input_tensor,
-        save_source_context=True,
+        save_code_context=True,
         keep_unsaved_layers=False,
         layers_to_save=[-1],
     )
@@ -1694,7 +1692,7 @@ def test_keep_unsaved_layers_false_model_scrubs_removed_labels_from_all_conditio
     }.isdisjoint(removed_no_pass)
     assert all(
         parent_label not in removed_no_pass and child_label not in removed_no_pass
-        for parent_label, child_label, _, _ in pruned_log.conditional_edge_passes
+        for parent_label, child_label, _, _ in pruned_log.conditional_edge_ops
     )
     assert all(
         removed_label not in layer_log.cond_branch_then_children

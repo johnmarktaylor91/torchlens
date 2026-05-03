@@ -1,14 +1,14 @@
 # validation/ - Replay, Invariants, and Schema Checks
 
 ## What This Does
-Validates TorchLens captures at several levels: saved forward activations, backward capture,
+Validates TorchLens captures at several levels: saved forward outs, backward capture,
 metadata invariants, intervention readiness, and unified `.tlspec` manifest schema.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `core.py` | Saved-activation replay, perturbation checks, arg reconstruction |
+| `core.py` | Saved-out replay, perturbation checks, arg reconstruction |
 | `backward.py` | Backward capture validation against stock autograd |
 | `consolidated.py` | Public `validate(..., scope=...)` dispatcher and intervention report |
 | `invariants.py` | Metadata invariant categories and `MetadataInvariantError` |
@@ -18,12 +18,12 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 ## Validation Scopes
 `torchlens.validate(model, x, scope=...)` accepts:
 - `"forward"` - calls `validate_forward_pass()`.
-- `"saved"` - validates saved activations on a `Trace` path.
+- `"saved"` - validates saved outs on a `Trace` path.
 - `"backward"` - validates first-class backward capture.
 - `"intervention"` - currently runs forward-like checks and returns intervention-axis details.
 
 Legacy top-level shims for `validate_forward_pass`, `validate_backward_pass`, and
-`validate_saved_activations` forward to this package.
+`validate_saved_outs` forward to this package.
 
 ## Forward Replay Flow
 1. Run the model for ground truth output.

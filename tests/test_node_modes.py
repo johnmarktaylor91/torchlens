@@ -72,8 +72,8 @@ def test_profiling_mode_omits_missing_fields(tmp_path: Path) -> None:
     model = nn.Linear(4, 4)
     log = tl.trace(model, torch.randn(1, 4))
     for layer_log in log.layer_logs.values():
-        for layer_pass in layer_log.passes.values():
-            layer_pass.func_time = None
+        for layer_pass in layer_log.ops.values():
+            layer_pass.func_duration = None
 
     dot = _render_dot(log, tmp_path, node_mode="profiling")
 

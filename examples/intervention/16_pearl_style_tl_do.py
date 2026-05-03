@@ -39,8 +39,8 @@ def main() -> None:
     result = tl.do(edited, tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
 
     assert result is edited
-    assert torch.allclose(edited.layer_list[-1].activation, torch.ones_like(x))
-    assert not torch.allclose(clean.layer_list[-1].activation, edited.layer_list[-1].activation)
+    assert torch.allclose(edited.layer_list[-1].out, torch.ones_like(x))
+    assert not torch.allclose(clean.layer_list[-1].out, edited.layer_list[-1].out)
 
 
 if __name__ == "__main__":

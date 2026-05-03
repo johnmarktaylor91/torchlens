@@ -55,7 +55,7 @@ class TestLayerLogConstruction:
         """layer_logs dict is populated after postprocessing."""
         assert len(simple_log.layer_logs) > 0
 
-    def test_layer_logs_keyed_by_no_pass_label(self, simple_log):
+    def test_layer_logs_keyed_by_no_call_label(self, simple_log):
         """Keys are no-pass layer labels."""
         for key, layer_log in simple_log.layer_logs.items():
             assert ":" not in key
@@ -64,14 +64,14 @@ class TestLayerLogConstruction:
     def test_single_pass_layer_has_one_pass(self, simple_log):
         """Non-recurrent model: every LayerLog has exactly one pass."""
         for layer_log in simple_log.layer_logs.values():
-            assert layer_log.num_passes == 1
-            assert len(layer_log.passes) == 1
-            assert 1 in layer_log.passes
+            assert layer_log.num_calls == 1
+            assert len(layer_log.ops) == 1
+            assert 1 in layer_log.ops
 
     def test_back_reference_set(self, simple_log):
         """parent_layer_log is set on each OpLog."""
         for layer_log in simple_log.layer_logs.values():
-            for pass_log in layer_log.passes.values():
+            for pass_log in layer_log.ops.values():
                 assert pass_log.parent_layer_log is layer_log
 
 
@@ -83,31 +83,31 @@ class TestLayerLogConstruction:
 class TestSinglePassDelegation:
     @pytest.mark.smoke
     def test_tensor_contents_delegation(self, simple_log):
-        """activation delegates to passes[1] for single-pass."""
+        """out delegates to ops[1] for single-pass."""
         for layer_log in simple_log.layer_logs.values():
-            pass_log = layer_log.passes[1]
-            assert layer_log.activation is pass_log.activation
+            pass_log = layer_log.ops[1]
+            assert layer_log.out is pass_log.out
 
-    def test_has_saved_activations_delegation(self, simple_log):
+    def test_has_saved_outs_delegation(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
-            pass_log = layer_log.passes[1]
-            assert layer_log.has_saved_activations == pass_log.has_saved_activations
+            pass_log = layer_log.ops[1]
+            assert layer_log.has_saved_outs == pass_log.has_saved_outs
 
-    def test_operation_num_delegation(self, simple_log):
+    def test_op_index_delegation(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
-            pass_log = layer_log.passes[1]
-            assert layer_log.operation_num == pass_log.operation_num
+            pass_log = layer_log.ops[1]
+            assert layer_log.op_index == pass_log.op_index
 
     def test_fallback_getattr_delegation(self, simple_log):
         """__getattr__ fallback delegates arbitrary per-pass fields."""
         for layer_log in simple_log.layer_logs.values():
-            pass_log = layer_log.passes[1]
+            pass_log = layer_log.ops[1]
             # func_autocast_state is per-pass, not an explicit @property
             assert layer_log.func_autocast_state is pass_log.func_autocast_state
 
-    def test_pass_finished_reads_from_trace(self, simple_log):
+    def test_tracing_finished_reads_from_trace(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
-            assert layer_log._pass_finished is True
+            assert layer_log._tracing_finished is True
 
 
 # ---------------------------------------------------------------------------
@@ -119,18 +119,18 @@ class TestAggregateFields:
     def test_aggregate_fields_match_first_pass(self, simple_log):
         """Aggregate fields on LayerLog match the corresponding first-pass values."""
         for layer_log in simple_log.layer_logs.values():
-            fp = layer_log.passes[1]
+            fp = layer_log.ops[1]
             assert layer_log.layer_type == fp.layer_type
             assert layer_log.func_name == fp.func_name
-            assert layer_log.tensor_shape == fp.tensor_shape
-            assert layer_log.tensor_dtype == fp.tensor_dtype
-            assert layer_log.is_input_layer == fp.is_input_layer
-            assert layer_log.is_output_layer == fp.is_output_layer
+            assert layer_log.shape == fp.shape
+            assert layer_log.dtype == fp.dtype
+            assert layer_log.is_input == fp.is_input
+            assert layer_log.is_output == fp.is_output
             assert layer_log.uses_params == fp.uses_params
 
     def test_layer_label_is_no_pass(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
-            fp = layer_log.passes[1]
+            fp = layer_log.ops[1]
             assert layer_log.layer_label == fp.layer_label_no_pass
 
 
@@ -141,47 +141,47 @@ class TestAggregateFields:
 
 class TestMultiPassLayerLog:
     @pytest.mark.smoke
-    def test_recurrent_layer_has_multiple_passes(self, recurrent_log):
-        """The repeated fc layer should have 2 passes."""
+    def test_recurrent_layer_has_multiple_ops(self, recurrent_log):
+        """The repeated fc layer should have 2 ops."""
         multi_pass_found = False
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_passes > 1:
+            if layer_log.num_calls > 1:
                 multi_pass_found = True
-                assert len(layer_log.passes) == layer_log.num_passes
+                assert len(layer_log.ops) == layer_log.num_calls
         assert multi_pass_found, "Expected at least one multi-pass layer in recurrent model"
 
     def test_multi_pass_tensor_contents_raises(self, recurrent_log):
         """Accessing per-pass field on multi-pass LayerLog raises ValueError."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_passes > 1:
-                with pytest.raises(ValueError, match="has .* passes"):
-                    _ = layer_log.activation
+            if layer_log.num_calls > 1:
+                with pytest.raises(ValueError, match="has .* ops"):
+                    _ = layer_log.out
                 break
 
     def test_multi_pass_getattr_raises(self, recurrent_log):
         """__getattr__ fallback raises for multi-pass layers."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_passes > 1:
+            if layer_log.num_calls > 1:
                 with pytest.raises(AttributeError):
                     _ = layer_log.func_autocast_state
                 break
 
     def test_multi_pass_aggregate_graph_union(self, recurrent_log):
-        """Aggregate graph properties are unions across passes."""
+        """Aggregate graph properties are unions across ops."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_passes > 1 and layer_log.has_children:
-                # Verify child_layers is a union
+            if layer_log.num_calls > 1 and layer_log.has_children:
+                # Verify children is a union
                 all_children = set()
-                for pass_log in layer_log.passes.values():
-                    for child in pass_log.child_layers:
+                for pass_log in layer_log.ops.values():
+                    for child in pass_log.children:
                         all_children.add(recurrent_log[child].layer_label_no_pass)
-                assert set(layer_log.child_layers) == all_children
+                assert set(layer_log.children) == all_children
                 break
 
     def test_getitem_returns_layer_log_for_multi_pass(self, recurrent_log):
         """log['label'] returns LayerLog for multi-pass layers."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_passes > 1:
+            if layer_log.num_calls > 1:
                 result = recurrent_log[layer_log.layer_label]
                 assert isinstance(result, LayerLog)
                 assert result is layer_log
@@ -190,18 +190,18 @@ class TestMultiPassLayerLog:
     def test_getitem_pass_notation_returns_pass_log(self, recurrent_log):
         """log['label:2'] still returns OpLog."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_passes > 1:
-                for pass_num, pass_log in layer_log.passes.items():
+            if layer_log.num_calls > 1:
+                for call_index, pass_log in layer_log.ops.items():
                     result = recurrent_log[pass_log.layer_label]
                     assert isinstance(result, OpLog)
                 break
 
-    def test_pass_labels_populated(self, recurrent_log):
-        """pass_labels list contains the w-pass labels of each pass."""
+    def test_call_labels_populated(self, recurrent_log):
+        """call_labels list contains the w-pass labels of each pass."""
         for layer_log in recurrent_log.layer_logs.values():
-            assert len(layer_log.pass_labels) == layer_log.num_passes
-            for i, pass_label in enumerate(layer_log.pass_labels, 1):
-                assert layer_log.passes[i].layer_label == pass_label
+            assert len(layer_log.call_labels) == layer_log.num_calls
+            for i, call_label in enumerate(layer_log.call_labels, 1):
+                assert layer_log.ops[i].layer_label == call_label
 
 
 # ---------------------------------------------------------------------------
@@ -218,9 +218,9 @@ class TestLayerLogDisplay:
 
     def test_str_multi_pass(self, recurrent_log):
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_passes > 1:
+            if layer_log.num_calls > 1:
                 s = str(layer_log)
-                assert "passes" in s.lower()
+                assert "ops" in s.lower()
                 break
 
     def test_repr_eq_str(self, simple_log):
@@ -286,15 +286,15 @@ class _SimpleLinear(nn.Module):
 
 
 class TestLayerNumPasses:
-    """layer_num_passes should be keyed correctly."""
+    """layer_num_calls should be keyed correctly."""
 
     def test_returns_integer(self):
         model = _SimpleLinear()
         log = tl.trace(model, torch.randn(2, 10))
-        for label in log.layer_labels_no_pass:
-            passes = log.layer_num_passes.get(label)
-            assert passes is not None, f"No passes for {label}"
-            assert isinstance(passes, int), f"Expected int, got {type(passes)} for {label}"
+        for label in log.layer_labels:
+            ops = log.layer_num_calls.get(label)
+            assert ops is not None, f"No ops for {label}"
+            assert isinstance(ops, int), f"Expected int, got {type(ops)} for {label}"
 
 
 class TestSliceIndexing:
@@ -360,13 +360,13 @@ class TestCaseInsensitiveLookup:
 
 
 class TestParentLayerArgLocs:
-    """LayerLog.parent_layer_arg_locs should return strings, not sets."""
+    """LayerLog.parent_arg_positions should return strings, not sets."""
 
     def test_arg_locs_are_strings(self):
         model = _SimpleLinear()
         log = tl.trace(model, torch.randn(2, 10))
         for layer in log:
-            arg_locs = layer.parent_layer_arg_locs
+            arg_locs = layer.parent_arg_positions
             for arg_type in ["args", "kwargs"]:
                 for key, val in arg_locs[arg_type].items():
                     assert isinstance(val, str), (

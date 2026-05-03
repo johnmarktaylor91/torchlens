@@ -123,60 +123,60 @@ class TestRandomGraphModel:
         p2 = sum(p.numel() for p in m2.parameters())
         assert p1 != p2
 
-    def test_nesting_depth(self):
+    def test_call_depth(self):
         """Module nesting creates expected hierarchy."""
-        model = RandomGraphModel(target_nodes=500, nesting_depth=4, seed=42)
+        model = RandomGraphModel(target_nodes=500, call_depth=4, seed=42)
         ml = trace_fn(model, torch.randn(2, 64))
-        max_depth = max(len(ml[label].containing_modules) for label in ml.layer_labels)
+        max_depth = max(len(ml[label].modules) for label in ml.layer_labels)
         assert max_depth >= 3
         ml.cleanup()
 
     def test_validation_small(self):
-        """Validation passes for small random model."""
+        """Validation ops for small random model."""
         model = RandomGraphModel(target_nodes=200, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     def test_validation_1k(self):
-        """Validation passes for 1k-node random model."""
+        """Validation ops for 1k-node random model."""
         model = RandomGraphModel(target_nodes=1000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     def test_validation_3k(self):
-        """Validation passes for 3k-node random model."""
+        """Validation ops for 3k-node random model."""
         model = RandomGraphModel(target_nodes=3000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     def test_validation_5k(self):
-        """Validation passes for 5k-node random model."""
+        """Validation ops for 5k-node random model."""
         model = RandomGraphModel(target_nodes=5000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     def test_validation_10k(self):
-        """Validation passes for 10k-node random model."""
+        """Validation ops for 10k-node random model."""
         model = RandomGraphModel(target_nodes=10000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     def test_validation_20k(self):
-        """Validation passes for 20k-node random model."""
+        """Validation ops for 20k-node random model."""
         model = RandomGraphModel(target_nodes=20000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     @pytest.mark.rare
     def test_validation_50k(self):
-        """Validation passes for 50k-node random model."""
+        """Validation ops for 50k-node random model."""
         model = RandomGraphModel(target_nodes=50000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     @pytest.mark.rare
     def test_validation_100k(self):
-        """Validation passes for 100k-node random model."""
+        """Validation ops for 100k-node random model."""
         model = RandomGraphModel(target_nodes=100000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
@@ -187,7 +187,7 @@ class TestRandomGraphModel:
     @pytest.mark.slow
     @pytest.mark.rare
     def test_validation_250k(self):
-        """Validation passes for 250k-node random model."""
+        """Validation ops for 250k-node random model."""
         model = RandomGraphModel(target_nodes=250000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
@@ -279,7 +279,7 @@ class TestElkUtilities:
 
     def test_build_hierarchical_has_groups(self):
         """Hierarchical builder creates compound nodes for module nesting."""
-        model = RandomGraphModel(target_nodes=500, nesting_depth=3, seed=42)
+        model = RandomGraphModel(target_nodes=500, call_depth=3, seed=42)
         ml = trace_fn(model, torch.randn(2, 64))
         entries = ml.layer_dict_main_keys
         elk = build_elk_graph_hierarchical(entries)
@@ -507,32 +507,32 @@ class TestDotVsElkComparison:
     @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
     def test_compare_15_nodes(self):
         """Tiny model — easiest to spot aesthetic differences."""
-        model = RandomGraphModel(target_nodes=15, seed=42, nesting_depth=1)
+        model = RandomGraphModel(target_nodes=15, seed=42, call_depth=1)
         self._render_both(model, torch.randn(2, 64), "15n")
 
     @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
     def test_compare_100_nodes(self):
         """Small model with moderate nesting."""
-        model = RandomGraphModel(target_nodes=100, seed=42, nesting_depth=2)
+        model = RandomGraphModel(target_nodes=100, seed=42, call_depth=2)
         self._render_both(model, torch.randn(2, 64), "100n")
 
     @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
     def test_compare_500_nodes(self):
         """Medium model — complexity where differences become visible."""
-        model = RandomGraphModel(target_nodes=500, seed=42, nesting_depth=2)
+        model = RandomGraphModel(target_nodes=500, seed=42, call_depth=2)
         self._render_both(model, torch.randn(2, 64), "500n")
 
     @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
     def test_compare_1k_nodes(self):
         """Larger model — still renderable by both engines."""
-        model = RandomGraphModel(target_nodes=1000, seed=42, nesting_depth=3)
+        model = RandomGraphModel(target_nodes=1000, seed=42, call_depth=3)
         self._render_both(model, torch.randn(2, 64), "1k")
 
     @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
     @pytest.mark.slow
     def test_compare_3k_nodes(self):
         """Near the ELK threshold — last size where dot is comfortable."""
-        model = RandomGraphModel(target_nodes=3000, seed=42, nesting_depth=3)
+        model = RandomGraphModel(target_nodes=3000, seed=42, call_depth=3)
         self._render_both(model, torch.randn(2, 64), "3k")
 
 

@@ -23,14 +23,14 @@ class AlternatingBranchBlock(nn.Module):
         super().__init__()
         self.shared = nn.Linear(4, 4)
 
-    def forward(self, x: torch.Tensor, pass_num: int) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, call_index: int) -> torch.Tensor:
         """Run one alternating branch step.
 
         Parameters
         ----------
         x:
             Input tensor for this pass.
-        pass_num:
+        call_index:
             One-indexed loop pass number.
 
         Returns
@@ -38,7 +38,7 @@ class AlternatingBranchBlock(nn.Module):
         torch.Tensor
             Shared-module output from the selected branch.
         """
-        branch_offset = 1.0 if pass_num % 2 == 1 else -1.0
+        branch_offset = 1.0 if call_index % 2 == 1 else -1.0
         branch_marker = (x.mean() * 0) + branch_offset
         if branch_marker > 0:
             y = self.shared(x)
@@ -48,7 +48,7 @@ class AlternatingBranchBlock(nn.Module):
 
 
 class AlternatingRecurrentIfModel(nn.Module):
-    """Recurrent model whose branch choice alternates across passes."""
+    """Recurrent model whose branch choice alternates across ops."""
 
     def __init__(self) -> None:
         """Initialise the repeating block."""
@@ -68,8 +68,8 @@ class AlternatingRecurrentIfModel(nn.Module):
         torch.Tensor
             Final recurrent output.
         """
-        for pass_num in range(1, 5):
-            x = self.block(x, pass_num)
+        for call_index in range(1, 5):
+            x = self.block(x, call_index)
         return x
 
 
@@ -95,9 +95,9 @@ class RolledMixedArmModel(nn.Module):
         torch.Tensor
             Final recurrent output.
         """
-        for pass_num in range(1, 5):
+        for call_index in range(1, 5):
             x = self.parent(x)
-            branch_offset = 1.0 if pass_num % 2 == 1 else -1.0
+            branch_offset = 1.0 if call_index % 2 == 1 else -1.0
             branch_marker = (x.mean() * 0) + branch_offset
             if branch_marker > 0:
                 x = self.branch(x)
@@ -213,7 +213,7 @@ def _find_multi_pass_linear_layer(trace: Trace) -> LayerLog:
     matching_layers = [
         layer
         for layer in trace.layer_logs.values()
-        if layer.func_name == "linear" and layer.num_passes > 1
+        if layer.func_name == "linear" and layer.num_calls > 1
     ]
     assert len(matching_layers) == 1
     return matching_layers[0]
@@ -222,16 +222,16 @@ def _find_multi_pass_linear_layer(trace: Trace) -> LayerLog:
 def _assert_sorted_unique_pass_lists(
     pass_map: Dict[Tuple[str, str, int, str], List[int]],
 ) -> None:
-    """Assert every ``conditional_edge_passes`` value is sorted and unique.
+    """Assert every ``conditional_edge_ops`` value is sorted and unique.
 
     Parameters
     ----------
     pass_map:
         Rolled edge-pass mapping from the model log.
     """
-    for pass_nums in pass_map.values():
-        assert pass_nums == sorted(pass_nums)
-        assert len(pass_nums) == len(set(pass_nums))
+    for call_indexs in pass_map.values():
+        assert call_indexs == sorted(call_indexs)
+        assert len(call_indexs) == len(set(call_indexs))
 
 
 def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
@@ -245,7 +245,7 @@ def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
         [(conditional_id, "then")],
         [(conditional_id, "else")],
     ]
-    assert linear_layer.conditional_branch_stack_passes == {
+    assert linear_layer.conditional_branch_stack_ops == {
         ((conditional_id, "then"),): [1, 3],
         ((conditional_id, "else"),): [2, 4],
     }
@@ -266,7 +266,7 @@ def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
     ]
 
 
-def test_rolled_mixed_arm_model_records_per_arm_edge_passes() -> None:
+def test_rolled_mixed_arm_model_records_per_arm_edge_ops() -> None:
     """Rolled mixed-arm edges retain sorted pass lists for both branches."""
     trace = _log_model(RolledMixedArmModel())
     conditional_id = _get_only_event(trace)
@@ -281,13 +281,15 @@ def test_rolled_mixed_arm_model_records_per_arm_edge_passes() -> None:
     parent_no_pass = trace[parent_label].layer_label_no_pass
     child_no_pass = trace[child_label].layer_label_no_pass
 
-    assert trace.conditional_edge_passes[
-        (parent_no_pass, child_no_pass, conditional_id, "then")
-    ] == [1, 3]
-    assert trace.conditional_edge_passes[
-        (parent_no_pass, child_no_pass, conditional_id, "else")
-    ] == [2, 4]
-    _assert_sorted_unique_pass_lists(trace.conditional_edge_passes)
+    assert trace.conditional_edge_ops[(parent_no_pass, child_no_pass, conditional_id, "then")] == [
+        1,
+        3,
+    ]
+    assert trace.conditional_edge_ops[(parent_no_pass, child_no_pass, conditional_id, "else")] == [
+        2,
+        4,
+    ]
+    _assert_sorted_unique_pass_lists(trace.conditional_edge_ops)
 
 
 def test_looped_if_alternating_model_has_exactly_two_signatures() -> None:
@@ -300,7 +302,7 @@ def test_looped_if_alternating_model_has_exactly_two_signatures() -> None:
         [(conditional_id, "then")],
         [(conditional_id, "else")],
     ]
-    assert linear_layer.conditional_branch_stack_passes == {
+    assert linear_layer.conditional_branch_stack_ops == {
         ((conditional_id, "then"),): [1, 3],
         ((conditional_id, "else"),): [2, 4],
     }
@@ -315,7 +317,7 @@ def test_non_conditional_recurrent_model_keeps_empty_aggregate_views() -> None:
     assert trace.conditional_events == []
     assert linear_layer.in_cond_branch is False
     assert linear_layer.conditional_branch_stacks == [[]]
-    assert linear_layer.conditional_branch_stack_passes == {(): [1, 2, 3]}
+    assert linear_layer.conditional_branch_stack_ops == {(): [1, 2, 3]}
     assert linear_layer.cond_branch_children_by_cond == {}
     assert linear_layer.cond_branch_start_children == []
     assert linear_layer.cond_branch_then_children == []

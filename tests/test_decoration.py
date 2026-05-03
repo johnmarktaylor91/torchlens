@@ -23,7 +23,7 @@ from torchlens.decoration import torch_funcs as torch_funcs_module
 from torchlens import _state, trace as trace_fn
 from torchlens.decoration.torch_funcs import (
     decorate_all_once,
-    get_func_argnames,
+    get_arg_names,
     patch_detached_references,
     patch_model_instance,
     wrap_torch,
@@ -278,17 +278,19 @@ class TestToggleState:
         x = torch.randn(3)
         y = torch.cos(x)
         assert y.shape == (3,)
-        assert not hasattr(y, "tl_tensor_label_raw")
+        assert not hasattr(y, "tl__label_raw")
 
-    def test_requires_grad_restored_after_exception(self):
-        """requires_grad must be restored even when forward raises."""
+    def test_has_trainable_params_restored_after_exception(self):
+        """has_trainable_params must be restored even when forward raises."""
         model = TwoLayerModel()
-        orig_grads = {n: p.requires_grad for n, p in model.named_parameters()}
+        orig_grads = {n: p.has_trainable_params for n, p in model.named_parameters()}
         with pytest.raises(RuntimeError):
             # Force an error by passing wrong shape
             trace_fn(model, torch.randn(0))
         for name, param in model.named_parameters():
-            assert param.requires_grad == orig_grads[name], f"{name} requires_grad changed"
+            assert param.has_trainable_params == orig_grads[name], (
+                f"{name} has_trainable_params changed"
+            )
 
 
 class TestWrapUnwrap:
@@ -307,7 +309,7 @@ class TestWrapUnwrap:
         x = torch.randn(4)
         y = torch.cos(x)
         assert y.shape == x.shape
-        assert not hasattr(y, "tl_tensor_label_raw")
+        assert not hasattr(y, "tl__label_raw")
 
     def test_wrap_restores_logging_after_unwrap(self):
         """wrap_torch after unwrap_torch re-enables logging."""
@@ -436,7 +438,7 @@ class TestPassthroughWhenOff:
         """Results must not have tl_ attributes when toggle is off."""
         x = torch.randn(3, 4)
         y = torch.matmul(x, x.T)
-        assert not hasattr(y, "tl_tensor_label_raw")
+        assert not hasattr(y, "tl__label_raw")
         assert not hasattr(y, "tl_source_trace")
 
     def test_ops_normal_after_logging(self):
@@ -447,8 +449,8 @@ class TestPassthroughWhenOff:
         x = torch.randn(5)
         y = torch.relu(x)
         z = x.view(1, 5)
-        assert not hasattr(y, "tl_tensor_label_raw")
-        assert not hasattr(z, "tl_tensor_label_raw")
+        assert not hasattr(y, "tl__label_raw")
+        assert not hasattr(z, "tl__label_raw")
 
     def test_tensor_method_ops(self):
         """Tensor method operations like .view, .reshape must work."""
@@ -530,11 +532,11 @@ class TestDetachedImports:
         class DictFuncModel(nn.Module):
             def __init__(self):
                 super().__init__()
-                self.ops = {"activation": torch.relu}
+                self.ops = {"out": torch.relu}
                 self.linear = nn.Linear(5, 5)
 
             def forward(self, x):
-                return self.ops["activation"](self.linear(x))
+                return self.ops["out"](self.linear(x))
 
         model = DictFuncModel()
         result = trace_fn(model, torch.randn(5))
@@ -606,14 +608,14 @@ class TestPermanentModelPrep:
         assert model in _state._prepared_models
 
     def test_permanent_attrs_survive_sessions(self):
-        """tl_module_address and tl_module_type should persist after logging."""
+        """tl_address and tl_module_type should persist after logging."""
         model = NestedModuleModel()
         trace_fn(model, torch.randn(5))
 
         # Permanent attributes should still be there
-        assert hasattr(model.block[0], "tl_module_address")
+        assert hasattr(model.block[0], "tl_address")
         assert hasattr(model.block[0], "tl_module_type")
-        assert model.block[0].tl_module_address == "block.0"
+        assert model.block[0].tl_address == "block.0"
         assert model.block[0].tl_module_type == "Linear"
 
     def test_session_attrs_cleaned(self):
@@ -623,7 +625,7 @@ class TestPermanentModelPrep:
 
         for module in model.modules():
             assert not hasattr(module, "tl_source_trace")
-            assert not hasattr(module, "tl_module_pass_num")
+            assert not hasattr(module, "tl_module_call_index")
             assert not hasattr(module, "tl_tensors_entered_labels")
             assert not hasattr(module, "tl_tensors_exited_labels")
 
@@ -674,18 +676,18 @@ class TestPermanentModelPrep:
         gc.collect()
         assert ref() is None  # model should be collected
 
-    def test_requires_grad_restored(self):
-        """All params should have original requires_grad after logging."""
+    def test_has_trainable_params_restored(self):
+        """All params should have original has_trainable_params after logging."""
         model = TwoLayerModel()
         # Freeze some params
-        model.linear.bias.requires_grad_(False)
-        orig_grads = {n: p.requires_grad for n, p in model.named_parameters()}
+        model.linear.bias.has_trainable_params_(False)
+        orig_grads = {n: p.has_trainable_params for n, p in model.named_parameters()}
 
         trace_fn(model, torch.randn(5))
 
         for name, param in model.named_parameters():
-            assert param.requires_grad == orig_grads[name], (
-                f"{name}: expected requires_grad={orig_grads[name]}"
+            assert param.has_trainable_params == orig_grads[name], (
+                f"{name}: expected has_trainable_params={orig_grads[name]}"
             )
 
 
@@ -753,10 +755,10 @@ class TestPauseLogging:
         cos_layers = [lbl for lbl in result.layer_labels if "cos" in lbl.lower()]
         assert len(cos_layers) == 0, f"cos appeared in graph during pause: {cos_layers}"
 
-    def test_activation_postfunc_not_logged(self):
-        """activation_postfunc runs inside pause_logging, ops should not appear."""
+    def test_out_postfunc_not_logged(self):
+        """out_postfunc runs inside pause_logging, ops should not appear."""
         model = SimpleModel()
-        result = trace_fn(model, torch.randn(5), activation_postfunc=torch.sigmoid)
+        result = trace_fn(model, torch.randn(5), out_postfunc=torch.sigmoid)
         # sigmoid from postfunc should NOT appear in graph
         sigmoid_layers = [lbl for lbl in result.layer_labels if "sigmoid" in lbl.lower()]
         assert len(sigmoid_layers) == 0, f"postfunc sigmoid leaked into graph: {sigmoid_layers}"
@@ -881,10 +883,8 @@ class TestJITCompat:
 
 
 class TestFuncArgnames:
-    def test_get_func_argnames_tolerates_bad_annotations(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """get_func_argnames should tolerate ``inspect.signature`` TypeErrors. #138"""
+    def test_get_arg_names_tolerates_bad_annotations(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """get_arg_names should tolerate ``inspect.signature`` TypeErrors. #138"""
 
         def fake_func(x: object, *, flag: bool = False) -> None:
             """fake_func(x, *, flag=False)"""
@@ -898,17 +898,17 @@ class TestFuncArgnames:
             return original_signature(target)
 
         monkeypatch.setattr(torch_funcs_module.inspect, "signature", failing_signature)
-        _state._func_argnames.pop("fake_func", None)
+        _state._arg_names.pop("fake_func", None)
 
-        get_func_argnames(fake_func, "fake_func")
+        get_arg_names(fake_func, "fake_func")
 
-        assert _state._func_argnames["fake_func"] == ("x", "flag")
+        assert _state._arg_names["fake_func"] == ("x", "flag")
 
     def test_argnames_collected_before_decoration(self) -> None:
         """Argnames must be collected before decoration mutates torch names. #138"""
         wrap_torch()
 
-        assert len(_state._func_argnames) > 500
+        assert len(_state._arg_names) > 500
         assert len(_state._orig_to_decorated) > 1000
 
 
@@ -994,9 +994,9 @@ class TestDecorationConsistency:
             assert d_id not in dec_ids, f"Duplicate wrapper found: {dec}"
             dec_ids.add(d_id)
 
-    def test_func_argnames_populated(self):
-        """_func_argnames should be pre-computed for many functions."""
-        assert len(_state._func_argnames) > 500
+    def test_arg_names_populated(self):
+        """_arg_names should be pre-computed for many functions."""
+        assert len(_state._arg_names) > 500
 
     def test_decorate_all_once_idempotent(self):
         """Calling decorate_all_once again should be a no-op."""
@@ -1196,10 +1196,10 @@ class TestSessionIsolation:
 
         result1 = trace_fn(model, x)
         # After first session, input tensor should be clean
-        assert not hasattr(x, "tl_tensor_label_raw")
+        assert not hasattr(x, "tl__label_raw")
 
         result2 = trace_fn(model, x)
-        assert not hasattr(x, "tl_tensor_label_raw")
+        assert not hasattr(x, "tl__label_raw")
 
         # Both sessions should have produced valid results
         assert len(result1.output_layers) > 0

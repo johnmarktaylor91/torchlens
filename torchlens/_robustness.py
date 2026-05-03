@@ -7,7 +7,7 @@ tensor variants break the logging pipeline in different ways:
 ================  =================================================  =================
 Variant           Why TorchLens cannot handle it today                Detection outcome
 ================  =================================================  =================
-Meta tensor       No storage, so activation saving returns garbage;  raise RuntimeError
+Meta tensor       No storage, so out saving returns garbage;  raise RuntimeError
                   ``.clone()`` yields another meta tensor, etc.
 Sparse tensor     ``safe_copy``/print-override paths assume dense    raise RuntimeError
                   layouts; postprocess indexing uses ``.numel()``
@@ -199,7 +199,7 @@ def check_model_and_input_variants(
             offenses.append(
                 (
                     "meta tensor in input",
-                    "Meta tensors have no backing storage, so activation saving "
+                    "Meta tensors have no backing storage, so out saving "
                     "cannot produce usable values.",
                 )
             )
@@ -264,7 +264,7 @@ def check_model_and_input_variants(
         warnings.warn(
             "TorchLens detected quantized submodules. Activation capture "
             "generally works, but FLOPs counts are not computed correctly for "
-            "quantized ops and activation dtype handling is best-effort. "
+            "quantized ops and out dtype handling is best-effort. "
             f"{_docs_pointer()}",
             UserWarning,
             stacklevel=3,

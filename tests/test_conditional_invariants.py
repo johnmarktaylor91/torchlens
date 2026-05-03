@@ -106,14 +106,14 @@ class AlternatingBranchBlock(nn.Module):
         super().__init__()
         self.shared = nn.Linear(4, 4)
 
-    def forward(self, x: torch.Tensor, pass_num: int) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, call_index: int) -> torch.Tensor:
         """Run one alternating branch step.
 
         Parameters
         ----------
         x:
             Input tensor for this pass.
-        pass_num:
+        call_index:
             One-indexed recurrent pass number.
 
         Returns
@@ -122,7 +122,7 @@ class AlternatingBranchBlock(nn.Module):
             Shared-layer output from the selected branch.
         """
 
-        branch_offset = 1.0 if pass_num % 2 == 1 else -1.0
+        branch_offset = 1.0 if call_index % 2 == 1 else -1.0
         branch_marker = (x.mean() * 0) + branch_offset
         if branch_marker > 0:
             y = self.shared(x)
@@ -132,7 +132,7 @@ class AlternatingBranchBlock(nn.Module):
 
 
 class AlternatingRecurrentIfModel(nn.Module):
-    """Recurrent model whose tensor-driven branch alternates across passes."""
+    """Recurrent model whose tensor-driven branch alternates across ops."""
 
     def __init__(self) -> None:
         """Initialise the repeating block."""
@@ -154,8 +154,8 @@ class AlternatingRecurrentIfModel(nn.Module):
             Final recurrent output tensor.
         """
 
-        for pass_num in range(1, 5):
-            x = self.block(x, pass_num)
+        for call_index in range(1, 5):
+            x = self.block(x, call_index)
         return x
 
 
@@ -211,7 +211,7 @@ def _get_only_terminal_bool(trace: Trace) -> OpLog:
     """
 
     bool_layers = [
-        layer for layer in trace.layer_list if layer.is_terminal_bool_layer and layer.is_scalar_bool
+        layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool
     ]
     assert len(bool_layers) == 1
     return bool_layers[0]
@@ -234,7 +234,7 @@ def _find_multi_pass_linear_layer(trace: Trace) -> LayerLog:
     matching_layers = [
         layer_log
         for layer_log in trace.layer_logs.values()
-        if layer_log.func_name == "linear" and layer_log.num_passes > 1
+        if layer_log.func_name == "linear" and layer_log.num_calls > 1
     ]
     assert len(matching_layers) == 1
     return matching_layers[0]
@@ -291,8 +291,8 @@ def _sync_layer_log_child_views(layer_log: LayerLog) -> None:
     layer_log.cond_branch_else_children = else_children
 
 
-def test_clean_conditional_log_passes_all_invariants() -> None:
-    """Clean conditional metadata passes the full invariant validator."""
+def test_clean_conditional_log_ops_all_invariants() -> None:
+    """Clean conditional metadata ops the full invariant validator."""
 
     trace = _log_model(ElifLadderModel(), torch.tensor([[0.25]]))
     try:
@@ -380,7 +380,7 @@ def test_invariant_6_parent_child_stacks_are_prefix_related() -> None:
         for layer in trace.layer_list:
             if len(layer.conditional_branch_stack) != 2:
                 continue
-            for parent_label in layer.parent_layers:
+            for parent_label in layer.parents:
                 parent_layer = trace[parent_label]
                 if len(parent_layer.conditional_branch_stack) == 1:
                     violating_child = layer
@@ -416,7 +416,7 @@ def test_invariant_8_event_bool_layers_point_back_to_the_event() -> None:
     try:
         event = _get_only_event(trace)
         non_bool_label = next(
-            layer.layer_label for layer in trace.layer_list if not layer.is_terminal_bool_layer
+            layer.layer_label for layer in trace.layer_list if not layer.is_terminal_bool
         )
         event.bool_layers.append(non_bool_label)
         _assert_invariant_error(trace, ("Invariant 8", non_bool_label))
@@ -430,21 +430,21 @@ def test_invariant_9_layerlog_stack_aggregates_match_pass_logs() -> None:
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     try:
         layer_log = _find_multi_pass_linear_layer(trace)
-        first_signature = next(iter(layer_log.conditional_branch_stack_passes))
-        layer_log.conditional_branch_stack_passes[first_signature] = [999]
-        _assert_invariant_error(trace, ("Invariant 9", "conditional_branch_stack_passes"))
+        first_signature = next(iter(layer_log.conditional_branch_stack_ops))
+        layer_log.conditional_branch_stack_ops[first_signature] = [999]
+        _assert_invariant_error(trace, ("Invariant 9", "conditional_branch_stack_ops"))
     finally:
         trace.cleanup()
 
 
-def test_invariant_10_conditional_edge_passes_exactly_match_unrolled_edges() -> None:
+def test_invariant_10_conditional_edge_ops_exactly_match_unrolled_edges() -> None:
     """Invariant 10 fails when an edge-pass entry names a non-existent pass."""
 
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     try:
-        edge_key = next(iter(trace.conditional_edge_passes))
-        existing_passes = trace.conditional_edge_passes[edge_key]
-        trace.conditional_edge_passes[edge_key] = sorted(existing_passes + [99])
+        edge_key = next(iter(trace.conditional_edge_ops))
+        existing_ops = trace.conditional_edge_ops[edge_key]
+        trace.conditional_edge_ops[edge_key] = sorted(existing_ops + [99])
         _assert_invariant_error(trace, ("Invariant 10", "pass 99"))
     finally:
         trace.cleanup()

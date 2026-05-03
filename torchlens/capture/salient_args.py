@@ -5,7 +5,7 @@ num_heads, dropout_p, etc.) that researchers want to see at a glance without
 enabling full ``save_function_args=True`` (which deep-copies everything).
 
 The registry maps normalized ``layer_type`` strings to extractor functions.
-Each extractor receives the raw args/kwargs and optionally parent_param_shapes,
+Each extractor receives the raw args/kwargs and optionally param_shapes,
 and returns a ``Dict[str, Any]`` of simple Python types (int, float, str,
 tuple, bool, None — never tensors).
 
@@ -49,12 +49,12 @@ def _register(*layer_types: str) -> Callable[[Extractor], Extractor]:
 def _build_arg_name_map(
     func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> SalientArgs:
-    """Map argument names to values using pre-computed ``_state._func_argnames``.
+    """Map argument names to values using pre-computed ``_state._arg_names``.
 
     Returns a dict combining positional args (mapped by name) and kwargs.
     If argnames aren't available, returns just kwargs.
     """
-    argnames = _st._func_argnames.get(func_name.strip("_"), ())
+    argnames = _st._arg_names.get(func_name.strip("_"), ())
     result = dict(kwargs)
     for i, val in enumerate(args):
         if i < len(argnames):
@@ -425,7 +425,7 @@ def extract_salient_args(
     func_name: str,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-    parent_param_shapes: list[Shape] | None = None,
+    param_shapes: list[Shape] | None = None,
 ) -> SalientArgs:
     """Extract salient hyperparameters for a logged operation.
 
@@ -434,7 +434,7 @@ def extract_salient_args(
         func_name: Original function name (used for argname lookup).
         args: Positional arguments to the function.
         kwargs: Keyword arguments to the function.
-        parent_param_shapes: Shapes of parent parameters (for deriving
+        param_shapes: Shapes of parent parameters (for deriving
             in/out channels, features, etc.).
 
     Returns:
@@ -445,7 +445,7 @@ def extract_salient_args(
         return {}
     try:
         named = _build_arg_name_map(func_name, args, kwargs)
-        return extractor(named, parent_param_shapes or [])
+        return extractor(named, param_shapes or [])
     except Exception:
         # Never crash logging for salient args extraction failure.
         return {}

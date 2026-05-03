@@ -1,4 +1,4 @@
-"""Tests for streaming activation save during ``trace``."""
+"""Tests for streaming out save during ``trace``."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def _make_streaming_model() -> tuple[_StreamingModel, torch.Tensor]:
 
 
 def _saved_layers(trace: Trace) -> list[Any]:
-    """Return all layers with saved activations from one model log.
+    """Return all layers with saved outs from one model log.
 
     Parameters
     ----------
@@ -77,7 +77,7 @@ def _saved_layers(trace: Trace) -> list[Any]:
         Saved layer-pass entries.
     """
 
-    return [layer for layer in trace.layer_list if layer.has_saved_activations]
+    return [layer for layer in trace.layer_list if layer.has_saved_outs]
 
 
 def _tmp_dirs_for(bundle_path: Path) -> list[Path]:
@@ -120,7 +120,7 @@ def test_streaming_writes_blobs_before_postprocess(
     monkeypatch.setattr(postprocess_module, "_add_output_layers", _capturing_add_output_layers)
 
     model, inputs = _make_streaming_model()
-    trace_fn(model, inputs, save_activations_to=bundle_path, layers_to_save="all")
+    trace_fn(model, inputs, save_outs_to=bundle_path, layers_to_save="all")
 
     assert observed["final_exists"] is False
     tmp_dirs = observed["tmp_dirs"]
@@ -132,7 +132,7 @@ def test_streaming_writes_blobs_before_postprocess(
     assert bundle_path.exists()
 
 
-def test_step_19_finalizes_bundle_and_keeps_activations_in_memory(tmp_path: Path) -> None:
+def test_step_19_finalizes_bundle_and_keeps_outs_in_memory(tmp_path: Path) -> None:
     """Step 19 should finalize the bundle and attach lazy refs without eviction."""
 
     bundle_path = tmp_path / "stream_bundle.tl"
@@ -140,8 +140,8 @@ def test_step_19_finalizes_bundle_and_keeps_activations_in_memory(tmp_path: Path
     trace = tl.trace_fn(
         model,
         inputs,
-        save_activations_to=bundle_path,
-        keep_activations_in_memory=True,
+        save_outs_to=bundle_path,
+        keep_outs_in_memory=True,
         layers_to_save="all",
     )
 
@@ -150,25 +150,25 @@ def test_step_19_finalizes_bundle_and_keeps_activations_in_memory(tmp_path: Path
     assert not _tmp_dirs_for(bundle_path)
     assert saved_layers
     for layer in saved_layers:
-        assert isinstance(layer.activation, torch.Tensor)
-        assert layer.activation_ref is not None
-        assert layer.activation_ref.source_bundle_path == bundle_path
-        assert ".tmp." not in str(layer.activation_ref.source_bundle_path)
+        assert isinstance(layer.out, torch.Tensor)
+        assert layer.out_ref is not None
+        assert layer.out_ref.source_bundle_path == bundle_path
+        assert ".tmp." not in str(layer.out_ref.source_bundle_path)
 
     manifest = Manifest.read(bundle_path / "manifest.json")
     assert manifest.tensors
 
 
-def test_step_20_evicts_streamed_activations_when_requested(tmp_path: Path) -> None:
-    """Step 20 should drop in-memory activations after refs are attached."""
+def test_step_20_evicts_streamed_outs_when_requested(tmp_path: Path) -> None:
+    """Step 20 should drop in-memory outs after refs are attached."""
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
     trace = tl.trace_fn(
         model,
         inputs,
-        save_activations_to=bundle_path,
-        keep_activations_in_memory=False,
+        save_outs_to=bundle_path,
+        keep_outs_in_memory=False,
         layers_to_save="all",
     )
 
@@ -176,26 +176,26 @@ def test_step_20_evicts_streamed_activations_when_requested(tmp_path: Path) -> N
     assert bundle_path.exists()
     assert saved_layers
     for layer in saved_layers:
-        assert layer.activation is None
-        assert layer.activation_ref is not None
-        assert layer.activation_ref.source_bundle_path == bundle_path
+        assert layer.out is None
+        assert layer.out_ref is not None
+        assert layer.out_ref.source_bundle_path == bundle_path
 
 
 def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> None:
-    """Exceptions raised during activation postprocessing should leave a partial temp dir."""
+    """Exceptions raised during out postprocessing should leave a partial temp dir."""
 
     bundle_path = tmp_path / "stream_bundle.tl"
 
-    def _raise_on_activation(_: torch.Tensor) -> torch.Tensor:
+    def _raise_on_out(_: torch.Tensor) -> torch.Tensor:
         raise RuntimeError("boom")
 
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensPostfuncError, match="activation_postfunc raised"):
+    with pytest.raises(TorchLensPostfuncError, match="out_postfunc raised"):
         trace_fn(
             model,
             inputs,
-            save_activations_to=bundle_path,
-            activation_postfunc=_raise_on_activation,
+            save_outs_to=bundle_path,
+            out_postfunc=_raise_on_out,
             layers_to_save="all",
         )
 
@@ -206,17 +206,17 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
     assert (tmp_dirs[0] / "REASON.txt").exists()
 
 
-def test_streaming_rejects_non_tensor_activation_postfunc_output(tmp_path: Path) -> None:
-    """Streaming save should abort when activation postprocessing returns a non-tensor."""
+def test_streaming_rejects_non_tensor_out_postfunc_output(tmp_path: Path) -> None:
+    """Streaming save should abort when out postprocessing returns a non-tensor."""
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensIOError, match="activation_postfunc outputs"):
+    with pytest.raises(TorchLensIOError, match="out_postfunc outputs"):
         trace_fn(
             model,
             inputs,
-            save_activations_to=bundle_path,
-            activation_postfunc=lambda tensor: tensor.detach().cpu().numpy(),
+            save_outs_to=bundle_path,
+            out_postfunc=lambda tensor: tensor.detach().cpu().numpy(),
             layers_to_save="all",
         )
 
@@ -227,7 +227,7 @@ def test_streaming_rejects_non_tensor_activation_postfunc_output(tmp_path: Path)
 
 
 def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
-    """Streaming save should fail immediately on sparse activations."""
+    """Streaming save should fail immediately on sparse outs."""
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
@@ -235,8 +235,8 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
         trace_fn(
             model,
             inputs,
-            save_activations_to=bundle_path,
-            activation_postfunc=lambda tensor: tensor.to_sparse(),
+            save_outs_to=bundle_path,
+            out_postfunc=lambda tensor: tensor.to_sparse(),
             layers_to_save="all",
         )
 
@@ -246,7 +246,7 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
     assert (tmp_dirs[0] / "PARTIAL").exists()
 
 
-def test_activation_sink_receives_saved_tensors_and_is_mutually_exclusive(
+def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
     tmp_path: Path,
 ) -> None:
     """Activation sink callbacks should receive saved tensors and conflict with streaming save."""
@@ -257,8 +257,8 @@ def test_activation_sink_receives_saved_tensors_and_is_mutually_exclusive(
         received.append((label, tensor))
 
     model, inputs = _make_streaming_model()
-    trace = tl.trace_fn(model, inputs, activation_sink=_sink, layers_to_save="all")
-    capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output_layer]
+    trace = tl.trace_fn(model, inputs, out_sink=_sink, layers_to_save="all")
+    capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
 
     assert received
     assert len(received) == len(capture_time_layers)
@@ -270,8 +270,8 @@ def test_activation_sink_receives_saved_tensors_and_is_mutually_exclusive(
         trace_fn(
             model2,
             inputs2,
-            save_activations_to=tmp_path / "stream_bundle.tl",
-            activation_sink=_sink,
+            save_outs_to=tmp_path / "stream_bundle.tl",
+            out_sink=_sink,
         )
 
 
@@ -286,15 +286,15 @@ def test_selective_streaming_save_is_rejected(tmp_path: Path) -> None:
             model,
             inputs,
             layers_to_save="linear",
-            save_activations_to=bundle_path,
-            keep_activations_in_memory=False,
+            save_outs_to=bundle_path,
+            keep_outs_in_memory=False,
         )
 
     assert not bundle_path.exists()
 
 
-def test_selective_activation_sink_still_works() -> None:
-    """Selective activation sinks should still use the supported two-pass path."""
+def test_selective_out_sink_still_works() -> None:
+    """Selective out sinks should still use the supported two-pass path."""
 
     received: list[tuple[str, torch.Tensor]] = []
 
@@ -302,9 +302,9 @@ def test_selective_activation_sink_still_works() -> None:
         received.append((label, tensor))
 
     model, inputs = _make_streaming_model()
-    trace = tl.trace_fn(model, inputs, activation_sink=_sink, layers_to_save="linear")
+    trace = tl.trace_fn(model, inputs, out_sink=_sink, layers_to_save="linear")
 
-    capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output_layer]
+    capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
     assert capture_time_layers
     assert len(received) == len(capture_time_layers)
     assert all("linear" in label for label, _ in received)
@@ -339,12 +339,12 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
     trace = tl.trace_fn(
         model,
         inputs,
-        save_activations_to=bundle_path,
-        keep_activations_in_memory=True,
+        save_outs_to=bundle_path,
+        keep_outs_in_memory=True,
         layers_to_save="all",
     )
 
     first_saved_layer = _saved_layers(trace)[0]
-    assert first_saved_layer.activation_ref is not None
-    assert first_saved_layer.activation_ref.source_bundle_path == bundle_path
-    assert ".tmp." not in str(first_saved_layer.activation_ref.source_bundle_path)
+    assert first_saved_layer.out_ref is not None
+    assert first_saved_layer.out_ref.source_bundle_path == bundle_path
+    assert ".tmp." not in str(first_saved_layer.out_ref.source_bundle_path)

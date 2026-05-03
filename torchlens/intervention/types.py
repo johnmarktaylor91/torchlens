@@ -172,7 +172,7 @@ class HelperSpec:
         Returns
         -------
         Callable[..., Any]
-            Hook callable with signature ``hook(activation, *, hook)``.
+            Hook callable with signature ``hook(out, *, hook)``.
 
         Raises
         ------
@@ -262,9 +262,9 @@ class FireRecord:
     """Runtime record for one intervention firing."""
 
     target_label: str = ""
-    pass_label: str | None = None
+    call_label: str | None = None
     func_call_id: int | None = None
-    output_path: tuple[OutputPathComponent, ...] = ()
+    container_path: tuple[OutputPathComponent, ...] = ()
     engine: str | None = None
     helper: HelperSpec | None = None
     site_label: str | None = None
@@ -626,8 +626,8 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
     return _fork_policy_table(
         MODEL_LOG_FIELD_ORDER,
         share={
-            "activation_postfunc",
-            "gradient_postfunc",
+            "out_postfunc",
+            "grad_transform",
             "_source_code_blob",
             "_source_model_ref",
             "_optimizer",
@@ -650,13 +650,13 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     return _fork_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,
         share={
-            "activation",
-            "transformed_activation",
-            "gradient",
-            "transformed_gradient",
-            "func_applied",
-            "grad_fn_object",
-            "corresponding_grad_fn",
+            "out",
+            "transformed_out",
+            "grad",
+            "transformed_grad",
+            "func",
+            "grad_fn",
+            "grad_fn_log",
             "source_trace",
         },
         reconstruct={"source_trace", "_construction_done"},

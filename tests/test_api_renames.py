@@ -19,19 +19,19 @@ from torchlens.validation import core as validation_core
 
 _VISUALIZATION_CASES = [
     ("view", "vis_mode", "rolled", "vis_mode"),
-    ("depth", "vis_nesting_depth", 5, "vis_nesting_depth"),
-    ("output_path", "vis_outpath", "custom.gv", "vis_outpath"),
+    ("depth", "vis_call_depth", 5, "vis_call_depth"),
+    ("container_path", "vis_outpath", "custom.gv", "vis_outpath"),
     ("save_only", "vis_save_only", True, "vis_save_only"),
     ("file_format", "vis_fileformat", "svg", "vis_fileformat"),
-    ("show_buffers", "vis_buffer_layers", True, "show_buffer_layers"),
+    ("show_buffers", "vis_buffers", True, "show_buffer_layers"),
     ("direction", "vis_direction", "leftright", "direction"),
     ("graph_overrides", "vis_graph_overrides", {"ranksep": "2.0"}, "vis_graph_overrides"),
     ("edge_overrides", "vis_edge_overrides", {"color": "red"}, "vis_edge_overrides"),
     (
-        "gradient_edge_overrides",
-        "vis_gradient_edge_overrides",
+        "grad_edge_overrides",
+        "vis_grad_edge_overrides",
         {"style": "dashed"},
-        "vis_gradient_edge_overrides",
+        "vis_grad_edge_overrides",
     ),
     ("module_overrides", "vis_module_overrides", {"color": "blue"}, "vis_module_overrides"),
     ("layout", "vis_node_placement", "dot", "vis_node_placement"),
@@ -40,9 +40,9 @@ _VISUALIZATION_CASES = [
     ("node_style", "vis_node_mode", "profiling", "node_mode"),
 ]
 _STREAMING_CASES = [
-    ("bundle_path", "save_activations_to", Path("bundle"), "save_activations_to"),
-    ("retain_in_memory", "keep_activations_in_memory", False, "keep_activations_in_memory"),
-    ("activation_callback", "activation_sink", torch.sigmoid, "activation_sink"),
+    ("bundle_path", "save_outs_to", Path("bundle"), "save_outs_to"),
+    ("retain_in_memory", "keep_outs_in_memory", False, "keep_outs_in_memory"),
+    ("out_callback", "out_sink", torch.sigmoid, "out_sink"),
 ]
 
 
@@ -69,15 +69,15 @@ class _DummyLog:
 
         self.verbose = False
         self.layer_logs: dict[str, Any] = {}
-        self.num_tensors_saved = 0
-        self.total_activation_memory_str = "0 B"
+        self.num_saved_ops = 0
+        self.total_out_memory_str = "0 B"
         self.render_calls: list[dict[str, Any]] = []
         self.cleaned_up = False
 
     def render_graph(
         self,
         vis_mode: str = "unrolled",
-        vis_nesting_depth: int = 1000,
+        vis_call_depth: int = 1000,
         vis_outpath: str = "modelgraph",
         vis_graph_overrides: dict[str, Any] | None = None,
         node_mode: str = "default",
@@ -86,7 +86,7 @@ class _DummyLog:
         collapse_fn: Any = None,
         skip_fn: Any = None,
         vis_edge_overrides: dict[str, Any] | None = None,
-        vis_gradient_edge_overrides: dict[str, Any] | None = None,
+        vis_grad_edge_overrides: dict[str, Any] | None = None,
         vis_module_overrides: dict[str, Any] | None = None,
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
@@ -103,7 +103,7 @@ class _DummyLog:
         self.render_calls.append(
             {
                 "vis_mode": vis_mode,
-                "vis_nesting_depth": vis_nesting_depth,
+                "vis_call_depth": vis_call_depth,
                 "vis_outpath": vis_outpath,
                 "vis_graph_overrides": vis_graph_overrides,
                 "node_mode": node_mode,
@@ -112,7 +112,7 @@ class _DummyLog:
                 "collapse_fn": collapse_fn,
                 "skip_fn": skip_fn,
                 "vis_edge_overrides": vis_edge_overrides,
-                "vis_gradient_edge_overrides": vis_gradient_edge_overrides,
+                "vis_grad_edge_overrides": vis_grad_edge_overrides,
                 "vis_module_overrides": vis_module_overrides,
                 "vis_save_only": vis_save_only,
                 "vis_fileformat": vis_fileformat,
@@ -147,7 +147,7 @@ def stubbed_runner(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], _Du
     captured: dict[str, Any] = {}
     dummy_log = _DummyLog()
 
-    def fake_run_model_and_save_specified_activations(*args: Any, **kwargs: Any) -> _DummyLog:
+    def fake_run_model_and_save_specified_outs(*args: Any, **kwargs: Any) -> _DummyLog:
         """Capture forwarded kwargs and return a dummy log object."""
 
         del args
@@ -156,8 +156,8 @@ def stubbed_runner(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], _Du
 
     monkeypatch.setattr(
         user_funcs,
-        "_run_model_and_save_specified_activations",
-        fake_run_model_and_save_specified_activations,
+        "_run_model_and_save_specified_outs",
+        fake_run_model_and_save_specified_outs,
     )
     return captured, dummy_log
 
@@ -227,7 +227,7 @@ def test_log_model_metadata_new_name_has_no_warning(monkeypatch: pytest.MonkeyPa
     assert _deprecation_messages(records) == []
 
 
-def test_validate_saved_activations_alias_warns_and_forwards(
+def test_validate_saved_outs_alias_warns_and_forwards(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The deprecated top-level validation alias should warn and forward kwargs."""
@@ -245,7 +245,7 @@ def test_validate_saved_activations_alias_warns_and_forwards(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        result = tl.validation.validate_saved_activations(
+        result = tl.validation.validate_saved_outs(
             _TinyModel(),
             _tiny_input(),
             validate_metadata=False,
@@ -256,14 +256,14 @@ def test_validate_saved_activations_alias_warns_and_forwards(
     assert len(_deprecation_messages(records)) == 1
 
 
-def test_trace_validate_saved_activations_warns_once(
+def test_trace_validate_saved_outs_warns_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The deprecated ``Trace`` method alias should warn once and delegate."""
 
     trace = tl.Trace("tiny")
 
-    def fake_validate_saved_activations(*args: Any, **kwargs: Any) -> bool:
+    def fake_validate_saved_outs(*args: Any, **kwargs: Any) -> bool:
         """Return success without running the real validation path."""
 
         del args, kwargs
@@ -271,14 +271,14 @@ def test_trace_validate_saved_activations_warns_once(
 
     monkeypatch.setattr(
         validation_core,
-        "validate_saved_activations",
-        fake_validate_saved_activations,
+        "validate_saved_outs",
+        fake_validate_saved_outs,
     )
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        first = trace.validate_saved_activations([torch.randn(1)])
-        second = trace.validate_saved_activations([torch.randn(1)])
+        first = trace.validate_saved_outs([torch.randn(1)])
+        second = trace.validate_saved_outs([torch.randn(1)])
 
     assert first is True
     assert second is True
@@ -290,10 +290,10 @@ def test_trace_validate_saved_activations_warns_once(
     [
         ("num_context_lines", "source_context_lines", 5, "num_context_lines"),
         (
-            "mark_input_output_distances",
+            "mark_layer_depths",
             "compute_input_output_distances",
             True,
-            "mark_input_output_distances",
+            "mark_layer_depths",
         ),
         ("detect_loops", "detect_recurrent_patterns", False, "detect_loops"),
     ],
@@ -328,7 +328,7 @@ def test_trace_old_renamed_kwargs_warn(
     ("new_name", "value", "captured_key"),
     [
         ("source_context_lines", 6, "num_context_lines"),
-        ("compute_input_output_distances", True, "mark_input_output_distances"),
+        ("compute_input_output_distances", True, "mark_layer_depths"),
         ("detect_recurrent_patterns", False, "detect_loops"),
     ],
 )
@@ -356,10 +356,10 @@ def test_trace_new_renamed_kwargs_do_not_warn(
     assert len(_deprecation_messages(records)) == 1
 
 
-def test_activation_transform_flat_kwarg_routes_to_runner(
+def test_out_transform_flat_kwarg_routes_to_runner(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
 ) -> None:
-    """Canonical activation transform kwarg should route through save options."""
+    """Canonical out transform kwarg should route through save options."""
 
     captured, _dummy_log = stubbed_runner
 
@@ -374,17 +374,17 @@ def test_activation_transform_flat_kwarg_routes_to_runner(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
-            activation_transform=transform,
+            out_transform=transform,
         )
 
-    assert captured["activation_transform"] is transform
+    assert captured["out_transform"] is transform
     assert len(_deprecation_messages(records)) == 1
 
 
-def test_activation_postfunc_flat_kwarg_warns_and_routes_to_transform(
+def test_out_postfunc_flat_kwarg_warns_and_routes_to_transform(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
 ) -> None:
-    """Deprecated activation postfunc kwarg should forward to activation_transform."""
+    """Deprecated out postfunc kwarg should forward to out_transform."""
 
     captured, _dummy_log = stubbed_runner
 
@@ -399,18 +399,18 @@ def test_activation_postfunc_flat_kwarg_warns_and_routes_to_transform(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
-            activation_postfunc=transform,
+            out_postfunc=transform,
         )
 
-    assert captured["activation_transform"] is transform
+    assert captured["out_transform"] is transform
     assert _deprecation_messages(records)[0] == (
-        "`activation_postfunc` is deprecated; use `activation_transform` instead. "
+        "`out_postfunc` is deprecated; use `out_transform` instead. "
         "The old name continues to work but will be removed in a future release."
     )
 
 
-def test_save_options_activation_postfunc_alias_warns() -> None:
-    """Deprecated SaveOptions activation_postfunc alias should still work."""
+def test_save_options_out_postfunc_alias_warns() -> None:
+    """Deprecated SaveOptions out_postfunc alias should still work."""
 
     def transform(tensor: torch.Tensor) -> torch.Tensor:
         """Return a transformed tensor for routing assertions."""
@@ -419,11 +419,11 @@ def test_save_options_activation_postfunc_alias_warns() -> None:
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        options = SaveOptions(activation_postfunc=transform)
+        options = SaveOptions(out_postfunc=transform)
 
-    assert options.activation_transform is transform
+    assert options.out_transform is transform
     assert _deprecation_messages(records) == [
-        "`activation_postfunc` is deprecated; use `save.activation_transform` instead. "
+        "`out_postfunc` is deprecated; use `save.out_transform` instead. "
         "The old name continues to work but will be removed in a future release."
     ]
 
@@ -432,7 +432,7 @@ def test_save_options_activation_postfunc_alias_warns() -> None:
     ("old_name", "new_name", "old_value", "new_value"),
     [
         ("num_context_lines", "source_context_lines", 5, 6),
-        ("mark_input_output_distances", "compute_input_output_distances", True, False),
+        ("mark_layer_depths", "compute_input_output_distances", True, False),
         ("detect_loops", "detect_recurrent_patterns", True, False),
     ],
 )
@@ -602,13 +602,13 @@ def test_visualization_group_and_flat_same_field_raise_for_explicit_default() ->
 
     with pytest.raises(
         TypeError,
-        match="Do not pass both `vis_nesting_depth` and `visualization.depth`.",
+        match="Do not pass both `vis_call_depth` and `visualization.depth`.",
     ):
         tl.visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
             visualization=VisualizationOptions(view="rolled", depth=1000),
-            vis_nesting_depth=5,
+            vis_call_depth=5,
         )
 
 
@@ -626,12 +626,12 @@ def test_visualization_group_and_flat_different_fields_merge_without_mutation(
             _TinyModel(),
             _tiny_input(),
             visualization=visualization,
-            vis_nesting_depth=5,
+            vis_call_depth=5,
         )
 
     assert visualization.depth == 1000
     assert dummy_log.render_calls[-1]["vis_mode"] == "rolled"
-    assert dummy_log.render_calls[-1]["vis_nesting_depth"] == 5
+    assert dummy_log.render_calls[-1]["vis_call_depth"] == 5
     assert len(_deprecation_messages(records)) == 1
 
 
@@ -724,7 +724,7 @@ def test_streaming_group_and_flat_same_field_raise() -> None:
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
             streaming=StreamingOptions(bundle_path=Path("bundle")),
-            save_activations_to=Path("other"),
+            save_outs_to=Path("other"),
         )
 
 
@@ -740,5 +740,5 @@ def test_streaming_group_and_flat_same_field_raise_for_explicit_default() -> Non
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
             streaming=StreamingOptions(bundle_path=None),
-            save_activations_to=Path("bundle"),
+            save_outs_to=Path("bundle"),
         )

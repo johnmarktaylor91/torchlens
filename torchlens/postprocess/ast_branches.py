@@ -81,7 +81,7 @@ class ConditionalRecord:
         Mapping from branch kind to the test expression range relevant for that
         arm. ``if`` chains use ``"then"`` and any flattened ``"elif_N"`` keys.
         Ternaries use ``"then"`` only.
-    nesting_depth:
+    call_depth:
         Lexical conditional nesting depth within the owning function scope.
     parent_conditional_key:
         Structural key of the lexically enclosing conditional, if any.
@@ -97,7 +97,7 @@ class ConditionalRecord:
     test_span: SourceRange
     branch_ranges: Dict[str, SourceRange]
     branch_test_spans: Dict[str, SourceRange]
-    nesting_depth: int
+    call_depth: int
     parent_conditional_key: Optional[ConditionalKey]
     parent_branch_kind: Optional[str]
 
@@ -138,7 +138,7 @@ class BranchInterval:
         Structural key of the owning conditional.
     branch_kind:
         Branch kind for this interval.
-    nesting_depth:
+    call_depth:
         Lexical conditional depth of the owning conditional.
     span:
         Full source range for the branch arm.
@@ -146,7 +146,7 @@ class BranchInterval:
 
     conditional_key: ConditionalKey
     branch_kind: str
-    nesting_depth: int
+    call_depth: int
     span: SourceRange
 
 
@@ -196,7 +196,7 @@ class ScopeEntry:
         Returns
         -------
         List[Tuple[ConditionalKey, str, int]]
-            Matching ``(conditional_key, branch_kind, nesting_depth)`` tuples
+            Matching ``(conditional_key, branch_kind, call_depth)`` tuples
             sorted outermost-to-innermost. Ambiguous same-line matches for a
             single conditional are dropped in degraded mode.
         """
@@ -220,9 +220,9 @@ class ScopeEntry:
                     filtered.extend(intervals)
             matches = filtered
 
-        matches.sort(key=lambda item: item.nesting_depth)
+        matches.sort(key=lambda item: item.call_depth)
         return [
-            (interval.conditional_key, interval.branch_kind, interval.nesting_depth)
+            (interval.conditional_key, interval.branch_kind, interval.call_depth)
             for interval in matches
         ]
 
@@ -859,7 +859,7 @@ class _ScopeIndexer:
         nodes: Sequence[ast.AST],
         parent_conditional_key: Optional[ConditionalKey],
         parent_branch_kind: Optional[str],
-        nesting_depth: int,
+        call_depth: int,
     ) -> None:
         """Walk a list of AST nodes under shared conditional context.
 
@@ -871,19 +871,19 @@ class _ScopeIndexer:
             Structural key of the enclosing conditional, if any.
         parent_branch_kind:
             Enclosing branch kind, if any.
-        nesting_depth:
+        call_depth:
             Current conditional nesting depth within the scope.
         """
 
         for node in nodes:
-            self._walk_node(node, parent_conditional_key, parent_branch_kind, nesting_depth)
+            self._walk_node(node, parent_conditional_key, parent_branch_kind, call_depth)
 
     def _walk_node(
         self,
         node: ast.AST,
         parent_conditional_key: Optional[ConditionalKey],
         parent_branch_kind: Optional[str],
-        nesting_depth: int,
+        call_depth: int,
     ) -> None:
         """Walk one AST node under shared conditional context.
 
@@ -895,7 +895,7 @@ class _ScopeIndexer:
             Structural key of the enclosing conditional, if any.
         parent_branch_kind:
             Enclosing branch kind, if any.
-        nesting_depth:
+        call_depth:
             Current conditional nesting depth within the scope.
         """
 
@@ -903,11 +903,11 @@ class _ScopeIndexer:
             return
 
         if isinstance(node, ast.If):
-            self._handle_if(node, parent_conditional_key, parent_branch_kind, nesting_depth)
+            self._handle_if(node, parent_conditional_key, parent_branch_kind, call_depth)
             return
 
         if isinstance(node, ast.IfExp):
-            self._handle_ifexp(node, parent_conditional_key, parent_branch_kind, nesting_depth)
+            self._handle_ifexp(node, parent_conditional_key, parent_branch_kind, call_depth)
             return
 
         if isinstance(node, ast.While):
@@ -929,14 +929,14 @@ class _ScopeIndexer:
             self._add_bool_consumer("bool_cast", node, None, None)
 
         for child in ast.iter_child_nodes(node):
-            self._walk_node(child, parent_conditional_key, parent_branch_kind, nesting_depth)
+            self._walk_node(child, parent_conditional_key, parent_branch_kind, call_depth)
 
     def _handle_if(
         self,
         node: ast.If,
         parent_conditional_key: Optional[ConditionalKey],
         parent_branch_kind: Optional[str],
-        nesting_depth: int,
+        call_depth: int,
     ) -> None:
         """Index a flattened ``if``/``elif``/``else`` chain.
 
@@ -948,14 +948,14 @@ class _ScopeIndexer:
             Structural key of the enclosing conditional, if any.
         parent_branch_kind:
             Enclosing branch kind, if any.
-        nesting_depth:
+        call_depth:
             Current conditional nesting depth within the scope.
         """
 
         if self._is_synthetic_elif(node):
-            self._walk_node(node.test, parent_conditional_key, parent_branch_kind, nesting_depth)
-            self._walk_nodes(node.body, parent_conditional_key, parent_branch_kind, nesting_depth)
-            self._walk_nodes(node.orelse, parent_conditional_key, parent_branch_kind, nesting_depth)
+            self._walk_node(node.test, parent_conditional_key, parent_branch_kind, call_depth)
+            self._walk_nodes(node.body, parent_conditional_key, parent_branch_kind, call_depth)
+            self._walk_nodes(node.orelse, parent_conditional_key, parent_branch_kind, call_depth)
             return
 
         flattened_elifs, terminal_else = self._flatten_elif_chain(node)
@@ -965,31 +965,29 @@ class _ScopeIndexer:
             terminal_else=terminal_else,
             parent_conditional_key=parent_conditional_key,
             parent_branch_kind=parent_branch_kind,
-            nesting_depth=nesting_depth,
+            call_depth=call_depth,
         )
         self._register_conditional(record)
 
         self._add_bool_consumer("if_test", node.test, record.key, "then")
-        self._walk_node(node.test, parent_conditional_key, parent_branch_kind, nesting_depth)
-        self._walk_nodes(node.body, record.key, "then", nesting_depth + 1)
+        self._walk_node(node.test, parent_conditional_key, parent_branch_kind, call_depth)
+        self._walk_nodes(node.body, record.key, "then", call_depth + 1)
 
         for index, elif_node in enumerate(flattened_elifs, start=1):
             branch_kind = f"elif_{index}"
             self._add_bool_consumer("elif_test", elif_node.test, record.key, branch_kind)
-            self._walk_node(
-                elif_node.test, parent_conditional_key, parent_branch_kind, nesting_depth
-            )
-            self._walk_nodes(elif_node.body, record.key, branch_kind, nesting_depth + 1)
+            self._walk_node(elif_node.test, parent_conditional_key, parent_branch_kind, call_depth)
+            self._walk_nodes(elif_node.body, record.key, branch_kind, call_depth + 1)
 
         if terminal_else:
-            self._walk_nodes(terminal_else, record.key, "else", nesting_depth + 1)
+            self._walk_nodes(terminal_else, record.key, "else", call_depth + 1)
 
     def _handle_ifexp(
         self,
         node: ast.IfExp,
         parent_conditional_key: Optional[ConditionalKey],
         parent_branch_kind: Optional[str],
-        nesting_depth: int,
+        call_depth: int,
     ) -> None:
         """Index a ternary conditional expression.
 
@@ -1001,7 +999,7 @@ class _ScopeIndexer:
             Structural key of the enclosing conditional, if any.
         parent_branch_kind:
             Enclosing branch kind, if any.
-        nesting_depth:
+        call_depth:
             Current conditional nesting depth within the scope.
         """
 
@@ -1023,16 +1021,16 @@ class _ScopeIndexer:
                 "else": _node_span(node.orelse),
             },
             branch_test_spans={"then": _node_span(node.test)},
-            nesting_depth=nesting_depth,
+            call_depth=call_depth,
             parent_conditional_key=parent_conditional_key,
             parent_branch_kind=parent_branch_kind,
         )
         self._register_conditional(record)
 
         self._add_bool_consumer("ifexp", node.test, key, "then")
-        self._walk_node(node.test, parent_conditional_key, parent_branch_kind, nesting_depth)
-        self._walk_node(node.body, key, "then", nesting_depth + 1)
-        self._walk_node(node.orelse, key, "else", nesting_depth + 1)
+        self._walk_node(node.test, parent_conditional_key, parent_branch_kind, call_depth)
+        self._walk_node(node.body, key, "then", call_depth + 1)
+        self._walk_node(node.orelse, key, "else", call_depth + 1)
 
     def _flatten_elif_chain(self, node: ast.If) -> Tuple[List[ast.If], List[ast.stmt]]:
         """Flatten a synthetic ``elif`` chain rooted at ``node``.
@@ -1068,7 +1066,7 @@ class _ScopeIndexer:
         terminal_else: List[ast.stmt],
         parent_conditional_key: Optional[ConditionalKey],
         parent_branch_kind: Optional[str],
-        nesting_depth: int,
+        call_depth: int,
     ) -> ConditionalRecord:
         """Build the conditional record for a flattened ``if`` chain.
 
@@ -1084,7 +1082,7 @@ class _ScopeIndexer:
             Structural key of the enclosing conditional, if any.
         parent_branch_kind:
             Enclosing branch kind, if any.
-        nesting_depth:
+        call_depth:
             Current conditional nesting depth within the scope.
 
         Returns
@@ -1119,7 +1117,7 @@ class _ScopeIndexer:
             test_span=_node_span(node.test),
             branch_ranges=branch_ranges,
             branch_test_spans=branch_test_spans,
-            nesting_depth=nesting_depth,
+            call_depth=call_depth,
             parent_conditional_key=parent_conditional_key,
             parent_branch_kind=parent_branch_kind,
         )
@@ -1140,7 +1138,7 @@ class _ScopeIndexer:
                 BranchInterval(
                     conditional_key=record.key,
                     branch_kind=branch_kind,
-                    nesting_depth=record.nesting_depth,
+                    call_depth=record.call_depth,
                     span=span,
                 )
             )

@@ -39,14 +39,14 @@ def _make_simple_model():
 def _make_frozen_first_layer():
     model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
     for p in model[0].parameters():
-        p.requires_grad = False
+        p.has_trainable_params = False
     return model
 
 
 def _make_all_frozen():
     model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
     for p in model.parameters():
-        p.requires_grad = False
+        p.has_trainable_params = False
     return model
 
 
@@ -72,10 +72,10 @@ class TestParamLogFields:
         assert isinstance(pl.memory, int)
         assert isinstance(pl.memory_str, str)
         assert isinstance(pl.trainable, bool)
-        assert isinstance(pl.module_address, str)
+        assert isinstance(pl.address, str)
         assert isinstance(pl.module_type, str)
         assert isinstance(pl.barcode, str)
-        assert isinstance(pl.num_passes, int)
+        assert isinstance(pl.num_calls, int)
         assert isinstance(pl.used_by_layers, list)
         assert isinstance(pl.linked_params, list)
 
@@ -155,7 +155,7 @@ class TestParamAccessorTLE:
     def test_access_by_address(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         entry = [e for e in mh if e.uses_params][0]
-        pl = entry.params[entry.parent_param_logs[0].address]
+        pl = entry.params[entry._param_logs[0].address]
         assert isinstance(pl, ParamLog)
 
     def test_access_by_short_name(self):
@@ -199,7 +199,7 @@ class TestParamMetadata:
         pl = mh.params["0.weight"]
         assert pl.address == "0.weight"
         assert pl.name == "weight"
-        assert pl.module_address == "0"
+        assert pl.address == "0"
 
     def test_shape_and_dtype(self):
         model = _make_simple_model()
@@ -223,7 +223,7 @@ class TestParamMetadata:
     def test_module_info(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params["0.weight"]
-        assert pl.module_address == "0"
+        assert pl.address == "0"
         assert pl.module_type == "Linear"
 
     def test_fsize_positive(self):
@@ -241,29 +241,27 @@ class TestParamMetadata:
 class TestTrainableFrozenTallies:
     def test_mh_all_trainable(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        assert mh.total_params == mh.total_params_trainable
-        assert mh.total_params_frozen == 0
-        assert mh.total_params == 67  # 50+5+10+2
+        assert mh.num_params == mh.num_params_trainable
+        assert mh.num_params_frozen == 0
+        assert mh.num_params == 67  # 50+5+10+2
 
     def test_mh_mixed(self):
         mh = trace_fn(_make_frozen_first_layer(), _simple_input())
-        assert mh.total_params_frozen == 55  # 50+5
-        assert mh.total_params_trainable == 12  # 10+2
-        assert mh.total_params == 67
-        assert mh.total_params == mh.total_params_trainable + mh.total_params_frozen
+        assert mh.num_params_frozen == 55  # 50+5
+        assert mh.num_params_trainable == 12  # 10+2
+        assert mh.num_params == 67
+        assert mh.num_params == mh.num_params_trainable + mh.num_params_frozen
 
     def test_mh_all_frozen(self):
         mh = trace_fn(_make_all_frozen(), _simple_input())
-        assert mh.total_params_trainable == 0
-        assert mh.total_params_frozen == 67
+        assert mh.num_params_trainable == 0
+        assert mh.num_params_frozen == 67
 
     def test_tle_tallies(self):
         mh = trace_fn(_make_frozen_first_layer(), _simple_input())
         for entry in mh:
             if entry.uses_params:
-                assert (
-                    entry.num_params_total == entry.num_params_trainable + entry.num_params_frozen
-                )
+                assert entry.num_params == entry.num_params_trainable + entry.num_params_frozen
         # First linear is frozen
         linear1 = [e for e in mh if "linear_1" in e.layer_label][0]
         assert linear1.num_params_frozen == 55
@@ -276,10 +274,10 @@ class TestTrainableFrozenTallies:
     def test_output_layer_no_params(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         output = mh["output_1"]
-        assert output.num_params_total == 0
+        assert output.num_params == 0
         assert output.num_params_trainable == 0
         assert output.num_params_frozen == 0
-        assert len(output.parent_param_logs) == 0
+        assert len(output._param_logs) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +317,7 @@ class TestTensorLogEntries:
         for pl in mh.params:
             for label in pl.used_by_layers:
                 entry = mh[label]
-                assert any(p.address == pl.address for p in entry.parent_param_logs)
+                assert any(p.address == pl.address for p in entry._param_logs)
 
 
 # ---------------------------------------------------------------------------
@@ -328,26 +326,26 @@ class TestTensorLogEntries:
 
 
 class TestRecurrentParams:
-    def test_num_passes_non_recurrent(self):
+    def test_num_calls_non_recurrent(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            assert pl.num_passes == 1
+            assert pl.num_calls == 1
 
-    def test_num_passes_recurrent(self, input_2d):
+    def test_num_calls_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         mh = trace_fn(model, input_2d)
         # fc1 is used 4 times
         pl = mh.params["fc1.weight"]
-        assert pl.num_passes >= 2  # should be 4
+        assert pl.num_calls >= 2  # should be 4
         assert len(pl.used_by_layers) >= 2
 
     def test_layer_log_entries_multi_pass(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         mh = trace_fn(model, input_2d)
         pl = mh.params["fc1.weight"]
-        # num_passes equals the number of used_by_layers
-        assert pl.num_passes == len(pl.used_by_layers)
-        assert pl.num_passes >= 2
+        # num_calls equals the number of used_by_layers
+        assert pl.num_calls == len(pl.used_by_layers)
+        assert pl.num_calls >= 2
 
 
 # ---------------------------------------------------------------------------
@@ -362,20 +360,20 @@ class TestGradientTracking:
             assert pl.has_grad is False
             assert pl.grad_shape is None
 
-    def test_no_grad_without_save_gradients(self):
-        mh = trace_fn(_make_simple_model(), _simple_input(), save_gradients=False)
-        # Even if we could call backward, save_gradients=False means no hooks
+    def test_no_grad_without_save_grads(self):
+        mh = trace_fn(_make_simple_model(), _simple_input(), save_grads=False)
+        # Even if we could call backward, save_grads=False means no hooks
         for pl in mh.params:
             assert pl.has_grad is False
 
     def test_grad_after_backward(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
-        output = mh["output_1"].activation
+        mh = trace_fn(model, x, save_grads=True)
+        output = mh["output_1"].out
         output.sum().backward()
 
-        # All trainable params should have gradients
+        # All trainable params should have grads
         for pl in mh.params:
             assert pl.has_grad is True
             assert pl.grad_shape == pl.shape
@@ -386,47 +384,47 @@ class TestGradientTracking:
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
-        output = mh["output_1"].activation
+        mh = trace_fn(model, x, save_grads=True)
+        output = mh["output_1"].out
         output.sum().backward()
 
-        # Frozen params should NOT have gradients
+        # Frozen params should NOT have grads
         assert mh.params["0.weight"].has_grad is False
         assert mh.params["0.bias"].has_grad is False
-        # Trainable params should have gradients
+        # Trainable params should have grads
         assert mh.params["2.weight"].has_grad is True
         assert mh.params["2.bias"].has_grad is True
 
     def test_tle_grad_saved(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
-        output = mh["output_1"].activation
+        mh = trace_fn(model, x, save_grads=True)
+        output = mh["output_1"].out
         output.sum().backward()
 
-        # TLEs with param layers should have saved gradients
+        # TLEs with param layers should have saved grads
         for entry in mh:
             if entry.uses_params:
-                assert entry.has_gradient is True
-                assert entry.gradient is not None
+                assert entry.has_grad is True
+                assert entry.grad is not None
                 assert entry.grad_shape is not None
 
-    def test_layers_with_saved_gradients_populated(self):
+    def test_ops_with_saved_grads_populated(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
-        output = mh["output_1"].activation
+        mh = trace_fn(model, x, save_grads=True)
+        output = mh["output_1"].out
         output.sum().backward()
 
-        assert len(mh.layers_with_saved_gradients) > 0
-        for label in mh.layers_with_saved_gradients:
-            assert mh[label].has_gradient is True
+        assert len(mh.ops_with_saved_grads) > 0
+        for label in mh.ops_with_saved_grads:
+            assert mh[label].has_grad is True
 
     def test_grad_shape_matches_param_shape(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
-        output = mh["output_1"].activation
+        mh = trace_fn(model, x, save_grads=True)
+        output = mh["output_1"].out
         output.sum().backward()
 
         for pl in mh.params:
@@ -471,14 +469,14 @@ class TestOptimizerSupport:
 
 
 class TestVisualizationParams:
-    def _get_dot_source(self, model, x, vis_mode="unrolled", vis_nesting_depth=1000):
+    def _get_dot_source(self, model, x, vis_mode="unrolled", vis_call_depth=1000):
         outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
         mh = trace_fn(model, x)
         dot_source = mh.render_graph(
             vis_mode=vis_mode,
             vis_outpath=outpath,
             vis_save_only=True,
-            vis_nesting_depth=vis_nesting_depth,
+            vis_call_depth=vis_call_depth,
         )
         return dot_source, mh
 
@@ -513,16 +511,16 @@ class TestVisualizationParams:
         dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input())
         assert "#B0B0B0" in dot  # FROZEN_PARAMS_BG_COLOR
 
-    def test_mixed_gradient_fill(self):
-        """When a layer has both trainable and frozen params, use gradient fill."""
+    def test_mixed_grad_fill(self):
+        """When a layer has both trainable and frozen params, use grad fill."""
         # Create a model with mixed trainable/frozen in the same layer
         model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
         # Freeze only the weight, keep bias trainable
-        model[0].weight.requires_grad = False
+        model[0].weight.has_trainable_params = False
         dot, mh = self._get_dot_source(model, _simple_input())
         # Gradient fill uses "color1:color2" syntax
         assert "#D9D9D9:#B0B0B0" in dot
-        assert "gradientangle" in dot
+        assert "gradangle" in dot
 
     def test_graph_caption_all_trainable(self):
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
@@ -540,29 +538,29 @@ class TestVisualizationParams:
 
     def test_collapsed_module_trainable_color(self):
         """Collapsed module with all trainable params should use trainable color."""
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_nesting_depth=1)
+        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_call_depth=1)
         assert "#D9D9D9" in dot
 
     def test_collapsed_module_frozen_color(self):
         """Collapsed module with all frozen params should use frozen color."""
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_nesting_depth=1)
+        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_call_depth=1)
         assert "#B0B0B0" in dot
 
-    def test_collapsed_module_mixed_gradient(self):
-        """Collapsed module with mixed frozen/trainable should use gradient fill."""
+    def test_collapsed_module_mixed_grad(self):
+        """Collapsed module with mixed frozen/trainable should use grad fill."""
         model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
-        model[0].weight.requires_grad = False
-        dot, mh = self._get_dot_source(model, _simple_input(), vis_nesting_depth=1)
+        model[0].weight.has_trainable_params = False
+        dot, mh = self._get_dot_source(model, _simple_input(), vis_call_depth=1)
         # The collapsed "0" module has mixed params
         assert "#D9D9D9:#B0B0B0" in dot or "#D9D9D9" in dot  # at least one color appears
 
     def test_collapsed_module_param_detail(self):
         """Collapsed module should show trainable/frozen param breakdown."""
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_nesting_depth=1)
+        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), vis_call_depth=1)
         assert "all trainable" in dot
 
     def test_collapsed_module_param_detail_frozen(self):
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_nesting_depth=1)
+        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), vis_call_depth=1)
         assert "all frozen" in dot
 
 
@@ -576,36 +574,36 @@ class TestIntegration:
         model = example_models.RecurrentParamsSimple()
         mh = trace_fn(model, input_2d)
         assert len(mh.params) == 2  # fc1.weight, fc1.bias
-        assert mh.params["fc1.weight"].num_passes >= 2
+        assert mh.params["fc1.weight"].num_calls >= 2
 
     def test_model_with_no_params(self):
         model = nn.Sequential(nn.ReLU(), nn.Sigmoid())
         x = torch.randn(1, 5)
         mh = trace_fn(model, x)
         assert len(mh.params) == 0
-        assert mh.total_params == 0
-        assert mh.total_params_trainable == 0
-        assert mh.total_params_frozen == 0
+        assert mh.num_params == 0
+        assert mh.num_params_trainable == 0
+        assert mh.num_params_frozen == 0
 
     def test_recurrent_params_complex(self, input_2d):
         model = example_models.RecurrentParamsComplex()
         mh = trace_fn(model, input_2d)
         assert len(mh.params) == 4  # fc1 weight+bias, fc2 weight+bias
         # Both fc1 and fc2 are used multiple times (as used_by_layers)
-        assert mh.params["fc1.weight"].num_passes >= 2
-        assert mh.params["fc2.weight"].num_passes >= 2
+        assert mh.params["fc1.weight"].num_calls >= 2
+        assert mh.params["fc2.weight"].num_calls >= 2
         # Verify all entries point to real layers
         for pl in mh.params:
             for label in pl.used_by_layers:
                 assert label in mh.layer_dict_all_keys
 
-    def test_gradient_tracking_recurrent(self, input_2d):
+    def test_grad_tracking_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        mh = trace_fn(model, input_2d, save_gradients=True)
-        output = mh["output_1"].activation
+        mh = trace_fn(model, input_2d, save_grads=True)
+        output = mh["output_1"].out
         output.sum().backward()
 
-        # Despite multiple passes, each param should have exactly one gradient
+        # Despite multiple ops, each param should have exactly one grad
         for pl in mh.params:
             assert pl.has_grad is True
             assert pl.grad_shape == pl.shape
@@ -649,7 +647,7 @@ class TestIntegration:
             model,
             _simple_input(),
             vis_save_only=True,
-            vis_nesting_depth=1,
+            vis_call_depth=1,
             vis_outpath=opj(outdir, "_param_collapsed_trainable"),
         )
 
@@ -658,7 +656,7 @@ class TestIntegration:
             model,
             _simple_input(),
             vis_save_only=True,
-            vis_nesting_depth=1,
+            vis_call_depth=1,
             vis_outpath=opj(outdir, "_param_collapsed_mixed"),
         )
 
@@ -667,7 +665,7 @@ class TestIntegration:
             model,
             _simple_input(),
             vis_save_only=True,
-            vis_nesting_depth=1,
+            vis_call_depth=1,
             vis_outpath=opj(outdir, "_param_collapsed_frozen"),
         )
 

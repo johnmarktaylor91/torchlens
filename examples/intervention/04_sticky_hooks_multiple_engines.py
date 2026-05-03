@@ -52,10 +52,10 @@ def main() -> None:
     rerun.attach_hooks(tl.func("relu"), tl.zero_ablate())
     rerun.rerun(model, x)
 
-    assert torch.allclose(replayed.layer_list[-1].activation, rerun.layer_list[-1].activation)
+    assert torch.allclose(replayed.layer_list[-1].out, rerun.layer_list[-1].out)
     assert replayed.last_run_records()[-1].engine == "replay"
     rerun_records = [
-        record for layer in rerun.layer_list for record in getattr(layer, "intervention_log", ())
+        record for layer in rerun.layer_list for record in getattr(layer, "interventions", ())
     ]
     assert rerun_records[-1].engine == "live"
 

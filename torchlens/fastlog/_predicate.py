@@ -13,9 +13,9 @@ def _coerce_default_capture_spec(default: bool | CaptureSpec) -> CaptureSpec:
     if isinstance(default, CaptureSpec):
         return default
     if default is True:
-        return CaptureSpec(save_activation=True, save_metadata=True)
+        return CaptureSpec(save_out=True, save_metadata=True)
     if default is False:
-        return CaptureSpec(save_activation=False, save_metadata=False)
+        return CaptureSpec(save_out=False, save_metadata=False)
     raise PredicateError("default capture decision must be bool or CaptureSpec")
 
 
@@ -49,14 +49,14 @@ def _normalize_capture_decision(
     default_spec = _coerce_default_capture_spec(default)
     if result is True:
         return CaptureSpec(
-            save_activation=True,
+            save_out=True,
             save_metadata=True,
             keep_grad=default_spec.keep_grad,
             device=default_spec.device,
             dtype=default_spec.dtype,
         )
     if result is False:
-        return CaptureSpec(save_activation=False, save_metadata=False)
+        return CaptureSpec(save_out=False, save_metadata=False)
     if result is None:
         return default_spec
     if isinstance(result, CaptureSpec):

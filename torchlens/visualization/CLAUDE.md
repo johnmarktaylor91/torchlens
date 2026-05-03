@@ -31,7 +31,7 @@ lives under `torchlens.experimental.dagua` and requires explicit opt-in.
 ## Code Panel
 `code_panel=True`, `"forward"`, `"class"`, or `"init+forward"` adds a Graphviz side panel
 from source captured at logging time. Callable code panels require a live model. ELK direct
-rendering bypasses this path.
+rendering byops this path.
 
 ## Visualization Modes
 - `vis_mode="unrolled"` renders per-pass `OpLog` nodes.
@@ -45,7 +45,7 @@ rendering bypasses this path.
 `NodeSpec` or `None`. `collapsed_node_spec_fn` customizes collapsed module nodes. Node mode
 presets are applied before user callbacks, so callbacks win.
 
-Graph, edge, gradient-edge, and module styling use dict/callable override options.
+Graph, edge, grad-edge, and module styling use dict/callable override options.
 
 ## Conditional and Intervention Rendering
 Graphviz renders IF/THEN/ELIF/ELSE arm labels from cond-id-aware metadata. Intervention-ready
@@ -53,5 +53,5 @@ logs can render hook nodes and cone/site styling through `node_spec.py` helpers.
 
 ## ELK Backend
 `_elk_internal/layout.py` uses Node.js ELK when available, falls back to sfdp/topological
-layout when needed, and bypasses ELK for very large graphs. Some Graphviz-only features
+layout when needed, and byops ELK for very large graphs. Some Graphviz-only features
 remain unavailable or less complete on the ELK path.

@@ -203,8 +203,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
     # Direct pass access
     mod = log.modules[param_module_addr]
-    if 1 in mod.passes:
-        out.write(_capture(f'log.modules["{param_module_addr}"].passes[1]', repr(mod.passes[1])))
+    if 1 in mod.ops:
+        out.write(_capture(f'log.modules["{param_module_addr}"].ops[1]', repr(mod.ops[1])))
 
     out.write(_capture("log.modules.to_pandas()", log.modules.to_pandas().to_string()))
     out.write(_capture("log.modules.summary()", log.modules.summary()))
@@ -212,19 +212,19 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     # Multi-pass module info (for recurrent models)
     if log.is_recurrent:
         for ml in log.modules:
-            if ml.num_passes > 1 and ml.address != "self":
+            if ml.num_calls > 1 and ml.address != "self":
                 out.write(
                     _capture(
-                        f'repr(log.modules["{ml.address}"]) — multi-pass module ({ml.num_passes} passes)',
+                        f'repr(log.modules["{ml.address}"]) — multi-pass module ({ml.num_calls} ops)',
                         repr(ml),
                     )
                 )
                 # Show ModuleCallLog for each pass
-                for p in sorted(ml.passes.keys()):
+                for p in sorted(ml.ops.keys()):
                     out.write(
                         _capture(
-                            f'repr(log.modules["{ml.address}"].passes[{p}]) — ModuleCallLog pass {p}',
-                            repr(ml.passes[p]),
+                            f'repr(log.modules["{ml.address}"].ops[{p}]) — ModuleCallLog pass {p}',
+                            repr(ml.ops[p]),
                         )
                     )
                 break
@@ -265,9 +265,9 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
             status = "FROZEN" if not pl.trainable else "TRAINABLE"
             out.write(f"  [{status}] {pl.address}\n")
             out.write(f"  {repr(pl)}\n\n")
-        out.write(f"  Total frozen: {log.total_params_frozen}\n")
-        out.write(f"  Total trainable: {log.total_params_trainable}\n")
-        out.write(f"  Total params: {log.total_params}\n")
+        out.write(f"  Total frozen: {log.num_params_frozen}\n")
+        out.write(f"  Total trainable: {log.num_params_trainable}\n")
+        out.write(f"  Total params: {log.num_params}\n")
 
     # ===== C.2 Buffer System =====
     if hasattr(log, "buffers") and log.buffers is not None and len(log.buffers) > 0:
@@ -307,12 +307,12 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 pass  # ambiguous short name, skip
 
         # Show scoped module buffers if there's a module with buffers
-        if first_buf.module_address:
+        if first_buf.address:
             try:
-                mod_bufs = log.modules[first_buf.module_address].buffers
+                mod_bufs = log.modules[first_buf.address].buffers
                 out.write(
                     _capture(
-                        f'repr(log.modules["{first_buf.module_address}"].buffers) — scoped',
+                        f'repr(log.modules["{first_buf.address}"].buffers) — scoped',
                         repr(mod_bufs),
                     )
                 )
@@ -340,13 +340,13 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_capture(f'repr(log["{sample_label}"]) — by full label', repr(log[sample_label])))
 
     # By label with pass and without pass
-    if len(log.layer_labels_w_pass) > 1:
-        sample_w_pass = log.layer_labels_w_pass[1]
+    if len(log.op_labels) > 1:
+        sample_w_pass = log.op_labels[1]
         out.write(
             _capture(f'repr(log["{sample_w_pass}"]) — by label w/ pass', repr(log[sample_w_pass]))
         )
     # Find a single-pass layer to demonstrate no-pass lookup
-    for lbl in log.layer_labels_no_pass:
+    for lbl in log.layer_labels:
         if lbl in log.layer_dict_all_keys:
             out.write(_capture(f'repr(log["{lbl}"]) — by label no pass', repr(log[lbl])))
             break
@@ -379,10 +379,10 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if log.is_recurrent and len(log.layer_logs) > 0:
         out.write(_section("D.1 LayerLog (multi-pass)", level=3))
         for ll in log.layer_logs.values():
-            if ll.num_passes > 1:
+            if ll.num_calls > 1:
                 out.write(
                     _capture(
-                        f"repr(layer_log) — {ll.layer_label} ({ll.num_passes} passes)",
+                        f"repr(layer_log) — {ll.layer_label} ({ll.num_calls} ops)",
                         repr(ll),
                     )
                 )
@@ -395,7 +395,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_capture_error('log["nonexistent"] — invalid layer name', lambda: log["nonexistent"]))
 
     # Multi-pass layer without pass specifier
-    for label, num_p in log.layer_num_passes.items():
+    for label, num_p in log.layer_num_calls.items():
         if num_p > 1:
             out.write(
                 _capture_error(
@@ -412,7 +412,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
     # Multi-pass module .layers access
     for ml in log.modules:
-        if ml.num_passes > 1 and ml.address != "self":
+        if ml.num_calls > 1 and ml.address != "self":
             out.write(
                 _capture_error(
                     f'log.modules["{ml.address}"].layers — multi-pass per-call field',
@@ -446,7 +446,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         out.write(_section("F.3 LayerLog field dump (multi-pass)", level=3))
         ll_for_dump = None
         for ll in log.layer_logs.values():
-            if ll.num_passes > 1:
+            if ll.num_calls > 1:
                 ll_for_dump = ll
                 break
         if ll_for_dump is None:
@@ -461,11 +461,11 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(mod_for_dump, f"ModuleLog: {mod_for_dump.address}"))
 
     # F.5 ModuleCallLog
-    if 1 in mod_for_dump.passes:
+    if 1 in mod_for_dump.ops:
         out.write(_section("F.5 ModuleCallLog field dump", level=3))
-        mpl_for_dump = mod_for_dump.passes[1]
-        out.write(_code(f"ModuleCallLog: {mpl_for_dump.pass_label}"))
-        out.write(_field_dump(mpl_for_dump, f"ModuleCallLog: {mpl_for_dump.pass_label}"))
+        mpl_for_dump = mod_for_dump.ops[1]
+        out.write(_code(f"ModuleCallLog: {mpl_for_dump.call_label}"))
+        out.write(_field_dump(mpl_for_dump, f"ModuleCallLog: {mpl_for_dump.call_label}"))
 
     # F.6 ParamLog
     if len(log.params) > 0:
@@ -483,34 +483,34 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(log.params, "ParamAccessor"))
 
     # ===== G. Gradient System =====
-    # Only for models with params — log with save_gradients=True and run backward
+    # Only for models with params — log with save_grads=True and run backward
     if len(log.params) > 0:
-        out.write(_section("G. Gradient System (save_gradients=True + backward)", level=2))
+        out.write(_section("G. Gradient System (save_grads=True + backward)", level=2))
         try:
-            grad_log = trace_fn(model, x, save_gradients=True, random_seed=42)
+            grad_log = trace_fn(model, x, save_grads=True, random_seed=42)
             output_label = grad_log.output_layers[0]
-            output_tensor = grad_log[output_label].activation
+            output_tensor = grad_log[output_label].out
             output_tensor.sum().backward()
 
-            out.write(_capture("grad_log.has_gradients", grad_log.has_gradients))
+            out.write(_capture("grad_log.has_grads", grad_log.has_grads))
             out.write(
                 _capture(
-                    "grad_log.layers_with_saved_gradients",
-                    grad_log.layers_with_saved_gradients,
+                    "grad_log.ops_with_saved_grads",
+                    grad_log.ops_with_saved_grads,
                 )
             )
 
-            # Show gradient fields on a OpLog that has saved grad
+            # Show grad fields on a OpLog that has saved grad
             for entry in grad_log.layer_list:
-                if entry.has_gradient:
+                if entry.has_grad:
                     out.write(
                         _section(
-                            f"G.1 OpLog gradient fields — {entry.layer_label}",
+                            f"G.1 OpLog grad fields — {entry.layer_label}",
                             level=3,
                         )
                     )
-                    out.write(_capture("has_gradient", entry.has_gradient))
-                    out.write(_capture("gradient", entry.gradient))
+                    out.write(_capture("has_grad", entry.has_grad))
+                    out.write(_capture("grad", entry.grad))
                     out.write(_capture("grad_shape", entry.grad_shape))
                     out.write(_capture("grad_dtype", entry.grad_dtype))
                     out.write(_capture("grad_memory", entry.grad_memory))
@@ -519,21 +519,21 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
             # Show a OpLog WITHOUT grad for contrast
             for entry in grad_log.layer_list:
-                if not entry.has_gradient:
+                if not entry.has_grad:
                     out.write(
                         _section(
                             f"G.2 OpLog without grad — {entry.layer_label}",
                             level=3,
                         )
                     )
-                    out.write(_capture("has_gradient", entry.has_gradient))
-                    out.write(_capture("gradient", entry.gradient))
+                    out.write(_capture("has_grad", entry.has_grad))
+                    out.write(_capture("grad", entry.grad))
                     break
 
-            # ParamLog gradient fields
+            # ParamLog grad fields
             for pl in grad_log.params:
                 if pl.has_grad:
-                    out.write(_section(f"G.3 ParamLog gradient fields — {pl.address}", level=3))
+                    out.write(_section(f"G.3 ParamLog grad fields — {pl.address}", level=3))
                     out.write(_capture("has_grad", pl.has_grad))
                     out.write(_capture("grad_shape", pl.grad_shape))
                     out.write(_capture("grad_dtype", pl.grad_dtype))
@@ -554,7 +554,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("trainable", pl.trainable))
                     break
         except Exception as e:
-            out.write(f"  (gradient capture failed: {type(e).__name__}: {e})\n")
+            out.write(f"  (grad capture failed: {type(e).__name__}: {e})\n")
             out.write(f"  {traceback.format_exc()}\n")
 
     return out.getvalue()
@@ -876,12 +876,12 @@ VIS_GALLERY = [
     ),
 ]
 
-# Gradient visualization gallery — rendered with save_gradients=True + backward()
+# Gradient visualization gallery — rendered with save_grads=True + backward()
 # (filename_stem, caption, model_name, input_shape_desc, vis_mode, depth, direction)
 GRADIENT_VIS_GALLERY = [
     (
-        "gradient_deep_nested",
-        "AestheticDeepNested — with gradient arrows",
+        "grad_deep_nested",
+        "AestheticDeepNested — with grad arrows",
         "AestheticDeepNested",
         "(1,8)",
         "unrolled",
@@ -889,8 +889,8 @@ GRADIENT_VIS_GALLERY = [
         "bottomup",
     ),
     (
-        "gradient_deep_nested_topdown",
-        "AestheticDeepNested — gradients, top-down",
+        "grad_deep_nested_topdown",
+        "AestheticDeepNested — grads, top-down",
         "AestheticDeepNested",
         "(1,8)",
         "unrolled",
@@ -898,8 +898,8 @@ GRADIENT_VIS_GALLERY = [
         "topdown",
     ),
     (
-        "gradient_frozen_mix",
-        "AestheticFrozenMix — gradients (frozen + trainable)",
+        "grad_frozen_mix",
+        "AestheticFrozenMix — grads (frozen + trainable)",
         "AestheticFrozenMix",
         "(1,8)",
         "unrolled",
@@ -907,8 +907,8 @@ GRADIENT_VIS_GALLERY = [
         "bottomup",
     ),
     (
-        "gradient_kitchen_sink",
-        "AestheticKitchenSink — gradients + nesting",
+        "grad_kitchen_sink",
+        "AestheticKitchenSink — grads + nesting",
         "AestheticKitchenSink",
         "(1,8)",
         "unrolled",
@@ -916,8 +916,8 @@ GRADIENT_VIS_GALLERY = [
         "bottomup",
     ),
     (
-        "gradient_kitchen_sink_depth1",
-        "AestheticKitchenSink — gradients, depth=1",
+        "grad_kitchen_sink_depth1",
+        "AestheticKitchenSink — grads, depth=1",
         "AestheticKitchenSink",
         "(1,8)",
         "unrolled",
@@ -1044,9 +1044,9 @@ def _build_latex_report() -> str:
             for pl in log.params:
                 status = "FROZEN" if not pl.trainable else "TRAINABLE"
                 frozen_text += f"[{status}] {pl.address}\n{repr(pl)}\n\n"
-            frozen_text += f"Total frozen: {log.total_params_frozen}\n"
-            frozen_text += f"Total trainable: {log.total_params_trainable}\n"
-            frozen_text += f"Total params: {log.total_params}\n"
+            frozen_text += f"Total frozen: {log.num_params_frozen}\n"
+            frozen_text += f"Total trainable: {log.num_params_trainable}\n"
+            frozen_text += f"Total params: {log.num_params}\n"
             doc.write(_verbatim_box("C.1 Frozen vs Trainable Parameters", frozen_text))
 
         # C.2 Buffers
@@ -1067,10 +1067,10 @@ def _build_latex_report() -> str:
         # D.1 LayerLog (multi-pass)
         if log.is_recurrent and len(log.layer_logs) > 0:
             for ll in log.layer_logs.values():
-                if ll.num_passes > 1:
+                if ll.num_calls > 1:
                     doc.write(
                         _verbatim_box(
-                            f"D.1 LayerLog — {ll.layer_label} ({ll.num_passes} passes)",
+                            f"D.1 LayerLog — {ll.layer_label} ({ll.num_calls} ops)",
                             repr(ll),
                         )
                     )
@@ -1079,14 +1079,14 @@ def _build_latex_report() -> str:
         # Multi-pass module
         if log.is_recurrent:
             for ml in log.modules:
-                if ml.num_passes > 1 and ml.address != "self":
-                    passes_text = repr(ml) + "\n\n"
-                    for p in sorted(ml.passes.keys()):
-                        passes_text += f"--- Pass {p} ---\n{repr(ml.passes[p])}\n\n"
+                if ml.num_calls > 1 and ml.address != "self":
+                    ops_text = repr(ml) + "\n\n"
+                    for p in sorted(ml.ops.keys()):
+                        ops_text += f"--- Pass {p} ---\n{repr(ml.ops[p])}\n\n"
                     doc.write(
                         _verbatim_box(
-                            f"B.1 Multi-Pass Module — {ml.address} ({ml.num_passes} passes)",
-                            passes_text,
+                            f"B.1 Multi-Pass Module — {ml.address} ({ml.num_calls} ops)",
+                            ops_text,
                         )
                     )
                     break
@@ -1101,7 +1101,7 @@ def _build_latex_report() -> str:
             log["nonexistent"]
         except Exception as e:
             error_text += f'log["nonexistent"]:\n{type(e).__name__}: {e}\n\n'
-        for label, num_p in log.layer_num_passes.items():
+        for label, num_p in log.layer_num_calls.items():
             if num_p > 1:
                 try:
                     log[label]
@@ -1231,8 +1231,8 @@ def _build_latex_report() -> str:
     # --- Section 3: Gradient Visualization Gallery ---
     doc.write("\\section{Gradient Visualization Gallery}\n\n")
     doc.write(
-        "Graphs below show backward-pass gradient edges (blue arrows) rendered after "
-        "\\texttt{log\\_forward\\_pass(save\\_gradients=True)} and \\texttt{.backward()}. "
+        "Graphs below show backward-pass grad edges (blue arrows) rendered after "
+        "\\texttt{log\\_forward\\_pass(save\\_grads=True)} and \\texttt{.backward()}. "
         "Gradient arrows only appear in unrolled mode.\n\n"
     )
 
@@ -1241,7 +1241,7 @@ def _build_latex_report() -> str:
         if not os.path.exists(pdf_path):
             continue
         param_str = (
-            f"save\\_gradients=True, "
+            f"save\\_grads=True, "
             f"vis\\_opt={_tex_escape(vis_mode)}, "
             f"depth={depth}, "
             f"direction={_tex_escape(direction)}"
@@ -1292,7 +1292,7 @@ def _ensure_vis_pdfs_exist():
     ]
     for stem, caption, model_name, _, vis_mode, depth, direction in grad_missing:
         model, x = model_inputs[model_name]
-        _vis_gradient(model, x, stem, vis_mode=vis_mode, depth=depth, direction=direction)
+        _vis_grad(model, x, stem, vis_mode=vis_mode, depth=depth, direction=direction)
 
 
 @pytest.mark.skipif(
@@ -1361,29 +1361,29 @@ def _vis(
         model,
         x,
         vis_mode=vis_mode,
-        vis_nesting_depth=depth,
+        vis_call_depth=depth,
         vis_outpath=opj(VIS_DIR, filename),
         vis_save_only=True,
         vis_fileformat="pdf",
-        vis_buffer_layers=buffer_layers,
+        vis_buffers=buffer_layers,
         vis_direction=direction,
         code_panel=code_panel,
         random_seed=42,
     )
 
 
-def _vis_gradient(model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup"):
-    """Generate a visualization PDF with gradient backward arrows.
+def _vis_grad(model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup"):
+    """Generate a visualization PDF with grad backward arrows.
 
-    Uses trace_fn(save_gradients=True) + backward() + render_graph()
-    since show_model_graph() hardcodes save_gradients=False.
+    Uses trace_fn(save_grads=True) + backward() + render_graph()
+    since show_model_graph() hardcodes save_grads=False.
     """
-    log = trace_fn(model, x, save_gradients=True, random_seed=42)
-    output = log[log.output_layers[0]].activation
+    log = trace_fn(model, x, save_grads=True, random_seed=42)
+    output = log[log.output_layers[0]].out
     output.sum().backward()
     log.render_graph(
         vis_mode=vis_mode,
-        vis_nesting_depth=depth,
+        vis_call_depth=depth,
         vis_outpath=opj(VIS_DIR, filename),
         vis_save_only=True,
         vis_fileformat="pdf",
@@ -1474,28 +1474,28 @@ def test_aesthetic_loop_visualizations():
     _vis(model, x_5d, "nested_modules_depth2", depth=2)
 
 
-def test_aesthetic_gradient_visualizations():
-    """Gradient backward arrows (blue) — requires save_gradients=True + backward().
+def test_aesthetic_grad_visualizations():
+    """Gradient backward arrows (blue) — requires save_grads=True + backward().
 
-    Note: gradient edges only render in unrolled mode.
-    TODO: Consider supporting gradient arrows in rolled mode.
+    Note: grad edges only render in unrolled mode.
+    TODO: Consider supporting grad arrows in rolled mode.
     """
-    # DeepNested: simple nested model with gradients
+    # DeepNested: simple nested model with grads
     model = example_models.AestheticDeepNested()
     x = torch.rand(1, 8)
-    _vis_gradient(model, x, "gradient_deep_nested")
-    _vis_gradient(model, x, "gradient_deep_nested_topdown", direction="topdown")
+    _vis_grad(model, x, "grad_deep_nested")
+    _vis_grad(model, x, "grad_deep_nested_topdown", direction="topdown")
 
-    # FrozenMix: frozen params shouldn't have gradient arrows, trainable ones should
+    # FrozenMix: frozen params shouldn't have grad arrows, trainable ones should
     model = example_models.AestheticFrozenMix()
     x = torch.rand(1, 8)
-    _vis_gradient(model, x, "gradient_frozen_mix")
+    _vis_grad(model, x, "grad_frozen_mix")
 
-    # KitchenSink: gradients with nesting, branching, buffers
+    # KitchenSink: grads with nesting, branching, buffers
     model = example_models.AestheticKitchenSink()
     x = torch.rand(1, 8)
-    _vis_gradient(model, x, "gradient_kitchen_sink")
-    _vis_gradient(model, x, "gradient_kitchen_sink_depth1", depth=1)
+    _vis_grad(model, x, "grad_kitchen_sink")
+    _vis_grad(model, x, "grad_kitchen_sink_depth1", depth=1)
 
 
 # =============================================================================
@@ -1513,8 +1513,8 @@ class _SimpleLinear(nn.Module):
 
 
 class TestVisualizationBugfixes:
-    def test_vis_nesting_depth_0(self):
-        """vis_nesting_depth=0 should not crash."""
+    def test_vis_call_depth_0(self):
+        """vis_call_depth=0 should not crash."""
         model = _SimpleLinear()
         log = trace_fn(model, torch.randn(2, 10))
         try:
@@ -1522,9 +1522,9 @@ class TestVisualizationBugfixes:
 
             render_graph(
                 log,
-                vis_nesting_depth=0,
+                vis_call_depth=0,
                 vis_save_only=True,
-                vis_outpath=opj(VIS_DIR, "test_nesting_depth_0"),
+                vis_outpath=opj(VIS_DIR, "test_call_depth_0"),
             )
         except ImportError:
             pytest.skip("graphviz not available")
@@ -1579,7 +1579,7 @@ class TestVisualizationBugfixes:
 
 
 class TestVisModuleListFormat:
-    """_get_lowest_containing_module should handle mixed LayerLog/OpLog nodes."""
+    """_get_lowest_module should handle mixed LayerLog/OpLog nodes."""
 
     def test_vis_with_nested_modules(self):
         class Inner(nn.Module):

@@ -10,7 +10,7 @@ Step 5 (_mark_conditional_branches) now runs a six-phase conditional pipeline:
 Step 6 (_fix_modules_for_internal_tensors): Internally-generated tensors
     (constants, arange, etc.) don't know their containing module. This infers
     module containment by tracing backward from known input-descendant tensors.
-    Also appends module path suffixes to operation_equivalence_type — this is
+    Also appends module path suffixes to equivalence_class — this is
     INTENTIONAL and affects loop detection (Step 8), ensuring operations in
     different modules are never grouped as the same layer.
 Step 7 (_fix_buffer_layers): Connects buffer parents, deduplicates identical
@@ -90,7 +90,7 @@ def _can_fast_skip_step5(self: "Trace") -> bool:
     """Return True when Step 5 has no work to do.
 
     The slow path's only branch-attributing inputs are the Trace's
-    ``internally_terminated_bool_layers``: if no terminal scalar bool was
+    ``internally_terminated_bool_ops``: if no terminal scalar bool was
     captured, ``_iter_terminal_scalar_bool_labels`` yields nothing, so
     every downstream collection (events, edges, per-layer arm children)
     would resolve to its empty default. Skipping the slow path is then
@@ -98,14 +98,14 @@ def _can_fast_skip_step5(self: "Trace") -> bool:
 
     The function also checks the Trace-level conditional collections
     (``conditional_events``, ``conditional_branch_edges``,
-    ``conditional_arm_edges``, ``conditional_edge_passes``). They are initialized empty in
+    ``conditional_arm_edges``, ``conditional_edge_ops``). They are initialized empty in
     :meth:`Trace.__init__`, and the slow path resets them on entry.
     Any caller that pre-populated these would change the user-visible
     output if we skipped, so we conservatively run the slow path in that
     (pathological) case as well.
     """
 
-    if self.internally_terminated_bool_layers:
+    if self.internally_terminated_bool_ops:
         return False
     if self.conditional_events:
         return False
@@ -113,7 +113,7 @@ def _can_fast_skip_step5(self: "Trace") -> bool:
         return False
     if self.conditional_arm_edges:
         return False
-    if self.conditional_edge_passes:
+    if self.conditional_edge_ops:
         return False
     return True
 
@@ -246,7 +246,7 @@ def _materialize_conditional_events(
             test_span=record.test_span,
             branch_ranges=record.branch_ranges,
             branch_test_spans=record.branch_test_spans,
-            nesting_depth=record.nesting_depth,
+            call_depth=record.call_depth,
             parent_conditional_id=None,
             parent_branch_kind=record.parent_branch_kind,
         )
@@ -309,9 +309,9 @@ def _mark_conditional_branches_if_backward_flood(
         node = self[node_label]
         if node_label in nodes_seen:
             continue
-        for parent_label in node.parent_layers:
+        for parent_label in node.parents:
             parent_layer = self[parent_label]
-            if parent_layer.is_output_ancestor:
+            if parent_layer.has_output_descendant:
                 parent_layer.cond_branch_start_children.append(node_label)
                 parent_layer.in_cond_branch = False
                 nodes_seen.add(parent_label)
@@ -340,7 +340,7 @@ def _attribute_branches_forward(
     """
 
     conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = defaultdict(list)
-    conditional_edge_passes: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
+    conditional_edge_ops: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
 
     for layer_label in self._raw_layer_labels_list:
         layer = self[layer_label]
@@ -353,7 +353,7 @@ def _attribute_branches_forward(
 
     for parent_label in self._raw_layer_labels_list:
         parent_layer = self[parent_label]
-        for child_label in parent_layer.child_layers:
+        for child_label in parent_layer.children:
             child_layer = self[child_label]
             gained_entries = _get_gained_branch_entries(
                 parent_layer.conditional_branch_stack,
@@ -364,19 +364,19 @@ def _attribute_branches_forward(
                     branch_kind, []
                 ).append(child_label)
                 conditional_arm_edges[(conditional_id, branch_kind)].append(
-                    (parent_layer.tensor_label_raw, child_layer.tensor_label_raw)
+                    (parent_layer._label_raw, child_layer._label_raw)
                 )
-                conditional_edge_passes[
+                conditional_edge_ops[
                     (
-                        parent_layer.tensor_label_raw.split(":", 1)[0],
-                        child_layer.tensor_label_raw.split(":", 1)[0],
+                        parent_layer._label_raw.split(":", 1)[0],
+                        child_layer._label_raw.split(":", 1)[0],
                         conditional_id,
                         branch_kind,
                     )
-                ].append(parent_layer.pass_num)
+                ].append(parent_layer.call_index)
 
     self.conditional_arm_edges = dict(conditional_arm_edges)
-    self.conditional_edge_passes = dict(conditional_edge_passes)
+    self.conditional_edge_ops = dict(conditional_edge_ops)
 
 
 def _materialize_derived_views(self: "Trace") -> None:
@@ -388,8 +388,8 @@ def _materialize_derived_views(self: "Trace") -> None:
         Model log being postprocessed.
     """
 
-    self.conditional_edge_passes = {
-        key: sorted(set(pass_nums)) for key, pass_nums in self.conditional_edge_passes.items()
+    self.conditional_edge_ops = {
+        key: sorted(set(call_indexs)) for key, call_indexs in self.conditional_edge_ops.items()
     }
 
     for layer_label in self._raw_layer_labels_list:
@@ -440,7 +440,7 @@ def _iter_terminal_scalar_bool_labels(self: "Trace") -> List[str]:
         execution order in the model log.
     """
 
-    terminal_bool_labels = set(self.internally_terminated_bool_layers)
+    terminal_bool_labels = set(self.internally_terminated_bool_ops)
     return [
         layer_label
         for layer_label in self._raw_layer_labels_list
@@ -636,7 +636,7 @@ def _fix_modules_for_internal_tensors(self: "Trace") -> None:
     forward pass.
 
     After fixing module containment, appends the module path as a suffix to
-    each tensor's ``operation_equivalence_type``. This is INTENTIONAL and
+    each tensor's ``equivalence_class``. This is INTENTIONAL and
     critical for Step 8 (loop detection): it ensures that operations with
     identical function signatures but in different modules (e.g., relu in
     linear1 vs relu in linear2) are never grouped as the same layer.
@@ -651,7 +651,7 @@ def _fix_modules_for_internal_tensors(self: "Trace") -> None:
         node_label = node_stack.pop()
         node = self[node_label]
         # Propagate modules backward to internal-only parent nodes:
-        for parent_label in node.parent_layers:
+        for parent_label in node.parents:
             parent_node = self[parent_label]
             if (not parent_node.has_input_ancestor) and (parent_label not in nodes_seen):
                 _fix_modules_for_single_internal_tensor(
@@ -659,30 +659,28 @@ def _fix_modules_for_internal_tensors(self: "Trace") -> None:
                 )
 
         # Propagate forward to internally-generated child nodes:
-        for child_label in node.child_layers:
+        for child_label in node.children:
             child_node = self[child_label]
             if (
                 node.has_input_ancestor
                 or child_node.has_input_ancestor
                 or child_label in nodes_seen
-                or child_node.is_output_layer
+                or child_node.is_output
             ):
                 continue
             _fix_modules_for_single_internal_tensor(
                 node, child_node, "child", node_stack, nodes_seen
             )
 
-    # Append module path suffix to operation_equivalence_type for ALL tensors.
+    # Append module path suffix to equivalence_class for ALL tensors.
     # This ensures loop detection (Step 8) treats same-function operations in
     # different modules as distinct equivalence types.
     _module_str_cache = {}
     for layer in self:
-        cm_key = tuple(layer.containing_modules)
+        cm_key = tuple(layer.modules)
         if cm_key not in _module_str_cache:
-            _module_str_cache[cm_key] = "_".join(
-                [module_pass[0] for module_pass in layer.containing_modules]
-            )
-        layer.operation_equivalence_type += _module_str_cache[cm_key]
+            _module_str_cache[cm_key] = "_".join([module_pass[0] for module_pass in layer.modules])
+        layer.equivalence_class += _module_str_cache[cm_key]
 
 
 def _fix_modules_for_single_internal_tensor(
@@ -708,34 +706,30 @@ def _fix_modules_for_single_internal_tensor(
         node_stack: Stack to push node_to_fix onto for further propagation.
         nodes_seen: Set of already-processed nodes.
     """
-    node_to_fix_label = node_to_fix.tensor_label_raw
-    node_to_fix.containing_modules = starting_node.containing_modules.copy()
+    node_to_fix_label = node_to_fix._label_raw
+    node_to_fix.modules = starting_node.modules.copy()
     if node_type_to_fix == "parent":
-        thread_modules = starting_node.module_entry_exit_threads_inputs[
-            node_to_fix.tensor_label_raw
-        ]
+        thread_modules = starting_node._module_boundary_threads_inputs[node_to_fix._label_raw]
         step_val = -1
     elif node_type_to_fix == "child":
-        thread_modules = node_to_fix.module_entry_exit_threads_inputs[
-            starting_node.tensor_label_raw
-        ]
+        thread_modules = node_to_fix._module_boundary_threads_inputs[starting_node._label_raw]
         step_val = 1
     else:
         raise ValueError("node_type_to_fix must be 'parent' or 'child'")
 
-    for enter_or_exit, module_address, module_pass in thread_modules[::step_val]:
-        module_pass_label = (module_address, module_pass)
+    for enter_or_exit, address, module_pass in thread_modules[::step_val]:
+        module_call_label = (address, module_pass)
         if node_type_to_fix == "parent":
-            if (enter_or_exit == "+") and (module_pass_label in node_to_fix.containing_modules):
-                node_to_fix.containing_modules.remove(module_pass_label)
+            if (enter_or_exit == "+") and (module_call_label in node_to_fix.modules):
+                node_to_fix.modules.remove(module_call_label)
             elif enter_or_exit == "-":
-                node_to_fix.containing_modules.append(module_pass_label)
+                node_to_fix.modules.append(module_call_label)
         elif node_type_to_fix == "child":
             if enter_or_exit == "+":
-                node_to_fix.containing_modules.append(module_pass_label)
+                node_to_fix.modules.append(module_call_label)
             elif enter_or_exit == "-":
-                if module_pass_label in node_to_fix.containing_modules:
-                    node_to_fix.containing_modules.remove(module_pass_label)
+                if module_call_label in node_to_fix.modules:
+                    node_to_fix.modules.remove(module_call_label)
     node_stack.append(node_to_fix_label)
     nodes_seen.add(node_to_fix_label)
 
@@ -750,10 +744,10 @@ def _fix_buffer_layers(self: "Trace") -> None:
        buffer's value), updating parent/child links and ancestry.
     2. Deduplicates buffers: buffers with the same containing module, same parent,
        same buffer_address, AND same tensor value are merged into a single node.
-       The dedup hash is (containing_modules + buffer_parent + buffer_address).
+       The dedup hash is (modules + buffer_parent + buffer_address).
     3. Assigns sequential buffer_pass numbers per buffer_address.
 
-    Note: Buffer sibling_layers are always empty — the sibling iteration in
+    Note: Buffer siblings are always empty — the sibling iteration in
     _merge_buffer_entries is effectively dead code for buffers (#2).
     """
     buffer_counter: Dict[str, int] = defaultdict(lambda: 1)
@@ -762,26 +756,22 @@ def _fix_buffer_layers(self: "Trace") -> None:
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
         if layer.buffer_parent is not None:
-            layer.parent_layers.append(layer.buffer_parent)
-            self[layer.buffer_parent].child_layers.append(layer_label)
+            layer.parents.append(layer.buffer_parent)
+            self[layer.buffer_parent].children.append(layer_label)
             self[layer.buffer_parent].has_children = True
-            layer.func_applied = identity
+            layer.func = identity
             layer.func_name = "identity"
             layer.has_input_ancestor = True
             layer.input_ancestors.update(self[layer.buffer_parent].input_ancestors)
-            layer.root_ancestors.remove(layer.tensor_label_raw)
+            layer.root_ancestors.remove(layer._label_raw)
             layer.root_ancestors.update(self[layer.buffer_parent].root_ancestors)
-            layer.parent_layer_arg_locs["args"][0] = layer.buffer_parent
-            if (self[layer.buffer_parent].activation is not None) and (
-                layer.captured_args is not None
-            ):
-                layer.captured_args.append(
-                    safe_copy(self[layer.buffer_parent].activation, detach_tensor=True)
+            layer.parent_arg_positions["args"][0] = layer.buffer_parent
+            if (self[layer.buffer_parent].out is not None) and (layer.saved_args is not None):
+                layer.saved_args.append(
+                    safe_copy(self[layer.buffer_parent].out, detach_tensor=True)
                 )
 
-        buffer_hash = (
-            str(layer.containing_modules) + str(layer.buffer_parent) + layer.buffer_address
-        )
+        buffer_hash = str(layer.modules) + str(layer.buffer_parent) + layer.buffer_address
         buffer_hash_groups[buffer_hash].append(layer_label)
 
     # Merge buffers with the same hash AND the same tensor value.
@@ -795,22 +785,22 @@ def _fix_buffer_layers(self: "Trace") -> None:
             for unique_buffer_label in unique_buffers:
                 unique_buffer = self[unique_buffer_label]
                 if (
-                    (buffer.activation is not None)
-                    and (unique_buffer.activation is not None)
-                    and (torch.equal(buffer.activation, unique_buffer.activation))
+                    (buffer.out is not None)
+                    and (unique_buffer.out is not None)
+                    and (torch.equal(buffer.out, unique_buffer.out))
                 ):
                     _merge_buffer_entries(self, unique_buffer, buffer)
                     break
             else:
                 unique_buffers.append(buffer_label)
 
-    # And relabel the buffer passes.
+    # And relabel the buffer ops.
 
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
         buffer_address = layer.buffer_address
         layer.buffer_pass = buffer_counter[buffer_address]
-        self.buffer_num_passes[buffer_address] = buffer_counter[buffer_address]
+        self.buffer_num_calls[buffer_address] = buffer_counter[buffer_address]
         buffer_counter[buffer_address] += 1
 
 
@@ -818,47 +808,45 @@ def _merge_buffer_entries(self: "Trace", source_buffer: OpLog, buffer_to_remove:
     """Merge a duplicate buffer into a source buffer, rewiring all edges.
 
     Transfers all child and parent connections from ``buffer_to_remove`` to
-    ``source_buffer``, updates parent_layer_arg_locs in children to point to
-    the source buffer, fixes internally_initialized_parents/ancestors references
+    ``source_buffer``, updates parent_arg_positions in children to point to
+    the source buffer, fixes internal_source_parents/ancestors references
     across the graph, and removes the duplicate from the layer dict.
     """
-    for child_layer in buffer_to_remove.child_layers:
-        if child_layer not in source_buffer.child_layers:
-            source_buffer.child_layers.append(child_layer)
-        self[child_layer].parent_layers.remove(buffer_to_remove.tensor_label_raw)
-        self[child_layer].parent_layers.append(source_buffer.tensor_label_raw)
-        if buffer_to_remove.tensor_label_raw in self[child_layer].internally_initialized_parents:
-            self[child_layer].internally_initialized_parents.remove(
-                buffer_to_remove.tensor_label_raw
-            )
-            self[child_layer].internally_initialized_parents.append(source_buffer.tensor_label_raw)
+    for child_layer in buffer_to_remove.children:
+        if child_layer not in source_buffer.children:
+            source_buffer.children.append(child_layer)
+        self[child_layer].parents.remove(buffer_to_remove._label_raw)
+        self[child_layer].parents.append(source_buffer._label_raw)
+        if buffer_to_remove._label_raw in self[child_layer].internal_source_parents:
+            self[child_layer].internal_source_parents.remove(buffer_to_remove._label_raw)
+            self[child_layer].internal_source_parents.append(source_buffer._label_raw)
 
         for arg_type in ["args", "kwargs"]:
-            for arg_label, arg_val in self[child_layer].parent_layer_arg_locs[arg_type].items():
-                if arg_val == buffer_to_remove.tensor_label_raw:
-                    self[child_layer].parent_layer_arg_locs[arg_type][arg_label] = (
-                        source_buffer.tensor_label_raw
+            for arg_label, arg_val in self[child_layer].parent_arg_positions[arg_type].items():
+                if arg_val == buffer_to_remove._label_raw:
+                    self[child_layer].parent_arg_positions[arg_type][arg_label] = (
+                        source_buffer._label_raw
                     )
 
-    for parent_layer in buffer_to_remove.parent_layers:
-        if parent_layer not in source_buffer.parent_layers:
-            source_buffer.parent_layers.append(parent_layer)
-        self[parent_layer].child_layers.remove(buffer_to_remove.tensor_label_raw)
-        self[parent_layer].child_layers.append(source_buffer.tensor_label_raw)
+    for parent_layer in buffer_to_remove.parents:
+        if parent_layer not in source_buffer.parents:
+            source_buffer.parents.append(parent_layer)
+        self[parent_layer].children.remove(buffer_to_remove._label_raw)
+        self[parent_layer].children.append(source_buffer._label_raw)
 
-    for parent_layer in buffer_to_remove.internally_initialized_parents:
-        if parent_layer not in source_buffer.internally_initialized_parents:
-            source_buffer.internally_initialized_parents.append(parent_layer)
+    for parent_layer in buffer_to_remove.internal_source_parents:
+        if parent_layer not in source_buffer.internal_source_parents:
+            source_buffer.internal_source_parents.append(parent_layer)
 
-    self._raw_layer_labels_list.remove(buffer_to_remove.tensor_label_raw)
-    self._raw_layer_dict.pop(buffer_to_remove.tensor_label_raw)
+    self._raw_layer_labels_list.remove(buffer_to_remove._label_raw)
+    self._raw_layer_dict.pop(buffer_to_remove._label_raw)
 
     for layer in self:
-        if buffer_to_remove.tensor_label_raw in layer.root_ancestors:
-            layer.root_ancestors.remove(buffer_to_remove.tensor_label_raw)
-            layer.root_ancestors.add(source_buffer.tensor_label_raw)
-        if buffer_to_remove.tensor_label_raw in layer.internally_initialized_ancestors:
-            layer.internally_initialized_ancestors.remove(buffer_to_remove.tensor_label_raw)
-            layer.internally_initialized_ancestors.add(source_buffer.tensor_label_raw)
+        if buffer_to_remove._label_raw in layer.root_ancestors:
+            layer.root_ancestors.remove(buffer_to_remove._label_raw)
+            layer.root_ancestors.add(source_buffer._label_raw)
+        if buffer_to_remove._label_raw in layer.internal_source_ancestors:
+            layer.internal_source_ancestors.remove(buffer_to_remove._label_raw)
+            layer.internal_source_ancestors.add(source_buffer._label_raw)
 
     self._remove_log_entry(buffer_to_remove, remove_references=True)

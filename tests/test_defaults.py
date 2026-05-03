@@ -20,11 +20,11 @@ class _DummyLog:
         """Initialize a capture object with the attributes the wrappers expect."""
         self.cleanup_calls = 0
         self.layer_logs: dict[str, Any] = {}
-        self.num_tensors_saved = 0
+        self.num_saved_ops = 0
         self.render_calls: list[dict[str, Any]] = []
         self.summary_calls: list[dict[str, Any]] = []
         self.summary_result = "summary output"
-        self.total_activation_memory_str = "0 B"
+        self.total_out_memory_str = "0 B"
         self.validate_calls: list[dict[str, Any]] = []
         self.verbose = False
 
@@ -145,7 +145,7 @@ def stubbed_runner(
         dummy_logs.append(dummy_log)
         return dummy_log
 
-    monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_activations", _fake_runner)
+    monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_outs", _fake_runner)
     return captured_calls, dummy_logs
 
 
@@ -162,18 +162,18 @@ def test_trace_defaults_are_stable(
     assert captured_calls[-1]["layers_to_save"] is None
     assert captured_calls[-1]["keep_unsaved_layers"] is True
     assert captured_calls[-1]["output_device"] == "same"
-    assert captured_calls[-1]["activation_transform"] is None
-    assert captured_calls[-1]["mark_input_output_distances"] is False
-    assert captured_calls[-1]["detach_saved_tensors"] is False
+    assert captured_calls[-1]["out_transform"] is None
+    assert captured_calls[-1]["mark_layer_depths"] is False
+    assert captured_calls[-1]["detach_saved_tensorss"] is False
     assert captured_calls[-1]["save_function_args"] is False
-    assert captured_calls[-1]["save_gradients"] is False
+    assert captured_calls[-1]["save_grads"] is False
     assert captured_calls[-1]["num_context_lines"] == 7
-    assert captured_calls[-1]["save_source_context"] is False
+    assert captured_calls[-1]["save_code_context"] is False
     assert captured_calls[-1]["save_rng_states"] is False
     assert captured_calls[-1]["detect_loops"] is True
-    assert captured_calls[-1]["save_activations_to"] is None
-    assert captured_calls[-1]["keep_activations_in_memory"] is True
-    assert captured_calls[-1]["activation_sink"] is None
+    assert captured_calls[-1]["save_outs_to"] is None
+    assert captured_calls[-1]["keep_outs_in_memory"] is True
+    assert captured_calls[-1]["out_sink"] is None
     assert captured_calls[-1]["verbose"] is False
     assert dummy_logs[-1].render_calls == []
 
@@ -191,15 +191,15 @@ def test_trace_accepts_explicit_opt_in_overrides(
         layers_to_save=None,
         keep_unsaved_layers=False,
         compute_input_output_distances=True,
-        save_source_context=True,
+        save_code_context=True,
         detect_recurrent_patterns=False,
         visualization=VisualizationOptions(mode="rolled"),
     )
 
     assert result is dummy_logs[-1]
     assert captured_calls[-1]["keep_unsaved_layers"] is False
-    assert captured_calls[-1]["mark_input_output_distances"] is True
-    assert captured_calls[-1]["save_source_context"] is True
+    assert captured_calls[-1]["mark_layer_depths"] is True
+    assert captured_calls[-1]["save_code_context"] is True
     assert captured_calls[-1]["detect_loops"] is False
     assert dummy_logs[-1].render_calls[-1]["vis_mode"] == "rolled"
 
@@ -214,9 +214,9 @@ def test_show_model_graph_defaults_are_stable(
     tl.show_model_graph(_TinyModel(), _tiny_input())
 
     assert captured_calls[-1]["layers_to_save"] is None
-    assert captured_calls[-1]["mark_input_output_distances"] is False
-    assert captured_calls[-1]["detach_saved_tensors"] is False
-    assert captured_calls[-1]["save_gradients"] is False
+    assert captured_calls[-1]["mark_layer_depths"] is False
+    assert captured_calls[-1]["detach_saved_tensorss"] is False
+    assert captured_calls[-1]["save_grads"] is False
     assert captured_calls[-1]["detect_loops"] is True
     assert captured_calls[-1]["verbose"] is False
     assert dummy_logs[-1].render_calls[-1]["vis_mode"] == "unrolled"
@@ -245,7 +245,7 @@ def test_show_model_graph_accepts_explicit_opt_in_overrides(
 def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """``log_model_metadata`` should keep its metadata-only wrapper behavior."""
 
-    captured_kwargs: dict[str, Any] = {}
+    saved_kwargs: dict[str, Any] = {}
     dummy_log = _DummyLog()
 
     def _fake_trace(*args: Any, **kwargs: Any) -> _DummyLog:
@@ -265,7 +265,7 @@ def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyP
         """
 
         del args
-        captured_kwargs.update(kwargs)
+        saved_kwargs.update(kwargs)
         return dummy_log
 
     monkeypatch.setattr(user_funcs, "trace", _fake_trace)
@@ -273,8 +273,8 @@ def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyP
     result = tl.log_model_metadata(_TinyModel(), _tiny_input())
 
     assert result is dummy_log
-    assert captured_kwargs["layers_to_save"] is None
-    assert captured_kwargs["compute_input_output_distances"] is True
+    assert saved_kwargs["layers_to_save"] is None
+    assert saved_kwargs["compute_input_output_distances"] is True
 
 
 def test_summary_uses_metadata_only_defaults(
@@ -311,10 +311,10 @@ def test_validate_forward_pass_uses_validation_overrides(
     assert result is True
     assert captured_calls[-1]["layers_to_save"] == "all"
     assert captured_calls[-1]["keep_unsaved_layers"] is True
-    assert captured_calls[-1]["activation_transform"] is None
-    assert captured_calls[-1]["mark_input_output_distances"] is False
-    assert captured_calls[-1]["detach_saved_tensors"] is False
-    assert captured_calls[-1]["save_gradients"] is False
+    assert captured_calls[-1]["out_transform"] is None
+    assert captured_calls[-1]["mark_layer_depths"] is False
+    assert captured_calls[-1]["detach_saved_tensorss"] is False
+    assert captured_calls[-1]["save_grads"] is False
     assert captured_calls[-1]["save_function_args"] is True
     assert captured_calls[-1]["save_rng_states"] is True
     assert dummy_logs[-1].validate_calls[-1]["validate_metadata"] is False

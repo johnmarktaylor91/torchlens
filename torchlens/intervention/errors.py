@@ -118,7 +118,7 @@ class InterventionReadyConflictError(ConfigurationError, ValueError):
 
 
 class DirectActivationWriteWarning(TorchLensInterventionWarning):
-    """User directly wrote a OpLog activation field."""
+    """User directly wrote a OpLog out field."""
 
 
 class MutateInPlaceWarning(TorchLensInterventionWarning):
@@ -126,7 +126,7 @@ class MutateInPlaceWarning(TorchLensInterventionWarning):
 
 
 class DirectWriteIgnoredWarning(TorchLensInterventionWarning):
-    """Warning for propagation engines that ignore direct activation writes."""
+    """Warning for propagation engines that ignore direct out writes."""
 
 
 class InterventionAuditWarning(TorchLensInterventionWarning):
@@ -150,7 +150,7 @@ SpecPortabilityError = OpaqueCallableInExecutableSaveError
 
 
 class DirectWriteInExecutableSaveError(ConfigurationError, ValueError):
-    """Raised when executable spec save sees direct activation writes."""
+    """Raised when executable spec save sees direct out writes."""
 
 
 class GraphShapeMismatchError(ValidationError, ValueError):
@@ -184,7 +184,7 @@ class AppendMismatchError(ValidationError, ValueError):
 
 
 class AppendBatchDependenceError(ValidationError, ValueError):
-    """Raised when append cannot prove helper or gradient batch independence."""
+    """Raised when append cannot prove helper or grad batch independence."""
 
 
 class BatchNormTrainModeWarning(TorchLensInterventionWarning):

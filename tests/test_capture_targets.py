@@ -35,7 +35,7 @@ def test_record_kpi_in_graph() -> None:
     """Attach arbitrary KPI metadata during capture."""
 
     log = tl.trace(_KpiModel(), torch.ones(1, 2))
-    assert "loss" in log.capture_kpis
+    assert "loss" in log.trace_annotations
 
 
 def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
@@ -72,8 +72,8 @@ def test_tied_parameter_notation_smoke() -> None:
 
     log = tl.trace(Tied(), torch.ones(1, 2))
     tied = [
-        layer.extra_data.get("tied_parameter_notation")
+        layer.annotations.get("tied_parameter_notation")
         for layer in log.layer_list
-        if layer.extra_data.get("tied_parameter_notation")
+        if layer.annotations.get("tied_parameter_notation")
     ]
     assert tied

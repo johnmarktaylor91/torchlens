@@ -62,11 +62,11 @@ def test_builtin_node_overlays_render(tmp_path: Path, overlay: str, expected: st
 
 
 def test_grad_norm_overlay_renders_after_backward(tmp_path: Path) -> None:
-    """grad-norm overlay should read saved gradients when available."""
+    """grad-norm overlay should read saved grads when available."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    log = tl.trace(model, torch.randn(2, 4, requires_grad=True), save_gradients=True)
-    loss = log[log.output_layers[0]].activation.sum()
+    log = tl.trace(model, torch.randn(2, 4, has_trainable_params=True), save_grads=True)
+    loss = log[log.output_layers[0]].out.sum()
     log.log_backward(loss)
 
     dot = _render_dot(log, tmp_path, node_overlay="grad_norm")

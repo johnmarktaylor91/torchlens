@@ -93,7 +93,7 @@ class AssertNotBranchModel(nn.Module):
 
 
 class SaveSourceContextFalseModel(nn.Module):
-    """``if``/``else`` model used with ``save_source_context=False``."""
+    """``if``/``else`` model used with ``save_code_context=False``."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the model forward pass.
@@ -119,7 +119,7 @@ class SaveSourceContextFalseModel(nn.Module):
 def _log_model(
     model: nn.Module,
     x: torch.Tensor,
-    save_source_context: bool = True,
+    save_code_context: bool = True,
 ) -> Trace:
     """Log a forward pass for a small inline test model.
 
@@ -129,7 +129,7 @@ def _log_model(
         Model to execute.
     x:
         Input tensor.
-    save_source_context:
+    save_code_context:
         Whether rich source loading is enabled during capture.
 
     Returns
@@ -138,7 +138,7 @@ def _log_model(
         Postprocessed model log.
     """
 
-    return trace_fn(model, x, save_source_context=save_source_context)
+    return trace_fn(model, x, save_code_context=save_code_context)
 
 
 def _get_only_event(trace: Trace) -> ConditionalEvent:
@@ -173,9 +173,7 @@ def _get_terminal_bool_layers(trace: Trace) -> List[OpLog]:
         Terminal scalar bool layers in execution order.
     """
 
-    return [
-        layer for layer in trace.layer_list if layer.is_terminal_bool_layer and layer.is_scalar_bool
-    ]
+    return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
 def _find_single_layer(trace: Trace, func_name: str) -> OpLog:
@@ -233,8 +231,8 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
     assert trace.conditional_elif_edges == expected_elif_edges
     assert trace.conditional_else_edges == expected_else_edges
 
-    for pass_nums in trace.conditional_edge_passes.values():
-        assert pass_nums == sorted(pass_nums)
+    for call_indexs in trace.conditional_edge_ops.values():
+        assert call_indexs == sorted(call_indexs)
 
     for layer in trace.layer_list:
         expected_then_children = sorted(
@@ -305,8 +303,8 @@ def test_simple_if_else_model_step5_pipeline() -> None:
     assert relu_layer.conditional_branch_stack == [(0, "then")]
     assert sigmoid_layer.conditional_branch_stack == [(0, "else")]
 
-    assert all(pass_nums == [1] for pass_nums in positive_log.conditional_edge_passes.values())
-    assert all(pass_nums == [1] for pass_nums in negative_log.conditional_edge_passes.values())
+    assert all(call_indexs == [1] for call_indexs in positive_log.conditional_edge_ops.values())
+    assert all(call_indexs == [1] for call_indexs in negative_log.conditional_edge_ops.values())
 
     _assert_derived_views_consistent(positive_log)
     _assert_derived_views_consistent(negative_log)
@@ -331,7 +329,7 @@ def test_elif_ladder_model_step5_pipeline() -> None:
         assert event.kind == "if_chain"
         assert set(event.branch_ranges) == {"then", "elif_1", "elif_2", "else"}
         assert (0, branch_kind) in trace.conditional_arm_edges
-        assert all(pass_nums == [1] for pass_nums in trace.conditional_edge_passes.values())
+        assert all(call_indexs == [1] for call_indexs in trace.conditional_edge_ops.values())
 
         target_layer = _find_single_layer(trace, func_name)
         assert target_layer.conditional_branch_stack == [(0, branch_kind)]
@@ -359,13 +357,13 @@ def test_assert_not_branch_model_step5_pipeline() -> None:
     _assert_derived_views_consistent(trace)
 
 
-def test_save_source_context_false_still_attributes_branches() -> None:
+def test_save_code_context_false_still_attributes_branches() -> None:
     """Conditional classification and attribution still run without source loading."""
 
     trace = _log_model(
         SaveSourceContextFalseModel(),
         torch.ones(2, 2),
-        save_source_context=False,
+        save_code_context=False,
     )
     event = _get_only_event(trace)
     bool_layers = _get_terminal_bool_layers(trace)

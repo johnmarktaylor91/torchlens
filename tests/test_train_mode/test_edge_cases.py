@@ -56,7 +56,7 @@ class MixedGradModel(nn.Module):
         self.frozen = nn.Linear(4, 4)
         self.trainable = nn.Linear(4, 2)
         for param in self.frozen.parameters():
-            param.requires_grad = False
+            param.has_trainable_params = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run frozen then trainable layers."""
@@ -97,11 +97,11 @@ def test_autocast_wrapping_slow_keeps_grad() -> None:
     with torch.autocast("cpu", dtype=torch.bfloat16):
         trace = tl.trace(
             model,
-            torch.randn(3, 4, requires_grad=True),
+            torch.randn(3, 4, has_trainable_params=True),
             train_mode=True,
             random_seed=0,
         )
-    saved = trace[trace.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     model.zero_grad(set_to_none=True)
     saved.float().sum().backward()
@@ -120,11 +120,11 @@ def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
 
     trace = tl.trace(
         ddp_model,
-        torch.randn(3, 4, requires_grad=True),
+        torch.randn(3, 4, has_trainable_params=True),
         train_mode=True,
         random_seed=0,
     )
-    saved = trace[trace.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     ddp_model.module.zero_grad(set_to_none=True)
     saved.sum().backward()
@@ -139,11 +139,11 @@ def test_view_reshape_ops_keep_grad() -> None:
     model = ViewModel()
     trace = tl.trace(
         model,
-        torch.randn(3, 4, requires_grad=True),
+        torch.randn(3, 4, has_trainable_params=True),
         train_mode=True,
         random_seed=0,
     )
-    saved = trace[trace.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     model.zero_grad(set_to_none=True)
     saved.square().mean().backward()
@@ -158,11 +158,11 @@ def test_inplace_relu_keeps_grad_slow() -> None:
     model = InplaceReluModel()
     trace = tl.trace(
         model,
-        torch.randn(3, 4, requires_grad=True),
+        torch.randn(3, 4, has_trainable_params=True),
         train_mode=True,
         random_seed=0,
     )
-    saved = trace[trace.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     model.zero_grad(set_to_none=True)
     saved.sum().backward()
@@ -179,11 +179,11 @@ def test_no_grad_wrapping_forward_severs_grad_slow() -> None:
     with no_grad():
         trace = tl.trace(
             model,
-            torch.randn(3, 4, requires_grad=True),
+            torch.randn(3, 4, has_trainable_params=True),
             train_mode=True,
             random_seed=0,
         )
-    saved = trace[trace.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     assert saved.grad_fn is None
     with pytest.raises(RuntimeError, match="does not require grad"):
@@ -192,16 +192,16 @@ def test_no_grad_wrapping_forward_severs_grad_slow() -> None:
 
 
 def test_mixed_grad_model_slow() -> None:
-    """Only the trainable parameter subset receives gradients."""
+    """Only the trainable parameter subset receives grads."""
 
     model = MixedGradModel()
     trace = tl.trace(
         model,
-        torch.randn(3, 4, requires_grad=True),
+        torch.randn(3, 4, has_trainable_params=True),
         train_mode=True,
         random_seed=0,
     )
-    saved = trace[trace.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     model.zero_grad(set_to_none=True)
     saved.sum().backward()
@@ -217,6 +217,6 @@ def test_compile_wrapped_model_rejected_cross_link() -> None:
     with pytest.raises(RuntimeError, match="torch.compile"):
         tl.trace(
             _compile_model(nn.Linear(4, 2)),
-            torch.randn(3, 4, requires_grad=True),
+            torch.randn(3, 4, has_trainable_params=True),
             train_mode=True,
         )

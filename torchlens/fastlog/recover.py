@@ -148,7 +148,7 @@ def _blob_is_recoverable(
 ) -> bool:
     """Return whether a record's blob(s) are present and hash-valid.
 
-    Both the raw activation blob and the transformed activation blob are
+    Both the raw out blob and the transformed out blob are
     validated when their metadata is present. A missing or hash-mismatched
     blob disqualifies the record.
     """
@@ -164,9 +164,9 @@ def _blob_is_recoverable(
         return False
     transformed_recoverable = _validate_blob_metadata(
         bundle_path,
-        record.metadata.get("transformed_activation_blob_id"),
-        record.metadata.get("transformed_activation_relative_path"),
-        record.metadata.get("transformed_activation_sha256"),
+        record.metadata.get("transformed_out_blob_id"),
+        record.metadata.get("transformed_out_relative_path"),
+        record.metadata.get("transformed_out_sha256"),
         recovery_warnings,
     )
     return transformed_recoverable
@@ -211,18 +211,18 @@ def _recording_from_records(
         records=records,
         by_pass={},
         by_label={},
-        by_module_address={},
+        by_address={},
         bundle_path=bundle_path,
-        n_passes=int(metadata.get("n_passes", 1)),
+        n_ops=int(metadata.get("n_ops", 1)),
         n_records=len(records),
-        pass_start_times=list(metadata.get("pass_start_times", [])),
-        pass_end_times=list(metadata.get("pass_end_times", [])),
+        start_times=list(metadata.get("start_times", [])),
+        end_times=list(metadata.get("end_times", [])),
         predicate_failures=[],
         predicate_failure_overflow_count=int(metadata.get("predicate_failure_overflow_count", 0)),
         keep_op_repr=metadata.get("keep_op_repr"),
         keep_module_repr=metadata.get("keep_module_repr"),
         history_size=int(metadata.get("history_size", 0)),
-        activation_postfunc_repr=metadata.get("activation_postfunc_repr"),
+        _out_transform_repr=metadata.get("_out_transform_repr"),
         recovered=recovered,
         recovery_warnings=recovery_warnings,
     )

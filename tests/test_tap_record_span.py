@@ -26,7 +26,7 @@ class MetricModel(torch.nn.Module):
         """
 
         y = torch.relu(x)
-        log_value("activation_sum", float(y.sum()))
+        log_value("out_sum", float(y.sum()))
         return y
 
 
@@ -43,8 +43,8 @@ def test_tap_records_without_modifying_output() -> None:
     assert tap.values()
     assert torch.equal(tap.values()[0], torch.relu(x))
     assert torch.equal(
-        hooked[hooked.output_layers[0]].activation,
-        plain[plain.output_layers[0]].activation,
+        hooked[hooked.output_layers[0]].out,
+        plain[plain.output_layers[0]].out,
     )
 
 
@@ -57,4 +57,4 @@ def test_record_span_and_log_value_metadata() -> None:
     assert log.observer_spans
     assert log.observer_spans[0]["name"] == "phase_name"
     assert log.observer_spans[0]["end"] is not None
-    assert log.report_values["activation_sum"] == 2.0
+    assert log.report_values["out_sum"] == 2.0

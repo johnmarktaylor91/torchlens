@@ -1,4 +1,4 @@
-"""Validation subpackage for saved activations, backward capture, and invariants."""
+"""Validation subpackage for saved outs, backward capture, and invariants."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from ..user_funcs import (
     validate_backward_pass,
     validate_batch_of_models_and_inputs,
     validate_forward_pass,
-    validate_saved_activations,
+    validate_saved_outs,
 )
-from .core import validate_saved_activations as validate_trace_saved_activations
+from .core import validate_saved_outs as validate_trace_saved_outs
 from .consolidated import InterventionValidationReport, validate
 from .invariants import MetadataInvariantError, check_metadata_invariants
 
@@ -327,8 +327,8 @@ __all__ = [
     "validate_batch_of_models_and_inputs",
     "validate",
     "validate_forward_pass",
-    "validate_saved_activations",
-    "validate_trace_saved_activations",
+    "validate_saved_outs",
+    "validate_trace_saved_outs",
     "check_metadata_invariants",
     "check_spec_compat",
     "MetadataInvariantError",

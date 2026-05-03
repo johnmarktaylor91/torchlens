@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._utils import activation_at
+from ._utils import out_at
 
 
 def vector(
@@ -15,16 +15,16 @@ def vector(
     trainer: Any | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Train or build a steering vector from saved TorchLens activations.
+    """Train or build a steering vector from saved TorchLens outs.
 
     Parameters
     ----------
     log:
         TorchLens ``Trace``.
     positive_site:
-        Site containing positive-class activations.
+        Site containing positive-class outs.
     negative_site:
-        Optional site containing negative-class activations.
+        Optional site containing negative-class outs.
     trainer:
         Optional callable trainer. Defaults to the installed package's
         ``train_steering_vector`` function.
@@ -51,8 +51,8 @@ def vector(
             "steering-vectors bridge requires the `steering` extra: install torchlens[steering]."
         ) from exc
 
-    positive = activation_at(log, positive_site)
-    negative = None if negative_site is None else activation_at(log, negative_site)
+    positive = out_at(log, positive_site)
+    negative = None if negative_site is None else out_at(log, negative_site)
     train = _resolve_trainer(steering_module, trainer)
     result = train(positive, negative, **kwargs)
     return {

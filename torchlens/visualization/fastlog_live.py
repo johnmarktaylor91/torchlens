@@ -25,17 +25,17 @@ _RAIL_COLORS = (
 def _shape_text(ctx: RecordContext) -> str:
     """Return a compact tensor shape string."""
 
-    if ctx.tensor_shape is None:
+    if ctx.shape is None:
         return ""
-    return "x".join(str(dim) for dim in ctx.tensor_shape)
+    return "x".join(str(dim) for dim in ctx.shape)
 
 
 def _dtype_text(ctx: RecordContext) -> str:
     """Return a compact dtype string."""
 
-    if ctx.tensor_dtype is None:
+    if ctx.dtype is None:
         return ""
-    return str(ctx.tensor_dtype).replace("torch.", "")
+    return str(ctx.dtype).replace("torch.", "")
 
 
 def _event_kept(trace: RecordingTrace, index: int) -> bool:
@@ -49,19 +49,19 @@ def _event_kept(trace: RecordingTrace, index: int) -> bool:
 def _module_key(ctx: RecordContext) -> str:
     """Return the best module grouping key for an event."""
 
-    if ctx.module_address:
-        return ctx.module_address
+    if ctx.address:
+        return ctx.address
     if ctx.module_stack:
-        return ctx.module_stack[-1].module_address
+        return ctx.module_stack[-1].address
     return "self"
 
 
-def _module_color(module_address: str, color_map: dict[str, str]) -> str:
+def _module_color(address: str, color_map: dict[str, str]) -> str:
     """Return a stable rail color for a module address."""
 
-    if module_address not in color_map:
-        color_map[module_address] = _RAIL_COLORS[len(color_map) % len(_RAIL_COLORS)]
-    return color_map[module_address]
+    if address not in color_map:
+        color_map[address] = _RAIL_COLORS[len(color_map) % len(_RAIL_COLORS)]
+    return color_map[address]
 
 
 def print_tree(trace: RecordingTrace) -> str:
@@ -101,24 +101,24 @@ def to_pandas(trace: RecordingTrace) -> Any:
 
     rows = [
         {
-            "pass_num": ctx.pass_index,
+            "call_index": ctx.pass_index,
             "step_num": ctx.event_index,
             "kind": ctx.kind,
             "op_type": ctx.layer_type or ctx.func_name,
-            "module_address": _module_key(ctx),
-            "shape": ctx.tensor_shape,
-            "dtype": ctx.tensor_dtype,
+            "address": _module_key(ctx),
+            "shape": ctx.shape,
+            "dtype": ctx.dtype,
         }
         for ctx in trace.events
     ]
     return pd.DataFrame(
         rows,
         columns=[
-            "pass_num",
+            "call_index",
             "step_num",
             "kind",
             "op_type",
-            "module_address",
+            "address",
             "shape",
             "dtype",
         ],
@@ -177,8 +177,8 @@ def show_graph(
     event_to_index = {ctx.event_index: index for index, ctx in enumerate(trace.events)}
     for op_number, ctx in enumerate(op_contexts):
         trace_index = event_to_index[ctx.event_index]
-        module_address = _module_key(ctx)
-        rail_color = _module_color(module_address, color_map)
+        address = _module_key(ctx)
+        rail_color = _module_color(address, color_map)
         fillcolor = "#98FB98" if _event_kept(trace, trace_index) else "#E6E6E6"
         dot.node(
             f"event_{ctx.event_index}",
@@ -186,7 +186,7 @@ def show_graph(
             shape="box",
             style="filled,rounded",
             fillcolor=fillcolor,
-            tooltip=module_address,
+            tooltip=address,
         )
         if op_number > 0:
             dot.edge(f"event_{op_contexts[op_number - 1].event_index}", f"event_{ctx.event_index}")
@@ -226,14 +226,14 @@ def timeline_html(trace: RecordingTrace) -> Any:
         module_rows[_module_key(ctx)].append(ctx)
     row_html: list[str] = []
     max_events = max((len(events) for events in module_rows.values()), default=1)
-    for module_address, events in module_rows.items():
+    for address, events in module_rows.items():
         tags = []
         for ctx in events:
             label = escape(str(ctx.layer_type or ctx.func_name or ctx.kind))
             tags.append(f'<span class="tl-fastlog-tag">{label}</span>')
         row_html.append(
             '<div class="tl-fastlog-row">'
-            f'<div class="tl-fastlog-module">{escape(module_address)}</div>'
+            f'<div class="tl-fastlog-module">{escape(address)}</div>'
             f'<div class="tl-fastlog-events" style="grid-template-columns: repeat({max_events}, max-content);">'
             + "".join(tags)
             + "</div></div>"

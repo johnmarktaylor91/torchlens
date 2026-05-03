@@ -38,27 +38,27 @@ class _StubTrace:
         """
         self.layer_list = layer_list or []
         self.layer_logs = layer_logs or {}
-        self._pass_finished = True
+        self._tracing_finished = True
 
         self.input_layers: List[str] = []
         self.output_layers: List[str] = []
         self.buffer_layers: List[str] = []
-        self.internally_initialized_layers: List[str] = []
-        self.internally_terminated_layers: List[str] = []
-        self.internally_terminated_bool_layers: List[str] = []
-        self.layers_with_saved_activations: List[str] = []
-        self.layers_with_saved_gradients: List[str] = []
+        self.internally_initialized_ops: List[str] = []
+        self.internally_terminated_ops: List[str] = []
+        self.internally_terminated_bool_ops: List[str] = []
+        self.ops_with_saved_outs: List[str] = []
+        self.ops_with_saved_grads: List[str] = []
         self._layers_where_internal_branches_merge_with_input: List[str] = []
 
         self.layers_with_params: Dict[str, List[str]] = {}
-        self.equivalent_operations: Dict[str, set] = {}
+        self.equivalent_ops: Dict[str, set] = {}
 
         self.conditional_branch_edges = []
         self.conditional_then_edges = []
         self.conditional_elif_edges = []
         self.conditional_else_edges = []
         self.conditional_arm_edges = {}
-        self.conditional_edge_passes = {}
+        self.conditional_edge_ops = {}
         self.conditional_events: List[ConditionalEvent] = []
 
         self._raw_to_final_layer_labels: Dict[str, str] = {}
@@ -111,7 +111,7 @@ def _make_conditional_event(bool_layers: List[str]) -> ConditionalEvent:
         test_span=(3, 0, 3, 8),
         branch_ranges={"then": (3, 9, 4, 12), "else": (5, 9, 6, 12)},
         branch_test_spans={"then": (3, 0, 3, 8)},
-        nesting_depth=0,
+        call_depth=0,
         parent_conditional_id=None,
         parent_branch_kind=None,
         bool_layers=bool_layers,
@@ -139,23 +139,23 @@ def _make_layer_stub(
     return SimpleNamespace(
         layer_label=layer_label,
         layer_label_no_pass=label_no_pass,
-        tensor_label_raw=layer_label,
-        parent_layers=[],
+        _label_raw=layer_label,
+        parents=[],
         root_ancestors=[],
-        child_layers=[],
+        children=[],
         input_ancestors=[],
         output_descendants=[],
-        internally_initialized_parents=[],
-        internally_initialized_ancestors=[],
+        internal_source_parents=[],
+        internal_source_ancestors=[],
         cond_branch_start_children=[],
         cond_branch_then_children=[],
         cond_branch_elif_children={},
         cond_branch_else_children=[],
         cond_branch_children_by_cond={},
-        equivalent_operations=set(),
-        recurrent_group=[],
-        parent_layer_arg_locs={"args": {}, "kwargs": {}},
-        children_tensor_versions={},
+        equivalent_ops=set(),
+        recurrent_ops=[],
+        parent_arg_positions={"args": {}, "kwargs": {}},
+        output_versions_per_child={},
     )
 
 
@@ -192,7 +192,7 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
         (0, "elif_1"): [("raw_parent", "raw_child_elif")],
         (0, "else"): [("raw_parent", "raw_child_else")],
     }
-    trace.conditional_edge_passes = {
+    trace.conditional_edge_ops = {
         ("raw_parent", "raw_child_then", 0, "then"): [1],
         ("raw_parent", "raw_child_elif", 0, "elif_1"): [1],
         ("raw_parent", "raw_child_else", 0, "else"): [1],
@@ -219,7 +219,7 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
         (0, "elif_1"): [("linear_1_1", "sigmoid_1_4")],
         (0, "else"): [("linear_1_1", "add_1_5")],
     }
-    assert trace.conditional_edge_passes == {
+    assert trace.conditional_edge_ops == {
         ("linear_1_1", "relu_1_3", 0, "then"): [1],
         ("linear_1_1", "sigmoid_1_4", 0, "elif_1"): [1],
         ("linear_1_1", "add_1_5", 0, "else"): [1],
@@ -252,7 +252,7 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
             "else": ["removed_child"],
         }
     }
-    parent_layer.conditional_branch_stack_passes = {((0, "then"),): [1, 2]}
+    parent_layer.conditional_branch_stack_ops = {((0, "then"),): [1, 2]}
 
     trace = _StubTrace(layer_list=[parent_pass], layer_logs={"parent": parent_layer})
     trace.conditional_branch_edges = [
@@ -269,7 +269,7 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
         (0, "then"): [("parent:1", "removed_child:2"), ("parent:1", "kept_child:1")],
         (0, "else"): [("parent:1", "removed_child:2")],
     }
-    trace.conditional_edge_passes = {
+    trace.conditional_edge_ops = {
         ("parent", "removed_child", 0, "then"): [2],
         ("parent", "kept_child", 0, "then"): [1],
     }
@@ -281,7 +281,7 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     assert trace.conditional_arm_edges == {
         (0, "then"): [("parent:1", "kept_child:1")],
     }
-    assert trace.conditional_edge_passes == {
+    assert trace.conditional_edge_ops == {
         ("parent", "kept_child", 0, "then"): [1],
     }
     assert trace.conditional_events[0].bool_layers == ["kept_bool:1"]
@@ -297,7 +297,7 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     assert parent_layer.cond_branch_elif_children == {}
     assert parent_layer.cond_branch_else_children == []
     assert parent_layer.cond_branch_children_by_cond == {0: {"then": ["kept_child"]}}
-    assert parent_layer.conditional_branch_stack_passes == {((0, "then"),): [1, 2]}
+    assert parent_layer.conditional_branch_stack_ops == {((0, "then"),): [1, 2]}
 
 
 def test_to_pandas_exports_conditional_columns() -> None:

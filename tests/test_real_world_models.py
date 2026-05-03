@@ -48,7 +48,7 @@ def test_alexnet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet_depth1"),
     )
     show_model_graph(
@@ -56,7 +56,7 @@ def test_alexnet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet_depth2"),
     )
     show_model_graph(
@@ -64,7 +64,7 @@ def test_alexnet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet_depth3"),
     )
     show_model_graph(
@@ -72,7 +72,7 @@ def test_alexnet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=4,
+        vis_call_depth=4,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "alexnet_depth4"),
     )
 
@@ -111,7 +111,7 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=True,
+        vis_buffers=True,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer"),
     )
     show_model_graph(
@@ -119,7 +119,7 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=False,
+        vis_buffers=False,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer"),
     )
     show_model_graph(
@@ -127,7 +127,7 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_buffer_layers=False,
+        vis_buffers=False,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_rolled"),
     )
     show_model_graph(
@@ -135,8 +135,8 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=True,
-        vis_nesting_depth=1,
+        vis_buffers=True,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth1"),
     )
     show_model_graph(
@@ -144,8 +144,8 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=False,
-        vis_nesting_depth=1,
+        vis_buffers=False,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth1"),
     )
     show_model_graph(
@@ -153,8 +153,8 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=True,
-        vis_nesting_depth=2,
+        vis_buffers=True,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth2"),
     )
     show_model_graph(
@@ -162,8 +162,8 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=False,
-        vis_nesting_depth=2,
+        vis_buffers=False,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth2"),
     )
     show_model_graph(
@@ -171,8 +171,8 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=True,
-        vis_nesting_depth=3,
+        vis_buffers=True,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth3"),
     )
     show_model_graph(
@@ -180,8 +180,8 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=False,
-        vis_nesting_depth=3,
+        vis_buffers=False,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth3"),
     )
     show_model_graph(
@@ -189,8 +189,8 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=True,
-        vis_nesting_depth=4,
+        vis_buffers=True,
+        vis_call_depth=4,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_showbuffer_depth4"),
     )
     show_model_graph(
@@ -198,8 +198,8 @@ def test_googlenet(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=False,
-        vis_nesting_depth=4,
+        vis_buffers=False,
+        vis_call_depth=4,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "googlenet_nobuffer_depth4"),
     )
 
@@ -246,7 +246,7 @@ def test_densenet121(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth1"),
     )
     show_model_graph(
@@ -254,7 +254,7 @@ def test_densenet121(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth2"),
     )
     show_model_graph(
@@ -262,7 +262,7 @@ def test_densenet121(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth3"),
     )
     show_model_graph(
@@ -270,7 +270,7 @@ def test_densenet121(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=4,
+        vis_call_depth=4,
         vis_outpath=opj(VIS_OUTPUT_DIR, "torchvision-main", "densenet121_depth4"),
     )
 
@@ -447,7 +447,7 @@ def test_cornet_z(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth1"),
     )
     show_model_graph(
@@ -455,7 +455,7 @@ def test_cornet_z(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth1"),
     )
     show_model_graph(
@@ -463,7 +463,7 @@ def test_cornet_z(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth2"),
     )
     show_model_graph(
@@ -471,7 +471,7 @@ def test_cornet_z(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth2"),
     )
     show_model_graph(
@@ -479,7 +479,7 @@ def test_cornet_z(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_unrolled_depth3"),
     )
     show_model_graph(
@@ -487,7 +487,7 @@ def test_cornet_z(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_z_rolled_depth3"),
     )
 
@@ -516,7 +516,7 @@ def test_cornet_s(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth1"),
     )
     show_model_graph(
@@ -524,7 +524,7 @@ def test_cornet_s(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth1"),
     )
     show_model_graph(
@@ -532,7 +532,7 @@ def test_cornet_s(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth2"),
     )
     show_model_graph(
@@ -540,7 +540,7 @@ def test_cornet_s(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth2"),
     )
     show_model_graph(
@@ -548,7 +548,7 @@ def test_cornet_s(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_unrolled_depth3"),
     )
     show_model_graph(
@@ -556,7 +556,7 @@ def test_cornet_s(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_s_rolled_depth3"),
     )
 
@@ -585,7 +585,7 @@ def test_cornet_r(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth1"),
     )
     show_model_graph(
@@ -593,7 +593,7 @@ def test_cornet_r(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth1"),
     )
     show_model_graph(
@@ -601,7 +601,7 @@ def test_cornet_r(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth2"),
     )
     show_model_graph(
@@ -609,7 +609,7 @@ def test_cornet_r(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth2"),
     )
     show_model_graph(
@@ -617,7 +617,7 @@ def test_cornet_r(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_unrolled_depth3"),
     )
     show_model_graph(
@@ -625,7 +625,7 @@ def test_cornet_r(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_r_rolled_depth3"),
     )
 
@@ -655,7 +655,7 @@ def test_cornet_rt():
         model_input,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth1"),
     )
     show_model_graph(
@@ -663,7 +663,7 @@ def test_cornet_rt():
         model_input,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth1"),
     )
     show_model_graph(
@@ -671,7 +671,7 @@ def test_cornet_rt():
         model_input,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth2"),
     )
     show_model_graph(
@@ -679,7 +679,7 @@ def test_cornet_rt():
         model_input,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth2"),
     )
     show_model_graph(
@@ -687,7 +687,7 @@ def test_cornet_rt():
         model_input,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_unrolled_depth3"),
     )
     show_model_graph(
@@ -695,7 +695,7 @@ def test_cornet_rt():
         model_input,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_outpath=opj(VIS_OUTPUT_DIR, "cornet", "cornet_rt_rolled_depth3"),
     )
 
@@ -1336,7 +1336,7 @@ def test_qml():
     softmax = torch.nn.Softmax(dim=1)
     layers = [clayer_1, qlayer, clayer_2, softmax]
     model = torch.nn.Sequential(*layers)
-    model_inputs = torch.rand(1, 2, requires_grad=False)
+    model_inputs = torch.rand(1, 2, has_trainable_params=False)
 
     show_model_graph(
         model,
@@ -3118,7 +3118,7 @@ def test_graph_transformer_pyg():
 
 @pytest.mark.slow
 def test_mobilenet_v3_small():
-    """MobileNet V3: h-swish activation, squeeze-excitation, NAS-tuned."""
+    """MobileNet V3: h-swish out, squeeze-excitation, NAS-tuned."""
     model = torchvision.models.mobilenet_v3_small(weights=None).eval()
     model_input = torch.rand(1, 3, 224, 224)
     show_model_graph(

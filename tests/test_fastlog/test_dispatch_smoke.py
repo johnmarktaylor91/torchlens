@@ -42,12 +42,12 @@ def _empty_recording(history_size: int) -> Recording:
         records=[],
         by_pass={},
         by_label={},
-        by_module_address={},
+        by_address={},
         bundle_path=None,
-        n_passes=1,
+        n_ops=1,
         n_records=0,
-        pass_start_times=[],
-        pass_end_times=[],
+        start_times=[],
+        end_times=[],
         predicate_failures=[],
         predicate_failure_overflow_count=0,
         keep_op_repr=None,
@@ -64,8 +64,8 @@ def _run_dispatcher_smoke(
     """Run a minimal predicate pass through existing dispatchers."""
 
     trace = Trace("TinyMlp")
-    trace.logging_mode = "predicate"
-    trace.pass_start_time = time.time()
+    trace.capture_mode = "predicate"
+    trace.start_time = time.time()
     state = RecordingState(options=options, recording=_empty_recording(options.history_size))
     _ensure_model_prepared(model)
     _prepare_model_session(trace, model)

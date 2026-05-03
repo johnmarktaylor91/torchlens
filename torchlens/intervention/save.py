@@ -109,7 +109,7 @@ def save_intervention(
         Save level: ``"audit"``, ``"executable_with_callables"``, or
         ``"portable"``.
     allow_direct_writes:
-        Whether executable saves may proceed when direct activation writes were
+        Whether executable saves may proceed when direct out writes were
         detected.
     overwrite:
         Whether an existing target directory may be replaced.
@@ -373,14 +373,14 @@ def _enforce_direct_write_policy(
         return
     if save_level == SaveLevel.AUDIT:
         warnings.warn(
-            "Direct activation writes are audit-only evidence in saved specs.",
+            "Direct out writes are audit-only evidence in saved specs.",
             DirectActivationWriteWarning,
             stacklevel=3,
         )
         return
     if not allow_direct_writes:
         raise DirectWriteInExecutableSaveError(
-            "Direct activation writes cannot be saved as executable interventions. "
+            "Direct out writes cannot be saved as executable interventions. "
             "Pass allow_direct_writes=True only if the recipe semantics are intentional."
         )
 
@@ -849,13 +849,13 @@ def _build_target_manifest(log: Any, spec: InterventionSpec) -> list[dict[str, A
                 "selector": _target_spec_to_json(target),
                 "resolved_labels": list(resolved.labels()),
                 "graph_shape_hash": getattr(log, "graph_shape_hash", None),
-                "module_address_normalized": _normalized_module_address(target),
+                "_address_normalized": _normalized_address(target),
             }
         )
     return manifest
 
 
-def _normalized_module_address(target: TargetSpec) -> str | None:
+def _normalized_address(target: TargetSpec) -> str | None:
     """Return normalized module selector data when applicable.
 
     Parameters
@@ -911,11 +911,11 @@ def _function_key_for_layer(layer: Any) -> FunctionRegistryKey | None:
         Function registry key or ``None`` for source nodes.
     """
 
-    template = getattr(layer, "captured_arg_template", None)
+    template = getattr(layer, "args_template", None)
     key = getattr(template, "func_id", None)
     if isinstance(key, FunctionRegistryKey):
         return key
-    func = getattr(layer, "func_applied", None)
+    func = getattr(layer, "func", None)
     if func is None:
         return None
     return function_registry_key_from_callable(func)

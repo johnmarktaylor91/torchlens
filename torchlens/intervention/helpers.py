@@ -21,7 +21,7 @@ HELPER_REGISTRY_VERSION = "1"
 
 
 def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
-    """Create a helper that replaces an activation with zeros.
+    """Create a helper that replaces an out with zeros.
 
     Parameters
     ----------
@@ -40,13 +40,13 @@ def zero_ablate(*, force_shape_change: bool = False) -> HelperSpec:
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that replaces an activation with zeros.
+            Hook callable that replaces an out with zeros.
         """
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Return zeros with the same metadata as the activation."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Return zeros with the same metadata as the out."""
 
-            return torch.zeros_like(activation)
+            return torch.zeros_like(out)
 
         return _hook
 
@@ -65,13 +65,13 @@ def mean_ablate(
     over: str = "self",
     force_shape_change: bool = False,
 ) -> HelperSpec:
-    """Create a helper that replaces activations with a source mean.
+    """Create a helper that replaces outs with a source mean.
 
     Parameters
     ----------
     source:
         Optional tensor source. When omitted or ``over="self"``, the mean is
-        computed from the current activation at hook fire time.
+        computed from the current out at hook fire time.
     over:
         Source policy label retained for audit. Phase 3 implements ``"self"``
         and tensor sources only.
@@ -90,15 +90,15 @@ def mean_ablate(
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that fills an activation from the configured source mean.
+            Hook callable that fills an out from the configured source mean.
         """
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Return an activation-shaped tensor filled with the source mean."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Return an out-shaped tensor filled with the source mean."""
 
-            source_tensor = _source_tensor_or_activation(source, activation)
-            mean_value = source_tensor.to(device=activation.device, dtype=activation.dtype).mean()
-            return torch.zeros_like(activation) + mean_value
+            source_tensor = _source_tensor_or_out(source, out)
+            mean_value = source_tensor.to(device=out.device, dtype=out.dtype).mean()
+            return torch.zeros_like(out) + mean_value
 
         return _hook
 
@@ -147,31 +147,29 @@ def resample_ablate(
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that samples replacement activation values.
+            Hook callable that samples replacement out values.
         """
 
         generator = _make_generator(seed)
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Return sampled values reshaped to the activation."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Return sampled values reshaped to the out."""
 
-            source_tensor = _source_tensor_or_activation(source_value, activation).to(
-                device=activation.device, dtype=activation.dtype
+            source_tensor = _source_tensor_or_out(source_value, out).to(
+                device=out.device, dtype=out.dtype
             )
             flat_source = source_tensor.reshape(-1)
             if flat_source.numel() == 0:
                 raise HookValueError("resample_ablate source tensor is empty")
             if seed is None:
                 _enqueue_nondeterminism_note(hook, "resample_ablate")
-                indices = torch.randint(
-                    flat_source.numel(), activation.shape, device=activation.device
-                )
+                indices = torch.randint(flat_source.numel(), out.shape, device=out.device)
             else:
                 indices = torch.randint(
                     flat_source.numel(),
-                    activation.shape,
+                    out.shape,
                     generator=generator,
-                    device=activation.device,
+                    device=out.device,
                 )
             return flat_source[indices]
 
@@ -206,7 +204,7 @@ def steer(
     coef:
         PLAN.md alias for ``magnitude``.
     feature_axis:
-        Required when a vector direction must be aligned with an activation
+        Required when a vector direction must be aligned with an out
         axis, avoiding silent batch/position assumptions.
     force_shape_change:
         Stored escape-hatch metadata for later execution phases.
@@ -228,14 +226,11 @@ def steer(
             Hook callable that adds the configured steering direction.
         """
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Add the steering vector to the activation."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Add the steering vector to the out."""
 
-            aligned = _align_direction(direction, activation, feature_axis=feature_axis)
-            return (
-                activation
-                + aligned.to(device=activation.device, dtype=activation.dtype) * scale_value
-            )
+            aligned = _align_direction(direction, out, feature_axis=feature_axis)
+            return out + aligned.to(device=out.device, dtype=out.dtype) * scale_value
 
         return _hook
 
@@ -254,7 +249,7 @@ def steer(
 
 
 def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
-    """Create a helper that multiplies an activation by ``factor``.
+    """Create a helper that multiplies an out by ``factor``.
 
     Parameters
     ----------
@@ -270,18 +265,18 @@ def scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
     """
 
     def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for activation scaling.
+        """Return the runtime hook for out scaling.
 
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that multiplies an activation by ``factor``.
+            Hook callable that multiplies an out by ``factor``.
         """
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Scale the activation."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Scale the out."""
 
-            return activation * factor
+            return out * factor
 
         return _hook
 
@@ -301,7 +296,7 @@ def clamp(
     max: float | None = None,
     force_shape_change: bool = False,
 ) -> HelperSpec:
-    """Create a helper that clamps activation values.
+    """Create a helper that clamps out values.
 
     Parameters
     ----------
@@ -322,18 +317,18 @@ def clamp(
         raise HookValueError("clamp requires min, max, or both")
 
     def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for activation clamping.
+        """Return the runtime hook for out clamping.
 
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that clamps activation values.
+            Hook callable that clamps out values.
         """
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Clamp the activation."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Clamp the out."""
 
-            return torch.clamp(activation, min=min, max=max)
+            return torch.clamp(out, min=min, max=max)
 
         return _hook
 
@@ -376,27 +371,25 @@ def noise(
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that adds Gaussian noise to activations.
+            Hook callable that adds Gaussian noise to outs.
         """
 
         generator = _make_generator(seed)
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Add Gaussian noise to the activation."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Add Gaussian noise to the out."""
 
             if seed is None:
                 _enqueue_nondeterminism_note(hook, "noise")
-                sample = torch.randn(
-                    activation.shape, device=activation.device, dtype=activation.dtype
-                )
+                sample = torch.randn(out.shape, device=out.device, dtype=out.dtype)
             else:
                 sample = torch.randn(
-                    activation.shape,
+                    out.shape,
                     generator=generator,
-                    device=activation.device,
-                    dtype=activation.dtype,
+                    device=out.device,
+                    dtype=out.dtype,
                 )
-            return activation + sample * std
+            return out + sample * std
 
         return _hook
 
@@ -416,14 +409,14 @@ def project_onto(
     feature_axis: int | None = None,
     force_shape_change: bool = False,
 ) -> HelperSpec:
-    """Create a helper that projects activations onto a direction.
+    """Create a helper that projects outs onto a direction.
 
     Parameters
     ----------
     direction:
         Projection direction.
     feature_axis:
-        Required when aligning a vector with a higher-rank activation.
+        Required when aligning a vector with a higher-rank out.
     force_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
@@ -439,19 +432,19 @@ def project_onto(
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that projects an activation onto ``direction``.
+            Hook callable that projects an out onto ``direction``.
         """
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Project activation onto the direction."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Project out onto the direction."""
 
-            aligned = _align_direction(direction, activation, feature_axis=feature_axis).to(
-                device=activation.device, dtype=activation.dtype
+            aligned = _align_direction(direction, out, feature_axis=feature_axis).to(
+                device=out.device, dtype=out.dtype
             )
             denom = torch.sum(aligned * aligned)
             if denom == 0:
                 raise HookValueError("project_onto direction has zero norm")
-            coef = torch.sum(activation * aligned) / denom
+            coef = torch.sum(out * aligned) / denom
             return aligned * coef
 
         return _hook
@@ -479,7 +472,7 @@ def project_off(
     direction:
         Direction to remove.
     feature_axis:
-        Required when aligning a vector with a higher-rank activation.
+        Required when aligning a vector with a higher-rank out.
     force_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
@@ -506,10 +499,10 @@ def project_off(
 
         onto_hook = onto_spec()
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Remove the projected component from the activation."""
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+            """Remove the projected component from the out."""
 
-            return cast(torch.Tensor, activation - onto_hook(activation, hook=hook))
+            return cast(torch.Tensor, out - onto_hook(out, hook=hook))
 
         return _hook
 
@@ -534,7 +527,7 @@ def swap_with(
     ----------
     other_label:
         Label string resolved at fire time by later phases, a OpLog-like
-        object with ``activation``, or a tensor value.
+        object with ``out``, or a tensor value.
     force_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
@@ -545,7 +538,7 @@ def swap_with(
     """
 
     def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for swapping activations.
+        """Return the runtime hook for swapping outs.
 
         Returns
         -------
@@ -553,7 +546,7 @@ def swap_with(
             Hook callable that resolves and returns the configured replacement.
         """
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Return the resolved replacement tensor."""
 
             replacement = _resolve_swap_value(other_label, hook)
@@ -561,7 +554,7 @@ def swap_with(
                 raise HookValueError(
                     "swap_with string labels require Phase 4 fire-time resolution context"
                 )
-            return replacement.to(device=activation.device, dtype=activation.dtype)
+            return replacement.to(device=out.device, dtype=out.dtype)
 
         return _hook
 
@@ -578,8 +571,8 @@ def swap_with(
 def splice_module(
     module: nn.Module,
     *,
-    input: str = "activation",
-    output: str = "activation",
+    input: str = "out",
+    output: str = "out",
     force_shape_change: bool = False,
 ) -> HelperSpec:
     """Create a helper that calls a module as a black-box forward splice.
@@ -589,9 +582,9 @@ def splice_module(
     module:
         Module to call under ``pause_logging()`` in the execution helper.
     input:
-        Input routing policy. Phase 3 implements ``"activation"``.
+        Input routing policy. Phase 3 implements ``"out"``.
     output:
-        Output routing policy. Phase 3 implements ``"activation"``.
+        Output routing policy. Phase 3 implements ``"out"``.
     force_shape_change:
         Stored escape hatch allowing output metadata changes.
 
@@ -601,8 +594,8 @@ def splice_module(
         Built-in forward helper spec.
     """
 
-    if input != "activation" or output != "activation":
-        raise HookValueError("splice_module Phase 3 only supports activation input/output routing")
+    if input != "out" or output != "out":
+        raise HookValueError("splice_module Phase 3 only supports out input/output routing")
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for module splicing.
@@ -610,22 +603,22 @@ def splice_module(
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that forwards the activation through ``module``.
+            Hook callable that forwards the out through ``module``.
         """
 
-        def _hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Call the spliced module and validate dtype/device."""
 
-            result = module(activation)
+            result = module(out)
             if not isinstance(result, torch.Tensor):
                 raise HookValueError("splice_module must return a torch.Tensor")
-            if not force_shape_change and result.dtype != activation.dtype:
+            if not force_shape_change and result.dtype != out.dtype:
                 raise SpliceModuleDtypeError(
-                    f"splice_module returned dtype {result.dtype}; expected {activation.dtype}"
+                    f"splice_module returned dtype {result.dtype}; expected {out.dtype}"
                 )
-            if not force_shape_change and result.device != activation.device:
+            if not force_shape_change and result.device != out.device:
                 raise SpliceModuleDeviceError(
-                    f"splice_module returned device {result.device}; expected {activation.device}"
+                    f"splice_module returned device {result.device}; expected {out.device}"
                 )
             return result
 
@@ -680,8 +673,8 @@ def bwd_hook(fn: Callable[..., torch.Tensor]) -> HelperSpec:
     )
 
 
-def gradient_zero(*, force_shape_change: bool = False) -> HelperSpec:
-    """Create a live/rerun-only helper that zeros a gradient tensor.
+def grad_zero(*, force_shape_change: bool = False) -> HelperSpec:
+    """Create a live/rerun-only helper that zeros a grad tensor.
 
     Parameters
     ----------
@@ -695,23 +688,23 @@ def gradient_zero(*, force_shape_change: bool = False) -> HelperSpec:
     """
 
     def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for zeroing gradients.
+        """Return the runtime hook for zeroing grads.
 
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that replaces a gradient with zeros.
+            Hook callable that replaces a grad with zeros.
         """
 
         def _hook(g: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Return a zero gradient."""
+            """Return a zero grad."""
 
             return torch.zeros_like(g)
 
         return _hook
 
     return _helper_spec(
-        "gradient_zero",
+        "grad_zero",
         kind="backward",
         kwargs={"force_shape_change": force_shape_change},
         factory=factory,
@@ -721,13 +714,13 @@ def gradient_zero(*, force_shape_change: bool = False) -> HelperSpec:
     )
 
 
-def gradient_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
-    """Create a live/rerun-only helper that scales a gradient tensor.
+def grad_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec:
+    """Create a live/rerun-only helper that scales a grad tensor.
 
     Parameters
     ----------
     factor:
-        Multiplicative gradient factor.
+        Multiplicative grad factor.
     force_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
@@ -738,23 +731,23 @@ def gradient_scale(factor: float, *, force_shape_change: bool = False) -> Helper
     """
 
     def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for gradient scaling.
+        """Return the runtime hook for grad scaling.
 
         Returns
         -------
         Callable[..., torch.Tensor]
-            Hook callable that multiplies a gradient by ``factor``.
+            Hook callable that multiplies a grad by ``factor``.
         """
 
         def _hook(g: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-            """Scale the gradient."""
+            """Scale the grad."""
 
             return g * factor
 
         return _hook
 
     return _helper_spec(
-        "gradient_scale",
+        "grad_scale",
         args=(factor,),
         kind="backward",
         kwargs={"force_shape_change": force_shape_change},
@@ -798,7 +791,7 @@ def _helper_spec(
     batch_independent:
         Whether this helper can be applied independently to each batch item.
     compatible_with_append:
-        Whether this helper opts into append when it changes activation shape.
+        Whether this helper opts into append when it changes out shape.
 
     Returns
     -------
@@ -873,8 +866,8 @@ def helper_from_serialized(
         "swap_with": swap_with,
         "splice_module": splice_module,
         "bwd_hook": bwd_hook,
-        "gradient_zero": gradient_zero,
-        "gradient_scale": gradient_scale,
+        "grad_zero": grad_zero,
+        "grad_scale": grad_scale,
     }
     if name not in constructors:
         raise ValueError(f"Unknown builtin helper {name!r}")
@@ -945,15 +938,15 @@ def _enqueue_nondeterminism_note(hook: HookContext, helper_name: str) -> None:
         operation_history.append(note)
 
 
-def _source_tensor_or_activation(source: Any, activation: torch.Tensor) -> torch.Tensor:
+def _source_tensor_or_out(source: Any, out: torch.Tensor) -> torch.Tensor:
     """Resolve a helper source object to a tensor.
 
     Parameters
     ----------
     source:
         Source object.
-    activation:
-        Fallback activation.
+    out:
+        Fallback out.
 
     Returns
     -------
@@ -962,10 +955,10 @@ def _source_tensor_or_activation(source: Any, activation: torch.Tensor) -> torch
     """
 
     if source is None:
-        return activation
+        return out
     if isinstance(source, torch.Tensor):
         return source
-    candidate = getattr(source, "activation", None)
+    candidate = getattr(source, "out", None)
     if isinstance(candidate, torch.Tensor):
         return candidate
     raise HookValueError(f"unsupported tensor source for helper: {type(source).__name__}")
@@ -973,17 +966,17 @@ def _source_tensor_or_activation(source: Any, activation: torch.Tensor) -> torch
 
 def _align_direction(
     direction: torch.Tensor,
-    activation: torch.Tensor,
+    out: torch.Tensor,
     *,
     feature_axis: int | None,
 ) -> torch.Tensor:
-    """Align a direction tensor with an activation tensor.
+    """Align a direction tensor with an out tensor.
 
     Parameters
     ----------
     direction:
         Direction tensor.
-    activation:
+    out:
         Activation tensor.
     feature_axis:
         Axis receiving a vector direction.
@@ -994,30 +987,30 @@ def _align_direction(
         Broadcast-compatible direction.
     """
 
-    if tuple(direction.shape) == tuple(activation.shape):
+    if tuple(direction.shape) == tuple(out.shape):
         return direction
-    if direction.ndim == 1 and activation.ndim > 1:
+    if direction.ndim == 1 and out.ndim > 1:
         if feature_axis is None:
             raise AxisAmbiguityError(
                 "vector directions require explicit feature_axis to avoid axis ambiguity"
             )
-        normalized_axis = feature_axis % activation.ndim
-        if direction.shape[0] != activation.shape[normalized_axis]:
+        normalized_axis = feature_axis % out.ndim
+        if direction.shape[0] != out.shape[normalized_axis]:
             raise HookValueError(
                 f"direction length {direction.shape[0]} does not match "
-                f"activation axis {normalized_axis} size {activation.shape[normalized_axis]}"
+                f"out axis {normalized_axis} size {out.shape[normalized_axis]}"
             )
-        shape = [1] * activation.ndim
+        shape = [1] * out.ndim
         shape[normalized_axis] = direction.shape[0]
         return direction.reshape(shape)
     try:
         cast(Callable[..., object], torch.broadcast_shapes)(
-            tuple(direction.shape), tuple(activation.shape)
+            tuple(direction.shape), tuple(out.shape)
         )
     except RuntimeError as exc:
         raise HookValueError(
             f"direction shape {tuple(direction.shape)} cannot broadcast to "
-            f"activation shape {tuple(activation.shape)}"
+            f"out shape {tuple(out.shape)}"
         ) from exc
     return direction
 
@@ -1045,15 +1038,15 @@ def _resolve_swap_value(other_label: Any, hook: HookContext) -> Any:
         if isinstance(swap_sources, dict):
             return swap_sources.get(other_label, other_label)
         return other_label
-    return getattr(other_label, "activation", other_label)
+    return getattr(other_label, "out", other_label)
 
 
 __all__ = [
     "HELPER_REGISTRY_VERSION",
     "bwd_hook",
     "clamp",
-    "gradient_scale",
-    "gradient_zero",
+    "grad_scale",
+    "grad_zero",
     "helper_from_serialized",
     "mean_ablate",
     "noise",

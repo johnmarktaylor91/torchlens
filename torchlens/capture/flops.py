@@ -16,7 +16,7 @@ Architecture — 3-tier dispatch system:
 
     3. **SPECIALTY_HANDLERS** (dict → callable): Operations needing shape-specific
        formulas (matmul, conv, normalization, attention, etc.).  Each handler
-       receives ``(output_shape, parent_param_shapes, captured_args)`` and returns
+       receives ``(output_shape, param_shapes, saved_args)`` and returns
        an int or None.
 
     Unknown operations (not in any tier) return ``None`` — they are not counted
@@ -31,7 +31,7 @@ Conventions:
       implementation (Taylor series, lookup tables, etc.).
     - **Backward FLOPs** are estimated as a multiplier on forward FLOPs, stored
       in ``BACKWARD_MULTIPLIERS``.  Typical values: 2x for matmul/conv (dL/dX +
-      dL/dW), 1x for simple activations, 2.5x for normalization.
+      dL/dW), 1x for simple outs, 2.5x for normalization.
 
 Maintenance — checking coverage against the full op list::
 
@@ -469,7 +469,7 @@ ELEMENTWISE_FLOPS: dict[str, int] = {
     "isneginf": 1,
     "isposinf": 1,
     "isreal": 1,
-    # Simple activations (1 FLOP per element)
+    # Simple outs (1 FLOP per element)
     "relu": 1,
     "relu_": 1,
     "relu6": 1,
@@ -634,8 +634,8 @@ ELEMENTWISE_FLOPS: dict[str, int] = {
 
 def _matmul_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """MatMul family: mm, matmul, __matmul__, bmm, multi_dot, etc.
 
@@ -646,10 +646,10 @@ def _matmul_flops(
     For 1D dot product A[K] @ B[K]:  FLOPs = 2 * K (K multiplies + K-1 adds,
     rounded to 2K for simplicity).
     """
-    if not captured_args:
+    if not saved_args:
         return None
     shapes = []
-    for arg in captured_args:
+    for arg in saved_args:
         s = _safe_shape(arg)
         if s is not None and len(s) >= 1:
             shapes.append(s)
@@ -672,18 +672,18 @@ def _matmul_flops(
 
 def _addmm_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """addmm / addbmm / baddbmm: beta * M + alpha * (A @ B).
 
     FLOPs = 2*batch*M*K*N (matmul) + output_numel (bias addition).
-    captured_args[0] is the bias matrix M; captured_args[1:3] are A and B.
+    saved_args[0] is the bias matrix M; saved_args[1:3] are A and B.
     """
-    if not captured_args or len(captured_args) < 3:
+    if not saved_args or len(saved_args) < 3:
         return None
     shapes = []
-    for arg in captured_args[1:3]:  # Skip bias (index 0), take A and B.
+    for arg in saved_args[1:3]:  # Skip bias (index 0), take A and B.
         s = _safe_shape(arg)
         if s is not None:
             shapes.append(s)
@@ -699,24 +699,24 @@ def _addmm_flops(
 
 def _linear_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """nn.Linear: 2 * batch * in_features * out_features (+ bias).
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
-    if parent_param_shapes:
+    if param_shapes:
         # Weight shape is [out_features, in_features]
-        weight_shape = parent_param_shapes[0]
+        weight_shape = param_shapes[0]
         if len(weight_shape) >= 2:
             out_features, in_features = weight_shape[0], weight_shape[1]
             batch = _numel(output_shape) // out_features if out_features > 0 else 0
             flops = 2 * batch * in_features * out_features
-            if len(parent_param_shapes) > 1:  # bias
+            if len(param_shapes) > 1:  # bias
                 flops += _numel(output_shape)
             return flops
     return None
@@ -724,8 +724,8 @@ def _linear_flops(
 
 def _conv_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """Convolution: 2 * output_numel * in_channels_per_group * kernel_size (+ bias).
 
@@ -733,94 +733,94 @@ def _conv_flops(
     Each output element requires a dot product of size
     ``in_channels_per_group * kernel_size``, hence ``2 * ...`` (MAC convention).
     """
-    if not parent_param_shapes:
+    if not param_shapes:
         return None
-    weight_shape = parent_param_shapes[0]
+    weight_shape = param_shapes[0]
     if len(weight_shape) < 3:
         return None
     out_numel = _numel(output_shape)
     channels_per_group = weight_shape[1]  # in_channels / groups
     kernel_size = _prod(weight_shape[2:])  # product of spatial kernel dims
     flops = 2 * out_numel * channels_per_group * kernel_size
-    if len(parent_param_shapes) > 1:  # bias adds 1 FLOP per output element
+    if len(param_shapes) > 1:  # bias adds 1 FLOP per output element
         flops += _numel(output_shape)
     return flops
 
 
 def _batchnorm_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """BatchNorm: ~5 FLOPs per element (mean, var, normalize, scale, shift).
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 5 * _numel(output_shape)
 
 
 def _layernorm_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """LayerNorm: ~5 FLOPs per element.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 5 * _numel(output_shape)
 
 
 def _groupnorm_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """GroupNorm: ~5 FLOPs per element.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 5 * _numel(output_shape)
 
 
 def _instancenorm_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """InstanceNorm: ~5 FLOPs per element.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 5 * _numel(output_shape)
 
 
 def _reduction_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """Reductions (sum, mean, max, min, prod, etc.): ~input_numel FLOPs.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
-    if captured_args:
-        input_shape = _safe_shape(captured_args[0])
+    if saved_args:
+        input_shape = _safe_shape(saved_args[0])
         if input_shape:
             return _numel(input_shape)
     return None
@@ -828,18 +828,18 @@ def _reduction_flops(
 
 def _var_std_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """Variance/std: ~3 * input_numel (mean, squared diff, sum).
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
-    if captured_args:
-        input_shape = _safe_shape(captured_args[0])
+    if saved_args:
+        input_shape = _safe_shape(saved_args[0])
         if input_shape:
             return 3 * _numel(input_shape)
     return None
@@ -847,18 +847,18 @@ def _var_std_flops(
 
 def _norm_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """Vector/matrix norm: ~2 * input_numel (square + sum, then sqrt).
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
-    if captured_args:
-        input_shape = _safe_shape(captured_args[0])
+    if saved_args:
+        input_shape = _safe_shape(saved_args[0])
         if input_shape:
             return 2 * _numel(input_shape)
     return None
@@ -866,50 +866,50 @@ def _norm_flops(
 
 def _softmax_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """Softmax: ~5 FLOPs per element (max, sub, exp, sum, div).
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 5 * _numel(output_shape)
 
 
 def _log_softmax_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """LogSoftmax: ~6 FLOPs per element.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 6 * _numel(output_shape)
 
 
 def _pool_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """Pooling: ~kernel_size comparisons/additions per output element.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function (input, kernel_size, ...).
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function (input, kernel_size, ...).
     """
     out_numel = _numel(output_shape)
-    # Try to extract kernel_size from captured_args[1]
-    if captured_args and len(captured_args) >= 2:
-        ks = captured_args[1]
+    # Try to extract kernel_size from saved_args[1]
+    if saved_args and len(saved_args) >= 2:
+        ks = saved_args[1]
         if isinstance(ks, int):
             return out_numel * ks
         elif isinstance(ks, (tuple, list)) and all(isinstance(v, int) for v in ks):
@@ -919,18 +919,18 @@ def _pool_flops(
 
 def _adaptive_pool_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """Adaptive pooling: each output element averages over a region of input.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
-    if captured_args:
-        input_shape = _safe_shape(captured_args[0])
+    if saved_args:
+        input_shape = _safe_shape(saved_args[0])
         if input_shape:
             return _numel(input_shape)
     return _numel(output_shape)
@@ -938,60 +938,60 @@ def _adaptive_pool_flops(
 
 def _embedding_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """Embedding: lookup, no arithmetic.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 0
 
 
 def _dropout_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """Dropout: 1 comparison + 1 multiply per element.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 2 * _numel(output_shape)
 
 
 def _interpolate_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """Interpolation/upsample: ~4 FLOPs per output element (bilinear).
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return 4 * _numel(output_shape)
 
 
 def _sort_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """Sort: O(n log n) comparisons.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     n = _numel(output_shape)
     if n > 0:
@@ -1001,33 +1001,33 @@ def _sort_flops(
 
 def _cumulative_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int:
     """Cumulative ops (cumsum, cumprod): input_numel.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
     return _numel(output_shape)
 
 
 def _cross_entropy_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """Cross-entropy: softmax + nll_loss ≈ 6 * input_numel.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
-    if captured_args:
-        input_shape = _safe_shape(captured_args[0])
+    if saved_args:
+        input_shape = _safe_shape(saved_args[0])
         if input_shape:
             return 6 * _numel(input_shape)
     return None
@@ -1035,18 +1035,18 @@ def _cross_entropy_flops(
 
 def _mse_loss_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """MSE loss: sub + square + mean ≈ 3 * input_numel.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
-    if captured_args:
-        input_shape = _safe_shape(captured_args[0])
+    if saved_args:
+        input_shape = _safe_shape(saved_args[0])
         if input_shape:
             return 3 * _numel(input_shape)
     return None
@@ -1054,18 +1054,18 @@ def _mse_loss_flops(
 
 def _binary_cross_entropy_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """Binary cross entropy: ~10 FLOPs per element.
 
     Args:
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved.
-        captured_args: Positional args to the function.
+        param_shapes: Shapes of parameter tensors involved.
+        saved_args: Positional args to the function.
     """
-    if captured_args:
-        input_shape = _safe_shape(captured_args[0])
+    if saved_args:
+        input_shape = _safe_shape(saved_args[0])
         if input_shape:
             return 10 * _numel(input_shape)
     return None
@@ -1073,19 +1073,19 @@ def _binary_cross_entropy_flops(
 
 def _einsum_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """Einsum: extract tensor operands (skip subscript string) and compute matmul-like FLOPs.
 
     For two-operand einsums that look like matrix multiplication, this gives
     a reasonable estimate. For more exotic subscripts, returns None.
     """
-    if not captured_args:
+    if not saved_args:
         return None
     # Skip the subscript string argument(s) and collect tensor shapes
     shapes = []
-    for arg in captured_args:
+    for arg in saved_args:
         s = _safe_shape(arg)
         if s is not None and len(s) >= 1:
             shapes.append(s)
@@ -1106,8 +1106,8 @@ def _einsum_flops(
 
 def _sdpa_flops(
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
 ) -> int | None:
     """Scaled dot-product attention: Q@K^T + scale + softmax + attn@V.
 
@@ -1116,11 +1116,11 @@ def _sdpa_flops(
       - Scale + softmax: 6*B*H*S_q*S_k  (1 scale + 5 softmax per element)
       - attn@V: 2*B*H*S_q*D_v*S_k  (matmul, MAC convention)
     """
-    if not captured_args or len(captured_args) < 3:
+    if not saved_args or len(saved_args) < 3:
         return None
-    q_shape = _safe_shape(captured_args[0])
-    k_shape = _safe_shape(captured_args[1])
-    v_shape = _safe_shape(captured_args[2])
+    q_shape = _safe_shape(saved_args[0])
+    k_shape = _safe_shape(saved_args[1])
+    v_shape = _safe_shape(saved_args[2])
     if not q_shape or not k_shape or not v_shape:
         return None
     if len(q_shape) < 2 or len(k_shape) < 2 or len(v_shape) < 2:
@@ -1139,7 +1139,7 @@ def _sdpa_flops(
 
 
 # Type alias for specialty FLOPs handler functions.
-# Signature: (output_shape, parent_param_shapes, captured_args) -> int | None
+# Signature: (output_shape, param_shapes, saved_args) -> int | None
 _FlopsHandler = Callable[[Shape | None, ParamShapes, CapturedArgs], int | None]
 
 # Registry mapping func_name to its specialty handler.
@@ -1329,9 +1329,9 @@ SPECIALTY_HANDLERS: dict[str, _FlopsHandler] = {
 # Backward FLOPs multipliers
 # ============================================================================
 # Backward FLOPs are estimated as (forward_flops * multiplier).
-# Rationale: backward pass computes gradients w.r.t. inputs AND parameters.
+# Rationale: backward pass computes grads w.r.t. inputs AND parameters.
 # For matmul/conv, this is roughly 2x forward (one matmul for dL/dX, one for dL/dW).
-# For simple activations, it's ~1x (element-wise derivative * upstream gradient).
+# For simple outs, it's ~1x (element-wise derivative * upstream grad).
 # Operations not in this dict use _DEFAULT_BACKWARD_MULTIPLIER (1.0).
 
 BACKWARD_MULTIPLIERS: dict[str, float] = {
@@ -1360,7 +1360,7 @@ BACKWARD_MULTIPLIERS: dict[str, float] = {
     "multi_dot": 2.0,
     "chain_matmul": 2.0,
     "einsum": 2.0,
-    # Normalization: gradients through mean/variance ≈ 2.5x
+    # Normalization: grads through mean/variance ≈ 2.5x
     "batch_norm": 2.5,
     "native_batch_norm": 2.5,
     "layer_norm": 2.5,
@@ -1369,7 +1369,7 @@ BACKWARD_MULTIPLIERS: dict[str, float] = {
     "group_norm": 2.5,
     "native_group_norm": 2.5,
     "instance_norm": 2.5,
-    # Simple activations: element-wise derivative ≈ 1x
+    # Simple outs: element-wise derivative ≈ 1x
     "relu": 1.0,
     "relu_": 1.0,
     "relu6": 1.0,
@@ -1380,7 +1380,7 @@ BACKWARD_MULTIPLIERS: dict[str, float] = {
     "leaky_relu": 1.0,
     "leaky_relu_": 1.0,
     "prelu": 1.0,
-    # Complex activations: derivative requires more work ≈ 1.5x
+    # Complex outs: derivative requires more work ≈ 1.5x
     "sigmoid": 1.5,
     "sigmoid_": 1.5,
     "tanh": 1.5,
@@ -1396,7 +1396,7 @@ BACKWARD_MULTIPLIERS: dict[str, float] = {
     "selu_": 1.5,
     "softplus": 1.5,
     "logsigmoid": 1.5,
-    # Softmax: gradient is O(n) per element ≈ 2x
+    # Softmax: grad is O(n) per element ≈ 2x
     "softmax": 2.0,
     "_softmax": 2.0,
     "log_softmax": 2.0,
@@ -1404,14 +1404,14 @@ BACKWARD_MULTIPLIERS: dict[str, float] = {
     # Attention ≈ 2.5x
     "scaled_dot_product_attention": 2.5,
     "multi_head_attention_forward": 2.5,
-    # Pooling ≈ 1.0x (just routing gradients)
+    # Pooling ≈ 1.0x (just routing grads)
     "max_pool1d": 1.0,
     "max_pool2d": 1.0,
     "max_pool3d": 1.0,
     "avg_pool1d": 1.0,
     "avg_pool2d": 1.0,
     "avg_pool3d": 1.0,
-    # Reductions ≈ 1.0x (broadcast gradient back)
+    # Reductions ≈ 1.0x (broadcast grad back)
     "sum": 1.0,
     "mean": 1.0,
     "prod": 1.5,
@@ -1437,7 +1437,7 @@ def register_op_rule(
     op_name:
         Captured operation name.
     flops_fn:
-        Callable receiving ``(output_shape, parent_param_shapes, args, kwargs)``.
+        Callable receiving ``(output_shape, param_shapes, args, kwargs)``.
     mem_fn:
         Optional memory-cost callable retained for external callers.
     """
@@ -1453,9 +1453,9 @@ def register_op_rule(
 def compute_forward_flops(
     func_name: str,
     output_shape: Shape | None,
-    parent_param_shapes: ParamShapes,
-    captured_args: CapturedArgs,
-    captured_kwargs: dict[str, object],
+    param_shapes: ParamShapes,
+    saved_args: CapturedArgs,
+    saved_kwargs: dict[str, object],
 ) -> int | None:
     """Compute forward FLOPs for a single operation via 3-tier dispatch.
 
@@ -1468,9 +1468,9 @@ def compute_forward_flops(
     Args:
         func_name: Name of the function that was applied.
         output_shape: Shape of the output tensor.
-        parent_param_shapes: Shapes of parameter tensors involved (from log entry).
-        captured_args: Positional args to the function (live tensors for shape extraction).
-        captured_kwargs: Keyword args (currently unused but available for future handlers).
+        param_shapes: Shapes of parameter tensors involved (from log entry).
+        saved_args: Positional args to the function (live tensors for shape extraction).
+        saved_kwargs: Keyword args (currently unused but available for future handlers).
 
     Returns:
         FLOPs count (int), 0 for zero-cost ops, or None if the operation is unknown.
@@ -1479,7 +1479,7 @@ def compute_forward_flops(
         return None
     if func_name in _CUSTOM_OP_RULES:
         flops_fn, _mem_fn = _CUSTOM_OP_RULES[func_name]
-        return flops_fn(output_shape, parent_param_shapes, captured_args, captured_kwargs)
+        return flops_fn(output_shape, param_shapes, saved_args, saved_kwargs)
 
     # Tier 1: zero-cost memory/layout ops
     if func_name in ZERO_FLOPS_OPS:
@@ -1494,7 +1494,7 @@ def compute_forward_flops(
     # Tier 3: shape-dependent specialty handlers
     if func_name in SPECIALTY_HANDLERS:
         handler = SPECIALTY_HANDLERS[func_name]
-        return handler(output_shape, parent_param_shapes, captured_args)
+        return handler(output_shape, param_shapes, saved_args)
 
     # Unknown operation — return None rather than guessing to avoid silent errors.
     return None

@@ -48,7 +48,7 @@ def _rank_prefixed_streaming_options(
     return StreamingOptions(
         bundle_path=bundle_path.parent / f"rank_{rank:02d}" / bundle_path.name,
         retain_in_memory=streaming.retain_in_memory,
-        activation_callback=streaming.activation_callback,
+        out_callback=streaming.out_callback,
     )
 
 
@@ -105,7 +105,7 @@ def _resolve_train_mode_default(
     """Resolve one default capture option for train-mode sugar."""
 
     if train_mode and value is MISSING:
-        return CaptureSpec(keep_grad=True, save_activation=True, save_metadata=True)
+        return CaptureSpec(keep_grad=True, save_out=True, save_metadata=True)
     if not train_mode or value is MISSING or value is False:
         return value
     if value is True:
@@ -137,10 +137,10 @@ class Recorder:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-        save_raw_activation: bool | MissingType = MISSING,
+        out_transform: ActivationPostfunc | None | MissingType = MISSING,
+        save_raw_outs: bool | MissingType = MISSING,
         train_mode: bool = False,
-        activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -152,13 +152,13 @@ class Recorder:
         include_source_events, max_predicate_failures, on_predicate_error, streaming,
         random_seed:
             Fastlog recording options.
-        activation_transform:
-            Optional callable applied to each retained activation copy after
+        out_transform:
+            Optional callable applied to each retained out copy after
             dtype/device transforms. The callable runs under ``pause_logging``
             and must return a ``torch.Tensor``. Errors are wrapped in
             :class:`torchlens.TorchLensPostfuncError`.
-        save_raw_activation:
-            When ``False`` and ``activation_transform`` is set, only the
+        save_raw_outs:
+            When ``False`` and ``out_transform`` is set, only the
             transformed payload is retained on the record. Defaults to
             ``True`` to mirror the slow path.
         train_mode:
@@ -177,14 +177,13 @@ class Recorder:
             value=default_module,
             train_mode=train_mode,
         )
-        if activation_postfunc is not MISSING:
-            if activation_transform is not MISSING:
+        if out_postfunc is not MISSING:
+            if out_transform is not MISSING:
                 raise TypeError(
-                    "kwarg activation_postfunc deprecated, use activation_transform; "
-                    "do not pass both"
+                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
                 )
-            warn_deprecated_alias("activation_postfunc", "activation_transform")
-            activation_transform = activation_postfunc
+            warn_deprecated_alias("out_postfunc", "out_transform")
+            out_transform = out_postfunc
         self.model = unwrapped_model
         self.options = merge_recording_options(
             recording=None,
@@ -198,8 +197,8 @@ class Recorder:
             on_predicate_error=on_predicate_error,
             streaming=streaming,
             random_seed=random_seed,
-            activation_transform=activation_transform,
-            save_raw_activation=save_raw_activation,
+            out_transform=out_transform,
+            save_raw_outs=save_raw_outs,
         )
         validate_recording_options(self.options)
         _ensure_model_prepared(self.model)

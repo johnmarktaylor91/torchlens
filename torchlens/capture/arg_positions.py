@@ -620,7 +620,7 @@ _UNARY_FUNCS = [
     "quadruple",
     "ntuple",
     "checkcatinputs",
-    # Hook/utility methods
+    # Hook/utility custom_methods
     "registerhook",
     "isinteger",
     # Dunder / internal
@@ -1004,7 +1004,7 @@ FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
 )
 
-# Tensor iterator and subclass methods
+# Tensor iterator and subclass custom_methods
 for _name in [
     "iter",
     "initsubclass",

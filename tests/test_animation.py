@@ -37,13 +37,13 @@ class RecurrentLinear(nn.Module):
         return state
 
 
-def test_animate_passes_returns_static_html() -> None:
-    """animate_passes should expose pass frames for a repeated site."""
+def test_animate_ops_returns_static_html() -> None:
+    """animate_ops should expose pass frames for a repeated site."""
 
     log = tl.trace(RecurrentLinear(), torch.randn(1, 3))
-    recurrent_label = next(label for label, count in log.layer_num_passes.items() if count > 1)
+    recurrent_label = next(label for label, count in log.layer_num_calls.items() if count > 1)
 
-    html = log.animate_passes(recurrent_label)
+    html = log.animate_ops(recurrent_label)
 
     assert "tl-pass-animation" in html
     assert "Play" in html

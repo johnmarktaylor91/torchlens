@@ -11,7 +11,7 @@ from torchlens.intervention.errors import LiveModeLabelError
 
 
 class _ReluReturnModel(torch.nn.Module):
-    """Model that exposes the returned ReLU activation for comparison."""
+    """Model that exposes the returned ReLU out for comparison."""
 
     def __init__(self) -> None:
         """Initialize the model with no captured output."""
@@ -20,7 +20,7 @@ class _ReluReturnModel(torch.nn.Module):
         self.latest: torch.Tensor | None = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return a single ReLU activation.
+        """Return a single ReLU out.
 
         Parameters
         ----------
@@ -30,7 +30,7 @@ class _ReluReturnModel(torch.nn.Module):
         Returns
         -------
         torch.Tensor
-            ReLU activation after live hooks.
+            ReLU out after live hooks.
         """
 
         self.latest = torch.relu(x)
@@ -63,12 +63,12 @@ class _LinearModel(torch.nn.Module):
         return self.linear(x)
 
 
-def _zero_hook(activation: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
-    """Return a zeroed activation.
+def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+    """Return a zeroed out.
 
     Parameters
     ----------
-    activation:
+    out:
         Activation at the hook site.
     hook:
         Hook context.
@@ -76,18 +76,18 @@ def _zero_hook(activation: torch.Tensor, *, hook: tl.HookContext) -> torch.Tenso
     Returns
     -------
     torch.Tensor
-        Zeroed activation with matching metadata.
+        Zeroed out with matching metadata.
     """
 
-    return activation * 0
+    return out * 0
 
 
-def _identity_hook(activation: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
-    """Return an activation unchanged.
+def _identity_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+    """Return an out unchanged.
 
     Parameters
     ----------
-    activation:
+    out:
         Activation at the hook site.
     hook:
         Hook context.
@@ -95,15 +95,15 @@ def _identity_hook(activation: torch.Tensor, *, hook: tl.HookContext) -> torch.T
     Returns
     -------
     torch.Tensor
-        Original activation.
+        Original out.
     """
 
-    return activation
+    return out
 
 
 @pytest.mark.smoke
-def test_live_func_hook_replaces_returned_and_saved_activation() -> None:
-    """Live post-hooks run before saving so returned and saved activations match."""
+def test_live_func_hook_replaces_returned_and_saved_out() -> None:
+    """Live post-hooks run before saving so returned and saved outs match."""
 
     model = _ReluReturnModel()
     log = tl.trace(
@@ -118,12 +118,12 @@ def test_live_func_hook_replaces_returned_and_saved_activation() -> None:
 
     assert log.run_state is RunState.LIVE_CAPTURED
     assert model.latest is not None
-    assert relu_layer.activation is not None
-    assert torch.equal(model.latest, relu_layer.activation)
-    assert torch.count_nonzero(relu_layer.activation) == 0
-    assert len(relu_layer.intervention_log) == 1
-    assert relu_layer.intervention_log[0].timing == "post"
-    assert relu_layer.intervention_log[0].direction == "forward"
+    assert relu_layer.out is not None
+    assert torch.equal(model.latest, relu_layer.out)
+    assert torch.count_nonzero(relu_layer.out) == 0
+    assert len(relu_layer.interventions) == 1
+    assert relu_layer.interventions[0].timing == "post"
+    assert relu_layer.interventions[0].direction == "forward"
 
 
 @pytest.mark.smoke
@@ -152,11 +152,11 @@ def test_module_selector_matches_capture_time_module_context() -> None:
         hooks={tl.module("linear"): _zero_hook},
     )
 
-    hooked_layers = [layer for layer in log.layer_list if layer.intervention_log]
+    hooked_layers = [layer for layer in log.layer_list if layer.interventions]
 
     assert hooked_layers
-    assert hooked_layers[0].activation is not None
-    assert torch.count_nonzero(hooked_layers[0].activation) == 0
+    assert hooked_layers[0].out is not None
+    assert torch.count_nonzero(hooked_layers[0].out) == 0
 
 
 @pytest.mark.smoke
@@ -170,7 +170,7 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
         intervention_ready=True,
     )
     raw_label = next(
-        layer.layer_label_raw for layer in raw_log.layer_list if layer.func_name == "relu"
+        layer._layer_label_raw for layer in raw_log.layer_list if layer.func_name == "relu"
     )
 
     label_log = tl.trace(
@@ -195,9 +195,9 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
         hooks={tl.in_module("linear"): _zero_hook},
     )
 
-    assert any(layer.intervention_log for layer in label_log.layer_list)
-    assert any(layer.intervention_log for layer in where_log.layer_list)
-    assert any(layer.intervention_log for layer in in_module_log.layer_list)
+    assert any(layer.interventions for layer in label_log.layer_list)
+    assert any(layer.interventions for layer in where_log.layer_list)
+    assert any(layer.interventions for layer in in_module_log.layer_list)
 
 
 @pytest.mark.smoke
@@ -215,8 +215,8 @@ def test_no_hooks_preserves_pristine_run_state() -> None:
 
 
 @pytest.mark.smoke
-def test_live_replacement_metadata_matches_saved_activation() -> None:
-    """Hook replacement refreshes tensor metadata and saved-activation flags."""
+def test_live_replacement_metadata_matches_saved_out() -> None:
+    """Hook replacement refreshes tensor metadata and saved-out flags."""
 
     log = tl.trace(
         _ReluReturnModel(),
@@ -227,11 +227,8 @@ def test_live_replacement_metadata_matches_saved_activation() -> None:
     )
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
 
-    assert relu_layer.activation is not None
-    assert relu_layer.has_saved_activations is True
-    assert relu_layer.tensor_shape == tuple(relu_layer.activation.shape)
-    assert relu_layer.tensor_dtype == relu_layer.activation.dtype
-    assert (
-        relu_layer.tensor_memory
-        == relu_layer.activation.nelement() * relu_layer.activation.element_size()
-    )
+    assert relu_layer.out is not None
+    assert relu_layer.has_saved_outs is True
+    assert relu_layer.shape == tuple(relu_layer.out.shape)
+    assert relu_layer.dtype == relu_layer.out.dtype
+    assert relu_layer.memory == relu_layer.out.nelement() * relu_layer.out.element_size()

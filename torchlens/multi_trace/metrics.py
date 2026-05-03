@@ -1,6 +1,6 @@
 """Pairwise distance metrics for the multi-trace subpackage.
 
-These primitives operate on pairs of activation (or gradient) tensors and return
+These primitives operate on pairs of out (or grad) tensors and return
 a scalar tensor in the [0, ~] range -- larger means more dissimilar. The
 `METRIC_REGISTRY` and `resolve_metric` helper let callers pass either a string
 name or a callable.
@@ -19,7 +19,7 @@ import torch
 
 
 # Small floor used to keep denominators away from zero. Empirically chosen to be
-# negligible compared to typical activation magnitudes while preventing 0/0
+# negligible compared to typical out magnitudes while preventing 0/0
 # explosions on dead/zero tensors.
 _EPS = 1e-12
 
@@ -48,7 +48,7 @@ def cosine_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     the cosine similarity is defined as 0 (and thus the distance is 1) unless
     the two flattened tensors are bitwise-equal -- in which case we treat them
     as identical (distance 0). This guards self-comparisons of dead/zero
-    activations from showing up as maximally-different.
+    outs from showing up as maximally-different.
     """
 
     fa = _as_flat_float(a)
@@ -156,7 +156,7 @@ def resolve_metric(
 ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
     """Resolve a metric specifier to a callable.
 
-    A string is looked up in ``METRIC_REGISTRY``; a callable passes through
+    A string is looked up in ``METRIC_REGISTRY``; a callable ops through
     unchanged. Anything else raises ``TypeError``.
     """
 

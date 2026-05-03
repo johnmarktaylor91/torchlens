@@ -16,7 +16,7 @@ def test_trace_streaming_on_iterable_inputs() -> None:
         [torch.ones(1, 2), torch.zeros(1, 2)],
         layers_to_save="none",
     )
-    assert root.num_streamed_passes == 2
+    assert root.num_streamed_ops == 2
     assert len(root.streaming_pass_logs) == 2
 
 
@@ -32,5 +32,5 @@ def test_multi_output_module_smoke() -> None:
             return x + 1, x * 2
 
     log = tl.trace(MultiOut(), torch.ones(1, 2), intervention_ready=True)
-    output_paths = [layer.output_path for layer in log.layer_list if layer.is_output_layer]
-    assert output_paths
+    container_paths = [layer.container_path for layer in log.layer_list if layer.is_output]
+    assert container_paths

@@ -67,7 +67,7 @@ _pending_live_fire_records: dict[str, list[Any]] = {}
 """Live hook fire records keyed by capture-time raw label.
 
 Wrappers create these records before ``OpLog`` construction so hooks can
-run before activation saving. ``capture.output_tensors`` consumes them after the
+run before out saving. ``capture.output_tensors`` consumes them after the
 real log entry exists.
 """
 
@@ -87,10 +87,10 @@ _capture_replay_templates: bool = False
 Phase 4a only plumbs the flag. Phase 4b builds the actual templates.
 """
 
-_relationship_source_model_id: int | None = None
+_relationship_model_id: int | None = None
 """Relationship evidence seed: ``id(model)`` at capture start."""
 
-_relationship_source_model_class: str | None = None
+_relationship_model_class: str | None = None
 """Relationship evidence seed: model class qualname at capture start."""
 
 _relationship_weight_fingerprint: str | None = None
@@ -239,7 +239,7 @@ def reset_capture_runtime_context() -> None:
     global _active_hook_plan, _active_intervention_spec, _func_call_id_counter
     global _pending_live_fire_records
     global _capture_replay_templates
-    global _relationship_source_model_id, _relationship_source_model_class
+    global _relationship_model_id, _relationship_model_class
     global _relationship_weight_fingerprint, _relationship_input_id
     global _relationship_input_shape_hash
 
@@ -248,8 +248,8 @@ def reset_capture_runtime_context() -> None:
     _active_intervention_spec = None
     _func_call_id_counter = 0
     _capture_replay_templates = False
-    _relationship_source_model_id = None
-    _relationship_source_model_class = None
+    _relationship_model_id = None
+    _relationship_model_class = None
     _relationship_weight_fingerprint = None
     _relationship_input_id = None
     _relationship_input_shape_hash = None
@@ -260,8 +260,8 @@ def configure_capture_runtime_context(
     hook_plan: Any | None = None,
     intervention_spec: "InterventionSpec | None" = None,
     capture_replay_templates: bool = False,
-    source_model_id: int | None = None,
-    source_model_class: str | None = None,
+    model_id: int | None = None,
+    model_class: str | None = None,
     weight_fingerprint: str | None = None,
     input_id: int | None = None,
     input_shape_hash: str | None = None,
@@ -276,9 +276,9 @@ def configure_capture_runtime_context(
         Active intervention spec placeholder. Mutators land in a later phase.
     capture_replay_templates:
         Whether replay-template capture should be enabled for this run.
-    source_model_id:
+    model_id:
         ``id(model)`` captured at the public API boundary.
-    source_model_class:
+    model_class:
         Model class qualname captured at the public API boundary.
     weight_fingerprint:
         Deterministic model-parameter fingerprint.
@@ -294,15 +294,15 @@ def configure_capture_runtime_context(
     """
 
     global _active_hook_plan, _active_intervention_spec, _capture_replay_templates
-    global _relationship_source_model_id, _relationship_source_model_class
+    global _relationship_model_id, _relationship_model_class
     global _relationship_weight_fingerprint, _relationship_input_id
     global _relationship_input_shape_hash
 
     _active_hook_plan = hook_plan
     _active_intervention_spec = intervention_spec
     _capture_replay_templates = capture_replay_templates
-    _relationship_source_model_id = source_model_id
-    _relationship_source_model_class = source_model_class
+    _relationship_model_id = model_id
+    _relationship_model_class = model_class
     _relationship_weight_fingerprint = weight_fingerprint
     _relationship_input_id = input_id
     _relationship_input_shape_hash = input_shape_hash
@@ -353,7 +353,7 @@ in PyTorch's type stubs.
 # wrapper code can look up argument names and original functions without
 # importing the decoration subpackage.
 
-_func_argnames: dict[str, tuple[str, ...]] = {}
+_arg_names: dict[str, tuple[str, ...]] = {}
 """func_name -> tuple of argument names, pre-computed via ``inspect.signature``
 for every torch function at decoration time.  Used by the wrapper to build
 keyword-argument metadata for logged operations.
@@ -415,7 +415,7 @@ here means the model's forward and submodule hooks are already installed.
 
 _collect_usage_stats: bool = False
 """When True, every decorated wrapper increments call counts in
-``_function_call_counts`` during logged forward passes.  Used by the
+``_function_call_counts`` during logged forward ops.  Used by the
 test suite to verify ArgSpec lookup table coverage."""
 
 _functorch_warning_emitted: bool = False
@@ -424,7 +424,7 @@ the current logging session.  Reset to False at the start of every
 ``active_logging()`` context so each forward pass gets at most one warning."""
 
 _function_call_counts: dict[str, int] = {}
-"""func_name -> total calls across all logged forward passes."""
+"""func_name -> total calls across all logged forward ops."""
 
 _function_call_models: dict[str, set[str]] = {}
 """func_name -> set of model names that called this function."""
@@ -479,7 +479,7 @@ def active_logging(trace: "Trace") -> Iterator[None]:
             "another forward pass is already being logged. Nested logging "
             "would silently corrupt the outer Trace. If you need to log a "
             "model's forward pass from inside another trace call "
-            "(e.g., a custom activation_postfunc), finish the outer capture "
+            "(e.g., a custom out_postfunc), finish the outer capture "
             "before starting another one."
         )
     # Model log must be visible before the toggle flips — wrappers will
@@ -509,9 +509,9 @@ def pause_logging() -> Iterator[None]:
 
     Typical callers:
         - ``safe_copy``: copies tensors without logging the copy op
-        - ``activation_postfunc``: applies user post-processing without logging
-        - ``get_tensor_memory_amount``: calls ``nelement()`` / ``element_size()``
-          which are themselves decorated tensor methods — without pausing,
+        - ``out_postfunc``: applies user post-processing without logging
+        - ``get_memory_amount``: calls ``nelement()`` / ``element_size()``
+          which are themselves decorated tensor custom_methods — without pausing,
           they'd trigger infinite recursive logging.
     """
     global _logging_enabled

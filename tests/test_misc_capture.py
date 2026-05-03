@@ -38,8 +38,8 @@ def test_profiler_execution_trace_bridge(tmp_path: Path) -> None:
     assert json.loads(trace_path.read_text(encoding="utf-8"))["nodes"]
 
 
-def test_fastlog_gradient_capture_spec() -> None:
-    """Fastlog capture specs expose the gradient retention flag."""
+def test_fastlog_grad_capture_spec() -> None:
+    """Fastlog capture specs expose the grad retention flag."""
 
     spec = tl.fastlog.CaptureSpec(keep_grad=True)
     assert spec.keep_grad is True

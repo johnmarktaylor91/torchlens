@@ -186,14 +186,14 @@ class TestBuildArgNameMap:
     def test_basic_mapping(self):
         from torchlens import _state
 
-        _state._func_argnames["softmax"] = ("input", "dim", "dtype")
+        _state._arg_names["softmax"] = ("input", "dim", "dtype")
         result = _build_arg_name_map("softmax", (torch.randn(3), 1), {})
         assert result["dim"] == 1
 
     def test_kwargs_take_precedence(self):
         from torchlens import _state
 
-        _state._func_argnames["softmax"] = ("input", "dim", "dtype")
+        _state._arg_names["softmax"] = ("input", "dim", "dtype")
         result = _build_arg_name_map("softmax", (torch.randn(3), 0), {"dim": 1})
         assert result["dim"] == 1
 
@@ -247,7 +247,7 @@ class TestFuncConfigIntegration:
         log = tl.trace(model, torch.randn(1, 3, 4, 4))
 
         for layer in log.layers:
-            if layer.is_input_layer or layer.is_buffer_layer:
+            if layer.is_input or layer.is_buffer:
                 assert layer.func_config == {}, (
                     f"Source layer {layer.layer_label} has non-empty func_config: "
                     f"{layer.func_config}"
@@ -259,7 +259,7 @@ class TestFuncConfigIntegration:
         log = tl.trace(model, torch.randn(1, 10))
 
         for layer in log.layers:
-            if layer.is_output_layer:
+            if layer.is_output:
                 assert layer.func_config == {}, (
                     f"Output layer {layer.layer_label} has non-empty func_config"
                 )
@@ -271,7 +271,7 @@ class TestFuncConfigIntegration:
 
         linear_layer = next(ly for ly in log.layers if ly.layer_type == "linear")
         # Access via pass
-        pass_log = linear_layer.passes[1]
+        pass_log = linear_layer.ops[1]
         assert pass_log.func_config["out_features"] == 5
 
     def test_func_config_in_str_output(self):
@@ -338,15 +338,15 @@ class TestFuncConfigIntegration:
         assert pool_layer.func_config["kernel_size"] == 2
         assert pool_layer.func_config["stride"] == 2
 
-    def test_save_new_activations_preserves_func_config(self):
-        """func_config should survive save_new_activations (fast path)."""
+    def test_save_new_outs_preserves_func_config(self):
+        """func_config should survive save_new_outs (fast path)."""
         model = nn.Linear(10, 5)
         x1 = torch.randn(1, 10)
         log = tl.trace(model, x1, layers_to_save="all")
 
         # Run with new input via Trace method
         x2 = torch.randn(1, 10)
-        log.save_new_activations(model, x2)
+        log.save_new_outs(model, x2)
 
         linear_layer = next(ly for ly in log.layers if ly.layer_type == "linear")
         assert linear_layer.func_config["out_features"] == 5
@@ -370,7 +370,7 @@ class TestFuncConfigIntegration:
         assert "dilation" not in conv_layer.func_config
         assert conv_layer.func_config["kernel_size"] == (3, 3)
 
-    def test_all_layers_have_func_config_attribute(self):
+    def test_layers_have_func_config_attribute(self):
         """Every layer in the log should have a func_config attribute (dict)."""
 
         class Model(nn.Module):

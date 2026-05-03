@@ -67,7 +67,7 @@ OBJECT_ALIAS_CASES = [
 WRAPPER_CASES = [
     ("validate_forward_pass", torchlens.validation.validate_forward_pass),
     ("validate_backward_pass", torchlens.validation.validate_backward_pass),
-    ("validate_saved_activations", torchlens.validation.validate_saved_activations),
+    ("validate_saved_outs", torchlens.validation.validate_saved_outs),
     ("summary", torchlens.visualization.summary),
     ("show_model_graph", torchlens.visualization.show_model_graph),
     ("show_backward_graph", torchlens.visualization.show_backward_graph),
@@ -151,13 +151,13 @@ def test_validate_backward_pass_positional_loss_fn(
     assert isinstance(result, bool)
 
 
-def test_validate_saved_activations_positional_random_seed(
+def test_validate_saved_outs_positional_random_seed(
     small_model: _TinyModel, small_input: torch.Tensor
 ) -> None:
-    """Legacy saved-activation validator args should still bind correctly."""
+    """Legacy saved-out validator args should still bind correctly."""
 
     with pytest.warns(DeprecationWarning):
-        result = torchlens.validate_saved_activations(small_model, small_input, None, 43)
+        result = torchlens.validate_saved_outs(small_model, small_input, None, 43)
     assert isinstance(result, bool)
 
 
@@ -195,7 +195,7 @@ def test_show_backward_graph_legacy_kwargs(
     """Top-level backward graph helper should accept representative legacy kwargs."""
 
     log = torchlens.trace(small_model, small_input, layers_to_save="all")
-    loss = log[log.output_layers[0]].activation.sum()
+    loss = log[log.output_layers[0]].out.sum()
     log.log_backward(loss)
 
     def node_spec_fn(grad_fn_log: Any, default_spec: Any) -> Any:

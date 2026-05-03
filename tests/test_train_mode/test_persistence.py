@@ -15,7 +15,7 @@ def test_train_mode_dropped_on_load(tmp_path: Path, two_layer_mlp: TwoLayerMlp) 
 
     trace = tl.trace(
         two_layer_mlp,
-        torch.randn(3, 4, requires_grad=True),
+        torch.randn(3, 4, has_trainable_params=True),
         train_mode=True,
         random_seed=0,
     )

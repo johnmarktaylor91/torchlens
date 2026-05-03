@@ -110,7 +110,7 @@ class RecordingState:
             self.history.popleft()
 
     def add_record(self, record: ActivationRecord) -> None:
-        """Append a retained activation record and update indexes."""
+        """Append a retained out record and update indexes."""
 
         self.storage_backend.append(record)
         object.__setattr__(self.recording, "n_records", len(self.recording.records))

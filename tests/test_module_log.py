@@ -117,10 +117,10 @@ class TestModuleLogFields:
         ml = log.modules["0"]
         assert ml.address == "0"
         assert ml.name == "0"
-        assert ml.module_class_name == "Linear"
+        assert ml.class_name == "Linear"
 
     def test_source_info(self):
-        log = trace_fn(_make_simple_model(), _simple_input(), save_source_context=True)
+        log = trace_fn(_make_simple_model(), _simple_input(), save_code_context=True)
         ml = log.modules["0"]
         assert ml.source_file is not None  # nn.Linear has inspectable source
         assert ml.forward_signature is not None
@@ -143,18 +143,18 @@ class TestModuleLogFields:
         # Root's call_children should include top-level modules
         assert len(root.call_children) > 0
 
-    def test_nesting_depth(self):
+    def test_call_depth(self):
         log = trace_fn(_make_nested_model(), _nested_input())
         root = log.modules["self"]
-        assert root.nesting_depth == 0
+        assert root.call_depth == 0
 
         # Top-level module should be depth 1
         top = log.modules["0"]
-        assert top.nesting_depth == 1
+        assert top.call_depth == 1
 
         # Nested inside "0" should be depth 2
         nested = log.modules["0.0"]
-        assert nested.nesting_depth == 2
+        assert nested.call_depth == 2
 
     def test_address_depth(self):
         log = trace_fn(_make_nested_model(), _nested_input())
@@ -165,8 +165,8 @@ class TestModuleLogFields:
     def test_layers_populated(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        assert len(ml.all_layers) > 0
-        assert ml.num_layers == len(ml.all_layers)
+        assert len(ml.layers) > 0
+        assert ml.num_layers == len(ml.layers)
 
     def test_params_accessor(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -180,7 +180,7 @@ class TestModuleLogFields:
         log = trace_fn(model, _simple_input())
         for ml in log.modules:
             if ml.address != "self":
-                assert ml.is_training is False
+                assert ml.is_train_mode is False
 
     def test_hooks_detected_false(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -194,7 +194,7 @@ class TestModuleLogFields:
         r = repr(ml)
         assert "ModuleLog" in r
         assert ml.address in r
-        assert ml.module_class_name in r
+        assert ml.class_name in r
 
 
 # ---------------------------------------------------------------------------
@@ -206,15 +206,15 @@ class TestModuleCallLog:
     def test_pass_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.passes[1]
+        mpl = ml.ops[1]
         assert isinstance(mpl, ModuleCallLog)
-        # Pass layers should be a subset of parent all_layers
-        assert all(label in ml.all_layers for label in mpl.layers)
+        # Pass layers should be a subset of parent layers
+        assert all(label in ml.layers for label in mpl.layers)
 
     def test_input_output_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.passes[1]
+        mpl = ml.ops[1]
         assert isinstance(mpl.input_layers, list)
         assert isinstance(mpl.output_layers, list)
 
@@ -222,13 +222,13 @@ class TestModuleCallLog:
         log = trace_fn(_make_nested_model(), _nested_input())
         # "0" contains "0.0" and "0.1" as submodules
         ml = log.modules["0"]
-        mpl = ml.passes[1]
+        mpl = ml.ops[1]
         assert isinstance(mpl.call_children, list)
 
     def test_repr(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.passes[1]
+        mpl = ml.ops[1]
         r = repr(mpl)
         assert "ModuleCallLog" in r
         assert len(r) > 0
@@ -240,36 +240,36 @@ class TestModuleCallLog:
 
 
 class TestMultiPassModules:
-    def test_num_passes_gt_1(self, input_2d):
+    def test_num_calls_gt_1(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         log = trace_fn(model, input_2d)
         # fc1 is used 4 times
         ml = log.modules["fc1"]
-        assert ml.num_passes >= 2
+        assert ml.num_calls >= 2
 
     def test_per_call_field_raises(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         log = trace_fn(model, input_2d)
         ml = log.modules["fc1"]
-        assert ml.num_passes > 1
-        with pytest.raises(AttributeError, match="passes"):
+        assert ml.num_calls > 1
+        with pytest.raises(AttributeError, match="ops"):
             _ = ml.layers
 
     def test_pass_access(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         log = trace_fn(model, input_2d)
         ml = log.modules["fc1"]
-        assert 1 in ml.passes
-        assert 2 in ml.passes
-        assert isinstance(ml.passes[1], ModuleCallLog)
-        assert isinstance(ml.passes[2], ModuleCallLog)
+        assert 1 in ml.ops
+        assert 2 in ml.ops
+        assert isinstance(ml.ops[1], ModuleCallLog)
+        assert isinstance(ml.ops[2], ModuleCallLog)
 
     def test_pass_notation_accessor(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         log = trace_fn(model, input_2d)
         mpl = log.modules["fc1:2"]
         assert isinstance(mpl, ModuleCallLog)
-        assert mpl.pass_num == 2
+        assert mpl.call_index == 2
 
 
 # ---------------------------------------------------------------------------
@@ -281,9 +281,9 @@ class TestSinglePassDelegation:
     def test_layers_delegates(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        assert ml.num_passes == 1
-        # Should delegate to passes[1].layers
-        assert ml.layers == ml.passes[1].layers
+        assert ml.num_calls == 1
+        # Should delegate to ops[1].layers
+        assert ml.layers == ml.ops[1].layers
 
     def test_forward_args_delegates(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -303,8 +303,8 @@ class TestModuleAccessorSummary:
         df = log.modules.to_pandas()
         assert len(df) == len(log.modules)
         assert "address" in df.columns
-        assert "module_class_name" in df.columns
-        assert "nesting_depth" in df.columns
+        assert "class_name" in df.columns
+        assert "call_depth" in df.columns
         assert "num_params" in df.columns
 
     def test_summary(self):
@@ -326,24 +326,24 @@ class TestModuleAccessorSummary:
 
 
 class TestModuleLogIntegration:
-    def test_root_all_layers_equals_model_layers(self):
+    def test_root_layers_equals_model_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         root = log.root_module
-        assert root.all_layers == log.layer_labels
+        assert root.layers == log.layer_labels
 
     def test_root_params_count(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         root = log.root_module
-        assert root.num_params == log.total_params
+        assert root.num_params == log.num_params
 
-    def test_module_class_name_matches(self):
+    def test_class_name_matches(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         # Module "0" is Linear
-        assert log.modules["0"].module_class_name == "Linear"
+        assert log.modules["0"].class_name == "Linear"
         # Module "1" is ReLU
-        assert log.modules["1"].module_class_name == "ReLU"
+        assert log.modules["1"].class_name == "ReLU"
         # Module "2" is Linear
-        assert log.modules["2"].module_class_name == "Linear"
+        assert log.modules["2"].class_name == "Linear"
 
     def test_nested_model_hierarchy(self):
         log = trace_fn(_make_nested_model(), _nested_input())
@@ -371,7 +371,7 @@ class TestModuleLogIntegration:
         ml = log.modules["0"]
         if ml.num_layers > 0:
             entry = ml[0]
-            assert entry.layer_label == ml.all_layers[0]
+            assert entry.layer_label == ml.layers[0]
 
     def test_nested_modules_model(self, input_2d):
         """Integration test with the NestedModules example model."""
@@ -381,7 +381,7 @@ class TestModuleLogIntegration:
         root = log.root_module
         assert root.address == "self"
         # Should have nested hierarchy
-        max_depth = max(ml.nesting_depth for ml in log.modules)
+        max_depth = max(ml.call_depth for ml in log.modules)
         assert max_depth >= 2  # At least 3 levels of nesting
 
 
@@ -412,7 +412,7 @@ class TestModuleLogStringIndexing:
 
 
 class TestTupleStringNormalization:
-    """containing_modules should handle both tuple and string formats."""
+    """modules should handle both tuple and string formats."""
 
     def test_module_hierarchy_with_nested_model(self):
         class Inner(nn.Module):

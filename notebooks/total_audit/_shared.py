@@ -309,7 +309,7 @@ def tiny_transformer(seed: int = 0) -> TinyTransformer:
 
 
 def make_clean_corrupt_pair(seed: int = 0) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return a deterministic clean/corrupt activation pair.
+    """Return a deterministic clean/corrupt out pair.
 
     Parameters
     ----------
@@ -417,7 +417,7 @@ def audit_touch_items(
     namespace:
         Mapping containing ``tl`` and representative instances keyed by class name.
     examples:
-        Optional exact-item call examples for methods that need arguments.
+        Optional exact-item call examples for custom_methods that need arguments.
     max_samples:
         Maximum number of compact item summaries to print.
     """

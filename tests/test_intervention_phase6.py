@@ -17,12 +17,12 @@ from torchlens.intervention.replay import cone_of_effect
 replay_mod = importlib.import_module("torchlens.intervention.replay")
 
 
-def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
     """Return a zero ablation for hook tests.
 
     Parameters
     ----------
-    activation:
+    out:
         Activation passed to the hook.
     hook:
         Hook context supplied by TorchLens.
@@ -30,18 +30,18 @@ def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Zeroed activation.
+        Zeroed out.
     """
 
-    return activation * 0
+    return out * 0
 
 
-def _identity_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
-    """Return an unchanged activation.
+def _identity_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    """Return an unchanged out.
 
     Parameters
     ----------
-    activation:
+    out:
         Activation passed to the hook.
     hook:
         Hook context supplied by TorchLens.
@@ -49,10 +49,10 @@ def _identity_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Original activation.
+        Original out.
     """
 
-    return activation
+    return out
 
 
 class ResidualRelu(torch.nn.Module):
@@ -125,7 +125,7 @@ class RecurrentRelu(torch.nn.Module):
         return x
 
 
-def _intervention_log(model: torch.nn.Module, x: torch.Tensor) -> Any:
+def _interventions(model: torch.nn.Module, x: torch.Tensor) -> Any:
     """Capture an intervention-ready model log.
 
     Parameters
@@ -167,32 +167,32 @@ def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
     """Replay applies hooks, mutates downstream output, and records run state."""
 
     torch.manual_seed(0)
-    log = _intervention_log(ResidualRelu(), torch.randn(2, 3))
-    original_output = log[log.output_layers[0]].activation.clone()
+    log = _interventions(ResidualRelu(), torch.randn(2, 3))
+    original_output = log[log.output_layers[0]].out.clone()
 
     log.replay(hooks={tl.func("relu"): _zero_hook})
 
     relu_site = _first_func(log, "relu")
-    assert torch.equal(relu_site.activation, torch.zeros_like(relu_site.activation))
-    assert not torch.equal(log[log.output_layers[0]].activation, original_output)
+    assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
+    assert not torch.equal(log[log.output_layers[0]].out, original_output)
     assert log.run_state is RunState.REPLAY_PROPAGATED
     assert log.last_run_ctx["engine"] == "replay"
-    assert relu_site.intervention_log[-1].engine == "replay"
+    assert relu_site.interventions[-1].engine == "replay"
 
 
-def test_replay_failure_rolls_back_partial_activation_updates(
+def test_replay_failure_rolls_back_partial_out_updates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Replay failures leave activations and intervention records unchanged."""
+    """Replay failures leave outs and intervention records unchanged."""
 
     torch.manual_seed(0)
-    log = _intervention_log(ResidualRelu(), torch.randn(2, 3))
+    log = _interventions(ResidualRelu(), torch.randn(2, 3))
     original_tensors = {
-        layer.layer_label: layer.activation.clone()
+        layer.layer_label: layer.out.clone()
         for layer in log.layer_list
-        if isinstance(layer.activation, torch.Tensor)
+        if isinstance(layer.out, torch.Tensor)
     }
-    original_records = {layer.layer_label: list(layer.intervention_log) for layer in log.layer_list}
+    original_records = {layer.layer_label: list(layer.interventions) for layer in log.layer_list}
     original_state = log.run_state
     real_execute = replay_mod._execute_replay_func_strict
     execute_count = 0
@@ -214,22 +214,22 @@ def test_replay_failure_rolls_back_partial_activation_updates(
     assert log.run_state is original_state
     for layer in log.layer_list:
         if layer.layer_label in original_tensors:
-            assert torch.equal(layer.activation, original_tensors[layer.layer_label])
-        assert list(layer.intervention_log) == original_records[layer.layer_label]
+            assert torch.equal(layer.out, original_tensors[layer.layer_label])
+        assert list(layer.interventions) == original_records[layer.layer_label]
 
 
-def test_replay_from_preserves_origin_activation_and_recomputes_children() -> None:
+def test_replay_from_preserves_origin_out_and_recomputes_children() -> None:
     """``replay_from`` treats the origin as already mutated."""
 
     torch.manual_seed(1)
-    log = _intervention_log(ResidualRelu(), torch.randn(2, 3))
+    log = _interventions(ResidualRelu(), torch.randn(2, 3))
     relu_site = _first_func(log, "relu")
-    replacement = torch.full_like(relu_site.activation, 2.0)
-    relu_site._internal_set("activation", replacement)
+    replacement = torch.full_like(relu_site.out, 2.0)
+    relu_site._internal_set("out", replacement)
 
     log.replay_from(relu_site)
 
-    assert torch.equal(relu_site.activation, replacement)
+    assert torch.equal(relu_site.out, replacement)
     assert log.run_state is RunState.REPLAY_PROPAGATED
     assert relu_site.layer_label in log.last_run_ctx["origins"]
 
@@ -237,7 +237,7 @@ def test_replay_from_preserves_origin_activation_and_recomputes_children() -> No
 def test_cone_of_effect_follows_bfs_children_and_stops_at_outputs() -> None:
     """Cone traversal walks children and terminates at output leaves."""
 
-    log = _intervention_log(ResidualRelu(), torch.randn(2, 3))
+    log = _interventions(ResidualRelu(), torch.randn(2, 3))
     relu_site = _first_func(log, "relu")
 
     cone = cone_of_effect(log, [relu_site])
@@ -245,17 +245,17 @@ def test_cone_of_effect_follows_bfs_children_and_stops_at_outputs() -> None:
 
     assert relu_site.layer_label in cone_labels
     assert log.output_layers[0] in cone_labels
-    assert cone_labels == sorted(cone_labels, key=lambda label: log[label].operation_num)
+    assert cone_labels == sorted(cone_labels, key=lambda label: log[label].op_index)
 
 
-def test_cone_of_effect_follows_children_tensor_versions() -> None:
-    """Cone traversal follows child-version edges even when child_layers is stale."""
+def test_cone_of_effect_follows_output_versions_per_child() -> None:
+    """Cone traversal follows child-version edges even when children is stale."""
 
-    log = _intervention_log(ResidualRelu(), torch.randn(2, 3))
+    log = _interventions(ResidualRelu(), torch.randn(2, 3))
     origin = _first_func(log, "linear")
-    child_label = origin.child_layers[0]
-    origin.child_layers.remove(child_label)
-    origin.children_tensor_versions[child_label] = origin.activation
+    child_label = origin.children[0]
+    origin.children.remove(child_label)
+    origin.output_versions_per_child[child_label] = origin.out
 
     cone_labels = [site.layer_label for site in cone_of_effect(log, [origin])]
 
@@ -265,7 +265,7 @@ def test_cone_of_effect_follows_children_tensor_versions() -> None:
 def test_cone_of_effect_includes_all_func_call_id_siblings_once() -> None:
     """Cone traversal expands same-call multi-output siblings."""
 
-    log = _intervention_log(SplitModel(), torch.randn(4, 5))
+    log = _interventions(SplitModel(), torch.randn(4, 5))
     max_sites = [layer for layer in log.layer_list if layer.func_name == "max"]
     assert len(max_sites) == 2
 
@@ -278,9 +278,9 @@ def test_cone_of_effect_includes_all_func_call_id_siblings_once() -> None:
 def test_replay_executes_multi_output_func_call_group_once() -> None:
     """Replay executes one saved function call for all output siblings."""
 
-    log = _intervention_log(SplitModel(), torch.randn(4, 5))
+    log = _interventions(SplitModel(), torch.randn(4, 5))
     max_sites = [layer for layer in log.layer_list if layer.func_name == "max"]
-    original_func: Callable[..., Any] = max_sites[0].func_applied
+    original_func: Callable[..., Any] = max_sites[0].func
     calls = {"count": 0}
 
     def counted_max(*args: Any, **kwargs: Any) -> Any:
@@ -290,7 +290,7 @@ def test_replay_executes_multi_output_func_call_group_once() -> None:
         return original_func(*args, **kwargs)
 
     for site in max_sites:
-        site._internal_set("func_applied", counted_max)
+        site._internal_set("func", counted_max)
 
     log.replay(hooks={tl.func("max"): _identity_hook})
 
@@ -300,10 +300,10 @@ def test_replay_executes_multi_output_func_call_group_once() -> None:
 def test_cone_of_effect_handles_cycles() -> None:
     """Cone traversal tracks visited sites and avoids graph cycles."""
 
-    log = _intervention_log(ResidualRelu(), torch.randn(2, 3))
+    log = _interventions(ResidualRelu(), torch.randn(2, 3))
     relu_site = _first_func(log, "relu")
     output = log[log.output_layers[0]]
-    output.child_layers.append(relu_site.layer_label)
+    output.children.append(relu_site.layer_label)
 
     cone = cone_of_effect(log, [relu_site])
 
@@ -313,9 +313,9 @@ def test_cone_of_effect_handles_cycles() -> None:
 def test_replay_warns_on_saved_edge_divergence() -> None:
     """Replay emits a control-flow divergence warning for edge mismatch."""
 
-    log = _intervention_log(ResidualRelu(), torch.randn(2, 3))
+    log = _interventions(ResidualRelu(), torch.randn(2, 3))
     relu_site = _first_func(log, "relu")
-    relu_site.parent_layers.clear()
+    relu_site.parents.clear()
 
     with pytest.warns(ControlFlowDivergenceWarning):
         log.replay(hooks={tl.func("relu"): _identity_hook})

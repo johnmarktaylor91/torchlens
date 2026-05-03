@@ -1,4 +1,4 @@
-"""Smoke tests for backward gradient disk streaming."""
+"""Smoke tests for backward grad disk streaming."""
 
 from __future__ import annotations
 
@@ -44,63 +44,60 @@ class _TinyStreamingBackwardModel(nn.Module):
 def _logged_backward_stream(
     bundle_path: Path,
     *,
-    keep_gradients_in_memory: bool = True,
+    keep_grads_in_memory: bool = True,
 ) -> tuple[tl.Trace, dict[str, torch.Tensor]]:
-    """Capture a backward pass with streamed gradients.
+    """Capture a backward pass with streamed grads.
 
     Parameters
     ----------
     bundle_path:
         Destination bundle path.
-    keep_gradients_in_memory:
-        Whether gradients should remain in memory after bundle finalization.
+    keep_grads_in_memory:
+        Whether grads should remain in memory after bundle finalization.
 
     Returns
     -------
     tuple[tl.Trace, dict[str, torch.Tensor]]
-        Captured log and eager gradient clones keyed by saved layer label.
+        Captured log and eager grad clones keyed by saved layer label.
     """
 
     torch.manual_seed(0)
     model = _TinyStreamingBackwardModel()
-    inputs = torch.randn(2, 3, requires_grad=True)
+    inputs = torch.randn(2, 3, has_trainable_params=True)
     trace = tl.trace(
         model,
         inputs,
         layers_to_save="all",
-        save_gradients=True,
-        save_gradients_to=bundle_path,
-        keep_gradients_in_memory=keep_gradients_in_memory,
+        save_grads=True,
+        save_grads_to=bundle_path,
+        keep_grads_in_memory=keep_grads_in_memory,
     )
-    trace.log_backward(trace[trace.output_layers[0]].activation.sum())
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
     expected = (
-        {
-            label: trace[label].gradient.detach().clone()
-            for label in trace.layers_with_saved_gradients
-        }
-        if keep_gradients_in_memory
+        {label: trace[label].grad.detach().clone() for label in trace.ops_with_saved_grads}
+        if keep_grads_in_memory
         else {}
     )
     return trace, expected
 
 
 @pytest.mark.smoke
-def test_log_backward_streams_gradients_to_disk(tmp_path: Path) -> None:
-    """Gradient streaming should write gradient blobs into the bundle."""
+def test_log_backward_streams_grads_to_disk(tmp_path: Path) -> None:
+    """Gradient streaming should write grad blobs into the bundle."""
 
     bundle_path = tmp_path / "backward_stream.tl"
     trace, _expected = _logged_backward_stream(bundle_path)
     manifest = Manifest.read(bundle_path / "manifest.json")
 
     assert bundle_path.exists()
-    assert trace.has_backward_log
-    assert any(entry.kind == "gradient" for entry in manifest.tensors)
-    assert len(trace.layers_with_saved_gradients) > 0
+    assert trace.has_backward_pass
+    assert any(entry.kind == "grad" for entry in manifest.tensors)
+    assert len(trace.ops_with_saved_grads) > 0
 
 
 @pytest.mark.smoke
-def test_lazy_load_gradient_from_bundle(tmp_path: Path) -> None:
-    """Lazy-loaded gradients should materialize on field access."""
+def test_lazy_load_grad_from_bundle(tmp_path: Path) -> None:
+    """Lazy-loaded grads should materialize on field access."""
 
     bundle_path = tmp_path / "backward_stream.tl"
     _trace, expected = _logged_backward_stream(bundle_path)
@@ -108,10 +105,10 @@ def test_lazy_load_gradient_from_bundle(tmp_path: Path) -> None:
     label = next(iter(expected))
     layer = lazy_log[label]
 
-    assert layer.__dict__["gradient"] is None
-    assert layer.gradient_ref is not None
-    assert torch.equal(layer.gradient, expected[label])
-    assert isinstance(layer.__dict__["gradient"], torch.Tensor)
+    assert layer.__dict__["grad"] is None
+    assert layer.grad_ref is not None
+    assert torch.equal(layer.grad, expected[label])
+    assert isinstance(layer.__dict__["grad"], torch.Tensor)
 
 
 @pytest.mark.smoke
@@ -125,46 +122,46 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     tl.save(trace, roundtrip_path)
     restored = tl.load(roundtrip_path, lazy=True)
     label = next(iter(expected))
-    grad_fn = next(grad_fn for grad_fn in restored.grad_fns if grad_fn.corresponding_layer)
+    grad_fn = next(grad_fn for grad_fn in restored.grad_fns if grad_fn.op)
 
-    assert restored.has_backward_log is True
-    assert restored.backward_num_passes == trace.backward_num_passes
+    assert restored.has_backward_pass is True
+    assert restored.backward_num_calls == trace.backward_num_calls
     assert restored.backward_memory_backend == trace.backward_memory_backend
     assert len(restored.grad_fn_logs) == len(trace.grad_fn_logs)
     assert restored.grad_fn_order == trace.grad_fn_order
-    assert grad_fn.corresponding_layer.corresponding_grad_fn is grad_fn
-    assert torch.equal(restored[label].gradient, expected[label])
+    assert grad_fn.op.grad_fn_log is grad_fn
+    assert torch.equal(restored[label].grad, expected[label])
 
 
 @pytest.mark.smoke
-def test_train_mode_disk_save_rejected_for_gradients(tmp_path: Path) -> None:
-    """Training mode should reject gradient disk streaming."""
+def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
+    """Training mode should reject grad disk streaming."""
 
     model = _TinyStreamingBackwardModel()
-    inputs = torch.randn(2, 3, requires_grad=True)
+    inputs = torch.randn(2, 3, has_trainable_params=True)
 
-    with pytest.raises(ValueError, match="gradient disk saves"):
+    with pytest.raises(ValueError, match="grad disk saves"):
         tl.trace(
             model,
             inputs,
             layers_to_save="all",
-            save_gradients=True,
-            save_gradients_to=tmp_path / "bad.tl",
+            save_grads=True,
+            save_grads_to=tmp_path / "bad.tl",
             train_mode=True,
         )
 
 
 @pytest.mark.smoke
-def test_keep_gradients_in_memory_false(tmp_path: Path) -> None:
-    """Explicit gradient eviction should keep lazy refs and drop live tensors."""
+def test_keep_grads_in_memory_false(tmp_path: Path) -> None:
+    """Explicit grad eviction should keep lazy refs and drop live tensors."""
 
     bundle_path = tmp_path / "backward_stream.tl"
     trace, _expected = _logged_backward_stream(
         bundle_path,
-        keep_gradients_in_memory=False,
+        keep_grads_in_memory=False,
     )
-    layer = trace[trace.layers_with_saved_gradients[0]]
+    layer = trace[trace.ops_with_saved_grads[0]]
 
-    assert layer.__dict__["gradient"] is None
-    assert layer.gradient_ref is not None
-    assert isinstance(layer.gradient, torch.Tensor)
+    assert layer.__dict__["grad"] is None
+    assert layer.grad_ref is not None
+    assert isinstance(layer.grad, torch.Tensor)

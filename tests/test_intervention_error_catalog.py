@@ -92,7 +92,7 @@ CATALOG_EXERCISE_MANIFEST: dict[str, str] = {
     "OpaqueCallableInExecutableSaveError": "tests/test_intervention_phase10.py::test_portable_save_rejects_opaque_callable",
     "DirectWriteInExecutableSaveError": "tests/test_intervention_phase10.py",
     "MutateInPlaceWarning": "tests/test_intervention_phase8b.py::test_mutate_warning_fires_once_and_can_be_suppressed",
-    "DirectActivationWriteWarning": "tests/test_intervention_phase8b.py::test_direct_activation_write_warns_once_and_marks_dirty",
+    "DirectActivationWriteWarning": "tests/test_intervention_phase8b.py::test_direct_out_write_warns_once_and_marks_dirty",
     "MultiMatchWarning": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
     "ControlFlowDivergenceWarning": "tests/test_intervention_phase7.py::test_rerun_non_strict_divergence_warns_and_swaps",
     "BatchNormTrainModeWarning": "tests/test_intervention_phase12.py::test_append_batchnorm_train_mode_warns",
@@ -149,24 +149,24 @@ class _LinearRelu(torch.nn.Module):
         return torch.relu(self.linear(x))
 
 
-def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
-    """Return zeros matching the input activation.
+def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    """Return zeros matching the input out.
 
     Parameters
     ----------
-    activation:
-        Hook input activation.
+    out:
+        Hook input out.
     hook:
         Hook context supplied by TorchLens.
 
     Returns
     -------
     torch.Tensor
-        Zero activation.
+        Zero out.
     """
 
     del hook
-    return torch.zeros_like(activation)
+    return torch.zeros_like(out)
 
 
 def _capture(model: torch.nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Trace:
@@ -375,8 +375,8 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     replay_log.replay()
     rerun_log.rerun(_ReluAdd(), x)
 
-    replay_output = replay_log[replay_log.output_layers[0]].activation
-    rerun_output = rerun_log[rerun_log.output_layers[0]].activation
+    replay_output = replay_log[replay_log.output_layers[0]].out
+    rerun_output = rerun_log[rerun_log.output_layers[0]].out
     assert torch.equal(replay_output, rerun_output)
 
 

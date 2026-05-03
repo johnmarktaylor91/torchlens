@@ -113,7 +113,7 @@ def test_bundle_getitem_returns_modellog_and_nodeview_dicts() -> None:
     assert bundle._supergraph is None
 
     node = bundle.node(tl.func("relu"))
-    assert set(node.activations) == {"a", "b"}
+    assert set(node.outs) == {"a", "b"}
     assert set(node.labels) == {"a", "b"}
     assert set(node.members) == {"a", "b"}
     assert bundle._supergraph is not None
@@ -151,10 +151,10 @@ def test_relationship_matrix_gates_node_operations() -> None:
     good = _log(_ReluModel())
     different = _log(_TanhModel())
     for member in (good, different):
-        member.source_model_id = None
-        member.source_model_class = None
-        member.weight_fingerprint_at_capture = None
-        member.weight_fingerprint_full = None
+        member.model_id = None
+        member.model_class = None
+        member.param_hash_quick = None
+        member.param_hash_full = None
         member.graph_shape_hash = None
         member.input_shape_hash = None
     bundle = tl.bundle({"good": good, "different": different})

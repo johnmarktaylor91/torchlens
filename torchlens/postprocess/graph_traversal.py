@@ -2,10 +2,10 @@
 
 Step 1 (_add_output_layers): Creates dedicated output OpLog nodes, copying
     metadata from the original output tensors but stripping params and module info.
-Step 2 (_find_output_ancestors): DFS backward from outputs marking is_output_ancestor.
+Step 2 (_find_output_ancestors): DFS backward from outputs marking has_output_descendant.
 Step 3 (_remove_orphan_nodes): Bidirectional flood from inputs AND outputs to find
     connected nodes; any node unreachable from both is removed as an orphan.
-Step 4 (_mark_input_output_distances): Optional forward/backward BFS recording
+Step 4 (_mark_layer_depths): Optional forward/backward BFS recording
     min/max hop counts from input and output nodes.
 """
 
@@ -32,12 +32,12 @@ def _add_output_layers(
     For each tensor in the model's output, creates a new OpLog that acts
     as a terminal "output" node. The new node copies tensor metadata from the
     original output tensor but resets function, parameter, and module information
-    to reflect that this is a synthetic bookkeeping node (func_applied=identity,
+    to reflect that this is a synthetic bookkeeping node (func=identity,
     no params, no containing module). The original output tensor becomes the
     parent of the new output node.
 
     Also detects child_tensor_variations: if the actual output tensor differs
-    from the parent's saved activation (e.g., due to in-place ops or postfunc),
+    from the parent's saved out (e.g., due to in-place ops or postfunc),
     the difference is recorded for validation.
     """
     new_output_layers = []
@@ -45,91 +45,89 @@ def _add_output_layers(
         output_node = self[output_layer_label]
         new_output_node = cast(OpLog, output_node.copy())
         new_output_node.layer_type = "output"
-        new_output_node.is_output_layer = True
-        new_output_node.is_input_layer = False
-        new_output_node.is_buffer_layer = False
+        new_output_node.is_output = True
+        new_output_node.is_input = False
+        new_output_node.is_buffer = False
         if i == len(self.output_layers) - 1:
             new_output_node.is_final_output = True
         self._layer_counter += 1
-        new_output_node.tensor_label_raw = f"output_{i + 1}_raw"
-        new_output_node.layer_label_raw = new_output_node.tensor_label_raw
-        new_output_node.creation_order = self._layer_counter
+        new_output_node._label_raw = f"output_{i + 1}_raw"
+        new_output_node._layer_label_raw = new_output_node._label_raw
+        new_output_node.creation_index = self._layer_counter
         output_address = "output"
         if output_addresses[i] != "":
             output_address += f".{output_addresses[i]}"
         new_output_node.io_role = output_address
-        output_path_meta = getattr(self, "_output_container_specs_by_raw_label", {}).get(
-            output_node.tensor_label_raw
+        container_path_meta = getattr(self, "_output_container_specs_by_raw_label", {}).get(
+            output_node._label_raw
         )
-        if output_path_meta is not None:
-            new_output_node.output_path = output_path_meta[0]
-            new_output_node.container_spec = output_path_meta[1]
+        if container_path_meta is not None:
+            new_output_node.container_path = container_path_meta[0]
+            new_output_node.container_spec = container_path_meta[1]
 
         # Fix function information:
 
-        new_output_node.func_applied = identity
+        new_output_node.func = identity
         new_output_node.func_name = "none"
         new_output_node.func_call_stack = _get_func_call_stack(
             self.num_context_lines,
-            source_loading_enabled=self.save_source_context,
+            source_loading_enabled=self.save_code_context,
             disable_col_offset=False,
         )
-        new_output_node.func_time = 0
+        new_output_node.func_duration = 0
         new_output_node.func_rng_states = (
             log_current_rng_states(torch_only=True) if self.save_rng_states else {}
         )
-        new_output_node.func_argnames = tuple([])
-        new_output_node.num_args = 0
-        new_output_node.num_positional_args = 0
-        new_output_node.num_keyword_args = 0
-        new_output_node.func_positional_args_non_tensor = []
-        new_output_node.func_kwargs_non_tensor = {}
+        new_output_node.arg_names = tuple([])
+        new_output_node.num_args_total = 0
+        new_output_node.num_pos_args = 0
+        new_output_node.num_kwargs = 0
+        new_output_node.non_tensor_pos_args = []
+        new_output_node.non_tensor_kwargs = {}
         new_output_node.func_non_tensor_args = []
         new_output_node.grad_fn_name = None
-        new_output_node.autograd_saved_bytes = None
-        new_output_node.autograd_saved_tensor_count = None
+        new_output_node.autograd_saved_memory = None
+        new_output_node.num_autograd_saved_tensors = None
         new_output_node.bytes_delta_at_call = 0
         new_output_node.bytes_peak_at_call = 0
-        new_output_node._internal_set("captured_args", [output_tensors[i]])
-        new_output_node._internal_set("captured_kwargs", {})
+        new_output_node._internal_set("saved_args", [output_tensors[i]])
+        new_output_node._internal_set("saved_kwargs", {})
 
         # Strip any params:
 
         new_output_node.parent_params = []
-        new_output_node.parent_param_barcodes = []
-        new_output_node.parent_param_passes = {}
-        new_output_node.parent_param_logs = []
-        new_output_node.parent_param_shapes = []
-        new_output_node.num_params_total = int(0)
+        new_output_node._param_barcodes = []
+        new_output_node.parent_param_ops = {}
+        new_output_node._param_logs = []
+        new_output_node.param_shapes = []
+        new_output_node.num_params = int(0)
         new_output_node.num_params_trainable = 0
         new_output_node.num_params_frozen = 0
-        new_output_node.params_memory = 0
+        new_output_node.param_memory = 0
 
         # Strip module info:
 
-        new_output_node.containing_module = None
-        new_output_node.containing_modules = []
+        new_output_node.module = None
+        new_output_node.modules = []
         new_output_node.modules_entered = []
-        new_output_node.module_passes_entered = []
-        new_output_node.modules_exited = [
-            mod_pass[0] for mod_pass in output_node.containing_modules
-        ]
-        new_output_node.module_passes_exited = output_node.containing_modules
+        new_output_node.module_ops_entered = []
+        new_output_node.output_of_modules = [mod_pass[0] for mod_pass in output_node.modules]
+        new_output_node.output_of_module_calls = output_node.modules
         new_output_node.is_submodule_output = False
-        new_output_node.is_leaf_module_output = False
-        new_output_node.module_entry_exit_threads_inputs = {}
-        new_output_node.module_entry_exit_thread_output = []
+        new_output_node.is_atomic_module_output = False
+        new_output_node._module_boundary_threads_inputs = {}
+        new_output_node._module_boundary_thread_output = []
 
         # Fix ancestry information:
 
-        new_output_node.is_internally_initialized = False
-        new_output_node.is_output_ancestor = True
-        new_output_node.output_descendants = {new_output_node.tensor_label_raw}
-        new_output_node.child_layers = []
+        new_output_node.is_internal_source = False
+        new_output_node.has_output_descendant = True
+        new_output_node.output_descendants = {new_output_node._label_raw}
+        new_output_node.children = []
         new_output_node.has_children = False
-        new_output_node.parent_layers = [output_node.tensor_label_raw]
-        new_output_node.parent_layer_arg_locs = {
-            "args": {0: output_node.tensor_label_raw},
+        new_output_node.parents = [output_node._label_raw]
+        new_output_node.parent_arg_positions = {
+            "args": {0: output_node._label_raw},
             "kwargs": {},
         }
         new_output_node.edge_uses = []
@@ -138,54 +136,50 @@ def _add_output_layers(
         new_output_node.func_config = {}
 
         # Fix layer equivalence information:
-        new_output_node.recurrent_group = []
+        new_output_node.recurrent_ops = []
         equiv_type = (
-            f"output_{'_'.join(tuple(str(s) for s in new_output_node.tensor_shape))}_"
-            f"{str(new_output_node.tensor_dtype)}"
+            f"output_{'_'.join(tuple(str(s) for s in new_output_node.shape))}_"
+            f"{str(new_output_node.dtype)}"
         )
-        new_output_node.operation_equivalence_type = equiv_type
-        self.equivalent_operations[equiv_type].add(new_output_node.tensor_label_raw)
+        new_output_node.equivalence_class = equiv_type
+        self.equivalent_ops[equiv_type].add(new_output_node._label_raw)
 
         # Track child tensor variations for output nodes.
-        new_output_node.has_child_tensor_variations = False
-        new_output_node.children_tensor_versions = {}
-        if output_node.has_saved_activations:
+        new_output_node.has_output_variations = False
+        new_output_node.output_versions_per_child = {}
+        if output_node.has_saved_outs:
             actual_output = safe_copy(output_tensors[i])
             if output_node.output_device not in [str(actual_output.device), "same"]:
                 actual_output = safe_to(actual_output, output_node.output_device)
             actual_output_raw = actual_output
-            if self.activation_postfunc is not None:
+            if self.out_postfunc is not None:
                 actual_output = output_node._apply_postfunc(
                     actual_output,
-                    self.activation_postfunc,
-                    postfunc_kind="activation",
+                    self.out_postfunc,
+                    postfunc_kind="out",
                     streaming_active=False,
                 )
             comparison_output = (
-                output_node.activation
-                if output_node.activation is not None
-                else output_node.transformed_activation
+                output_node.out if output_node.out is not None else output_node.transformed_out
             )
             if comparison_output is not None and not tensor_nanequal(
                 actual_output, comparison_output
             ):
-                output_node.children_tensor_versions[new_output_node.tensor_label_raw] = (
-                    actual_output
-                )
-                output_node.has_child_tensor_variations = True
-                if output_node.activation is None:
-                    new_output_node._internal_set("transformed_activation", actual_output)
+                output_node.output_versions_per_child[new_output_node._label_raw] = actual_output
+                output_node.has_output_variations = True
+                if output_node.out is None:
+                    new_output_node._internal_set("transformed_out", actual_output)
                 else:
-                    new_output_node._internal_set("activation", actual_output_raw)
+                    new_output_node._internal_set("out", actual_output_raw)
 
         # Change original output node:
 
-        output_node.child_layers.append(new_output_node.tensor_label_raw)
+        output_node.children.append(new_output_node._label_raw)
 
-        self._raw_layer_dict[new_output_node.tensor_label_raw] = new_output_node
-        self._raw_layer_labels_list.append(new_output_node.tensor_label_raw)
+        self._raw_layer_dict[new_output_node._label_raw] = new_output_node
+        self._raw_layer_labels_list.append(new_output_node._label_raw)
 
-        new_output_layers.append(new_output_node.tensor_label_raw)
+        new_output_layers.append(new_output_node._label_raw)
 
     self.output_layers = new_output_layers
 
@@ -194,7 +188,7 @@ def _find_output_ancestors(self: "Trace") -> None:
     """Step 2: Mark every node that is an ancestor of an output node.
 
     Uses a LIFO stack (DFS) starting from output nodes. For each node popped,
-    checks its children — if any child is_output_ancestor, this node is too,
+    checks its children — if any child has_output_descendant, this node is too,
     and it inherits the child's output_descendants. Then pushes all unseen parents
     onto the stack.
 
@@ -203,7 +197,7 @@ def _find_output_ancestors(self: "Trace") -> None:
     parents) but harmless — it may beneficially propagate output_descendants
     from newly-marked children on the second visit.
 
-    The boolean is_output_ancestor is always correct after this function; the
+    The boolean has_output_descendant is always correct after this function; the
     output_descendants set may be incomplete for multi-output graphs, but Step 4's
     flood corrects it if distance marking is enabled.
     """
@@ -213,11 +207,11 @@ def _find_output_ancestors(self: "Trace") -> None:
         node_label = node_stack.pop()
         nodes_seen.add(node_label)
         node = self[node_label]
-        for child_node_label in node.child_layers:
-            if self[child_node_label].is_output_ancestor:
-                node.is_output_ancestor = True
+        for child_node_label in node.children:
+            if self[child_node_label].has_output_descendant:
+                node.has_output_descendant = True
                 node.output_descendants.update(self[child_node_label].output_descendants)
-        for parent_node_label in node.parent_layers:
+        for parent_node_label in node.parents:
             if parent_node_label not in nodes_seen:
                 node_stack.append(parent_node_label)
 
@@ -226,7 +220,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     """Step 3: Remove orphan nodes unreachable from both inputs and outputs.
 
     Floods BIDIRECTIONALLY from input and output nodes simultaneously. A node is
-    reachable if it can be reached by following child_layers OR parent_layers from
+    reachable if it can be reached by following children OR parents from
     any starting node. This bidirectional approach is necessary because:
     - Forward-only (from inputs) would miss nodes reachable only backward from outputs
       (e.g., internally-initialized tensors that only feed into outputs).
@@ -243,16 +237,16 @@ def _remove_orphan_nodes(self: "Trace") -> None:
         tensor_label = node_stack.pop()
         nodes_seen.add(tensor_label)
         layer_entry = self._raw_layer_dict[tensor_label]
-        if (len(layer_entry.child_layers) == 0) and (not layer_entry.is_output_layer):
+        if (len(layer_entry.children) == 0) and (not layer_entry.is_output):
             _log_internally_terminated_tensor(self, tensor_label)
         # Follow BOTH directions to ensure full bidirectional reachability.
-        for next_label in layer_entry.child_layers + layer_entry.parent_layers:
+        for next_label in layer_entry.children + layer_entry.parents:
             if next_label not in nodes_seen:
                 node_stack.append(next_label)
 
     nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen)
     orphan_nodes = orig_nodes - nodes_seen
-    self.orphan_layers = list(orphan_nodes)
+    self.orphan_ops = list(orphan_nodes)
 
     # Batch-remove orphaned nodes and rebuild the ordered layer dict/list.
     orphan_entries = [self._raw_layer_dict[label] for label in orphan_nodes]
@@ -302,15 +296,15 @@ def _expand_seen_nodes_to_complete_func_call_groups(
     return expanded_seen
 
 
-def _mark_input_output_distances(self: "Trace") -> None:
+def _mark_layer_depths(self: "Trace") -> None:
     """Step 4: Compute min/max hop distances from inputs and outputs.
 
-    Runs two unidirectional floods: forward from inputs (following child_layers)
-    and backward from outputs (following parent_layers). Each flood records
+    Runs two unidirectional floods: forward from inputs (following children)
+    and backward from outputs (following parents). Each flood records
     min_distance_from_{input,output} and max_distance_from_{input,output} on
     every reachable node.
 
-    This step is CONDITIONAL on ``self.mark_input_output_distances`` — it is
+    This step is CONDITIONAL on ``self.mark_layer_depths`` — it is
     skipped when the user doesn't need distance metadata, saving time on
     large graphs.
     """
@@ -326,8 +320,8 @@ def _flood_graph_from_input_or_output_nodes(self: "Trace", mode: str) -> None:
     ancestry (input_ancestors or output_descendants).
 
     Unlike the bidirectional flood in Step 3, this flood is UNIDIRECTIONAL:
-    from inputs it follows child_layers (forward), from outputs it follows
-    parent_layers (backward). This ensures hop counts reflect actual data-flow
+    from inputs it follows children (forward), from outputs it follows
+    parents (backward). This ensures hop counts reflect actual data-flow
     distance, not arbitrary graph traversal paths.
 
     A node may be revisited if a new path provides a shorter min or longer max
@@ -344,15 +338,15 @@ def _flood_graph_from_input_or_output_nodes(self: "Trace", mode: str) -> None:
         direction = "forwards"
         marker_field = "has_input_ancestor"
         layer_logging_field = "input_ancestors"
-        forward_field = "child_layers"
+        forward_field = "children"
     elif mode == "output":
         starting_nodes = self.output_layers[:]
         min_field = "min_distance_from_output"
         max_field = "max_distance_from_output"
         direction = "backwards"
-        marker_field = "is_output_ancestor"
+        marker_field = "has_output_descendant"
         layer_logging_field = "output_descendants"
-        forward_field = "parent_layers"
+        forward_field = "parents"
     else:
         raise ValueError("Mode but be either 'input' or 'output'")
 
@@ -466,11 +460,9 @@ def _check_whether_to_add_node_to_flood_stack(
 def _log_internally_terminated_tensor(self: "Trace", tensor_label: str) -> None:
     """Mark a tensor as terminated inside the model (no children reaching an output node)."""
     layer_entry = self[tensor_label]
-    layer_entry.is_internally_terminated = True
-    if tensor_label not in self.internally_terminated_layers:
-        self.internally_terminated_layers.append(tensor_label)
-        if layer_entry.is_scalar_bool and (
-            tensor_label not in self.internally_terminated_bool_layers
-        ):
-            self.internally_terminated_bool_layers.append(tensor_label)
-            layer_entry.is_terminal_bool_layer = True
+    layer_entry.is_internal_sink = True
+    if tensor_label not in self.internally_terminated_ops:
+        self.internally_terminated_ops.append(tensor_label)
+        if layer_entry.is_scalar_bool and (tensor_label not in self.internally_terminated_bool_ops):
+            self.internally_terminated_bool_ops.append(tensor_label)
+            layer_entry.is_terminal_bool = True

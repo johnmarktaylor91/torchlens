@@ -16,9 +16,9 @@ Single-pass `LayerLog` values delegate per-pass attributes:
 
 ```python
 layer = log.layers["linear_1_1"]
-layer.activation
-layer.child_layers       # union across passes
-layer.passes             # dict[int, OpLog]
+layer.out
+layer.children       # union across ops
+layer.ops             # dict[int, OpLog]
 ```
 
 ## Field Management
@@ -27,36 +27,36 @@ layer.passes             # dict[int, OpLog]
 - Avoid ad hoc state that is not scrubbed by save/load, cleanup, and postprocess trimming.
 
 ## Trace Gotchas
-- `_pass_finished` changes `__len__`, `__getitem__`, iteration, and display behavior.
-- Fast-pass postprocess relies on `_pass_finished` staying true between passes.
+- `_tracing_finished` changes `__len__`, `__getitem__`, iteration, and display behavior.
+- Fast-pass postprocess relies on `_tracing_finished` staying true between ops.
 - Methods such as `save`, `load`, `find_sites`, `fork`, `replay`, `rerun`, and
   `preview_fastlog` bridge into other subpackages; avoid importing them at module top if it
   creates cycles.
-- `graph_shape_hash` is computed before `_set_pass_finished`.
+- `graph_shape_hash` is computed before `_set_tracing_finished`.
 
 ## OpLog Gotchas
 - `copy()` shallow-copies selected graph/conditional fields and deep-copies the rest.
-- `activation` for some output/getitem cases may reference parent saved data directly.
-- `gradient` is a bare reference; do not mutate it in-place.
+- `out` for some output/getitem cases may reference parent saved data directly.
+- `grad` is a bare reference; do not mutate it in-place.
 - `save_tensor_data()` must route through `safe_copy()` and respect `train_mode`.
 - `TensorLog` is a compatibility alias from `op_log.py`; new docs should prefer
   `OpLog` unless referring to the alias itself.
 
 ## LayerLog Gotchas
 - `__getattr__` delegation must raise `ValueError` for ambiguous multi-pass access.
-- Aggregate graph properties are unions across passes.
+- Aggregate graph properties are unions across ops.
 - Conditional per-cond children need explicit merge handling; do not treat legacy THEN-only
   views as canonical.
 
 ## Module/Param/Buffer/Grad Logs
 - `ModuleLog` and `ModuleCallLog` are built in postprocess Step 17 from `_module_build_data`.
-- `ParamLog` keeps `_param_ref` for lazy gradient access; call `release_param_ref()` when
+- `ParamLog` keeps `_param_ref` for lazy grad access; call `release_param_ref()` when
   breaking model references.
-- `BufferLog` extends `OpLog` but owns buffer-specific `name` and `module_address`.
+- `BufferLog` extends `OpLog` but owns buffer-specific `name` and `address`.
 - `GradFnLog` and `GradFnCallLog` are populated by backward capture and rendered separately.
 
 ## Cleanup
-`cleanup.py` removes backrefs, parameter refs, saved activations, conditional edges, and
+`cleanup.py` removes backrefs, parameter refs, saved outs, conditional edges, and
 intervention metadata for removed layers. Keep it in sync with any new cross-reference field.
 
 ## Known Risks

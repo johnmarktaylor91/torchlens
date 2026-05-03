@@ -78,19 +78,19 @@ def direction_to_rankdir(direction: str) -> str:
     )
 
 
-def compute_module_penwidth(nesting_depth: int, max_nesting_depth: int) -> float:
-    """Return the cluster border width for a module at ``nesting_depth``.
+def compute_module_penwidth(call_depth: int, max_call_depth: int) -> float:
+    """Return the cluster border width for a module at ``call_depth``.
 
-    ``nesting_depth`` is 0-based (outermost is depth 0).  Outermost modules
+    ``call_depth`` is 0-based (outermost is depth 0).  Outermost modules
     get the maximum penwidth; deepest modules get the minimum.  When the
-    overall hierarchy has only one level (``max_nesting_depth == 0`` or
+    overall hierarchy has only one level (``max_call_depth == 0`` or
     ``1``) we still return a sensible value so callers don't have to
     special-case shallow models.
     """
 
-    if max_nesting_depth <= 0:
+    if max_call_depth <= 0:
         return float(MIN_MODULE_PENWIDTH + PENWIDTH_RANGE)
-    nesting_fraction = (max_nesting_depth - nesting_depth) / max_nesting_depth
+    nesting_fraction = (max_call_depth - call_depth) / max_call_depth
     nesting_fraction = max(0.0, min(1.0, nesting_fraction))
     return MIN_MODULE_PENWIDTH + nesting_fraction * PENWIDTH_RANGE
 

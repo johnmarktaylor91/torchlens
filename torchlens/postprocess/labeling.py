@@ -1,16 +1,16 @@
 """Steps 9-12: Label mapping, final info logging, renaming, cleanup, and lookup keys.
 
 Step 9 (_map_raw_labels_to_final_labels): Assigns human-readable labels to each
-    tensor. Label format: ``{layer_type}_{type_num}_{total_num}:{pass_num}`` for
-    regular layers, or ``{layer_type}_{type_num}:{pass_num}`` for input/output/buffer.
-    The ``:pass_num`` suffix is omitted when num_passes == 1. For multi-pass
-    layers (pass > 1), layer_type and layer_type_num are INHERITED from the first
-    pass to guarantee label consistency within recurrent_group groups.
+    tensor. Label format: ``{layer_type}_{type_num}_{total_num}:{call_index}`` for
+    regular layers, or ``{layer_type}_{type_num}:{call_index}`` for input/output/buffer.
+    The ``:call_index`` suffix is omitted when num_calls == 1. For multi-pass
+    layers (pass > 1), layer_type and type_index are INHERITED from the first
+    pass to guarantee label consistency within recurrent_ops groups.
 
-Step 10 (_log_final_info_for_all_layers): Logs operation numbers, module hierarchy,
+Step 10 (_log_final_info_for_layers): Logs operation numbers, module hierarchy,
     param/size tallies, and structural flags. Populates _module_build_data dicts
     that Step 12 and Step 17 depend on. MUST run before Step 12 because
-    _add_lookup_keys_for_layer_entry needs module_num_passes data.
+    _add_lookup_keys_for_layer_entry needs module_num_calls data.
 
 Step 11 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fields):
     Renames all raw labels (e.g., "cos_3_raw") to final labels in both Trace-level
@@ -40,18 +40,18 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
 
     Iterates through all tensors in order and assigns each a human-readable label.
     Label format conventions:
-    - Regular layers: ``{layer_type}_{type_num}_{total_num}:{pass_num}``
+    - Regular layers: ``{layer_type}_{type_num}_{total_num}:{call_index}``
       e.g., ``conv2d_3_12:2`` (3rd conv2d overall, 12th layer total, pass 2)
-    - Input/output/buffer: ``{layer_type}_{type_num}:{pass_num}``
+    - Input/output/buffer: ``{layer_type}_{type_num}:{call_index}``
       e.g., ``input_1:1`` (total_num is always 0 for these types)
-    - When num_passes == 1, the ``:pass_num`` suffix is omitted in
+    - When num_calls == 1, the ``:call_index`` suffix is omitted in
       the default ``layer_label`` (but ``layer_label_w_pass`` always includes it).
 
-    For multi-pass layers (pass_num > 1), ``layer_type`` AND ``layer_type_num``
+    For multi-pass layers (call_index > 1), ``layer_type`` AND ``type_index``
     are INHERITED from the first pass's tensor to guarantee that all members of
-    a recurrent_group group share the same ``layer_label_no_pass``. Using
-    the entry's own layer_type would cause label mismatches when passes have
-    different layer types (e.g., SSD300 train with getitem passes {1,3} gap).
+    a recurrent_ops group share the same ``layer_label_no_pass``. Using
+    the entry's own layer_type would cause label mismatches when ops have
+    different layer types (e.g., SSD300 train with getitem ops {1,3} gap).
 
     Stores the bidirectional mapping in ``self._raw_to_final_layer_labels`` and
     ``self._final_to_raw_layer_labels``.
@@ -62,56 +62,54 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     layer_total_counter = 1  # Sequential counter for non-input/buffer/output layers.
     for tensor_log_entry in self:
         layer_type = tensor_log_entry.layer_type
-        pass_num = tensor_log_entry.pass_num
-        if pass_num == 1:
+        call_index = tensor_log_entry.call_index
+        if call_index == 1:
             # First pass: assign new type_num and total_num.
-            layer_type_num = layer_type_counter[layer_type]
+            type_index = layer_type_counter[layer_type]
             layer_type_counter[layer_type] += 1
             if layer_type in ["input", "buffer"]:
-                layer_total_num = 0  # Input/buffer don't get a total order number.
+                overall_index = 0  # Input/buffer don't get a total order number.
             else:
-                layer_total_num = layer_total_counter
+                overall_index = layer_total_counter
                 layer_total_counter += 1
 
         else:
             # Pass > 1: INHERIT layer_type and numbers from the first pass.
-            # This ensures all passes of the same layer share layer_label_no_pass.
-            first_pass_tensor = self[tensor_log_entry.recurrent_group[0]]
+            # This ensures all ops of the same layer share layer_label_no_pass.
+            first_pass_tensor = self[tensor_log_entry.recurrent_ops[0]]
             layer_type = first_pass_tensor.layer_type
-            layer_type_num = first_pass_tensor.layer_type_num
+            type_index = first_pass_tensor.type_index
             if layer_type in ["input", "buffer"]:
-                layer_total_num = 0
+                overall_index = 0
             else:
-                layer_total_num = first_pass_tensor.layer_total_num
-        tensor_log_entry.layer_type_num = layer_type_num
-        tensor_log_entry.layer_total_num = layer_total_num
+                overall_index = first_pass_tensor.overall_index
+        tensor_log_entry.type_index = type_index
+        tensor_log_entry.overall_index = overall_index
 
         if layer_type not in ["input", "output", "buffer"]:
             tensor_log_entry.layer_label_w_pass = (
-                f"{layer_type}_{layer_type_num}_{layer_total_num}:{pass_num}"
+                f"{layer_type}_{type_index}_{overall_index}:{call_index}"
             )
-            tensor_log_entry.layer_label_no_pass = (
-                f"{layer_type}_{layer_type_num}_{layer_total_num}"
-            )
+            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}_{overall_index}"
         else:
-            tensor_log_entry.layer_label_w_pass = f"{layer_type}_{layer_type_num}:{pass_num}"
-            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{layer_type_num}"
+            tensor_log_entry.layer_label_w_pass = f"{layer_type}_{type_index}:{call_index}"
+            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}"
 
-        tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{layer_type_num}:{pass_num}"
-        tensor_log_entry.layer_label_no_pass_short = f"{layer_type}_{layer_type_num}"
-        if tensor_log_entry.num_passes == 1:
+        tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{type_index}:{call_index}"
+        tensor_log_entry.layer_label_no_pass_short = f"{layer_type}_{type_index}"
+        if tensor_log_entry.num_calls == 1:
             tensor_log_entry.layer_label = tensor_log_entry.layer_label_no_pass
             tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_no_pass_short
         else:
             tensor_log_entry.layer_label = tensor_log_entry.layer_label_w_pass
             tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_w_pass_short
-        raw_to_final_layer_labels[tensor_log_entry.tensor_label_raw] = tensor_log_entry.layer_label
-        final_to_raw_layer_labels[tensor_log_entry.layer_label] = tensor_log_entry.tensor_label_raw
+        raw_to_final_layer_labels[tensor_log_entry._label_raw] = tensor_log_entry.layer_label
+        final_to_raw_layer_labels[tensor_log_entry.layer_label] = tensor_log_entry._label_raw
     self._raw_to_final_layer_labels = raw_to_final_layer_labels
     self._final_to_raw_layer_labels = final_to_raw_layer_labels
 
 
-def _log_final_info_for_all_layers(self: "Trace") -> None:
+def _log_final_info_for_layers(self: "Trace") -> None:
     """Step 10: Log final metadata for all layers and build module hierarchy.
 
     Iterates through all layers (before unsaved ones are discarded in Step 12)
@@ -123,13 +121,13 @@ def _log_final_info_for_all_layers(self: "Trace") -> None:
     - Structural flags: branching, recurrence, conditional branching.
 
     MUST run before Step 12 because ``_add_lookup_keys_for_layer_entry``
-    (called in Step 12) needs module_num_passes data populated here.
+    (called in Step 12) needs module_num_calls data populated here.
 
     Uses shadow sets for O(1) membership checks to avoid expensive linear
     ``in`` checks on lists for large models.
     """
     unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
-    operation_num = 1
+    op_index = 1
     mbd = self._module_build_data
 
     # Shadow sets for O(1) membership checks in _log_module_hierarchy_info_for_layer.
@@ -138,46 +136,46 @@ def _log_final_info_for_all_layers(self: "Trace") -> None:
     _shadow_sets: dict[str, Any] = {
         "module_layers": defaultdict(set),
         "module_pass_layers": defaultdict(set),
-        "top_level_module_passes": set(),
+        "top_level_module_ops": set(),
         "module_pass_children": defaultdict(set),
-        "module_addresses": set(),
-        "module_passes": set(),
+        "addresses": set(),
+        "module_ops": set(),
     }
 
     for t, layer_entry in enumerate(self):
         if layer_entry.layer_type in ["input", "buffer"]:
-            layer_entry.operation_num = 0
+            layer_entry.op_index = 0
         elif layer_entry.layer_type == "output":
-            layer_entry.operation_num = None  # fix later
+            layer_entry.op_index = None  # fix later
         else:
-            layer_entry.operation_num = operation_num
-            self.num_operations += 1
-            operation_num += 1
+            layer_entry.op_index = op_index
+            self.num_ops += 1
+            op_index += 1
 
         # Replace any layer names with their final names:
         _replace_layer_names_for_layer_entry(self, layer_entry)
 
         # Log the module hierarchy information:
         _log_module_hierarchy_info_for_layer(self, layer_entry, _shadow_sets)
-        if layer_entry.leaf_module_pass is not None:
-            submodule_pass_nice_name = ":".join([str(i) for i in layer_entry.leaf_module_pass])
-            layer_entry.leaf_module_pass = submodule_pass_nice_name
+        if layer_entry.atomic_module_call is not None:
+            submodule_pass_nice_name = ":".join([str(i) for i in layer_entry.atomic_module_call])
+            layer_entry.atomic_module_call = submodule_pass_nice_name
 
         # Tally the tensor sizes:
-        self.total_activation_memory += layer_entry.tensor_memory
+        self.total_out_memory += layer_entry.memory
 
         # Tally the parameter sizes:
         if layer_entry.layer_label_no_pass not in unique_layers_seen:  # only count params once
             if layer_entry.uses_params:
-                self.total_param_layers += 1
-            self.total_params += layer_entry.num_params_total
-            self.total_params_trainable += layer_entry.num_params_trainable
-            self.total_params_frozen += layer_entry.num_params_frozen
-            self.total_param_tensors += layer_entry.num_param_tensors
-            self.total_params_memory += layer_entry.params_memory
+                self.num_layers_with_params += 1
+            self.num_params += layer_entry.num_params
+            self.num_params_trainable += layer_entry.num_params_trainable
+            self.num_params_frozen += layer_entry.num_params_frozen
+            self.num_param_tensors += layer_entry.num_param_tensors
+            self.param_memory += layer_entry.param_memory
             # Tally for modules, too.
-            for module_name, _ in layer_entry.containing_modules:
-                mbd["module_nparams"][module_name] += layer_entry.num_params_total
+            for module_name, _ in layer_entry.modules:
+                mbd["module_nparams"][module_name] += layer_entry.num_params
                 mbd["module_nparams_trainable"][module_name] += layer_entry.num_params_trainable
                 mbd["module_nparams_frozen"][module_name] += layer_entry.num_params_frozen
 
@@ -185,22 +183,22 @@ def _log_final_info_for_all_layers(self: "Trace") -> None:
 
         # Tally elapsed time:
 
-        self.time_function_calls += layer_entry.func_time
+        self.function_calls_duration += layer_entry.func_duration
 
-    _finalize_output_operation_nums(self)
+    _finalize_output_op_indexs(self)
     _build_module_hierarchy_dicts(self)
 
 
-def _finalize_output_operation_nums(self: "Trace") -> None:
-    """Assign operation_num to output layers (deferred until total is known)."""
+def _finalize_output_op_indexs(self: "Trace") -> None:
+    """Assign op_index to output layers (deferred until total is known)."""
     for layer in self.output_layers:
-        self[layer].operation_num = self.num_operations
+        self[layer].op_index = self.num_ops
 
 
 def _build_module_hierarchy_dicts(self: "Trace") -> None:
     """Derive top_level_modules and module_children from their pass-level counterparts."""
     mbd = self._module_build_data
-    for module in mbd["top_level_module_passes"]:
+    for module in mbd["top_level_module_ops"]:
         module_no_pass = module.split(":")[0]
         if module_no_pass not in mbd["top_level_modules"]:
             mbd["top_level_modules"].append(module_no_pass)
@@ -216,18 +214,18 @@ def _build_module_hierarchy_dicts(self: "Trace") -> None:
 # Fields in OpLog that contain raw labels needing rename.
 # These may be lists or sets — the rename logic handles both via type(orig).
 _LIST_FIELDS_TO_RENAME = [
-    "parent_layers",
+    "parents",
     "root_ancestors",
-    "child_layers",
+    "children",
     "input_ancestors",
     "output_descendants",
-    "internally_initialized_parents",
-    "internally_initialized_ancestors",
+    "internal_source_parents",
+    "internal_source_ancestors",
     "cond_branch_start_children",
     "cond_branch_then_children",
     "cond_branch_else_children",
-    "equivalent_operations",
-    "recurrent_group",
+    "equivalent_ops",
+    "recurrent_ops",
 ]
 
 
@@ -276,10 +274,10 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: OpLog) -> N
     """Replace all raw labels in a OpLog's fields with final labels.
 
     Handles three categories of fields:
-    1. List/set fields (parent_layers, child_layers, etc.): creates NEW objects
+    1. List/set fields (parents, children, etc.): creates NEW objects
        via type(orig)([comprehension]) — no shared-set corruption possible.
-    2. parent_layer_arg_locs dict: renames values in-place.
-    3. children_tensor_versions dict: renames keys.
+    2. parent_arg_positions dict: renames values in-place.
+    3. output_versions_per_child dict: renames keys.
 
     Args:
         layer_entry: OpLog to rename labels for.
@@ -297,7 +295,7 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: OpLog) -> N
             d[field] = type(orig)(mapping[raw] for raw in orig)
 
     # Fix the arg locations field:
-    arg_locs = d.get("parent_layer_arg_locs")
+    arg_locs = d.get("parent_arg_positions")
     if arg_locs:
         for arg_type in ("args", "kwargs"):
             sub = arg_locs[arg_type]
@@ -305,9 +303,9 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: OpLog) -> N
                 sub[key] = mapping[value]
 
     # Fix the field names for different children tensor versions:
-    ctv = d.get("children_tensor_versions")
+    ctv = d.get("output_versions_per_child")
     if ctv:
-        d["children_tensor_versions"] = {
+        d["output_versions_per_child"] = {
             mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()
         }
 
@@ -322,17 +320,13 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: OpLog) -> N
     if d.get("edge_uses"):
         d["edge_uses"] = [_rename_label_dataclass(record, mapping) for record in d["edge_uses"]]
 
-    if d.get("captured_arg_template") is not None:
-        d["captured_arg_template"] = _rename_template_parent_refs(
-            d["captured_arg_template"], mapping
-        )
-    if d.get("captured_kwarg_template") is not None:
-        d["captured_kwarg_template"] = _rename_template_parent_refs(
-            d["captured_kwarg_template"], mapping
-        )
-    if d.get("intervention_log"):
-        d["intervention_log"] = [
-            _rename_label_dataclass(record, mapping) for record in d["intervention_log"]
+    if d.get("args_template") is not None:
+        d["args_template"] = _rename_template_parent_refs(d["args_template"], mapping)
+    if d.get("kwargs_template") is not None:
+        d["kwargs_template"] = _rename_template_parent_refs(d["kwargs_template"], mapping)
+    if d.get("interventions"):
+        d["interventions"] = [
+            _rename_label_dataclass(record, mapping) for record in d["interventions"]
         ]
 
 
@@ -380,7 +374,7 @@ def _rename_label_dataclass(value: Any, mapping: Dict[str, str]) -> Any:
         "parent_label",
         "child_label",
         "target_label",
-        "pass_label",
+        "call_label",
         "site_label",
         "layer_label",
     }
@@ -414,10 +408,10 @@ def _log_module_hierarchy_info_for_layer(
 ) -> None:
     """Populate module hierarchy data for a single layer in _module_build_data.
 
-    For each module in the layer's containing_modules, records:
+    For each module in the layer's modules, records:
     - Module tensor counts (per-module and per-pass).
     - Module-to-layer mappings.
-    - Top-level module passes and parent-child relationships.
+    - Top-level module ops and parent-child relationships.
     - Module addresses and pass labels.
 
     Uses shadow sets for O(1) dedup checks (the primary lists maintain insertion
@@ -428,70 +422,67 @@ def _log_module_hierarchy_info_for_layer(
         _shadow_sets: Dict of shadow sets mirroring _module_build_data lists.
     """
     _module_labels_seen = _shadow_sets["module_layers"]
-    _module_pass_labels_seen = _shadow_sets["module_pass_layers"]
-    _top_level_module_passes_seen = _shadow_sets["top_level_module_passes"]
+    _module_call_labels_seen = _shadow_sets["module_pass_layers"]
+    _top_level_module_ops_seen = _shadow_sets["top_level_module_ops"]
     _module_pass_children_seen = _shadow_sets["module_pass_children"]
-    _module_addresses_seen = _shadow_sets["module_addresses"]
-    _module_passes_seen = _shadow_sets["module_passes"]
+    _addresses_seen = _shadow_sets["addresses"]
+    _module_ops_seen = _shadow_sets["module_ops"]
     mbd = self._module_build_data
 
-    containing_module_pass_label = None
+    module_call_label = None
     layer_label = layer_entry.layer_label
-    for module_index, module_pass_label in enumerate(layer_entry.containing_modules):
-        if isinstance(module_pass_label, str):
-            module_name, module_pass = module_pass_label.rsplit(":", 1)
+    for module_index, module_call_label in enumerate(layer_entry.modules):
+        if isinstance(module_call_label, str):
+            module_name, module_pass = module_call_label.rsplit(":", 1)
             module_pass = int(module_pass)  # type: ignore[assignment]
         else:
-            module_name, module_pass = module_pass_label
+            module_name, module_pass = module_call_label
         module_pass_nice_label = f"{module_name}:{module_pass}"
         mbd["module_num_tensors"][module_name] += 1
-        mbd["module_pass_num_tensors"][module_pass_nice_label] += 1
+        mbd["module_call_index_tensors"][module_pass_nice_label] += 1
         if layer_label not in _module_labels_seen[module_name]:
             _module_labels_seen[module_name].add(layer_label)
             mbd["module_layers"][module_name].append(layer_label)
-        if layer_label not in _module_pass_labels_seen[module_pass_nice_label]:
-            _module_pass_labels_seen[module_pass_nice_label].add(layer_label)
+        if layer_label not in _module_call_labels_seen[module_pass_nice_label]:
+            _module_call_labels_seen[module_pass_nice_label].add(layer_label)
             mbd["module_pass_layers"][module_pass_nice_label].append(layer_label)
-        if (module_index == 0) and (module_pass_nice_label not in _top_level_module_passes_seen):
-            _top_level_module_passes_seen.add(module_pass_nice_label)
-            mbd["top_level_module_passes"].append(module_pass_nice_label)
+        if (module_index == 0) and (module_pass_nice_label not in _top_level_module_ops_seen):
+            _top_level_module_ops_seen.add(module_pass_nice_label)
+            mbd["top_level_module_ops"].append(module_pass_nice_label)
         else:
-            if (containing_module_pass_label is not None) and (
-                module_pass_nice_label
-                not in _module_pass_children_seen[containing_module_pass_label]
+            if (module_call_label is not None) and (
+                module_pass_nice_label not in _module_pass_children_seen[module_call_label]
             ):
-                _module_pass_children_seen[containing_module_pass_label].add(module_pass_nice_label)
-                mbd["module_pass_children"][containing_module_pass_label].append(
-                    module_pass_nice_label
-                )
-        containing_module_pass_label = module_pass_nice_label
-        if mbd["module_num_passes"][module_name] < module_pass:
-            mbd["module_num_passes"][module_name] = module_pass
-        if module_name not in _module_addresses_seen:
-            _module_addresses_seen.add(module_name)
-            mbd["module_addresses"].append(module_name)
-        if module_pass_nice_label not in _module_passes_seen:
-            _module_passes_seen.add(module_pass_nice_label)
-            mbd["module_passes"].append(module_pass_nice_label)
+                _module_pass_children_seen[module_call_label].add(module_pass_nice_label)
+                mbd["module_pass_children"][module_call_label].append(module_pass_nice_label)
+        module_call_label = module_pass_nice_label
+        if mbd["module_num_calls"][module_name] < module_pass:
+            mbd["module_num_calls"][module_name] = module_pass
+        if module_name not in _addresses_seen:
+            _addresses_seen.add(module_name)
+            mbd["addresses"].append(module_name)
+        if module_pass_nice_label not in _module_ops_seen:
+            _module_ops_seen.add(module_pass_nice_label)
+            mbd["module_ops"].append(module_pass_nice_label)
 
 
 def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
     """Step 12: Remove unsaved layers, build lookup keys, finalize layer lists.
 
     Unless ``keep_unsaved_layers=True``, removes OpLog entries that don't
-    have saved activations. For each retained entry:
+    have saved outs. For each retained entry:
     - Builds lookup keys (integer index, label, module path, address).
     - Adds to layer_list, layer_dict_main_keys, and label lists.
     - Reorders fields via _trim_and_reorder_layer_entry_fields.
 
-    Sets _all_layers_logged and _all_layers_saved flags for downstream
+    Sets _layers_logged and _layers_saved flags for downstream
     consumers (e.g., visualization guards for keep_unsaved_layers=False).
     """
     layers_to_remove = []
     # Quick loop to count how many tensors are saved:
     for layer_entry in self:
-        if layer_entry.has_saved_activations:
-            self.num_tensors_saved += 1
+        if layer_entry.has_saved_outs:
+            self.num_saved_ops += 1
 
     retained_call_group_labels = _labels_in_replay_ready_call_groups_to_retain(self)
 
@@ -501,16 +492,15 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
         num_logged_tensors = sum(
             1
             for layer_entry in self
-            if layer_entry.has_saved_activations
-            or layer_entry.layer_label in retained_call_group_labels
+            if layer_entry.has_saved_outs or layer_entry.layer_label in retained_call_group_labels
         )
 
     self.layer_list = []
     self.layer_dict_main_keys = {}
     self.layer_labels = []
-    self.layer_labels_no_pass = []
-    self.layer_labels_w_pass = []
-    self.layer_num_passes = {}
+    self.layer_labels = []
+    self.op_labels = []
+    self.layer_num_calls = {}
 
     i = 0
     for raw_tensor_label in self._raw_layer_labels_list:
@@ -518,7 +508,7 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
         # Determine valid lookup keys and relate them to the tensor's realtime operation number:
         should_keep_for_replay = layer_entry.layer_label in retained_call_group_labels
         if (
-            getattr(layer_entry, "has_saved_activations", False)
+            getattr(layer_entry, "has_saved_outs", False)
             or self.keep_unsaved_layers
             or should_keep_for_replay
         ):
@@ -529,30 +519,30 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
             self.layer_list.append(layer_entry)
             self.layer_dict_main_keys[layer_entry.layer_label] = layer_entry
             self.layer_labels.append(layer_entry.layer_label)
-            self.layer_labels_no_pass.append(layer_entry.layer_label_no_pass)
-            self.layer_labels_w_pass.append(layer_entry.layer_label_w_pass)
-            self.layer_num_passes[layer_entry.layer_label_no_pass] = layer_entry.num_passes
-            if layer_entry.has_saved_activations:
-                self.saved_activation_memory += layer_entry.tensor_memory
+            self.layer_labels.append(layer_entry.layer_label_no_pass)
+            self.op_labels.append(layer_entry.layer_label_w_pass)
+            self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_calls
+            if layer_entry.has_saved_outs:
+                self.saved_out_memory += layer_entry.memory
             i += 1
         else:
             layers_to_remove.append(layer_entry)
-            self.unlogged_layers.append(layer_entry.layer_label)
+            self.unlogged_ops.append(layer_entry.layer_label)
             self._unsaved_layers_lookup_keys.update(layer_entry.lookup_keys)
 
     # Remove unused entries and scrub any label-bearing references they left behind.
     if layers_to_remove:
         self._batch_remove_log_entries(layers_to_remove, remove_references=True)
 
-    if (self.num_tensors_saved == len(self)) or self.keep_unsaved_layers:
-        self._all_layers_logged = True
+    if (self.num_saved_ops == len(self)) or self.keep_unsaved_layers:
+        self._layers_logged = True
     else:
-        self._all_layers_logged = False
+        self._layers_logged = False
 
-    if self.num_tensors_saved == len(self.layer_list):
-        self._all_layers_saved = True
+    if self.num_saved_ops == len(self.layer_list):
+        self._layers_saved = True
     else:
-        self._all_layers_saved = False
+        self._layers_saved = False
 
 
 def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
@@ -562,7 +552,7 @@ def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
         self: Trace being postprocessed.
 
     Returns:
-        Labels to keep atomically even when their activation was not saved.
+        Labels to keep atomically even when their out was not saved.
     """
 
     if not getattr(self, "intervention_ready", False):
@@ -574,9 +564,7 @@ def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
         if func_call_id is not None:
             call_groups[func_call_id].append(layer_entry)
 
-    labels_to_keep = {
-        layer_entry.layer_label for layer_entry in self if layer_entry.has_saved_activations
-    }
+    labels_to_keep = {layer_entry.layer_label for layer_entry in self if layer_entry.has_saved_outs}
     label_to_entry = {layer_entry.layer_label: layer_entry for layer_entry in self}
     changed = True
     while changed:
@@ -610,10 +598,10 @@ def _replay_dependency_labels(layer_entry: OpLog) -> set[str]:
         Parent labels referenced by templates, edge provenance, or graph edges.
     """
 
-    dependency_labels = set(layer_entry.parent_layers)
+    dependency_labels = set(layer_entry.parents)
     for edge in getattr(layer_entry, "edge_uses", []):
         dependency_labels.add(edge.parent_label)
-    for template in (layer_entry.captured_arg_template, layer_entry.captured_kwarg_template):
+    for template in (layer_entry.args_template, layer_entry.kwargs_template):
         for parent_ref in _collect_parent_refs(template):
             dependency_labels.add(parent_ref.parent_label)
     return dependency_labels
@@ -666,7 +654,7 @@ def _add_lookup_keys_for_layer_entry(
     - Module paths: module_pass labels for modules exited by this layer.
     - Addresses: buffer_address, input/output address.
 
-    Also reformats module_passes_exited/entered and containing_modules
+    Also reformats output_of_module_calls/entered and modules
     from (name, pass) tuples to "name:pass" strings (exhaustive mode only).
 
     Args:
@@ -674,7 +662,7 @@ def _add_lookup_keys_for_layer_entry(
         tensor_index: Zero-based position in the final ordered layer list.
         num_tensors_to_keep: Total number of retained tensors (for negative indices).
     """
-    # The "default" keys: including the pass if multiple passes, excluding if one pass.
+    # The "default" keys: including the pass if multiple ops, excluding if one pass.
     lookup_keys_for_tensor = [
         layer_entry.layer_label,
         layer_entry.layer_label_short,
@@ -683,45 +671,42 @@ def _add_lookup_keys_for_layer_entry(
     ]
 
     # If just one pass, also allow indexing by pass label.
-    if layer_entry.num_passes == 1:
+    if layer_entry.num_calls == 1:
         lookup_keys_for_tensor.extend(
             [layer_entry.layer_label_w_pass, layer_entry.layer_label_w_pass_short]
         )
 
-    # Relabel the module passes if the first pass:
-    if self.logging_mode == "exhaustive":
-        layer_entry.module_passes_exited = [
+    # Relabel the module ops if the first pass:
+    if self.capture_mode == "exhaustive":
+        layer_entry.output_of_module_calls = [
             f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.module_passes_exited
+            for module_name, module_pass in layer_entry.output_of_module_calls
         ]
-        layer_entry.module_passes_entered = [
+        layer_entry.module_ops_entered = [
             f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.module_passes_entered
+            for module_name, module_pass in layer_entry.module_ops_entered
         ]
-        if layer_entry.containing_module is not None:
-            layer_entry.containing_module = ":".join(
-                [str(i) for i in layer_entry.containing_module]
-            )
-        layer_entry.containing_modules = [
-            f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.containing_modules
+        if layer_entry.module is not None:
+            layer_entry.module = ":".join([str(i) for i in layer_entry.module])
+        layer_entry.modules = [
+            f"{module_name}:{module_pass}" for module_name, module_pass in layer_entry.modules
         ]
-        if (layer_entry.containing_module is None) and len(layer_entry.containing_modules) > 0:
-            layer_entry.containing_module = layer_entry.containing_modules[-1]
+        if (layer_entry.module is None) and len(layer_entry.modules) > 0:
+            layer_entry.module = layer_entry.modules[-1]
 
     # Allow indexing by modules exited as well:
-    for module_pass in layer_entry.module_passes_exited:
+    for module_pass in layer_entry.output_of_module_calls:
         module_name, _ = module_pass.split(":")
         lookup_keys_for_tensor.append(f"{module_pass}")
-        if self._module_build_data["module_num_passes"][module_name] == 1:
+        if self._module_build_data["module_num_calls"][module_name] == 1:
             lookup_keys_for_tensor.append(f"{module_name}")
 
     # Allow using buffer/input/output address as key, too:
-    if layer_entry.is_buffer_layer:
-        if self.buffer_num_passes[layer_entry.buffer_address] == 1:
+    if layer_entry.is_buffer:
+        if self.buffer_num_calls[layer_entry.buffer_address] == 1:
             lookup_keys_for_tensor.append(layer_entry.buffer_address)
         lookup_keys_for_tensor.append(f"{layer_entry.buffer_address}:{layer_entry.buffer_pass}")
-    elif layer_entry.is_input_layer or layer_entry.is_output_layer:
+    elif layer_entry.is_input or layer_entry.is_output:
         lookup_keys_for_tensor.append(layer_entry.io_role)
 
     lookup_keys_for_tensor = sorted(lookup_keys_for_tensor, key=str)
@@ -730,9 +715,9 @@ def _add_lookup_keys_for_layer_entry(
     layer_entry.lookup_keys = lookup_keys_for_tensor
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
-            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.creation_order
+            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.creation_index
             self.layer_dict_all_keys[lookup_key] = layer_entry
-        self._layer_num_to_lookup_keys_dict[layer_entry.creation_order].append(lookup_key)
+        self._layer_num_to_lookup_keys_dict[layer_entry.creation_index].append(lookup_key)
 
 
 def _trim_and_reorder_layer_entry_fields(layer_entry: OpLog) -> None:
@@ -741,7 +726,7 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: OpLog) -> None:
     PRESERVES all fields — this function only reorders, it does NOT strip
     any data. Fields listed in LAYER_PASS_LOG_FIELD_ORDER come first (in that
     order), followed by any remaining non-callable fields not in the order list.
-    Callable attributes (methods) are excluded from the reordered dict.
+    Callable attributes (custom_methods) are excluded from the reordered dict.
     """
     old_dict = layer_entry.__dict__
     new_dir_dict = {}
@@ -750,8 +735,8 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: OpLog) -> None:
         if field in old_dict:
             new_dir_dict[field] = old_dict[field]
     # Second: any remaining fields not in the order list (preserves all data).
-    # The callable check skips bound methods, but must not skip weakref.ref
-    # objects (which are callable but are data, not methods).
+    # The callable check skips bound custom_methods, but must not skip weakref.ref
+    # objects (which are callable but are data, not custom_methods).
     for field, value in old_dict.items():
         if field not in new_dir_dict and (not callable(value) or isinstance(value, weakref.ref)):
             new_dir_dict[field] = value
@@ -762,21 +747,21 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     """Step 11: Rename raw labels to final labels in all Trace-level fields.
 
     Updates list fields (input_layers, output_layers, etc.), dict fields
-    (layers_with_params, equivalent_operations), conditional branch
+    (layers_with_params, equivalent_ops), conditional branch
     edges, and module layer argument names. Creates NEW container objects
-    (no shared-set corruption) — see set() constructor in equivalent_operations
+    (no shared-set corruption) — see set() constructor in equivalent_ops
     rename.
     """
     list_fields_to_rename = [
         "input_layers",
         "output_layers",
         "buffer_layers",
-        "internally_initialized_layers",
+        "internally_initialized_ops",
         "_layers_where_internal_branches_merge_with_input",
-        "internally_terminated_layers",
-        "internally_terminated_bool_layers",
-        "layers_with_saved_gradients",
-        "layers_with_saved_activations",
+        "internally_terminated_ops",
+        "internally_terminated_bool_ops",
+        "ops_with_saved_grads",
+        "ops_with_saved_outs",
     ]
     for field in list_fields_to_rename:
         tensor_labels = getattr(self, field)
@@ -795,11 +780,11 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     self.layers_with_params = new_param_tensors
 
     new_equiv_operations_tensors: dict[Any, set[str]] = {}
-    for key, equiv_values in self.equivalent_operations.items():
+    for key, equiv_values in self.equivalent_ops.items():
         new_equiv_operations_tensors[key] = set(
             [self._raw_to_final_layer_labels[tensor_label] for tensor_label in equiv_values]
         )
-    self.equivalent_operations = new_equiv_operations_tensors
+    self.equivalent_ops = new_equiv_operations_tensors
 
     for t, (child, parent) in enumerate(self.conditional_branch_edges):
         new_child, new_parent = (
@@ -819,14 +804,14 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         for (cond_id, branch_kind), arm_edges in self.conditional_arm_edges.items()
     }
 
-    self.conditional_edge_passes = {
+    self.conditional_edge_ops = {
         (
             self._raw_to_final_layer_labels[parent],
             self._raw_to_final_layer_labels[child],
             cond_id,
             branch_kind,
-        ): pass_nums
-        for (parent, child, cond_id, branch_kind), pass_nums in self.conditional_edge_passes.items()
+        ): call_indexs
+        for (parent, child, cond_id, branch_kind), call_indexs in self.conditional_edge_ops.items()
     }
 
     for conditional_event in self.conditional_events:

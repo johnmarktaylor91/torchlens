@@ -17,7 +17,7 @@ import torchlens as tl
 
 
 class _Tracker:
-    """Small object with tracker-like methods for export tests."""
+    """Small object with tracker-like custom_methods for export tests."""
 
     def __init__(self) -> None:
         """Initialize recorded calls."""
@@ -179,7 +179,9 @@ def test_emit_nvtx_capture_option_does_not_change_capture() -> None:
     assert len(log.layer_list) > 0
 
 
-def test_tabular_exports_round_trip_and_old_methods_warn(export_log: Any, tmp_path: Path) -> None:
+def test_tabular_exports_round_trip_and_old_custom_methods_warn(
+    export_log: Any, tmp_path: Path
+) -> None:
     """New tabular exports should round-trip and old Trace writers should warn."""
 
     expected = export_log.to_pandas()

@@ -311,9 +311,9 @@ class _TlSpecWriter:
 
         if kind == "bundle":
             return "torchlens.intervention.bundle.Bundle"
-        source_model_class = getattr(source, "source_model_class", None)
-        if isinstance(source_model_class, str) and source_model_class:
-            return source_model_class
+        model_class = getattr(source, "model_class", None)
+        if isinstance(model_class, str) and model_class:
+            return model_class
         model = _source_model(source)
         if model is not None:
             model_type = type(model)
@@ -354,7 +354,7 @@ class _TlSpecWriter:
             parameter_hash = _hash_named_tensor_meta(model.named_parameters())
             buffer_hash = _hash_named_tensor_meta(model.named_buffers())
         else:
-            raw_parameter_hash = getattr(source, "weight_fingerprint_at_capture", None)
+            raw_parameter_hash = getattr(source, "param_hash_quick", None)
             if isinstance(raw_parameter_hash, str) and len(raw_parameter_hash) == 64:
                 parameter_hash = raw_parameter_hash
             else:
@@ -435,11 +435,11 @@ class _TlSpecWriter:
             sites.append(
                 {
                     "function_path": _json_str_or_none(getattr(layer, "func_name", None)),
-                    "module_path": _json_str_or_none(getattr(layer, "containing_module", None)),
+                    "module_path": _json_str_or_none(getattr(layer, "module", None)),
                     "layer_label": str(getattr(layer, "layer_label", "")),
-                    "pass_index": _json_int_or_none(getattr(layer, "pass_num", None)),
+                    "pass_index": _json_int_or_none(getattr(layer, "call_index", None)),
                     "op_kind": _json_str_or_none(
-                        getattr(layer, "operation_equivalence_type", None)
+                        getattr(layer, "equivalence_class", None)
                         or getattr(layer, "func_name", None)
                     ),
                 }

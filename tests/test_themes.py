@@ -37,7 +37,7 @@ def test_visualization_options_convenience_knobs_return_graph(tmp_path: Path) ->
     log = tl.trace(nn.Linear(2, 2), torch.randn(1, 2))
     options = VisualizationOptions(
         view="unrolled",
-        output_path=str(tmp_path / "paper.svg"),
+        container_path=str(tmp_path / "paper.svg"),
         save_only=True,
         file_format="svg",
         for_paper=True,

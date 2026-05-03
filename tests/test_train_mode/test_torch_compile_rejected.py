@@ -41,27 +41,27 @@ def test_trace_rejects_torch_compile(
     with pytest.raises(RuntimeError, match="torch.compile"):
         tl.trace(
             compiled_model,
-            torch.randn(3, 4, requires_grad=True),
+            torch.randn(3, 4, has_trainable_params=True),
             train_mode=True,
         )
 
 
-def test_save_new_activations_rejects_torch_compile(
+def test_save_new_outs_rejects_torch_compile(
     two_layer_mlp: TwoLayerMlp,
 ) -> None:
     """Replay train-mode capture rejects compiled model wrappers."""
 
     trace = tl.trace(
         two_layer_mlp,
-        torch.randn(3, 4, requires_grad=True),
+        torch.randn(3, 4, has_trainable_params=True),
         random_seed=0,
     )
     compiled_model = _compile_model(two_layer_mlp)
 
     with pytest.raises(RuntimeError, match="torch.compile"):
-        trace.save_new_activations(
+        trace.save_new_outs(
             compiled_model,
-            torch.randn(3, 4, requires_grad=True),
+            torch.randn(3, 4, has_trainable_params=True),
             train_mode=True,
             random_seed=0,
         )
@@ -78,6 +78,6 @@ def test_fastlog_record_rejects_torch_compile(
     with pytest.raises(RuntimeError, match="torch.compile"):
         tl.fastlog.record(
             compiled_model,
-            torch.randn(3, 4, requires_grad=True),
+            torch.randn(3, 4, has_trainable_params=True),
             train_mode=True,
         )

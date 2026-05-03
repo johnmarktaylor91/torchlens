@@ -74,9 +74,9 @@ def save(
     path: str | Path,
     *,
     level: str = "portable",
-    include_activations: bool = True,
-    include_gradients: bool = True,
-    include_captured_args: bool = False,
+    include_outs: bool = True,
+    include_grads: bool = True,
+    include_saved_args: bool = False,
     include_rng_states: bool = False,
     strict: bool = True,
     overwrite: bool = False,
@@ -92,11 +92,11 @@ def save(
     level:
         Public ``.tlspec`` save level: ``"audit"``,
         ``"executable_with_callables"``, or ``"portable"``.
-    include_activations:
-        Whether activations should be saved as blobs.
-    include_gradients:
-        Whether gradients should be saved as blobs.
-    include_captured_args:
+    include_outs:
+        Whether outs should be saved as blobs.
+    include_grads:
+        Whether grads should be saved as blobs.
+    include_saved_args:
         Whether captured args/kwargs and related tensor payloads should be saved.
     include_rng_states:
         Whether per-layer RNG state tensors should be saved.
@@ -120,7 +120,7 @@ def save(
     >>> trace = tl.trace(model, x, layers_to_save="all")
     >>> tl.save(trace, "demo_bundle", overwrite=True)
     >>> loaded = tl.load("demo_bundle")
-    >>> loaded["linear_1_1"].activation.shape
+    >>> loaded["linear_1_1"].out.shape
     torch.Size([2, 3])
 
     Warnings
@@ -131,17 +131,17 @@ def save(
 
     save_level = coerce_tlspec_save_level(level)
     if save_level == "audit":
-        include_activations = False
-        include_gradients = False
-        include_captured_args = False
+        include_outs = False
+        include_grads = False
+        include_saved_args = False
         include_rng_states = False
     elif save_level == "executable_with_callables":
-        include_captured_args = True
+        include_saved_args = True
         include_rng_states = True
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
-    _validate_activation_postfunc_outputs(trace, include_activations=include_activations)
+    _validate_out_postfunc_outputs(trace, include_outs=include_outs)
 
     backup_path: Path | None = None
     tmp_path = _make_tmp_bundle_path(bundle_path)
@@ -158,9 +158,9 @@ def save(
 
         scrubbed_state, blob_specs = _scrub_trace_for_bundle(
             trace,
-            include_activations=include_activations,
-            include_gradients=include_gradients,
-            include_captured_args=include_captured_args,
+            include_outs=include_outs,
+            include_grads=include_grads,
+            include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
         )
         _raise_for_unmaterialized_nested_blob_refs(
@@ -171,8 +171,8 @@ def save(
             trace,
             scrubbed_state=scrubbed_state,
             blob_specs=blob_specs,
-            include_activations=include_activations,
-            include_gradients=include_gradients,
+            include_outs=include_outs,
+            include_grads=include_grads,
         )
 
         tensor_entries: list[TensorEntry] = []
@@ -314,7 +314,7 @@ def load(
     path:
         ``.tlspec`` directory path.
     lazy:
-        Whether direct activation/gradient blobs should remain lazy placeholders.
+        Whether direct out/grad blobs should remain lazy placeholders.
     map_location:
         Target device for eager tensor materialization.
     materialize_nested:
@@ -337,10 +337,10 @@ def load(
     >>> import torchlens as tl
     >>> trace = tl.load("demo_trace.tlspec", lazy=True)
     >>> layer = trace["linear_1_1"]
-    >>> layer.activation is None
+    >>> layer.out is None
     True
-    >>> activation = layer.materialize_activation()
-    >>> activation.shape
+    >>> out = layer.materialize_out()
+    >>> out.shape
     torch.Size([2, 3])
     >>> spec = tl.load("demo_intervention.tlspec")
     >>> bundle = tl.load("demo_bundle.tlspec")
@@ -409,7 +409,7 @@ def _load_trace_payload(
     manifest:
         Parsed portable manifest.
     lazy:
-        Whether direct activation/gradient blobs should remain lazy placeholders.
+        Whether direct out/grad blobs should remain lazy placeholders.
     map_location:
         Target device for eager tensor materialization.
     materialize_nested:
@@ -478,7 +478,7 @@ def _load_unified_tlspec(
     bundle_path:
         Directory containing a unified ``manifest.json``.
     lazy:
-        Whether direct activation/gradient blobs should remain lazy placeholders.
+        Whether direct out/grad blobs should remain lazy placeholders.
     map_location:
         Target device for eager tensor materialization.
     materialize_nested:
@@ -700,9 +700,9 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
 def _scrub_trace_for_bundle(
     trace: Trace,
     *,
-    include_activations: bool,
-    include_gradients: bool,
-    include_captured_args: bool,
+    include_outs: bool,
+    include_grads: bool,
+    include_saved_args: bool,
     include_rng_states: bool,
 ) -> tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]]]:
     """Scrub a model log while excluding transient load-only private attrs.
@@ -711,11 +711,11 @@ def _scrub_trace_for_bundle(
     ----------
     trace:
         Model log being saved.
-    include_activations:
-        Whether activations should be blobified.
-    include_gradients:
-        Whether gradients should be blobified.
-    include_captured_args:
+    include_outs:
+        Whether outs should be blobified.
+    include_grads:
+        Whether grads should be blobified.
+    include_saved_args:
         Whether nested captured args should be blobified.
     include_rng_states:
         Whether nested RNG states should be blobified.
@@ -738,9 +738,9 @@ def _scrub_trace_for_bundle(
     try:
         return scrub_for_save(
             trace,
-            include_activations=include_activations,
-            include_gradients=include_gradients,
-            include_captured_args=include_captured_args,
+            include_outs=include_outs,
+            include_grads=include_grads,
+            include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
         )
     finally:
@@ -801,8 +801,8 @@ def _attach_fast_copy_specs(
     *,
     scrubbed_state: dict[str, Any],
     blob_specs: list[tuple[str, torch.Tensor, str, str]],
-    include_activations: bool,
-    include_gradients: bool,
+    include_outs: bool,
+    include_grads: bool,
 ) -> list[_FastCopySpec]:
     """Attach direct-field blob refs for lazily-backed tensors that can be fast-copied.
 
@@ -814,10 +814,10 @@ def _attach_fast_copy_specs(
         Scrubbed metadata state returned by ``scrub_for_save``.
     blob_specs:
         Existing eager-write blob specs.
-    include_activations:
-        Whether activation fields should be persisted.
-    include_gradients:
-        Whether gradient fields should be persisted.
+    include_outs:
+        Whether out fields should be persisted.
+    include_grads:
+        Whether grad fields should be persisted.
 
     Returns
     -------
@@ -833,26 +833,26 @@ def _attach_fast_copy_specs(
     used_blob_ids = {blob_id for blob_id, _, _, _ in blob_specs}
     fast_copy_specs: list[_FastCopySpec] = []
     for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers):
-        if include_activations:
+        if include_outs:
             fast_copy_spec = _maybe_make_fast_copy_spec(
                 live_layer=live_layer,
                 scrubbed_layer=scrubbed_layer,
-                tensor_field="activation",
-                ref_field="activation_ref",
-                kind="activation",
-                has_field="has_saved_activations",
+                tensor_field="out",
+                ref_field="out_ref",
+                kind="out",
+                has_field="has_saved_outs",
                 used_blob_ids=used_blob_ids,
             )
             if fast_copy_spec is not None:
                 fast_copy_specs.append(fast_copy_spec)
-        if include_gradients:
+        if include_grads:
             fast_copy_spec = _maybe_make_fast_copy_spec(
                 live_layer=live_layer,
                 scrubbed_layer=scrubbed_layer,
-                tensor_field="gradient",
-                ref_field="gradient_ref",
-                kind="gradient",
-                has_field="has_gradient",
+                tensor_field="grad",
+                ref_field="grad_ref",
+                kind="grad",
+                has_field="has_grad",
                 used_blob_ids=used_blob_ids,
             )
             if fast_copy_spec is not None:
@@ -879,7 +879,7 @@ def _maybe_make_fast_copy_spec(
     scrubbed_layer:
         Scrubbed ``OpLog`` counterpart that will be pickled.
     tensor_field:
-        Direct tensor field name, for example ``"activation"``.
+        Direct tensor field name, for example ``"out"``.
     ref_field:
         Matching lazy-ref field name.
     kind:
@@ -1073,9 +1073,9 @@ def _build_manifest(
         Fully-populated bundle manifest.
     """
 
-    n_activation_blobs = sum(1 for entry in tensor_entries if entry.kind == "activation")
-    n_gradient_blobs = sum(1 for entry in tensor_entries if entry.kind == "gradient")
-    n_auxiliary_blobs = len(tensor_entries) - n_activation_blobs - n_gradient_blobs
+    n_out_blobs = sum(1 for entry in tensor_entries if entry.kind == "out")
+    n_grad_blobs = sum(1 for entry in tensor_entries if entry.kind == "grad")
+    n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
     return Manifest(
         io_format_version=IO_FORMAT_VERSION,
         torchlens_version=TORCHLENS_VERSION,
@@ -1093,47 +1093,47 @@ def _build_manifest(
         ),
         bundle_format="directory",
         n_layers=len(trace.layer_list),
-        n_activation_blobs=n_activation_blobs,
-        n_gradient_blobs=n_gradient_blobs,
+        n_out_blobs=n_out_blobs,
+        n_grad_blobs=n_grad_blobs,
         n_auxiliary_blobs=n_auxiliary_blobs,
         tensors=tensor_entries,
         unsupported_tensors=unsupported_tensors,
     )
 
 
-def _validate_activation_postfunc_outputs(
+def _validate_out_postfunc_outputs(
     trace: Trace,
     *,
-    include_activations: bool,
+    include_outs: bool,
 ) -> None:
-    """Reject portable saves when activation postprocessing produced non-tensors.
+    """Reject portable saves when out postprocessing produced non-tensors.
 
     Parameters
     ----------
     trace:
         Model log being saved.
-    include_activations:
-        Whether activation fields will be saved.
+    include_outs:
+        Whether out fields will be saved.
 
     Raises
     ------
     TorchLensIOError
-        If a saved activation is not a plain tensor.
+        If a saved out is not a plain tensor.
     """
 
-    if not include_activations or getattr(trace, "activation_postfunc", None) is None:
+    if not include_outs or getattr(trace, "out_postfunc", None) is None:
         return
     for layer in trace.layer_list:
-        if not getattr(layer, "has_saved_activations", False):
+        if not getattr(layer, "has_saved_outs", False):
             continue
-        transformed_activation = getattr(layer, "transformed_activation", None)
-        if transformed_activation is None:
+        transformed_out = getattr(layer, "transformed_out", None)
+        if transformed_out is None:
             continue
-        if not isinstance(transformed_activation, torch.Tensor):
+        if not isinstance(transformed_out, torch.Tensor):
             raise TorchLensIOError(
-                "Portable bundle save requires activation_postfunc outputs to be torch.Tensor "
+                "Portable bundle save requires out_postfunc outputs to be torch.Tensor "
                 f"instances, but layer {layer.layer_label} produced "
-                f"{type(transformed_activation).__name__}."
+                f"{type(transformed_out).__name__}."
             )
 
 
@@ -1156,23 +1156,23 @@ def _apply_skipped_blobs_to_scrubbed_state(
 
     layer_list = scrubbed_state.get("layer_list")
     if isinstance(layer_list, list):
-        activation_labels = [
+        out_labels = [
             layer.layer_label
             for layer in layer_list
-            if bool(getattr(layer, "has_saved_activations", False))
+            if bool(getattr(layer, "has_saved_outs", False))
         ]
-        gradient_labels = [
-            layer.layer_label for layer in layer_list if bool(getattr(layer, "has_gradient", False))
+        grad_labels = [
+            layer.layer_label for layer in layer_list if bool(getattr(layer, "has_grad", False))
         ]
-        scrubbed_state["layers_with_saved_activations"] = activation_labels
-        scrubbed_state["layers_with_saved_gradients"] = gradient_labels
-        scrubbed_state["num_tensors_saved"] = len(activation_labels)
-        scrubbed_state["saved_activation_memory"] = sum(
-            int(getattr(layer, "tensor_memory", 0) or 0)
+        scrubbed_state["ops_with_saved_outs"] = out_labels
+        scrubbed_state["ops_with_saved_grads"] = grad_labels
+        scrubbed_state["num_saved_ops"] = len(out_labels)
+        scrubbed_state["saved_out_memory"] = sum(
+            int(getattr(layer, "memory", 0) or 0)
             for layer in layer_list
-            if bool(getattr(layer, "has_saved_activations", False))
+            if bool(getattr(layer, "has_saved_outs", False))
         )
-        scrubbed_state["has_gradients"] = bool(gradient_labels)
+        scrubbed_state["has_grads"] = bool(grad_labels)
 
 
 def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
@@ -1213,14 +1213,10 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
     for field_name, field_value in list(vars(value).items()):
         replaced_value = _replace_skipped_blob_refs(field_value, skipped_blob_ids)
         setattr(value, field_name, replaced_value)
-        if (
-            field_name == "activation"
-            and replaced_value is None
-            and hasattr(value, "has_saved_activations")
-        ):
-            value.has_saved_activations = False
-        if field_name == "gradient" and replaced_value is None and hasattr(value, "has_gradient"):
-            value.has_gradient = False
+        if field_name == "out" and replaced_value is None and hasattr(value, "has_saved_outs"):
+            value.has_saved_outs = False
+        if field_name == "grad" and replaced_value is None and hasattr(value, "has_grad"):
+            value.has_grad = False
     return value
 
 

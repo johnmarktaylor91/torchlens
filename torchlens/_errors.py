@@ -4,4 +4,4 @@ from .errors._base import CaptureError
 
 
 class TorchLensPostfuncError(CaptureError, RuntimeError):
-    """Raised when activation_postfunc or gradient_postfunc raises."""
+    """Raised when out_postfunc or grad_transform raises."""

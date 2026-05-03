@@ -286,12 +286,12 @@ def make_intervention_node_spec_fn(
             str(getattr(layer_log, "layer_label", "")),
             str(getattr(layer_log, "layer_label_no_pass", "")),
         }
-        pass_labels = getattr(layer_log, "pass_nums", None)
-        if pass_labels is None:
-            pass_labels = ()
-        for pass_num in pass_labels:
+        call_labels = getattr(layer_log, "call_indexs", None)
+        if call_labels is None:
+            call_labels = ()
+        for call_index in call_labels:
             base = str(getattr(layer_log, "layer_label_no_pass", ""))
-            matching_labels.add(f"{base}:{pass_num}")
+            matching_labels.add(f"{base}:{call_index}")
 
         spec = default_spec
         if matching_labels & site_labels:

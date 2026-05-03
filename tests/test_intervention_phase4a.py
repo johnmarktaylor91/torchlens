@@ -61,11 +61,11 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
     log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
     assert log.intervention_ready is True
-    assert log.source_model_id == id(model)
-    assert log.source_model_class == f"{type(model).__module__}.{type(model).__qualname__}"
-    assert log.weight_fingerprint_at_capture is not None
-    assert log.weight_fingerprint_full == log.weight_fingerprint_at_capture
-    assert log.input_id_at_capture == id(x)
+    assert log.model_id == id(model)
+    assert log.model_class == f"{type(model).__module__}.{type(model).__qualname__}"
+    assert log.param_hash_quick is not None
+    assert log.param_hash_full == log.param_hash_quick
+    assert log.input_id == id(x)
     assert log.input_shape_hash is not None
     assert log.save_function_args is False
 

@@ -1,6 +1,6 @@
 """Functions for tracking tensor lineage, family relationships, and operation equivalence.
 
-Handles backward hooks for gradient capture, parent-child-sibling-spouse linkage,
+Handles backward hooks for grad capture, parent-child-sibling-spouse linkage,
 parameter pass tracking, and structural fingerprinting of operations for loop detection.
 
 Key concepts:
@@ -10,7 +10,7 @@ Key concepts:
     co-parents become spouses, and children of the same parent become siblings.
     All links are bidirectional and updated immediately at creation time.
 
-**Operation equivalence type** (``_get_operation_equivalence_type``):
+**Operation equivalence type** (``_get_equivalence_class``):
     A structural fingerprint string that identifies operations as "the same layer"
     across loop iterations.  Used by loop detection to group operations into
     equivalence classes.  For parameterized ops, the fingerprint is based on the
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 
 def _add_backward_hook(self: "Trace", t: torch.Tensor, tensor_label: str) -> None:
-    """Register a backward hook on ``t`` that captures its gradient into Trace.
+    """Register a backward hook on ``t`` that captures its grad into Trace.
 
     The hook closure captures a ``weakref`` to Trace (not a strong reference)
     so that the hook doesn't prevent GC of the Trace after the user drops it
@@ -51,12 +51,12 @@ def _add_backward_hook(self: "Trace", t: torch.Tensor, tensor_label: str) -> Non
     the tensor itself, avoiding circular references.
 
     Only tensors that participate in autograd (have grad_fn or require_grad)
-    get hooks — others would never receive gradients.
+    get hooks — others would never receive grads.
 
     Args:
         t: The tensor to hook.
         tensor_label: Raw tensor label (e.g. ``"conv2d_3_47_raw"``) used to
-            look up the corresponding log entry when the gradient arrives.
+            look up the corresponding log entry when the grad arrives.
     """
     # Weak reference prevents Trace → tensor → hook → Trace ref cycle.
     self_ref = weakref.ref(self)
@@ -70,37 +70,37 @@ def _add_backward_hook(self: "Trace", t: torch.Tensor, tensor_label: str) -> Non
         t.register_hook(log_grad_to_model_history)  # type: ignore[no-untyped-call]
 
 
-def _log_tensor_grad(self: "Trace", grad: torch.Tensor, tensor_label_raw: str) -> None:
-    """Callback invoked during backward pass to save a tensor's gradient.
+def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None:
+    """Callback invoked during backward pass to save a tensor's grad.
 
-    Resolves the raw label to a final label, then saves the gradient on the
+    Resolves the raw label to a final label, then saves the grad on the
     layer entry.  If the layer is an output parent, its output-layer children
-    also receive the gradient (since output layers are identity wrappers that
-    share the same gradient).
+    also receive the grad (since output layers are identity wrappers that
+    share the same grad).
 
     Args:
-        grad: The gradient tensor from autograd.
-        tensor_label_raw: Raw tensor label used to look up the final label.
+        grad: The grad tensor from autograd.
+        _label_raw: Raw tensor label used to look up the final label.
     """
-    self.has_gradients = True
-    tensor_label = self._raw_to_final_layer_labels[tensor_label_raw]
+    self.has_grads = True
+    tensor_label = self._raw_to_final_layer_labels[_label_raw]
     layer_log_entry = self[tensor_label]
     layers_to_update = [tensor_label]
-    # Output layers are identity wrappers; propagate gradient to them too.
+    # Output layers are identity wrappers; propagate grad to them too.
     if layer_log_entry.feeds_output:
-        for child_layer in layer_log_entry.child_layers:
-            if self[child_layer].is_output_layer:
+        for child_layer in layer_log_entry.children:
+            if self[child_layer].is_output:
                 layers_to_update.append(child_layer)
 
     for layer_label in layers_to_update:
         layer = self[layer_label]
-        selection = getattr(self, "_gradient_layer_nums_to_save", "all")
+        selection = getattr(self, "_grad_layer_nums_to_save", "all")
         if selection != "all":
-            if selection in [None, "none", []] or layer.creation_order not in selection:
+            if selection in [None, "none", []] or layer.creation_index not in selection:
                 continue
-        if layer_label not in self._saved_gradients_set:
-            self._saved_gradients_set.add(layer_label)
-            self.layers_with_saved_gradients.append(layer_label)
+        if layer_label not in self._saved_grads_set:
+            self._saved_grads_set.add(layer_label)
+            self.ops_with_saved_grads.append(layer_label)
         layer.log_tensor_grad(grad)
 
 
@@ -117,7 +117,7 @@ def _locate_parent_tensors_in_args(
       - Nested: ``args[i][j]`` maps to key ``(i, j)``
     Deeper nesting is not tracked (would require recursive search).
 
-    This mapping is stored as ``parent_layer_arg_locs`` on the child's log
+    This mapping is stored as ``parent_arg_positions`` on the child's log
     entry, and is used by:
       - ``_get_parent_contents``: to retrieve pre-call parent values from arg_copies
       - Validation replay: to reconstruct the function call
@@ -170,15 +170,15 @@ def _find_arg_positions_for_single_parent(
     iterfunc = iteration_strategies[arg_type]
 
     for arg_key, arg in iterfunc(arg_struct):  # type: ignore[operator]
-        if getattr(arg, "tl_tensor_label_raw", -1) == parent_entry.tensor_label_raw:
-            tensor_all_arg_positions[arg_type][arg_key] = parent_entry.tensor_label_raw
+        if getattr(arg, "tl__label_raw", -1) == parent_entry._label_raw:
+            tensor_all_arg_positions[arg_type][arg_key] = parent_entry._label_raw
         elif type(arg) in [list, tuple, dict]:
             # Second level of nesting (e.g., torch.cat([tensor_a, tensor_b])).
             iterfunc2 = iteration_strategies[type(arg)]
             for sub_arg_key, sub_arg in iterfunc2(arg):  # type: ignore[operator]
-                if getattr(sub_arg, "tl_tensor_label_raw", -1) == parent_entry.tensor_label_raw:
+                if getattr(sub_arg, "tl__label_raw", -1) == parent_entry._label_raw:
                     tensor_all_arg_positions[arg_type][(arg_key, sub_arg_key)] = (
-                        parent_entry.tensor_label_raw
+                        parent_entry._label_raw
                     )
 
 
@@ -194,19 +194,19 @@ def _get_ancestors_from_parents(
         List of input ancestors and internally initialized ancestors.
     """
     input_ancestors = set()
-    internally_initialized_ancestors = set()
+    internal_source_ancestors = set()
 
     for parent_entry in parent_entries:
         input_ancestors.update(parent_entry.input_ancestors)
-        internally_initialized_ancestors.update(parent_entry.internally_initialized_ancestors)
-    return input_ancestors, internally_initialized_ancestors
+        internal_source_ancestors.update(parent_entry.internal_source_ancestors)
+    return input_ancestors, internal_source_ancestors
 
 
 def _update_tensor_family_links(self: "Trace", entry_to_update: OpLog) -> None:
     """Update bidirectional family links for a newly created tensor.
 
     All four relationship types are updated symmetrically:
-      - **Parent → Child**: new tensor added to each parent's ``child_layers``.
+      - **Parent → Child**: new tensor added to each parent's ``children``.
       - **Spouse ↔ Spouse**: all pairs of parents become spouses (they co-parent).
       - **Sibling ↔ Sibling**: existing children of each parent become siblings
         of the new tensor (and vice versa).
@@ -214,18 +214,18 @@ def _update_tensor_family_links(self: "Trace", entry_to_update: OpLog) -> None:
     Args:
         entry_to_update: The newly created OpLog entry.
     """
-    tensor_label = entry_to_update.tensor_label_raw
-    parent_tensor_labels = entry_to_update.parent_layers
+    tensor_label = entry_to_update._label_raw
+    parent_tensor_labels = entry_to_update.parents
 
     # Parent → Child (bidirectional: child already knows its parents from fields_dict).
     for parent_tensor_label in parent_tensor_labels:
         parent_tensor = self[parent_tensor_label]
-        if tensor_label not in parent_tensor.child_layers:
-            parent_tensor.child_layers.append(tensor_label)
+        if tensor_label not in parent_tensor.children:
+            parent_tensor.children.append(tensor_label)
             parent_tensor.has_children = True
 
 
-def _process_parent_param_passes(
+def _process_parent_param_ops(
     arg_parameters: list[torch.nn.Parameter],
 ) -> dict[str, int]:
     """Assign persistent barcodes to parameters and track their pass number.
@@ -236,7 +236,7 @@ def _process_parent_param_passes(
 
     The barcode is a random string that uniquely identifies the parameter tensor
     across the entire logging session.  It's used (together with layer_type) to
-    build the ``operation_equivalence_type`` for parameterized operations, which
+    build the ``equivalence_class`` for parameterized operations, which
     is how loop detection recognizes "conv2d with weights W" as the same layer
     on pass 1 and pass 2.
 
@@ -246,24 +246,24 @@ def _process_parent_param_passes(
     Returns:
         Dict mapping each parameter's barcode to its current pass number.
     """
-    parent_param_passes = {}
+    parent_param_ops = {}
     for param in arg_parameters:
         param_obj: Any = param
         if not hasattr(param, "tl_param_barcode"):
             # First time seeing this parameter — assign a unique barcode.
             param_barcode = make_random_barcode()
             param_obj.tl_param_barcode = param_barcode
-            param_obj.tl_pass_num = 1
+            param_obj.tl_call_index = 1
         else:
             # Same parameter seen again (loop iteration) — increment pass.
             param_barcode = param_obj.tl_param_barcode
-            param_obj.tl_pass_num += 1
-        parent_param_passes[param_barcode] = param_obj.tl_pass_num
-    return parent_param_passes
+            param_obj.tl_call_index += 1
+        parent_param_ops[param_barcode] = param_obj.tl_call_index
+    return parent_param_ops
 
 
 def _make_raw_param_group_barcode(indiv_param_barcodes: list[str], layer_type: str) -> str:
-    """Build an operation_equivalence_type string for a parameterized operation.
+    """Build an equivalence_class string for a parameterized operation.
 
     Combines the layer type with sorted parameter barcodes to produce a
     canonical fingerprint.  Sorting ensures order-independence (e.g., weight
@@ -286,14 +286,14 @@ def _make_raw_param_group_barcode(indiv_param_barcodes: list[str], layer_type: s
     return param_group_barcode
 
 
-def _get_operation_equivalence_type(
+def _get_equivalence_class(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     i: int,
     layer_type: str,
     fields_dict: dict[str, Any],
 ) -> str:
-    """Build an operation_equivalence_type string for a NON-parameterized operation.
+    """Build an equivalence_class string for a NON-parameterized operation.
 
     For ops that don't use parameters (e.g., ``relu``, ``cat``, ``add``), the
     fingerprint is built from:
@@ -303,10 +303,10 @@ def _get_operation_equivalence_type(
       4. ``module`` suffix: disambiguates identical ops in different submodules.
 
     This fingerprint is used by loop detection.  Two operations with the same
-    fingerprint are candidates for being "the same layer on different passes."
+    fingerprint are candidates for being "the same layer on different ops."
 
-    Note: non-parameterized ops default to ``pass_num=1`` because without
-    parameters to track reuse, there's no reliable way to count passes.
+    Note: non-parameterized ops default to ``call_index=1`` because without
+    parameters to track reuse, there's no reliable way to count ops.
 
     Args:
         args: Positional arguments to the function call.
@@ -314,19 +314,19 @@ def _get_operation_equivalence_type(
         i: Index of this output tensor within a multi-output call.
         layer_type: The normalized operation name.
         fields_dict: Must contain ``is_part_of_iterable_output`` and
-            ``containing_module``.
+            ``module``.
 
     Returns:
         A string key identifying this operation's equivalence class.
     """
     arg_hash = _get_hash_from_args(args, kwargs)
-    operation_equivalence_type = f"{layer_type}_{arg_hash}"
+    equivalence_class = f"{layer_type}_{arg_hash}"
     if fields_dict["is_part_of_iterable_output"]:
-        operation_equivalence_type += f"_outindex{i}"
-    if fields_dict["containing_module"] is not None:
-        module_str = fields_dict["containing_module"][0]
-        operation_equivalence_type += f"_module{module_str}"
-    return operation_equivalence_type
+        equivalence_class += f"_outindex{i}"
+    if fields_dict["module"] is not None:
+        module_str = fields_dict["module"][0]
+        equivalence_class += f"_module{module_str}"
+    return equivalence_class
 
 
 def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
@@ -355,9 +355,9 @@ def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
 def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int = 0) -> None:
     """Append structural fingerprint tokens for a single argument to the accumulator list.
 
-    Builds an ``operation_equivalence_type`` -- a structural fingerprint of the operation's
+    Builds an ``equivalence_class`` -- a structural fingerprint of the operation's
     argument types and shapes (not a content hash). This fingerprint is used by loop
-    detection to identify operations that are structurally identical across passes.
+    detection to identify operations that are structurally identical across ops.
 
     For tensors, only shape and dtype are recorded (not values). Containers (dicts, lists,
     tuples, sets) are recursed into with depth-limited traversal. Parameters are excluded.
@@ -375,7 +375,7 @@ def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int
         pass  # exclude parameters from hash — must check before Tensor (Parameter is a subclass)
     elif isinstance(arg, torch.Tensor):
         # Use shape/dtype only — formatting a tensor can trigger wrapped
-        # methods (item, __format__) which re-enter logging and cause
+        # custom_methods (item, __format__) which re-enter logging and cause
         # infinite recursion.
         args_to_hash.append(f"{prefix}_tensor{arg.shape}")
     elif isinstance(arg, dict):
@@ -388,12 +388,12 @@ def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int
         args_to_hash.append(f"{prefix}_{arg}")
 
 
-def _update_tensor_containing_modules(layer_entry: OpLog) -> list[str]:
+def _update_tensor_modules(layer_entry: OpLog) -> list[str]:
     """Compute a tensor's current module nesting by replaying entry/exit transitions.
 
     Each tensor records:
-      - ``containing_modules``: the module stack at creation time.
-      - ``module_entry_exit_thread_output``: a sequence of transitions like
+      - ``modules``: the module stack at creation time.
+      - ``_module_boundary_thread_output``: a sequence of transitions like
         ``"+encoder.layer1:1"`` (entered) or ``"-encoder.layer1:1"`` (exited).
 
     This function starts from the origin stack and applies each transition to
@@ -406,11 +406,11 @@ def _update_tensor_containing_modules(layer_entry: OpLog) -> list[str]:
     Returns:
         Current containing-module stack as a list of module pass strings.
     """
-    containing_modules = layer_entry.containing_modules[:]
-    thread_modules = layer_entry.module_entry_exit_thread_output[:]
+    modules = layer_entry.modules[:]
+    thread_modules = layer_entry._module_boundary_thread_output[:]
     for thread_module in thread_modules:
         if thread_module[0] == "+":
-            containing_modules.append(thread_module[1:])
-        elif (thread_module[0] == "-") and (thread_module[1:] in containing_modules):
-            containing_modules.remove(thread_module[1:])
-    return cast(list[str], containing_modules)
+            modules.append(thread_module[1:])
+        elif (thread_module[0] == "-") and (thread_module[1:] in modules):
+            modules.remove(thread_module[1:])
+    return cast(list[str], modules)

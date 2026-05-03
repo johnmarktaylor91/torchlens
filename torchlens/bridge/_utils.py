@@ -51,17 +51,17 @@ def resolve_one_site(log: Any, site: Any) -> Any:
     Returns
     -------
     Any
-        Layer-pass-like object with an ``activation`` attribute.
+        Layer-pass-like object with an ``out`` attribute.
     """
 
-    if hasattr(site, "activation") and hasattr(site, "layer_label"):
+    if hasattr(site, "out") and hasattr(site, "layer_label"):
         return site
     resolved = log.resolve_sites(site, max_fanout=1)
     return resolved.first()
 
 
-def activation_at(log: Any, site: Any) -> torch.Tensor:
-    """Return a tensor activation for one resolved site.
+def out_at(log: Any, site: Any) -> torch.Tensor:
+    """Return a tensor out for one resolved site.
 
     Parameters
     ----------
@@ -73,20 +73,20 @@ def activation_at(log: Any, site: Any) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Saved tensor activation.
+        Saved tensor out.
 
     Raises
     ------
     ValueError
-        If the site does not carry a tensor activation.
+        If the site does not carry a tensor out.
     """
 
     layer = resolve_one_site(log, site)
-    activation = getattr(layer, "activation", None)
-    if not isinstance(activation, torch.Tensor):
+    out = getattr(layer, "out", None)
+    if not isinstance(out, torch.Tensor):
         label = getattr(layer, "layer_label", site)
-        raise ValueError(f"Bridge site {label!r} does not have a saved tensor activation.")
-    return activation
+        raise ValueError(f"Bridge site {label!r} does not have a saved tensor out.")
+    return out
 
 
 def first_input_tensor(log: Any) -> torch.Tensor:
@@ -100,23 +100,23 @@ def first_input_tensor(log: Any) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        First saved input activation.
+        First saved input out.
 
     Raises
     ------
     ValueError
-        If no tensor input activation is present.
+        If no tensor input out is present.
     """
 
     for layer in getattr(log, "layer_list", []):
-        activation = getattr(layer, "activation", None)
-        if getattr(layer, "is_input_layer", False) and isinstance(activation, torch.Tensor):
-            return activation
+        out = getattr(layer, "out", None)
+        if getattr(layer, "is_input", False) and isinstance(out, torch.Tensor):
+            return out
     raise ValueError("Could not find a saved tensor input in this Trace.")
 
 
 def tensor_layers(log: Any, sites: Iterable[Any] | None = None) -> list[Any]:
-    """Return layer-pass records with tensor activations.
+    """Return layer-pass records with tensor outs.
 
     Parameters
     ----------
@@ -137,13 +137,13 @@ def tensor_layers(log: Any, sites: Iterable[Any] | None = None) -> list[Any]:
     return [
         layer
         for layer in getattr(log, "layer_list", [])
-        if isinstance(getattr(layer, "activation", None), torch.Tensor)
-        and not getattr(layer, "is_input_layer", False)
+        if isinstance(getattr(layer, "out", None), torch.Tensor)
+        and not getattr(layer, "is_input", False)
     ]
 
 
 __all__ = [
-    "activation_at",
+    "out_at",
     "first_input_tensor",
     "resolve_one_site",
     "source_model",

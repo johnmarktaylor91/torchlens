@@ -573,9 +573,9 @@ def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSele
     if address is None:
         return InModuleSelector(str(address_or_layer))
 
-    containing_modules = getattr(address_or_layer, "containing_modules", ())
-    module_passes = getattr(address_or_layer, "module_passes_exited", ())
-    candidates = tuple(containing_modules) + tuple(module_passes)
+    modules = getattr(address_or_layer, "modules", ())
+    module_ops = getattr(address_or_layer, "output_of_module_calls", ())
+    candidates = tuple(modules) + tuple(module_ops)
     return any(_module_pass_matches(candidate, address) for candidate in candidates)
 
 
@@ -595,8 +595,8 @@ def _module_pass_matches(module_pass: str, address: str) -> bool:
         Whether the module pass belongs to the requested address.
     """
 
-    module_address = module_pass.rsplit(":", 1)[0]
-    return module_pass == address or module_address == address
+    address = module_pass.rsplit(":", 1)[0]
+    return module_pass == address or address == address
 
 
 __all__ = [

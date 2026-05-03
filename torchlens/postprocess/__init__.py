@@ -14,22 +14,22 @@ split into thematic submodules:
   references, trim/reorder fields, build lookup keys.
 - finalization (Steps 13-20): Undecorate saved tensors, log timing, finalize
   ParamLogs, build LayerLog/ModuleLog aggregates, mark pass as finished, then
-  finalize any streamed bundle and optionally evict in-memory activations.
+  finalize any streamed bundle and optionally evict in-memory outs.
 
 Step ordering invariants:
 - Steps 1-3 MUST precede Step 5 (conditional branch detection needs orphan-free graph).
 - Step 6 (module suffix appending) MUST precede Step 8 (loop detection uses
-  operation_equivalence_type which includes module suffixes).
-- Step 8 MUST precede Step 9 (label generation needs recurrent_group).
+  equivalence_class which includes module suffixes).
+- Step 8 MUST precede Step 9 (label generation needs recurrent_ops).
 - Step 9 MUST precede Step 10 (final info logging uses finalized labels).
 - Step 10 MUST precede Step 12 (lookup key generation needs module hierarchy data
   populated in Step 10).
 - Step 11 (rename) MUST precede Step 12 (cleanup uses renamed labels).
 - Step 16.5 (_build_layer_logs) MUST precede Step 17 (_build_module_logs) because
-  ModuleLog.all_layers references LayerLog keys.
+  ModuleLog.layers references LayerLog keys.
 
 Fast mode skips Steps 1-10 and Step 17, reusing the exhaustive pass's metadata.
-It only copies activations from parent to output nodes, trims, renames, builds
+It only copies outs from parent to output nodes, trims, renames, builds
 LayerLogs, and marks the pass as finished. See postprocess_fast() below.
 """
 
@@ -49,21 +49,21 @@ from .control_flow import (
 from .finalization import (
     _build_layer_logs,
     _build_module_logs,
-    _evict_streamed_activations,
+    _evict_streamed_outs,
     _finalize_streamed_bundle,
     _finalize_param_logs,
     _log_time_elapsed,
-    _set_pass_finished,
+    _set_tracing_finished,
     _undecorate_all_saved_tensors,
 )
 from .graph_traversal import (
     _add_output_layers,
     _find_output_ancestors,
-    _mark_input_output_distances,
+    _mark_layer_depths,
     _remove_orphan_nodes,
 )
 from .labeling import (
-    _log_final_info_for_all_layers,
+    _log_final_info_for_layers,
     _map_raw_labels_to_final_labels,
     _remove_unwanted_entries_and_log_remaining,
     _rename_model_history_layer_names,
@@ -85,14 +85,14 @@ def postprocess(
     Transforms the raw Trace captured during the forward pass into its
     final user-facing form. In fast mode, delegates to ``postprocess_fast``
     which skips most steps (graph traversal, loop detection, module annotation)
-    and only copies activations, trims fields, and builds LayerLogs.
+    and only copies outs, trims fields, and builds LayerLogs.
 
     Args:
         output_tensors: The actual output tensors returned by the model's forward().
         output_tensor_addresses: Hierarchical address strings for each output
             (e.g., "0.1" for nested tuple outputs).
     """
-    if self.logging_mode == "fast":
+    if self.capture_mode == "fast":
         postprocess_fast(self)
         return
 
@@ -101,7 +101,7 @@ def postprocess(
         import warnings
 
         warnings.warn("No layers were logged during the forward pass; skipping postprocessing.")
-        _set_pass_finished(self)
+        _set_tracing_finished(self)
         return
 
     _vprint(
@@ -125,9 +125,9 @@ def postprocess(
 
     # Step 4: Find min/max distance from input and output nodes.
     # Conditional: only runs when the user requested distance metadata.
-    if self.mark_input_output_distances:
+    if self.mark_layer_depths:
         with _vtimed(self, "  Step 4: Input/output distances"):
-            _mark_input_output_distances(self)
+            _mark_layer_depths(self)
 
     # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
     with _vtimed(self, "  Step 5: Mark conditional branches"):
@@ -137,7 +137,7 @@ def postprocess(
     with _vtimed(self, "  Step 6: Fix module containment"):
         _fix_modules_for_internal_tensors(self)
 
-    # Step 7: Fix the buffer passes and parent information.
+    # Step 7: Fix the buffer ops and parent information.
     with _vtimed(self, "  Step 7: Fix buffer layers"):
         _fix_buffer_layers(self)
 
@@ -159,7 +159,7 @@ def postprocess(
 
     # Step 10: Log final info for all layers
     with _vtimed(self, "  Step 10: Log final info"):
-        _log_final_info_for_all_layers(self)
+        _log_final_info_for_layers(self)
 
     # Step 11: Rename all raw labels to final labels
     with _vtimed(self, "  Step 11: Rename labels"):
@@ -184,7 +184,7 @@ def postprocess(
     with _vtimed(self, "  Step 15: Log timing"):
         _log_time_elapsed(self)
 
-    # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
+    # Step 16: Populate ParamLog reverse mappings, linked params, num_calls, and grad metadata.
     with _vtimed(self, "  Step 16: Finalize params"):
         _finalize_param_logs(self)
 
@@ -196,24 +196,24 @@ def postprocess(
     with _vtimed(self, "  Step 17: Build module logs"):
         _build_module_logs(self)
 
-    # Step 17.5: Compute graph shape hash before _set_pass_finished changes access behavior.
+    # Step 17.5: Compute graph shape hash before _set_tracing_finished changes access behavior.
     with _vtimed(self, "  Step 17.5: Graph shape hash"):
         self.graph_shape_hash = compute_graph_shape_hash(self)
 
     # Step 18: log the pass as finished, changing the Trace behavior to its user-facing version.
     with _vtimed(self, "  Step 18: Mark pass finished"):
-        _set_pass_finished(self)
+        _set_tracing_finished(self)
 
-    should_finalize_streaming = self._activation_writer is not None and not getattr(
+    should_finalize_streaming = self._out_writer is not None and not getattr(
         self, "_defer_streaming_bundle_finalization", False
     )
     if should_finalize_streaming:
         with _vtimed(self, "  Step 19: Finalize streamed bundle"):
             _finalize_streamed_bundle(self)
 
-    if should_finalize_streaming and not self._keep_activations_in_memory:
-        with _vtimed(self, "  Step 20: Evict streamed activations"):
-            _evict_streamed_activations(self)
+    if should_finalize_streaming and not self._keep_outs_in_memory:
+        with _vtimed(self, "  Step 20: Evict streamed outs"):
+            _evict_streamed_outs(self)
 
     if getattr(self, "verbose", False):
         print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")
@@ -224,7 +224,7 @@ def postprocess_fast(self: "Trace") -> None:
 
     The fast pass reuses the exhaustive pass's graph structure, loop groupings,
     and labels. It only needs to:
-    1. Copy activation data from each output's parent tensor into the output node.
+    1. Copy out data from each output's parent tensor into the output node.
     2. Trim and reorder fields.
     3. Remove unsaved layers and build lookup keys.
     4. Undecorate saved tensors.
@@ -237,42 +237,42 @@ def postprocess_fast(self: "Trace") -> None:
     - Step 8: Loop detection
     - Steps 9-10: Label mapping and final info logging
     - Step 17: _build_module_logs — module structure doesn't change between
-      passes and _module_build_data isn't repopulated in fast mode (#108).
+      ops and _module_build_data isn't repopulated in fast mode (#108).
     """
     _vprint(self, "Fast-pass postprocessing...")
     # Use layer_dict_main_keys to get OpLog directly (not LayerLog)
     for output_layer_label in self.output_layers:
         output_layer = self.layer_dict_main_keys[output_layer_label]
-        if not output_layer.parent_layers:
+        if not output_layer.parents:
             continue  # Guard for parentless output layers (#152)
-        parent_layer = self.layer_dict_main_keys[output_layer.parent_layers[0]]
-        parent_contents = parent_layer.activation
-        parent_transformed = parent_layer.transformed_activation
+        parent_layer = self.layer_dict_main_keys[output_layer.parents[0]]
+        parent_contents = parent_layer.out
+        parent_transformed = parent_layer.transformed_out
         output_layer._internal_set(
-            "activation",
-            safe_copy(parent_contents, detach_tensor=self.detach_saved_tensors)
+            "out",
+            safe_copy(parent_contents, detach_tensor=self.detach_saved_tensorss)
             if parent_contents is not None
             else None,
         )
         output_layer._internal_set(
-            "transformed_activation",
-            safe_copy(parent_transformed, detach_tensor=self.detach_saved_tensors)
+            "transformed_out",
+            safe_copy(parent_transformed, detach_tensor=self.detach_saved_tensorss)
             if isinstance(parent_transformed, torch.Tensor)
             else parent_transformed,
         )
-        output_layer.tensor_memory = parent_layer.tensor_memory
-        output_layer.transformed_activation_shape = parent_layer.transformed_activation_shape
-        output_layer.transformed_activation_dtype = parent_layer.transformed_activation_dtype
-        output_layer.transformed_activation_memory = parent_layer.transformed_activation_memory
-        output_layer.has_saved_activations = parent_layer.has_saved_activations
-        output_layer.has_gradient = parent_layer.has_gradient
-        output_layer._internal_set("gradient", parent_layer.gradient)
-        output_layer._internal_set("transformed_gradient", parent_layer.transformed_gradient)
-        output_layer.transformed_gradient_shape = parent_layer.transformed_gradient_shape
-        output_layer.transformed_gradient_dtype = parent_layer.transformed_gradient_dtype
-        output_layer.transformed_gradient_memory = parent_layer.transformed_gradient_memory
-        if output_layer.has_saved_activations:
-            self.layers_with_saved_activations.append(output_layer_label)
+        output_layer.memory = parent_layer.memory
+        output_layer.transformed_out_shape = parent_layer.transformed_out_shape
+        output_layer.transformed_out_dtype = parent_layer.transformed_out_dtype
+        output_layer.transformed_out_memory = parent_layer.transformed_out_memory
+        output_layer.has_saved_outs = parent_layer.has_saved_outs
+        output_layer.has_grad = parent_layer.has_grad
+        output_layer._internal_set("grad", parent_layer.grad)
+        output_layer._internal_set("transformed_grad", parent_layer.transformed_grad)
+        output_layer.transformed_grad_shape = parent_layer.transformed_grad_shape
+        output_layer.transformed_grad_dtype = parent_layer.transformed_grad_dtype
+        output_layer.transformed_grad_memory = parent_layer.transformed_grad_memory
+        if output_layer.has_saved_outs:
+            self.ops_with_saved_outs.append(output_layer_label)
     _trim_and_reorder_model_history_fields(self)
     _remove_unwanted_entries_and_log_remaining(self)
     _undecorate_all_saved_tensors(self)
@@ -284,17 +284,17 @@ def postprocess_fast(self: "Trace") -> None:
     _log_time_elapsed(self)
     _build_layer_logs(self)
     # Note: _build_module_logs is NOT called here because module structure
-    # doesn't change between passes and _module_build_data isn't repopulated
+    # doesn't change between ops and _module_build_data isn't repopulated
     # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
     if self.intervention_ready and not getattr(self, "capture_full_args", False):
         self.intervention_ready = False
     self.graph_shape_hash = compute_graph_shape_hash(self)
-    _set_pass_finished(self)
+    _set_tracing_finished(self)
 
-    should_finalize_streaming = self._activation_writer is not None and not getattr(
+    should_finalize_streaming = self._out_writer is not None and not getattr(
         self, "_defer_streaming_bundle_finalization", False
     )
     if should_finalize_streaming:
         _finalize_streamed_bundle(self)
-    if should_finalize_streaming and not self._keep_activations_in_memory:
-        _evict_streamed_activations(self)
+    if should_finalize_streaming and not self._keep_outs_in_memory:
+        _evict_streamed_outs(self)

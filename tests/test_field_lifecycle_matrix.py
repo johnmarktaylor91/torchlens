@@ -35,12 +35,12 @@ class _LifecycleModel(nn.Module):
         return torch.relu(x) + 1
 
 
-def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
-    """Return a zero-valued activation.
+def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    """Return a zero-valued out.
 
     Parameters
     ----------
-    activation:
+    out:
         Activation supplied by TorchLens.
     hook:
         Hook context supplied by TorchLens.
@@ -48,11 +48,11 @@ def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Zero-valued activation with the same shape as ``activation``.
+        Zero-valued out with the same shape as ``out``.
     """
 
     del hook
-    return activation * 0
+    return out * 0
 
 
 def _capture_log() -> Trace:
@@ -106,7 +106,7 @@ def test_construction_done_lifecycle() -> None:
 
     assert constructed._construction_done is True
     assert log._has_direct_writes is False
-    constructed.activation = constructed.activation
+    constructed.out = constructed.out
     assert log._has_direct_writes is True
     assert log.run_state is RunState.DIRECT_WRITE_DIRTY
 
@@ -143,5 +143,5 @@ def test_run_state_transitions() -> None:
 
     dirty = _capture_log()
     layer = next(layer for layer in dirty.layer_list if layer.func_name == "relu")
-    layer.activation = layer.activation
+    layer.out = layer.out
     assert dirty.run_state is RunState.DIRECT_WRITE_DIRTY

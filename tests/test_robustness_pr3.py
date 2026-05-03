@@ -129,7 +129,7 @@ class _BatchEncodingLike(UserDict):
     """Minimal stand-in for HuggingFace's ``BatchEncoding`` (UserDict subclass).
 
     BatchEncoding wraps a dict of tensor fields and adds attribute access
-    plus ``to()`` methods. We only need the dict interface for TorchLens'
+    plus ``to()`` custom_methods. We only need the dict interface for TorchLens'
     input-extraction path.
     """
 

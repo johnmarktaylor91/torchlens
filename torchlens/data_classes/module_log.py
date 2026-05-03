@@ -7,9 +7,9 @@ Three-level hierarchy:
   pointing to individual OpLog entries.
 
 * **ModuleLog** -- aggregate metadata for one ``nn.Module`` across all its
-  invocations.  Stores ``all_layers`` as no-pass labels (e.g.
+  invocations.  Stores ``layers`` as no-pass labels (e.g.
   ``"conv2d_1_1"``), pointing to aggregate LayerLog entries.
-  For single-pass modules, per-pass fields are delegated to ``passes[1]``
+  For single-pass modules, per-pass fields are delegated to ``ops[1]``
   via ``_single_pass_or_error()``.
 
 * **ModuleAccessor** -- dict-like accessor returned by ``trace.modules``.
@@ -17,7 +17,7 @@ Three-level hierarchy:
   or ordinal index.
 
 ModuleLog vs ModuleCallLog label convention:
-  - ModuleLog.all_layers stores **no-pass** labels -> LayerLog
+  - ModuleLog.layers stores **no-pass** labels -> LayerLog
   - ModuleCallLog.layers stores **pass-qualified** labels -> OpLog
 This matches each accessor's natural granularity.
 """
@@ -58,7 +58,7 @@ def _module_call_log_to_row(module_call_log: "ModuleCallLog") -> Dict[str, Any]:
 
 
 class ModuleCallLog:
-    """Per-(module, pass_num) data for one invocation of a module.
+    """Per-(module, call_index) data for one invocation of a module.
 
     Lightweight container holding the list of layers computed during
     this particular invocation, the captured forward arguments, and
@@ -69,9 +69,9 @@ class ModuleCallLog:
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
-        "module_address": FieldPolicy.KEEP,
-        "pass_num": FieldPolicy.KEEP,
-        "pass_label": FieldPolicy.KEEP,
+        "address": FieldPolicy.KEEP,
+        "call_index": FieldPolicy.KEEP,
+        "call_label": FieldPolicy.KEEP,
         "layers": FieldPolicy.KEEP,
         "input_layers": FieldPolicy.KEEP,
         "output_layers": FieldPolicy.KEEP,
@@ -81,14 +81,14 @@ class ModuleCallLog:
         "forward_kwargs_summary": FieldPolicy.KEEP,
         "call_parent": FieldPolicy.KEEP,
         "call_children": FieldPolicy.KEEP,
-        "all_module_addresses": FieldPolicy.KEEP,
+        "all_addresses": FieldPolicy.KEEP,
     }
 
     def __init__(
         self,
-        module_address: str,
-        pass_num: int,
-        pass_label: str,
+        address: str,
+        call_index: int,
+        call_label: str,
         layers: List[str],
         input_layers: List[str],
         output_layers: List[str],
@@ -96,11 +96,11 @@ class ModuleCallLog:
         forward_kwargs: dict[str, Any] | None = None,
         call_parent: Optional[str] = None,
         call_children: Optional[List[str]] = None,
-        all_module_addresses: Optional[List[str]] = None,
+        all_addresses: Optional[List[str]] = None,
     ) -> None:
-        self.module_address = module_address
-        self.pass_num = pass_num
-        self.pass_label = pass_label  # e.g. "features.0:1"
+        self.address = address
+        self.call_index = call_index
+        self.call_label = call_label  # e.g. "features.0:1"
         self.layers = layers  # pass-qualified layer labels
         self.input_layers = input_layers
         self.output_layers = output_layers
@@ -110,9 +110,7 @@ class ModuleCallLog:
         self.forward_kwargs_summary = ""
         self.call_parent = call_parent
         self.call_children = call_children if call_children is not None else []
-        self.all_module_addresses = (
-            all_module_addresses if all_module_addresses is not None else [module_address]
-        )
+        self.all_addresses = all_addresses if all_addresses is not None else [address]
 
     @property
     def num_layers(self) -> int:
@@ -120,9 +118,9 @@ class ModuleCallLog:
         return len(self.layers)
 
     @property
-    def is_shared_module(self) -> bool:
+    def is_shared(self) -> bool:
         """Whether this module appears at multiple addresses."""
-        return len(self.all_module_addresses) > 1
+        return len(self.all_addresses) > 1
 
     @property
     def inputs(self) -> List[str]:
@@ -139,7 +137,7 @@ class ModuleCallLog:
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
         lines = [
-            f"ModuleCallLog: {self.pass_label}",
+            f"ModuleCallLog: {self.call_label}",
             f"  layers: {self.num_layers}",
         ]
         if self.input_layers:
@@ -241,7 +239,7 @@ class ModuleCallLog:
         default_fill_state(
             state,
             defaults={
-                "all_module_addresses": [state["module_address"]],
+                "all_addresses": [state["address"]],
                 "forward_args_summary": "",
                 "forward_kwargs_summary": "",
             },
@@ -256,20 +254,20 @@ class ModuleLog:
     static metadata (source file, class name, hierarchy) and dynamic
     data (layers computed, parameter usage, pass-level detail).
 
-    ``all_layers`` stores **no-pass** labels (e.g. ``"conv2d_1_1"``),
+    ``layers`` stores **no-pass** labels (e.g. ``"conv2d_1_1"``),
     pointing to aggregate LayerLog entries.  For per-pass detail, access
-    ``self.passes[pass_num].layers`` which stores pass-qualified labels.
+    ``self.ops[call_index].layers`` which stores pass-qualified labels.
 
     For single-pass modules, per-pass fields (``layers``, ``input_layers``,
     ``output_layers``, ``forward_args``, ``forward_kwargs``) are accessible
-    directly via ``_single_pass_or_error()`` delegation to ``passes[1]``.
+    directly via ``_single_pass_or_error()`` delegation to ``ops[1]``.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
         "name": FieldPolicy.KEEP,
-        "module_class_name": FieldPolicy.KEEP,
+        "class_name": FieldPolicy.KEEP,
         "source_file": FieldPolicy.KEEP,
         "source_line": FieldPolicy.KEEP,
         "class_docstring": FieldPolicy.KEEP,
@@ -282,24 +280,24 @@ class ModuleLog:
         "address_depth": FieldPolicy.KEEP,
         "call_parent": FieldPolicy.KEEP,
         "call_children": FieldPolicy.KEEP,
-        "nesting_depth": FieldPolicy.KEEP,
-        "num_passes": FieldPolicy.KEEP,
-        "passes": FieldPolicy.KEEP,
-        "pass_labels": FieldPolicy.KEEP,
-        "all_layers": FieldPolicy.KEEP,
+        "call_depth": FieldPolicy.KEEP,
+        "num_calls": FieldPolicy.KEEP,
+        "ops": FieldPolicy.KEEP,
+        "call_labels": FieldPolicy.KEEP,
+        "layers": FieldPolicy.KEEP,
         "params": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
-        "params_memory": FieldPolicy.KEEP,
-        "requires_grad": FieldPolicy.KEEP,
+        "param_memory": FieldPolicy.KEEP,
+        "has_trainable_params": FieldPolicy.KEEP,
         "buffer_layers": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
-        "is_training": FieldPolicy.KEEP,
+        "is_train_mode": FieldPolicy.KEEP,
         "has_forward_hooks": FieldPolicy.KEEP,
         "has_backward_hooks": FieldPolicy.KEEP,
-        "extra_attributes": FieldPolicy.BLOB_RECURSIVE,
-        "methods": FieldPolicy.KEEP,
+        "custom_attributes": FieldPolicy.BLOB_RECURSIVE,
+        "custom_methods": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
 
@@ -309,7 +307,7 @@ class ModuleLog:
         address: str,
         all_addresses: Optional[List[str]] = None,
         name: str = "",
-        module_class_name: str = "",
+        class_name: str = "",
         # Source info
         source_file: Optional[str] = None,
         source_line: Optional[int] = None,
@@ -325,35 +323,35 @@ class ModuleLog:
         # Hierarchy — call-based (dynamic)
         call_parent: Optional[str] = None,
         call_children: Optional[List[str]] = None,
-        nesting_depth: int = 0,
+        call_depth: int = 0,
         # Pass info
-        num_passes: int = 1,
-        passes: Optional[Dict[int, "ModuleCallLog"]] = None,
-        pass_labels: Optional[List[str]] = None,
+        num_calls: int = 1,
+        ops: Optional[Dict[int, "ModuleCallLog"]] = None,
+        call_labels: Optional[List[str]] = None,
         # Layers (aggregate)
-        all_layers: Optional[List[str]] = None,
+        layers: Optional[List[str]] = None,
         # Parameters
         params: Optional["ParamAccessor"] = None,
         num_params: int = 0,
         num_params_trainable: int = 0,
         num_params_frozen: int = 0,
-        params_memory: int = 0,
-        requires_grad: bool = False,
+        param_memory: int = 0,
+        has_trainable_params: bool = False,
         # Buffers
         buffer_layers: Optional[List[str]] = None,
         # Module state
-        is_training: bool = True,
+        is_train_mode: bool = True,
         has_forward_hooks: bool = False,
         has_backward_hooks: bool = False,
-        extra_attributes: Optional[Dict[str, Any]] = None,
-        methods: Optional[List[str]] = None,
+        custom_attributes: Optional[Dict[str, Any]] = None,
+        custom_methods: Optional[List[str]] = None,
         # Back-reference
         _source_trace: "Trace | None" = None,
     ) -> None:
         self.address = address
         self.all_addresses = all_addresses if all_addresses is not None else [address]
         self.name = name
-        self.module_class_name = module_class_name
+        self.class_name = class_name
 
         self.source_file = source_file
         self.source_line = source_line
@@ -369,15 +367,15 @@ class ModuleLog:
 
         self.call_parent = call_parent
         self.call_children = call_children if call_children is not None else []
-        self.nesting_depth = nesting_depth
+        self.call_depth = call_depth
 
-        self.num_passes = num_passes
-        self.passes = passes if passes is not None else {}
-        self.pass_labels = pass_labels if pass_labels is not None else []
+        self.num_calls = num_calls
+        self.ops = ops if ops is not None else {}
+        self.call_labels = call_labels if call_labels is not None else []
 
-        # all_layers stores NO-PASS labels (e.g. "conv2d_1_1") -> LayerLog.
+        # layers stores NO-PASS labels (e.g. "conv2d_1_1") -> LayerLog.
         # Contrast with ModuleCallLog.layers which stores pass-qualified labels.
-        self.all_layers = all_layers if all_layers is not None else []
+        self.layers = layers if layers is not None else []
 
         from .param_log import ParamAccessor
 
@@ -385,17 +383,17 @@ class ModuleLog:
         self.num_params = num_params
         self.num_params_trainable = num_params_trainable
         self.num_params_frozen = num_params_frozen
-        self.params_memory = params_memory
-        self.requires_grad = requires_grad
+        self.param_memory = param_memory
+        self.has_trainable_params = has_trainable_params
 
         self.buffer_layers = buffer_layers if buffer_layers is not None else []
         self._buffer_accessor: Any = None  # populated by _build_module_logs
 
-        self.is_training = is_training
+        self.is_train_mode = is_train_mode
         self.has_forward_hooks = has_forward_hooks
         self.has_backward_hooks = has_backward_hooks
-        self.extra_attributes = extra_attributes if extra_attributes is not None else {}
-        self.methods = methods if methods is not None else []
+        self.custom_attributes = custom_attributes if custom_attributes is not None else {}
+        self.custom_methods = custom_methods if custom_methods is not None else []
 
         # Store as weakref to break circular reference (Trace -> _module_logs -> ModuleLog -> Trace).
         self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
@@ -408,10 +406,10 @@ class ModuleLog:
     @property
     def num_layers(self) -> int:
         """Number of unique layers in this module."""
-        return len(self.all_layers)
+        return len(self.layers)
 
     @property
-    def params_memory_str(self) -> str:
+    def param_memory_str(self) -> str:
         """Return parameter tensor size in human-readable units.
 
         Returns
@@ -419,7 +417,7 @@ class ModuleLog:
         str
             Human-readable parameter memory amount.
         """
-        return human_readable_size(self.params_memory)
+        return human_readable_size(self.param_memory)
 
     @property
     def _source_trace(self) -> "Trace | None":
@@ -452,69 +450,49 @@ class ModuleLog:
     # expose per-pass fields; multi-pass modules raise with guidance.
 
     def _single_pass_or_error(self, field_name: str) -> Any:
-        """Return a field from the single pass, or raise if the module has multiple passes.
+        """Return a field from the single pass, or raise if the module has multiple ops.
 
-        For modules invoked once, transparently delegates to passes[1].
+        For modules invoked once, transparently delegates to ops[1].
         For multi-pass modules, raises AttributeError directing the user to
         access the field on a specific pass.
         """
-        if self.num_passes > 1:
+        if self.num_calls > 1:
             raise AttributeError(
-                f"Module '{self.address}' has {self.num_passes} passes. "
+                f"Module '{self.address}' has {self.num_calls} ops. "
                 f"Access '{field_name}' on a specific pass: "
-                f"module.passes[1].{field_name}, module.passes[2].{field_name}, etc."
+                f"module.ops[1].{field_name}, module.ops[2].{field_name}, etc."
             )
-        if 1 not in self.passes:
+        if 1 not in self.ops:
             return None
-        return getattr(self.passes[1], field_name)
-
-    @property
-    def layers(self) -> List[str]:
-        """Module layer labels for a single-pass module.
-
-        Returns
-        -------
-        List[str]
-            Layer labels belonging to the only module pass.
-        """
-        result = self._single_pass_or_error("layers")
-        return result if result is not None else []
+        return getattr(self.ops[1], field_name)
 
     @property
     def input_layers(self) -> List[str]:
-        """Module input layer labels for a single-pass module.
+        """Aggregate module input layer labels.
 
         Returns
         -------
         List[str]
-            Input layer labels belonging to the only module pass.
+            No-pass input layer labels across module calls.
         """
-        result = self._single_pass_or_error("input_layers")
-        return result if result is not None else []
+        labels: list[str] = []
+        for call in self.ops.values():
+            labels.extend(label.split(":", 1)[0] for label in call.input_layers)
+        return list(dict.fromkeys(labels))
 
     @property
     def output_layers(self) -> List[str]:
-        """Module output layer labels for a single-pass module.
+        """Aggregate module output layer labels.
 
         Returns
         -------
         List[str]
-            Output layer labels belonging to the only module pass.
+            No-pass output layer labels across module calls.
         """
-        result = self._single_pass_or_error("output_layers")
-        return result if result is not None else []
-
-    @property
-    def inputs(self) -> List[str]:
-        """Module input layer labels."""
-
-        return self.input_layers
-
-    @property
-    def outputs(self) -> List[str]:
-        """Module output layer labels."""
-
-        return self.output_layers
+        labels: list[str] = []
+        for call in self.ops.values():
+            labels.extend(label.split(":", 1)[0] for label in call.output_layers)
+        return list(dict.fromkeys(labels))
 
     @property
     def forward_args(self) -> tuple[Any, ...] | None:
@@ -551,9 +529,7 @@ class ModuleLog:
             return cast("BufferAccessor", self._buffer_accessor)
         parent_accessor = self._source_trace._buffer_accessor
         scoped = {
-            addr: bl
-            for addr, bl in parent_accessor._dict.items()
-            if bl.module_address == self.address
+            addr: bl for addr, bl in parent_accessor._dict.items() if bl.address == self.address
         }
         self._buffer_accessor = BufferAccessor(scoped, source_trace=self._source_trace)
         return cast("BufferAccessor", self._buffer_accessor)
@@ -563,7 +539,7 @@ class ModuleLog:
         if self._source_trace is None:
             return 0
         total = 0
-        for label in self.all_layers:
+        for label in self.layers:
             entry = self._source_trace[label]
             val = getattr(entry, field, None)
             if val is not None:
@@ -601,37 +577,37 @@ class ModuleLog:
         return self.flops // 2
 
     @property
-    def gradient(self) -> torch.Tensor | List[torch.Tensor] | None:
-        """Aggregate saved gradients across layers in this module.
+    def grad(self) -> torch.Tensor | List[torch.Tensor] | None:
+        """Aggregate saved grads across layers in this module.
 
         Returns
         -------
         torch.Tensor | List[torch.Tensor] | None
-            A stacked tensor when layer gradient shapes match, a list when
-            shapes differ, or ``None`` when no layer gradients were saved.
+            A stacked tensor when layer grad shapes match, a list when
+            shapes differ, or ``None`` when no layer grads were saved.
         """
         if self._source_trace is None:
             return None
-        gradients = [
-            self._source_trace[layer_label].gradient
-            for layer_label in self.all_layers
-            if getattr(self._source_trace[layer_label], "has_gradient", False)
+        grads = [
+            self._source_trace[layer_label].grad
+            for layer_label in self.layers
+            if getattr(self._source_trace[layer_label], "has_grad", False)
         ]
-        if not gradients:
+        if not grads:
             return None
-        first_shape = gradients[0].shape
-        if all(gradient.shape == first_shape for gradient in gradients):
-            return torch.stack(gradients)
-        return gradients
+        first_shape = grads[0].shape
+        if all(grad.shape == first_shape for grad in grads):
+            return torch.stack(grads)
+        return grads
 
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""
         lines = [
-            f"ModuleLog: {self.address} ({self.module_class_name})",
-            f"  nesting_depth: {self.nesting_depth}, address_depth: {self.address_depth}",
+            f"ModuleLog: {self.address} ({self.class_name})",
+            f"  call_depth: {self.call_depth}, address_depth: {self.address_depth}",
             f"  num_params: {self.num_params}",
             f"  num_layers: {self.num_layers}",
-            f"  num_passes: {self.num_passes}",
+            f"  num_calls: {self.num_calls}",
         ]
         if self.is_shared:
             lines.append(f"  aliases: {self.all_addresses}")
@@ -640,7 +616,7 @@ class ModuleLog:
         return "\n".join(lines)
 
     def __len__(self) -> int:
-        """Return the total number of layers across all passes of this module."""
+        """Return the total number of layers across all ops of this module."""
         return self.num_layers
 
     def __getitem__(self, ix: int | str) -> Any:
@@ -652,10 +628,10 @@ class ModuleLog:
             raise RuntimeError("No source Trace reference; cannot index into layers.")
         if isinstance(ix, str):
             # String label lookup within this module's layers
-            if ix in self.all_layers:
+            if ix in self.layers:
                 return self._source_trace[ix]
             # Try substring match within module layers
-            matches = [lbl for lbl in self.all_layers if ix in lbl]
+            matches = [lbl for lbl in self.layers if ix in lbl]
             if len(matches) == 1:
                 return self._source_trace[matches[0]]
             elif len(matches) > 1:
@@ -664,13 +640,13 @@ class ModuleLog:
                     f"'{self.address}': {', '.join(matches[:5])}"
                 )
             raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
-        return self._source_trace[self.all_layers[ix]]
+        return self._source_trace[self.layers[ix]]
 
     def __iter__(self) -> Iterator[Any]:
         """Iterate over OpLog entries for all layers in this module."""
         if self._source_trace is None:
-            return iter(self.all_layers)
-        return iter(self._source_trace[label] for label in self.all_layers)
+            return iter(self.layers)
+        return iter(self._source_trace[label] for label in self.layers)
 
     def show_graph(self, **kwargs: Any) -> str:
         """Render this module's focused graph.
@@ -714,15 +690,15 @@ class ModuleLog:
             ) from e
 
         rows = []
-        for label in self.all_layers:
+        for label in self.layers:
             entry = self._source_trace[label]
             rows.append(
                 {
                     "layer_label": entry.layer_label,
                     "layer_type": entry.layer_type,
-                    "tensor_shape": entry.tensor_shape,
-                    "tensor_dtype": entry.tensor_dtype,
-                    "pass_num": entry.pass_num,
+                    "shape": entry.shape,
+                    "dtype": entry.dtype,
+                    "call_index": entry.call_index,
                     "func_name": entry.func_name,
                 }
             )
@@ -887,9 +863,9 @@ class ModuleAccessor:
         items = []
         for ml in self._list:
             items.append(
-                f"  '{ml.address}': {ml.module_class_name} "
-                f"(depth={ml.nesting_depth}, params={ml.num_params}, "
-                f"layers={ml.num_layers}, passes={ml.num_passes})"
+                f"  '{ml.address}': {ml.class_name} "
+                f"(depth={ml.call_depth}, params={ml.num_params}, "
+                f"layers={ml.num_layers}, ops={ml.num_calls})"
             )
         inner = "\n".join(items)
         return f"ModuleAccessor({len(self)} modules):\n{inner}"
@@ -914,12 +890,12 @@ class ModuleAccessor:
             rows.append(
                 {
                     "address": ml.address,
-                    "module_class_name": ml.module_class_name,
-                    "nesting_depth": ml.nesting_depth,
+                    "class_name": ml.class_name,
+                    "call_depth": ml.call_depth,
                     "address_depth": ml.address_depth,
                     "num_params": ml.num_params,
                     "num_layers": ml.num_layers,
-                    "num_passes": ml.num_passes,
+                    "num_calls": ml.num_calls,
                 }
             )
         return pd.DataFrame(rows)
@@ -987,7 +963,7 @@ class ModuleAccessor:
         Returns
         -------
         str
-            Summary table with module address, class, depth, params, layers, and passes.
+            Summary table with module address, class, depth, params, layers, and ops.
         """
         if len(self) == 0:
             return "No modules."
@@ -997,8 +973,8 @@ class ModuleAccessor:
         lines.append("-" * 92)
         for ml in self._list:
             lines.append(
-                f"{ml.address:<40} {ml.module_class_name:<20} "
-                f"{ml.nesting_depth:>5} {ml.num_params:>10} "
-                f"{ml.num_layers:>7} {ml.num_passes:>7}"
+                f"{ml.address:<40} {ml.class_name:<20} "
+                f"{ml.call_depth:>5} {ml.num_params:>10} "
+                f"{ml.num_layers:>7} {ml.num_calls:>7}"
             )
         return "\n".join(lines)

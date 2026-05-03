@@ -75,11 +75,11 @@ def test_explain_returns_sensible_string_for_each_audience() -> None:
         assert "TinyReportModel" in text
 
 
-def test_explain_reports_nonfinite_activation() -> None:
-    """The anomaly section should flag saved NaN or Inf activations."""
+def test_explain_reports_nonfinite_out() -> None:
+    """The anomaly section should flag saved NaN or Inf outs."""
 
     log = _captured_log()
-    log["linear_1_1"].activation[0, 0] = torch.nan
+    log["linear_1_1"].out[0, 0] = torch.nan
     text = tl.report.explain(log)
     assert "NaN or Inf" in text
     assert "linear_1_1" in text

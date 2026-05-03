@@ -52,7 +52,7 @@ def main() -> None:
     edited.do(exact_site, tl.scale(0.0), confirm_mutation=True)
 
     assert edited.last_run_records()[-1].site_label == exact_label
-    assert not torch.allclose(log.layer_list[-1].activation, edited.layer_list[-1].activation)
+    assert not torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
 
 
 if __name__ == "__main__":

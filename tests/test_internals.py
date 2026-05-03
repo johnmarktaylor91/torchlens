@@ -14,7 +14,7 @@ import torch.nn as nn
 
 from torchlens import trace as trace_fn
 from torchlens.utils.tensor_utils import (
-    get_tensor_memory_amount,
+    get_memory_amount,
     print_override,
     safe_copy,
     safe_to,
@@ -77,7 +77,7 @@ class TestFieldOrderSync:
 
         init_attrs = self._init_assigned_attrs(OpLog)
         # Private fields (prefixed _) are intentionally excluded from some FIELD_ORDERs,
-        # but some _ fields ARE in FIELD_ORDER (e.g. _pass_finished). Check both directions:
+        # but some _ fields ARE in FIELD_ORDER (e.g. _tracing_finished). Check both directions:
         # 1. Every FIELD_ORDER entry should be an init attr or a property
         for field in LAYER_PASS_LOG_FIELD_ORDER:
             assert field in init_attrs or hasattr(OpLog, field), (
@@ -241,12 +241,12 @@ class TestSafeCopy:
         assert t.data_ptr() != copied.data_ptr()
 
     def test_safe_copy_preserves_label(self):
-        """safe_copy(detach_tensor=True) preserves tl_tensor_label_raw."""
+        """safe_copy(detach_tensor=True) preserves tl__label_raw."""
         t = torch.randn(3, 3)
-        t.tl_tensor_label_raw = "test_label"
+        t.tl__label_raw = "test_label"
         copied = safe_copy(t, detach_tensor=True)
-        assert hasattr(copied, "tl_tensor_label_raw")
-        assert copied.tl_tensor_label_raw == "test_label"
+        assert hasattr(copied, "tl__label_raw")
+        assert copied.tl__label_raw == "test_label"
 
     def test_safe_copy_non_tensor(self):
         """safe_copy on non-tensors should return a shallow copy."""
@@ -289,7 +289,7 @@ class TestPrintOverride:
 
 
 # ---------------------------------------------------------------------------
-# get_tensor_memory_amount tests
+# get_memory_amount tests
 # ---------------------------------------------------------------------------
 
 
@@ -297,11 +297,11 @@ class TestGetTensorMemory:
     def test_meta_tensor_returns_zero(self):
         """meta tensors should return 0 bytes."""
         t = torch.randn(100, 100, device="meta")
-        assert get_tensor_memory_amount(t) == 0
+        assert get_memory_amount(t) == 0
 
     def test_normal_tensor(self):
         t = torch.randn(10, 10)  # 100 float32 = 400 bytes
-        assert get_tensor_memory_amount(t) == 400
+        assert get_memory_amount(t) == 400
 
 
 # ---------------------------------------------------------------------------
@@ -385,11 +385,11 @@ class TestBufferDuplicate:
         assert log is not None
 
     def test_shared_buffer_fast_path(self):
-        """save_new_activations with shared buffer should not crash."""
+        """save_new_outs with shared buffer should not crash."""
         model = _SharedBufferModel()
         x = torch.randn(2, 10)
         log = trace_fn(model, x)
-        log.save_new_activations(model, torch.randn(2, 10))
+        log.save_new_outs(model, torch.randn(2, 10))
 
 
 class TestBufferMerge:
@@ -465,14 +465,14 @@ class TestCleanupReleasesReferences:
 
 class TestNestedTupleArgs:
     def test_nested_tuple_independence(self):
-        """Nested tuples/lists in captured_args should be independent copies."""
+        """Nested tuples/lists in saved_args should be independent copies."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
         log = trace_fn(model, x, save_function_args=True)
         found_args = False
         for label in log.layer_labels:
             entry = log[label]
-            if entry.captured_args is not None and len(entry.captured_args) > 0:
+            if entry.saved_args is not None and len(entry.saved_args) > 0:
                 found_args = True
                 break
         assert found_args or True  # OK if no args (model-dependent)
@@ -491,11 +491,11 @@ class TestDisplayLargeTensor:
 
 class TestDisplayUsesLoggedShape:
     def test_shape_matches_capture_time(self):
-        """tensor_shape should reflect capture-time shape."""
+        """shape should reflect capture-time shape."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
         log = trace_fn(model, x, layers_to_save="all")
         for label in log.layer_labels:
             entry = log[label]
-            if entry.activation is not None:
-                assert entry.tensor_shape is not None
+            if entry.out is not None:
+                assert entry.shape is not None

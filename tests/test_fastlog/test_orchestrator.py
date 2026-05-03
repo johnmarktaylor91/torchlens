@@ -93,7 +93,7 @@ def test_shared_module_called_twice_has_balanced_events() -> None:
     child_events = [
         record.ctx
         for record in recording
-        if record.ctx.module_address == "shared" and record.ctx.kind.startswith("module")
+        if record.ctx.address == "shared" and record.ctx.kind.startswith("module")
     ]
 
     assert [ctx.kind for ctx in child_events] == [
@@ -106,10 +106,10 @@ def test_shared_module_called_twice_has_balanced_events() -> None:
 
 
 def test_identity_passthrough_has_module_events() -> None:
-    """Identity modules are represented even when their tensor passes through."""
+    """Identity modules are represented even when their tensor ops through."""
 
     output, recording = _run_predicate_pass(IdentityModel(), torch.ones(1), None, _options())
-    labels = [record.ctx.module_address for record in recording]
+    labels = [record.ctx.address for record in recording]
 
     assert torch.equal(output, torch.ones(1))
     assert "identity" in labels

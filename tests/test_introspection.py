@@ -104,7 +104,7 @@ def test_stack_metadata_helpers_run_only_for_surviving_frames(
 
 
 def test_disable_col_offset_skips_col_offset_helper(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify ``disable_col_offset`` bypasses bytecode column-offset inspection.
+    """Verify ``disable_col_offset`` byops bytecode column-offset inspection.
 
     Args:
         monkeypatch: Pytest fixture for replacing helper functions.

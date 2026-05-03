@@ -1,7 +1,7 @@
 # torchlens/ - Core Package
 
 ## What This Is
-TorchLens extracts activations and metadata from PyTorch eager models. `import
+TorchLens extracts outs and metadata from PyTorch eager models. `import
 torchlens` exposes the public API and compatibility shims, but torch wrapping is lazy:
 the first capture prepares the model and calls `wrap_torch()` from `decoration/`.
 
@@ -26,12 +26,12 @@ tl.fastlog.record(model, input, keep_op=...)
 ```
 
 Selective `layers_to_save` uses the two-pass strategy: Pass 1 exhaustive metadata, Pass
-2 fast activation save. Fastlog uses explicit predicate passes instead and does not
+2 fast out save. Fastlog uses explicit predicate ops instead and does not
 try to build a faithful full graph.
 
-`train_mode=True` is the public opt-in for losses built from saved activations. It keeps
+`train_mode=True` is the public opt-in for losses built from saved outs. It keeps
 floating tensors graph-connected, preserves user `requires_grad`, and rejects incompatible
-detaching or disk-only activation storage.
+detaching or disk-only out storage.
 
 ## Top-Level Modules
 

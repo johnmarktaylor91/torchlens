@@ -27,18 +27,18 @@ _SIMPLE_KEEP_TYPES = (str, int, float, bool, type(None), torch.dtype, torch.devi
 class _ScrubOptions:
     """Flags controlling which optional tensor payloads are preserved."""
 
-    include_activations: bool
-    include_gradients: bool
-    include_captured_args: bool
+    include_outs: bool
+    include_grads: bool
+    include_saved_args: bool
     include_rng_states: bool
 
 
 def scrub_for_save(
     trace: Trace,
     *,
-    include_activations: bool = True,
-    include_gradients: bool = True,
-    include_captured_args: bool = False,
+    include_outs: bool = True,
+    include_grads: bool = True,
+    include_saved_args: bool = False,
     include_rng_states: bool = False,
 ) -> tuple[dict[str, Any], list[BlobSpec]]:
     """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
@@ -47,11 +47,11 @@ def scrub_for_save(
     ----------
     trace:
         Live model log to scrub.
-    include_activations:
-        Whether saved activations should be replaced with blob references.
-    include_gradients:
-        Whether gradients should be replaced with blob references.
-    include_captured_args:
+    include_outs:
+        Whether saved outs should be replaced with blob references.
+    include_grads:
+        Whether grads should be replaced with blob references.
+    include_saved_args:
         Whether captured args/kwargs and related tensor payloads should be
         preserved via blob references.
     include_rng_states:
@@ -66,9 +66,9 @@ def scrub_for_save(
     """
 
     options = _ScrubOptions(
-        include_activations=include_activations,
-        include_gradients=include_gradients,
-        include_captured_args=include_captured_args,
+        include_outs=include_outs,
+        include_grads=include_grads,
+        include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
     )
     memo: dict[int, Any] = {}
@@ -164,8 +164,8 @@ def _scrub_value(
         )
 
     if isinstance(value, Trace):
-        scrubbed_state["activation_postfunc_repr"] = (
-            repr(value.activation_postfunc) if value.activation_postfunc is not None else None
+        scrubbed_state["_out_transform_repr"] = (
+            repr(value.out_postfunc) if value.out_postfunc is not None else None
         )
         scrubbed_state["io_format_version"] = IO_FORMAT_VERSION
 
@@ -181,14 +181,14 @@ def _effective_policy(
 ) -> FieldPolicy:
     """Resolve the runtime policy for a field after include-flag overrides."""
 
-    if field_name in {"activation", "transformed_activation"} and not options.include_activations:
+    if field_name in {"out", "transformed_out"} and not options.include_outs:
         return FieldPolicy.DROP
-    if field_name in {"gradient", "transformed_gradient"} and not options.include_gradients:
+    if field_name in {"grad", "transformed_grad"} and not options.include_grads:
         return FieldPolicy.DROP
-    if field_name in {"captured_args", "captured_kwargs", "children_tensor_versions"}:
-        return FieldPolicy.BLOB_RECURSIVE if options.include_captured_args else FieldPolicy.DROP
+    if field_name in {"saved_args", "saved_kwargs", "output_versions_per_child"}:
+        return FieldPolicy.BLOB_RECURSIVE if options.include_saved_args else FieldPolicy.DROP
     if field_name in {"forward_args", "forward_kwargs"}:
-        return FieldPolicy.BLOB_RECURSIVE if options.include_captured_args else FieldPolicy.DROP
+        return FieldPolicy.BLOB_RECURSIVE if options.include_saved_args else FieldPolicy.DROP
     if field_name == "func_rng_states":
         return FieldPolicy.BLOB_RECURSIVE if options.include_rng_states else FieldPolicy.DROP
     return base_policy
@@ -363,17 +363,17 @@ def _next_blob_id(blob_counter: list[int]) -> str:
 def _blob_kind_for_field(owner: Any, field_name: str) -> str:
     """Map an object field name to the portable manifest tensor kind."""
 
-    if field_name == "activation":
-        return "activation"
-    if field_name == "transformed_activation":
-        return "transformed_activation"
-    if field_name == "gradient":
-        return "gradient"
-    if field_name == "transformed_gradient":
-        return "transformed_gradient"
-    if field_name in {"captured_args", "captured_kwargs"}:
+    if field_name == "out":
+        return "out"
+    if field_name == "transformed_out":
+        return "transformed_out"
+    if field_name == "grad":
+        return "grad"
+    if field_name == "transformed_grad":
+        return "transformed_grad"
+    if field_name in {"saved_args", "saved_kwargs"}:
         return "captured_arg"
-    if field_name == "children_tensor_versions":
+    if field_name == "output_versions_per_child":
         return "child_version"
     if field_name == "func_rng_states":
         return "rng_state"
@@ -381,7 +381,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "module_arg"
     if field_name == "func_config":
         return "func_config"
-    if field_name == "extra_attributes":
+    if field_name == "custom_attributes":
         return "module_meta"
     if field_name in {"grad_inputs", "grad_outputs"}:
         return "grad_fn_grad"
@@ -393,8 +393,8 @@ def _blob_label_for_owner(owner: Any) -> str:
 
     if hasattr(owner, "layer_label_w_pass") and getattr(owner, "layer_label_w_pass") is not None:
         return str(getattr(owner, "layer_label_w_pass"))
-    if hasattr(owner, "pass_label") and getattr(owner, "pass_label") is not None:
-        return str(getattr(owner, "pass_label"))
+    if hasattr(owner, "call_label") and getattr(owner, "call_label") is not None:
+        return str(getattr(owner, "call_label"))
     if hasattr(owner, "address") and getattr(owner, "address") is not None:
         return str(getattr(owner, "address"))
     return type(owner).__name__

@@ -351,7 +351,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
     6. Logs all output tensors into the active ``Trace``.
 
     **Barcode nesting detection**: Before calling the original function, a random
-    barcode is written to ``trace.current_function_call_barcode``.  If the
+    barcode is written to ``trace._current_func_barcode``.  If the
     original function internally calls *other* wrapped torch functions, those
     inner calls will overwrite the barcode.  After the call returns, if the
     barcode still matches, this is a "bottom-level" function (leaf in the call
@@ -417,7 +417,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             )
 
         # Reset barcode; skip metadata-only functions that would cause recursion.
-        trace.current_function_call_barcode = 0
+        trace._current_func_barcode = 0
         if func_name in funcs_not_to_log:
             return func(*args, **kwargs)
 
@@ -426,10 +426,10 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         arg_tensorlike = _collect_tensor_args(args, kwargs)
 
         # Register buffer tensors on first encounter. Buffers are tagged with
-        # tl_buffer_address during model prep but don't get a tl_tensor_label_raw
+        # tl_buffer_address during model prep but don't get a tl__label_raw
         # until the first function actually uses them.
         for t in arg_tensorlike:
-            if hasattr(t, "tl_buffer_address") and not hasattr(t, "tl_tensor_label_raw"):
+            if hasattr(t, "tl_buffer_address") and not hasattr(t, "tl__label_raw"):
                 log_source_tensor(trace, t, "buffer", getattr(t, "tl_buffer_address"))
 
         # Intercept print functions to show TorchLens label info in repr.
@@ -450,7 +450,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # execute during this call, they will overwrite it. After the call,
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
-        trace.current_function_call_barcode = func_call_barcode
+        trace._current_func_barcode = func_call_barcode
         start_time = time.time()
         _save_rng = getattr(trace, "save_rng_states", False)
         rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
@@ -470,7 +470,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             rng_states=rng_states,
             autocast_state=autocast_state,
         )
-        is_bottom_level_func = trace.current_function_call_barcode == func_call_barcode
+        is_bottom_level_func = trace._current_func_barcode == func_call_barcode
 
         # __setitem__, zero_, __delitem__ modify in-place and return None;
         # treat the first arg (the modified tensor) as the output.
@@ -489,7 +489,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         )
         if same_object_returned:
             # Create a distinct tensor object for logging — otherwise attaching
-            # tl_tensor_label_raw to the output would clobber the input's label.
+            # tl__label_raw to the output would clobber the input's label.
             out_orig = safe_copy(out_orig)
 
         out_orig = apply_live_hooks_to_outputs(
@@ -529,8 +529,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             # For true in-place ops, propagate the newly assigned label back
             # to the original tensor so subsequent operations see it.
             if was_inplace:
-                if hasattr(out_orig, "tl_tensor_label_raw"):
-                    args[0].tl_tensor_label_raw = out_orig.tl_tensor_label_raw
+                if hasattr(out_orig, "tl__label_raw"):
+                    args[0].tl__label_raw = out_orig.tl__label_raw
 
         return out_orig
 
@@ -550,12 +550,12 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
 
 
 # ---------------------------------------------------------------------------
-# get_func_argnames — now writes to _state._func_argnames instead of self
+# get_arg_names — now writes to _state._arg_names instead of self
 # ---------------------------------------------------------------------------
 
 
-def get_func_argnames(orig_func: Callable[..., Any], func_name: str) -> None:
-    """Extract argument names for a function and store in ``_state._func_argnames``.
+def get_arg_names(orig_func: Callable[..., Any], func_name: str) -> None:
+    """Extract argument names for a function and store in ``_state._arg_names``.
 
     Tries ``inspect.signature`` first (works for Python functions). Falls back
     to docstring parsing for C builtins whose signature isn't introspectable.
@@ -584,7 +584,7 @@ def get_func_argnames(orig_func: Callable[..., Any], func_name: str) -> None:
                 argnames.append(f"**{name}")
             else:
                 argnames.append(name)
-        _state._func_argnames[storage_key] = tuple(argnames)
+        _state._arg_names[storage_key] = tuple(argnames)
         return
     except (ValueError, TypeError):
         # TypeError: Python 3.14+ deferred annotation evaluation (PEP 649)
@@ -611,7 +611,7 @@ def get_func_argnames(orig_func: Callable[..., Any], func_name: str) -> None:
         argname = argname.replace("*", "")
         argnames.append(argname)
     argnames = tuple([arg for arg in argnames if arg not in ["self", "cls"]])  # type: ignore[assignment]
-    _state._func_argnames[storage_key] = argnames  # type: ignore[assignment]
+    _state._arg_names[storage_key] = argnames  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------
@@ -625,7 +625,7 @@ def decorate_all_once() -> None:
     Iterates over every ``(namespace, func_name)`` pair in ``ORIG_TORCH_FUNCS``
     and replaces each function with a ``torch_func_decorator`` wrapper. Also:
 
-    - Pre-computes ``_state._func_argnames`` for metadata capture.
+    - Pre-computes ``_state._arg_names`` for metadata capture.
     - Populates ``_state._orig_to_decorated`` / ``_state._decorated_to_orig``
       bidirectional mappings (keyed by ``id()``).
     - Registers wrappers in ``torch.jit._builtins._builtin_table`` so JIT
@@ -662,14 +662,14 @@ def decorate_all_once() -> None:
     # Tensor.bool first, then inspect Tensor.dim_order, the annotation
     # bool | list[...] resolves bool to our wrapper -> TypeError (#138).
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
-        if func_name.strip("_") in _state._func_argnames:
+        if func_name.strip("_") in _state._arg_names:
             continue
         namespace_key = namespace_name.replace("torch.", "")
         local_func_namespace = nested_getattr(torch, namespace_key)
         if not hasattr(local_func_namespace, func_name):
             continue
         orig_func = getattr(local_func_namespace, func_name)
-        get_func_argnames(orig_func, func_name)
+        get_arg_names(orig_func, func_name)
 
     # --- Pass 2: Decorate all functions ---
     for namespace_name, func_name in ORIG_TORCH_FUNCS:
@@ -980,7 +980,7 @@ def patch_detached_references() -> None:
        ``_orig_to_decorated`` by ``id()``.
 
     2. **Class-level attributes** — Classes defined in other modules that store
-       torch function references as class attributes or methods. Crawls
+       torch function references as class attributes or custom_methods. Crawls
        ``vars(cls)`` for each class found in the module.
 
     3. **Function defaults** — Functions that use torch functions as default
@@ -1076,7 +1076,7 @@ def _patch_function_defaults(func: Any, mapping: dict[int, Any]) -> None:
     original torch function references.
 
     This handles the case where a function uses a torch function as a default
-    argument value, e.g. ``def f(activation=torch.relu)``. The default still
+    argument value, e.g. ``def f(out=torch.relu)``. The default still
     points to the pre-decoration original; we replace it with the wrapper.
     """
     try:

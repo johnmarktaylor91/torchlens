@@ -3,7 +3,7 @@
 What this demonstrates
 ----------------------
 Hooks can collect side-channel readouts through ``hook.run_ctx`` while leaving
-the activation unchanged.
+the out unchanged.
 
 How to run
 ----------
@@ -46,11 +46,11 @@ def main() -> None:
     probe = nn.Linear(8, 1, bias=False).eval()
     log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
-    def readout(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
-        """Store probe scores and leave the activation unchanged."""
+    def readout(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        """Store probe scores and leave the out unchanged."""
 
-        hook.run_ctx.setdefault("probe_scores", []).append(probe(activation).detach())
-        return activation
+        hook.run_ctx.setdefault("probe_scores", []).append(probe(out).detach())
+        return out
 
     edited = log.fork("probe")
     edited.attach_hooks(tl.func("relu"), readout).replay()
@@ -58,7 +58,7 @@ def main() -> None:
     scores = edited.last_run_ctx["probe_scores"]
     assert len(scores) == 1
     assert scores[0].shape == (2, 1)
-    assert torch.allclose(log.layer_list[-1].activation, edited.layer_list[-1].activation)
+    assert torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only
 
 
 DiffLayout = Literal["paired"]
-DiffTensorField = Literal["activation", "gradient"]
+DiffTensorField = Literal["out", "grad"]
 
 _CAPTION = (
     "Clean vs zero_ablate(layer1.0.relu) — top: clean, bottom: ablated. "
@@ -40,7 +40,7 @@ def bundle_diff(
     left: str | "Trace" | None = None,
     right: str | "Trace" | None = None,
     baseline: str | "Trace" | None = None,
-    on: DiffTensorField = "activation",
+    on: DiffTensorField = "out",
     vis_outpath: str = "bundle_diff",
     vis_save_only: bool = False,
     vis_fileformat: str = "svg",
@@ -487,7 +487,7 @@ def _add_side_edges(dot: graphviz.Digraph, *, layers: list[Any], side: str) -> N
     visible = {str(getattr(layer, "layer_label", "")): layer for layer in layers}
     for layer in layers:
         target_id = _node_id(side, layer)
-        for parent_label in getattr(layer, "parent_layers", []) or []:
+        for parent_label in getattr(layer, "parents", []) or []:
             parent = visible.get(str(parent_label))
             if parent is not None:
                 dot.edge(_node_id(side, parent), target_id, color="#707070", arrowsize="0.5")
@@ -602,9 +602,9 @@ def _node_label(layer: Any, delta: float) -> str:
 
     label = str(getattr(layer, "layer_label", "node"))
     func_name = str(getattr(layer, "func_name", "op"))
-    module = getattr(layer, "containing_module", None)
+    module = getattr(layer, "module", None)
     module_line = f"@{module}" if module else ""
-    shape = getattr(layer, "tensor_shape", None)
+    shape = getattr(layer, "shape", None)
     shape_line = str(tuple(shape)) if isinstance(shape, (list, tuple)) else str(shape or "")
     parts = [label, func_name]
     if module_line:

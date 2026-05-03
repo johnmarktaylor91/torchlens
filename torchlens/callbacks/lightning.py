@@ -33,7 +33,7 @@ class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
 
     def __init__(
         self,
-        output_path: str | Path,
+        container_path: str | Path,
         *,
         every_n_batches: int = 1,
         input_getter: Any | None = None,
@@ -43,7 +43,7 @@ class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
 
         Parameters
         ----------
-        output_path:
+        container_path:
             JSONL path receiving one summary per profiled batch.
         every_n_batches:
             Batch interval for profiling.
@@ -56,7 +56,7 @@ class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
         if every_n_batches < 1:
             raise ValueError("every_n_batches must be at least 1.")
         super().__init__()
-        self.output_path = Path(output_path)
+        self.container_path = Path(container_path)
         self.every_n_batches = every_n_batches
         self.input_getter = input_getter
         self.layers_to_save = layers_to_save
@@ -222,8 +222,8 @@ class LayerProfilerCallback(_LightningCallback):  # type: ignore[misc]
             "layer_labels": [str(layer.layer_label) for layer in getattr(log, "layer_list", [])],
         }
         self.records.append(record)
-        self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.output_path.open("a", encoding="utf-8") as file:
+        self.container_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.container_path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(record, sort_keys=True) + "\n")
 
     def _model_input(self, batch: Any) -> Any:

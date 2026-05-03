@@ -7,13 +7,13 @@
   "created_at": "2026-05-01T12:49:08Z",
   "bundle_format": "directory",
   "n_layers": 42,
-  "n_activation_blobs": 42,
-  "n_gradient_blobs": 0,
+  "n_out_blobs": 42,
+  "n_grad_blobs": 0,
   "n_auxiliary_blobs": 0,
   "tensors": [
     {
       "blob_id": "0000000001",
-      "kind": "activation",
+      "kind": "out",
       "label": "input_1:1",
       "relative_path": "blobs/0000000001.safetensors",
       "backend": "safetensors",
@@ -30,7 +30,7 @@
     },
     {
       "blob_id": "0000000002",
-      "kind": "activation",
+      "kind": "out",
       "label": "linear_1_1:1",
       "relative_path": "blobs/0000000002.safetensors",
       "backend": "safetensors",
@@ -47,7 +47,7 @@
     },
     {
       "blob_id": "0000000003",
-      "kind": "activation",
+      "kind": "out",
       "label": "transpose_1_2:1",
       "relative_path": "blobs/0000000003.safetensors",
       "backend": "safetensors",
@@ -64,7 +64,7 @@
     },
     {
       "blob_id": "0000000004",
-      "kind": "activation",
+      "kind": "out",
       "label": "linear_2_3:1",
       "relative_path": "blobs/0000000004.safetensors",
       "backend": "safetensors",
@@ -81,7 +81,7 @@
     },
     {
       "blob_id": "0000000005",
-      "kind": "activation",
+      "kind": "out",
       "label": "unflatten_1_4:1",
       "relative_path": "blobs/0000000005.safetensors",
       "backend": "safetensors",
@@ -99,7 +99,7 @@
     },
     {
       "blob_id": "0000000006",
-      "kind": "activation",
+      "kind": "out",
       "label": "unsqueeze_1_5:1",
       "relative_path": "blobs/0000000006.safetensors",
       "backend": "safetensors",
@@ -118,7 +118,7 @@
     },
     {
       "blob_id": "0000000007",
-      "kind": "activation",
+      "kind": "out",
       "label": "transpose_2_6:1",
       "relative_path": "blobs/0000000007.safetensors",
       "backend": "safetensors",
@@ -137,7 +137,7 @@
     },
     {
       "blob_id": "0000000008",
-      "kind": "activation",
+      "kind": "out",
       "label": "squeeze_1_7:1",
       "relative_path": "blobs/0000000008.safetensors",
       "backend": "safetensors",
@@ -155,7 +155,7 @@
     },
     {
       "blob_id": "0000000009",
-      "kind": "activation",
+      "kind": "out",
       "label": "contiguous_1_8:1",
       "relative_path": "blobs/0000000009.safetensors",
       "backend": "safetensors",
@@ -173,7 +173,7 @@
     },
     {
       "blob_id": "0000000010",
-      "kind": "activation",
+      "kind": "out",
       "label": "getitem_1_9:1",
       "relative_path": "blobs/0000000010.safetensors",
       "backend": "safetensors",
@@ -190,7 +190,7 @@
     },
     {
       "blob_id": "0000000011",
-      "kind": "activation",
+      "kind": "out",
       "label": "getitem_2_10:1",
       "relative_path": "blobs/0000000011.safetensors",
       "backend": "safetensors",
@@ -207,7 +207,7 @@
     },
     {
       "blob_id": "0000000012",
-      "kind": "activation",
+      "kind": "out",
       "label": "getitem_3_11:1",
       "relative_path": "blobs/0000000012.safetensors",
       "backend": "safetensors",
@@ -224,7 +224,7 @@
     },
     {
       "blob_id": "0000000013",
-      "kind": "activation",
+      "kind": "out",
       "label": "view_1_12:1",
       "relative_path": "blobs/0000000013.safetensors",
       "backend": "safetensors",
@@ -241,7 +241,7 @@
     },
     {
       "blob_id": "0000000014",
-      "kind": "activation",
+      "kind": "out",
       "label": "transpose_3_13:1",
       "relative_path": "blobs/0000000014.safetensors",
       "backend": "safetensors",
@@ -258,7 +258,7 @@
     },
     {
       "blob_id": "0000000015",
-      "kind": "activation",
+      "kind": "out",
       "label": "view_2_14:1",
       "relative_path": "blobs/0000000015.safetensors",
       "backend": "safetensors",
@@ -275,7 +275,7 @@
     },
     {
       "blob_id": "0000000016",
-      "kind": "activation",
+      "kind": "out",
       "label": "transpose_4_15:1",
       "relative_path": "blobs/0000000016.safetensors",
       "backend": "safetensors",
@@ -292,7 +292,7 @@
     },
     {
       "blob_id": "0000000017",
-      "kind": "activation",
+      "kind": "out",
       "label": "view_3_16:1",
       "relative_path": "blobs/0000000017.safetensors",
       "backend": "safetensors",
@@ -309,7 +309,7 @@
     },
     {
       "blob_id": "0000000018",
-      "kind": "activation",
+      "kind": "out",
       "label": "transpose_5_17:1",
       "relative_path": "blobs/0000000018.safetensors",
       "backend": "safetensors",
@@ -326,7 +326,7 @@
     },
     {
       "blob_id": "0000000019",
-      "kind": "activation",
+      "kind": "out",
       "label": "view_4_18:1",
       "relative_path": "blobs/0000000019.safetensors",
       "backend": "safetensors",
@@ -344,7 +344,7 @@
     },
     {
       "blob_id": "0000000020",
-      "kind": "activation",
+      "kind": "out",
       "label": "view_5_19:1",
       "relative_path": "blobs/0000000020.safetensors",
       "backend": "safetensors",
@@ -362,7 +362,7 @@
     },
     {
       "blob_id": "0000000021",
-      "kind": "activation",
+      "kind": "out",
       "label": "view_6_20:1",
       "relative_path": "blobs/0000000021.safetensors",
       "backend": "safetensors",
@@ -380,7 +380,7 @@
     },
     {
       "blob_id": "0000000022",
-      "kind": "activation",
+      "kind": "out",
       "label": "scaleddotproductattention_1_21:1",
       "relative_path": "blobs/0000000022.safetensors",
       "backend": "safetensors",
@@ -398,7 +398,7 @@
     },
     {
       "blob_id": "0000000023",
-      "kind": "activation",
+      "kind": "out",
       "label": "permute_1_22:1",
       "relative_path": "blobs/0000000023.safetensors",
       "backend": "safetensors",
@@ -416,7 +416,7 @@
     },
     {
       "blob_id": "0000000024",
-      "kind": "activation",
+      "kind": "out",
       "label": "contiguous_2_23:1",
       "relative_path": "blobs/0000000024.safetensors",
       "backend": "safetensors",
@@ -434,7 +434,7 @@
     },
     {
       "blob_id": "0000000025",
-      "kind": "activation",
+      "kind": "out",
       "label": "view_7_24:1",
       "relative_path": "blobs/0000000025.safetensors",
       "backend": "safetensors",
@@ -450,7 +450,7 @@
     },
     {
       "blob_id": "0000000026",
-      "kind": "activation",
+      "kind": "out",
       "label": "linear_3_25:1",
       "relative_path": "blobs/0000000026.safetensors",
       "backend": "safetensors",
@@ -466,7 +466,7 @@
     },
     {
       "blob_id": "0000000027",
-      "kind": "activation",
+      "kind": "out",
       "label": "view_8_26:1",
       "relative_path": "blobs/0000000027.safetensors",
       "backend": "safetensors",
@@ -483,7 +483,7 @@
     },
     {
       "blob_id": "0000000028",
-      "kind": "activation",
+      "kind": "out",
       "label": "transpose_6_27:1",
       "relative_path": "blobs/0000000028.safetensors",
       "backend": "safetensors",
@@ -500,7 +500,7 @@
     },
     {
       "blob_id": "0000000029",
-      "kind": "activation",
+      "kind": "out",
       "label": "dropout_1_28:1",
       "relative_path": "blobs/0000000029.safetensors",
       "backend": "safetensors",
@@ -517,7 +517,7 @@
     },
     {
       "blob_id": "0000000030",
-      "kind": "activation",
+      "kind": "out",
       "label": "add_1_29:1",
       "relative_path": "blobs/0000000030.safetensors",
       "backend": "safetensors",
@@ -534,7 +534,7 @@
     },
     {
       "blob_id": "0000000031",
-      "kind": "activation",
+      "kind": "out",
       "label": "layernorm_1_30:1",
       "relative_path": "blobs/0000000031.safetensors",
       "backend": "safetensors",
@@ -551,7 +551,7 @@
     },
     {
       "blob_id": "0000000032",
-      "kind": "activation",
+      "kind": "out",
       "label": "linear_4_31:1",
       "relative_path": "blobs/0000000032.safetensors",
       "backend": "safetensors",
@@ -568,7 +568,7 @@
     },
     {
       "blob_id": "0000000033",
-      "kind": "activation",
+      "kind": "out",
       "label": "gelu_1_32:1",
       "relative_path": "blobs/0000000033.safetensors",
       "backend": "safetensors",
@@ -585,7 +585,7 @@
     },
     {
       "blob_id": "0000000034",
-      "kind": "activation",
+      "kind": "out",
       "label": "dropout_2_33:1",
       "relative_path": "blobs/0000000034.safetensors",
       "backend": "safetensors",
@@ -602,7 +602,7 @@
     },
     {
       "blob_id": "0000000035",
-      "kind": "activation",
+      "kind": "out",
       "label": "linear_5_34:1",
       "relative_path": "blobs/0000000035.safetensors",
       "backend": "safetensors",
@@ -619,7 +619,7 @@
     },
     {
       "blob_id": "0000000036",
-      "kind": "activation",
+      "kind": "out",
       "label": "dropout_3_35:1",
       "relative_path": "blobs/0000000036.safetensors",
       "backend": "safetensors",
@@ -636,7 +636,7 @@
     },
     {
       "blob_id": "0000000037",
-      "kind": "activation",
+      "kind": "out",
       "label": "add_2_36:1",
       "relative_path": "blobs/0000000037.safetensors",
       "backend": "safetensors",
@@ -653,7 +653,7 @@
     },
     {
       "blob_id": "0000000038",
-      "kind": "activation",
+      "kind": "out",
       "label": "layernorm_2_37:1",
       "relative_path": "blobs/0000000038.safetensors",
       "backend": "safetensors",
@@ -670,7 +670,7 @@
     },
     {
       "blob_id": "0000000039",
-      "kind": "activation",
+      "kind": "out",
       "label": "layernorm_3_38:1",
       "relative_path": "blobs/0000000039.safetensors",
       "backend": "safetensors",
@@ -687,7 +687,7 @@
     },
     {
       "blob_id": "0000000040",
-      "kind": "activation",
+      "kind": "out",
       "label": "getitem_4_39:1",
       "relative_path": "blobs/0000000040.safetensors",
       "backend": "safetensors",
@@ -703,7 +703,7 @@
     },
     {
       "blob_id": "0000000041",
-      "kind": "activation",
+      "kind": "out",
       "label": "linear_6_40:1",
       "relative_path": "blobs/0000000041.safetensors",
       "backend": "safetensors",
@@ -719,7 +719,7 @@
     },
     {
       "blob_id": "0000000042",
-      "kind": "activation",
+      "kind": "out",
       "label": "output_1:1",
       "relative_path": "blobs/0000000042.safetensors",
       "backend": "safetensors",

@@ -36,7 +36,7 @@ class TensorEntry:
     blob_id:
         Opaque zero-padded blob identifier.
     kind:
-        Logical tensor kind, for example ``"activation"``.
+        Logical tensor kind, for example ``"out"``.
     label:
         Human-readable TorchLens layer label associated with the blob.
     relative_path:
@@ -163,12 +163,12 @@ class Manifest:
         Bundle container format. S4 supports ``"directory"`` only.
     n_layers:
         Total number of ``OpLog`` entries in the saved log.
-    n_activation_blobs:
-        Count of persisted activation tensor blobs.
-    n_gradient_blobs:
-        Count of persisted gradient tensor blobs.
+    n_out_blobs:
+        Count of persisted out tensor blobs.
+    n_grad_blobs:
+        Count of persisted grad tensor blobs.
     n_auxiliary_blobs:
-        Count of persisted non-activation, non-gradient tensor blobs.
+        Count of persisted non-out, non-grad tensor blobs.
     tensors:
         Persisted tensor entries.
     unsupported_tensors:
@@ -183,8 +183,8 @@ class Manifest:
     created_at: str
     bundle_format: str
     n_layers: int
-    n_activation_blobs: int
-    n_gradient_blobs: int
+    n_out_blobs: int
+    n_grad_blobs: int
     n_auxiliary_blobs: int
     tensors: list[TensorEntry]
     unsupported_tensors: list[dict[str, str]]
@@ -212,8 +212,8 @@ class Manifest:
         required_int_fields = (
             "io_format_version",
             "n_layers",
-            "n_activation_blobs",
-            "n_gradient_blobs",
+            "n_out_blobs",
+            "n_grad_blobs",
             "n_auxiliary_blobs",
         )
         required_str_fields = (
@@ -258,8 +258,8 @@ class Manifest:
             created_at=data["created_at"],
             bundle_format=data["bundle_format"],
             n_layers=data["n_layers"],
-            n_activation_blobs=data["n_activation_blobs"],
-            n_gradient_blobs=data["n_gradient_blobs"],
+            n_out_blobs=data["n_out_blobs"],
+            n_grad_blobs=data["n_grad_blobs"],
             n_auxiliary_blobs=data["n_auxiliary_blobs"],
             tensors=tensors,
             unsupported_tensors=unsupported_tensors,
@@ -341,13 +341,13 @@ class Manifest:
             If the declared counts disagree with the tensor entries.
         """
 
-        n_activation_blobs = sum(1 for entry in self.tensors if entry.kind == "activation")
-        n_gradient_blobs = sum(1 for entry in self.tensors if entry.kind == "gradient")
-        n_auxiliary_blobs = len(self.tensors) - n_activation_blobs - n_gradient_blobs
-        if self.n_activation_blobs != n_activation_blobs:
-            raise TorchLensIOError("Manifest n_activation_blobs does not match tensor entries.")
-        if self.n_gradient_blobs != n_gradient_blobs:
-            raise TorchLensIOError("Manifest n_gradient_blobs does not match tensor entries.")
+        n_out_blobs = sum(1 for entry in self.tensors if entry.kind == "out")
+        n_grad_blobs = sum(1 for entry in self.tensors if entry.kind == "grad")
+        n_auxiliary_blobs = len(self.tensors) - n_out_blobs - n_grad_blobs
+        if self.n_out_blobs != n_out_blobs:
+            raise TorchLensIOError("Manifest n_out_blobs does not match tensor entries.")
+        if self.n_grad_blobs != n_grad_blobs:
+            raise TorchLensIOError("Manifest n_grad_blobs does not match tensor entries.")
         if self.n_auxiliary_blobs != n_auxiliary_blobs:
             raise TorchLensIOError("Manifest n_auxiliary_blobs does not match tensor entries.")
 

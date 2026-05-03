@@ -128,7 +128,7 @@ def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.Trace) -> 
 
 
 @pytest.mark.smoke
-def test_site_table_methods_and_getitem_singleton(phase2_log: tl.Trace) -> None:
+def test_site_table_custom_methods_and_getitem_singleton(phase2_log: tl.Trace) -> None:
     """SiteTable exposes sequence, filtering, first, labels, and DataFrame helpers."""
 
     table = phase2_log.find_sites(tl.func("relu"), max_fanout=4)

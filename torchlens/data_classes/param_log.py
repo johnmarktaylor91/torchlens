@@ -1,8 +1,8 @@
 """ParamLog and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters.
 
 ParamLog stores static metadata (address, shape, dtype, trainability) plus
-lazy gradient information.  It does NOT store the parameter tensor itself --
-only a weak-ish reference (``_param_ref``) used solely for lazy gradient
+lazy grad information.  It does NOT store the parameter tensor itself --
+only a weak-ish reference (``_param_ref``) used solely for lazy grad
 access via ``_check_param_grad()``.
 
 **GC concern with _param_ref**: ``_param_ref`` holds a direct reference to
@@ -14,7 +14,7 @@ deletes all ParamLog references.
 
 **Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
 grad_memory) is computed lazily on first access via ``_check_param_grad()``.
-This allows gradients computed after ``trace()`` returns (e.g.
+This allows grads computed after ``trace()`` returns (e.g.
 after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
@@ -54,23 +54,23 @@ class ParamLog:
 
     Captures static parameter identity (address, shape, dtype, trainability)
     and links to the module that owns it.  Does NOT store the parameter tensor
-    itself -- only a ``_param_ref`` reference for lazy gradient access.
+    itself -- only a ``_param_ref`` reference for lazy grad access.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
-        "address": FieldPolicy.KEEP,
+        "module_address": FieldPolicy.KEEP,
         "name": FieldPolicy.KEEP,
         "shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "memory": FieldPolicy.KEEP,
         "trainable": FieldPolicy.KEEP,
-        "module_address": FieldPolicy.KEEP,
+        "address": FieldPolicy.KEEP,
         "module_type": FieldPolicy.KEEP,
         "barcode": FieldPolicy.KEEP,
         "has_optimizer": FieldPolicy.KEEP,
         "_param_ref": FieldPolicy.DROP,
-        "num_passes": FieldPolicy.KEEP,
+        "num_calls": FieldPolicy.KEEP,
         "used_by_layers": FieldPolicy.KEEP,
         "linked_params": FieldPolicy.KEEP,
         "_has_grad": FieldPolicy.KEEP,
@@ -82,14 +82,14 @@ class ParamLog:
 
     def __init__(
         self,
-        address: str,
+        module_address: str,
         name: str,
         shape: Tuple[int, ...],
         dtype: torch.dtype,
         num_params: int,
         memory: int,
         trainable: bool,
-        module_address: str,
+        address: str,
         module_type: str,
         barcode: str,
         has_optimizer: Optional[bool] = None,
@@ -106,13 +106,13 @@ class ParamLog:
         self.barcode = barcode
         self.has_optimizer = has_optimizer
 
-        # Direct reference to the actual nn.Parameter for lazy gradient access.
+        # Direct reference to the actual nn.Parameter for lazy grad access.
         # Prevents GC of the parameter while this ParamLog is alive (acceptable
         # because Trace lifetime <= model lifetime; cleanup() clears it).
         self._param_ref: Optional[torch.nn.Parameter] = None
 
         # Populated during postprocessing:
-        self.num_passes: int = 1  # how many forward passes used this param
+        self.num_calls: int = 1  # how many forward ops used this param
         self.used_by_layers: List[str] = []  # layer labels that used this param
         self.linked_params: List[str] = []  # other param addresses sharing the same tensor
         self._has_grad: bool = False  # one-shot flag: once True, no further checks
@@ -145,9 +145,9 @@ class ParamLog:
         return self.dtype in _QUANTIZED_DTYPES
 
     def _check_param_grad(self) -> None:
-        """Lazily check if the parameter has a gradient and cache the result.
+        """Lazily check if the parameter has a grad and cache the result.
 
-        Called by each grad property on first access.  Once a gradient is
+        Called by each grad property on first access.  Once a grad is
         found, all grad metadata is cached and no further checks are made
         (``_has_grad`` acts as a one-shot flag).
         """
@@ -161,116 +161,116 @@ class ParamLog:
 
     @property
     def has_grad(self) -> bool:
-        """Return whether this parameter currently has a gradient stored.
+        """Return whether this parameter currently has a grad stored.
 
         Returns
         -------
         bool
-            ``True`` when the referenced parameter has a gradient.
+            ``True`` when the referenced parameter has a grad.
         """
         self._check_param_grad()
         return self._has_grad
 
     @has_grad.setter
     def has_grad(self, value: bool) -> None:
-        """Set cached gradient-presence status.
+        """Set cached grad-presence status.
 
         Parameters
         ----------
         value:
-            Cached gradient-presence status.
+            Cached grad-presence status.
         """
         self._has_grad = value
 
     @property
     def grad_shape(self) -> Optional[Tuple[int, ...]]:
-        """Return the gradient tensor shape.
+        """Return the grad tensor shape.
 
         Returns
         -------
         Optional[Tuple[int, ...]]
-            Shape of the gradient tensor, or ``None`` if no gradient exists.
+            Shape of the grad tensor, or ``None`` if no grad exists.
         """
         self._check_param_grad()
         return self._grad_shape
 
     @grad_shape.setter
     def grad_shape(self, value: Optional[Tuple[int, ...]]) -> None:
-        """Set cached gradient tensor shape.
+        """Set cached grad tensor shape.
 
         Parameters
         ----------
         value:
-            Cached gradient tensor shape, or ``None`` when absent.
+            Cached grad tensor shape, or ``None`` when absent.
         """
         self._grad_shape = value
 
     @property
     def grad_dtype(self) -> Optional[torch.dtype]:
-        """Return the gradient tensor dtype.
+        """Return the grad tensor dtype.
 
         Returns
         -------
         Optional[torch.dtype]
-            Dtype of the gradient tensor, or ``None`` if no gradient exists.
+            Dtype of the grad tensor, or ``None`` if no grad exists.
         """
         self._check_param_grad()
         return self._grad_dtype
 
     @grad_dtype.setter
     def grad_dtype(self, value: Optional[torch.dtype]) -> None:
-        """Set cached gradient tensor dtype.
+        """Set cached grad tensor dtype.
 
         Parameters
         ----------
         value:
-            Cached gradient tensor dtype, or ``None`` when absent.
+            Cached grad tensor dtype, or ``None`` when absent.
         """
         self._grad_dtype = value
 
     @property
     def grad_memory(self) -> int:
-        """Return the gradient tensor size in bytes.
+        """Return the grad tensor size in bytes.
 
         Returns
         -------
         int
-            Size of the gradient tensor in bytes.
+            Size of the grad tensor in bytes.
         """
         self._check_param_grad()
         return self._grad_memory
 
     @grad_memory.setter
     def grad_memory(self, value: int) -> None:
-        """Set cached gradient tensor size in bytes.
+        """Set cached grad tensor size in bytes.
 
         Parameters
         ----------
         value:
-            Cached gradient memory amount in bytes.
+            Cached grad memory amount in bytes.
         """
         self._grad_memory = value
 
     @property
     def grad_memory_str(self) -> str:
-        """Return gradient tensor size in human-readable units.
+        """Return grad tensor size in human-readable units.
 
         Returns
         -------
         str
-            Human-readable gradient memory amount.
+            Human-readable grad memory amount.
         """
         self._check_param_grad()
         return self._grad_memory_str
 
     @grad_memory_str.setter
     def grad_memory_str(self, value: str) -> None:
-        """Set cached gradient tensor size in human-readable units.
+        """Set cached grad tensor size in human-readable units.
 
         Parameters
         ----------
         value:
-            Human-readable gradient memory amount.
+            Human-readable grad memory amount.
         """
         self._grad_memory_str = value
 
@@ -284,7 +284,7 @@ class ParamLog:
             f"  size: {self.memory_str}",
             f"  {status}",
             f"  has_grad: {self.has_grad}",
-            f"  module: {self.module_address} ({self.module_type})",
+            f"  module: {self.address} ({self.module_type})",
         ]
         if self.used_by_layers:
             lines.append(f"  used by: {', '.join(self.used_by_layers)}")
@@ -292,12 +292,12 @@ class ParamLog:
             lines.append(f"  linked: {', '.join(self.linked_params)}")
         if self.has_optimizer is not None:
             lines.append(f"  has_optimizer: {self.has_optimizer}")
-        if self.num_passes > 1:
-            lines.append(f"  num_passes: {self.num_passes}")
+        if self.num_calls > 1:
+            lines.append(f"  num_calls: {self.num_calls}")
         return "\n".join(lines)
 
     def release_param_ref(self) -> None:
-        """Cache gradient info, then null _param_ref to allow param GC."""
+        """Cache grad info, then null _param_ref to allow param GC."""
         self._check_param_grad()
         self._param_ref = None
 

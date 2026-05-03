@@ -23,9 +23,9 @@ def per_layer(
     Parameters
     ----------
     log:
-        TorchLens ``Trace`` containing saved activations.
+        TorchLens ``Trace`` containing saved outs.
     benchmark:
-        Callable benchmark accepting ``(activation, layer=..., **kwargs)``.
+        Callable benchmark accepting ``(out, layer=..., **kwargs)``.
     sites:
         Optional iterable of layer labels/selectors to score. Defaults to all
         saved tensor layers except input placeholders.
@@ -48,11 +48,11 @@ def per_layer(
 
     scores: dict[str, Any] = {}
     for layer in tensor_layers(log, sites):
-        activation = getattr(layer, "activation")
+        out = getattr(layer, "out")
         label = str(getattr(layer, "layer_label", getattr(layer, "layer_label_no_pass", "layer")))
         # TODO: connect the real Brain-Score Benchmark API once the offline
         # vendored fixtures are available in the launch extras matrix.
-        scores[label] = benchmark(activation, layer=label, **kwargs)
+        scores[label] = benchmark(out, layer=label, **kwargs)
     return scores
 
 

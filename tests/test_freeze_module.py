@@ -7,7 +7,7 @@ import torch
 import torchlens as tl
 
 
-def test_freeze_module_restores_requires_grad_and_gradients() -> None:
+def test_freeze_module_restores_has_trainable_params_and_grads() -> None:
     """``freeze_module`` should restore parameter training state."""
 
     layer = torch.nn.Linear(2, 2)
@@ -15,10 +15,10 @@ def test_freeze_module_restores_requires_grad_and_gradients() -> None:
         parameter.grad = torch.ones_like(parameter)
 
     with tl.experimental.freeze_module(layer):
-        assert all(not parameter.requires_grad for parameter in layer.parameters())
+        assert all(not parameter.has_trainable_params for parameter in layer.parameters())
         assert all(parameter.grad is None for parameter in layer.parameters())
 
-    assert all(parameter.requires_grad for parameter in layer.parameters())
+    assert all(parameter.has_trainable_params for parameter in layer.parameters())
     assert all(parameter.grad is not None for parameter in layer.parameters())
 
 

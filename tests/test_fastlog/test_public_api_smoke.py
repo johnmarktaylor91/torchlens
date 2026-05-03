@@ -88,7 +88,7 @@ def test_recorder_context_records_multiple_forwards() -> None:
         for _ in range(5):
             recorder.log(torch.ones(1, 3))
 
-    assert recorder.recording.n_passes == 5
+    assert recorder.recording.n_ops == 5
 
 
 def test_direct_model_call_inside_recorder_block_does_not_capture() -> None:

@@ -18,8 +18,8 @@
 
 ## Attribute Conventions
 - `tl_` prefix on tensor/module attributes during logging.
-- Permanent attrs: `tl_module_address`, `tl_module_type`, forward wrapper markers.
-- Session attrs: `tl_source_trace`, `tl_module_pass_num`, buffer labels, temporary counters.
+- Permanent attrs: `tl_address`, `tl_module_type`, forward wrapper markers.
+- Session attrs: `tl_source_trace`, `tl_module_call_index`, buffer labels, temporary counters.
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state.
 
 ## Public Surface
@@ -45,7 +45,7 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 8. Portable I/O must reject unsafe paths/symlinks and unsupported tensor variants.
 
 ## Newer 2.x Subsystems
-- `_io/` and `io/`: portable save/load, `.tlspec` manifests, lazy activation refs, rehydration.
+- `_io/` and `io/`: portable save/load, `.tlspec` manifests, lazy out refs, rehydration.
 - `intervention/`: Bundle, sites/selectors, hooks, helpers, replay/rerun/fork/save.
 - `fastlog/`: sparse `Recording` path, predicate normalization, RAM/disk storage.
 - `bridge/`: lazy optional adapters for external tools.
@@ -60,7 +60,7 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
   `conditional_events`, runs backward flood, attributes forward arm edges, then derives
   legacy THEN/ELIF/ELSE views.
 - Primary structures are `Trace.conditional_events`, `conditional_arm_edges`,
-  `conditional_edge_passes`, and `cond_branch_children_by_cond`.
+  `conditional_edge_ops`, and `cond_branch_children_by_cond`.
 - Graphviz renders IF/THEN/ELIF/ELSE labels; ELK and dagua conditional support remains more
   limited than Graphviz.
 

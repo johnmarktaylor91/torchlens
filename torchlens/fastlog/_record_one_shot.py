@@ -33,10 +33,10 @@ def record(
     return_output: bool = False,
     postprocess: str = "none",
     random_seed: int | None = None,
-    activation_transform: ActivationPostfunc | None = None,
-    save_raw_activation: bool = True,
+    out_transform: ActivationPostfunc | None = None,
+    save_raw_outs: bool = True,
     train_mode: bool = False,
-    activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+    out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
 ) -> Recording | tuple[Any, Recording]:
     """Record one model forward pass with fastlog predicates.
 
@@ -52,12 +52,12 @@ def record(
     include_source_events, max_predicate_failures, on_predicate_error, streaming,
     random_seed:
         Fastlog recording options.
-    activation_transform:
-        Optional callable applied to each retained activation copy after
+    out_transform:
+        Optional callable applied to each retained out copy after
         dtype/device transforms. Errors propagate as
         :class:`torchlens.TorchLensPostfuncError`.
-    save_raw_activation:
-        When ``False`` and ``activation_transform`` is set, only transformed
+    save_raw_outs:
+        When ``False`` and ``out_transform`` is set, only transformed
         payloads are retained. Defaults to ``True`` to mirror the slow path.
     train_mode:
         If True, omitted defaults are promoted to keep-grad capture specs.
@@ -74,13 +74,11 @@ def record(
 
     reject_compiled_model(model, api_name="torchlens.fastlog.record")
     validate_postprocess(postprocess)
-    if activation_postfunc is not MISSING:
-        if activation_transform is not None:
-            raise TypeError(
-                "kwarg activation_postfunc deprecated, use activation_transform; do not pass both"
-            )
-        warn_deprecated_alias("activation_postfunc", "activation_transform")
-        activation_transform = cast(ActivationPostfunc | None, activation_postfunc)
+    if out_postfunc is not MISSING:
+        if out_transform is not None:
+            raise TypeError("kwarg out_postfunc deprecated, use out_transform; do not pass both")
+        warn_deprecated_alias("out_postfunc", "out_transform")
+        out_transform = cast(ActivationPostfunc | None, out_postfunc)
     with Recorder(
         model,
         keep_op=keep_op,
@@ -93,8 +91,8 @@ def record(
         on_predicate_error=on_predicate_error,
         streaming=streaming,
         random_seed=random_seed,
-        activation_transform=activation_transform,
-        save_raw_activation=save_raw_activation,
+        out_transform=out_transform,
+        save_raw_outs=save_raw_outs,
         train_mode=train_mode,
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)

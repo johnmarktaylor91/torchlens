@@ -47,11 +47,11 @@ class VisualizationOverrides:
     Attributes:
         graph: Overrides for the top-level graph (e.g. rankdir, bgcolor).
         edge: Overrides for data-flow edges.
-        gradient_edge: Overrides for gradient-flow edges.
+        grad_edge: Overrides for grad-flow edges.
         module: Overrides for module subgraph clusters (e.g. label style).
     """
 
     graph: dict[str, Any] | None = None
     edge: dict[str, Any] | None = None
-    gradient_edge: dict[str, Any] | None = None
+    grad_edge: dict[str, Any] | None = None
     module: dict[str, Any] | None = None

@@ -46,7 +46,7 @@ def _input() -> torch.Tensor:
 def _capture_summary(log: Any) -> tuple[list[str], int]:
     """Return stable fields for comparing captures."""
 
-    return (list(log.layer_logs.keys()), int(log.num_tensors_saved))
+    return (list(log.layer_logs.keys()), int(log.num_saved_ops))
 
 
 def test_trace_capture_options_equivalent_to_individual_kwargs() -> None:
@@ -88,8 +88,8 @@ def test_trace_save_conflict_raises() -> None:
         tl.trace(
             _TinyModel(),
             _input(),
-            save=SaveOptions(save_raw_activation=True),
-            save_raw_activation=False,
+            save=SaveOptions(save_raw_outs=True),
+            save_raw_outs=False,
         )
 
 

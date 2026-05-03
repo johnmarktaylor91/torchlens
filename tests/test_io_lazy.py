@@ -1,4 +1,4 @@
-"""Tests for lazy activation refs, drift checks, and nested rehydration."""
+"""Tests for lazy out refs, drift checks, and nested rehydration."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def _build_log(
     Returns
     -------
     Trace
-        Logged forward pass with all activations saved.
+        Logged forward pass with all outs saved.
     """
 
     torch.manual_seed(seed)
@@ -87,7 +87,7 @@ def _save_bundle(
     seed: int = 0,
     save_function_args: bool = False,
     save_rng_states: bool = False,
-    include_captured_args: bool = False,
+    include_saved_args: bool = False,
     include_rng_states: bool = False,
     path_name: str = "bundle.tl",
 ) -> tuple[Path, Trace]:
@@ -103,7 +103,7 @@ def _save_bundle(
         Whether function arguments should be captured in the source log.
     save_rng_states:
         Whether RNG state tensors should be captured in the source log.
-    include_captured_args:
+    include_saved_args:
         Whether nested captured args should be persisted in the bundle.
     include_rng_states:
         Whether nested RNG-state tensors should be persisted in the bundle.
@@ -125,7 +125,7 @@ def _save_bundle(
     save(
         trace,
         bundle_path,
-        include_captured_args=include_captured_args,
+        include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
     )
     return bundle_path, trace
@@ -145,7 +145,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_activations)
+    return next(layer for layer in trace.layer_list if layer.has_saved_outs)
 
 
 def _read_manifest(bundle_path: Path) -> dict[str, Any]:
@@ -234,10 +234,10 @@ def test_lazy_ref_metadata_access_does_not_materialize(
     restored = load(bundle_path, lazy=True)
     layer = _first_saved_layer(restored)
     live_layer = _first_saved_layer(live_log)
-    ref = layer.activation_ref
+    ref = layer.out_ref
 
     assert ref is not None
-    assert isinstance(live_layer.activation, torch.Tensor)
+    assert isinstance(live_layer.out, torch.Tensor)
 
     def _fail(*_: Any, **__: Any) -> Any:
         raise AssertionError("filesystem access should not occur")
@@ -245,9 +245,9 @@ def test_lazy_ref_metadata_access_does_not_materialize(
     monkeypatch.setattr("torchlens._io.lazy.sha256_of_file", _fail)
     monkeypatch.setattr("torchlens._io.lazy.load_file", _fail)
 
-    assert ref.shape == tuple(layer.tensor_shape)
-    assert ref.dtype == layer.tensor_dtype
-    assert ref.device_at_save == str(live_layer.activation.device)
+    assert ref.shape == tuple(layer.shape)
+    assert ref.dtype == layer.dtype
+    assert ref.device_at_save == str(live_layer.out.device)
 
 
 def test_lazy_materialize_matches_eager_load_bit_exactly(tmp_path: Path) -> None:
@@ -260,9 +260,9 @@ def test_lazy_materialize_matches_eager_load_bit_exactly(tmp_path: Path) -> None
     eager_layer = _first_saved_layer(eager_log)
     lazy_layer = _first_saved_layer(lazy_log)
 
-    eager_tensor = eager_layer.activation
+    eager_tensor = eager_layer.out
     assert isinstance(eager_tensor, torch.Tensor)
-    lazy_tensor = lazy_layer.materialize_activation()
+    lazy_tensor = lazy_layer.materialize_out()
 
     assert torch.equal(lazy_tensor, eager_tensor)
 
@@ -277,7 +277,7 @@ def test_lazy_materialize_honors_cuda_map_location(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True)
     layer = _first_saved_layer(lazy_log)
 
-    tensor = layer.materialize_activation(map_location="cuda")
+    tensor = layer.materialize_out(map_location="cuda")
 
     assert tensor.device.type == "cuda"
 
@@ -316,38 +316,38 @@ def test_lazy_resave_fast_copy_produces_valid_bundle(tmp_path: Path) -> None:
     save(lazy_log, resaved_path)
     restored = load(resaved_path, lazy=False)
 
-    live_tensor = _first_saved_layer(live_log).activation
-    restored_tensor = _first_saved_layer(restored).activation
+    live_tensor = _first_saved_layer(live_log).out
+    restored_tensor = _first_saved_layer(restored).out
 
     assert isinstance(live_tensor, torch.Tensor)
     assert isinstance(restored_tensor, torch.Tensor)
     assert torch.equal(restored_tensor, live_tensor)
 
 
-def test_rehydrate_nested_materializes_captured_args_blob_refs(tmp_path: Path) -> None:
+def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> None:
     """``rehydrate_nested`` should replace nested captured-arg refs with tensors."""
 
     bundle_path, _ = _save_bundle(
         tmp_path,
         save_function_args=True,
-        include_captured_args=True,
-        path_name="captured_args.tl",
+        include_saved_args=True,
+        path_name="saved_args.tl",
     )
     lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
     layer = next(
         layer
         for layer in lazy_log.layer_list
-        if layer.args_captured
-        and layer.captured_args is not None
-        and _contains_blob_ref(layer.captured_args)
+        if layer.has_saved_args
+        and layer.saved_args is not None
+        and _contains_blob_ref(layer.saved_args)
     )
 
-    assert _contains_blob_ref(layer.captured_args)
+    assert _contains_blob_ref(layer.saved_args)
 
     rehydrate_nested(lazy_log)
 
-    assert not _contains_blob_ref(layer.captured_args)
-    assert any(isinstance(arg, torch.Tensor) for arg in layer.captured_args)
+    assert not _contains_blob_ref(layer.saved_args)
+    assert any(isinstance(arg, torch.Tensor) for arg in layer.saved_args)
 
 
 def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
@@ -356,8 +356,8 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
     bundle_path, _ = _save_bundle(
         tmp_path,
         save_function_args=True,
-        include_captured_args=True,
-        path_name="captured_args.tl",
+        include_saved_args=True,
+        path_name="saved_args.tl",
     )
     lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
 
@@ -365,7 +365,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
         TorchLensIOError,
         match="Call torchlens.rehydrate_nested\\(trace\\) before saving",
     ):
-        save(lazy_log, tmp_path / "resaved.tl", include_captured_args=True)
+        save(lazy_log, tmp_path / "resaved.tl", include_saved_args=True)
 
 
 def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
@@ -377,9 +377,9 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
         tmp_path,
         save_function_args=True,
         save_rng_states=True,
-        include_captured_args=True,
+        include_saved_args=True,
         include_rng_states=True,
-        path_name="captured_args_and_rng.tl",
+        path_name="saved_args_and_rng.tl",
     )
     lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
     resaved_path = tmp_path / "resaved_without_nested_fields.tl"
@@ -387,7 +387,7 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
     save(
         lazy_log,
         resaved_path,
-        include_captured_args=False,
+        include_saved_args=False,
         include_rng_states=False,
     )
     restored = load(resaved_path, lazy=False)
@@ -396,7 +396,7 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
 
 
 @pytest.mark.parametrize("lazy", [False, True])
-@pytest.mark.parametrize("method_name", ["validate_forward_pass", "validate_saved_activations"])
+@pytest.mark.parametrize("method_name", ["validate_forward_pass", "validate_saved_outs"])
 def test_portable_loaded_logs_reject_validation_entry_points(
     tmp_path: Path,
     lazy: bool,
@@ -421,7 +421,7 @@ def test_lazy_materialize_does_not_leak_file_descriptors(tmp_path: Path) -> None
 
     bundle_path, _ = _save_bundle(tmp_path)
     lazy_log = load(bundle_path, lazy=True)
-    ref = _first_saved_layer(lazy_log).activation_ref
+    ref = _first_saved_layer(lazy_log).out_ref
     assert ref is not None
 
     before = len(list(fd_dir.iterdir()))

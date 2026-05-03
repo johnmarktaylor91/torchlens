@@ -44,7 +44,7 @@ def _build_trace(seed: int = 0) -> Trace:
     Returns
     -------
     Trace
-        Logged forward pass with saved activations.
+        Logged forward pass with saved outs.
     """
 
     torch.manual_seed(seed)
@@ -67,7 +67,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_activations)
+    return next(layer for layer in trace.layer_list if layer.has_saved_outs)
 
 
 def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
@@ -86,7 +86,7 @@ def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
     assert len(restored.layer_list) == len(trace.layer_list)
     assert restored[restored.output_layers[0]].layer_label == restored.output_layers[0]
     assert restored.layer_list[0].source_trace is restored
-    assert isinstance(_first_saved_layer(restored).activation, torch.Tensor)
+    assert isinstance(_first_saved_layer(restored).out, torch.Tensor)
 
 
 def test_old_style_pickle_without_io_format_version_warns_and_remains_usable(
@@ -128,15 +128,15 @@ def test_old_style_pickle_without_io_format_version_warns_and_remains_usable(
     assert isinstance(restored, Trace)
     assert restored[restored.output_layers[0]].layer_label == restored.output_layers[0]
     assert restored.layer_list[0].source_trace is restored
-    assert isinstance(_first_saved_layer(restored).activation, torch.Tensor)
+    assert isinstance(_first_saved_layer(restored).out, torch.Tensor)
 
 
-def test_plain_pickle_preserves_in_memory_activations(tmp_path: Path) -> None:
-    """Plain pickles should keep activations resident rather than turning them into refs."""
+def test_plain_pickle_preserves_in_memory_outs(tmp_path: Path) -> None:
+    """Plain pickles should keep outs resident rather than turning them into refs."""
 
     trace = _build_trace()
     source_layer = _first_saved_layer(trace)
-    assert isinstance(source_layer.activation, torch.Tensor)
+    assert isinstance(source_layer.out, torch.Tensor)
 
     pickle_path = tmp_path / "in_memory_trace.pkl"
     with pickle_path.open("wb") as handle:
@@ -145,6 +145,6 @@ def test_plain_pickle_preserves_in_memory_activations(tmp_path: Path) -> None:
         restored = pickle.load(handle)
 
     restored_layer = _first_saved_layer(restored)
-    assert isinstance(restored_layer.activation, torch.Tensor)
-    assert restored_layer.activation_ref is None
-    assert torch.equal(restored_layer.activation, source_layer.activation)
+    assert isinstance(restored_layer.out, torch.Tensor)
+    assert restored_layer.out_ref is None
+    assert torch.equal(restored_layer.out, source_layer.out)

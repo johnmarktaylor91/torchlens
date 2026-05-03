@@ -19,7 +19,7 @@ class CaptureSpec:
 
     Parameters
     ----------
-    save_activation:
+    save_out:
         Whether tensor payloads should be retained for this event.
     save_metadata:
         Whether non-payload metadata should be retained for this event.
@@ -31,7 +31,7 @@ class CaptureSpec:
         Optional target dtype for retained payloads.
     """
 
-    save_activation: bool = True
+    save_out: bool = True
     save_metadata: bool = True
     keep_grad: bool = False
     device: torch.device | str | None = None
@@ -53,7 +53,7 @@ class StorageIntent:
 class ModuleStackFrame:
     """One frame in the active module stack."""
 
-    module_address: str
+    address: str
     module_type: str
     module_id: int
     pass_index: int
@@ -70,10 +70,10 @@ class RecordContext:
     event_index: int
     op_index: int | None
     layer_type: str | None
-    layer_type_num: int | None
-    creation_order: int | None
+    type_index: int | None
+    creation_index: int | None
     func_name: str | None
-    module_address: str | None
+    address: str | None
     module_type: str | None
     module_pass_index: int | None
     module_stack: tuple[ModuleStackFrame, ...]
@@ -81,8 +81,8 @@ class RecordContext:
     recent_ops: tuple["RecordContext", ...]
     parent_labels: tuple[str, ...]
     input_output_address: str | None
-    tensor_shape: tuple[int, ...] | None
-    tensor_dtype: torch.dtype | None
+    shape: tuple[int, ...] | None
+    dtype: torch.dtype | None
     tensor_device: torch.device | None
     tensor_requires_grad: bool | None
     output_index: int | None
@@ -120,18 +120,18 @@ class ActivationRecord:
     spec:
         Resolved capture policy for this record.
     ram_payload:
-        Raw activation copy retained in memory, or ``None`` when not stored
+        Raw out copy retained in memory, or ``None`` when not stored
         either because the record is metadata-only or the caller opted out
-        via ``save_raw_activation=False``.
+        via ``save_raw_outs=False``.
     disk_payload:
-        Raw activation copy persisted to disk, or ``None`` when no disk
+        Raw out copy persisted to disk, or ``None`` when no disk
         target is active or the caller opted out via
-        ``save_raw_activation=False``.
+        ``save_raw_outs=False``.
     transformed_ram_payload:
-        Output of ``activation_postfunc`` retained in memory. ``None`` when
+        Output of ``out_postfunc`` retained in memory. ``None`` when
         no postfunc is configured for the recording.
     transformed_disk_payload:
-        Output of ``activation_postfunc`` persisted to disk. ``None`` when
+        Output of ``out_postfunc`` persisted to disk. ``None`` when
         no postfunc is configured for the recording.
     metadata:
         Auxiliary record metadata, including disk blob entries when present.
@@ -237,7 +237,7 @@ class RecordingTrace:
             )
             result = predicate(ctx) if predicate is not None else False
             spec = _normalize_capture_decision(result, ctx, False)
-            decisions.append(spec.save_activation or spec.save_metadata)
+            decisions.append(spec.save_out or spec.save_metadata)
         return RecordingTrace(
             contexts=self.contexts,
             decisions=tuple(decisions),
@@ -252,24 +252,24 @@ class Recording:
     records: list[ActivationRecord]
     by_pass: dict[int, list[int]]
     by_label: dict[str, list[tuple[int, int]]]
-    by_module_address: dict[str, list[int]]
+    by_address: dict[str, list[int]]
     bundle_path: Path | None
-    n_passes: int
+    n_ops: int
     n_records: int
-    pass_start_times: list[float]
-    pass_end_times: list[float]
+    start_times: list[float]
+    end_times: list[float]
     predicate_failures: list[PredicateFailure]
     predicate_failure_overflow_count: int
     keep_op_repr: str | None
     keep_module_repr: str | None
     history_size: int
-    activation_postfunc_repr: str | None = None
+    _out_transform_repr: str | None = None
     recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
 
     @property
-    def activation_transform_repr(self) -> str | None:
-        """Canonical repr for the activation transform callable.
+    def out_transform_repr(self) -> str | None:
+        """Canonical repr for the out transform callable.
 
         Returns
         -------
@@ -277,7 +277,7 @@ class Recording:
             Callable repr captured at recording time, if any.
         """
 
-        return self.activation_postfunc_repr
+        return self._out_transform_repr
 
     def __getitem__(self, key: int | str) -> ActivationRecord | list[ActivationRecord]:
         """Return records by integer index or raw/final label."""
@@ -288,7 +288,7 @@ class Recording:
         return [self.records[index] for _, index in indexes]
 
     def __iter__(self) -> Iterator[ActivationRecord]:
-        """Iterate over retained activation records."""
+        """Iterate over retained out records."""
 
         return iter(self.records)
 
@@ -297,10 +297,10 @@ class Recording:
 
         return len(self.records)
 
-    def iter_pass(self, pass_num: int) -> Iterator[ActivationRecord]:
+    def iter_pass(self, call_index: int) -> Iterator[ActivationRecord]:
         """Iterate over records retained for one pass."""
 
-        for index in self.by_pass.get(pass_num, []):
+        for index in self.by_pass.get(call_index, []):
             yield self.records[index]
 
     def to_pandas(self) -> Any:
@@ -319,7 +319,7 @@ class Recording:
                 "label": record.ctx.label,
                 "pass_index": record.ctx.pass_index,
                 "event_index": record.ctx.event_index,
-                "save_activation": record.spec.save_activation,
+                "save_out": record.spec.save_out,
                 "save_metadata": record.spec.save_metadata,
             }
             for record in self.records
@@ -329,7 +329,7 @@ class Recording:
     def summary(self) -> str:
         """Return a concise human-readable recording summary."""
 
-        return f"Recording(n_passes={self.n_passes}, n_records={len(self.records)})"
+        return f"Recording(n_ops={self.n_ops}, n_records={len(self.records)})"
 
     def enrich(self, steps: list[str] | str) -> "Recording":
         """Return a new recording with requested incremental enrichments.

@@ -79,12 +79,12 @@ class BranchModel(torch.nn.Module):
         return torch.sigmoid(x)
 
 
-def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
-    """Return a zeroed activation.
+def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    """Return a zeroed out.
 
     Parameters
     ----------
-    activation:
+    out:
         Activation passed to the hook.
     hook:
         Hook context supplied by TorchLens.
@@ -92,11 +92,11 @@ def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Zeroed activation.
+        Zeroed out.
     """
 
     del hook
-    return activation * 0
+    return out * 0
 
 
 def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
@@ -138,12 +138,12 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
 
 
 @pytest.mark.smoke
-def test_rerun_with_hook_updates_downstream_activation() -> None:
+def test_rerun_with_hook_updates_downstream_out() -> None:
     """Rerun installs the active spec so live hooks affect downstream output."""
 
     x = torch.tensor([[-1.0, 2.0, 3.0]])
     log = _capture(ReluAdd(), x)
-    original_output = log[log.output_layers[0]].activation.clone()
+    original_output = log[log.output_layers[0]].out.clone()
     log._intervention_spec = InterventionSpec(
         targets=[TargetSpec("func", "relu")],
         hook=_zero_hook,
@@ -152,10 +152,10 @@ def test_rerun_with_hook_updates_downstream_activation() -> None:
     log.rerun(ReluAdd(), x)
 
     relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
-    assert torch.equal(relu_site.activation, torch.zeros_like(relu_site.activation))
-    assert torch.equal(log[log.output_layers[0]].activation, torch.ones_like(original_output))
-    assert not torch.equal(log[log.output_layers[0]].activation, original_output)
-    assert relu_site.intervention_log[-1].engine == "live"
+    assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
+    assert torch.equal(log[log.output_layers[0]].out, torch.ones_like(original_output))
+    assert not torch.equal(log[log.output_layers[0]].out, original_output)
+    assert relu_site.interventions[-1].engine == "live"
 
 
 @pytest.mark.smoke
@@ -223,11 +223,11 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     log.operation_history = history
     log._warned_direct_write = True
     log._warned_mutate_in_place = True
-    log.source_model_id = 123
-    log.source_model_class = "kept.Model"
-    log.weight_fingerprint_at_capture = "weights-a"
-    log.weight_fingerprint_full = "weights-full"
-    log.input_id_at_capture = 456
+    log.model_id = 123
+    log.model_class = "kept.Model"
+    log.param_hash_quick = "weights-a"
+    log.param_hash_full = "weights-full"
+    log.input_id = 456
     log.input_shape_hash = "input-hash"
     log.is_appended = True
     log.relationship_evidence = {"model": Relationship.SAME_OBJECT}
@@ -241,11 +241,11 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     assert log.operation_history is history
     assert log._warned_direct_write is True
     assert log._warned_mutate_in_place is True
-    assert log.source_model_id == 123
-    assert log.source_model_class == "kept.Model"
-    assert log.weight_fingerprint_at_capture == "weights-a"
-    assert log.weight_fingerprint_full == "weights-full"
-    assert log.input_id_at_capture == 456
+    assert log.model_id == 123
+    assert log.model_class == "kept.Model"
+    assert log.param_hash_quick == "weights-a"
+    assert log.param_hash_full == "weights-full"
+    assert log.input_id == 456
     assert log.input_shape_hash == "input-hash"
     assert log.is_appended is True
     assert log.relationship_evidence == {"model": Relationship.SAME_OBJECT}

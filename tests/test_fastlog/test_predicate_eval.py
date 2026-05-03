@@ -37,14 +37,14 @@ def test_normalize_capture_decision_bool_and_none_rules() -> None:
     """Boolean and None returns normalize according to the slot default."""
 
     ctx = _ctx()
-    default = CaptureSpec(save_activation=True, save_metadata=False, keep_grad=True)
+    default = CaptureSpec(save_out=True, save_metadata=False, keep_grad=True)
 
     keep = _normalize_capture_decision(True, ctx, default)
     skip = _normalize_capture_decision(False, ctx, default)
     inherited = _normalize_capture_decision(None, ctx, default)
 
-    assert keep == CaptureSpec(save_activation=True, save_metadata=True, keep_grad=True)
-    assert skip == CaptureSpec(save_activation=False, save_metadata=False)
+    assert keep == CaptureSpec(save_out=True, save_metadata=True, keep_grad=True)
+    assert skip == CaptureSpec(save_out=False, save_metadata=False)
     assert inherited is default
 
 
@@ -52,7 +52,7 @@ def test_normalize_capture_decision_accepts_capture_spec() -> None:
     """CaptureSpec returns pass through unchanged."""
 
     ctx = _ctx()
-    spec = CaptureSpec(save_activation=False, save_metadata=True)
+    spec = CaptureSpec(save_out=False, save_metadata=True)
 
     assert _normalize_capture_decision(spec, ctx, False) is spec
 
@@ -80,9 +80,9 @@ def test_evaluate_keep_op_and_module_use_predicates_and_defaults() -> None:
         default_module=True,
     )
 
-    assert _evaluate_keep_op(ctx, options).save_activation is True
+    assert _evaluate_keep_op(ctx, options).save_out is True
     assert _evaluate_keep_module(ctx, options) == CaptureSpec(
-        save_activation=True,
+        save_out=True,
         save_metadata=True,
     )
 
@@ -93,7 +93,7 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
     tensor = torch.ones(2, 3)
     module_stack = (
         ModuleStackFrame(
-            module_address="encoder",
+            address="encoder",
             module_type="Linear",
             module_id=123,
             pass_index=1,
@@ -102,9 +102,9 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
     op_data = {
         "label": "relu_1_2_raw",
         "raw_label": "relu_1_2_raw",
-        "creation_order": 2,
+        "creation_index": 2,
         "func_name": "relu",
-        "module_address": "encoder",
+        "address": "encoder",
         "module_type": "Linear",
         "module_pass_index": 1,
         "parent_labels": ("input_1_raw",),

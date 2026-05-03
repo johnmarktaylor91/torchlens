@@ -53,9 +53,9 @@ def main() -> None:
     edited = log.fork("generation_patch")
     edited.attach_hooks(tl.label(first_relu), tl.zero_ablate()).replay()
 
-    assert edited.layer_list[-1].activation.shape == (2, 3, 4)
+    assert edited.layer_list[-1].out.shape == (2, 3, 4)
     assert edited.last_run_records()[-1].site_label == first_relu
-    assert not torch.allclose(log.layer_list[-1].activation, edited.layer_list[-1].activation)
+    assert not torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
 
 
 if __name__ == "__main__":

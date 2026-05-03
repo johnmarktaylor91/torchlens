@@ -139,7 +139,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_activations)
+    return next(layer for layer in trace.layer_list if layer.has_saved_outs)
 
 
 def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> None:
@@ -161,7 +161,7 @@ def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> Non
         TorchLensIOError,
         match=rf"Failed to materialize blob at {re.escape(str(blob_path))}\.",
     ):
-        layer.materialize_activation()
+        layer.materialize_out()
 
 
 def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:
@@ -212,10 +212,10 @@ def test_stale_blob_counts_raise_with_count_field(tmp_path: Path) -> None:
 
     bundle_path = _save_bundle(tmp_path)
     manifest = _read_manifest(bundle_path)
-    manifest["n_activation_blobs"] += 1
+    manifest["n_out_blobs"] += 1
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match=r"n_activation_blobs"):
+    with pytest.raises(TorchLensIOError, match=r"n_out_blobs"):
         load(bundle_path)
 
 

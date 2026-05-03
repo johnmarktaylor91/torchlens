@@ -15,8 +15,8 @@ EXPECTED_MODELLOG_METHODS = {
     "to_csv",
     "to_parquet",
     "to_json",
-    "save_new_activations",
-    "validate_saved_activations",
+    "save_new_outs",
+    "validate_saved_outs",
     "validate_forward_pass",
     "check_metadata_invariants",
     "cleanup",
@@ -38,13 +38,15 @@ def test_modellog_has_no_class_body_attribute_rebindings() -> None:
     assert class_defs, "Trace class not found"
 
     trace_class = class_defs[0]
-    defined_methods = {
+    defined_custom_methods = {
         node.name
         for node in trace_class.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
-    missing_methods = EXPECTED_MODELLOG_METHODS - defined_methods
-    assert not missing_methods, f"Trace is missing explicit defs: {sorted(missing_methods)}"
+    missing_custom_methods = EXPECTED_MODELLOG_METHODS - defined_custom_methods
+    assert not missing_custom_methods, (
+        f"Trace is missing explicit defs: {sorted(missing_custom_methods)}"
+    )
 
     for body_node in trace_class.body:
         if isinstance(body_node, ast.Assign) and isinstance(body_node.value, ast.Name):

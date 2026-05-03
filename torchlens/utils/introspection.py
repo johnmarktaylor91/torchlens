@@ -20,7 +20,7 @@ from torch import nn
 # These are all tensor properties that either:
 #   - trigger deprecation warnings (.T, .H, .mT on non-2D tensors), or
 #   - return views that would create duplicate tensor entries (.real, .imag).
-# "grad" is also excluded (via substring check) to avoid pulling in gradient
+# "grad" is also excluded (via substring check) to avoid pulling in grad
 # tensors, which are tracked separately.
 _ATTR_SKIP_SET = frozenset({"T", "mT", "real", "imag", "H"})
 
@@ -321,7 +321,7 @@ def _extend_search_stack_from_item(
         #   - Skip dunders (__*) — internal Python machinery
         #   - Skip _ATTR_SKIP_SET (.T, .mT, .H, .real, .imag) — trigger
         #     deprecation warnings or create duplicate tensor views
-        #   - Skip anything containing "grad" — gradient tensors tracked separately
+        #   - Skip anything containing "grad" — grad tensors tracked separately
         _state._dir_cache[obj_type] = [
             a
             for a in dir(item)
@@ -341,7 +341,7 @@ def _extend_search_stack_from_item(
         # Leaf primitives — can't contain tensors.
         if attr_cls in [str, int, float, bool, np.ndarray]:
             continue
-        # Skip callables (methods, functions) UNLESS they're nn.Modules,
+        # Skip callables (custom_methods, functions) UNLESS they're nn.Modules,
         # which are callable but may hold tensor attributes.
         if callable(attr) and not issubclass(attr_cls, nn.Module):
             continue
@@ -360,7 +360,7 @@ def _extend_search_stack_from_item(
 def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
     """Collect a named ``tl_``-prefixed attribute from each tensor that has it.
 
-    Used to extract logging metadata (e.g. ``tl_tensor_label_raw``) from a
+    Used to extract logging metadata (e.g. ``tl__label_raw``) from a
     list of tensors that may or may not have been tagged by the logging pipeline.
 
     Args:

@@ -45,7 +45,7 @@ class Extractor:
         Returns
         -------
         dict[str, torch.Tensor]
-            Mapping from layer names to activations.
+            Mapping from layer names to outs.
         """
 
         from torchlens import extract
@@ -63,7 +63,7 @@ class Extractor:
         Returns
         -------
         dict[str, torch.Tensor]
-            Mapping from layer names to activations.
+            Mapping from layer names to outs.
         """
 
         return self(x)

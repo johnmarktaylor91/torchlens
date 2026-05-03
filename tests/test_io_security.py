@@ -184,16 +184,16 @@ def test_lazy_materialize_rejects_tampered_relative_path(tmp_path: Path) -> None
 
     bundle_path = _build_bundle(tmp_path)
     lazy_log = load(bundle_path, lazy=True)
-    layer = next(layer for layer in lazy_log.layer_list if layer.has_saved_activations)
-    ref = layer.activation_ref
+    layer = next(layer for layer in lazy_log.layer_list if layer.has_saved_outs)
+    ref = layer.out_ref
     assert ref is not None
 
     outside_blob_path = tmp_path / "outside_materialize.safetensors"
     shutil.copy2(_first_blob_path(bundle_path), outside_blob_path)
-    layer.activation_ref = replace(ref, relative_path="../outside_materialize.safetensors")
+    layer.out_ref = replace(ref, relative_path="../outside_materialize.safetensors")
 
     with pytest.raises(TorchLensIOError, match="Bundle rejected"):
-        layer.materialize_activation()
+        layer.materialize_out()
 
 
 def test_extra_blob_with_manifest_sha_collision_raises(tmp_path: Path) -> None:

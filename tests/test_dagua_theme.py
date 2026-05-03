@@ -87,6 +87,6 @@ def test_render_audit_exposes_unused_fields() -> None:
         assert "trace_unused" in audit
         assert "entry_unused" in audit
         assert "module_unused" in audit
-        assert "time_total" in audit["trace_unused"]
+        assert "duration" in audit["trace_unused"]
     finally:
         log.cleanup()

@@ -63,7 +63,7 @@ class TinyTransformer(nn.Module):
             dim_feedforward=8,
             dropout=0.0,
             batch_first=True,
-            activation="gelu",
+            out="gelu",
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
         self.norm = nn.LayerNorm(6)
@@ -213,11 +213,11 @@ def _assert_modellog_matches(live_log: tl.Trace, loaded_log: tl.Trace) -> None:
         layer.layer_label for layer in live_log.layer_list
     ]
     for live_layer, loaded_layer in zip(live_log.layer_list, loaded_log.layer_list):
-        if isinstance(live_layer.activation, torch.Tensor):
-            assert isinstance(loaded_layer.activation, torch.Tensor)
-            assert loaded_layer.activation.dtype == live_layer.activation.dtype
-            assert loaded_layer.activation.shape == live_layer.activation.shape
-            assert torch.equal(loaded_layer.activation, live_layer.activation)
+        if isinstance(live_layer.out, torch.Tensor):
+            assert isinstance(loaded_layer.out, torch.Tensor)
+            assert loaded_layer.out.dtype == live_layer.out.dtype
+            assert loaded_layer.out.shape == live_layer.out.shape
+            assert torch.equal(loaded_layer.out, live_layer.out)
 
 
 def _assert_intervention_matches(
@@ -242,10 +242,10 @@ def _assert_intervention_matches(
     live_helper = live_spec.target_value_specs[0].value
     assert isinstance(fixture_helper, HelperSpec)
     assert isinstance(live_helper, HelperSpec)
-    activation = torch.randn(2, 3)
+    out = torch.randn(2, 3)
     assert torch.equal(
-        fixture_helper()(activation, hook=None),
-        live_helper()(activation, hook=None),
+        fixture_helper()(out, hook=None),
+        live_helper()(out, hook=None),
     )
 
     compat = check_spec_compat(fixture_spec, live_log)

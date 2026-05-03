@@ -243,13 +243,13 @@ class SiteTable:
                 "layer_label": site.layer_label,
                 "layer_label_w_pass": site.layer_label_w_pass,
                 "layer_label_no_pass": site.layer_label_no_pass,
-                "pass_num": site.pass_num,
-                "operation_num": site.operation_num,
-                "creation_order": site.creation_order,
+                "call_index": site.call_index,
+                "op_index": site.op_index,
+                "creation_index": site.creation_index,
                 "func_name": site.func_name,
-                "containing_module": site.containing_module,
-                "containing_modules": site.containing_modules,
-                "module_passes_exited": site.module_passes_exited,
+                "module": site.module,
+                "modules": site.modules,
+                "output_of_module_calls": site.output_of_module_calls,
             }
             for site in self._sites
         ]
@@ -299,7 +299,7 @@ def resolve_sites(
             "tl.func(...), or another typed selector."
         )
 
-    sites = tuple(_iter_layer_passes(log))
+    sites = tuple(_iter_layer_ops(log))
     matched = _resolve_unchecked(sites, query, strict=strict)
     if not matched:
         raise SiteResolutionError(
@@ -348,8 +348,8 @@ def find_sites(
     return resolve_sites(log, query, strict=strict, max_fanout=max_fanout)
 
 
-def _iter_layer_passes(log: "Trace") -> Sequence["OpLog"]:
-    """Return final layer passes from a completed model log.
+def _iter_layer_ops(log: "Trace") -> Sequence["OpLog"]:
+    """Return final layer ops from a completed model log.
 
     Parameters
     ----------
@@ -367,7 +367,7 @@ def _iter_layer_passes(log: "Trace") -> Sequence["OpLog"]:
         If the model log has not completed postprocessing.
     """
 
-    if not getattr(log, "_pass_finished", False):
+    if not getattr(log, "_tracing_finished", False):
         raise SiteResolutionError("Sites can only be resolved after the forward pass is complete.")
     return log.layer_list
 
@@ -537,7 +537,7 @@ def _label_matches(site: "OpLog", label: str) -> bool:
         site.layer_label_short,
         site.layer_label_w_pass_short,
         site.layer_label_no_pass_short,
-        site.layer_label_raw,
+        site._layer_label_raw,
     )
     return label in candidate_labels or label in site.lookup_keys
 
@@ -558,8 +558,8 @@ def _module_output_matches(site: "OpLog", address: str) -> bool:
         Whether the site exits the requested module.
     """
 
-    module_passes = getattr(site, "module_passes_exited", ())
-    return any(_module_label_matches(module_pass, address) for module_pass in module_passes)
+    module_ops = getattr(site, "output_of_module_calls", ())
+    return any(_module_label_matches(module_pass, address) for module_pass in module_ops)
 
 
 def _module_label_matches(module_pass: str, address: str) -> bool:
@@ -578,8 +578,8 @@ def _module_label_matches(module_pass: str, address: str) -> bool:
         Whether the labels refer to the same module boundary.
     """
 
-    module_address = module_pass.rsplit(":", 1)[0]
-    return module_pass == address or module_address == address
+    address = module_pass.rsplit(":", 1)[0]
+    return module_pass == address or address == address
 
 
 def _predicate_payload(value: Any) -> tuple[Callable[["OpLog"], bool], str | None]:

@@ -1,4 +1,4 @@
-"""Streaming statistics for activation aggregation."""
+"""Streaming statistics for out aggregation."""
 
 from __future__ import annotations
 
@@ -372,18 +372,18 @@ def _metric_value_from_log(log: Any, metric_name: str) -> Any:
     """
 
     if metric_name == "output" and log.output_layers:
-        return log[log.output_layers[-1]].activation
+        return log[log.output_layers[-1]].out
     try:
-        return log[metric_name].activation
+        return log[metric_name].out
     except Exception:
         matches = [
             layer
             for layer in log.layer_list
-            if metric_name in str(layer.layer_label) and layer.has_saved_activations
+            if metric_name in str(layer.layer_label) and layer.has_saved_outs
         ]
         if not matches:
-            raise KeyError(f"No saved activation matched metric {metric_name!r}.")
-        return matches[0].activation
+            raise KeyError(f"No saved out matched metric {metric_name!r}.")
+        return matches[0].out
 
 
 def aggregate(
@@ -391,7 +391,7 @@ def aggregate(
     dataloader: Iterable[Any],
     metrics: Mapping[str, StreamingStat],
 ) -> dict[str, Any]:
-    """Stream activations through metric accumulators.
+    """Stream outs through metric accumulators.
 
     Parameters
     ----------

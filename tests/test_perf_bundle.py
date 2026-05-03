@@ -200,14 +200,14 @@ class TestBranchFastSkip:
         )
 
         # And the conditional collections must remain at their empty defaults.
-        assert log.internally_terminated_bool_layers == []
+        assert log.internally_terminated_bool_ops == []
         assert log.conditional_events == []
         assert log.conditional_branch_edges == []
         assert log.conditional_then_edges == []
         assert log.conditional_elif_edges == []
         assert log.conditional_else_edges == []
         assert log.conditional_arm_edges == {}
-        assert log.conditional_edge_passes == {}
+        assert log.conditional_edge_ops == {}
 
     def test_slow_path_runs_when_conditional_present(self) -> None:
         """A model with an if-branch must still run the full slow path."""
@@ -230,7 +230,7 @@ class TestBranchFastSkip:
             "branch; the fast-skip is incorrectly engaging."
         )
         assert len(log.conditional_events) >= 1
-        assert len(log.internally_terminated_bool_layers) >= 1
+        assert len(log.internally_terminated_bool_ops) >= 1
 
     def test_empty_model_does_not_crash(self) -> None:
         """A model that produces zero ops must not crash inside Step 5."""

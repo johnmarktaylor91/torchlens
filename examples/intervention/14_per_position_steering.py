@@ -2,7 +2,7 @@
 
 What this demonstrates
 ----------------------
-Add a direction tensor with the same non-batch shape as the matched activation.
+Add a direction tensor with the same non-batch shape as the matched out.
 This mirrors per-position steering for sequence models while using a tiny
 feed-forward toy.
 
@@ -50,8 +50,8 @@ def main() -> None:
     steered.attach_hooks(tl.func("relu"), tl.steer(direction, magnitude=1.0)).replay()
 
     delta = (
-        steered.find_sites(tl.func("relu")).first().activation
-        - log.find_sites(tl.func("relu")).first().activation
+        steered.find_sites(tl.func("relu")).first().out
+        - log.find_sites(tl.func("relu")).first().out
     )
     assert torch.allclose(delta[:, 0, :], torch.zeros_like(delta[:, 0, :]))
     assert torch.allclose(delta[:, 1, :], torch.full_like(delta[:, 1, :], 0.5))

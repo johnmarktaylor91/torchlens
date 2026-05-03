@@ -93,7 +93,7 @@ def _validate_scope_keywords(
     scope: str,
     *,
     loss_fn: Callable[[Any], torch.Tensor] | None,
-    perturb_saved_gradients: bool,
+    perturb_saved_grads: bool,
     atol: float,
     rtol: float,
 ) -> None:
@@ -105,7 +105,7 @@ def _validate_scope_keywords(
         Requested validation scope.
     loss_fn:
         Optional backward loss function.
-    perturb_saved_gradients:
+    perturb_saved_grads:
         Backward perturbation flag.
     atol:
         Backward absolute tolerance.
@@ -117,8 +117,8 @@ def _validate_scope_keywords(
         return
     if loss_fn is not None:
         _raise_backward_only("loss_fn", scope)
-    if perturb_saved_gradients:
-        _raise_backward_only("perturb_saved_gradients", scope)
+    if perturb_saved_grads:
+        _raise_backward_only("perturb_saved_grads", scope)
     if atol != 1e-5:
         _raise_backward_only("atol", scope)
     if rtol != 1e-4:
@@ -195,7 +195,7 @@ def validate(
     verbose: bool = False,
     validate_metadata: bool = True,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
-    perturb_saved_gradients: bool = False,
+    perturb_saved_grads: bool = False,
     atol: float = 1e-5,
     rtol: float = 1e-4,
 ) -> bool:
@@ -220,7 +220,7 @@ def validate(
         Whether metadata invariant checks should run for forward-like scopes.
     loss_fn:
         Backward-only loss function.
-    perturb_saved_gradients:
+    perturb_saved_grads:
         Backward-only perturbation flag.
     atol:
         Backward-only absolute tolerance.
@@ -240,7 +240,7 @@ def validate(
     _validate_scope_keywords(
         normalized_scope,
         loss_fn=loss_fn,
-        perturb_saved_gradients=perturb_saved_gradients,
+        perturb_saved_grads=perturb_saved_grads,
         atol=atol,
         rtol=rtol,
     )
@@ -254,7 +254,7 @@ def validate(
             input_args,
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
-            perturb_saved_gradients=perturb_saved_gradients,
+            perturb_saved_grads=perturb_saved_grads,
             atol=atol,
             rtol=rtol,
         )

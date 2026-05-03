@@ -164,7 +164,7 @@ def test_skip_input_or_output_raises(tmp_path: Any) -> None:
     def skip_fn(layer_log: LayerLog) -> bool:
         """Try to skip the input layer."""
 
-        return layer_log.is_input_layer
+        return layer_log.is_input
 
     try:
         _render_dot(log, tmp_path, skip_fn=skip_fn)
@@ -175,12 +175,12 @@ def test_skip_input_or_output_raises(tmp_path: Any) -> None:
         raise AssertionError("Expected ValueError when skipping an input layer")
 
 
-def test_skip_preserves_gradient_edge_kind(tmp_path: Any) -> None:
-    """Skipping a forward node should preserve gradient edge styling."""
+def test_skip_preserves_grad_edge_kind(tmp_path: Any) -> None:
+    """Skipping a forward node should preserve grad edge styling."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 1))
-    log = tl.trace(model, torch.randn(1, 4), save_gradients=True)
-    output = log[log.output_layers[0]].activation
+    log = tl.trace(model, torch.randn(1, 4), save_grads=True)
+    output = log[log.output_layers[0]].out
     output.sum().backward()
 
     def skip_fn(layer_log: LayerLog) -> bool:

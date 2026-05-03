@@ -171,8 +171,8 @@ def _child_ops_for_buffer(log: Trace, buffer_address: str) -> list[str]:
     """
 
     for node in log.layer_dict_main_keys.values():
-        if node.is_buffer_layer and node.buffer_address == buffer_address:
-            return [child.replace(":", "pass") for child in node.child_layers]
+        if node.is_buffer and node.buffer_address == buffer_address:
+            return [child.replace(":", "pass") for child in node.children]
     raise AssertionError(f"Buffer {buffer_address!r} was not found in the log.")
 
 

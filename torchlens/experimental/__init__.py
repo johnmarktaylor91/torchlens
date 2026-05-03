@@ -167,7 +167,7 @@ def session(model: nn.Module) -> Session:
     Returns
     -------
     Session
-        Session with ``invoke`` and ``bundle`` methods.
+        Session with ``invoke`` and ``bundle`` custom_methods.
     """
 
     return Session(model=model)

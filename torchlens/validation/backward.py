@@ -1,4 +1,4 @@
-"""Validation helpers for backward-pass gradient capture."""
+"""Validation helpers for backward-pass grad capture."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _sum_tensors(value: Any) -> torch.Tensor:
 
 
 def _clone_inputs_with_grad(input_args: Any) -> Any:
-    """Clone tensor inputs and enable gradients on floating tensors.
+    """Clone tensor inputs and enable grads on floating tensors.
 
     Parameters
     ----------
@@ -65,17 +65,17 @@ def _clone_inputs_with_grad(input_args: Any) -> Any:
 
 
 def _param_grads(model: nn.Module) -> dict[str, torch.Tensor]:
-    """Collect detached parameter gradients by name.
+    """Collect detached parameter grads by name.
 
     Parameters
     ----------
     model:
-        Model whose parameter gradients should be collected.
+        Model whose parameter grads should be collected.
 
     Returns
     -------
     dict[str, torch.Tensor]
-        Detached gradient clones for parameters with gradients.
+        Detached grad clones for parameters with grads.
     """
     return {
         name: parameter.grad.detach().clone()
@@ -90,7 +90,7 @@ def validate_backward_pass(
     input_kwargs: dict[str, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
-    perturb_saved_gradients: bool = False,
+    perturb_saved_grads: bool = False,
     atol: float = 1e-5,
     rtol: float = 1e-4,
 ) -> bool:
@@ -107,8 +107,8 @@ def validate_backward_pass(
     loss_fn:
         Optional callable that maps model outputs to a scalar loss. Defaults to
         summing all returned tensors.
-    perturb_saved_gradients:
-        If True, perturb captured saved gradients before comparison; the
+    perturb_saved_grads:
+        If True, perturb captured saved grads before comparison; the
         validation should then return False.
     atol:
         Absolute tolerance for ``torch.allclose``.
@@ -118,7 +118,7 @@ def validate_backward_pass(
     Returns
     -------
     bool
-        True when captured gradients match stock autograd and perturbation is
+        True when captured grads match stock autograd and perturbation is
         not requested.
     """
     from ..user_funcs import trace as trace_fn
@@ -141,16 +141,16 @@ def validate_backward_pass(
         logged_inputs,
         input_kwargs=input_kwargs,
         layers_to_save="all",
-        gradients_to_save="all",
+        grads_to_save="all",
     )
-    output_layers = [trace[layer_label].activation for layer_label in trace.output_layers]
+    output_layers = [trace[layer_label].out for layer_label in trace.output_layers]
     logged_output: Any = output_layers[0] if len(output_layers) == 1 else output_layers
     logged_loss = loss_fn(logged_output)
     trace.log_backward(logged_loss)
-    if perturb_saved_gradients:
+    if perturb_saved_grads:
         for layer in trace.layer_list:
-            if layer.has_gradient and isinstance(layer.gradient, torch.Tensor):
-                layer.gradient = layer.gradient + torch.randn_like(layer.gradient)
+            if layer.has_grad and isinstance(layer.grad, torch.Tensor):
+                layer.grad = layer.grad + torch.randn_like(layer.grad)
                 break
     observed_param_grads = _param_grads(model)
     trace.cleanup()
@@ -164,5 +164,5 @@ def validate_backward_pass(
             )
             for name in expected_param_grads
         )
-        and not perturb_saved_gradients
+        and not perturb_saved_grads
     )

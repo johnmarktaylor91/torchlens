@@ -23,7 +23,7 @@ def identity(x: Any) -> Any:
     """Return the input unchanged.
 
     Used as a no-op placeholder where a callable is expected (e.g.
-    ``activation_postfunc`` when no user postprocessing is desired).
+    ``out_postfunc`` when no user postprocessing is desired).
     """
     return x
 

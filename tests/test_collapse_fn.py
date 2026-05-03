@@ -45,7 +45,7 @@ def test_collapse_fn_collapses_module(tmp_path: Any) -> None:
     assert "relu_1_2 [" not in dot
 
 
-def test_collapse_fn_overrides_nesting_depth(tmp_path: Any) -> None:
+def test_collapse_fn_overrides_call_depth(tmp_path: Any) -> None:
     """collapse_fn should win over a non-collapsing nesting depth."""
 
     log = tl.trace(_nested_model(), torch.randn(1, 4))
@@ -55,18 +55,18 @@ def test_collapse_fn_overrides_nesting_depth(tmp_path: Any) -> None:
 
         return module_log.address == "0"
 
-    dot = _render_dot(log, tmp_path, vis_nesting_depth=1000, collapse_fn=collapse_fn)
+    dot = _render_dot(log, tmp_path, vis_call_depth=1000, collapse_fn=collapse_fn)
 
     assert "shape=box3d" in dot
     assert "@0" in dot
     assert "linear_1_1 [" not in dot
 
 
-def test_nesting_depth_unchanged_when_no_collapse_fn(tmp_path: Any) -> None:
-    """Legacy vis_nesting_depth collapse behavior should remain available."""
+def test_call_depth_unchanged_when_no_collapse_fn(tmp_path: Any) -> None:
+    """Legacy vis_call_depth collapse behavior should remain available."""
 
     log = tl.trace(_nested_model(), torch.randn(1, 4))
 
-    dot = _render_dot(log, tmp_path, vis_nesting_depth=1)
+    dot = _render_dot(log, tmp_path, vis_call_depth=1)
 
     assert dot.count("shape=box3d") == 1

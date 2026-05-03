@@ -707,7 +707,7 @@ class ShapePredicateModel(nn.Module):
 
 
 class SaveSourceContextOffModel(nn.Module):
-    """Model used to strengthen the ``save_source_context=False`` path."""
+    """Model used to strengthen the ``save_code_context=False`` path."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the conditional forward pass.
@@ -730,7 +730,7 @@ class SaveSourceContextOffModel(nn.Module):
 
 
 class SaveSourceContextOffAssertModel(nn.Module):
-    """Model that combines ``assert`` with ``save_source_context=False``."""
+    """Model that combines ``assert`` with ``save_code_context=False``."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the forward pass.
@@ -963,7 +963,7 @@ def _log_model(
     model: nn.Module,
     x: torch.Tensor,
     *,
-    save_source_context: bool = True,
+    save_code_context: bool = True,
     keep_unsaved_layers: bool = True,
     layers_to_save: str | Sequence[str] | None = "all",
 ) -> Trace:
@@ -975,7 +975,7 @@ def _log_model(
         Model to execute.
     x:
         Input tensor.
-    save_source_context:
+    save_code_context:
         Whether rich source loading is enabled during capture.
     keep_unsaved_layers:
         Whether unsaved layers remain in the final log.
@@ -990,7 +990,7 @@ def _log_model(
     return trace_fn(
         model,
         x,
-        save_source_context=save_source_context,
+        save_code_context=save_code_context,
         keep_unsaved_layers=keep_unsaved_layers,
         layers_to_save=layers_to_save,
     )
@@ -1009,9 +1009,7 @@ def _get_terminal_bool_layers(trace: Trace) -> list[OpLog]:
     list[OpLog]
         Terminal scalar bool layers in execution order.
     """
-    return [
-        layer for layer in trace.layer_list if layer.is_terminal_bool_layer and layer.is_scalar_bool
-    ]
+    return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
 def _find_only_layer(
@@ -1223,9 +1221,9 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
     assert trace.conditional_elif_edges == expected_elif_edges
     assert trace.conditional_else_edges == expected_else_edges
 
-    for pass_nums in trace.conditional_edge_passes.values():
-        assert pass_nums == sorted(pass_nums)
-        assert len(pass_nums) == len(set(pass_nums))
+    for call_indexs in trace.conditional_edge_ops.values():
+        assert call_indexs == sorted(call_indexs)
+        assert len(call_indexs) == len(set(call_indexs))
 
 
 def _render_dot_source(
@@ -1250,7 +1248,7 @@ def _render_dot_source(
     tuple[str, Trace]
         Rendered DOT source and the populated model log.
     """
-    trace = _log_model(model, x, save_source_context=True)
+    trace = _log_model(model, x, save_code_context=True)
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = f"{tmpdir}/conditional_branch_matrix"
         dot_source = trace.render_graph(
@@ -1291,8 +1289,8 @@ def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str
     raise AssertionError(f"Could not find edge line for {parent_label!r} -> {child_label!r}")
 
 
-def _assert_conditional_edge_passes_exact(trace: Trace) -> None:
-    """Assert ``conditional_edge_passes`` matches unrolled arm edges exactly.
+def _assert_conditional_edge_ops_exact(trace: Trace) -> None:
+    """Assert ``conditional_edge_ops`` matches unrolled arm edges exactly.
 
     Parameters
     ----------
@@ -1312,24 +1310,24 @@ def _assert_conditional_edge_passes_exact(trace: Trace) -> None:
                 )
             )
 
-    for edge_key, pass_nums in trace.conditional_edge_passes.items():
-        assert pass_nums == sorted(pass_nums)
-        assert len(pass_nums) == len(set(pass_nums))
+    for edge_key, call_indexs in trace.conditional_edge_ops.items():
+        assert call_indexs == sorted(call_indexs)
+        assert len(call_indexs) == len(set(call_indexs))
         parent_no_pass, child_no_pass, conditional_id, branch_kind = edge_key
-        for pass_num in pass_nums:
+        for call_index in call_indexs:
             assert (
                 parent_no_pass,
                 child_no_pass,
                 conditional_id,
                 branch_kind,
-                pass_num,
+                call_index,
             ) in actual_unrolled_edges
 
     for actual_edge in actual_unrolled_edges:
-        parent_no_pass, child_no_pass, conditional_id, branch_kind, pass_num = actual_edge
+        parent_no_pass, child_no_pass, conditional_id, branch_kind, call_index = actual_edge
         assert (
-            pass_num
-            in trace.conditional_edge_passes[
+            call_index
+            in trace.conditional_edge_ops[
                 (parent_no_pass, child_no_pass, conditional_id, branch_kind)
             ]
         )
@@ -1498,7 +1496,7 @@ def test_branch_uses_only_parameter_model_records_parameter_entry_edge() -> None
         branch_add_layer.layer_label,
     ) in trace.conditional_arm_edges[(event.id, "then")]
     assert bias_view_layer.uses_params is True
-    assert branch_add_layer.parent_layers == [bias_view_layer.layer_label]
+    assert branch_add_layer.parents == [bias_view_layer.layer_label]
     assert bias_view_layer.conditional_branch_stack == []
 
 
@@ -1571,14 +1569,14 @@ def test_looped_if_alternating_model_has_exactly_two_signatures() -> None:
     linear_layer = _find_only_layer_log(
         trace,
         "linear",
-        lambda layer_log: layer_log.num_passes > 1,
+        lambda layer_log: layer_log.num_calls > 1,
     )
 
     assert linear_layer.conditional_branch_stacks == [
         [(conditional_id, "then")],
         [(conditional_id, "else")],
     ]
-    assert linear_layer.conditional_branch_stack_passes == {
+    assert linear_layer.conditional_branch_stack_ops == {
         ((conditional_id, "then"),): [1, 3],
         ((conditional_id, "else"),): [2, 4],
     }
@@ -1592,7 +1590,7 @@ def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
     linear_layer = _find_only_layer_log(
         trace,
         "linear",
-        lambda layer_log: layer_log.num_passes > 1,
+        lambda layer_log: layer_log.num_calls > 1,
     )
 
     assert linear_layer.in_cond_branch is True
@@ -1600,14 +1598,14 @@ def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
         [(conditional_id, "then")],
         [(conditional_id, "else")],
     ]
-    assert linear_layer.conditional_branch_stack_passes == {
+    assert linear_layer.conditional_branch_stack_ops == {
         ((conditional_id, "then"),): [1, 3],
         ((conditional_id, "else"),): [2, 4],
     }
     assert check_metadata_invariants(trace) is True
 
 
-def test_rolled_mixed_arm_model_records_exact_passes_and_composite_render_label() -> None:
+def test_rolled_mixed_arm_model_records_exact_ops_and_composite_render_label() -> None:
     """Rolled mixed-arm edges keep exact pass lists and a composite Graphviz label."""
     trace = _log_model(RolledMixedArmModel(), torch.ones(1, 4))
     dot_source, render_log = _render_dot_source(
@@ -1625,15 +1623,11 @@ def test_rolled_mixed_arm_model_records_exact_passes_and_composite_render_label(
 
     assert len(then_edges) == 2
     assert len(else_edges) == 2
-    assert trace.conditional_edge_passes[
-        (parent_no_pass, child_no_pass, conditional_id, "then")
-    ] == [
+    assert trace.conditional_edge_ops[(parent_no_pass, child_no_pass, conditional_id, "then")] == [
         1,
         3,
     ]
-    assert trace.conditional_edge_passes[
-        (parent_no_pass, child_no_pass, conditional_id, "else")
-    ] == [
+    assert trace.conditional_edge_ops[(parent_no_pass, child_no_pass, conditional_id, "else")] == [
         2,
         4,
     ]
@@ -1643,7 +1637,7 @@ def test_rolled_mixed_arm_model_records_exact_passes_and_composite_render_label(
         render_log.conditional_arm_edges[(conditional_id, "then")][0][0],
         render_log.conditional_arm_edges[(conditional_id, "then")][0][1],
     )
-    _assert_conditional_edge_passes_exact(trace)
+    _assert_conditional_edge_ops_exact(trace)
     assert check_metadata_invariants(trace) is True
 
 
@@ -1653,8 +1647,8 @@ def test_reconverging_branches_model_clears_branch_stack_after_merge() -> None:
     negative_log = _log_model(ReconvergingBranchesModel(), -torch.ones(2, 2))
     positive_add = _find_only_layer(positive_log, "add")
     negative_add = _find_only_layer(negative_log, "add")
-    positive_parent = positive_log[positive_add.parent_layers[0]]
-    negative_parent = negative_log[negative_add.parent_layers[0]]
+    positive_parent = positive_log[positive_add.parents[0]]
+    negative_parent = negative_log[negative_add.parents[0]]
 
     assert positive_add.conditional_branch_stack == []
     assert negative_add.conditional_branch_stack == []
@@ -1862,19 +1856,19 @@ def test_documented_false_negatives_do_not_materialise_branch_events(
     branch_layers = [
         layer
         for layer in trace.layer_list
-        if layer.func_name in {"relu", "sigmoid", "where"} and not layer.is_output_layer
+        if layer.func_name in {"relu", "sigmoid", "where"} and not layer.is_output
     ]
     assert all(layer.conditional_branch_stack == [] for layer in branch_layers)
 
 
-def test_save_source_context_off_model_keeps_branch_classification_without_loading_source(
+def test_save_code_context_off_model_keeps_branch_classification_without_loading_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Disabled source loading keeps branch attribution and the canonical no-source state."""
     trace = _log_model(
         SaveSourceContextOffModel(),
         torch.ones(2, 2),
-        save_source_context=False,
+        save_code_context=False,
     )
     event = _get_root_event(trace)
     relu_layer = _find_only_layer(trace, "relu")
@@ -1887,9 +1881,7 @@ def test_save_source_context_off_model_keeps_branch_classification_without_loadi
         return original_getlines(*args, **kwargs)
 
     captured_entries = [
-        entry
-        for entry in trace.layer_list
-        if not entry.is_input_layer and entry.func_name != "none"
+        entry for entry in trace.layer_list if not entry.is_input and entry.func_name != "none"
     ]
     assert captured_entries
     assert all(len(entry.func_call_stack) > 0 for entry in captured_entries)
@@ -1920,19 +1912,19 @@ def test_save_source_context_off_model_keeps_branch_classification_without_loadi
 
     roundtrip_log = pickle.loads(pickle.dumps(trace))
     roundtrip_stack = next(
-        entry.func_call_stack for entry in roundtrip_log.layer_list if not entry.is_input_layer
+        entry.func_call_stack for entry in roundtrip_log.layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
     assert roundtrip_stack[0].source_context == "None"
 
 
-def test_save_source_context_off_assert_model_has_no_false_positive_if_edges() -> None:
+def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> None:
     """Disabled source loading plus ``assert`` must not fabricate branch metadata."""
     trace = _log_model(
         SaveSourceContextOffAssertModel(),
         torch.ones(2, 2),
-        save_source_context=False,
+        save_code_context=False,
     )
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
@@ -1976,7 +1968,7 @@ def test_keep_unsaved_layers_false_model_scrubs_removed_labels_from_conditional_
     }.isdisjoint(removed_no_pass)
     assert all(
         parent_label not in removed_no_pass and child_label not in removed_no_pass
-        for parent_label, child_label, _, _ in pruned_log.conditional_edge_passes
+        for parent_label, child_label, _, _ in pruned_log.conditional_edge_ops
     )
     assert all(
         removed_label not in event.bool_layers

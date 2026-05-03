@@ -28,8 +28,8 @@ class DynamicMLP(nn.Module):
         return x
 
 
-def test_dynamic_graph_records_1000_passes_with_varying_event_counts() -> None:
-    """Recorder handles 1000 input-dependent passes and preserves pass counts."""
+def test_dynamic_graph_records_1000_ops_with_varying_event_counts() -> None:
+    """Recorder handles 1000 input-dependent ops and preserves pass counts."""
 
     model = DynamicMLP()
     with tl.fastlog.Recorder(model, keep_op=lambda ctx: ctx.kind == "op") as recorder:
@@ -38,6 +38,6 @@ def test_dynamic_graph_records_1000_passes_with_varying_event_counts() -> None:
     recording = recorder.recording
     op_counts = Counter(record.ctx.pass_index for record in recording if record.ctx.kind == "op")
 
-    assert recording.n_passes == 1000
+    assert recording.n_ops == 1000
     assert set(op_counts.values()) == {3, 5, 7}
     assert {op_counts[index] for index in (1, 2, 3)} == {3, 5, 7}

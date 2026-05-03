@@ -66,7 +66,7 @@ def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
 
 @pytest.mark.smoke
 def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
-    """Container defaults are per-instance and intervention_log forks by copy."""
+    """Container defaults are per-instance and interventions forks by copy."""
 
     log_a = Trace("a")
     log_b = Trace("b")
@@ -77,14 +77,14 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
 
     pass_a = next(iter(_capture_tiny_log()))
     pass_b = next(iter(_capture_tiny_log()))
-    pass_a.intervention_log.append({"op": "sentinel"})
-    assert pass_b.intervention_log == []
-    assert LAYER_PASS_LOG_FORK_POLICY["intervention_log"] is ForkFieldPolicy.FORK_COPY
+    pass_a.interventions.append({"op": "sentinel"})
+    assert pass_b.interventions == []
+    assert LAYER_PASS_LOG_FORK_POLICY["interventions"] is ForkFieldPolicy.FORK_COPY
 
 
 @pytest.mark.smoke
 def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
-    """Construction is internal, but user activation writes dirty the owning Trace."""
+    """Construction is internal, but user out writes dirty the owning Trace."""
 
     log = _capture_tiny_log()
     layer = next(iter(log))
@@ -98,7 +98,7 @@ def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
     assert constructed._construction_done is True
     assert log._has_direct_writes is False
 
-    constructed.activation = constructed.activation
+    constructed.out = constructed.out
     assert log._has_direct_writes is True
 
 
@@ -111,7 +111,7 @@ def test_postprocess_internal_writes_do_not_mark_direct_write_dirty() -> None:
     assert log.run_state is RunState.PRISTINE
     for layer in log:
         assert hasattr(layer, "func_call_id")
-        assert hasattr(layer, "output_path")
-        assert hasattr(layer, "intervention_log")
+        assert hasattr(layer, "container_path")
+        assert hasattr(layer, "interventions")
         assert hasattr(layer, "edge_uses")
         assert layer._construction_done is True

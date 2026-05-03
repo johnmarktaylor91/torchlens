@@ -62,8 +62,8 @@ def main() -> None:
     edited.attach_hooks(tl.func("relu"), tl.zero_ablate())
     edited.replay()
 
-    clean_out = log.layer_list[-1].activation
-    edited_out = edited.layer_list[-1].activation
+    clean_out = log.layer_list[-1].out
+    edited_out = edited.layer_list[-1].out
     assert not torch.allclose(clean_out, edited_out)
     assert edited.last_run_records()[-1].helper_name == "zero_ablate"
 

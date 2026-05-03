@@ -33,23 +33,23 @@ def _empty_recording(options: RecordingOptions) -> Recording:
         records=[],
         by_pass={},
         by_label={},
-        by_module_address={},
+        by_address={},
         bundle_path=(
             None
             if options.streaming is None or options.streaming.bundle_path is None
             else Path(options.streaming.bundle_path)
         ),
-        n_passes=0,
+        n_ops=0,
         n_records=0,
-        pass_start_times=[],
-        pass_end_times=[],
+        start_times=[],
+        end_times=[],
         predicate_failures=[],
         predicate_failure_overflow_count=0,
         keep_op_repr=repr(options.keep_op) if options.keep_op is not None else None,
         keep_module_repr=repr(options.keep_module) if options.keep_module is not None else None,
         history_size=options.history_size,
-        activation_postfunc_repr=(
-            repr(options.activation_transform) if options.activation_transform is not None else None
+        _out_transform_repr=(
+            repr(options.out_transform) if options.out_transform is not None else None
         ),
     )
 
@@ -96,7 +96,7 @@ def _emit_root_module_event(
         kind="module_enter" if kind == "enter" else "module_exit",
         op_log_or_op_data={
             "label": f"root:{kind}:1",
-            "module_address": "",
+            "address": "",
             "module_type": type(model).__name__,
             "module_pass_index": frame.pass_index,
         },
@@ -106,13 +106,13 @@ def _emit_root_module_event(
         pass_index=state.pass_index,
         event_index=state.event_index,
         op_index=None,
-        time_since_pass_start=time.time() - trace.pass_start_time,
+        time_since_pass_start=time.time() - trace.start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
     )
     try:
         spec = _evaluate_keep_module(ctx, state.options)
-        if spec.save_activation or spec.save_metadata:
+        if spec.save_out or spec.save_metadata:
             state.add_record(ActivationRecord(ctx=ctx, spec=spec))
     except Exception as exc:
         state.handle_predicate_exception(ctx, exc)
@@ -138,21 +138,21 @@ def _run_predicate_pass(
     args = _normalize_input_args(input_args)
     kwargs = input_kwargs or {}
     trace = Trace(str(type(model).__name__))
-    trace.logging_mode = "predicate"
-    trace.pass_start_time = time.time()
+    trace.capture_mode = "predicate"
+    trace.start_time = time.time()
     if state is None:
         recording = _empty_recording(options)
         state = RecordingState(options=options, recording=recording)
     else:
         recording = state.recording
     _reset_state_for_pass(state, pass_index=pass_index, sample_id=sample_id)
-    recording.pass_start_times.append(trace.pass_start_time)
+    recording.start_times.append(trace.start_time)
     input_tensors = get_vars_of_type_from_obj([args, kwargs], torch.Tensor, [torch.nn.Parameter])
     _ensure_model_prepared(model)
     _prepare_model_session(trace, model)
     model_output = None
     root_frame = ModuleStackFrame(
-        module_address="",
+        address="",
         module_type=type(model).__name__,
         module_id=id(model),
         pass_index=1,
@@ -187,9 +187,9 @@ def _run_predicate_pass(
         raise
     finally:
         _cleanup_model_session(model, input_tensors)
-        pass_end_time = time.time()
-        recording.pass_end_times.append(pass_end_time)
-        object.__setattr__(recording, "n_passes", max(recording.n_passes, pass_index))
+        end_time = time.time()
+        recording.end_times.append(end_time)
+        object.__setattr__(recording, "n_ops", max(recording.n_ops, pass_index))
         object.__setattr__(recording, "n_records", len(recording.records))
         if not pass_failed and finalize_storage:
             state.finalize_storage()

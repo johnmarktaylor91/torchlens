@@ -106,7 +106,7 @@ def replay_from(
         Model log to mutate in place.
     site:
         Layer pass or selector resolving to the origin site. The origin's
-        current activation is treated as the override value.
+        current out is treated as the override value.
     strict:
         Whether control-flow divergence warnings should be raised as errors.
 
@@ -120,8 +120,8 @@ def replay_from(
     _preflight_log(log)
     _warn_if_direct_writes_will_be_overlaid(log)
     origin = _resolve_single_origin(log, site, strict=replay_options.strict)
-    if not isinstance(origin.activation, torch.Tensor):
-        raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor activation")
+    if not isinstance(origin.out, torch.Tensor):
+        raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor out")
     return _run_replay(
         log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
     )
@@ -135,7 +135,7 @@ def cone_of_effect(trace: "Trace", origins: Iterable["OpLog"]) -> list["OpLog"]:
     trace:
         Model log whose saved graph should be traversed.
     origins:
-        Origin layer passes whose downstream dependents are affected.
+        Origin layer ops whose downstream dependents are affected.
 
     Returns
     -------
@@ -172,7 +172,7 @@ def cone_of_effect(trace: "Trace", origins: Iterable["OpLog"]) -> list["OpLog"]:
         for child_label in _child_labels(layer):
             if child_label not in visited:
                 frontier.append(child_label)
-        for child_label in getattr(layer, "children_tensor_versions", {}) or {}:
+        for child_label in getattr(layer, "output_versions_per_child", {}) or {}:
             if child_label not in visited:
                 frontier.append(child_label)
 
@@ -200,7 +200,7 @@ def _run_replay(
     strict:
         Whether to escalate divergence warnings.
     preserve_origins:
-        If true, origin activations are treated as already-mutated overrides
+        If true, origin outs are treated as already-mutated overrides
         and are not recomputed.
 
     Returns
@@ -214,8 +214,8 @@ def _run_replay(
     origin_labels = {origin.layer_label for origin in origins}
     overlay: dict[str, torch.Tensor] = {}
     for origin in origins:
-        if isinstance(origin.activation, torch.Tensor):
-            overlay[origin.layer_label] = origin.activation
+        if isinstance(origin.out, torch.Tensor):
+            overlay[origin.layer_label] = origin.out
 
     hook_targets = _hook_targets_by_label(log, hook_entries, strict=strict)
     executed_call_ids: set[int] = set()
@@ -250,7 +250,7 @@ def _run_replay(
         for member in group:
             if preserve_origins and member.layer_label in origin_labels:
                 continue
-            tensor = _slice_output_by_path(output, tuple(member.output_path or ()))
+            tensor = _slice_output_by_path(output, tuple(member.container_path or ()))
             tensor, records = _apply_replay_hooks(
                 tensor,
                 site=member,
@@ -265,7 +265,7 @@ def _run_replay(
 
     _commit_replay_updates(log, pending_updates, pending_records)
     log.run_state = RunState.REPLAY_PROPAGATED
-    log._activation_recipe_revision = getattr(log, "_spec_revision", 0)
+    log._out_recipe_revision = getattr(log, "_spec_revision", 0)
     log.last_run_ctx = {
         **_ensure_replay_run_ctx(log),
         "engine": "replay",
@@ -305,7 +305,7 @@ def _warn_if_direct_writes_will_be_overlaid(log: "Trace") -> None:
         return
     warnings.warn(
         "DirectActivationWriteWarning: replay/rerun propagation uses the intervention "
-        "recipe and may overlay direct OpLog activation writes.",
+        "recipe and may overlay direct OpLog out writes.",
         DirectActivationWriteWarning,
         stacklevel=3,
     )
@@ -331,7 +331,7 @@ def _reconstruct_args_from_template(
     trace:
         Owning model log.
     overlay:
-        Current replay activations keyed by site label.
+        Current replay outs keyed by site label.
     strict:
         Whether divergence warnings should raise.
 
@@ -397,7 +397,7 @@ def _resolve_arg_component(
     trace:
         Owning model log.
     overlay:
-        Replay overlay of already-computed activations.
+        Replay overlay of already-computed outs.
     strict:
         Whether divergence warnings should raise.
 
@@ -417,14 +417,14 @@ def _resolve_arg_component(
         _warn_if_unexpected_parent(pass_log, parent.layer_label, strict=strict)
         if parent.layer_label in overlay:
             return overlay[parent.layer_label]
-        if pass_log.layer_label in (getattr(parent, "children_tensor_versions", {}) or {}):
-            version = parent.children_tensor_versions[pass_log.layer_label]
+        if pass_log.layer_label in (getattr(parent, "output_versions_per_child", {}) or {}):
+            version = parent.output_versions_per_child[pass_log.layer_label]
             if isinstance(version, torch.Tensor):
                 return version
-        if isinstance(parent.activation, torch.Tensor):
-            return parent.activation
+        if isinstance(parent.out, torch.Tensor):
+            return parent.out
         raise ReplayPreconditionError(
-            f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no activation"
+            f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
         )
     if isinstance(component, LiteralTensor):
         return component.value
@@ -470,10 +470,10 @@ def _execute_replay_func_strict(
         Function return value.
     """
 
-    if site.func_applied is None:
-        raise ReplayPreconditionError(f"{site.layer_label!r} has no func_applied for replay")
+    if site.func is None:
+        raise ReplayPreconditionError(f"{site.layer_label!r} has no func for replay")
     return execute_with_restored_rng_autocast(
-        site.func_applied,
+        site.func,
         args,
         kwargs,
         rng_states=site.func_rng_states,
@@ -482,18 +482,18 @@ def _execute_replay_func_strict(
 
 
 def _apply_replay_hooks(
-    activation: torch.Tensor,
+    out: torch.Tensor,
     *,
     site: "OpLog",
     hook_entries: Sequence[NormalizedHookEntry],
     run_ctx: dict[str, Any],
 ) -> tuple[torch.Tensor, list[FireRecord]]:
-    """Apply replay hooks to one recomputed activation.
+    """Apply replay hooks to one recomputed out.
 
     Parameters
     ----------
-    activation:
-        Current activation tensor.
+    out:
+        Current out tensor.
     site:
         Hook target site.
     hook_entries:
@@ -504,10 +504,10 @@ def _apply_replay_hooks(
     Returns
     -------
     tuple[torch.Tensor, list[FireRecord]]
-        Hook-composed activation and fire records to commit if replay succeeds.
+        Hook-composed out and fire records to commit if replay succeeds.
     """
 
-    current = activation
+    current = out
     records: list[FireRecord] = []
     for entry in hook_entries:
         context = make_hook_context(
@@ -534,14 +534,14 @@ def _commit_replay_updates(
     pending_updates: Mapping[str, torch.Tensor],
     pending_records: Mapping[str, Sequence[FireRecord]],
 ) -> None:
-    """Commit replay activation updates, rolling back if final writes fail.
+    """Commit replay out updates, rolling back if final writes fail.
 
     Parameters
     ----------
     log:
         Model log whose layer-pass entries are updated.
     pending_updates:
-        Replacement activations keyed by layer label.
+        Replacement outs keyed by layer label.
     pending_records:
         Hook fire records keyed by layer label.
     """
@@ -551,19 +551,19 @@ def _commit_replay_updates(
         for label, tensor in pending_updates.items():
             site = log[label]
             snapshots[label] = {
-                "activation": site.activation,
-                "transformed_activation": site.transformed_activation,
-                "tensor_shape": site.tensor_shape,
-                "transformed_activation_shape": site.transformed_activation_shape,
-                "tensor_dtype": site.tensor_dtype,
-                "transformed_activation_dtype": site.transformed_activation_dtype,
-                "tensor_memory": site.tensor_memory,
-                "transformed_activation_memory": site.transformed_activation_memory,
-                "intervention_log": list(site.intervention_log),
+                "out": site.out,
+                "transformed_out": site.transformed_out,
+                "shape": site.shape,
+                "transformed_out_shape": site.transformed_out_shape,
+                "dtype": site.dtype,
+                "transformed_out_dtype": site.transformed_out_dtype,
+                "memory": site.memory,
+                "transformed_out_memory": site.transformed_out_memory,
+                "interventions": list(site.interventions),
             }
-            _apply_activation_update(site, tensor)
+            _apply_out_update(site, tensor)
             if label in pending_records:
-                site.intervention_log.extend(pending_records[label])
+                site.interventions.extend(pending_records[label])
     except Exception:
         for label, state in snapshots.items():
             site = log[label]
@@ -572,22 +572,22 @@ def _commit_replay_updates(
         raise
 
 
-def _apply_activation_update(site: "OpLog", tensor: torch.Tensor) -> None:
-    """Replace a site activation and refresh saved tensor metadata.
+def _apply_out_update(site: "OpLog", tensor: torch.Tensor) -> None:
+    """Replace a site out and refresh saved tensor metadata.
 
     Parameters
     ----------
     site:
         Layer pass to mutate.
     tensor:
-        Replacement activation.
+        Replacement out.
     """
 
-    from ..capture.output_tensors import _set_saved_activation_metadata
+    from ..capture.output_tensors import _set_saved_out_metadata
 
-    site._internal_set("activation", tensor)
-    site._internal_set("transformed_activation", None)
-    _set_saved_activation_metadata(site, tensor)
+    site._internal_set("out", tensor)
+    site._internal_set("transformed_out", None)
+    _set_saved_out_metadata(site, tensor)
 
 
 def _preflight_log(log: "Trace") -> None:
@@ -599,7 +599,7 @@ def _preflight_log(log: "Trace") -> None:
         Model log to validate.
     """
 
-    if not getattr(log, "_pass_finished", False):
+    if not getattr(log, "_tracing_finished", False):
         raise ReplayPreconditionError("replay requires a completed Trace")
     if not getattr(log, "intervention_ready", False):
         raise ReplayPreconditionError("replay requires intervention_ready=True capture metadata")
@@ -615,8 +615,8 @@ def _preflight_group(group: Sequence["OpLog"]) -> None:
     """
 
     for site in group:
-        if site.func_applied is None:
-            raise ReplayPreconditionError(f"{site.layer_label!r} has no func_applied for replay")
+        if site.func is None:
+            raise ReplayPreconditionError(f"{site.layer_label!r} has no func for replay")
         _template_for_site(site)
 
 
@@ -634,9 +634,9 @@ def _template_for_site(site: "OpLog") -> CapturedArgTemplate:
         Captured replay template.
     """
 
-    template = getattr(site, "captured_arg_template", None)
+    template = getattr(site, "args_template", None)
     if not isinstance(template, CapturedArgTemplate):
-        raise ReplayPreconditionError(f"{site.layer_label!r} has no captured_arg_template")
+        raise ReplayPreconditionError(f"{site.layer_label!r} has no args_template")
     _raise_on_unsupported_template(site, template)
     return template
 
@@ -797,7 +797,7 @@ def _resolve_single_origin(
         Single origin site.
     """
 
-    if hasattr(site, "layer_label") and hasattr(site, "activation"):
+    if hasattr(site, "layer_label") and hasattr(site, "out"):
         return cast("OpLog", site)
     return cast("OpLog", log.resolve_sites(site, strict=strict, max_fanout=1).first())
 
@@ -868,8 +868,8 @@ def _child_labels(site: "OpLog") -> tuple[str, ...]:
         Child labels.
     """
 
-    labels = list(getattr(site, "child_layers", ()) or ())
-    labels.extend((getattr(site, "children_tensor_versions", {}) or {}).keys())
+    labels = list(getattr(site, "children", ()) or ())
+    labels.extend((getattr(site, "output_versions_per_child", {}) or {}).keys())
     return tuple(dict.fromkeys(labels))
 
 
@@ -964,7 +964,7 @@ def _warn_if_unexpected_parent(
         Whether to raise instead of warn.
     """
 
-    if parent_label in set(getattr(pass_log, "parent_layers", ()) or ()):
+    if parent_label in set(getattr(pass_log, "parents", ()) or ()):
         return
     message = (
         f"replay template for {pass_log.layer_label!r} references {parent_label!r}, "
@@ -987,8 +987,8 @@ def _check_edge_expectations(site: "OpLog", *, strict: bool) -> None:
     """
 
     edge_parents = {edge.parent_label for edge in getattr(site, "edge_uses", ()) or ()}
-    if edge_parents and not edge_parents.issubset(set(site.parent_layers)):
-        message = f"edge provenance for {site.layer_label!r} no longer matches parent_layers"
+    if edge_parents and not edge_parents.issubset(set(site.parents)):
+        message = f"edge provenance for {site.layer_label!r} no longer matches parents"
         if strict:
             raise ControlFlowDivergenceError(message)
         warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
@@ -1008,8 +1008,8 @@ def _is_inplace_none_return(site: "OpLog") -> bool:
         Whether to use the first positional argument as output.
     """
 
-    func_name = getattr(site.func_applied, "__name__", "") if site.func_applied is not None else ""
-    return bool(site.func_is_inplace) or func_name in {"__setitem__", "zero_", "__delitem__"}
+    func_name = getattr(site.func, "__name__", "") if site.func is not None else ""
+    return bool(site.is_inplace) or func_name in {"__setitem__", "zero_", "__delitem__"}
 
 
 def _ensure_replay_run_ctx(log: "Trace") -> dict[str, Any]:
@@ -1069,9 +1069,9 @@ def _replay_fire_record(entry: NormalizedHookEntry, site: "OpLog") -> FireRecord
     helper_kwargs = dict(entry.helper_spec.kwargs) if entry.helper_spec is not None else {}
     return FireRecord(
         target_label=site.layer_label,
-        pass_label=site.layer_label_w_pass,
+        call_label=site.layer_label_w_pass,
         func_call_id=site.func_call_id,
-        output_path=tuple(site.output_path or ()),
+        container_path=tuple(site.container_path or ()),
         engine="replay",
         helper=entry.helper_spec,
         site_label=site.layer_label,

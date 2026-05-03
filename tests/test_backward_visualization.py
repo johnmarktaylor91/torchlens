@@ -47,7 +47,7 @@ class _DoubleFn(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx: torch.autograd.function.FunctionCtx, grad: torch.Tensor) -> torch.Tensor:
-        """Return doubled upstream gradient."""
+        """Return doubled upstream grad."""
         return grad * 2
 
 
@@ -75,15 +75,15 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Model log after backward capture.
     """
 
-    trace = tl.trace(model, x, gradients_to_save="all")
-    trace.log_backward(trace[trace.output_layers[0]].activation.sum())
+    trace = tl.trace(model, x, grads_to_save="all")
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
 
 @pytest.mark.smoke
 def test_show_backward_graph_renders(tmp_path: Path) -> None:
     """show_backward_graph returns DOT source and writes a non-empty output file."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, has_trainable_params=True))
     outpath = tmp_path / "backward_graph"
 
     dot = trace.show_backward_graph(
@@ -100,7 +100,7 @@ def test_show_backward_graph_renders(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
     """Backward DOT contains expected grad_fn labels."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, has_trainable_params=True))
 
     dot = trace.show_backward_graph(
         vis_outpath=str(tmp_path / "grad_fns"),
@@ -116,7 +116,7 @@ def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
     """Intervening grad_fns use the documented ``[i]`` label prefix."""
-    trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
+    trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, has_trainable_params=True))
 
     dot = trace.show_backward_graph(
         vis_outpath=str(tmp_path / "intervening"),
@@ -130,7 +130,7 @@ def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
     """Custom autograd grad_fns use the documented ``[custom]`` suffix."""
-    trace = _log_backward_model(_CustomModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _log_backward_model(_CustomModel(), torch.randn(2, 3, has_trainable_params=True))
 
     dot = trace.show_backward_graph(
         vis_outpath=str(tmp_path / "custom"),
@@ -145,7 +145,7 @@ def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
     """Backward node labels include corresponding forward layer labels."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, has_trainable_params=True))
 
     dot = trace.show_backward_graph(
         vis_outpath=str(tmp_path / "cross_ref"),
@@ -160,7 +160,7 @@ def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_show_backward_graph_top_level_function(tmp_path: Path) -> None:
     """The top-level ``tl.show_backward_graph`` helper renders a Trace."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, has_trainable_params=True))
 
     dot = tl.show_backward_graph(
         trace,
@@ -177,8 +177,8 @@ def test_show_backward_graph_errors_without_log_backward() -> None:
     """show_backward_graph errors clearly before explicit backward capture."""
     trace = tl.trace(
         _LinearReluModel(),
-        torch.randn(2, 3, requires_grad=True),
-        gradients_to_save="all",
+        torch.randn(2, 3, has_trainable_params=True),
+        grads_to_save="all",
     )
 
     with pytest.raises(ValueError, match="call log_backward\\(loss\\) first"):
@@ -189,7 +189,7 @@ def test_show_backward_graph_errors_without_log_backward() -> None:
 def test_forward_graph_unchanged(tmp_path: Path) -> None:
     """Top-level forward graph output remains stable around backward rendering."""
     model = _LinearReluModel()
-    x = torch.randn(2, 3, requires_grad=True)
+    x = torch.randn(2, 3, has_trainable_params=True)
     before = tmp_path / "forward_before"
     after = tmp_path / "forward_after"
 

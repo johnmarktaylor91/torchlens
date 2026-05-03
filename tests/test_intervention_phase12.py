@@ -130,8 +130,8 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
 
-def _first_batch_activation(log: tl.Trace) -> torch.Tensor:
-    """Return the first saved activation with a batch dimension.
+def _first_batch_out(log: tl.Trace) -> torch.Tensor:
+    """Return the first saved out with a batch dimension.
 
     Parameters
     ----------
@@ -141,18 +141,18 @@ def _first_batch_activation(log: tl.Trace) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        First activation with at least one dimension.
+        First out with at least one dimension.
     """
 
     for layer in log.layer_list:
-        if isinstance(layer.activation, torch.Tensor) and layer.activation.ndim > 0:
-            return layer.activation
-    raise AssertionError("no batch activation found")
+        if isinstance(layer.out, torch.Tensor) and layer.out.ndim > 0:
+            return layer.out
+    raise AssertionError("no batch out found")
 
 
 @pytest.mark.smoke
 def test_append_success_grows_batch_and_sets_state() -> None:
-    """Compatible append concatenates saved activations and records state."""
+    """Compatible append concatenates saved outs and records state."""
 
     torch.manual_seed(0)
     model = _LinearRelu()
@@ -169,7 +169,7 @@ def test_append_success_grows_batch_and_sets_state() -> None:
     assert log.last_run_ctx["engine"] == "append"
     assert log.operation_history[-1]["op"] == "append"
     assert len(log.operation_history) == original_history_len + 1
-    assert _first_batch_activation(log).shape[0] == 5
+    assert _first_batch_out(log).shape[0] == 5
 
 
 def test_append_topology_mismatch_raises() -> None:
@@ -227,7 +227,7 @@ def test_append_batchnorm_train_mode_warns() -> None:
 
 
 def test_append_recipe_stale_rejected_before_capture() -> None:
-    """Append requires propagated activations to match the current recipe."""
+    """Append requires propagated outs to match the current recipe."""
 
     model = _LinearRelu()
     model.eval()

@@ -5,7 +5,7 @@ small local PyTorch model unless noted otherwise.
 
 1. `01_first_five_minutes.py` - minimal capture, discovery, fork, zero-ablation, and replay.
 2. `02_exact_site_after_discovery.py` - discover labels with `find_sites`, then target an exact site.
-3. `03_activation_patching_paired_prompt.py` - clean-versus-corrupted activation patching.
+3. `03_out_patching_paired_prompt.py` - clean-versus-corrupted out patching.
 4. `04_sticky_hooks_multiple_engines.py` - reuse sticky hooks with replay and rerun.
 5. `05_set_vs_attach_hooks.py` - static `set` replacements versus sticky hook recipes.
 6. `06_chunked_batching.py` - append compatible chunks for memory-constrained evaluation.

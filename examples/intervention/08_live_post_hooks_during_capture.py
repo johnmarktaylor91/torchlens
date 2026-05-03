@@ -42,8 +42,8 @@ def main() -> None:
         hooks={tl.func("relu"): tl.zero_ablate()},
     )
 
-    assert torch.allclose(live.layer_list[-1].activation, torch.ones_like(x))
-    assert not torch.allclose(clean.layer_list[-1].activation, live.layer_list[-1].activation)
+    assert torch.allclose(live.layer_list[-1].out, torch.ones_like(x))
+    assert not torch.allclose(clean.layer_list[-1].out, live.layer_list[-1].out)
     assert live.last_run_records()[-1].engine == "live"
 
 

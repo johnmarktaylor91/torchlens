@@ -1,4 +1,4 @@
-"""Trace query and display helpers used by ``Trace`` methods.
+"""Trace query and display helpers used by ``Trace`` custom_methods.
 
 **__getitem__ lookup logic** (``_getitem_after_pass``):
 
@@ -115,7 +115,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
         ]
         entries_with_substr = {
-            self.layer_dict_all_keys[key].creation_order: self.layer_dict_all_keys[key]
+            self.layer_dict_all_keys[key].creation_index: self.layer_dict_all_keys[key]
             for key in keys_with_substr
         }
         if len(entries_with_substr) == 1:
@@ -148,10 +148,10 @@ def _str_after_pass(self: "Trace") -> str:
 
     # General info
 
-    s += f"\n\tRandom seed: {self.random_seed_used}"
+    s += f"\n\tRandom seed: {self.random_seed}"
     s += (
-        f"\n\tTime elapsed: {np.round(self.time_total, 3)}s "
-        f"({np.round(self.time_logging, 3)}s spent logging)"
+        f"\n\tTime elapsed: {np.round(self.duration, 3)}s "
+        f"({np.round(self.overhead_duration, 3)}s spent logging)"
     )
 
     # Overall model structure
@@ -181,10 +181,10 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += "\n\tTensor info:"
     s += (
-        f"\n\t\t- {self.num_tensors_total} total tensors ({self.total_activation_memory_str}) "
+        f"\n\t\t- {self.num_tensors_total} total tensors ({self.total_out_memory_str}) "
         f"computed in forward pass."
     )
-    s += f"\n\t\t- {self.num_tensors_saved} tensors ({self.saved_activation_memory_str}) with saved activations."
+    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_out_memory_str}) with saved outs."
     nonfinite = self.first_nonfinite()
     if not nonfinite.startswith("No non-finite"):
         s += f"\n\t\t- NaN/Inf: {nonfinite}"
@@ -192,8 +192,8 @@ def _str_after_pass(self: "Trace") -> str:
     # Model parameters:
 
     s += (
-        f"\n\tParameters: {self.total_param_layers} parameter operations ({self.total_params} params total; "
-        f"{self.total_params_memory_str})"
+        f"\n\tParameters: {self.num_layers_with_params} parameter operations ({self.num_params} params total; "
+        f"{self.param_memory_str})"
     )
     s += "\n\tFLOP convention: MACs are reported as FLOPs // 2."
 
@@ -203,23 +203,21 @@ def _str_after_pass(self: "Trace") -> str:
 
     # Now print all layers.
     s += "\n\tLayers"
-    if self._all_layers_saved:
-        s += " (all have saved activations):"
-    elif self.num_tensors_saved == 0:
-        s += " (no layer activations are saved):"
+    if self._layers_saved:
+        s += " (all have saved outs):"
+    elif self.num_saved_ops == 0:
+        s += " (no layer outs are saved):"
     else:
-        s += " (* means layer has saved activations):"
+        s += " (* means layer has saved outs):"
     for layer_ind, layer_barcode in enumerate(self.layer_labels):
-        pass_num = self.layer_dict_main_keys[layer_barcode].pass_num
-        total_passes = self.layer_dict_main_keys[layer_barcode].num_passes
-        if total_passes > 1:
-            pass_str = f" ({pass_num}/{total_passes} passes)"
+        call_index = self.layer_dict_main_keys[layer_barcode].call_index
+        total_ops = self.layer_dict_main_keys[layer_barcode].num_calls
+        if total_ops > 1:
+            pass_str = f" ({call_index}/{total_ops} ops)"
         else:
             pass_str = ""
 
-        if self.layer_dict_main_keys[layer_barcode].has_saved_activations and (
-            not self._all_layers_saved
-        ):
+        if self.layer_dict_main_keys[layer_barcode].has_saved_outs and (not self._layers_saved):
             s += "\n\t\t* "
         else:
             s += "\n\t\t  "
@@ -235,12 +233,12 @@ def _str_during_pass(self: "Trace") -> str:
         String summarizing the model.
     """
     s = f"Log of {self.model_name} forward pass (pass still ongoing):"
-    s += f"\n\tRandom seed: {self.random_seed_used}"
+    s += f"\n\tRandom seed: {self.random_seed}"
     s += f"\n\tInput tensors: {self.input_layers}"
     s += f"\n\tOutput tensors: {self.output_layers}"
-    s += f"\n\tInternally initialized tensors: {self.internally_initialized_layers}"
-    s += f"\n\tInternally terminated tensors: {self.internally_terminated_layers}"
-    s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_layers}"
+    s += f"\n\tInternally initialized tensors: {self.internally_initialized_ops}"
+    s += f"\n\tInternally terminated tensors: {self.internally_terminated_ops}"
+    s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_ops}"
     s += f"\n\tBuffer tensors: {self.buffer_layers}"
     s += "\n\tRaw layer labels:"
     for layer in self._raw_layer_labels_list:
@@ -273,14 +271,14 @@ def _module_hierarchy_str(self: "Trace") -> str:
     """
     s = ""
     root_module = cast(Any, self.modules["self"])
-    root_pass = root_module.passes.get(1)
+    root_pass = root_module.ops.get(1)
     if root_pass is None:
         return s
     for module_pass in root_pass.call_children:
-        module, pass_num = module_pass.split(":")
+        module, call_index = module_pass.split(":")
         s += f"\n\t\t{module}"
-        if cast(Any, self.modules[module]).num_passes > 1:
-            s += f":{pass_num}"
+        if cast(Any, self.modules[module]).num_calls > 1:
+            s += f":{call_index}"
         s += _module_hierarchy_str_recursive(self, module_pass, 1)
     return s
 
@@ -296,20 +294,20 @@ def _module_hierarchy_str_recursive(self: "Trace", module_pass: str, level: int)
     module_call_log = self.modules[module_pass]
     children = module_call_log.call_children
     any_grandchild_modules = any(
-        [len(self.modules[child_pass_label].call_children) > 0 for child_pass_label in children]
+        [len(self.modules[child_call_label].call_children) > 0 for child_call_label in children]
     )
     if any_grandchild_modules or len(children) == 0:
         for submodule_pass in children:
-            submodule, pass_num = submodule_pass.split(":")
+            submodule, call_index = submodule_pass.split(":")
             s += f"\n\t\t{'    ' * level}{submodule}"
-            if cast(Any, self.modules[submodule]).num_passes > 1:
-                s += f":{pass_num}"
+            if cast(Any, self.modules[submodule]).num_calls > 1:
+                s += f":{call_index}"
             s += _module_hierarchy_str_recursive(self, submodule_pass, level + 1)
     else:
         submodule_list = []
         for submodule_pass in children:
-            submodule, pass_num = submodule_pass.split(":")
-            if cast(Any, self.modules[submodule]).num_passes == 1:
+            submodule, call_index = submodule_pass.split(":")
+            if cast(Any, self.modules[submodule]).num_calls == 1:
                 submodule_list.append(submodule)
             else:
                 submodule_list.append(submodule_pass)

@@ -29,7 +29,7 @@ from .tensor_utils import (
     tensor_all_nan,
     tensor_nanequal,
     safe_to,
-    get_tensor_memory_amount,
+    get_memory_amount,
     safe_copy,
     print_override,
 )
@@ -431,7 +431,7 @@ def peek_graph(
     model: nn.Module,
     x: Any,
     view: Literal["unrolled", "rolled", "none"] = "unrolled",
-    output_path: str | Path = "modelgraph",
+    container_path: str | Path = "modelgraph",
     file_format: str = "pdf",
 ) -> None:
     """Capture and render a model graph with quickstart defaults.
@@ -444,7 +444,7 @@ def peek_graph(
         Input passed to ``trace``.
     view:
         Visualization view vocabulary passed as ``vis_mode``.
-    output_path:
+    container_path:
         Output path stem for the renderer.
     file_format:
         Renderer output format.
@@ -465,7 +465,7 @@ def peek_graph(
     )
     trace.show(
         vis_mode=view,
-        vis_outpath=str(output_path),
+        vis_outpath=str(container_path),
         vis_fileformat=file_format,
         vis_save_only=True,
     )
@@ -617,7 +617,7 @@ def find_executable_save_set(
     Returns
     -------
     list[str]
-        Selected layer labels. The heuristic sorts candidates by activation
+        Selected layer labels. The heuristic sorts candidates by out
         memory ascending to maximize count.
     """
 
@@ -627,9 +627,7 @@ def find_executable_save_set(
         entry = trace[layer]
         label = str(getattr(entry, "layer_label_no_pass", getattr(entry, "layer_label", layer)))
         memory = int(
-            getattr(entry, "transformed_activation_memory", None)
-            or getattr(entry, "tensor_memory", None)
-            or 0
+            getattr(entry, "transformed_out_memory", None) or getattr(entry, "memory", None) or 0
         )
         candidates.append((memory, label))
 
@@ -658,7 +656,7 @@ def trace_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any)
     -------
     Any
         First ``Trace`` with ``streaming_pass_logs`` and
-        ``num_streamed_passes`` attributes.
+        ``num_streamed_ops`` attributes.
     """
 
     import torchlens
@@ -668,7 +666,7 @@ def trace_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any)
         raise ValueError("inputs_iter must yield at least one input.")
     root = logs[0]
     root.streaming_pass_logs = logs
-    root.num_streamed_passes = len(logs)
+    root.num_streamed_ops = len(logs)
     return root
 
 
@@ -688,7 +686,7 @@ __all__ = [
     "doctor",
     "ensure_iterable",
     "get_attr_values_from_tensor_list",
-    "get_tensor_memory_amount",
+    "get_memory_amount",
     "get_vars_of_type_from_obj",
     "human_readable_size",
     "identity",

@@ -17,14 +17,14 @@ class GradFnCallLog:
     """Runtime data for one execution of an autograd ``grad_fn`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
-        "pass_num": FieldPolicy.KEEP,
+        "call_index": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
         "time_started": FieldPolicy.KEEP,
         "time_finished": FieldPolicy.KEEP,
     }
 
-    pass_num: int
+    call_index: int
     grad_inputs: Any = None
     grad_outputs: Any = None
     time_started: float | None = None

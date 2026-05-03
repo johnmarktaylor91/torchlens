@@ -3,7 +3,7 @@
 ## What This Does
 Transforms raw capture records into user-facing `Trace` state. The current full pipeline
 has 20 ordered steps: graph traversal, conditional attribution, module/buffer fixes, loop
-detection, labeling, finalization, streaming bundle finalization, and optional activation
+detection, labeling, finalization, streaming bundle finalization, and optional out
 eviction. Step order is load-bearing.
 
 ## Files
@@ -26,13 +26,13 @@ eviction. Step order is load-bearing.
 | 1 | `_add_output_layers` | Create dedicated output nodes |
 | 2 | `_find_output_ancestors` | Mark nodes connected to model output |
 | 3 | `_remove_orphan_nodes` | Drop unconnected raw nodes |
-| 4 | `_mark_input_output_distances` | Optional input/output distance metadata |
+| 4 | `_mark_layer_depths` | Optional input/output distance metadata |
 | 5 | `_mark_conditional_branches` | AST/bool/event/edge conditional attribution |
 | 6 | `_fix_modules_for_internal_tensors` | Infer module containment for internal tensors |
 | 7 | `_fix_buffer_layers` | Deduplicate and reconnect buffers |
 | 8 | `_detect_and_label_loops` or `_group_by_shared_params` | Recurrent grouping |
 | 9 | `_map_raw_labels_to_final_labels` | Build raw-to-final label map |
-| 10 | `_log_final_info_for_all_layers` | Write final layer/module fields |
+| 10 | `_log_final_info_for_layers` | Write final layer/module fields |
 | 11 | `_rename_model_history_layer_names` and `_trim_and_reorder_model_history_fields` | Rename global refs |
 | 12 | `_remove_unwanted_entries_and_log_remaining` | Apply save policy and lookup keys |
 | 13 | `_undecorate_all_saved_tensors` | Strip TorchLens attrs from saved tensors |
@@ -42,9 +42,9 @@ eviction. Step order is load-bearing.
 | 16.5 | `_build_layer_logs` | Build aggregate LayerLogs |
 | 17 | `_build_module_logs` | Build ModuleLogs |
 | 17.5 | `compute_graph_shape_hash` | Hash graph shape before pass-finished behavior changes |
-| 18 | `_set_pass_finished` | Switch Trace to user-facing behavior |
-| 19 | `_finalize_streamed_bundle` | Finalize streamed activation bundle |
-| 20 | `_evict_streamed_activations` | Optional in-memory activation eviction |
+| 18 | `_set_tracing_finished` | Switch Trace to user-facing behavior |
+| 19 | `_finalize_streamed_bundle` | Finalize streamed out bundle |
+| 20 | `_evict_streamed_outs` | Optional in-memory out eviction |
 
 ## Step 5: Conditional Attribution
 Step 5 builds AST indexes, classifies terminal scalar bools, materializes dense
@@ -52,7 +52,7 @@ Step 5 builds AST indexes, classifies terminal scalar bools, materializes dense
 then derives legacy THEN/ELIF/ELSE views. Canonical structures are:
 - `Trace.conditional_events`
 - `Trace.conditional_arm_edges`
-- `Trace.conditional_edge_passes`
+- `Trace.conditional_edge_ops`
 - `cond_branch_children_by_cond` on `OpLog` and `LayerLog`
 
 ## Loop Detection
@@ -62,6 +62,6 @@ rebuilds pass assignments. Step 6 appends module suffixes to equivalence types, 
 is necessary, not defensive.
 
 ## Fast Mode
-`postprocess_fast()` is for second-pass selective activation saves. It reuses graph structure,
+`postprocess_fast()` is for second-pass selective out saves. It reuses graph structure,
 labels, module data, and loop groupings from the exhaustive pass. It must not call
 `_build_module_logs()` because `_module_build_data` is not repopulated in fast mode.

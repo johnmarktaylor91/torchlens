@@ -34,7 +34,7 @@ def _normalize_module_stack(
             continue
         frames.append(
             ModuleStackFrame(
-                module_address=str(frame.get("module_address", "")),
+                address=str(frame.get("address", "")),
                 module_type=str(frame.get("module_type", "")),
                 module_id=int(frame.get("module_id", 0)),
                 pass_index=int(frame.get("pass_index", 0)),
@@ -108,20 +108,20 @@ def _build_record_context(
         layer_type = _read_field(data, "func_name")
     if isinstance(layer_type, str):
         layer_type = layer_type.lower().replace("_", "")
-    layer_type_num = _read_field(data, "layer_type_num")
-    if layer_type_num is None and layer_type is not None and op_counts is not None:
-        layer_type_num = op_counts.get(cast(str, layer_type))
+    type_index = _read_field(data, "type_index")
+    if type_index is None and layer_type is not None and op_counts is not None:
+        type_index = op_counts.get(cast(str, layer_type))
     tensor = _read_field(data, "tensor")
-    tensor_shape = _read_field(data, "tensor_shape")
-    tensor_dtype = _read_field(data, "tensor_dtype")
+    shape = _read_field(data, "shape")
+    dtype = _read_field(data, "dtype")
     tensor_device = _read_field(data, "tensor_device")
     tensor_requires_grad = _read_field(data, "tensor_requires_grad")
     if isinstance(tensor, torch.Tensor):
-        tensor_shape = tuple(tensor.shape)
-        tensor_dtype = tensor.dtype
+        shape = tuple(tensor.shape)
+        dtype = tensor.dtype
         tensor_device = tensor.device
         tensor_requires_grad = tensor.requires_grad
-    raw_label = _read_field(data, "tensor_label_raw", _read_field(data, "raw_label"))
+    raw_label = _read_field(data, "_label_raw", _read_field(data, "raw_label"))
     label = _read_field(data, "label", raw_label)
     if label is None:
         label = f"{kind}_{event_index}"
@@ -133,10 +133,10 @@ def _build_record_context(
         event_index=event_index,
         op_index=op_index,
         layer_type=layer_type,
-        layer_type_num=layer_type_num,
-        creation_order=_read_field(data, "creation_order"),
+        type_index=type_index,
+        creation_index=_read_field(data, "creation_index"),
         func_name=_read_field(data, "func_name"),
-        module_address=_read_field(data, "module_address"),
+        address=_read_field(data, "address"),
         module_type=_read_field(data, "module_type"),
         module_pass_index=_read_field(data, "module_pass_index"),
         module_stack=stack,
@@ -144,8 +144,8 @@ def _build_record_context(
         recent_ops=_recent_ops_for_event(recent_events, include_source_events),
         parent_labels=tuple(_read_field(data, "parent_labels", ())),
         input_output_address=_read_field(data, "input_output_address"),
-        tensor_shape=tensor_shape,
-        tensor_dtype=tensor_dtype,
+        shape=shape,
+        dtype=dtype,
         tensor_device=tensor_device,
         tensor_requires_grad=tensor_requires_grad,
         output_index=_read_field(data, "output_index"),

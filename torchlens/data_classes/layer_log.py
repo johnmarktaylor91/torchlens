@@ -1,14 +1,14 @@
 """LayerLog and LayerAccessor: aggregate per-layer metadata and dict-like accessor.
 
 LayerLog groups one or more OpLog entries that represent the same
-logical layer across recurrent passes.  For non-recurrent models (the
+logical layer across recurrent ops.  For non-recurrent models (the
 common case), every LayerLog wraps exactly one OpLog.
 
-**Delegation pattern**: For single-pass layers, per-pass fields (activation,
-gradient, operation_num, etc.) are accessible directly on the LayerLog
-via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``passes[1]``.
+**Delegation pattern**: For single-pass layers, per-pass fields (out,
+grad, op_index, etc.) are accessible directly on the LayerLog
+via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``ops[1]``.
 For multi-pass layers, accessing these fields raises ``ValueError`` (NOT
-``AttributeError``) directing the user to ``layer_log.passes[N].field``.
+``AttributeError``) directing the user to ``layer_log.ops[N].field``.
 
 Why ValueError instead of AttributeError: Python's property protocol treats
 ``AttributeError`` from a ``@property`` as "attribute doesn't exist" and falls
@@ -16,17 +16,17 @@ through to ``__getattr__``.  Using ``ValueError`` avoids this trap and gives
 the user a clear error message.
 
 **_build_layer_logs merge rules** (in postprocess/layer_log.py):
-When merging multiple passes into one LayerLog, these aggregate fields are merged:
-  - ``has_input_ancestor``: OR across passes
+When merging multiple ops into one LayerLog, these aggregate fields are merged:
+  - ``has_input_ancestor``: OR across ops
   - ``io_role``: character-level merge of "I", "O", "IO" strings
-  - ``is_leaf_module_output``: OR across passes
-  - ``in_cond_branch``: OR across passes
-  - ``conditional_branch_stacks`` / ``conditional_branch_stack_passes``:
+  - ``is_atomic_module_output``: OR across ops
+  - ``in_cond_branch``: OR across ops
+  - ``conditional_branch_stacks`` / ``conditional_branch_stack_ops``:
     unique per-pass stack signatures and their pass numbers
   - ``cond_branch_children_by_cond`` and derived child views:
-    pass-stripped ordered unions across passes
+    pass-stripped ordered unions across ops
 All other 78+ fields use the first pass's values only.
-``modules_exited`` / ``module_passes_exited`` are NOT updated across passes
+``output_of_modules`` / ``output_of_module_calls`` are NOT updated across ops
 (correct because same-layer grouping requires identical structural position).
 """
 
@@ -53,84 +53,84 @@ class LayerLog:
     For non-recurrent models, every LayerLog has exactly one pass.
 
     Aggregate fields (function identity, param identity, flags, module containment)
-    live directly on LayerLog.  Per-pass fields (activations, graph edges,
-    execution state, gradients) live on the OpLog objects in ``self.passes``.
+    live directly on LayerLog.  Per-pass fields (outs, graph edges,
+    execution state, grads) live on the OpLog objects in ``self.ops``.
 
     For single-pass layers, per-pass fields are accessible directly via
-    ``__getattr__`` delegation (e.g. ``layer_log.activation`` transparently
-    reads from ``passes[1].activation``).
+    ``__getattr__`` delegation (e.g. ``layer_log.out`` transparently
+    reads from ``ops[1].out``).
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "layer_label": FieldPolicy.KEEP,
         "layer_label_short": FieldPolicy.KEEP,
         "layer_type": FieldPolicy.KEEP,
-        "layer_type_num": FieldPolicy.KEEP,
-        "layer_total_num": FieldPolicy.KEEP,
-        "num_passes": FieldPolicy.KEEP,
+        "type_index": FieldPolicy.KEEP,
+        "overall_index": FieldPolicy.KEEP,
+        "num_calls": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
-        "func_applied": FieldPolicy.DROP,
+        "func": FieldPolicy.DROP,
         "func_name": FieldPolicy.KEEP,
-        "func_is_inplace": FieldPolicy.KEEP,
+        "is_inplace": FieldPolicy.KEEP,
         "grad_fn_name": FieldPolicy.KEEP,
         "grad_fn_id": FieldPolicy.KEEP,
-        "grad_fn_object": FieldPolicy.DROP,
-        "corresponding_grad_fn": FieldPolicy.DROP,
-        "func_argnames": FieldPolicy.KEEP,
-        "num_args": FieldPolicy.KEEP,
-        "num_positional_args": FieldPolicy.KEEP,
-        "num_keyword_args": FieldPolicy.KEEP,
+        "grad_fn": FieldPolicy.DROP,
+        "grad_fn_log": FieldPolicy.DROP,
+        "arg_names": FieldPolicy.KEEP,
+        "num_args_total": FieldPolicy.KEEP,
+        "num_pos_args": FieldPolicy.KEEP,
+        "num_kwargs": FieldPolicy.KEEP,
         "is_part_of_iterable_output": FieldPolicy.KEEP,
-        "iterable_output_index": FieldPolicy.KEEP,
-        "tensor_shape": FieldPolicy.KEEP,
-        "transformed_activation_shape": FieldPolicy.KEEP,
-        "tensor_dtype": FieldPolicy.KEEP,
-        "transformed_activation_dtype": FieldPolicy.KEEP,
-        "tensor_memory": FieldPolicy.KEEP,
-        "transformed_activation_memory": FieldPolicy.KEEP,
-        "transformed_activation": FieldPolicy.BLOB,
-        "autograd_saved_bytes": FieldPolicy.KEEP,
-        "autograd_saved_tensor_count": FieldPolicy.KEEP,
+        "multi_output_index": FieldPolicy.KEEP,
+        "shape": FieldPolicy.KEEP,
+        "transformed_out_shape": FieldPolicy.KEEP,
+        "dtype": FieldPolicy.KEEP,
+        "transformed_out_dtype": FieldPolicy.KEEP,
+        "memory": FieldPolicy.KEEP,
+        "transformed_out_memory": FieldPolicy.KEEP,
+        "transformed_out": FieldPolicy.BLOB,
+        "autograd_saved_memory": FieldPolicy.KEEP,
+        "num_autograd_saved_tensors": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
-        "activation_postfunc": FieldPolicy.DROP,
-        "extra_data": FieldPolicy.KEEP,
-        "detach_saved_tensor": FieldPolicy.KEEP,
-        "save_gradients": FieldPolicy.KEEP,
-        "transformed_gradient": FieldPolicy.BLOB,
-        "transformed_gradient_shape": FieldPolicy.KEEP,
-        "transformed_gradient_dtype": FieldPolicy.KEEP,
-        "transformed_gradient_memory": FieldPolicy.KEEP,
+        "out_postfunc": FieldPolicy.DROP,
+        "annotations": FieldPolicy.KEEP,
+        "detach_saved_tensors": FieldPolicy.KEEP,
+        "save_grads": FieldPolicy.KEEP,
+        "transformed_grad": FieldPolicy.BLOB,
+        "transformed_grad_shape": FieldPolicy.KEEP,
+        "transformed_grad_dtype": FieldPolicy.KEEP,
+        "transformed_grad_memory": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
-        "parent_param_barcodes": FieldPolicy.KEEP,
-        "parent_param_logs": FieldPolicy.KEEP,
-        "parent_param_shapes": FieldPolicy.KEEP,
-        "num_params_total": FieldPolicy.KEEP,
+        "_param_barcodes": FieldPolicy.KEEP,
+        "_param_logs": FieldPolicy.KEEP,
+        "param_shapes": FieldPolicy.KEEP,
+        "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
-        "params_memory": FieldPolicy.KEEP,
+        "param_memory": FieldPolicy.KEEP,
         "func_config": FieldPolicy.BLOB_RECURSIVE,
-        "operation_equivalence_type": FieldPolicy.KEEP,
-        "equivalent_operations": FieldPolicy.KEEP,
-        "is_input_layer": FieldPolicy.KEEP,
-        "is_output_layer": FieldPolicy.KEEP,
+        "equivalence_class": FieldPolicy.KEEP,
+        "equivalent_ops": FieldPolicy.KEEP,
+        "is_input": FieldPolicy.KEEP,
+        "is_output": FieldPolicy.KEEP,
         "is_final_output": FieldPolicy.KEEP,
-        "is_buffer_layer": FieldPolicy.KEEP,
+        "is_buffer": FieldPolicy.KEEP,
         "buffer_address": FieldPolicy.KEEP,
         "buffer_parent": FieldPolicy.KEEP,
-        "is_internally_initialized": FieldPolicy.KEEP,
-        "is_internally_terminated": FieldPolicy.KEEP,
-        "is_terminal_bool_layer": FieldPolicy.KEEP,
+        "is_internal_source": FieldPolicy.KEEP,
+        "is_internal_sink": FieldPolicy.KEEP,
+        "is_terminal_bool": FieldPolicy.KEEP,
         "is_scalar_bool": FieldPolicy.KEEP,
-        "scalar_bool_value": FieldPolicy.KEEP,
+        "bool_value": FieldPolicy.KEEP,
         "in_cond_branch": FieldPolicy.KEEP,
         "conditional_branch_stacks": FieldPolicy.KEEP,
-        "conditional_branch_stack_passes": FieldPolicy.KEEP,
+        "conditional_branch_stack_ops": FieldPolicy.KEEP,
         "cond_branch_children_by_cond": FieldPolicy.KEEP,
-        "containing_module": FieldPolicy.KEEP,
-        "containing_modules": FieldPolicy.KEEP,
-        "modules_exited": FieldPolicy.KEEP,
-        "module_passes_exited": FieldPolicy.KEEP,
+        "module": FieldPolicy.KEEP,
+        "modules": FieldPolicy.KEEP,
+        "output_of_modules": FieldPolicy.KEEP,
+        "output_of_module_calls": FieldPolicy.KEEP,
         "cond_branch_start_children": FieldPolicy.KEEP,
         "cond_branch_then_children": FieldPolicy.KEEP,
         "cond_branch_elif_children": FieldPolicy.KEEP,
@@ -138,9 +138,9 @@ class LayerLog:
         "has_input_ancestor": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
-        "is_leaf_module_output": FieldPolicy.KEEP,
-        "passes": FieldPolicy.KEEP,
-        "pass_labels": FieldPolicy.KEEP,
+        "is_atomic_module_output": FieldPolicy.KEEP,
+        "ops": FieldPolicy.KEEP,
+        "call_labels": FieldPolicy.KEEP,
     }
 
     def __init__(self, first_pass: "OpLog") -> None:
@@ -153,9 +153,9 @@ class LayerLog:
         self.layer_label = first_pass.layer_label_no_pass
         self.layer_label_short = first_pass.layer_label_no_pass_short
         self.layer_type = first_pass.layer_type
-        self.layer_type_num = first_pass.layer_type_num
-        self.layer_total_num = first_pass.layer_total_num
-        self.num_passes = first_pass.num_passes
+        self.type_index = first_pass.type_index
+        self.overall_index = first_pass.overall_index
+        self.num_calls = first_pass.num_calls
         # Store as weakref to break circular reference (Trace -> layer_logs -> LayerLog -> Trace).
         _sml = first_pass.source_trace
         self._source_trace_ref: weakref.ReferenceType["Trace"] | None = (
@@ -163,87 +163,87 @@ class LayerLog:
         )
 
         # Function identity
-        self.func_applied = first_pass.func_applied
+        self.func = first_pass.func
         self.func_name = first_pass.func_name
-        self.func_is_inplace = first_pass.func_is_inplace
+        self.is_inplace = first_pass.is_inplace
         self.grad_fn_name = first_pass.grad_fn_name
         self.grad_fn_id = first_pass.grad_fn_id
-        self.grad_fn_object = first_pass.grad_fn_object
-        self.corresponding_grad_fn = first_pass.corresponding_grad_fn
-        self.func_argnames = first_pass.func_argnames
-        self.num_args = first_pass.num_args
-        self.num_positional_args = first_pass.num_positional_args
-        self.num_keyword_args = first_pass.num_keyword_args
+        self.grad_fn = first_pass.grad_fn
+        self.grad_fn_log = first_pass.grad_fn_log
+        self.arg_names = first_pass.arg_names
+        self.num_args_total = first_pass.num_args_total
+        self.num_pos_args = first_pass.num_pos_args
+        self.num_kwargs = first_pass.num_kwargs
         self.is_part_of_iterable_output = first_pass.is_part_of_iterable_output
-        self.iterable_output_index = first_pass.iterable_output_index
+        self.multi_output_index = first_pass.multi_output_index
 
         # Tensor type (representative from first pass)
-        self.tensor_shape = first_pass.tensor_shape
-        self.transformed_activation_shape = first_pass.transformed_activation_shape
-        self.tensor_dtype = first_pass.tensor_dtype
-        self.transformed_activation_dtype = first_pass.transformed_activation_dtype
-        self.tensor_memory = first_pass.tensor_memory
-        self.transformed_activation_memory = first_pass.transformed_activation_memory
-        self.autograd_saved_bytes: Optional[int] = first_pass.autograd_saved_bytes
-        self.autograd_saved_tensor_count: Optional[int] = first_pass.autograd_saved_tensor_count
+        self.shape = first_pass.shape
+        self.transformed_out_shape = first_pass.transformed_out_shape
+        self.dtype = first_pass.dtype
+        self.transformed_out_dtype = first_pass.transformed_out_dtype
+        self.memory = first_pass.memory
+        self.transformed_out_memory = first_pass.transformed_out_memory
+        self.autograd_saved_memory: Optional[int] = first_pass.autograd_saved_memory
+        self.num_autograd_saved_tensors: Optional[int] = first_pass.num_autograd_saved_tensors
 
         # Config
         self.output_device = first_pass.output_device
-        self.activation_postfunc = first_pass.activation_postfunc
-        self.extra_data: Dict[str, Any] = {}
-        self.detach_saved_tensor = first_pass.detach_saved_tensor
-        self.save_gradients = first_pass.save_gradients
-        self.transformed_gradient_shape = first_pass.transformed_gradient_shape
-        self.transformed_gradient_dtype = first_pass.transformed_gradient_dtype
-        self.transformed_gradient_memory = first_pass.transformed_gradient_memory
+        self.out_postfunc = first_pass.out_postfunc
+        self.annotations: Dict[str, Any] = {}
+        self.detach_saved_tensors = first_pass.detach_saved_tensors
+        self.save_grads = first_pass.save_grads
+        self.transformed_grad_shape = first_pass.transformed_grad_shape
+        self.transformed_grad_dtype = first_pass.transformed_grad_dtype
+        self.transformed_grad_memory = first_pass.transformed_grad_memory
 
         # FLOPs
         self.flops_forward = first_pass.flops_forward
         self.flops_backward = first_pass.flops_backward
 
         # Param identity
-        self.parent_param_barcodes = first_pass.parent_param_barcodes
-        self.parent_param_logs: List["ParamLog"] = first_pass.parent_param_logs
-        self.parent_param_shapes = first_pass.parent_param_shapes
-        self.num_params_total = first_pass.num_params_total
+        self._param_barcodes = first_pass._param_barcodes
+        self._param_logs: List["ParamLog"] = first_pass._param_logs
+        self.param_shapes = first_pass.param_shapes
+        self.num_params = first_pass.num_params
         self.num_params_trainable = first_pass.num_params_trainable
         self.num_params_frozen = first_pass.num_params_frozen
-        self.params_memory = first_pass.params_memory
+        self.param_memory = first_pass.param_memory
 
         # Function config
         self.func_config = first_pass.func_config
 
         # Equivalence
-        self.operation_equivalence_type = first_pass.operation_equivalence_type
-        self.equivalent_operations = first_pass.equivalent_operations
+        self.equivalence_class = first_pass.equivalence_class
+        self.equivalent_ops = first_pass.equivalent_ops
 
         # Special flags
-        self.is_input_layer = first_pass.is_input_layer
-        self.is_output_layer = first_pass.is_output_layer
+        self.is_input = first_pass.is_input
+        self.is_output = first_pass.is_output
         self.is_final_output = first_pass.is_final_output
-        self.is_buffer_layer = first_pass.is_buffer_layer
+        self.is_buffer = first_pass.is_buffer
         self.buffer_address = first_pass.buffer_address
         self.buffer_parent = first_pass.buffer_parent
-        self.is_internally_initialized = first_pass.is_internally_initialized
-        self.is_internally_terminated = first_pass.is_internally_terminated
-        self.is_terminal_bool_layer = first_pass.is_terminal_bool_layer
+        self.is_internal_source = first_pass.is_internal_source
+        self.is_internal_sink = first_pass.is_internal_sink
+        self.is_terminal_bool = first_pass.is_terminal_bool
         self.is_scalar_bool = first_pass.is_scalar_bool
-        self.scalar_bool_value = first_pass.scalar_bool_value
+        self.bool_value = first_pass.bool_value
         self.in_cond_branch = first_pass.in_cond_branch
         self.conditional_branch_stacks: List[List[Tuple[int, str]]] = []
-        self.conditional_branch_stack_passes: Dict[Tuple[Tuple[int, str], ...], List[int]] = {}
+        self.conditional_branch_stack_ops: Dict[Tuple[Tuple[int, str], ...], List[int]] = {}
         self.cond_branch_children_by_cond: Dict[int, Dict[str, List[str]]] = {}
 
         # Module (static containment)
-        self.containing_module = first_pass.containing_module
-        self.containing_modules = first_pass.containing_modules
+        self.module = first_pass.module
+        self.modules = first_pass.modules
 
         # Fields stored as aggregate for vis compatibility.
         # Initialized from first pass.  For multi-pass layers, _build_layer_logs
         # merges only has_input_ancestor (OR), io_role (char-merge),
-        # and is_leaf_module_output (OR).  All others keep first-pass values.
-        self.modules_exited = first_pass.modules_exited
-        self.module_passes_exited = first_pass.module_passes_exited
+        # and is_atomic_module_output (OR).  All others keep first-pass values.
+        self.output_of_modules = first_pass.output_of_modules
+        self.output_of_module_calls = first_pass.output_of_module_calls
         self.cond_branch_start_children = first_pass.cond_branch_start_children
         self.cond_branch_then_children = first_pass.cond_branch_then_children
         self.cond_branch_elif_children = first_pass.cond_branch_elif_children
@@ -251,27 +251,27 @@ class LayerLog:
         self.has_input_ancestor = first_pass.has_input_ancestor
         self.io_role = first_pass.io_role
         self.buffer_pass = first_pass.buffer_pass
-        self.is_leaf_module_output = first_pass.is_leaf_module_output
+        self.is_atomic_module_output = first_pass.is_atomic_module_output
 
         # Pass management
-        self.passes: Dict[int, "OpLog"] = {}
-        self.pass_labels: List[str] = []
+        self.ops: Dict[int, "OpLog"] = {}
+        self.call_labels: List[str] = []
 
     @property
-    def activation_transform(self) -> Any:
-        """Canonical activation transform callable inherited from the first pass.
+    def out_transform(self) -> Any:
+        """Canonical out transform callable inherited from the first pass.
 
         Returns
         -------
         Any
-            Transform callable, or ``None`` when activations are stored unchanged.
+            Transform callable, or ``None`` when outs are stored unchanged.
         """
 
-        return self.activation_postfunc
+        return self.out_postfunc
 
-    @activation_transform.setter
-    def activation_transform(self, value: Any) -> None:
-        """Set the canonical activation transform callable.
+    @out_transform.setter
+    def out_transform(self, value: Any) -> None:
+        """Set the canonical out transform callable.
 
         Parameters
         ----------
@@ -279,7 +279,7 @@ class LayerLog:
             Transform callable, or ``None``.
         """
 
-        self.activation_postfunc = value
+        self.out_postfunc = value
 
     @property
     def macs_forward(self) -> Optional[int]:
@@ -294,36 +294,36 @@ class LayerLog:
     @property
     def uses_params(self) -> bool:
         """Whether this layer uses model parameters."""
-        return len(self.parent_param_barcodes) > 0
+        return len(self._param_barcodes) > 0
 
     @property
     def num_param_tensors(self) -> int:
         """Number of parameter tensors used by this layer."""
-        return len(self.parent_param_barcodes)
+        return len(self._param_barcodes)
 
     @property
-    def is_computed_inside_submodule(self) -> bool:
+    def in_submodule(self) -> bool:
         """Whether this layer was computed inside a submodule."""
-        return self.containing_module is not None
+        return self.module is not None
 
     @property
-    def module_nesting_depth(self) -> int:
+    def module_call_depth(self) -> int:
         """Depth of module nesting for this layer."""
-        return len(self.containing_modules)
+        return len(self.modules)
 
     @property
-    def tensor_memory_str(self) -> str:
-        """Return the activation tensor size in human-readable units.
+    def memory_str(self) -> str:
+        """Return the out tensor size in human-readable units.
 
         Returns
         -------
         str
             Human-readable tensor memory amount.
         """
-        return human_readable_size(self.tensor_memory)
+        return human_readable_size(self.memory)
 
     @property
-    def params_memory_str(self) -> str:
+    def param_memory_str(self) -> str:
         """Return the parameter tensor size in human-readable units.
 
         Returns
@@ -331,7 +331,7 @@ class LayerLog:
         str
             Human-readable parameter memory amount.
         """
-        return human_readable_size(self.params_memory)
+        return human_readable_size(self.param_memory)
 
     @property
     def source_trace(self) -> "Trace":
@@ -369,17 +369,17 @@ class LayerLog:
             state,
             defaults={
                 "_source_trace_ref": None,
-                "extra_data": {},
-                "autograd_saved_bytes": None,
-                "autograd_saved_tensor_count": None,
-                "transformed_activation": None,
-                "transformed_activation_shape": None,
-                "transformed_activation_dtype": None,
-                "transformed_activation_memory": None,
-                "transformed_gradient": None,
-                "transformed_gradient_shape": None,
-                "transformed_gradient_dtype": None,
-                "transformed_gradient_memory": None,
+                "annotations": {},
+                "autograd_saved_memory": None,
+                "num_autograd_saved_tensors": None,
+                "transformed_out": None,
+                "transformed_out_shape": None,
+                "transformed_out_dtype": None,
+                "transformed_out_memory": None,
+                "transformed_grad": None,
+                "transformed_grad_shape": None,
+                "transformed_grad_dtype": None,
+                "transformed_grad_memory": None,
             },
         )
         self.__dict__.update(state)
@@ -399,50 +399,50 @@ class LayerLog:
         if a @property raises AttributeError, Python silently treats
         the attribute as missing and falls through to __getattr__.
         """
-        if self.num_passes > 1:
+        if self.num_calls > 1:
             raise ValueError(
-                f"Layer '{self.layer_label}' has {self.num_passes} passes. "
+                f"Layer '{self.layer_label}' has {self.num_calls} ops. "
                 f"Access '{field_name}' on a specific pass: "
-                f"log['{self.layer_label}'].passes[1].{field_name}"
+                f"log['{self.layer_label}'].ops[1].{field_name}"
             )
-        return getattr(self.passes[1], field_name)
+        return getattr(self.ops[1], field_name)
 
     @property
-    def activation(self) -> Any:
-        """Return the saved activation for a single-pass layer.
+    def out(self) -> Any:
+        """Return the saved out for a single-pass layer.
 
         Returns
         -------
         Any
-            Saved activation from the only pass.
+            Saved out from the only pass.
         """
-        return self._single_pass_or_error("activation")
+        return self._single_pass_or_error("out")
 
     @property
     def tensor(self) -> Any:
-        """Alias for the raw saved activation on single-pass layers."""
+        """Alias for the raw saved out on single-pass layers."""
 
         return self._single_pass_or_error("tensor")
 
     @property
-    def transformed_activation(self) -> Any:
-        """Transformed activation on single-pass layers."""
+    def transformed_out(self) -> Any:
+        """Transformed out on single-pass layers."""
 
-        return self._single_pass_or_error("transformed_activation")
+        return self._single_pass_or_error("transformed_out")
 
     @property
-    def has_saved_activations(self) -> bool:
-        """Return whether the single pass has a saved activation.
+    def has_saved_outs(self) -> bool:
+        """Return whether the single pass has a saved out.
 
         Returns
         -------
         bool
-            ``True`` when an activation was saved for the only pass.
+            ``True`` when an out was saved for the only pass.
         """
-        return cast(bool, self._single_pass_or_error("has_saved_activations"))
+        return cast(bool, self._single_pass_or_error("has_saved_outs"))
 
     @property
-    def captured_args(self) -> Any:
+    def saved_args(self) -> Any:
         """Return captured positional arguments for a single-pass layer.
 
         Returns
@@ -450,10 +450,10 @@ class LayerLog:
         Any
             Captured positional arguments from the only pass.
         """
-        return self._single_pass_or_error("captured_args")
+        return self._single_pass_or_error("saved_args")
 
     @property
-    def captured_kwargs(self) -> Any:
+    def saved_kwargs(self) -> Any:
         """Return captured keyword arguments for a single-pass layer.
 
         Returns
@@ -461,35 +461,35 @@ class LayerLog:
         Any
             Captured keyword arguments from the only pass.
         """
-        return self._single_pass_or_error("captured_kwargs")
+        return self._single_pass_or_error("saved_kwargs")
 
     @property
-    def gradient(self) -> Any:
-        """Return the saved gradient for a single-pass layer.
+    def grad(self) -> Any:
+        """Return the saved grad for a single-pass layer.
 
         Returns
         -------
         Any
-            Saved gradient from the only pass.
+            Saved grad from the only pass.
         """
-        return self._single_pass_or_error("gradient")
+        return self._single_pass_or_error("grad")
 
     @property
-    def transformed_gradient(self) -> Any:
-        """Transformed gradient on single-pass layers."""
+    def transformed_grad(self) -> Any:
+        """Transformed grad on single-pass layers."""
 
-        return self._single_pass_or_error("transformed_gradient")
+        return self._single_pass_or_error("transformed_grad")
 
     @property
-    def has_gradient(self) -> bool:
-        """Return whether the single pass has a saved gradient.
+    def has_grad(self) -> bool:
+        """Return whether the single pass has a saved grad.
 
         Returns
         -------
         bool
-            ``True`` when a gradient was saved for the only pass.
+            ``True`` when a grad was saved for the only pass.
         """
-        return cast(bool, self._single_pass_or_error("has_gradient"))
+        return cast(bool, self._single_pass_or_error("has_grad"))
 
     @property
     def func_call_stack(self) -> Any:
@@ -503,7 +503,7 @@ class LayerLog:
         return self._single_pass_or_error("func_call_stack")
 
     @property
-    def func_time(self) -> Any:
+    def func_duration(self) -> Any:
         """Return function execution time for a single-pass layer.
 
         Returns
@@ -511,7 +511,7 @@ class LayerLog:
         Any
             Function timing value from the only pass.
         """
-        return self._single_pass_or_error("func_time")
+        return self._single_pass_or_error("func_duration")
 
     @property
     def func_rng_states(self) -> Any:
@@ -525,7 +525,7 @@ class LayerLog:
         return self._single_pass_or_error("func_rng_states")
 
     @property
-    def operation_num(self) -> int:
+    def op_index(self) -> int:
         """Return the operation number for a single-pass layer.
 
         Returns
@@ -533,10 +533,10 @@ class LayerLog:
         int
             Operation number from the only pass.
         """
-        return cast(int, self._single_pass_or_error("operation_num"))
+        return cast(int, self._single_pass_or_error("op_index"))
 
     @property
-    def pass_num(self) -> int:
+    def call_index(self) -> int:
         """Return the pass number for a single-pass layer.
 
         Returns
@@ -544,10 +544,10 @@ class LayerLog:
         int
             Pass number from the only pass.
         """
-        return cast(int, self._single_pass_or_error("pass_num"))
+        return cast(int, self._single_pass_or_error("call_index"))
 
     @property
-    def creation_order(self) -> int:
+    def creation_index(self) -> int:
         """Return the creation-order index for a single-pass layer.
 
         Returns
@@ -555,7 +555,7 @@ class LayerLog:
         int
             Creation-order value from the only pass.
         """
-        return cast(int, self._single_pass_or_error("creation_order"))
+        return cast(int, self._single_pass_or_error("creation_index"))
 
     @property
     def lookup_keys(self) -> list[str]:
@@ -571,18 +571,18 @@ class LayerLog:
     # ********************************************
     # ***** Aggregate graph properties ***********
     # ********************************************
-    # Graph-edge properties compute the union across all passes, returning
+    # Graph-edge properties compute the union across all ops, returning
     # no-pass labels (i.e. LayerLog-level identifiers).  This gives a
     # complete picture of which layers are connected across all recurrent
     # iterations.  Order is preserved (first-seen insertion order).
 
     @property
-    def child_layers(self) -> list[str]:
-        """Union of child layers (no-pass labels) across all passes."""
+    def children(self) -> list[str]:
+        """Union of child layers (no-pass labels) across all ops."""
         result = []
         seen = set()
-        for pass_log in self.passes.values():
-            for label in pass_log.child_layers:
+        for pass_log in self.ops.values():
+            for label in pass_log.children:
                 no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
@@ -590,12 +590,12 @@ class LayerLog:
         return result
 
     @property
-    def parent_layers(self) -> list[str]:
-        """Union of parent layers (no-pass labels) across all passes."""
+    def parents(self) -> list[str]:
+        """Union of parent layers (no-pass labels) across all ops."""
         result = []
         seen = set()
-        for pass_log in self.passes.values():
-            for label in pass_log.parent_layers:
+        for pass_log in self.ops.values():
+            for label in pass_log.parents:
                 no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
@@ -611,7 +611,7 @@ class LayerLog:
         bool
             ``True`` when at least one pass has graph children.
         """
-        return any(p.has_children for p in self.passes.values())
+        return any(p.has_children for p in self.ops.values())
 
     @property
     def has_parents(self) -> bool:
@@ -622,15 +622,15 @@ class LayerLog:
         bool
             ``True`` when at least one pass has graph parents.
         """
-        return any(p.has_parents for p in self.passes.values())
+        return any(p.has_parents for p in self.ops.values())
 
     @property
-    def sibling_layers(self) -> list[str]:
-        """Union of sibling layers (no-pass labels) across all passes."""
+    def siblings(self) -> list[str]:
+        """Union of sibling layers (no-pass labels) across all ops."""
         result = []
         seen = set()
-        for pass_log in self.passes.values():
-            for label in pass_log.sibling_layers:
+        for pass_log in self.ops.values():
+            for label in pass_log.siblings:
                 no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
@@ -646,15 +646,15 @@ class LayerLog:
         bool
             ``True`` when at least one pass has graph siblings.
         """
-        return any(p.has_siblings for p in self.passes.values())
+        return any(p.has_siblings for p in self.ops.values())
 
     @property
-    def co_parent_layers(self) -> list[str]:
-        """Union of spouse layers (no-pass labels) across all passes."""
+    def co_parents(self) -> list[str]:
+        """Union of spouse layers (no-pass labels) across all ops."""
         result = []
         seen = set()
-        for pass_log in self.passes.values():
-            for label in pass_log.co_parent_layers:
+        for pass_log in self.ops.values():
+            for label in pass_log.co_parents:
                 no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
@@ -670,14 +670,14 @@ class LayerLog:
         bool
             ``True`` when at least one pass has graph co-parents.
         """
-        return any(p.has_co_parents for p in self.passes.values())
+        return any(p.has_co_parents for p in self.ops.values())
 
     @property
-    def _pass_finished(self) -> bool:
+    def _tracing_finished(self) -> bool:
         sml = self.source_trace
         if sml is None:
             return True
-        return sml._pass_finished
+        return sml._tracing_finished
 
     # ********************************************
     # ****** Convenience properties **************
@@ -708,102 +708,102 @@ class LayerLog:
         """Access parameter metadata by address, short name, or index."""
         from .param_log import ParamAccessor
 
-        param_dict = {pl.address: pl for pl in self.parent_param_logs}
+        param_dict = {pl.address: pl for pl in self._param_logs}
         return ParamAccessor(param_dict)
 
     # ********************************************
     # **** Rolled-vis computed properties ********
     # ********************************************
     # These provide per-pass edge tracking for rolled (recurrence-aware)
-    # graph visualization.  Computed on-the-fly from the passes dict.
+    # graph visualization.  Computed on-the-fly from the ops dict.
     # Used by the visualization renderer to draw pass-annotated edges.
 
     @property
-    def child_layers_per_pass(self) -> dict[int, list[str]]:
+    def children_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: child layer labels (no-pass) for each pass."""
         result = {}
-        for pass_num, pass_log in self.passes.items():
+        for call_index, pass_log in self.ops.items():
             children = []
-            for label in pass_log.child_layers:
+            for label in pass_log.children:
                 no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in children:
                     children.append(no_pass)
-            result[pass_num] = children
+            result[call_index] = children
         return result
 
     @property
-    def parent_layers_per_pass(self) -> dict[int, list[str]]:
+    def parents_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: parent layer labels (no-pass) for each pass."""
         result = {}
-        for pass_num, pass_log in self.passes.items():
+        for call_index, pass_log in self.ops.items():
             parents = []
-            for label in pass_log.parent_layers:
+            for label in pass_log.parents:
                 no_pass = self.source_trace[label].layer_label_no_pass
                 if no_pass not in parents:
                     parents.append(no_pass)
-            result[pass_num] = parents
+            result[call_index] = parents
         return result
 
     @property
-    def child_passes_per_layer(self) -> dict[str, list[int]]:
-        """Dict[str, List[int]]: for each child layer, which passes connect to it."""
+    def child_ops_per_layer(self) -> dict[str, list[int]]:
+        """Dict[str, List[int]]: for each child layer, which ops connect to it."""
         from collections import defaultdict
 
         result: defaultdict[str, list[int]] = defaultdict(list)
-        for pass_num, pass_log in self.passes.items():
-            for label in pass_log.child_layers:
+        for call_index, pass_log in self.ops.items():
+            for label in pass_log.children:
                 no_pass = self.source_trace[label].layer_label_no_pass
-                if pass_num not in result[no_pass]:
-                    result[no_pass].append(pass_num)
+                if call_index not in result[no_pass]:
+                    result[no_pass].append(call_index)
         return dict(result)
 
     @property
-    def parent_passes_per_layer(self) -> dict[str, list[int]]:
-        """Dict[str, List[int]]: for each parent layer, which passes connect from it."""
+    def parent_ops_per_layer(self) -> dict[str, list[int]]:
+        """Dict[str, List[int]]: for each parent layer, which ops connect from it."""
         from collections import defaultdict
 
         result: defaultdict[str, list[int]] = defaultdict(list)
-        for pass_num, pass_log in self.passes.items():
-            for label in pass_log.parent_layers:
+        for call_index, pass_log in self.ops.items():
+            for label in pass_log.parents:
                 no_pass = self.source_trace[label].layer_label_no_pass
-                if pass_num not in result[no_pass]:
-                    result[no_pass].append(pass_num)
+                if call_index not in result[no_pass]:
+                    result[no_pass].append(call_index)
         return dict(result)
 
     @property
-    def edges_vary_across_passes(self) -> bool:
-        """Whether graph edges differ across passes."""
-        if self.num_passes <= 1:
+    def edges_vary_across_ops(self) -> bool:
+        """Whether graph edges differ across ops."""
+        if self.num_calls <= 1:
             return False
-        all_pass_lists = list(self.child_passes_per_layer.values()) + list(
-            self.parent_passes_per_layer.values()
+        all_pass_lists = list(self.child_ops_per_layer.values()) + list(
+            self.parent_ops_per_layer.values()
         )
-        return any(len(passes) < self.num_passes for passes in all_pass_lists)
+        return any(len(ops) < self.num_calls for ops in all_pass_lists)
 
     @property
-    def leaf_module_passes(self) -> set[Any]:
-        """Set of module passes exited across all passes."""
+    def leaf_module_ops(self) -> set[Any]:
+        """Set of module ops exited across all ops."""
         result = set()
-        for pass_log in self.passes.values():
-            if pass_log.is_leaf_module_output:
-                result.add(pass_log.leaf_module_pass)
+        for pass_log in self.ops.values():
+            if pass_log.is_atomic_module_output:
+                result.add(pass_log.atomic_module_call)
         return result
 
     @property
-    def parent_layer_arg_locs(self) -> dict[str, dict[Any, str]]:
-        """Merged parent_layer_arg_locs across passes (set-union).
+    def parent_arg_positions(self) -> dict[str, dict[Any, str]]:
+        """Merged parent_arg_positions across ops (set-union).
 
-        For single-pass layers, delegates to passes[1].
+        For single-pass layers, delegates to ops[1].
         For multi-pass, merges arg locs using set-union of no-pass labels.
         """
-        if self.num_passes == 1:
-            return cast(dict[str, dict[Any, str]], self.passes[1].parent_layer_arg_locs)
+        if self.num_calls == 1:
+            return cast(dict[str, dict[Any, str]], self.ops[1].parent_arg_positions)
         from collections import defaultdict
 
         result: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
-        for pass_log in self.passes.values():
+        for pass_log in self.ops.values():
             for arg_type in ["args", "kwargs"]:
-                for arg_key, layer_label in pass_log.parent_layer_arg_locs[arg_type].items():
+                for arg_key, layer_label in pass_log.parent_arg_positions[arg_type].items():
                     no_pass = self.source_trace[layer_label].layer_label_no_pass
                     if arg_key not in result[arg_type]:
                         result[arg_type][arg_key] = no_pass
@@ -814,7 +814,7 @@ class LayerLog:
     # ********************************************
 
     def __getattr__(self, name: str) -> Any:
-        """Fallback attribute lookup: delegates to passes[1] for single-pass layers.
+        """Fallback attribute lookup: delegates to ops[1] for single-pass layers.
 
         Only called when normal attribute lookup has already failed (Python's
         ``__getattr__`` protocol).  For single-pass layers, transparently
@@ -827,19 +827,19 @@ class LayerLog:
         """
         if name.startswith("_"):
             raise AttributeError(name)
-        passes = self.__dict__.get("passes")
-        if passes and len(passes) == 1 and 1 in passes:
+        ops = self.__dict__.get("ops")
+        if ops and len(ops) == 1 and 1 in ops:
             try:
-                return getattr(passes[1], name)
+                return getattr(ops[1], name)
             except AttributeError:
                 pass
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     # ********************************************
-    # ************ User-facing methods ***********
+    # ************ User-facing custom_methods ***********
     # ********************************************
 
-    def get_child_layers(self) -> list["LayerLog"]:
+    def get_children(self) -> list["LayerLog"]:
         """Return child LayerLog objects for this layer.
 
         Returns
@@ -847,9 +847,9 @@ class LayerLog:
         list[LayerLog]
             Child layers resolved through the owning model log.
         """
-        return [self.source_trace[child_label] for child_label in self.child_layers]
+        return [self.source_trace[child_label] for child_label in self.children]
 
-    def get_parent_layers(self) -> list["LayerLog"]:
+    def get_parents(self) -> list["LayerLog"]:
         """Return parent LayerLog objects for this layer.
 
         Returns
@@ -857,14 +857,14 @@ class LayerLog:
         list[LayerLog]
             Parent layers resolved through the owning model log.
         """
-        return [self.source_trace[parent_label] for parent_label in self.parent_layers]
+        return [self.source_trace[parent_label] for parent_label in self.parents]
 
     def show(
         self,
         method: Literal["auto", "heatmap", "channels", "rgb", "hist"] = "auto",
         **kwargs: Any,
     ) -> Any:
-        """Display this layer's saved activation.
+        """Display this layer's saved out.
 
         Parameters
         ----------
@@ -889,40 +889,37 @@ class LayerLog:
     # ********************************************
 
     def __str__(self) -> str:
-        if not self._pass_finished:
+        if not self._tracing_finished:
             return f"LayerLog({self.layer_label}) (pass not finished)"
         s = f"Layer {self.layer_label}:"
-        if self.num_passes > 1:
-            s += f" ({self.num_passes} passes)"
-        s += (
-            f"\n\tOutput tensor: shape={self.tensor_shape}, "
-            f"dtype={self.tensor_dtype}, size={self.tensor_memory_str}"
-        )
-        if not self.is_input_layer:
+        if self.num_calls > 1:
+            s += f" ({self.num_calls} ops)"
+        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.memory_str}"
+        if not self.is_input:
             s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_name})"
             if self.func_config:
                 config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
                 s += f"\n\tConfig: {config_str}"
-        if self.containing_module is not None:
-            s += f"\n\tComputed inside module: {self.containing_module}"
-        if len(self.parent_param_shapes) > 0:
-            params_shapes_str = ", ".join(str(ps) for ps in self.parent_param_shapes)
+        if self.module is not None:
+            s += f"\n\tComputed inside module: {self.module}"
+        if len(self.param_shapes) > 0:
+            params_shapes_str = ", ".join(str(ps) for ps in self.param_shapes)
             s += (
                 f"\n\tParams: {params_shapes_str}; "
-                f"{self.num_params_total} total ({self.params_memory_str})"
+                f"{self.num_params} total ({self.param_memory_str})"
             )
         s += "\n\tRelated Layers:"
-        s += f"\n\t\t- parents: {', '.join(self.parent_layers) or 'none'}"
-        s += f"\n\t\t- children: {', '.join(self.child_layers) or 'none'}"
-        if self.num_passes > 1:
-            s += f"\n\tPasses: {', '.join(self.pass_labels)}"
+        s += f"\n\t\t- parents: {', '.join(self.parents) or 'none'}"
+        s += f"\n\t\t- children: {', '.join(self.children) or 'none'}"
+        if self.num_calls > 1:
+            s += f"\n\tPasses: {', '.join(self.call_labels)}"
         return s
 
     def __repr__(self) -> str:
         return self.__str__()
 
     def __len__(self) -> int:
-        return cast(int, self.num_passes)
+        return cast(int, self.num_calls)
 
 
 class LayerAccessor:
@@ -957,19 +954,19 @@ class LayerAccessor:
         """Return a LayerLog by label or index, or a OpLog by pass label.
 
         Pass notation ``"conv2d_1_1:2"`` splits on the last colon, looks up
-        the base LayerLog, and returns ``layer_log.passes[2]``.
+        the base LayerLog, and returns ``layer_log.ops[2]``.
         """
         if isinstance(key, int):
             return self._list[key]
         if key in self._dict:
             return self._dict[key]
-        # Try pass notation: "conv2d_1_1:2" -> LayerLog.passes[2]
+        # Try pass notation: "conv2d_1_1:2" -> LayerLog.ops[2]
         if ":" in key and self._source_ref is not None:
             base, _, pass_str = key.rpartition(":")
             if base in self._dict:
                 try:
-                    pass_num = int(pass_str)
-                    return self._dict[base].passes[pass_num]
+                    call_index = int(pass_str)
+                    return self._dict[base].ops[call_index]
                 except (ValueError, KeyError):
                     pass
         suggestions = []
@@ -1057,12 +1054,11 @@ class LayerAccessor:
             return [
                 layer.layer_label
                 for layer in self._list
-                if layer.containing_module == module
-                or module in getattr(layer, "containing_modules", [])
+                if layer.module == module or module in getattr(layer, "modules", [])
             ]
         counts: Dict[str, int] = {}
         for layer in self._list:
-            key = str(layer.containing_module or "self")
+            key = str(layer.module or "self")
             counts[key] = counts.get(key, 0) + 1
         return counts
 
@@ -1090,15 +1086,12 @@ class LayerAccessor:
             return [
                 layer.layer_label
                 for layer in self._list
-                if (
-                    layer.containing_module == module
-                    or module in getattr(layer, "containing_modules", [])
-                )
+                if (layer.module == module or module in getattr(layer, "modules", []))
                 and (layer.func_name or layer.layer_type) == operator
             ]
         counts: Dict[Tuple[str, str], int] = {}
         for layer in self._list:
-            key = (str(layer.containing_module or "self"), str(layer.func_name or layer.layer_type))
+            key = (str(layer.module or "self"), str(layer.func_name or layer.layer_type))
             counts[key] = counts.get(key, 0) + 1
         return counts
 
@@ -1120,8 +1113,8 @@ class LayerAccessor:
         for ll in self._list:
             items.append(
                 f"  '{ll.layer_label}': {ll.func_name or 'input'} "
-                f"(shape={list(ll.tensor_shape) if ll.tensor_shape else '?'}, "
-                f"passes={ll.num_passes})"
+                f"(shape={list(ll.shape) if ll.shape else '?'}, "
+                f"ops={ll.num_calls})"
             )
         inner = "\n".join(items)
         return f"LayerAccessor({len(self)} layers):\n{inner}"
@@ -1142,15 +1135,15 @@ class LayerAccessor:
                     "layer_label": ll.layer_label,
                     "layer_type": ll.layer_type,
                     "func_name": ll.func_name,
-                    "tensor_shape": ll.tensor_shape,
-                    "tensor_dtype": ll.tensor_dtype,
-                    "tensor_memory_str": ll.tensor_memory_str,
-                    "num_passes": ll.num_passes,
-                    "num_params_total": ll.num_params_total,
-                    "containing_module": ll.containing_module,
-                    "is_input_layer": ll.is_input_layer,
-                    "is_output_layer": ll.is_output_layer,
-                    "is_buffer_layer": ll.is_buffer_layer,
+                    "shape": ll.shape,
+                    "dtype": ll.dtype,
+                    "memory_str": ll.memory_str,
+                    "num_calls": ll.num_calls,
+                    "num_params": ll.num_params,
+                    "module": ll.module,
+                    "is_input": ll.is_input,
+                    "is_output": ll.is_output,
+                    "is_buffer": ll.is_buffer,
                 }
             )
         return pd.DataFrame(rows)

@@ -11,7 +11,7 @@ this module produces:
 * :func:`build_supergraph` -- the constructor used by intervention ``Bundle``.
 
 Matching is intentionally simple: a linear scan in topological order with a
-greedy fingerprint match. The fingerprint is ``(containing_module, func_name)``
+greedy fingerprint match. The fingerprint is ``(module, func_name)``
 -- the same module address and the same function under the hood. Topological
 position breaks ties when a fingerprint repeats (e.g. multiple ``relu`` calls
 in the same block).
@@ -35,8 +35,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only
     from ..data_classes.model_log import Trace
 
 
-# A fingerprint is (containing_module, func_name).  Both fields normalize to
-# strings; ``containing_module`` is None when the op was logged outside of a
+# A fingerprint is (module, func_name).  Both fields normalize to
+# strings; ``module`` is None when the op was logged outside of a
 # named submodule (we map that to the empty string so equality works cleanly).
 Fingerprint = Tuple[str, str]
 
@@ -44,12 +44,12 @@ Fingerprint = Tuple[str, str]
 def _fingerprint(layer: "LayerLog") -> Fingerprint:
     """Return the structural fingerprint used for cross-trace node matching.
 
-    Composed of ``(containing_module or "", func_name or "")`` -- both
+    Composed of ``(module or "", func_name or "")`` -- both
     coerced to strings.  Module pass labels (e.g. ``"fc1:1"``) include the
     pass index so multi-call modules disambiguate naturally.
     """
 
-    mod = layer.containing_module if layer.containing_module is not None else ""
+    mod = layer.module if layer.module is not None else ""
     func = layer.func_name if layer.func_name is not None else ""
     return (str(mod), str(func))
 
@@ -62,7 +62,7 @@ def _shape_excluding_batch(layer: "LayerLog") -> Optional[Tuple[int, ...]]:
     dim. (This matches the bundle's stacking semantics.)
     """
 
-    shape = getattr(layer, "tensor_shape", None)
+    shape = getattr(layer, "shape", None)
     if shape is None:
         return None
     shape_t = tuple(shape)
@@ -114,7 +114,7 @@ def compare_topology(a: "Trace", b: "Trace") -> TopologyDiff:
     different orders across traces (rare in practice for the same model
     architecture), the greedy scan can mis-pair them.  In those cases the
     user should treat the bundle as divergent and rely on per-trace
-    accessors (``.activations``, not ``.activation``).
+    accessors (``.outs``, not ``.out``).
     """
 
     a_layers = list(a.layer_logs.values())
@@ -176,7 +176,7 @@ class SupergraphNode:
         ``LayerLog.layer_label`` values (chosen from the first trace that
         contributed the node).
     fingerprint:
-        ``(containing_module, func_name)`` tuple used for matching.
+        ``(module, func_name)`` tuple used for matching.
     traces:
         Ordered list of trace names that traversed this node, preserving
         bundle order.
@@ -186,7 +186,7 @@ class SupergraphNode:
         Representative function name (taken from the first contributing
         trace's LayerLog).
     module_path:
-        Representative ``containing_module`` (or ``None`` if not in a module).
+        Representative ``module`` (or ``None`` if not in a module).
     module_type:
         Representative module class name when available from ``Trace.modules``.
     """
@@ -241,7 +241,7 @@ def _module_type_for_layer(trace: "Trace", layer: "LayerLog") -> Optional[str]:
         Module class name when the module accessor has the containing module.
     """
 
-    module_path = getattr(layer, "containing_module", None)
+    module_path = getattr(layer, "module", None)
     if module_path is None:
         return None
     modules = getattr(trace, "modules", None)
@@ -252,7 +252,7 @@ def _module_type_for_layer(trace: "Trace", layer: "LayerLog") -> Optional[str]:
         module_log = modules[module_key]
     except (KeyError, TypeError):
         return None
-    module_type = getattr(module_log, "module_class_name", None)
+    module_type = getattr(module_log, "class_name", None)
     return str(module_type) if module_type else None
 
 
@@ -280,7 +280,7 @@ def _per_trace_fingerprint_to_canonical(
 def build_supergraph(traces: List["Trace"], names: List[str]) -> Supergraph:
     """Build the union supergraph from N Traces.
 
-    The construction proceeds in three passes:
+    The construction proceeds in three ops:
 
     1. **Canonical-name assignment.** For every (trace, layer) we compute a
        fingerprint occurrence index.  The same (fingerprint,
@@ -346,11 +346,7 @@ def build_supergraph(traces: List["Trace"], names: List[str]) -> Supergraph:
                     name=cname,
                     fingerprint=fp,
                     op_type=str(layer.func_name) if layer.func_name is not None else "",
-                    module_path=(
-                        str(layer.containing_module)
-                        if layer.containing_module is not None
-                        else None
-                    ),
+                    module_path=(str(layer.module) if layer.module is not None else None),
                     module_type=_module_type_for_layer(trace, layer),
                 )
                 super_g.nodes[cname] = node
@@ -359,7 +355,7 @@ def build_supergraph(traces: List["Trace"], names: List[str]) -> Supergraph:
                 node.traces.append(trace_name)
 
     # Pass 3a: edges. We rebuild per-trace edges using each trace's
-    # parent_layers structure, mapped through canonical names.
+    # parents structure, mapped through canonical names.
     for trace_idx, trace in enumerate(traces):
         trace_name = names[trace_idx]
         # Build trace-local layer_label -> (fingerprint, occurrence) lookup
@@ -372,10 +368,10 @@ def build_supergraph(traces: List["Trace"], names: List[str]) -> Supergraph:
             if child_key is None:
                 continue
             child_canonical = canonical_name[child_key]
-            for parent_label in layer.parent_layers:
+            for parent_label in layer.parents:
                 parent_layer = trace.layer_logs.get(parent_label)
                 if parent_layer is None:
-                    # parent_layers are typically pass-qualified strings; map
+                    # parents are typically pass-qualified strings; map
                     # back to no_pass labels via the source Trace index.
                     try:
                         ref = trace[parent_label]

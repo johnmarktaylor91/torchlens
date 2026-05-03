@@ -40,7 +40,7 @@ def _build_live_log() -> Trace:
         layers_to_save="all",
         save_function_args=True,
         save_rng_states=True,
-        save_source_context=True,
+        save_code_context=True,
         random_seed=0,
     )
 

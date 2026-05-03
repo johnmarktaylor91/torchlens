@@ -20,7 +20,7 @@ class _ReluAdd(nn.Module):
         return torch.relu(x) + 1
 
 
-def _intervention_log() -> tl.Trace:
+def _interventions() -> tl.Trace:
     """Build an intervention-ready log with a relu replacement recipe.
 
     Returns
@@ -38,7 +38,7 @@ def _intervention_log() -> tl.Trace:
 def test_trace_show_accepts_intervention_options() -> None:
     """``Trace.show`` accepts Phase 11 intervention visualization kwargs."""
 
-    log = _intervention_log()
+    log = _interventions()
     try:
         assert log.show(vis_opt="none", vis_intervention_mode="node_mark") is None
         assert (
@@ -55,7 +55,7 @@ def test_trace_show_accepts_intervention_options() -> None:
 def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
     """``node_mark`` marks intervention sites and cone members in DOT output."""
 
-    log = _intervention_log()
+    log = _interventions()
     try:
         dot = log.render_graph(
             vis_save_only=True,
@@ -83,7 +83,7 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
 def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) -> None:
     """``as_node`` inserts a diamond hook node after an intervention site."""
 
-    log = _intervention_log()
+    log = _interventions()
     try:
         dot = log.render_graph(
             vis_save_only=True,
@@ -101,7 +101,7 @@ def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) ->
 def test_bundle_show_accepts_vis_opt_none() -> None:
     """``Bundle.show`` accepts render kwargs and skips on ``vis_opt='none'``."""
 
-    log = _intervention_log()
+    log = _interventions()
     clean = tl.trace(_ReluAdd(), torch.randn(2, 3), vis_opt="none")
     try:
         bundle = tl.bundle({"intervened": log, "clean": clean})
@@ -114,14 +114,14 @@ def test_bundle_show_accepts_vis_opt_none() -> None:
 def test_dagua_bridge_exposes_intervention_metadata() -> None:
     """Dagua graph objects expose Phase 11 intervention metadata arrays."""
 
-    log = _intervention_log()
+    log = _interventions()
     try:
         graph = dagua.trace_to_dagua_graph(log, vis_mode="unrolled")
         assert hasattr(graph, "is_intervention_site")
         assert hasattr(graph, "is_in_cone")
-        assert hasattr(graph, "intervention_log_summary")
+        assert hasattr(graph, "interventions_summary")
         assert any(graph.is_intervention_site)
         assert any(graph.is_in_cone)
-        assert len(graph.intervention_log_summary) == graph.num_nodes
+        assert len(graph.interventions_summary) == graph.num_nodes
     finally:
         log.cleanup()

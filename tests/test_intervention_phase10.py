@@ -109,12 +109,12 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
 
     log = _log()
 
-    def opaque_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        """Return activation unchanged.
+    def opaque_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        """Return out unchanged.
 
         Parameters
         ----------
-        activation:
+        out:
             Activation tensor.
         hook:
             Hook context.
@@ -122,11 +122,11 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         Returns
         -------
         torch.Tensor
-            Input activation.
+            Input out.
         """
 
         del hook
-        return activation
+        return out
 
     log.attach_hooks({tl.func("relu"): opaque_hook})
     with pytest.raises(OpaqueCallableInExecutableSaveError):

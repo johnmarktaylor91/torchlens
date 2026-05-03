@@ -39,7 +39,7 @@ class TinyResnetWithProbe(nn.Module):
         )
         self.probe = nn.Linear(8, 2)
         for param in self.backbone.parameters():
-            param.requires_grad = False
+            param.has_trainable_params = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the frozen backbone and trainable probe."""
@@ -57,7 +57,7 @@ class TeacherStudentPair(nn.Module):
         self.teacher = nn.Linear(4, 3)
         self.student = nn.Linear(4, 3)
         for param in self.teacher.parameters():
-            param.requires_grad = False
+            param.has_trainable_params = False
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Return teacher and student outputs."""
@@ -66,7 +66,7 @@ class TeacherStudentPair(nn.Module):
 
 
 class MultiTapModel(nn.Module):
-    """Model returning intermediate and final activations."""
+    """Model returning intermediate and final outs."""
 
     def __init__(self) -> None:
         """Initialize the tap layers."""
@@ -76,7 +76,7 @@ class MultiTapModel(nn.Module):
         self.fc2 = nn.Linear(4, 2)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return a hidden activation and final output."""
+        """Return a hidden out and final output."""
 
         hidden = torch.relu(self.fc1(x))
         return hidden, self.fc2(hidden)

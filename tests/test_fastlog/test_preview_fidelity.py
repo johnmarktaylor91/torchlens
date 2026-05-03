@@ -60,7 +60,7 @@ def test_missing_record_context_field_errors_in_preview_and_dry_run() -> None:
     def bad_predicate(ctx: RecordContext) -> bool:
         """Access a field outside the RecordContext schema."""
 
-        return bool(ctx.recurrent_group)
+        return bool(ctx.recurrent_ops)
 
     dot = trace.preview_fastlog(predicate=bad_predicate)
 

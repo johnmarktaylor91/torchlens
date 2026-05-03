@@ -1360,7 +1360,7 @@ class NestedParamFreeLoops(nn.Module):
     - Outer loop: 4 iterations with state feedback (coords updated each iteration)
     - Inner loop: 3 levels, each doing:
         - A normalization step that divides by a LEVEL-DEPENDENT constant
-          (this creates different operation_equivalence_types per level)
+          (this creates different equivalence_classs per level)
         - A core operation (sin) that is THE SAME equivalence type across all levels
         - An accumulation step
 
@@ -1389,7 +1389,7 @@ class NestedParamFreeLoops(nn.Module):
             scaled = offset
             for divisor in divisors:
                 # This division uses a DIFFERENT non-tensor arg per level,
-                # giving each level a different operation_equivalence_type
+                # giving each level a different equivalence_class
                 normalized = scaled / divisor
 
                 # This sin has the SAME equivalence type across all levels
@@ -1740,7 +1740,7 @@ class ContextUnet(nn.Module):
 
 class ViewMutationUnsqueeze(nn.Module):
     """Mutation through unsqueeze view: y = x.unsqueeze(0); y.fill_(0); return x.
-    The fill_ mutates x's storage through the view, so x's activation at
+    The fill_ mutates x's storage through the view, so x's out at
     logging time differs from what children actually receive."""
 
     def __init__(self):
@@ -1890,7 +1890,7 @@ class FunctionalAfterSubmodule(nn.Module):
 
 class StochasticDepthModel(nn.Module):
     """Model with stochastic depth (dropout-like skip) that changes the
-    computational graph between forward passes unless RNG state is restored.
+    computational graph between forward ops unless RNG state is restored.
 
     Used to test that the two-pass architecture handles stochastic models
     correctly (issue #58).
@@ -2029,7 +2029,7 @@ class AestheticFrozenMix(nn.Module):
         self.trainable_fc = nn.Linear(8, 8)
         # Freeze the first layer
         for param in self.frozen_fc.parameters():
-            param.requires_grad = False
+            param.has_trainable_params = False
 
     def forward(self, x):
         x = self.frozen_fc(x)
@@ -2838,7 +2838,7 @@ class SimpleDepthEstimator(nn.Module):
 
 class SameTensorAllArgs(nn.Module):
     """Z1: torch.addmm(x, x, x) — same tensor in ALL 3 arg positions.
-    Attacks parent_layer_arg_locs dedup."""
+    Attacks parent_arg_positions dedup."""
 
     def __init__(self):
         super().__init__()
@@ -3106,7 +3106,7 @@ class ConvAutoencoder(nn.Module):
 
 
 class SparseAutoencoder(nn.Module):
-    """Autoencoder with L1-penalized bottleneck (sparsity via activation)."""
+    """Autoencoder with L1-penalized bottleneck (sparsity via out)."""
 
     def __init__(self):
         super().__init__()
@@ -3156,7 +3156,7 @@ class DenoisingAutoencoder(nn.Module):
 class VQVAE(nn.Module):
     """Vector-quantized VAE: encoder→nearest codebook→decoder.
 
-    Straight-through estimator for gradients past the argmin.
+    Straight-through estimator for grads past the argmin.
     """
 
     def __init__(self, num_embeddings=16, embedding_dim=32):
@@ -3546,7 +3546,7 @@ class CapsuleNetwork(nn.Module):
         h = torch.relu(self.primary_caps(h))
         h = h.flatten(1)
         caps = self.fc(h).view(-1, 10, 8)
-        # Squash activation (capsule nonlinearity)
+        # Squash out (capsule nonlinearity)
         norms = caps.norm(dim=-1, keepdim=True)
         squashed = (norms**2 / (1 + norms**2)) * (caps / (norms + 1e-8))
         return self.out(squashed.flatten(1))
@@ -4564,7 +4564,9 @@ class PartialConvModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv = nn.Conv2d(3, 16, 3, padding=1, bias=False)
-        self.mask_conv_weight = nn.Parameter(torch.ones(16, 3, 3, 3) / 27.0, requires_grad=False)
+        self.mask_conv_weight = nn.Parameter(
+            torch.ones(16, 3, 3, 3) / 27.0, has_trainable_params=False
+        )
         self.bias = nn.Parameter(torch.zeros(16))
         self.fc = nn.Linear(16, 4)
         self.pool = nn.AdaptiveAvgPool2d(1)
@@ -4808,7 +4810,7 @@ class RBFNetwork(nn.Module):
         self.fc = nn.Linear(num_centers, output_dim)
 
     def forward(self, x):
-        # Compute RBF activations: exp(-||x - c||^2 / (2*sigma^2))
+        # Compute RBF outs: exp(-||x - c||^2 / (2*sigma^2))
         diff = x.unsqueeze(1) - self.centers.unsqueeze(0)  # (B, K, D)
         dist_sq = (diff**2).sum(-1)  # (B, K)
         sigma_sq = torch.exp(self.log_sigmas) ** 2 * 2
@@ -4817,7 +4819,7 @@ class RBFNetwork(nn.Module):
 
 
 class SIRENModel(nn.Module):
-    """SIREN: sinusoidal activations for coordinate-based MLP."""
+    """SIREN: sinusoidal outs for coordinate-based MLP."""
 
     def __init__(self):
         super().__init__()
@@ -5170,12 +5172,12 @@ class SimpleEGNN(nn.Module):
 
 
 class MAMLInnerLoop(nn.Module):
-    """MAML-style higher-order gradients: gradient computation within forward pass.
+    """MAML-style higher-order grads: grad computation within forward pass.
 
     Tests the pattern where torch.autograd.grad is called INSIDE the forward
-    method to compute an inner-loop gradient update, and the outer loss
-    backpropagates THROUGH that inner gradient. This is the "gradient of
-    gradient" pattern — the most demanding test for activation tracking.
+    method to compute an inner-loop grad update, and the outer loss
+    backpropagates THROUGH that inner grad. This is the "grad of
+    grad" pattern — the most demanding test for out tracking.
     """
 
     def __init__(self, in_dim=8, hidden=16, out_dim=4):
@@ -5191,11 +5193,11 @@ class MAMLInnerLoop(nn.Module):
         support_out = h @ self.w2 + self.b2
         # Inner loss (MSE to zero — dummy task)
         inner_loss = (support_out**2).mean()
-        # Inner gradient step (differentiable!)
+        # Inner grad step (differentiable!)
         grads = torch.autograd.grad(
             inner_loss, [self.w1, self.b1, self.w2, self.b2], create_graph=True
         )
-        # Fast weights (one gradient step)
+        # Fast weights (one grad step)
         w1_fast = self.w1 - 0.01 * grads[0]
         b1_fast = self.b1 - 0.01 * grads[1]
         w2_fast = self.w2 - 0.01 * grads[2]
@@ -5344,7 +5346,7 @@ class RandomGraphModel(nn.Module):
 
     Args:
         target_nodes: Approximate number of TorchLens nodes to generate.
-        nesting_depth: Levels of nn.Module nesting (1-5).
+        call_depth: Levels of nn.Module nesting (1-5).
         seed: RNG seed for deterministic structure.
         branch_probability: Fraction of blocks that use branch/attention types.
         hidden_dim: Hidden dimension for all layers.
@@ -5353,7 +5355,7 @@ class RandomGraphModel(nn.Module):
     def __init__(
         self,
         target_nodes: int = 1000,
-        nesting_depth: int = 2,
+        call_depth: int = 2,
         seed: int = 42,
         branch_probability: float = 0.3,
         hidden_dim: int = 64,
@@ -5385,23 +5387,23 @@ class RandomGraphModel(nn.Module):
             blocks.append(block_cls(hidden_dim))
 
         # Distribute across nesting depth using ModuleList wrappers.
-        nesting_depth = max(1, min(nesting_depth, 5))
-        if nesting_depth == 1:
+        call_depth = max(1, min(call_depth, 5))
+        if call_depth == 1:
             self.layers = nn.ModuleList(blocks)
         else:
             # Split blocks into groups and nest them.
-            group_size = max(1, len(blocks) // nesting_depth)
+            group_size = max(1, len(blocks) // call_depth)
             nested = nn.ModuleList()
             for i in range(0, len(blocks), group_size):
                 group = nn.ModuleList(blocks[i : i + group_size])
                 nested.append(group)
             self.layers = nested
 
-        self.nesting_depth = nesting_depth
+        self.call_depth = call_depth
 
     def forward(self, x):
         x = self.input_proj(x)
-        if self.nesting_depth == 1:
+        if self.call_depth == 1:
             for layer in self.layers:
                 x = layer(x)
         else:

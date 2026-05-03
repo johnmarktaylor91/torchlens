@@ -117,7 +117,7 @@ def render_model_summary(
     resolved_show_ops = _resolve_show_ops(show_ops=show_ops, include_ops=include_ops)
     resolved_fields = _resolve_fields(resolved_level, fields=fields, columns=columns)
 
-    if not trace._pass_finished:
+    if not trace._tracing_finished:
         legacy_text = _render_in_progress_summary(
             trace=trace,
             fields=resolved_fields,
@@ -154,7 +154,7 @@ def format_model_repr(trace: "Trace") -> str:
         Short two-line representation.
     """
     run_state = getattr(getattr(trace, "run_state", None), "name", "UNKNOWN")
-    if not trace._pass_finished:
+    if not trace._tracing_finished:
         return (
             f"Trace(name={getattr(trace, 'name', None)!r}, "
             f"model_class={trace.model_name!r}, layers={len(trace._raw_layer_dict)}, "
@@ -212,9 +212,8 @@ def format_discoverability_summary(trace: "Trace") -> str:
         f"  fork_chain: {_fork_chain_summary(trace)}",
         "Graph and relationship evidence:",
         f"  graph_shape_hash: {_truncated(getattr(trace, 'graph_shape_hash', None))}",
-        f"  source_model_class: {getattr(trace, 'source_model_class', None)}",
-        "  weight_fingerprint: "
-        f"{_truncated(getattr(trace, 'weight_fingerprint_at_capture', None))}",
+        f"  model_class: {getattr(trace, 'model_class', None)}",
+        f"  weight_fingerprint: {_truncated(getattr(trace, 'param_hash_quick', None))}",
         f"  relationship_evidence: {_relationship_evidence_summary(trace)}",
         "Next operations:",
         f"  {_next_operation_hint(trace)}",
@@ -242,7 +241,7 @@ def _input_shape_summary(trace: "Trace") -> str:
     shape = _combined_shape_str(trace, layers)
     if shape and shape != "-":
         return shape
-    metadata = getattr(trace, "input_metadata", {}) or {}
+    metadata = getattr(trace, "input_annotations", {}) or {}
     if metadata:
         return _shorten(repr(metadata), limit=80)
     return "unknown"
@@ -262,8 +261,8 @@ def _capture_timestamp(trace: "Trace") -> str:
         Pass start/end timing information.
     """
 
-    pass_start = float(getattr(trace, "pass_start_time", 0.0) or 0.0)
-    pass_end = float(getattr(trace, "pass_end_time", 0.0) or 0.0)
+    pass_start = float(getattr(trace, "start_time", 0.0) or 0.0)
+    pass_end = float(getattr(trace, "end_time", 0.0) or 0.0)
     if pass_start <= 0:
         return "unknown"
     if pass_end > 0:
@@ -290,7 +289,7 @@ def _run_state_name(trace: "Trace") -> str:
 
 
 def _stale_spec_status(trace: "Trace") -> str:
-    """Return whether the activation recipe is stale.
+    """Return whether the out recipe is stale.
 
     Parameters
     ----------
@@ -304,9 +303,9 @@ def _stale_spec_status(trace: "Trace") -> str:
     """
 
     spec_revision = int(getattr(trace, "_spec_revision", 0) or 0)
-    recipe_revision = int(getattr(trace, "_activation_recipe_revision", 0) or 0)
+    recipe_revision = int(getattr(trace, "_out_recipe_revision", 0) or 0)
     stale = spec_revision != recipe_revision
-    return f"{stale} (spec={spec_revision}, activation_recipe={recipe_revision})"
+    return f"{stale} (spec={spec_revision}, out_recipe={recipe_revision})"
 
 
 def _last_run_summary(trace: "Trace") -> str:
@@ -581,7 +580,7 @@ def _next_operation_hint(trace: "Trace") -> str:
 
     if getattr(trace, "_has_direct_writes", False):
         return "direct writes present; replay() or rerun() will overlay recipe state"
-    if getattr(trace, "_spec_revision", 0) != getattr(trace, "_activation_recipe_revision", 0):
+    if getattr(trace, "_spec_revision", 0) != getattr(trace, "_out_recipe_revision", 0):
         return "spec stale; call replay() or rerun() to propagate"
     if not getattr(trace, "intervention_ready", False):
         return "not intervention-ready; recapture with intervention_ready=True for replay templates"
@@ -604,7 +603,7 @@ def _rng_note_summary(trace: "Trace") -> str:
 
     notes = []
     for layer in getattr(trace, "layer_list", []) or []:
-        for record in getattr(layer, "intervention_log", []) or []:
+        for record in getattr(layer, "interventions", []) or []:
             note = getattr(record, "determinism_note", None)
             if note:
                 notes.append(str(note))
@@ -770,11 +769,11 @@ def _render_in_progress_summary(
             entry = trace._raw_layer_dict[raw_label]
             row = {
                 "name": str(
-                    getattr(entry, "layer_label_raw", None)
-                    or getattr(entry, "tensor_label_raw", raw_label)
+                    getattr(entry, "_layer_label_raw", None)
+                    or getattr(entry, "_label_raw", raw_label)
                 ),
-                "shape": _shape_str(getattr(entry, "tensor_shape", None)),
-                "dtype": _dtype_str(getattr(entry, "tensor_dtype", None)),
+                "shape": _shape_str(getattr(entry, "shape", None)),
+                "dtype": _dtype_str(getattr(entry, "dtype", None)),
             }
             rows.append(row)
         display_fields = [field for field in fields if field in {"name", "shape", "dtype"}] or [
@@ -938,10 +937,10 @@ def _build_overview_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str
         }
     )
     footer_lines = [
-        f"Params: {_int_with_commas(trace.total_params)} unique; trainable: "
-        f"{_int_with_commas(trace.total_params_trainable)}",
-        f"Ops: {trace.num_operations} total",
-        f"Saved activations: {human_readable_size(trace.saved_activation_memory)}",
+        f"Params: {_int_with_commas(trace.num_params)} unique; trainable: "
+        f"{_int_with_commas(trace.num_params_trainable)}",
+        f"Ops: {trace.num_ops} total",
+        f"Saved outs: {human_readable_size(trace.saved_out_memory)}",
         f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}  "
         f"MACs: {_human_flops(trace.total_macs_forward)}",
         "FLOP convention: counts use the captured TorchLens convention; "
@@ -967,7 +966,7 @@ def _build_graph_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]]:
     for module in _iter_summary_modules(trace):
         rows.append(
             {
-                "name": f"{module.address} ({module.module_class_name})",
+                "name": f"{module.address} ({module.class_name})",
                 "shape": _module_shape(trace, module),
                 "params": _human_count(module.num_params),
                 "parents": _module_parent_summary(module),
@@ -975,7 +974,7 @@ def _build_graph_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]]:
         )
     footer_lines = [
         f"Modules shown: {len(rows)}",
-        f"Ops tracked: {trace.num_operations}",
+        f"Ops tracked: {trace.num_ops}",
     ]
     return rows, footer_lines
 
@@ -1002,20 +1001,20 @@ def _build_memory_rows(
     running_total = 0
     rows: List[Dict[str, str]] = []
     for entry in _iter_operation_entries(trace, mode=mode):
-        tensor_memory = int(getattr(entry, "tensor_memory", 0) or 0)
-        running_total += tensor_memory
+        memory = int(getattr(entry, "memory", 0) or 0)
+        running_total += memory
         rows.append(
             {
                 "name": _entry_name(entry),
-                "shape": _shape_str(getattr(entry, "tensor_shape", None)),
-                "dtype": _dtype_str(getattr(entry, "tensor_dtype", None)),
-                "tensor_mb": _mb_str(tensor_memory),
+                "shape": _shape_str(getattr(entry, "shape", None)),
+                "dtype": _dtype_str(getattr(entry, "dtype", None)),
+                "tensor_mb": _mb_str(memory),
                 "running_mb": _mb_str(running_total),
             }
         )
     footer_lines = [
-        f"Tracked tensor volume: {human_readable_size(trace.total_activation_memory)}",
-        f"Saved activations: {human_readable_size(trace.saved_activation_memory)}",
+        f"Tracked tensor volume: {human_readable_size(trace.total_out_memory)}",
+        f"Saved outs: {human_readable_size(trace.saved_out_memory)}",
         "Live forward-memory peak: not tracked in Trace",
     ]
     return rows, footer_lines
@@ -1082,10 +1081,10 @@ def _build_compute_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]
             }
         )
     footer_lines = [
-        f"Params: {_int_with_commas(trace.total_params)} unique",
+        f"Params: {_int_with_commas(trace.num_params)} unique",
         f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}",
         f"MACs: {_human_flops(trace.total_macs_forward)}",
-        f"Forward time: {trace.time_forward_pass * 1000:.2f} ms",
+        f"Forward time: {trace.forward_duration * 1000:.2f} ms",
     ]
     return rows, footer_lines
 
@@ -1114,8 +1113,8 @@ def _build_waterfall_rows(
     peak_memory = 0
     rows: List[Dict[str, str]] = []
     for entry in _iter_operation_entries(trace, mode=mode):
-        duration = float(getattr(entry, "func_time", 0.0) or 0.0)
-        memory = int(getattr(entry, "tensor_memory", 0) or 0)
+        duration = float(getattr(entry, "func_duration", 0.0) or 0.0)
+        memory = int(getattr(entry, "memory", 0) or 0)
         peak_memory = max(peak_memory, memory)
         rows.append(
             {
@@ -1159,20 +1158,20 @@ def _build_operation_rows(
     rows: List[Dict[str, str]] = []
     running_total = 0
     for entry in _iter_operation_entries(trace, mode=mode):
-        tensor_memory = int(getattr(entry, "tensor_memory", 0) or 0)
-        running_total += tensor_memory
+        memory = int(getattr(entry, "memory", 0) or 0)
+        running_total += memory
         rows.append(
             {
                 "name": _entry_name(entry),
-                "shape": _shape_str(getattr(entry, "tensor_shape", None)),
-                "params": _human_count(int(getattr(entry, "num_params_total", 0) or 0)),
-                "parents": _parent_summary(getattr(entry, "parent_layers", [])),
-                "dtype": _dtype_str(getattr(entry, "tensor_dtype", None)),
-                "tensor_mb": _mb_str(tensor_memory),
+                "shape": _shape_str(getattr(entry, "shape", None)),
+                "params": _human_count(int(getattr(entry, "num_params", 0) or 0)),
+                "parents": _parent_summary(getattr(entry, "parents", [])),
+                "dtype": _dtype_str(getattr(entry, "dtype", None)),
+                "tensor_mb": _mb_str(memory),
                 "running_mb": _mb_str(running_total),
                 "flops": _human_flops(int(getattr(entry, "flops_forward", 0) or 0)),
                 "macs": _human_flops(int(getattr(entry, "macs_forward", 0) or 0)),
-                "time_ms": f"{float(getattr(entry, 'func_time', 0.0) or 0.0) * 1000:.2f}",
+                "time_ms": f"{float(getattr(entry, 'func_duration', 0.0) or 0.0) * 1000:.2f}",
             }
         )
     footer_lines = [
@@ -1242,12 +1241,12 @@ def _module_overview_row(trace: "Trace", module: "ModuleLog") -> Dict[str, str]:
     if module.num_params > 0:
         train = "yes" if module.num_params_trainable > 0 else "no"
     return {
-        "name": f"{module.address} ({module.module_class_name})",
+        "name": f"{module.address} ({module.class_name})",
         "shape": _module_shape(trace, module),
         "params": _human_count(module.num_params),
         "train": train,
         "parents": _module_parent_summary(module),
-        "class": module.module_class_name,
+        "class": module.class_name,
     }
 
 
@@ -1266,13 +1265,13 @@ def _module_shape(trace: "Trace", module: "ModuleLog") -> str:
     str
         Representative output shape.
     """
-    if not module.all_layers:
+    if not module.layers:
         return "-"
     try:
-        layer = trace[module.all_layers[-1]]
+        layer = trace[module.layers[-1]]
     except KeyError:
         return "-"
-    return _shape_str(getattr(layer, "tensor_shape", None))
+    return _shape_str(getattr(layer, "shape", None))
 
 
 def _module_parent_summary(module: "ModuleLog") -> str:
@@ -1308,13 +1307,13 @@ def _module_dtype(trace: "Trace", module: "ModuleLog") -> str:
     str
         Representative dtype.
     """
-    if not module.all_layers:
+    if not module.layers:
         return "-"
     try:
-        layer = trace[module.all_layers[-1]]
+        layer = trace[module.layers[-1]]
     except KeyError:
         return "-"
-    return _dtype_str(getattr(layer, "tensor_dtype", None))
+    return _dtype_str(getattr(layer, "dtype", None))
 
 
 def _module_time_ms(trace: "Trace", module: "ModuleLog") -> float:
@@ -1333,12 +1332,12 @@ def _module_time_ms(trace: "Trace", module: "ModuleLog") -> float:
         Summed execution time in milliseconds.
     """
     total = 0.0
-    for layer_label in module.all_layers:
+    for layer_label in module.layers:
         try:
             layer = trace[layer_label]
         except KeyError:
             continue
-        total += float(getattr(layer, "func_time", 0.0) or 0.0)
+        total += float(getattr(layer, "func_duration", 0.0) or 0.0)
     return total * 1000.0
 
 
@@ -1404,12 +1403,12 @@ def _entry_name(entry: Any) -> str:
     if base_name is None:
         base_name = getattr(entry, "layer_label_w_pass", None) or getattr(entry, "layer_label", "?")
     if (
-        getattr(entry, "num_passes", 1)
-        and getattr(entry, "num_passes", 1) > 1
-        and hasattr(entry, "passes")
+        getattr(entry, "num_calls", 1)
+        and getattr(entry, "num_calls", 1) > 1
+        and hasattr(entry, "ops")
     ):
-        return f"{base_name} x{getattr(entry, 'num_passes', 1)}"
-    if getattr(entry, "pass_num", 1) > 1:
+        return f"{base_name} x{getattr(entry, 'num_calls', 1)}"
+    if getattr(entry, "call_index", 1) > 1:
         return str(getattr(entry, "layer_label", base_name))
     return str(base_name)
 
@@ -1434,7 +1433,7 @@ def _combined_shape_str(trace: "Trace", labels: Sequence[str]) -> str:
     shapes = []
     for label in labels:
         try:
-            shapes.append(_shape_str(getattr(trace[label], "tensor_shape", None)))
+            shapes.append(_shape_str(getattr(trace[label], "shape", None)))
         except KeyError:
             continue
     if not shapes:
@@ -1523,12 +1522,12 @@ def _event_branch_op_count(trace: "Trace", event: "ConditionalEvent") -> int:
     )
 
 
-def _parent_summary(parent_layers: Sequence[str]) -> str:
+def _parent_summary(parents: Sequence[str]) -> str:
     """Return a compact parent-layer summary.
 
     Parameters
     ----------
-    parent_layers:
+    parents:
         Parent layer labels.
 
     Returns
@@ -1536,11 +1535,11 @@ def _parent_summary(parent_layers: Sequence[str]) -> str:
     str
         Compact parent summary.
     """
-    if not parent_layers:
+    if not parents:
         return "-"
-    if len(parent_layers) == 1:
-        return str(parent_layers[0])
-    return f"{parent_layers[0]} +{len(parent_layers) - 1}"
+    if len(parents) == 1:
+        return str(parents[0])
+    return f"{parents[0]} +{len(parents) - 1}"
 
 
 def _shape_str(shape: Any) -> str:

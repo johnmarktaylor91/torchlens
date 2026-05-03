@@ -1,8 +1,8 @@
-"""Streaming bundle writer used during forward-pass activation capture.
+"""Streaming bundle writer used during forward-pass out capture.
 
 This module implements the strict streaming writer behind
-``trace(save_activations_to=...)``. It writes one safetensors blob
-per saved activation into a temporary bundle during the forward pass, then
+``trace(save_outs_to=...)``. It writes one safetensors blob
+per saved out into a temporary bundle during the forward pass, then
 finalizes ``manifest.json`` and ``metadata.pkl`` at postprocess time so the
 returned log can stay memory-backed or disk-backed with the same on-disk
 bundle.
@@ -51,7 +51,7 @@ def next_blob_id(blob_index: int) -> str:
 
 
 class BundleStreamWriter:
-    """Persist activation blobs incrementally into a temp TorchLens bundle.
+    """Persist out blobs incrementally into a temp TorchLens bundle.
 
     Parameters
     ----------
@@ -78,7 +78,7 @@ class BundleStreamWriter:
         """
 
         if not strict:
-            raise TorchLensIOError("Streaming activation save is always strict.")
+            raise TorchLensIOError("Streaming out save is always strict.")
 
         self.final_path = Path(path)
         if self.final_path.is_symlink():
@@ -150,7 +150,7 @@ class BundleStreamWriter:
 
         self._ensure_writable()
         if not isinstance(tensor, torch.Tensor):
-            postfunc_name = "gradient_postfunc" if kind == "gradient" else "activation_postfunc"
+            postfunc_name = "grad_transform" if kind == "grad" else "out_postfunc"
             reason = (
                 f"Streaming {kind} save requires {postfunc_name} outputs to be torch.Tensor "
                 f"instances, but blob_id={blob_id} ({label}) received {type(tensor).__name__}."
@@ -353,9 +353,9 @@ class BundleStreamWriter:
         """Build the final manifest for the streamed bundle."""
 
         tensor_entries = list(self._tensor_entries)
-        n_activation_blobs = sum(1 for entry in tensor_entries if entry.kind == "activation")
-        n_gradient_blobs = sum(1 for entry in tensor_entries if entry.kind == "gradient")
-        n_auxiliary_blobs = len(tensor_entries) - n_activation_blobs - n_gradient_blobs
+        n_out_blobs = sum(1 for entry in tensor_entries if entry.kind == "out")
+        n_grad_blobs = sum(1 for entry in tensor_entries if entry.kind == "grad")
+        n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
         layer_list = scrubbed_state.get("layer_list", [])
         n_layers = len(layer_list) if isinstance(layer_list, list) else 0
         return Manifest(
@@ -372,8 +372,8 @@ class BundleStreamWriter:
             .replace("+00:00", "Z"),
             bundle_format="directory",
             n_layers=n_layers,
-            n_activation_blobs=n_activation_blobs,
-            n_gradient_blobs=n_gradient_blobs,
+            n_out_blobs=n_out_blobs,
+            n_grad_blobs=n_grad_blobs,
             n_auxiliary_blobs=n_auxiliary_blobs,
             tensors=tensor_entries,
             unsupported_tensors=unsupported,

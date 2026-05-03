@@ -61,7 +61,7 @@ def test_root_only_linear_emits_root_enter_exit() -> None:
     recording = tl.fastlog.record(
         RootLinear(3, 2),
         torch.ones(1, 3),
-        keep_module=lambda ctx: ctx.module_address == "",
+        keep_module=lambda ctx: ctx.address == "",
     )
 
     assert [record.ctx.kind for record in recording] == ["module_enter", "module_exit"]
@@ -73,9 +73,9 @@ def test_shared_module_pass_counter_increments_for_two_calls() -> None:
     recording = tl.fastlog.record(
         SharedModule(),
         torch.ones(1, 3),
-        keep_module=lambda ctx: ctx.module_address == "shared",
+        keep_module=lambda ctx: ctx.address == "shared",
     )
-    child_events = [record.ctx for record in recording if record.ctx.module_address == "shared"]
+    child_events = [record.ctx for record in recording if record.ctx.address == "shared"]
 
     assert [ctx.kind for ctx in child_events] == [
         "module_enter",
@@ -92,7 +92,7 @@ def test_identity_sequence_pass_through_tensor_is_visible() -> None:
     recording = tl.fastlog.record(
         IdentitySequence(),
         torch.ones(1, 3),
-        keep_module=lambda ctx: bool(ctx.module_address and "1" in ctx.module_address),
+        keep_module=lambda ctx: bool(ctx.address and "1" in ctx.address),
         default_op=False,
     )
 

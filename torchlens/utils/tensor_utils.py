@@ -1,8 +1,8 @@
 """Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer.
 
 Many functions in this module use ``pause_logging()`` to temporarily disable
-the torchlens logging toggle before calling tensor methods.  This is
-necessary because tensor methods like ``.clone()``, ``.to()``,
+the torchlens logging toggle before calling tensor custom_methods.  This is
+necessary because tensor custom_methods like ``.clone()``, ``.to()``,
 ``.nelement()``, and ``.element_size()`` are all decorated at import time
 (see ``decoration/torch_funcs.py``).  Without pausing, these internal calls
 would be logged as user operations, creating spurious entries and, in the
@@ -133,7 +133,7 @@ def tensor_nanequal(
 
     ``pause_logging()`` is required because this function is called during
     active logging (from ``_tag_tensor_and_track_variations``) and uses
-    decorated tensor methods like ``.resolve_conj()``, ``.isinf()``, etc.
+    decorated tensor custom_methods like ``.resolve_conj()``, ``.isinf()``, etc.
     Without pausing, these calls re-enter the logging pipeline and cause
     infinite recursion.
 
@@ -219,11 +219,11 @@ def safe_to(obj: Any, device: str) -> Any:
         return obj
 
 
-def get_tensor_memory_amount(t: torch.Tensor) -> int:
+def get_memory_amount(t: torch.Tensor) -> int:
     """Return the memory footprint of a tensor in bytes.
 
     ``pause_logging()`` is required because ``.nelement()`` and
-    ``.element_size()`` are decorated tensor methods.  Without pausing,
+    ``.element_size()`` are decorated tensor custom_methods.  Without pausing,
     calling them during active logging would trigger the logging pipeline
     recursively (infinite loop).
 
@@ -294,7 +294,7 @@ def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
 
     Uses ``pause_logging()`` so that ``.clone()``, ``.detach()``,
     ``.cpu()`` etc. don't get logged — these are all decorated tensor
-    methods, and calling them during active logging would create spurious
+    custom_methods, and calling them during active logging would create spurious
     entries or infinite recursion.
 
     For non-tensor inputs, falls back to ``copy.copy()`` (shallow copy),
@@ -305,7 +305,7 @@ def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
     Args:
         x: Input value (tensor, parameter, or arbitrary object).
         detach_tensor: If True, detach the clone from the autograd graph.
-            This is used when saving activations to avoid retaining the
+            This is used when saving outs to avoid retaining the
             full computational graph in memory.
 
     Returns:
@@ -342,8 +342,8 @@ def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
                         vals_tensor = torch.zeros(x.shape, dtype=torch.float32)
             # Preserve the raw label so postprocessing can map this tensor
             # back to its Trace entry.
-            if hasattr(x, "tl_tensor_label_raw"):
-                setattr(vals_tensor, "tl_tensor_label_raw", getattr(x, "tl_tensor_label_raw"))
+            if hasattr(x, "tl__label_raw"):
+                setattr(vals_tensor, "tl__label_raw", getattr(x, "tl__label_raw"))
             if isinstance(x, torch.nn.Parameter):
                 return torch.nn.Parameter(vals_tensor)
             return vals_tensor
@@ -356,7 +356,7 @@ def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
 def print_override(t: torch.Tensor, func_name: str) -> str:
     """Safe ``__str__``/``__repr__`` for tensors during active logging.
 
-    The default ``Tensor.__repr__`` calls decorated methods internally,
+    The default ``Tensor.__repr__`` calls decorated custom_methods internally,
     which would re-enter the logging pipeline and cause infinite recursion.
     This override pauses logging, converts to a numpy array for formatting,
     and appends autograd metadata (``grad_fn`` / ``requires_grad``) to

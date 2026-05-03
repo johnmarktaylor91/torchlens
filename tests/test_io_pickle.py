@@ -48,7 +48,7 @@ def _build_live_log() -> Trace:
         layers_to_save="all",
         save_function_args=True,
         save_rng_states=True,
-        save_source_context=True,
+        save_code_context=True,
         random_seed=0,
     )
 
@@ -80,9 +80,9 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     live_log = _build_live_log()
     scrubbed_state, blob_specs = scrub_for_save(
         live_log,
-        include_activations=True,
-        include_gradients=False,
-        include_captured_args=True,
+        include_outs=True,
+        include_grads=False,
+        include_saved_args=True,
         include_rng_states=True,
     )
     manifest = _write_manifest(tmp_path, blob_specs)
@@ -102,8 +102,8 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     assert restored.modules["bn"]._source_trace is restored
     assert restored.buffers["bn.running_mean"].buffer_address == "bn.running_mean"
 
-    first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_activations)
-    assert isinstance(first_saved_layer.activation, torch.Tensor)
+    first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_outs)
+    assert isinstance(first_saved_layer.out, torch.Tensor)
     assert (
         first_saved_layer.parent_layer_log
         is restored.layer_logs[first_saved_layer.layer_label_no_pass]
@@ -112,9 +112,9 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     first_arg_layer = next(
         layer
         for layer in restored.layer_list
-        if layer.captured_args is not None and len(layer.captured_args) > 0
+        if layer.saved_args is not None and len(layer.saved_args) > 0
     )
-    assert isinstance(first_arg_layer.captured_args[0], torch.Tensor)
+    assert isinstance(first_arg_layer.saved_args[0], torch.Tensor)
 
 
 def test_trace_setstate_default_fills_pre_sprint_state() -> None:
@@ -123,14 +123,14 @@ def test_trace_setstate_default_fills_pre_sprint_state() -> None:
     live_log = _build_live_log()
     old_state = live_log.__getstate__()
     old_state.pop("io_format_version", None)
-    old_state.pop("activation_postfunc_repr", None)
+    old_state.pop("_out_transform_repr", None)
 
     restored = Trace.__new__(Trace)
     with pytest.warns(DeprecationWarning):
         restored.__setstate__(old_state)
 
     assert restored.io_format_version == IO_FORMAT_VERSION
-    assert restored.activation_postfunc_repr is None
+    assert restored._out_transform_repr is None
 
 
 def test_trace_setstate_rejects_newer_io_versions() -> None:

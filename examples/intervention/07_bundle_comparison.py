@@ -3,7 +3,7 @@
 What this demonstrates
 ----------------------
 Construct a ``Bundle``, access one node across members, compute per-member
-metrics, and compare activations at a shared site.
+metrics, and compare outs at a shared site.
 
 How to run
 ----------
@@ -51,7 +51,7 @@ def main() -> None:
     sizes = bundle.metric(lambda member: len(member.layer_list))
     comparison = bundle.compare_at(tl.func("relu"))
 
-    assert set(node.activations) == {"clean", "zero"}
+    assert set(node.outs) == {"clean", "zero"}
     assert sizes["clean"] == sizes["zero"]
     assert comparison.shape == (2, 2)
 

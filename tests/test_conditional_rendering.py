@@ -113,7 +113,7 @@ class BranchEntryWithArgLabelModel(nn.Module):
 
 
 class RolledMixedArmModel(nn.Module):
-    """Model whose rolled arm-entry edge appears in both THEN and ELSE passes."""
+    """Model whose rolled arm-entry edge appears in both THEN and ELSE ops."""
 
     def __init__(self) -> None:
         """Initialise the repeated parent and branch layers."""
@@ -134,9 +134,9 @@ class RolledMixedArmModel(nn.Module):
         torch.Tensor
             Final recurrent output.
         """
-        for pass_num in range(1, 5):
+        for call_index in range(1, 5):
             x = self.parent(x)
-            branch_offset = 1.0 if pass_num % 2 == 1 else -1.0
+            branch_offset = 1.0 if call_index % 2 == 1 else -1.0
             branch_marker = (x.mean() * 0) + branch_offset
             if branch_marker > 0:
                 x = self.branch(x)
@@ -166,7 +166,7 @@ def _render_dot_source(
     Tuple[str, Trace]
         Rendered DOT source and the populated model log.
     """
-    trace = tl.trace_fn(model, x, save_source_context=True)
+    trace = tl.trace_fn(model, x, save_code_context=True)
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "conditional_render")
         dot_source = trace.render_graph(
@@ -318,8 +318,8 @@ def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate
         trace.cleanup()
 
 
-def test_rolled_mixed_arm_graphviz_shows_composite_pass_label() -> None:
-    """Rolled rendering shows a composite THEN/ELSE label when passes diverge."""
+def test_rolled_mixed_arm_graphviz_shows_composite_call_label() -> None:
+    """Rolled rendering shows a composite THEN/ELSE label when ops diverge."""
     dot_source, trace = _render_dot_source(
         RolledMixedArmModel(),
         torch.ones(1, 4),

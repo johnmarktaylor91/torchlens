@@ -44,7 +44,7 @@ def rehydrate_trace(
     bundle_path:
         Root bundle directory containing the ``blobs/`` subdirectory.
     lazy:
-        Whether direct activation/gradient blob refs should remain lazy.
+        Whether direct out/grad blob refs should remain lazy.
     map_location:
         Target device passed through to ``safetensors`` materialization.
     materialize_nested:
@@ -231,7 +231,7 @@ def _rehydrate_object(
                                 map_location,
                             ),
                         )
-                elif not lazy or field_name in {"transformed_activation", "transformed_gradient"}:
+                elif not lazy or field_name in {"transformed_out", "transformed_grad"}:
                     _assign_rehydrated_field(
                         value,
                         field_name,
@@ -427,7 +427,7 @@ def _build_lazy_tensor_ref(
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
     *,
-    kind: Literal["activation", "gradient"],
+    kind: Literal["out", "grad"],
 ) -> LazyActivationRef | None:
     """Build a ``LazyActivationRef`` from one manifest entry.
 
@@ -445,7 +445,7 @@ def _build_lazy_tensor_ref(
     Returns
     -------
     LazyActivationRef | None
-        Lazy activation placeholder, or ``None`` when the manifest entry uses the
+        Lazy out placeholder, or ``None`` when the manifest entry uses the
         older minimal schema that does not include enough metadata yet.
     """
 
@@ -478,14 +478,14 @@ def _lazy_ref_field_name(field_name: str) -> str | None:
         Matching lazy-ref field name, or ``None`` when not applicable.
     """
 
-    if field_name == "activation":
-        return "activation_ref"
-    if field_name == "gradient":
-        return "gradient_ref"
+    if field_name == "out":
+        return "out_ref"
+    if field_name == "grad":
+        return "grad_ref"
     return None
 
 
-def _lazy_ref_kind(blob_kind: str) -> Literal["activation", "gradient"]:
+def _lazy_ref_kind(blob_kind: str) -> Literal["out", "grad"]:
     """Normalize a blob kind into a lazy direct-tensor kind.
 
     Parameters
@@ -499,9 +499,9 @@ def _lazy_ref_kind(blob_kind: str) -> Literal["activation", "gradient"]:
         Direct tensor kind expected by ``LazyActivationRef``.
     """
 
-    if blob_kind == "gradient":
-        return "gradient"
-    return "activation"
+    if blob_kind == "grad":
+        return "grad"
+    return "out"
 
 
 def _manifest_entry_for_blob_ref(
@@ -828,12 +828,12 @@ def _source_bundle_path_for_trace(trace: Trace) -> Path:
         return bundle_path
 
     for layer in getattr(trace, "layer_list", []):
-        activation_ref = getattr(layer, "activation_ref", None)
-        if isinstance(activation_ref, LazyActivationRef):
-            return activation_ref.source_bundle_path
-        gradient_ref = getattr(layer, "gradient_ref", None)
-        if isinstance(gradient_ref, LazyActivationRef):
-            return gradient_ref.source_bundle_path
+        out_ref = getattr(layer, "out_ref", None)
+        if isinstance(out_ref, LazyActivationRef):
+            return out_ref.source_bundle_path
+        grad_ref = getattr(layer, "grad_ref", None)
+        if isinstance(grad_ref, LazyActivationRef):
+            return grad_ref.source_bundle_path
 
     raise TorchLensIOError(
         "Trace does not retain a source bundle path for nested blob rehydration."

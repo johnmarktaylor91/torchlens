@@ -22,7 +22,7 @@ this package mostly stateless and free of high-level TorchLens business logic.
 - `safe_copy()` clones through clean torch functions and strips `tl_*` attrs.
 - `safe_to()` moves tensors under `pause_logging()`.
 - `tensor_nanequal()` is NaN-aware and complex-aware.
-- `get_tensor_memory_amount()` must use `pause_logging()` because tensor methods are wrapped.
+- `get_memory_amount()` must use `pause_logging()` because tensor custom_methods are wrapped.
 - `MAX_FLOATING_POINT_TOLERANCE` is shared by validation.
 
 ## RNG and Autocast

@@ -117,22 +117,22 @@ class TestTraceGC:
         # Allow up to 256KB of noise (caches, interned strings, etc.)
         assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 sessions"
 
-    def test_save_new_activations_no_leak(self):
-        """5x save_new_activations should not leak memory."""
+    def test_save_new_outs_no_leak(self):
+        """5x save_new_outs should not leak memory."""
         model = _TwoLayerNet()
         x = torch.randn(1, 5)
-        # Two-pass path: exhaustive first, then fast via save_new_activations
+        # Two-pass path: exhaustive first, then fast via save_new_outs
         trace = tl.trace_fn(model, x, layers_to_save=None)
 
         # Warm up
-        trace.save_new_activations(model, torch.randn(1, 5), layers_to_save="all")
+        trace.save_new_outs(model, torch.randn(1, 5), layers_to_save="all")
         gc.collect()
 
         tracemalloc.start()
         baseline = tracemalloc.take_snapshot()
 
         for _ in range(5):
-            trace.save_new_activations(model, torch.randn(1, 5), layers_to_save="all")
+            trace.save_new_outs(model, torch.randn(1, 5), layers_to_save="all")
             gc.collect()
 
         after = tracemalloc.take_snapshot()
@@ -140,9 +140,7 @@ class TestTraceGC:
 
         stats = after.compare_to(baseline, "lineno")
         tl_growth = sum(s.size_diff for s in stats if "torchlens" in str(s.traceback))
-        assert tl_growth < 256 * 1024, (
-            f"Memory grew by {tl_growth} bytes across 5 save_new_activations"
-        )
+        assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 save_new_outs"
         trace.cleanup()
 
     def test_cleanup_breaks_param_ref(self):
@@ -158,8 +156,8 @@ class TestTraceGC:
         """backward(), release_param_refs(), verify grad info is cached."""
         model = _TwoLayerNet()
         x = torch.randn(1, 5)
-        trace = tl.trace_fn(model, x, save_gradients=True)
-        # Run backward to populate gradients
+        trace = tl.trace_fn(model, x, save_grads=True)
+        # Run backward to populate grads
         out = model(x)
         out.sum().backward()
         # Access grad metadata to cache it

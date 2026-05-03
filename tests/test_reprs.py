@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 
 
 class _InfModel(nn.Module):
-    """Tiny model that produces a non-finite activation."""
+    """Tiny model that produces a non-finite out."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return an infinite tensor."""
@@ -59,7 +59,7 @@ def test_trace_repr_html_is_informative() -> None:
 
 
 @pytest.mark.parametrize("method", ["auto", "heatmap", "channels", "rgb", "hist"])
-def test_layer_log_show_methods_return_output(method: str) -> None:
+def test_layer_log_show_custom_methods_return_output(method: str) -> None:
     """LayerLog.show accepts every Phase 3 display method."""
 
     x = torch.randn(1, 3, 4, 4) if method == "rgb" else torch.randn(3, 4, 4)

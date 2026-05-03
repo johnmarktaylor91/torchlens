@@ -48,10 +48,10 @@ Nothing should be hidden behind external planning documents.
 capture. Other notebooks assume this import path and seed policy work.
 
 `01_basic_capture` captures a deterministic forward pass, displays labels, and
-uses the activation onramp. Indexing and anatomy notebooks build on this.
+uses the out onramp. Indexing and anatomy notebooks build on this.
 
 `02_layer_indexing` explores exact labels, substring behavior, suggestions, and
-saved activation lookups. Intervention notebooks depend on these site rules.
+saved out lookups. Intervention notebooks depend on these site rules.
 
 `03_save_load_basics` writes and reloads a portable artifact in a temporary
 directory. Advanced save/load notebooks reuse this cleanup pattern.
@@ -68,7 +68,7 @@ to pass-qualified labels.
 `08_layerpasslog_anatomy` inspects per-operation records, saved tensors, shapes,
 parents, and canonical field order.
 
-`09_other_log_types` covers module, parameter, buffer, and gradient-log types
+`09_other_log_types` covers module, parameter, buffer, and grad-log types
 through small introspection examples.
 
 `10_bundle_anatomy` builds a small bundle and inspects members, baseline state,

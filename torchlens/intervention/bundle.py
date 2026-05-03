@@ -162,7 +162,7 @@ class Bundle:
         )
 
     def __getattr__(self, name: str) -> Any:
-        """Return budget-preserving Phase 8 helper methods.
+        """Return budget-preserving Phase 8 helper custom_methods.
 
         Parameters
         ----------
@@ -180,7 +180,7 @@ class Bundle:
             If ``name`` is not a dynamic bundle helper.
         """
 
-        dynamic_methods: dict[str, Callable[..., Any]] = {
+        dynamic_custom_methods: dict[str, Callable[..., Any]] = {
             "aligned_pairs": _bundle_aligned_pairs,
             "compare": _bundle_compare,
             "delta_map": _bundle_delta_map,
@@ -188,7 +188,7 @@ class Bundle:
             "output_delta": _bundle_output_delta,
             "show_diff": _bundle_show_diff,
         }
-        helper = dynamic_methods.get(name)
+        helper = dynamic_custom_methods.get(name)
         if helper is None:
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
         return helper.__get__(self, type(self))
@@ -519,7 +519,7 @@ class Bundle:
         return results
 
     def compare_at(self, site: Any) -> torch.Tensor:
-        """Return pairwise activation differences at a site.
+        """Return pairwise out differences at a site.
 
         Parameters
         ----------
@@ -542,7 +542,7 @@ class Bundle:
         top_k: int = 10,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
     ) -> list[tuple[str, float]]:
-        """Rank sites by activation distance from a baseline.
+        """Rank sites by out distance from a baseline.
 
         Parameters
         ----------
@@ -569,18 +569,16 @@ class Bundle:
                 view = self.node(site.layer_label)
             except BundleMemberError:
                 continue
-            activations = view.activations
-            base = activations.get(baseline_name)
+            outs = view.outs
+            base = outs.get(baseline_name)
             if not isinstance(base, torch.Tensor):
                 continue
             distances: list[float] = []
-            for name, activation in activations.items():
-                if name == baseline_name or not isinstance(activation, torch.Tensor):
+            for name, out in outs.items():
+                if name == baseline_name or not isinstance(out, torch.Tensor):
                     continue
                 val = (
-                    relative_l1_scalar(base, activation)
-                    if is_scalar_like(base)
-                    else metric_fn(base, activation)
+                    relative_l1_scalar(base, out) if is_scalar_like(base) else metric_fn(base, out)
                 )
                 distances.append(float(val.detach().item()))
             if distances:
@@ -589,7 +587,7 @@ class Bundle:
         return scored[:top_k]
 
     def diff(self, a: Any, b: Any) -> Any:
-        """Return activation differences between two members or at one site.
+        """Return out differences between two members or at one site.
 
         Parameters
         ----------
@@ -667,7 +665,7 @@ class Bundle:
         return self._relationship_between(self._members[a], self._members[b])
 
     def _diff_members(self, left_name: str, right_name: str) -> list[tuple[str, float]]:
-        """Return per-site activation differences between two members.
+        """Return per-site out differences between two members.
 
         Parameters
         ----------
@@ -691,14 +689,14 @@ class Bundle:
                 right_site = resolve_sites(right_log, label, max_fanout=1).first()
             except Exception:  # noqa: BLE001 - missing sites are not common sites
                 continue
-            left_activation = getattr(left_site, "activation", None)
-            right_activation = getattr(right_site, "activation", None)
-            if not isinstance(left_activation, torch.Tensor) or not isinstance(
-                right_activation,
+            left_out = getattr(left_site, "out", None)
+            right_out = getattr(right_site, "out", None)
+            if not isinstance(left_out, torch.Tensor) or not isinstance(
+                right_out,
                 torch.Tensor,
             ):
                 continue
-            value = relative_l1_scalar(left_activation, right_activation)
+            value = relative_l1_scalar(left_out, right_out)
             rows.append((label, float(value.detach().item())))
         return rows
 
@@ -984,12 +982,12 @@ class Bundle:
         if left is right:
             return Relationship.SAME_OBJECT
 
-        left_class = getattr(left, "source_model_class", None)
-        right_class = getattr(right, "source_model_class", None)
+        left_class = getattr(left, "model_class", None)
+        right_class = getattr(right, "model_class", None)
         left_weight = cls._weight_fingerprint(left)
         right_weight = cls._weight_fingerprint(right)
-        left_id = getattr(left, "source_model_id", None)
-        right_id = getattr(right, "source_model_id", None)
+        left_id = getattr(left, "model_id", None)
+        right_id = getattr(right, "model_id", None)
         if (
             left_id is not None
             and left_id == right_id
@@ -1037,9 +1035,9 @@ class Bundle:
             Fingerprint value.
         """
 
-        return getattr(log, "weight_fingerprint_full", None) or getattr(
+        return getattr(log, "param_hash_full", None) or getattr(
             log,
-            "weight_fingerprint_at_capture",
+            "param_hash_quick",
             None,
         )
 
@@ -1079,7 +1077,7 @@ def _metric_label(metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Ten
     return metric if isinstance(metric, str) else getattr(metric, "__name__", "callable")
 
 
-def _tensor_field(layer: Any, field: Literal["activation", "gradient"]) -> torch.Tensor | None:
+def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | None:
     """Return a tensor field from a layer-like object.
 
     Parameters
@@ -1163,7 +1161,7 @@ def _bundle_delta_map(
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
     *,
     baseline: str | "Trace" | None = None,
-    on: Literal["activation", "gradient"] = "activation",
+    on: Literal["out", "grad"] = "out",
 ) -> dict[str, dict[str, float]]:
     """Return per-node tensor deltas from a baseline trace.
 
@@ -1223,7 +1221,7 @@ def _bundle_norm_delta(
     self: Bundle,
     *,
     baseline: str | "Trace" | None = None,
-    on: Literal["activation", "gradient"] = "activation",
+    on: Literal["out", "grad"] = "out",
 ) -> dict[str, dict[str, float]]:
     """Return relative L2 deltas for every comparable bundle node.
 
@@ -1282,7 +1280,7 @@ def _bundle_output_delta(
     target: str | "Trace",
     *,
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
-    on: Literal["activation", "gradient"] = "activation",
+    on: Literal["out", "grad"] = "out",
 ) -> dict[str, dict[str, float]]:
     """Return output divergence for every member versus a target trace.
 
@@ -1338,7 +1336,7 @@ def _bundle_motif_occurrences(self: Bundle) -> dict[str, list[tuple[str, str]]]:
     motifs: dict[str, list[tuple[str, str]]] = {}
     for member_name, member in self.members.items():
         for layer in getattr(member, "layer_list", []):
-            key = getattr(layer, "operation_equivalence_type", None)
+            key = getattr(layer, "equivalence_class", None)
             if not key:
                 continue
             motifs.setdefault(str(key), []).append((member_name, str(layer.layer_label)))
@@ -1350,7 +1348,7 @@ def _bundle_compare(
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
     *,
     baseline: str | "Trace" | None = None,
-    on: Literal["activation", "gradient"] = "activation",
+    on: Literal["out", "grad"] = "out",
 ) -> dict[str, Any]:
     """Return a unified bundle comparison payload.
 
@@ -1406,11 +1404,11 @@ def _alignment_score(left: Any, right: Any, left_index: int, right_index: int) -
     """
 
     score = 0.0
-    if getattr(left, "containing_module", None) == getattr(right, "containing_module", None):
+    if getattr(left, "module", None) == getattr(right, "module", None):
         score += 0.35
     if getattr(left, "func_name", None) == getattr(right, "func_name", None):
         score += 0.35
-    if getattr(left, "tensor_shape", None) == getattr(right, "tensor_shape", None):
+    if getattr(left, "shape", None) == getattr(right, "shape", None):
         score += 0.2
     distance = abs(left_index - right_index)
     score += max(0.0, 0.1 - (distance * 0.01))

@@ -1,4 +1,4 @@
-"""Partial capture helpers for failed TorchLens forward passes."""
+"""Partial capture helpers for failed TorchLens forward ops."""
 
 from __future__ import annotations
 
@@ -70,8 +70,8 @@ class PartialTrace:
         """
 
         for layer in self.raw_layers:
-            activation = getattr(layer, "activation", None)
-            candidate = activation if isinstance(activation, torch.Tensor) else None
+            out = getattr(layer, "out", None)
+            candidate = out if isinstance(out, torch.Tensor) else None
             if candidate is None or candidate.numel() == 0:
                 continue
             try:
@@ -79,13 +79,13 @@ class PartialTrace:
             except (RuntimeError, TypeError):
                 continue
             if has_nonfinite:
-                parents = ", ".join(getattr(layer, "parent_layers", None) or []) or "none"
+                parents = ", ".join(getattr(layer, "parents", None) or []) or "none"
                 return (
                     "First non-finite captured tensor is in "
-                    f"layer {getattr(layer, 'tensor_label_raw', 'unknown')} "
+                    f"layer {getattr(layer, '_label_raw', 'unknown')} "
                     f"(op {getattr(layer, 'func_name', 'unknown')}), "
-                    f"shape={getattr(layer, 'tensor_shape', None)}, "
-                    f"dtype={getattr(layer, 'tensor_dtype', None)}, parents={parents}."
+                    f"shape={getattr(layer, 'shape', None)}, "
+                    f"dtype={getattr(layer, 'dtype', None)}, parents={parents}."
                 )
         fields = getattr(self.original_exception, "fields", {})
         if "layer" in fields:
@@ -120,12 +120,12 @@ class PartialTrace:
         ]
         for layer in self.raw_layers:
             raw_label = _raw_label(layer)
-            shape = getattr(layer, "tensor_shape", None)
-            dtype = getattr(layer, "tensor_dtype", None)
+            shape = getattr(layer, "shape", None)
+            dtype = getattr(layer, "dtype", None)
             func_name = getattr(layer, "func_name", "unknown")
             label = f"{raw_label}\\nop={func_name}\\nshape={shape}\\ndtype={dtype}"
             lines.append(f'  "{_dot_escape(raw_label)}" [label="{_dot_escape(label)}"];')
-            for parent in getattr(layer, "parent_layers", []) or []:
+            for parent in getattr(layer, "parents", []) or []:
                 lines.append(f'  "{_dot_escape(str(parent))}" -> "{_dot_escape(raw_label)}";')
         failure_label = _failure_label(self.original_exception)
         lines.append(f'  "__failure__" [shape=note, label="{_dot_escape(failure_label)}"];')
@@ -231,7 +231,7 @@ def _raw_label(layer: OpLog) -> str:
         Raw tensor label, falling back to the raw layer label.
     """
 
-    return str(getattr(layer, "tensor_label_raw", getattr(layer, "layer_label_raw", "unknown")))
+    return str(getattr(layer, "_label_raw", getattr(layer, "_layer_label_raw", "unknown")))
 
 
 def _dot_escape(value: str) -> str:

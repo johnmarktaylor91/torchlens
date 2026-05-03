@@ -5,7 +5,7 @@ BufferLog extends OpLog to represent a model buffer (e.g. BatchNorm's
 regular tensors but have additional identity: a ``buffer_address`` (e.g.
 ``"features.0.running_mean"``) and an owning module.
 
-**Why name/module_address live on BufferLog, not LayerLog**: These are
+**Why name/address live on BufferLog, not LayerLog**: These are
 buffer-specific identifiers that don't apply to general layers.  A LayerLog
 is too generic — it could be any operation.  Only BufferLog entries have a
 meaningful ``buffer_address``.  For single-pass buffers, the parent LayerLog
@@ -49,7 +49,7 @@ class BufferLog(OpLog):
 
     Subclasses OpLog and participates in the computation graph
     identically to regular tensor operations.  Adds ``name`` and
-    ``module_address`` computed properties derived from the
+    ``address`` computed properties derived from the
     ``buffer_address`` field (inherited from OpLog).
 
     No additional constructor arguments — the buffer identity comes
@@ -68,7 +68,7 @@ class BufferLog(OpLog):
         return cast(str, addr.rsplit(".", 1)[-1])
 
     @property
-    def module_address(self) -> str:
+    def address(self) -> str:
         """Module address (everything before last dot), e.g. 'features.0'."""
         addr = self.buffer_address
         if addr is None:
@@ -78,19 +78,19 @@ class BufferLog(OpLog):
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, size, module, and pass number."""
         lines = [f"BufferLog: {self.buffer_address or self.layer_label}"]
-        if self.tensor_shape is not None:
-            lines.append(f"  shape: {list(self.tensor_shape)}")
-        if self.tensor_dtype is not None:
-            lines.append(f"  dtype: {self.tensor_dtype}")
-        if self.tensor_memory is not None:
-            lines.append(f"  size: {human_readable_size(self.tensor_memory)}")
-        if self.module_address:
-            lines.append(f"  module: {self.module_address}")
+        if self.shape is not None:
+            lines.append(f"  shape: {list(self.shape)}")
+        if self.dtype is not None:
+            lines.append(f"  dtype: {self.dtype}")
+        if self.memory is not None:
+            lines.append(f"  size: {human_readable_size(self.memory)}")
+        if self.address:
+            lines.append(f"  module: {self.address}")
         if self.buffer_pass is not None:
             lines.append(f"  pass: {self.buffer_pass}")
-        lines.append(f"  has_saved_activations: {self.has_saved_activations}")
-        if self.has_gradient:
-            lines.append("  has_gradient: True")
+        lines.append(f"  has_saved_outs: {self.has_saved_outs}")
+        if self.has_grad:
+            lines.append("  has_grad: True")
         if self.layer_label is not None:
             lines.append(f"  layer_label: {self.layer_label}")
         return "\n".join(lines)
@@ -166,8 +166,8 @@ class BufferAccessor:
             return "{}"
         items = []
         for bl in self._list:
-            shape_str = str(list(bl.tensor_shape)) if bl.tensor_shape is not None else "?"
-            dtype_str = str(bl.tensor_dtype) if bl.tensor_dtype is not None else "?"
+            shape_str = str(list(bl.shape)) if bl.shape is not None else "?"
+            dtype_str = str(bl.dtype) if bl.dtype is not None else "?"
             items.append(f"'{bl.buffer_address}': BufferLog {shape_str} {dtype_str}")
         inner = ",\n ".join(items)
         return "{" + inner + "}"

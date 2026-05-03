@@ -34,14 +34,14 @@ def _first_internal_label(model: nn.Module, x: torch.Tensor) -> str:
         x,
         capture=tl.options.CaptureOptions(layers_to_save=None),
     )
-    for label in log.layer_labels_no_pass:
+    for label in log.layer_labels:
         if not label.startswith(("input", "output")):
             return label
     raise AssertionError("No internal layer found.")
 
 
 def test_extractor_returns_feature_dict() -> None:
-    """Extractor call returns a dict-like activation mapping."""
+    """Extractor call returns a dict-like out mapping."""
 
     model = CompatModel()
     x = torch.randn(2, 3)
