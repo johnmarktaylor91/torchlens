@@ -143,7 +143,7 @@ def record_span(name: str) -> Iterator[dict[str, Any]]:
         if _state._active_record_spans and _state._active_record_spans[-1] is span:
             _state._active_record_spans.pop()
         elif span in _state._active_record_spans:
-            _state._active_record_spans.remove(span)
+            _state._active_record_spans.pop(span)
 
 
 def active_span_records() -> list[dict[str, Any]]:

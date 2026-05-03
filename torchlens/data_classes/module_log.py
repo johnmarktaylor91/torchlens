@@ -664,7 +664,7 @@ class ModuleLog:
             return iter(self.layers)
         return iter(self._source_trace[label] for label in self.layers)
 
-    def show_graph(self, **kwargs: Any) -> str:
+    def draw(self, **kwargs: Any) -> str:
         """Render this module's focused graph.
 
         Parameters
@@ -686,7 +686,7 @@ class ModuleLog:
         trace: Trace | None = self._source_trace
         if trace is None:
             raise RuntimeError("ModuleLog not bound to a Trace")
-        return cast(str, trace.render_graph(module=self, **kwargs))
+        return cast(str, trace.draw(module=self, **kwargs))
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.

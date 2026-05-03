@@ -30,7 +30,7 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
         DOT source.
     """
 
-    return log.render_graph(
+    return log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / "graph"),

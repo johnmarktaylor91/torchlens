@@ -86,7 +86,7 @@ def test_show_backward_graph_renders(tmp_path: Path) -> None:
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, has_trainable_params=True))
     outpath = tmp_path / "backward_graph"
 
-    dot = trace.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(outpath),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -102,7 +102,7 @@ def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
     """Backward DOT contains expected grad_fn labels."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, has_trainable_params=True))
 
-    dot = trace.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(tmp_path / "grad_fns"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -118,7 +118,7 @@ def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
     """Intervening grad_fns use the documented ``[i]`` label prefix."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, has_trainable_params=True))
 
-    dot = trace.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(tmp_path / "intervening"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -132,7 +132,7 @@ def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
     """Custom autograd grad_fns use the documented ``[custom]`` suffix."""
     trace = _log_backward_model(_CustomModel(), torch.randn(2, 3, has_trainable_params=True))
 
-    dot = trace.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(tmp_path / "custom"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -147,7 +147,7 @@ def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
     """Backward node labels include corresponding forward layer labels."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, has_trainable_params=True))
 
-    dot = trace.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(tmp_path / "cross_ref"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -162,7 +162,7 @@ def test_show_backward_graph_top_level_function(tmp_path: Path) -> None:
     """The top-level ``tl.show_backward_graph`` helper renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, has_trainable_params=True))
 
-    dot = tl.show_backward_graph(
+    dot = tl.draw_backward(
         trace,
         vis_outpath=str(tmp_path / "top_level"),
         vis_save_only=True,
@@ -182,7 +182,7 @@ def test_show_backward_graph_errors_without_log_backward() -> None:
     )
 
     with pytest.raises(ValueError, match="call log_backward\\(loss\\) first"):
-        trace.show_backward_graph(vis_save_only=True)
+        trace.draw_backward(vis_save_only=True)
 
 
 @pytest.mark.smoke
@@ -201,7 +201,7 @@ def test_forward_graph_unchanged(tmp_path: Path) -> None:
         vis_fileformat="dot",
     )
     trace = _log_backward_model(model, x)
-    trace.show_backward_graph(
+    trace.draw_backward(
         vis_outpath=str(tmp_path / "backward"),
         vis_save_only=True,
         vis_fileformat="svg",

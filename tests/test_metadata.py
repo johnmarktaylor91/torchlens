@@ -101,8 +101,8 @@ def test_buffer_layers():
 def test_tensor_info_fields(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.num_tensors_total, int)
-    assert mh.num_tensors_total > 0
+    assert isinstance(mh.num_tensors, int)
+    assert mh.num_tensors > 0
     assert isinstance(mh.total_out_memory, (int, float))
     assert mh.total_out_memory > 0
     assert isinstance(mh.total_out_memory_str, str)
@@ -1453,7 +1453,7 @@ class TestConditionalBranchDetection:
         mh = trace_fn(model, x, save_code_context=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             outpath = os.path.join(tmpdir, "cond_then_test")
-            mh.render_graph(
+            mh.draw(
                 vis_mode="unrolled",
                 vis_outpath=outpath,
                 vis_save_only=True,

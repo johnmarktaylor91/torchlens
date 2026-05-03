@@ -101,7 +101,7 @@ def _render_dot(log: Trace, tmp_path: Path, show_buffer_layers: str | bool) -> s
         Rendered DOT source.
     """
 
-    return log.render_graph(
+    return log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / f"buffer_visibility_{show_buffer_layers}"),

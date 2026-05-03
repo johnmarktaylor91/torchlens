@@ -530,7 +530,7 @@
 | `tl.Trace.num_ops` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.num_streamed_ops` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.num_saved_ops` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.num_tensors_total` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.num_tensors` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.observer_spans` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.operation_history` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.orphan_ops` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |

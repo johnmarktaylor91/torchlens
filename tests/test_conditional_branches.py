@@ -1251,7 +1251,7 @@ def _render_dot_source(
     trace = _log_model(model, x, save_code_context=True)
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = f"{tmpdir}/conditional_branch_matrix"
-        dot_source = trace.render_graph(
+        dot_source = trace.draw(
             vis_mode=vis_mode,
             vis_outpath=outpath,
             vis_save_only=True,

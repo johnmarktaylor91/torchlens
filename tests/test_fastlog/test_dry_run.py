@@ -67,7 +67,7 @@ def test_show_graph_renders_without_error(tmp_path: Path) -> None:
     """show_graph returns DOT and Graphviz can render it."""
 
     trace = tl.fastlog.dry_run(_mlp(), torch.randn(1, 4), keep_op=_keep_linear)
-    dot = trace.show_graph(vis_outpath=str(tmp_path / "dry_run"), vis_fileformat="png")
+    dot = trace.draw(vis_outpath=str(tmp_path / "dry_run"), vis_fileformat="png")
 
     assert "digraph" in dot
     assert (tmp_path / "dry_run.png").exists()

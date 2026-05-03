@@ -57,7 +57,7 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
 
     log = _interventions()
     try:
-        dot = log.render_graph(
+        dot = log.draw(
             vis_save_only=True,
             vis_outpath=str(tmp_path / "node_mark"),
             vis_fileformat="dot",
@@ -67,7 +67,7 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
         assert "#FF00FF" in dot
         assert "#FFB3FF" in dot
 
-        without_cone = log.render_graph(
+        without_cone = log.draw(
             vis_save_only=True,
             vis_outpath=str(tmp_path / "node_mark_no_cone"),
             vis_fileformat="dot",
@@ -85,7 +85,7 @@ def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) ->
 
     log = _interventions()
     try:
-        dot = log.render_graph(
+        dot = log.draw(
             vis_save_only=True,
             vis_outpath=str(tmp_path / "as_node"),
             vis_fileformat="dot",

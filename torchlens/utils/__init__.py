@@ -463,7 +463,7 @@ def peek_graph(
         x,
         capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
     )
-    trace.show(
+    trace.draw(
         vis_mode=view,
         vis_outpath=str(container_path),
         vis_fileformat=file_format,

@@ -205,7 +205,7 @@ def test_show_backward_graph_legacy_kwargs(
         return default_spec
 
     with pytest.warns(DeprecationWarning):
-        result = torchlens.show_backward_graph(
+        result = torchlens.draw_backward(
             log,
             vis_outpath=str(tmp_path / "backward_graph"),
             vis_save_only=True,

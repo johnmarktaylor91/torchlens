@@ -194,7 +194,7 @@ def test_find_layers_and_suggest_on_three_architectures(
     base_label = label.split(":", 1)[0]
     prefix = base_label.split("_", 1)[0]
     assert base_label in log.find_layers(prefix)
-    assert log.suggest(prefix)
+    assert log.find_layers(prefix)
     with pytest.raises(ValueError, match="Did you mean"):
         tl.peek(model, x, "definitely_missing_layer")
 

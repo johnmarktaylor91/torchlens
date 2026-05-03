@@ -472,7 +472,7 @@ class TestVisualizationParams:
     def _get_dot_source(self, model, x, vis_mode="unrolled", vis_call_depth=1000):
         outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
         mh = trace_fn(model, x)
-        dot_source = mh.render_graph(
+        dot_source = mh.draw(
             vis_mode=vis_mode,
             vis_outpath=outpath,
             vis_save_only=True,

@@ -1582,7 +1582,7 @@ def test_get_model_metadata(default_input1):
     model = example_models.SimpleFF()
     mh = get_model_metadata(model, default_input1)
     assert len(mh.layer_labels) > 0
-    assert mh.num_tensors_total > 0
+    assert mh.num_tensors > 0
 
 
 def test_trace_getitem_by_index(default_input1):

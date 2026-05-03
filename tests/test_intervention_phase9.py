@@ -124,7 +124,7 @@ def test_metric_and_joint_metric_contracts() -> None:
 
     bundle = tl.bundle({"a": _log(), "b": _log()})
 
-    assert bundle.metric(lambda member: len(member.layer_list)) == {
+    assert bundle.apply(lambda member: len(member.layer_list)) == {
         "a": len(bundle["a"].layer_list),
         "b": len(bundle["b"].layer_list),
     }
@@ -163,7 +163,7 @@ def test_relationship_matrix_gates_node_operations() -> None:
     with pytest.raises(BundleRelationshipError, match="node"):
         bundle.node(tl.func("relu"))
 
-    assert bundle.metric(lambda member: member.name) == {
+    assert bundle.apply(lambda member: member.name) == {
         "good": good.name,
         "different": different.name,
     }

@@ -108,7 +108,7 @@ def test_raise_on_nan_raises_capture_error_with_partial_graph() -> None:
     assert error.fields["shape"] == (1, 2)
 
     partial = tl.partial.from_failed_capture(error)
-    graph = partial.render_graph()
+    graph = partial.draw()
     assert "digraph torchlens_partial" in graph
     assert "__truediv__" in graph
     assert "shape=(1, 2)" in graph
@@ -137,6 +137,6 @@ def test_partial_trace_attached_to_generic_forward_exception() -> None:
         tl.trace(ForwardErrorFixture(), _input_tensor())
     partial = tl.partial.from_failed_capture(exc_info.value)
     assert isinstance(partial, PartialTrace)
-    graph = partial.render_graph()
+    graph = partial.draw()
     assert "__add__" in graph
     assert "fixture failure" in graph

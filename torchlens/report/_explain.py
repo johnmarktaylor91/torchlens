@@ -104,7 +104,7 @@ def _capture_summary_lines(log: Any) -> list[str]:
 
     layer_count = _safe_len(getattr(log, "layer_list", None))
     operation_count = int(getattr(log, "num_ops", 0) or 0)
-    tensor_total = int(getattr(log, "num_tensors_total", 0) or 0)
+    tensor_total = int(getattr(log, "num_tensors", 0) or 0)
     tensor_saved = int(getattr(log, "num_saved_ops", 0) or 0)
     pass_counts = [
         int(value)

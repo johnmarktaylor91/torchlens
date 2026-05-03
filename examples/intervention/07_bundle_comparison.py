@@ -48,7 +48,7 @@ def main() -> None:
 
     bundle = tl.bundle({"clean": clean, "zero": zero}, baseline="clean")
     node = bundle.node(tl.func("relu"))
-    sizes = bundle.metric(lambda member: len(member.layer_list))
+    sizes = bundle.apply(lambda member: len(member.layer_list))
     comparison = bundle.compare_at(tl.func("relu"))
 
     assert set(node.outs) == {"clean", "zero"}

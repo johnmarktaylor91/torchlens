@@ -23,7 +23,7 @@ COMMUTATIVE_FUNCS = {"add", "mul", "cat", "eq", "ne"}
 
 MODELLOG_FIELD_USAGE: dict[str, str] = {
     "model_name": "Graph caption title.",
-    "num_tensors_total": "Graph caption tensor count.",
+    "num_tensors": "Graph caption tensor count.",
     "total_out_memory": "Graph caption out-memory summary.",
     "num_param_tensors": "Caption metadata for model scale.",
     "num_params": "Graph caption parameter summary.",
@@ -197,7 +197,7 @@ def build_torchlens_caption(trace: Any) -> str:
         )
     return (
         f"{getattr(trace, 'model_name', 'TorchLens model')}\n"
-        f"{getattr(trace, 'num_tensors_total', 0)} tensors total "
+        f"{getattr(trace, 'num_tensors', 0)} tensors total "
         f"({human_readable_size(getattr(trace, 'total_out_memory', 0) or 0)})\n"
         f"{params_line}"
     )

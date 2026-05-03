@@ -32,7 +32,7 @@ class _DummyLog:
         """Record cleanup requests from wrapper helpers."""
         self.cleanup_calls += 1
 
-    def render_graph(self, **kwargs: Any) -> None:
+    def draw(self, **kwargs: Any) -> None:
         """Record visualization kwargs forwarded by the wrapper."""
         self.render_calls.append(kwargs)
 

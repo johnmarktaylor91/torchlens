@@ -144,7 +144,7 @@ def save_new_outs(
         layer_log_entry.output_versions_per_child = {}
 
     # Reset per-pass bookkeeping fields.  Graph-level totals (total_out_memory,
-    # num_tensors_total) are NOT reset — they describe the static graph structure.
+    # num_tensors) are NOT reset — they describe the static graph structure.
     self.ops_with_saved_outs = []
     self.ops_with_saved_grads = []
     self._saved_grads_set = set()

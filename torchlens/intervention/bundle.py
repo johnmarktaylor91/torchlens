@@ -353,7 +353,7 @@ class Bundle:
         self._enforce_capacity()
         return self
 
-    def pop(self, name: str) -> "Trace":
+    def remove(self, name: str) -> "Trace":
         """Remove and return a member by name.
 
         Parameters
@@ -373,7 +373,7 @@ class Bundle:
         self._supergraph = None
         return log
 
-    def evict_all_but(self, keep: list[str]) -> None:
+    def remove_all_but(self, keep: list[str]) -> None:
         """Remove every member whose name is not listed in ``keep``.
 
         Parameters
@@ -398,20 +398,31 @@ class Bundle:
             self._baseline_name = None
         self._supergraph = None
 
-    def set_capacity(self, n: int) -> None:
-        """Cap members with LRU-style eviction while preserving the baseline.
+    @property
+    def capacity(self) -> int | None:
+        """Return the configured member capacity.
+
+        Returns
+        -------
+        int | None
+            Member capacity, or ``None`` when uncapped.
+        """
+
+        return self._capacity
+
+    @capacity.setter
+    def capacity(self, n: int | None) -> None:
+        """Set member capacity with LRU-style eviction while preserving the baseline.
 
         Parameters
         ----------
         n:
-            Maximum member count.
-
-        Returns
-        -------
-        None
-            The bundle is mutated in place.
+            Maximum member count, or ``None`` to remove the cap.
         """
 
+        if n is None:
+            self._capacity = None
+            return
         if n < 1:
             raise ValueError("Bundle capacity must be at least 1.")
         self._capacity = n
@@ -513,7 +524,7 @@ class Bundle:
             member.rerun(model, x, **kwargs)
         return self
 
-    def metric(self, fn: Callable[["Trace"], Any]) -> dict[str, Any]:
+    def apply(self, fn: Callable[["Trace"], Any]) -> dict[str, Any]:
         """Apply a function independently to each member.
 
         Parameters
@@ -528,22 +539,6 @@ class Bundle:
         """
 
         return {name: fn(member) for name, member in self._members.items()}
-
-    def joint_metric(self, fn: Callable[["Bundle"], Any]) -> Any:
-        """Apply a function to this bundle.
-
-        Parameters
-        ----------
-        fn:
-            Callable receiving this bundle.
-
-        Returns
-        -------
-        Any
-            Function result.
-        """
-
-        return fn(self)
 
     def show(self, method: str = "graph", **kwargs: Any) -> dict[str, str | None]:
         """Render each bundle member graph as a member-keyed strip.
@@ -574,7 +569,12 @@ class Bundle:
             member_kwargs = dict(kwargs)
             if isinstance(base_outpath, str):
                 member_kwargs["vis_outpath"] = f"{base_outpath}_{name}"
-            results[name] = member.show(method=method, **member_kwargs)  # type: ignore[arg-type]
+            if method == "repr":
+                results[name] = repr(member)
+            elif method == "html":
+                results[name] = member._repr_html_()
+            else:
+                results[name] = member.draw(**member_kwargs)
         return results
 
     def compare_at(self, site: Any) -> torch.Tensor:
@@ -592,7 +592,7 @@ class Bundle:
         """
 
         self._require_relationship("compare_at", _REQUIRED_RELATIONSHIPS["compare_at"])
-        return self.node(site).diff()
+        return self.node(site).diff_pair()
 
     def most_changed(
         self,
@@ -645,7 +645,7 @@ class Bundle:
         scored.sort(key=lambda row: row[1], reverse=True)
         return scored[:top_k]
 
-    def diff(self, a: Any, b: Any) -> Any:
+    def diff_pair(self, a: Any, b: Any) -> Any:
         """Return out differences between two members or at one site.
 
         Parameters
@@ -665,7 +665,7 @@ class Bundle:
         if isinstance(a, str) and a in self._members and isinstance(b, str) and b in self._members:
             return self._diff_members(a, b)
         view = self.node(a)
-        return view.diff(other=b if isinstance(b, str) else None)
+        return view.diff_pair(other=b if isinstance(b, str) else None)
 
     def cluster(self, *args: Any, **kwargs: Any) -> None:
         """Placeholder for future bundle clustering.
@@ -760,7 +760,7 @@ class Bundle:
         return rows
 
     @property
-    def relationship_matrix(self) -> dict[tuple[str, str], Relationship]:
+    def relationships(self) -> dict[tuple[str, str], Relationship]:
         """Return pairwise relationships for all member pairs.
 
         Returns

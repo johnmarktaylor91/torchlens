@@ -1381,7 +1381,7 @@ def _vis_grad(model, x, filename, vis_mode="unrolled", depth=1000, direction="bo
     log = trace_fn(model, x, save_grads=True, random_seed=42)
     output = log[log.output_layers[0]].out
     output.sum().backward()
-    log.render_graph(
+    log.draw(
         vis_mode=vis_mode,
         vis_call_depth=depth,
         vis_outpath=opj(VIS_DIR, filename),
@@ -1546,13 +1546,13 @@ class TestVisualizationBugfixes:
         )
         log.set(func("relu"), torch.zeros(2, 3))
         try:
-            node_mark = log.render_graph(
+            node_mark = log.draw(
                 vis_save_only=True,
                 vis_outpath=opj(VIS_DIR, "test_intervention_node_mark"),
                 vis_fileformat="dot",
                 vis_intervention_mode="node_mark",
             )
-            as_node = log.render_graph(
+            as_node = log.draw(
                 vis_save_only=True,
                 vis_outpath=opj(VIS_DIR, "test_intervention_as_node"),
                 vis_fileformat="dot",
@@ -1600,4 +1600,4 @@ class TestVisModuleListFormat:
 
         model = Outer()
         log = trace_fn(model, torch.randn(2, 10))
-        log.render_graph(vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_nested_modules"))
+        log.draw(vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_nested_modules"))

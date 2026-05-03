@@ -144,7 +144,7 @@ def _graph_label(ctx: RecordContext, kept: bool, rail_color: str) -> str:
     )
 
 
-def show_graph(
+def draw(
     trace: RecordingTrace,
     *,
     vis_outpath: str | None = None,

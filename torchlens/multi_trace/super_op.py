@@ -254,7 +254,7 @@ class SuperOp:
 
         return self._stacked("grad")
 
-    def diff(
+    def diff_pair(
         self,
         other: str | None = None,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",

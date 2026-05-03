@@ -971,8 +971,8 @@ class LayerAccessor:
                     pass
         suggestions = []
         source = self._source_ref() if self._source_ref is not None else None
-        if source is not None and hasattr(source, "suggest"):
-            suggestions = source.suggest(str(key))
+        if source is not None and hasattr(source, "find_layers"):
+            suggestions = source.find_layers(str(key))
         if suggestions:
             suggestion_str = ", ".join(repr(item) for item in suggestions)
             raise KeyError(f"Layer '{key}' not found. Did you mean {suggestion_str}?")

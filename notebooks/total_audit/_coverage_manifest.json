@@ -2099,7 +2099,7 @@
       },
       {
         "kind": "property",
-        "name": "num_tensors_total"
+        "name": "num_tensors"
       },
       {
         "kind": "field",

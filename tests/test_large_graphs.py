@@ -456,7 +456,7 @@ class TestLargeGraphRendering:
         """vis_node_placement parameter reaches render_graph."""
         model = RandomGraphModel(target_nodes=200, seed=42)
         ml = trace_fn(model, torch.randn(2, 64))
-        ml.render_graph(
+        ml.draw(
             vis_mode="unrolled",
             vis_save_only=True,
             vis_outpath=os.path.join(VIS_OUTPUT_DIR, "placement_test"),
@@ -556,7 +556,7 @@ class TestDotThresholdBenchmark:
             actual_nodes = len(ml.layer_labels)
             start = time.time()
             try:
-                ml.render_graph(
+                ml.draw(
                     vis_mode="unrolled",
                     vis_save_only=True,
                     vis_outpath=os.path.join(VIS_OUTPUT_DIR, f"bench_{target}"),

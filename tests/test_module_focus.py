@@ -17,7 +17,7 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     """Render a Trace to DOT using a temporary SVG output path."""
 
     tmp_path.mkdir(parents=True, exist_ok=True)
-    return log.render_graph(
+    return log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / "graph"),
@@ -224,7 +224,7 @@ def test_modulelog_show_graph_method(tmp_path: Path) -> None:
     log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     module_log = log.modules["block1"]
     direct = _render_dot(log, tmp_path / "direct", module=module_log)
-    method = module_log.show_graph(
+    method = module_log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / "method" / "graph"),

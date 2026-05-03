@@ -169,7 +169,7 @@ def _render_dot_source(
     trace = tl.trace_fn(model, x, save_code_context=True)
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "conditional_render")
-        dot_source = trace.render_graph(
+        dot_source = trace.draw(
             vis_mode=vis_mode,
             vis_outpath=outpath,
             vis_save_only=True,

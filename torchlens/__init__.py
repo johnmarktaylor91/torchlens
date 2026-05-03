@@ -73,7 +73,7 @@ from .user_funcs import (
     trace as _trace,
     record_kpi_in_graph,
     register_tensor_connection,
-    show_backward_graph as _moved_show_backward_graph,
+    draw_backward as _moved_draw_backward,
     show_bundle_graph,
     show_model_graph as _moved_show_model_graph,
     summary as _moved_summary,
@@ -259,7 +259,7 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
     try:
         layer_log = trace[layer]
     except (KeyError, ValueError) as exc:
-        suggestions = trace.suggest(layer) if hasattr(trace, "suggest") else []
+        suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
         raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
 
     out = getattr(layer_log, "out", None)
@@ -401,7 +401,7 @@ def extract(
     for pattern in layer_plan.values():
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
-            suggestions = trace.suggest(pattern)
+            suggestions = trace.find_layers(pattern)
             raise ValueError(_did_you_mean_message(pattern, suggestions))
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
@@ -718,8 +718,8 @@ def show_model_graph(*args: Any, **kwargs: Any) -> Any:
     return _moved_show_model_graph(*args, **kwargs)
 
 
-@_functools.wraps(_moved_show_backward_graph)
-def show_backward_graph(*args: Any, **kwargs: Any) -> Any:
+@_functools.wraps(_moved_draw_backward)
+def draw_backward(*args: Any, **kwargs: Any) -> Any:
     """Deprecated top-level wrapper for ``torchlens.visualization.show_backward_graph``.
 
     Parameters
@@ -729,7 +729,7 @@ def show_backward_graph(*args: Any, **kwargs: Any) -> Any:
     """
 
     _warn_moved_name("show_backward_graph", "torchlens.visualization", "show_backward_graph")
-    return _moved_show_backward_graph(*args, **kwargs)
+    return _moved_draw_backward(*args, **kwargs)
 
 
 def bundle(*args: Any, **kwargs: Any) -> Bundle:

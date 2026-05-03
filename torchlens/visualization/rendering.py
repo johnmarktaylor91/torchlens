@@ -374,7 +374,7 @@ class RenderEdge:
     metadata_child: Optional[GraphNode]
 
 
-def render_graph(
+def draw(
     self: "Trace",
     vis_mode: VisModeLiteral = "unrolled",
     vis_call_depth: int = 1000,
@@ -627,7 +627,7 @@ def render_graph(
         )
 
     graph_caption = (
-        f"<<B>{self.model_name}</B><br align='left'/>{self.num_tensors_total} "
+        f"<<B>{self.model_name}</B><br align='left'/>{self.num_tensors} "
         f"tensors total ({self.total_out_memory_str})"
         f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
@@ -777,7 +777,7 @@ def render_graph(
     except subprocess.TimeoutExpired:
         warnings.warn(
             f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for graph with "
-            f"{self.num_tensors_total} nodes. DOT source saved to "
+            f"{self.num_tensors} nodes. DOT source saved to "
             f"'{source_path}'. Consider using vis_node_placement='sfdp' or "
             f"vis_call_depth to collapse modules."
         )

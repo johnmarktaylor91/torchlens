@@ -19,7 +19,7 @@ def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
 
     log = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
 
-    dot = log.render_graph(
+    dot = log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / theme),
@@ -46,7 +46,7 @@ def test_visualization_options_convenience_knobs_return_graph(tmp_path: Path) ->
         return_graph=True,
     )
 
-    graph = log.render_graph(**tl.options.visualization_to_render_kwargs(options))
+    graph = log.draw(**tl.options.visualization_to_render_kwargs(options))
 
     assert isinstance(graph, graphviz.Digraph)
     assert graph.graph_attr["dpi"] == "120"

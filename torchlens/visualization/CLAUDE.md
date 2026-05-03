@@ -23,7 +23,7 @@ lives under `torchlens.experimental.dagua` and requires explicit opt-in.
 | `_summary_internal/` | Internal summary builders |
 
 ## Entry Points
-- `Trace.render_graph()` and `show_model_graph()` call `rendering.render_graph()`.
+- `Trace.draw()` and `show_model_graph()` call `rendering.draw()`.
 - `show_backward_graph()` calls `rendering.render_backward_graph()`.
 - `torchlens.viz.bundle_diff()` calls `visualization.bundle_diff.bundle_diff()`.
 - `torchlens.fastlog.preview()` uses `visualization.fastlog_preview.preview_fastlog()`.

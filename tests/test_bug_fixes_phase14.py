@@ -351,7 +351,7 @@ def test_rolled_forward_graph_supports_grad_arrows(tmp_path: Path) -> None:
         grads_to_save="all",
     )
     trace[trace.output_layers[0]].out.backward()
-    dot = trace.render_graph(
+    dot = trace.draw(
         vis_mode="rolled",
         vis_outpath=str(tmp_path / "rolled_grad"),
         vis_fileformat="dot",

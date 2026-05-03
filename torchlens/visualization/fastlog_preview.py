@@ -296,4 +296,4 @@ def preview_fastlog(
         show_predicate_inputs=show_predicate_inputs,
         show_module_events=show_module_events,
     )
-    return cast(str, trace.render_graph(node_spec_fn=node_spec_fn, **render_kwargs))
+    return cast(str, trace.draw(node_spec_fn=node_spec_fn, **render_kwargs))

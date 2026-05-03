@@ -27,7 +27,7 @@ class M(nn.Module):
 log = tl.trace_fn(M(), torch.ones(1), layers_to_save=None)
 try:
     try:
-        log.render_graph(vis_renderer="dagua", vis_save_only=True, vis_fileformat="svg")
+        log.draw(vis_renderer="dagua", vis_save_only=True, vis_fileformat="svg")
     except RuntimeError as exc:
         message = "opt in via `from torchlens.experimental import dagua` first"
         raise SystemExit(0 if message in str(exc) else 2)
@@ -64,7 +64,7 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
     log = trace_fn(model, torch.rand(1, 16, 16, 16), layers_to_save=None)
     out = tmp_path / "residual.svg"
     try:
-        log.render_graph(
+        log.draw(
             vis_renderer="dagua",
             vis_theme="torchlens",
             vis_mode="unrolled",

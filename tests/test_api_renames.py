@@ -74,7 +74,7 @@ class _DummyLog:
         self.render_calls: list[dict[str, Any]] = []
         self.cleaned_up = False
 
-    def render_graph(
+    def draw(
         self,
         vis_mode: str = "unrolled",
         vis_call_depth: int = 1000,

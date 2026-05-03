@@ -20,7 +20,7 @@ Key design patterns:
 * **Explicit Trace custom_methods** - Public custom_methods are defined directly on
   ``Trace``. Heavier implementations may delegate into subpackages
   through local imports, but users still call them as
-  ``trace.render_graph(...)`` or ``trace.validate_forward_pass(...)``.
+  ``trace.draw(...)`` or ``trace.validate_forward_pass(...)``.
 
 * **_module_build_data** - A transient dict that accumulates module hierarchy
   information during the forward pass.  Consumed by ``_build_module_logs``
@@ -840,24 +840,6 @@ class Trace:
             if len(result) >= limit:
                 break
         return result
-
-    def suggest(self, query: str, *, limit: int = 3) -> List[str]:
-        """Return a short list of suggested layer labels for a failed query.
-
-        Parameters
-        ----------
-        query:
-            Layer query that did not resolve.
-        limit:
-            Maximum number of suggestions.
-
-        Returns
-        -------
-        List[str]
-            Suggested no-pass layer labels.
-        """
-
-        return self.find_layers(query, limit=limit)
 
     @property
     def unsupported_ops(self) -> _CallableList:
@@ -2336,7 +2318,7 @@ class Trace:
         return any(entry.in_cond_branch for entry in self.layer_list)
 
     @property
-    def num_tensors_total(self) -> int:
+    def num_tensors(self) -> int:
         """Total number of tensor operations."""
         return len(self)
 
@@ -2508,7 +2490,7 @@ class Trace:
     # ******** Public Convenience Methods ********
     # ********************************************
 
-    def render_graph(
+    def draw(
         self,
         vis_mode: VisModeLiteral = "unrolled",
         vis_call_depth: int = 1000,
@@ -2561,7 +2543,7 @@ class Trace:
             Graphviz DOT source, renderer-specific output, or renderer object
             when ``return_graph=True``.
         """
-        from ..visualization.rendering import render_graph as _impl
+        from ..visualization.rendering import draw as _impl
 
         return _impl(
             self,
@@ -2736,40 +2718,7 @@ class Trace:
             )
         return "No non-finite tensor values found in saved outs."
 
-    def show(self, method: Literal["graph", "repr", "html"] = "graph", **kwargs: Any) -> str | None:
-        """Render this model log with intervention visualization defaults.
-
-        Parameters
-        ----------
-        method:
-            ``"graph"`` renders the model graph. ``"repr"`` prints the compact
-            representation. ``"html"`` returns the notebook HTML fragment.
-        **kwargs:
-            Forwarded to :meth:`render_graph`. The legacy ``vis_opt`` alias is
-            accepted for parity with logging APIs.
-
-        Returns
-        -------
-        str | None
-            DOT source when rendering occurs, otherwise ``None`` for
-            ``vis_opt='none'`` / ``vis_mode='none'``.
-        """
-
-        if method == "repr":
-            return repr(self)
-        if method == "html":
-            return self._repr_html_()
-        if method != "graph":
-            raise ValueError("method must be 'graph', 'repr', or 'html'.")
-        if "vis_opt" in kwargs and "vis_mode" not in kwargs:
-            kwargs["vis_mode"] = kwargs.pop("vis_opt")
-        elif "vis_opt" in kwargs:
-            kwargs.pop("vis_opt")
-        if kwargs.get("vis_mode") == "none":
-            return None
-        return cast(str | None, self.render_graph(**kwargs))
-
-    def show_backward_graph(
+    def draw_backward(
         self,
         vis_outpath: str = "backward_modelgraph",
         vis_graph_overrides: Optional[Dict[str, Any]] = None,

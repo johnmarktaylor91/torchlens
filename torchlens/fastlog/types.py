@@ -187,12 +187,12 @@ class RecordingTrace:
 
         return to_pandas(self)
 
-    def show_graph(self, **kwargs: Any) -> str:
+    def draw(self, **kwargs: Any) -> str:
         """Render a flat Graphviz graph of trace operation events."""
 
-        from ..visualization.fastlog_live import show_graph
+        from ..visualization.fastlog_live import draw
 
-        return show_graph(self, **kwargs)
+        return draw(self, **kwargs)
 
     def summary(self) -> str:
         """Return a concise human-readable dry-run summary."""

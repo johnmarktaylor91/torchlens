@@ -1413,7 +1413,7 @@ def trace(
 
     # Visualize if desired.
     if visualization_options.mode != "none":
-        trace.render_graph(**visualization_to_render_kwargs(visualization_options))
+        trace.draw(**visualization_to_render_kwargs(visualization_options))
 
     if unwrap_when_done:
         from .decoration import unwrap_torch
@@ -1672,12 +1672,12 @@ def show_model_graph(
             render_kwargs["module"] = module.address if isinstance(module, ModuleLog) else module
         if code_panel is not False:
             render_kwargs["code_panel"] = code_panel
-        trace.render_graph(**render_kwargs)
+        trace.draw(**render_kwargs)
     finally:
         trace.cleanup()
 
 
-def show_backward_graph(
+def draw_backward(
     trace: Trace,
     vis_outpath: str | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
@@ -1766,7 +1766,7 @@ def show_backward_graph(
     if node_style is not MISSING:
         node_mode = cast(VisNodeModeLiteral, node_style)
 
-    return trace.show_backward_graph(
+    return trace.draw_backward(
         vis_outpath=container_path,
         vis_graph_overrides=graph_overrides,
         node_spec_fn=node_spec_fn,

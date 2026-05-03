@@ -163,7 +163,7 @@ class GradFnLog:
         """Pass-qualified labels for this grad_fn."""
         return [f"{self.label}:{call_index}" for call_index in self.ops]
 
-    def log_pass(self, grad_inputs: Any, grad_outputs: Any, timestamp: float) -> None:
+    def _log_call(self, grad_inputs: Any, grad_outputs: Any, timestamp: float) -> None:
         """Append one runtime hook firing to this grad_fn log.
 
         Parameters

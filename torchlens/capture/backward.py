@@ -161,7 +161,7 @@ def _make_grad_fn_hook(trace: Any, grad_fn_id: int) -> Callable[..., None]:
             grad_inputs = None
             grad_outputs = None
         with pause_logging():
-            grad_fn_log.log_pass(grad_inputs, grad_outputs, time.time())
+            grad_fn_log._log_call(grad_inputs, grad_outputs, time.time())
 
     return hook
 

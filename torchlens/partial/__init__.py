@@ -97,7 +97,7 @@ class PartialTrace:
             )
         return "No non-finite tensor values found in partial capture."
 
-    def render_graph(self, vis_outpath: str | None = None, **_: Any) -> str:
+    def draw(self, vis_outpath: str | None = None, **_: Any) -> str:
         """Render the failed capture as minimal Graphviz DOT source.
 
         Parameters
@@ -152,7 +152,7 @@ class PartialTrace:
         """
 
         if method == "graph":
-            return self.render_graph(**kwargs)
+            return self.draw(**kwargs)
         if method == "repr":
             return repr(self)
         if method == "html":
