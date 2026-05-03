@@ -221,22 +221,22 @@ _LIST_FIELDS_TO_RENAME = [
     "output_descendants",
     "internal_source_parents",
     "internal_source_ancestors",
-    "cond_branch_start_children",
-    "cond_branch_then_children",
-    "cond_branch_else_children",
+    "conditional_entry_children",
+    "conditional_then_children",
+    "conditional_else_children",
     "equivalent_ops",
     "recurrent_ops",
 ]
 
 
 def _rename_elif_children(
-    cond_branch_elif_children: Dict[int, List[str]],
+    conditional_elif_children: Dict[int, List[str]],
     mapping: Dict[str, str],
 ) -> Dict[int, List[str]]:
-    """Rename labels inside ``cond_branch_elif_children``.
+    """Rename labels inside ``conditional_elif_children``.
 
     Args:
-        cond_branch_elif_children: Mapping from elif index to child labels.
+        conditional_elif_children: Mapping from elif index to child labels.
         mapping: Raw-to-final layer-label mapping.
 
     Returns:
@@ -244,18 +244,18 @@ def _rename_elif_children(
     """
     return {
         elif_ix: [mapping[layer_label] for layer_label in child_labels]
-        for elif_ix, child_labels in cond_branch_elif_children.items()
+        for elif_ix, child_labels in conditional_elif_children.items()
     }
 
 
 def _rename_children_by_cond(
-    cond_branch_children_by_cond: Dict[int, Dict[str, List[str]]],
+    conditional_arm_children: Dict[int, Dict[str, List[str]]],
     mapping: Dict[str, str],
 ) -> Dict[int, Dict[str, List[str]]]:
-    """Rename labels inside ``cond_branch_children_by_cond``.
+    """Rename labels inside ``conditional_arm_children``.
 
     Args:
-        cond_branch_children_by_cond: ``cond_id -> branch_kind -> child labels``.
+        conditional_arm_children: ``cond_id -> branch_kind -> child labels``.
         mapping: Raw-to-final layer-label mapping.
 
     Returns:
@@ -266,7 +266,7 @@ def _rename_children_by_cond(
             branch_kind: [mapping[layer_label] for layer_label in child_labels]
             for branch_kind, child_labels in branch_children.items()
         }
-        for cond_id, branch_children in cond_branch_children_by_cond.items()
+        for cond_id, branch_children in conditional_arm_children.items()
     }
 
 
@@ -309,13 +309,13 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: OpLog) -> N
             mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()
         }
 
-    elif_children = d.get("cond_branch_elif_children")
+    elif_children = d.get("conditional_elif_children")
     if elif_children:
-        d["cond_branch_elif_children"] = _rename_elif_children(elif_children, mapping)
+        d["conditional_elif_children"] = _rename_elif_children(elif_children, mapping)
 
-    children_by_cond = d.get("cond_branch_children_by_cond")
+    children_by_cond = d.get("conditional_arm_children")
     if children_by_cond:
-        d["cond_branch_children_by_cond"] = _rename_children_by_cond(children_by_cond, mapping)
+        d["conditional_arm_children"] = _rename_children_by_cond(children_by_cond, mapping)
 
     if d.get("edge_uses"):
         d["edge_uses"] = [_rename_label_dataclass(record, mapping) for record in d["edge_uses"]]
@@ -793,7 +793,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         )
         self.conditional_branch_edges[t] = (new_child, new_parent)
 
-    self.conditional_arm_edges = {
+    self.conditional_arm_entry_edges = {
         (cond_id, branch_kind): [
             (
                 self._raw_to_final_layer_labels[parent],
@@ -801,20 +801,25 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
             )
             for parent, child in arm_edges
         ]
-        for (cond_id, branch_kind), arm_edges in self.conditional_arm_edges.items()
+        for (cond_id, branch_kind), arm_edges in self.conditional_arm_entry_edges.items()
     }
 
-    self.conditional_edge_ops = {
+    self.conditional_edge_call_indices = {
         (
             self._raw_to_final_layer_labels[parent],
             self._raw_to_final_layer_labels[child],
             cond_id,
             branch_kind,
         ): call_indexs
-        for (parent, child, cond_id, branch_kind), call_indexs in self.conditional_edge_ops.items()
+        for (
+            parent,
+            child,
+            cond_id,
+            branch_kind,
+        ), call_indexs in self.conditional_edge_call_indices.items()
     }
 
-    for conditional_event in self.conditional_events:
+    for conditional_event in self.conditional_records:
         conditional_event.bool_layers = [
             self._raw_to_final_layer_labels[layer_label]
             for layer_label in conditional_event.bool_layers

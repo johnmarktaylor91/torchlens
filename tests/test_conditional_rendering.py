@@ -191,8 +191,8 @@ def _get_only_event_id(trace: Trace) -> int:
     int
         Dense conditional id.
     """
-    assert len(trace.conditional_events) == 1
-    return trace.conditional_events[0].id
+    assert len(trace.conditional_records) == 1
+    return trace.conditional_records[0].id
 
 
 def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str:
@@ -233,10 +233,10 @@ def test_simple_if_else_graphviz_labels_then_and_else_edges() -> None:
     try:
         positive_conditional_id = _get_only_event_id(positive_log)
         negative_conditional_id = _get_only_event_id(negative_log)
-        then_parent, then_child = positive_log.conditional_arm_edges[
+        then_parent, then_child = positive_log.conditional_arm_entry_edges[
             (positive_conditional_id, "then")
         ][0]
-        else_parent, else_child = negative_log.conditional_arm_edges[
+        else_parent, else_child = negative_log.conditional_arm_entry_edges[
             (negative_conditional_id, "else")
         ][0]
 
@@ -263,9 +263,9 @@ def test_elif_ladder_graphviz_labels_elif_and_else_edges() -> None:
         dot_source, trace = _render_dot_source(ElifLadderModel(), x)
         try:
             conditional_id = _get_only_event_id(trace)
-            parent_label, child_label = trace.conditional_arm_edges[(conditional_id, branch_kind)][
-                0
-            ]
+            parent_label, child_label = trace.conditional_arm_entry_edges[
+                (conditional_id, branch_kind)
+            ][0]
             edge_line = _find_edge_line(dot_source, parent_label, child_label)
             assert label_text in edge_line
         finally:
@@ -280,13 +280,13 @@ def test_basic_ternary_graphviz_labels_then_and_else_edges() -> None:
     try:
         positive_conditional_id = _get_only_event_id(positive_log)
         negative_conditional_id = _get_only_event_id(negative_log)
-        assert positive_log.conditional_events[0].kind == "ifexp"
-        assert negative_log.conditional_events[0].kind == "ifexp"
+        assert positive_log.conditional_records[0].kind == "ifexp"
+        assert negative_log.conditional_records[0].kind == "ifexp"
 
-        then_parent, then_child = positive_log.conditional_arm_edges[
+        then_parent, then_child = positive_log.conditional_arm_entry_edges[
             (positive_conditional_id, "then")
         ][0]
-        else_parent, else_child = negative_log.conditional_arm_edges[
+        else_parent, else_child = negative_log.conditional_arm_entry_edges[
             (negative_conditional_id, "else")
         ][0]
 
@@ -306,7 +306,7 @@ def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate
 
     try:
         conditional_id = _get_only_event_id(trace)
-        parent_label, child_label = trace.conditional_arm_edges[(conditional_id, "then")][0]
+        parent_label, child_label = trace.conditional_arm_entry_edges[(conditional_id, "then")][0]
         edge_line = _find_edge_line(dot_source, parent_label, child_label)
 
         assert 'label=<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>' in edge_line
@@ -328,7 +328,7 @@ def test_rolled_mixed_arm_graphviz_shows_composite_call_label() -> None:
 
     try:
         conditional_id = _get_only_event_id(trace)
-        parent_label, child_label = trace.conditional_arm_edges[(conditional_id, "then")][0]
+        parent_label, child_label = trace.conditional_arm_entry_edges[(conditional_id, "then")][0]
         edge_line = _find_edge_line(dot_source, parent_label, child_label)
 
         assert "THEN(1,3) / ELSE(2,4)" in edge_line

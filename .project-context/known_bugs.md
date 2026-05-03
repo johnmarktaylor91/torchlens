@@ -15,7 +15,7 @@ Fixed or verified in Phase 14:
 - `COND-THEN-MULTIPASS`: rolled `LayerLog` conditional child views merge
   pass-level THEN/ELIF/ELSE children.
 - `INVARIANT-COND-THEN`: metadata invariants reject stale
-  `cond_branch_then_children` projections.
+  `conditional_then_children` projections.
 - `HASH-COLLISION`: deterministic barcodes use SHA-256 prefixes instead of
   Python `hash()` truncation.
 - `VALIDATE-STATE-RESTORE`: `validate_forward_pass()` restores model state in

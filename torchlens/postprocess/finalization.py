@@ -206,7 +206,7 @@ def _build_root_module_log(
         all_addresses=root_meta.get("all_addresses", ["self"]),
         _source_trace=self,
     )
-    root_module.ops = {1: root_pass}
+    root_module.ops[1] = root_pass
     pass_dict["self:1"] = root_pass
 
     return root_module
@@ -279,12 +279,12 @@ def _merge_layer_log_conditional_fields(
     pass_log:
         Per-pass layer entry contributing conditional metadata.
     """
-    if pass_log.in_cond_branch:
-        layer_log.in_cond_branch = True
+    if pass_log.is_in_conditional_body:
+        layer_log.is_in_conditional_body = True
 
     stack_signature = tuple(pass_log.conditional_branch_stack)
     if stack_signature not in layer_log.conditional_branch_stack_ops:
-        layer_log.conditional_branch_stacks.append(list(pass_log.conditional_branch_stack))
+        layer_log.conditional_role_stacks.append(list(pass_log.conditional_branch_stack))
         layer_log.conditional_branch_stack_ops[stack_signature] = []
 
     signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
@@ -292,8 +292,8 @@ def _merge_layer_log_conditional_fields(
         signature_ops.append(pass_log.call_index)
         signature_ops.sort()
 
-    for conditional_id, branch_children in pass_log.cond_branch_children_by_cond.items():
-        merged_branch_children = layer_log.cond_branch_children_by_cond.setdefault(
+    for conditional_id, branch_children in pass_log.conditional_arm_children.items():
+        merged_branch_children = layer_log.conditional_arm_children.setdefault(
             conditional_id,
             {},
         )
@@ -314,42 +314,42 @@ def _rebuild_layer_log_conditional_views(layer_log: "LayerLog") -> None:
     layer_log:
         Aggregate layer entry whose derived conditional fields are refreshed.
     """
-    layer_log.in_cond_branch = any(
-        len(branch_stack) > 0 for branch_stack in layer_log.conditional_branch_stacks
+    layer_log.is_in_conditional_body = any(
+        len(branch_stack) > 0 for branch_stack in layer_log.conditional_role_stacks
     )
 
-    cond_branch_start_children: List[str] = []
+    conditional_entry_children: List[str] = []
     for call_index in sorted(layer_log.ops):
         pass_log = layer_log.ops[call_index]
-        for child_label in pass_log.cond_branch_start_children:
+        for child_label in pass_log.conditional_entry_children:
             _append_unique_child_label(
-                cond_branch_start_children,
+                conditional_entry_children,
                 _strip_pass_suffix(child_label),
             )
-    layer_log.cond_branch_start_children = cond_branch_start_children
+    layer_log.conditional_entry_children = conditional_entry_children
 
-    cond_branch_then_children: List[str] = []
-    cond_branch_elif_children: Dict[int, List[str]] = {}
-    cond_branch_else_children: List[str] = []
-    for branch_children in layer_log.cond_branch_children_by_cond.values():
+    conditional_then_children: List[str] = []
+    conditional_elif_children: Dict[int, List[str]] = {}
+    conditional_else_children: List[str] = []
+    for branch_children in layer_log.conditional_arm_children.values():
         for child_label in branch_children.get("then", []):
-            _append_unique_child_label(cond_branch_then_children, child_label)
+            _append_unique_child_label(conditional_then_children, child_label)
         for branch_kind, child_labels in branch_children.items():
             if not branch_kind.startswith("elif_"):
                 continue
             elif_index = int(branch_kind.split("_", 1)[1])
-            elif_children = cond_branch_elif_children.setdefault(elif_index, [])
+            elif_children = conditional_elif_children.setdefault(elif_index, [])
             for child_label in child_labels:
                 _append_unique_child_label(elif_children, child_label)
         for child_label in branch_children.get("else", []):
-            _append_unique_child_label(cond_branch_else_children, child_label)
+            _append_unique_child_label(conditional_else_children, child_label)
 
-    layer_log.cond_branch_then_children = cond_branch_then_children
-    layer_log.cond_branch_elif_children = cond_branch_elif_children
-    layer_log.cond_branch_else_children = cond_branch_else_children
+    layer_log.conditional_then_children = conditional_then_children
+    layer_log.conditional_elif_children = conditional_elif_children
+    layer_log.conditional_else_children = conditional_else_children
 
 
-def _rebuild_conditional_edge_ops(self: "Trace") -> None:
+def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
     """Recompute rolled conditional edge-pass metadata from arm-entry edges.
 
     Parameters
@@ -357,8 +357,8 @@ def _rebuild_conditional_edge_ops(self: "Trace") -> None:
     self:
         Model log being finalized.
     """
-    conditional_edge_ops: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
-    for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items():
+    conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
+    for (conditional_id, branch_kind), edge_list in self.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             parent_no_pass = _strip_pass_suffix(parent_label)
             child_no_pass = _strip_pass_suffix(child_label)
@@ -369,11 +369,12 @@ def _rebuild_conditional_edge_ops(self: "Trace") -> None:
                 conditional_id,
                 branch_kind,
             )
-            if child_call_index not in conditional_edge_ops[edge_key]:
-                conditional_edge_ops[edge_key].append(child_call_index)
+            if child_call_index not in conditional_edge_call_indices[edge_key]:
+                conditional_edge_call_indices[edge_key].append(child_call_index)
 
-    self.conditional_edge_ops = {
-        edge_key: sorted(call_indexs) for edge_key, call_indexs in conditional_edge_ops.items()
+    self.conditional_edge_call_indices = {
+        edge_key: sorted(call_indexs)
+        for edge_key, call_indexs in conditional_edge_call_indices.items()
     }
 
 
@@ -735,10 +736,10 @@ def _build_layer_logs(self: "Trace") -> None:
     2. io_role: Character-wise merge with '*' for differing characters
        (e.g., "output.0" + "output.1" -> "output.*").
     3. is_atomic_module_op: OR across ops.
-    4. in_cond_branch: OR across ops.
-    5. conditional_branch_stacks / conditional_branch_stack_ops:
+    4. is_in_conditional_body: OR across ops.
+    5. conditional_role_stacks / conditional_branch_stack_ops:
        unique stack signatures in first-seen order plus sorted pass maps.
-    6. cond_branch_children_by_cond: pass-stripped union across ops with
+    6. conditional_arm_children: pass-stripped union across ops with
        insertion-order preservation.
 
     Derived aggregate views (cond_branch_then/elif/else/start_children) are
@@ -826,7 +827,7 @@ def _build_layer_logs(self: "Trace") -> None:
 
     self.autograd_saved_memory = autograd_saved_memory if has_autograd_saved_value else None
     self.layer_logs = layer_logs
-    _rebuild_conditional_edge_ops(self)
+    _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)
 
 
@@ -841,13 +842,13 @@ def _build_conditional_records(self: "Trace") -> None:
     )
 
     conditionals: list[Conditional] = []
-    event_by_id = {event.id: event for event in self.conditional_events}
-    for event in self.conditional_events:
+    event_by_id = {event.id: event for event in self.conditional_records}
+    for event in self.conditional_records:
         terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
         conditional_id = f"cond_{terminal_bool_label}"
         branch_kinds = [
             branch_kind
-            for cond_id, branch_kind in self.conditional_arm_edges
+            for cond_id, branch_kind in self.conditional_arm_entry_edges
             if cond_id == event.id
         ]
         ordered_branch_kinds = ["then"]
@@ -863,7 +864,7 @@ def _build_conditional_records(self: "Trace") -> None:
         arms: list[ConditionalArm] = []
         for branch_kind in ordered_branch_kinds:
             kind = "elif" if branch_kind.startswith("elif_") else branch_kind
-            edge_list = list(self.conditional_arm_edges.get((event.id, branch_kind), []))
+            edge_list = list(self.conditional_arm_entry_edges.get((event.id, branch_kind), []))
             execution_labels = list(dict.fromkeys(child for _parent, child in edge_list))
             evaluation_labels = list(event.bool_layers) if kind in {"then", "elif"} else []
             terminal_bool = terminal_bool_label if kind == "then" and event.bool_layers else None
@@ -909,8 +910,11 @@ def _build_conditional_records(self: "Trace") -> None:
                 if layer.layer_label in arm.execution_op_labels:
                     roles.append(ConditionalRoleRef(conditional.id, arm_index, arm.kind, "body"))
         layer.in_conditionals = roles
-        if layer.bool_conditional_id is not None and layer.bool_conditional_id in event_by_id:
-            event = event_by_id[layer.bool_conditional_id]
+        if (
+            layer.terminal_conditional_id is not None
+            and layer.terminal_conditional_id in event_by_id
+        ):
+            event = event_by_id[layer.terminal_conditional_id]
             event_index = [conditional.id for conditional in conditionals].index(
                 f"cond_{event.bool_layers[0] if event.bool_layers else event.id}"
             )

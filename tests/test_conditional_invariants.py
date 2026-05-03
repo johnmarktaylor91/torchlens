@@ -192,8 +192,8 @@ def _get_only_event(trace: Trace) -> ConditionalEvent:
         The lone conditional event.
     """
 
-    assert len(trace.conditional_events) == 1
-    return trace.conditional_events[0]
+    assert len(trace.conditional_records) == 1
+    return trace.conditional_records[0]
 
 
 def _get_only_terminal_bool(trace: Trace) -> OpLog:
@@ -265,13 +265,13 @@ def _sync_layer_log_child_views(layer_log: LayerLog) -> None:
     ----------
     layer_log:
         Aggregate layer entry whose derived conditional views should match
-        its current ``cond_branch_children_by_cond`` mapping.
+        its current ``conditional_arm_children`` mapping.
     """
 
     then_children: list[str] = []
     elif_children: dict[int, list[str]] = {}
     else_children: list[str] = []
-    for branch_children in layer_log.cond_branch_children_by_cond.values():
+    for branch_children in layer_log.conditional_arm_children.values():
         for child_label in branch_children.get("then", []):
             if child_label not in then_children:
                 then_children.append(child_label)
@@ -286,9 +286,9 @@ def _sync_layer_log_child_views(layer_log: LayerLog) -> None:
         for child_label in branch_children.get("else", []):
             if child_label not in else_children:
                 else_children.append(child_label)
-    layer_log.cond_branch_then_children = then_children
-    layer_log.cond_branch_elif_children = elif_children
-    layer_log.cond_branch_else_children = else_children
+    layer_log.conditional_then_children = then_children
+    layer_log.conditional_elif_children = elif_children
+    layer_log.conditional_else_children = else_children
 
 
 def test_clean_conditional_log_ops_all_invariants() -> None:
@@ -307,14 +307,14 @@ def test_invariant_1_arm_edges_bidirectional_consistency() -> None:
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         event = _get_only_event(trace)
-        parent_label, child_label = trace.conditional_arm_edges[(event.id, "then")][0]
+        parent_label, child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
         parent_layer = trace[parent_label]
-        parent_layer.cond_branch_children_by_cond[event.id]["then"] = [
+        parent_layer.conditional_arm_children[event.id]["then"] = [
             label
-            for label in parent_layer.cond_branch_children_by_cond[event.id]["then"]
+            for label in parent_layer.conditional_arm_children[event.id]["then"]
             if label != child_label
         ]
-        _assert_invariant_error(trace, ("Invariant 1", "conditional_arm_edges"))
+        _assert_invariant_error(trace, ("Invariant 1", "conditional_arm_entry_edges"))
     finally:
         trace.cleanup()
 
@@ -325,10 +325,10 @@ def test_invariant_2_derived_child_views_match_primary_structures() -> None:
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         event = _get_only_event(trace)
-        parent_label, _child_label = trace.conditional_arm_edges[(event.id, "then")][0]
+        parent_label, _child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
         parent_layer = trace[parent_label]
-        parent_layer.cond_branch_then_children = []
-        _assert_invariant_error(trace, ("Invariant 2", "cond_branch_then_children"))
+        parent_layer.conditional_then_children = []
+        _assert_invariant_error(trace, ("Invariant 2", "conditional_then_children"))
     finally:
         trace.cleanup()
 
@@ -340,7 +340,7 @@ def test_invariant_3_child_labels_exist_in_trace() -> None:
     try:
         parent_label = trace.conditional_branch_edges[0][0]
         missing_label = "missing_bool_layer"
-        trace[parent_label].cond_branch_start_children.append(missing_label)
+        trace[parent_label].conditional_entry_children.append(missing_label)
         trace.conditional_branch_edges.append((parent_label, missing_label))
         _assert_invariant_error(trace, ("Invariant 3", missing_label))
     finally:
@@ -348,13 +348,13 @@ def test_invariant_3_child_labels_exist_in_trace() -> None:
 
 
 def test_invariant_4_bool_classification_fields_agree() -> None:
-    """Invariant 4 fails when ``bool_is_branch`` disagrees with the context kind."""
+    """Invariant 4 fails when ``is_terminal_conditional_bool`` disagrees with the context kind."""
 
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         bool_layer = _get_only_terminal_bool(trace)
-        bool_layer.bool_is_branch = False
-        _assert_invariant_error(trace, ("Invariant 4", "bool_is_branch"))
+        bool_layer.is_terminal_conditional_bool = False
+        _assert_invariant_error(trace, ("Invariant 4", "is_terminal_conditional_bool"))
     finally:
         trace.cleanup()
 
@@ -365,7 +365,7 @@ def test_invariant_5_all_conditional_ids_resolve_to_events() -> None:
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         bool_layer = _get_only_terminal_bool(trace)
-        bool_layer.bool_conditional_id = 999
+        bool_layer.terminal_conditional_id = 999
         _assert_invariant_error(trace, ("Invariant 5", "cond_id 999"))
     finally:
         trace.cleanup()
@@ -437,14 +437,14 @@ def test_invariant_9_layerlog_stack_aggregates_match_pass_logs() -> None:
         trace.cleanup()
 
 
-def test_invariant_10_conditional_edge_ops_exactly_match_unrolled_edges() -> None:
+def test_invariant_10_conditional_edge_call_indices_exactly_match_unrolled_edges() -> None:
     """Invariant 10 fails when an edge-pass entry names a non-existent pass."""
 
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     try:
-        edge_key = next(iter(trace.conditional_edge_ops))
-        existing_ops = trace.conditional_edge_ops[edge_key]
-        trace.conditional_edge_ops[edge_key] = sorted(existing_ops + [99])
+        edge_key = next(iter(trace.conditional_edge_call_indices))
+        existing_ops = trace.conditional_edge_call_indices[edge_key]
+        trace.conditional_edge_call_indices[edge_key] = sorted(existing_ops + [99])
         _assert_invariant_error(trace, ("Invariant 10", "pass 99"))
     finally:
         trace.cleanup()
@@ -463,15 +463,15 @@ def test_invariant_11_transient_bool_key_is_removed() -> None:
 
 
 def test_invariant_12_layerlog_children_union_is_exact() -> None:
-    """Invariant 12 fails when ``LayerLog.cond_branch_children_by_cond`` loses a child."""
+    """Invariant 12 fails when ``LayerLog.conditional_arm_children`` loses a child."""
 
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     try:
         layer_log = _find_multi_pass_linear_layer(trace)
         only_event = _get_only_event(trace)
-        layer_log.cond_branch_children_by_cond[only_event.id]["then"] = []
+        layer_log.conditional_arm_children[only_event.id]["then"] = []
         _sync_layer_log_child_views(layer_log)
-        _assert_invariant_error(trace, ("Invariant 12", "cond_branch_children_by_cond"))
+        _assert_invariant_error(trace, ("Invariant 12", "conditional_arm_children"))
     finally:
         trace.cleanup()
 
@@ -485,7 +485,7 @@ def test_invariant_13_legacy_if_view_is_bidirectionally_consistent() -> None:
         parent_label = next(
             layer.layer_label
             for layer in trace.layer_list
-            if bool_label not in layer.cond_branch_start_children
+            if bool_label not in layer.conditional_entry_children
         )
         trace.conditional_branch_edges.append((parent_label, bool_label))
         _assert_invariant_error(trace, ("Invariant 13", "conditional_branch_edges"))

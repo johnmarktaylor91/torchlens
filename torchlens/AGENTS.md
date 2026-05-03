@@ -57,10 +57,10 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 
 ## Conditional Branch Attribution
 - Step 5 builds AST file indexes, classifies terminal bools, materializes dense
-  `conditional_events`, runs backward flood, attributes forward arm edges, then derives
+  `conditional_records`, runs backward flood, attributes forward arm edges, then derives
   legacy THEN/ELIF/ELSE views.
-- Primary structures are `Trace.conditional_events`, `conditional_arm_edges`,
-  `conditional_edge_ops`, and `cond_branch_children_by_cond`.
+- Primary structures are `Trace.conditional_records`, `conditional_arm_entry_edges`,
+  `conditional_edge_call_indices`, and `conditional_arm_children`.
 - Graphviz renders IF/THEN/ELIF/ELSE labels; ELK and dagua conditional support remains more
   limited than Graphviz.
 

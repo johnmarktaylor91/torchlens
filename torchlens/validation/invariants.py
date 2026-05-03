@@ -749,13 +749,13 @@ def _is_prefix_stack(prefix: list[tuple[int, str]], full: list[tuple[int, str]])
 
 
 def _expected_layer_pass_child_views(
-    cond_branch_children_by_cond: dict[int, dict[str, list[str]]],
+    conditional_arm_children: dict[int, dict[str, list[str]]],
 ) -> tuple[list[str], dict[int, list[str]], list[str]]:
     """Project pass-level child views from the primary conditional structure.
 
     Parameters
     ----------
-    cond_branch_children_by_cond:
+    conditional_arm_children:
         Primary ``cond_id -> branch_kind -> child labels`` mapping on a
         ``OpLog``.
 
@@ -768,13 +768,13 @@ def _expected_layer_pass_child_views(
     then_children = sorted(
         {
             child_label
-            for branch_children in cond_branch_children_by_cond.values()
+            for branch_children in conditional_arm_children.values()
             for child_label in branch_children.get("then", [])
         }
     )
     elif_children: dict[int, list[str]] = {}
     grouped_elif_children: dict[int, set[str]] = defaultdict(set)
-    for branch_children in cond_branch_children_by_cond.values():
+    for branch_children in conditional_arm_children.values():
         for branch_kind, child_labels in branch_children.items():
             if not branch_kind.startswith("elif_"):
                 continue
@@ -786,7 +786,7 @@ def _expected_layer_pass_child_views(
     else_children = sorted(
         {
             child_label
-            for branch_children in cond_branch_children_by_cond.values()
+            for branch_children in conditional_arm_children.values()
             for child_label in branch_children.get("else", [])
         }
     )
@@ -794,13 +794,13 @@ def _expected_layer_pass_child_views(
 
 
 def _expected_layer_log_child_views(
-    cond_branch_children_by_cond: dict[int, dict[str, list[str]]],
+    conditional_arm_children: dict[int, dict[str, list[str]]],
 ) -> tuple[list[str], dict[int, list[str]], list[str]]:
     """Project aggregate child views from a ``LayerLog`` primary structure.
 
     Parameters
     ----------
-    cond_branch_children_by_cond:
+    conditional_arm_children:
         Aggregate ``cond_id -> branch_kind -> child labels`` mapping on a
         ``LayerLog``.
 
@@ -813,7 +813,7 @@ def _expected_layer_log_child_views(
     then_children: list[str] = []
     elif_children: dict[int, list[str]] = {}
     else_children: list[str] = []
-    for branch_children in cond_branch_children_by_cond.values():
+    for branch_children in conditional_arm_children.values():
         for child_label in branch_children.get("then", []):
             _append_unique(then_children, child_label)
         for branch_kind, child_labels in branch_children.items():
@@ -831,7 +831,7 @@ def _expected_layer_log_child_views(
 def _expected_layer_log_child_union(
     layer_log: "LayerLog",
 ) -> dict[int, dict[str, list[str]]]:
-    """Build the expected aggregate ``cond_branch_children_by_cond`` for a ``LayerLog``.
+    """Build the expected aggregate ``conditional_arm_children`` for a ``LayerLog``.
 
     Parameters
     ----------
@@ -847,7 +847,7 @@ def _expected_layer_log_child_union(
     expected_children_by_cond: dict[int, dict[str, list[str]]] = {}
     for call_index in sorted(layer_log.ops):
         pass_log = layer_log.ops[call_index]
-        for conditional_id, branch_children in pass_log.cond_branch_children_by_cond.items():
+        for conditional_id, branch_children in pass_log.conditional_arm_children.items():
             merged_branch_children = expected_children_by_cond.setdefault(conditional_id, {})
             for branch_kind, child_labels in branch_children.items():
                 merged_child_labels = merged_branch_children.setdefault(branch_kind, [])
@@ -885,110 +885,110 @@ def _check_conditional_invariants(ml: "Trace") -> None:
     name = "conditional_invariants"
     layer_label_set = set(ml.layer_labels)
     valid_child_labels = _valid_conditional_child_labels(ml)
-    event_id_set = {event.id for event in ml.conditional_events}
+    event_id_set = {event.id for event in ml.conditional_records}
     branch_context_kinds = {"if_test", "elif_test", "ifexp"}
     wrapped_context_kinds = branch_context_kinds | {"bool_cast"}
 
-    # Invariant 1: conditional_arm_edges ↔ cond_branch_children_by_cond.
-    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items():
+    # Invariant 1: conditional_arm_entry_edges ↔ conditional_arm_children.
+    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             if parent_label not in layer_label_set:
                 _fail_conditional_invariant(
                     name,
                     1,
-                    f"conditional_arm_edges[{(conditional_id, branch_kind)}] references "
+                    f"conditional_arm_entry_edges[{(conditional_id, branch_kind)}] references "
                     f"missing parent layer {parent_label!r}",
                 )
             parent_layer = ml[parent_label]
-            branch_children = parent_layer.cond_branch_children_by_cond.get(conditional_id, {}).get(
+            branch_children = parent_layer.conditional_arm_children.get(conditional_id, {}).get(
                 branch_kind, []
             )
             if child_label not in branch_children:
                 _fail_conditional_invariant(
                     name,
                     1,
-                    f"conditional_arm_edges[{(conditional_id, branch_kind)}] includes edge "
+                    f"conditional_arm_entry_edges[{(conditional_id, branch_kind)}] includes edge "
                     f"({parent_label!r}, {child_label!r}) but "
-                    f"{parent_label}.cond_branch_children_by_cond[{conditional_id}][{branch_kind!r}]="
+                    f"{parent_label}.conditional_arm_children[{conditional_id}][{branch_kind!r}]="
                     f"{branch_children}",
                 )
 
     for parent_layer in ml.layer_list:
-        for conditional_id, branch_children in parent_layer.cond_branch_children_by_cond.items():
+        for conditional_id, branch_children in parent_layer.conditional_arm_children.items():
             for branch_kind, child_labels in branch_children.items():
-                model_edges = ml.conditional_arm_edges.get((conditional_id, branch_kind), [])
+                model_edges = ml.conditional_arm_entry_edges.get((conditional_id, branch_kind), [])
                 for child_label in child_labels:
                     if (parent_layer.layer_label, child_label) not in model_edges:
                         _fail_conditional_invariant(
                             name,
                             1,
-                            f"{parent_layer.layer_label}.cond_branch_children_by_cond"
+                            f"{parent_layer.layer_label}.conditional_arm_children"
                             f"[{conditional_id}][{branch_kind!r}] includes {child_label!r} "
-                            f"but conditional_arm_edges[{(conditional_id, branch_kind)}]={model_edges}",
+                            f"but conditional_arm_entry_edges[{(conditional_id, branch_kind)}]={model_edges}",
                         )
 
     # Invariant 2: per-layer derived views are exact projections of the primary structures.
     for layer in ml.layer_list:
         expected_then_children, expected_elif_children, expected_else_children = (
-            _expected_layer_pass_child_views(layer.cond_branch_children_by_cond)
+            _expected_layer_pass_child_views(layer.conditional_arm_children)
         )
-        if layer.cond_branch_then_children != expected_then_children:
+        if layer.conditional_then_children != expected_then_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"{layer.layer_label}.cond_branch_then_children={layer.cond_branch_then_children} != "
+                f"{layer.layer_label}.conditional_then_children={layer.conditional_then_children} != "
                 f"expected projection {expected_then_children}",
             )
-        if layer.cond_branch_elif_children != expected_elif_children:
+        if layer.conditional_elif_children != expected_elif_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"{layer.layer_label}.cond_branch_elif_children={layer.cond_branch_elif_children} != "
+                f"{layer.layer_label}.conditional_elif_children={layer.conditional_elif_children} != "
                 f"expected projection {expected_elif_children}",
             )
-        if layer.cond_branch_else_children != expected_else_children:
+        if layer.conditional_else_children != expected_else_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"{layer.layer_label}.cond_branch_else_children={layer.cond_branch_else_children} != "
+                f"{layer.layer_label}.conditional_else_children={layer.conditional_else_children} != "
                 f"expected projection {expected_else_children}",
             )
 
     for layer_log in ml.layer_logs.values():
         expected_then_children, expected_elif_children, expected_else_children = (
-            _expected_layer_log_child_views(layer_log.cond_branch_children_by_cond)
+            _expected_layer_log_child_views(layer_log.conditional_arm_children)
         )
-        if layer_log.cond_branch_then_children != expected_then_children:
+        if layer_log.conditional_then_children != expected_then_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"LayerLog {layer_log.layer_label}.cond_branch_then_children="
-                f"{layer_log.cond_branch_then_children} != expected projection "
+                f"LayerLog {layer_log.layer_label}.conditional_then_children="
+                f"{layer_log.conditional_then_children} != expected projection "
                 f"{expected_then_children}",
             )
-        if layer_log.cond_branch_elif_children != expected_elif_children:
+        if layer_log.conditional_elif_children != expected_elif_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"LayerLog {layer_log.layer_label}.cond_branch_elif_children="
-                f"{layer_log.cond_branch_elif_children} != expected projection "
+                f"LayerLog {layer_log.layer_label}.conditional_elif_children="
+                f"{layer_log.conditional_elif_children} != expected projection "
                 f"{expected_elif_children}",
             )
-        if layer_log.cond_branch_else_children != expected_else_children:
+        if layer_log.conditional_else_children != expected_else_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"LayerLog {layer_log.layer_label}.cond_branch_else_children="
-                f"{layer_log.cond_branch_else_children} != expected projection "
+                f"LayerLog {layer_log.layer_label}.conditional_else_children="
+                f"{layer_log.conditional_else_children} != expected projection "
                 f"{expected_else_children}",
             )
 
     # Invariant 3: every child label in conditional child views exists in the log.
     for layer in ml.layer_list:
         for field_name, child_labels in (
-            ("cond_branch_start_children", layer.cond_branch_start_children),
-            ("cond_branch_then_children", layer.cond_branch_then_children),
-            ("cond_branch_else_children", layer.cond_branch_else_children),
+            ("conditional_entry_children", layer.conditional_entry_children),
+            ("conditional_then_children", layer.conditional_then_children),
+            ("conditional_else_children", layer.conditional_else_children),
         ):
             for child_label in child_labels:
                 if child_label not in valid_child_labels:
@@ -998,21 +998,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                         f"{layer.layer_label}.{field_name} contains missing child label "
                         f"{child_label!r}",
                     )
-        for elif_index, child_labels in layer.cond_branch_elif_children.items():
+        for elif_index, child_labels in layer.conditional_elif_children.items():
             for child_label in child_labels:
                 if child_label not in valid_child_labels:
                     _fail_conditional_invariant(
                         name,
                         3,
-                        f"{layer.layer_label}.cond_branch_elif_children[{elif_index}] "
+                        f"{layer.layer_label}.conditional_elif_children[{elif_index}] "
                         f"contains missing child label {child_label!r}",
                     )
 
     for layer_log in ml.layer_logs.values():
         for field_name, child_labels in (
-            ("cond_branch_start_children", layer_log.cond_branch_start_children),
-            ("cond_branch_then_children", layer_log.cond_branch_then_children),
-            ("cond_branch_else_children", layer_log.cond_branch_else_children),
+            ("conditional_entry_children", layer_log.conditional_entry_children),
+            ("conditional_then_children", layer_log.conditional_then_children),
+            ("conditional_else_children", layer_log.conditional_else_children),
         ):
             for child_label in child_labels:
                 if child_label not in valid_child_labels:
@@ -1022,13 +1022,13 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                         f"LayerLog {layer_log.layer_label}.{field_name} contains missing child "
                         f"label {child_label!r}",
                     )
-        for elif_index, child_labels in layer_log.cond_branch_elif_children.items():
+        for elif_index, child_labels in layer_log.conditional_elif_children.items():
             for child_label in child_labels:
                 if child_label not in valid_child_labels:
                     _fail_conditional_invariant(
                         name,
                         3,
-                        f"LayerLog {layer_log.layer_label}.cond_branch_elif_children[{elif_index}] "
+                        f"LayerLog {layer_log.layer_label}.conditional_elif_children[{elif_index}] "
                         f"contains missing child label {child_label!r}",
                     )
 
@@ -1040,48 +1040,48 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"Trace.conditional_branch_edges contains missing child label {child_label!r} "
                 f"for parent {parent_label!r}",
             )
-    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items():
+    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             if child_label not in valid_child_labels:
                 _fail_conditional_invariant(
                     name,
                     3,
-                    f"Trace.conditional_arm_edges contains missing child label "
+                    f"Trace.conditional_arm_entry_edges contains missing child label "
                     f"{child_label!r} for edge {(conditional_id, branch_kind, parent_label)}",
                 )
 
     # Invariant 4: bool classification fields are mutually consistent.
     for layer in ml.layer_list:
-        expected_is_branch = layer.bool_context_kind in branch_context_kinds
-        if layer.bool_is_branch != expected_is_branch:
+        expected_is_branch = layer.conditional_context_kind in branch_context_kinds
+        if layer.is_terminal_conditional_bool != expected_is_branch:
             _fail_conditional_invariant(
                 name,
                 4,
-                f"{layer.layer_label} has bool_is_branch={layer.bool_is_branch} but "
-                f"bool_context_kind={layer.bool_context_kind!r}",
+                f"{layer.layer_label} has is_terminal_conditional_bool={layer.is_terminal_conditional_bool} but "
+                f"conditional_context_kind={layer.conditional_context_kind!r}",
             )
-        if layer.bool_is_branch and layer.bool_conditional_id is None:
+        if layer.is_terminal_conditional_bool and layer.terminal_conditional_id is None:
             _fail_conditional_invariant(
                 name,
                 4,
-                f"{layer.layer_label} has bool_is_branch=True but bool_conditional_id is None",
+                f"{layer.layer_label} has is_terminal_conditional_bool=True but terminal_conditional_id is None",
             )
-        if layer.bool_context_kind is not None and not layer.is_terminal_bool:
+        if layer.conditional_context_kind is not None and not layer.is_terminal_bool:
             _fail_conditional_invariant(
                 name,
                 4,
-                f"{layer.layer_label} has bool_context_kind={layer.bool_context_kind!r} but "
+                f"{layer.layer_label} has conditional_context_kind={layer.conditional_context_kind!r} but "
                 f"is_terminal_bool=False",
             )
         if (
-            layer.bool_wrapper_kind is not None
-            and layer.bool_context_kind not in wrapped_context_kinds
+            layer.conditional_wrapper_kind is not None
+            and layer.conditional_context_kind not in wrapped_context_kinds
         ):
             _fail_conditional_invariant(
                 name,
                 4,
-                f"{layer.layer_label} has bool_wrapper_kind={layer.bool_wrapper_kind!r} but "
-                f"bool_context_kind={layer.bool_context_kind!r}",
+                f"{layer.layer_label} has conditional_wrapper_kind={layer.conditional_wrapper_kind!r} but "
+                f"conditional_context_kind={layer.conditional_context_kind!r}",
             )
 
     # Invariant 5: every referenced cond_id corresponds to a ConditionalEvent.
@@ -1090,17 +1090,19 @@ def _check_conditional_invariants(ml: "Trace") -> None:
         referenced_cond_ids.update(
             conditional_id for conditional_id, _ in layer.conditional_branch_stack
         )
-        if layer.bool_conditional_id is not None:
-            referenced_cond_ids.add(layer.bool_conditional_id)
-        referenced_cond_ids.update(layer.cond_branch_children_by_cond)
+        if layer.terminal_conditional_id is not None:
+            referenced_cond_ids.add(layer.terminal_conditional_id)
+        referenced_cond_ids.update(layer.conditional_arm_children)
     for layer_log in ml.layer_logs.values():
         referenced_cond_ids.update(
             conditional_id
-            for branch_stack in layer_log.conditional_branch_stacks
+            for branch_stack in layer_log.conditional_role_stacks
             for conditional_id, _ in branch_stack
         )
-        referenced_cond_ids.update(layer_log.cond_branch_children_by_cond)
-    referenced_cond_ids.update(conditional_id for conditional_id, _ in ml.conditional_arm_edges)
+        referenced_cond_ids.update(layer_log.conditional_arm_children)
+    referenced_cond_ids.update(
+        conditional_id for conditional_id, _ in ml.conditional_arm_entry_edges
+    )
 
     for conditional_id in sorted(referenced_cond_ids):
         if conditional_id not in event_id_set:
@@ -1108,7 +1110,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 name,
                 5,
                 f"Referenced cond_id {conditional_id} has no matching ConditionalEvent.id "
-                f"in Trace.conditional_events",
+                f"in Trace.conditional_records",
             )
 
     # Invariant 6: parent->child stacks are monotone by prefix relation.
@@ -1136,7 +1138,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
             )
 
     # Invariant 7: elif keys are contiguous on ConditionalEvent.
-    for event in ml.conditional_events:
+    for event in ml.conditional_records:
         for field_name, mapping in (
             ("branch_ranges", event.branch_ranges),
             ("branch_test_spans", event.branch_test_spans),
@@ -1153,7 +1155,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 )
 
     # Invariant 8: ConditionalEvent.bool_layers back-reference to the event id.
-    for event in ml.conditional_events:
+    for event in ml.conditional_records:
         for bool_label in event.bool_layers:
             if bool_label not in layer_label_set:
                 _fail_conditional_invariant(
@@ -1163,12 +1165,12 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"{bool_label!r}",
                 )
             bool_layer = ml[bool_label]
-            if bool_layer.bool_conditional_id != event.id:
+            if bool_layer.terminal_conditional_id != event.id:
                 _fail_conditional_invariant(
                     name,
                     8,
                     f"ConditionalEvent id={event.id} bool_layers includes {bool_label!r} but "
-                    f"{bool_label}.bool_conditional_id={bool_layer.bool_conditional_id}",
+                    f"{bool_label}.terminal_conditional_id={bool_layer.terminal_conditional_id}",
                 )
 
     # Invariant 9: LayerLog conditional aggregate views match pass-level data.
@@ -1183,12 +1185,12 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 expected_stack_ops[stack_signature] = []
             expected_stack_ops[stack_signature].append(call_index)
 
-        if layer_log.conditional_branch_stacks != expected_stack_order:
+        if layer_log.conditional_role_stacks != expected_stack_order:
             _fail_conditional_invariant(
                 name,
                 9,
-                f"LayerLog {layer_log.layer_label}.conditional_branch_stacks="
-                f"{layer_log.conditional_branch_stacks} != expected {expected_stack_order}",
+                f"LayerLog {layer_log.layer_label}.conditional_role_stacks="
+                f"{layer_log.conditional_role_stacks} != expected {expected_stack_order}",
             )
         if layer_log.conditional_branch_stack_ops != expected_stack_ops:
             _fail_conditional_invariant(
@@ -1199,9 +1201,9 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{expected_stack_ops}",
             )
 
-    # Invariant 10: conditional_edge_ops exactly matches unrolled arm edges.
+    # Invariant 10: conditional_edge_call_indices exactly matches unrolled arm edges.
     actual_unrolled_edges: set[tuple[str, str, int, str, int]] = set()
-    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_edges.items():
+    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             actual_unrolled_edges.add(
                 (
@@ -1213,13 +1215,13 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 )
             )
 
-    for edge_key, call_indexs in ml.conditional_edge_ops.items():
+    for edge_key, call_indexs in ml.conditional_edge_call_indices.items():
         parent_no_pass, child_no_pass, conditional_id, branch_kind = edge_key
         if call_indexs != sorted(call_indexs) or len(call_indexs) != len(set(call_indexs)):
             _fail_conditional_invariant(
                 name,
                 10,
-                f"conditional_edge_ops[{edge_key}] has unsorted or duplicate pass list "
+                f"conditional_edge_call_indices[{edge_key}] has unsorted or duplicate pass list "
                 f"{call_indexs}",
             )
         for call_index in call_indexs:
@@ -1234,19 +1236,19 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 _fail_conditional_invariant(
                     name,
                     10,
-                    f"conditional_edge_ops[{edge_key}] includes pass {call_index} but "
-                    f"conditional_arm_edges has no matching unrolled edge",
+                    f"conditional_edge_call_indices[{edge_key}] includes pass {call_index} but "
+                    f"conditional_arm_entry_edges has no matching unrolled edge",
                 )
 
     for actual_edge in sorted(actual_unrolled_edges):
         parent_no_pass, child_no_pass, conditional_id, branch_kind, call_index = actual_edge
         edge_key = (parent_no_pass, child_no_pass, conditional_id, branch_kind)
-        if call_index not in ml.conditional_edge_ops.get(edge_key, []):
+        if call_index not in ml.conditional_edge_call_indices.get(edge_key, []):
             _fail_conditional_invariant(
                 name,
                 10,
-                f"conditional_arm_edges implies unrolled edge {actual_edge} but "
-                f"conditional_edge_ops[{edge_key}]={ml.conditional_edge_ops.get(edge_key)}",
+                f"conditional_arm_entry_edges implies unrolled edge {actual_edge} but "
+                f"conditional_edge_call_indices[{edge_key}]={ml.conditional_edge_call_indices.get(edge_key)}",
             )
 
     # Invariant 11: no transient _bool_conditional_key remains after step 5c.
@@ -1258,15 +1260,15 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{layer.layer_label} still has transient _bool_conditional_key attribute",
             )
 
-    # Invariant 12: LayerLog cond_branch_children_by_cond is the exact pass union.
+    # Invariant 12: LayerLog conditional_arm_children is the exact pass union.
     for layer_log in ml.layer_logs.values():
         expected_children_by_cond = _expected_layer_log_child_union(layer_log)
-        if layer_log.cond_branch_children_by_cond != expected_children_by_cond:
+        if layer_log.conditional_arm_children != expected_children_by_cond:
             _fail_conditional_invariant(
                 name,
                 12,
-                f"LayerLog {layer_log.layer_label}.cond_branch_children_by_cond="
-                f"{layer_log.cond_branch_children_by_cond} != expected pass union "
+                f"LayerLog {layer_log.layer_label}.conditional_arm_children="
+                f"{layer_log.conditional_arm_children} != expected pass union "
                 f"{expected_children_by_cond}",
             )
 
@@ -1279,21 +1281,21 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"conditional_branch_edges references missing parent layer {parent_label!r}",
             )
         parent_layer = ml[parent_label]
-        if bool_label not in parent_layer.cond_branch_start_children:
+        if bool_label not in parent_layer.conditional_entry_children:
             _fail_conditional_invariant(
                 name,
                 13,
                 f"conditional_branch_edges includes ({parent_label!r}, {bool_label!r}) but "
-                f"{parent_label}.cond_branch_start_children={parent_layer.cond_branch_start_children}",
+                f"{parent_label}.conditional_entry_children={parent_layer.conditional_entry_children}",
             )
 
     for parent_layer in ml.layer_list:
-        for bool_label in parent_layer.cond_branch_start_children:
+        for bool_label in parent_layer.conditional_entry_children:
             if (parent_layer.layer_label, bool_label) not in ml.conditional_branch_edges:
                 _fail_conditional_invariant(
                     name,
                     13,
-                    f"{parent_layer.layer_label}.cond_branch_start_children includes "
+                    f"{parent_layer.layer_label}.conditional_entry_children includes "
                     f"{bool_label!r} but conditional_branch_edges={ml.conditional_branch_edges}",
                 )
 

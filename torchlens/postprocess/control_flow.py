@@ -75,7 +75,7 @@ def _mark_conditional_branches(self: "Trace") -> None:
             "Internally-terminated bool layers were absent but conditional "
             "keys were produced; the fast-skip precondition is stale."
         )
-    events_by_key = _materialize_conditional_events(
+    events_by_key = _materialize_conditional_records(
         self,
         file_indexes,
         conditional_keys,
@@ -97,8 +97,8 @@ def _can_fast_skip_step5(self: "Trace") -> bool:
     semantically equivalent to running it.
 
     The function also checks the Trace-level conditional collections
-    (``conditional_events``, ``conditional_branch_edges``,
-    ``conditional_arm_edges``, ``conditional_edge_ops``). They are initialized empty in
+    (``conditional_records``, ``conditional_branch_edges``,
+    ``conditional_arm_entry_edges``, ``conditional_edge_call_indices``). They are initialized empty in
     :meth:`Trace.__init__`, and the slow path resets them on entry.
     Any caller that pre-populated these would change the user-visible
     output if we skipped, so we conservatively run the slow path in that
@@ -107,13 +107,13 @@ def _can_fast_skip_step5(self: "Trace") -> bool:
 
     if self.internally_terminated_bool_ops:
         return False
-    if self.conditional_events:
+    if self.conditional_records:
         return False
     if self.conditional_branch_edges:
         return False
-    if self.conditional_arm_edges:
+    if self.conditional_arm_entry_edges:
         return False
-    if self.conditional_edge_ops:
+    if self.conditional_edge_call_indices:
         return False
     return True
 
@@ -179,17 +179,17 @@ def _classify_bool_layers(
             classification = frame_classification
             break
 
-        bool_is_branch = (
+        is_terminal_conditional_bool = (
             classification.kind in _BRANCH_CONTEXT_KINDS
             and classification.conditional_key is not None
         )
-        bool_layer.bool_context_kind = classification.kind
-        bool_layer.bool_wrapper_kind = classification.wrapper_kind
-        bool_layer.bool_is_branch = bool_is_branch
-        bool_layer.bool_conditional_id = None
+        bool_layer.conditional_context_kind = classification.kind
+        bool_layer.conditional_wrapper_kind = classification.wrapper_kind
+        bool_layer.is_terminal_conditional_bool = is_terminal_conditional_bool
+        bool_layer.terminal_conditional_id = None
         bool_classifications[bool_label] = classification
 
-        if bool_is_branch:
+        if is_terminal_conditional_bool:
             conditional_key = classification.conditional_key
             if conditional_key is None:
                 raise ValueError("Branch-participating bool classification must include a key.")
@@ -199,7 +199,7 @@ def _classify_bool_layers(
     return list(ordered_conditional_keys.keys()), bool_classifications
 
 
-def _materialize_conditional_events(
+def _materialize_conditional_records(
     self: "Trace",
     file_indexes: Dict[str, Optional[ast_branches.FileIndex]],
     conditional_keys: List[ast_branches.ConditionalKey],
@@ -227,7 +227,7 @@ def _materialize_conditional_events(
     from ..data_classes.model_log import ConditionalEvent
 
     record_lookup = _build_conditional_record_lookup(file_indexes)
-    self.conditional_events = []
+    self.conditional_records = []
 
     events_by_key: Dict[ast_branches.ConditionalKey, ConditionalEvent] = {}
     for conditional_id, conditional_key in enumerate(conditional_keys):
@@ -251,7 +251,7 @@ def _materialize_conditional_events(
             parent_branch_kind=record.parent_branch_kind,
         )
         events_by_key[conditional_key] = event
-        self.conditional_events.append(event)
+        self.conditional_records.append(event)
 
     for conditional_key in conditional_keys:
         record, _function_qualname = record_lookup[conditional_key]
@@ -264,10 +264,10 @@ def _materialize_conditional_events(
         bool_layer = self[bool_label]
         bool_conditional_key: Optional[ast_branches.ConditionalKey] = classification.conditional_key
         if bool_conditional_key is None or bool_conditional_key not in events_by_key:
-            bool_layer.bool_conditional_id = None
+            bool_layer.terminal_conditional_id = None
             continue
         event = events_by_key[bool_conditional_key]
-        bool_layer.bool_conditional_id = event.id
+        bool_layer.terminal_conditional_id = event.id
         event.bool_layers.append(bool_label)
 
     for bool_label in _iter_terminal_scalar_bool_labels(self):
@@ -292,14 +292,14 @@ def _mark_conditional_branches_if_backward_flood(
 
     self.conditional_branch_edges = []
     for layer in self:
-        layer.cond_branch_start_children = []
-        layer.in_cond_branch = False
+        layer.conditional_entry_children = []
+        layer.is_in_conditional_body = False
 
     branch_bool_labels = [
         bool_label
         for bool_label in _iter_terminal_scalar_bool_labels(self)
         if bool_classifications[bool_label].conditional_key is not None
-        and self[bool_label].bool_is_branch
+        and self[bool_label].is_terminal_conditional_bool
     ]
 
     nodes_seen: Set[str] = set()
@@ -312,14 +312,14 @@ def _mark_conditional_branches_if_backward_flood(
         for parent_label in node.parents:
             parent_layer = self[parent_label]
             if parent_layer.has_output_descendant:
-                parent_layer.cond_branch_start_children.append(node_label)
-                parent_layer.in_cond_branch = False
+                parent_layer.conditional_entry_children.append(node_label)
+                parent_layer.is_in_conditional_body = False
                 nodes_seen.add(parent_label)
                 self.conditional_branch_edges.append((parent_label, node_label))
             else:
                 if parent_label in nodes_seen:
                     continue
-                parent_layer.in_cond_branch = True
+                parent_layer.is_in_conditional_body = True
                 node_stack.append(parent_label)
 
         nodes_seen.add(node_label)
@@ -339,8 +339,8 @@ def _attribute_branches_forward(
         Structural-to-dense conditional event lookup created in phase 5c.
     """
 
-    conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = defaultdict(list)
-    conditional_edge_ops: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
+    conditional_arm_entry_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = defaultdict(list)
+    conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
 
     for layer_label in self._raw_layer_labels_list:
         layer = self[layer_label]
@@ -349,7 +349,7 @@ def _attribute_branches_forward(
             events_by_key,
         )
         layer.conditional_branch_depth = len(layer.conditional_branch_stack)
-        layer.cond_branch_children_by_cond = {}
+        layer.conditional_arm_children = {}
 
     for parent_label in self._raw_layer_labels_list:
         parent_layer = self[parent_label]
@@ -360,13 +360,13 @@ def _attribute_branches_forward(
                 child_layer.conditional_branch_stack,
             )
             for conditional_id, branch_kind in gained_entries:
-                parent_layer.cond_branch_children_by_cond.setdefault(conditional_id, {}).setdefault(
+                parent_layer.conditional_arm_children.setdefault(conditional_id, {}).setdefault(
                     branch_kind, []
                 ).append(child_label)
-                conditional_arm_edges[(conditional_id, branch_kind)].append(
+                conditional_arm_entry_edges[(conditional_id, branch_kind)].append(
                     (parent_layer._label_raw, child_layer._label_raw)
                 )
-                conditional_edge_ops[
+                conditional_edge_call_indices[
                     (
                         parent_layer._label_raw.split(":", 1)[0],
                         child_layer._label_raw.split(":", 1)[0],
@@ -375,8 +375,8 @@ def _attribute_branches_forward(
                     )
                 ].append(parent_layer.call_index)
 
-    self.conditional_arm_edges = dict(conditional_arm_edges)
-    self.conditional_edge_ops = dict(conditional_edge_ops)
+    self.conditional_arm_entry_edges = dict(conditional_arm_entry_edges)
+    self.conditional_edge_call_indices = dict(conditional_edge_call_indices)
 
 
 def _materialize_derived_views(self: "Trace") -> None:
@@ -388,38 +388,39 @@ def _materialize_derived_views(self: "Trace") -> None:
         Model log being postprocessed.
     """
 
-    self.conditional_edge_ops = {
-        key: sorted(set(call_indexs)) for key, call_indexs in self.conditional_edge_ops.items()
+    self.conditional_edge_call_indices = {
+        key: sorted(set(call_indexs))
+        for key, call_indexs in self.conditional_edge_call_indices.items()
     }
 
     for layer_label in self._raw_layer_labels_list:
         layer = self[layer_label]
-        layer.cond_branch_then_children = sorted(
+        layer.conditional_then_children = sorted(
             set(
                 chain.from_iterable(
                     branch_children.get("then", [])
-                    for branch_children in layer.cond_branch_children_by_cond.values()
+                    for branch_children in layer.conditional_arm_children.values()
                 )
             )
         )
 
         elif_children: Dict[int, Set[str]] = defaultdict(set)
-        for branch_children in layer.cond_branch_children_by_cond.values():
+        for branch_children in layer.conditional_arm_children.values():
             for branch_kind, child_labels in branch_children.items():
                 if not branch_kind.startswith("elif_"):
                     continue
                 elif_index = int(branch_kind.split("_", 1)[1])
                 elif_children[elif_index].update(child_labels)
-        layer.cond_branch_elif_children = {
+        layer.conditional_elif_children = {
             elif_index: sorted(child_labels)
             for elif_index, child_labels in sorted(elif_children.items())
         }
 
-        layer.cond_branch_else_children = sorted(
+        layer.conditional_else_children = sorted(
             set(
                 chain.from_iterable(
                     branch_children.get("else", [])
-                    for branch_children in layer.cond_branch_children_by_cond.values()
+                    for branch_children in layer.conditional_arm_children.values()
                 )
             )
         )

@@ -984,8 +984,8 @@ def trace(
             If True, TorchLens also captures source text on each ``FuncCallLocation``
             (``source_context``, ``code_context``, etc.) plus module source metadata.
             Full ``if``/``elif``/``else`` and ternary branch attribution
-            (``conditional_events``, ``conditional_arm_edges``,
-            ``conditional_edge_ops``, etc.) works regardless of this flag because it
+            (``conditional_records``, ``conditional_arm_entry_edges``,
+            ``conditional_edge_call_indices``, etc.) works regardless of this flag because it
             relies only on the always-captured identity fields.
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when

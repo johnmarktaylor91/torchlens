@@ -2973,8 +2973,8 @@ def _compute_edge_label(
 
     Precedence matches the Phase 7 conditional rendering spec:
 
-    1. Arm-entry labels from ``Trace.conditional_arm_edges`` /
-       ``Trace.conditional_edge_ops``.
+    1. Arm-entry labels from ``Trace.conditional_arm_entry_edges`` /
+       ``Trace.conditional_edge_call_indices``.
     2. ``IF`` labels from ``Trace.conditional_branch_edges``.
     3. ``None`` when the edge has no branch semantics.
 
@@ -3077,7 +3077,7 @@ def _get_arm_edge_entries(
     arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]] = []
     if vis_mode == "unrolled":
         edge_key = (parent_node.layer_label, child_node.layer_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items():
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items():
             if edge_key in edge_list:
                 arm_entries.append((conditional_id, branch_kind, None))
     elif vis_mode == "rolled":
@@ -3088,7 +3088,7 @@ def _get_arm_edge_entries(
             edge_child,
             conditional_id,
             branch_kind,
-        ), call_indexs in trace.conditional_edge_ops.items():
+        ), call_indexs in trace.conditional_edge_call_indices.items():
             if (edge_parent, edge_child) == (parent_no_pass, child_no_pass):
                 arm_entries.append((conditional_id, branch_kind, tuple(call_indexs)))
     else:
@@ -3280,7 +3280,7 @@ def _get_conditional_reference_text(conditional_id: int, trace: "Trace") -> str:
     str
         Line-based conditional reference when available, otherwise ``"C{id}"``.
     """
-    for conditional_event in trace.conditional_events:
+    for conditional_event in trace.conditional_records:
         if conditional_event.id == conditional_id:
             return f"L{conditional_event.if_stmt_span[0]}"
     return f"C{conditional_id}"
@@ -3307,7 +3307,7 @@ def _arm_entry_sort_key(
         Sort key ordered by source line, branch rank, then conditional id.
     """
     source_line = 10**9
-    for conditional_event in trace.conditional_events:
+    for conditional_event in trace.conditional_records:
         if conditional_event.id == conditional_id:
             source_line = conditional_event.if_stmt_span[0]
             break
@@ -3718,7 +3718,7 @@ def _node_has_grad(layer: Any) -> bool:
     """
 
     ops = getattr(layer, "ops", None)
-    if isinstance(ops, dict):
+    if ops is not None and hasattr(ops, "values"):
         return any(bool(getattr(pass_log, "has_grad", False)) for pass_log in ops.values())
     return bool(getattr(layer, "has_grad", False))
 

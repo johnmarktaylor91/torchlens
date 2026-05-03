@@ -43,6 +43,77 @@ if TYPE_CHECKING:
     from .param_log import ParamAccessor
 
 
+class ModuleCallAccessor:
+    """Scoped dict-like accessor for ModuleCallLog entries owned by a ModuleLog."""
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {"_dict": FieldPolicy.KEEP}
+
+    def __init__(self, calls: Dict[int, "ModuleCallLog"] | None = None) -> None:
+        """Initialize the accessor.
+
+        Parameters
+        ----------
+        calls:
+            Mapping from 1-based call index to ModuleCallLog.
+        """
+
+        self._dict: Dict[int, "ModuleCallLog"] = dict(calls or {})
+
+    def __getitem__(self, key: int | str) -> "ModuleCallLog":
+        """Return a ModuleCallLog by call index or call label."""
+
+        if isinstance(key, int):
+            return self._dict[key]
+        for call in self._dict.values():
+            if key == call.call_label:
+                return call
+        raise KeyError(f"Module call '{key}' not found in scoped calls.")
+
+    def __setitem__(self, key: int, value: "ModuleCallLog") -> None:
+        """Set a ModuleCallLog by call index."""
+
+        self._dict[key] = value
+
+    def __contains__(self, key: object) -> bool:
+        """Return whether key resolves to a ModuleCallLog."""
+
+        if isinstance(key, int):
+            return key in self._dict
+        if isinstance(key, str):
+            return any(key == call.call_label for call in self._dict.values())
+        return False
+
+    def __iter__(self) -> Iterator[int]:
+        """Iterate call-index keys."""
+
+        return iter(self._dict)
+
+    def __len__(self) -> int:
+        """Return the number of scoped calls."""
+
+        return len(self._dict)
+
+    def get(self, key: int, default: "ModuleCallLog | None" = None) -> "ModuleCallLog | None":
+        """Return a ModuleCallLog by call index, or default."""
+
+        return self._dict.get(key, default)
+
+    def keys(self) -> list[int]:
+        """Return call-index keys."""
+
+        return list(self._dict.keys())
+
+    def values(self) -> list["ModuleCallLog"]:
+        """Return scoped ModuleCallLog values."""
+
+        return list(self._dict.values())
+
+    def items(self) -> list[tuple[int, "ModuleCallLog"]]:
+        """Return ``(call_index, ModuleCallLog)`` pairs."""
+
+        return list(self._dict.items())
+
+
 @dataclass
 class HookInfo:
     """Summary of one PyTorch module hook registry."""
@@ -515,7 +586,7 @@ class ModuleLog:
         self.call_depth = call_depth
 
         self.num_calls = num_calls
-        self.ops = ops if ops is not None else {}
+        self.ops = ModuleCallAccessor(ops)
         self.call_labels = call_labels if call_labels is not None else []
 
         # layers stores NO-PASS labels (e.g. "conv2d_1_1") -> LayerLog.
@@ -720,7 +791,7 @@ class ModuleLog:
         return self.ops[1]
 
     @property
-    def calls(self) -> Dict[int, ModuleCallLog]:
+    def calls(self) -> ModuleCallAccessor:
         """Scoped module-call collection."""
 
         return self.ops

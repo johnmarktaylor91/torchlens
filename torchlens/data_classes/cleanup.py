@@ -129,21 +129,21 @@ def _label_for_reference_removal(log_entry: OpLog, pass_finished: bool) -> str:
     return cast(str, log_entry._label_raw)
 
 
-def _filter_cond_branch_children_by_cond(
-    cond_branch_children_by_cond: Dict[int, Dict[str, List[str]]],
+def _filter_conditional_arm_children(
+    conditional_arm_children: Dict[int, Dict[str, List[str]]],
     labels_to_remove: Set[str],
 ) -> Dict[int, Dict[str, List[str]]]:
-    """Drop removed labels from ``cond_branch_children_by_cond``.
+    """Drop removed labels from ``conditional_arm_children``.
 
     Args:
-        cond_branch_children_by_cond: ``cond_id -> branch_kind -> child labels``.
+        conditional_arm_children: ``cond_id -> branch_kind -> child labels``.
         labels_to_remove: Labels that should be removed.
 
     Returns:
         A new nested dict with removed labels and empty containers pruned.
     """
     filtered_children_by_cond: Dict[int, Dict[str, List[str]]] = {}
-    for cond_id, branch_children in cond_branch_children_by_cond.items():
+    for cond_id, branch_children in conditional_arm_children.items():
         filtered_branch_children = {
             branch_kind: [
                 child_label for child_label in child_labels if child_label not in labels_to_remove
@@ -160,14 +160,14 @@ def _filter_cond_branch_children_by_cond(
     return filtered_children_by_cond
 
 
-def _filter_cond_branch_elif_children(
-    cond_branch_elif_children: Dict[int, List[str]],
+def _filter_conditional_elif_children(
+    conditional_elif_children: Dict[int, List[str]],
     labels_to_remove: Set[str],
 ) -> Dict[int, List[str]]:
-    """Drop removed labels from ``cond_branch_elif_children``.
+    """Drop removed labels from ``conditional_elif_children``.
 
     Args:
-        cond_branch_elif_children: ``elif_index -> child labels``.
+        conditional_elif_children: ``elif_index -> child labels``.
         labels_to_remove: Labels that should be removed.
 
     Returns:
@@ -177,26 +177,26 @@ def _filter_cond_branch_elif_children(
         elif_ix: [
             child_label for child_label in child_labels if child_label not in labels_to_remove
         ]
-        for elif_ix, child_labels in cond_branch_elif_children.items()
+        for elif_ix, child_labels in conditional_elif_children.items()
         if any(child_label not in labels_to_remove for child_label in child_labels)
     }
 
 
-def _filter_conditional_arm_edges(
-    conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]],
+def _filter_conditional_arm_entry_edges(
+    conditional_arm_entry_edges: Dict[Tuple[int, str], List[Tuple[str, str]]],
     labels_to_remove: Set[str],
 ) -> Dict[Tuple[int, str], List[Tuple[str, str]]]:
-    """Drop removed labels from ``conditional_arm_edges``.
+    """Drop removed labels from ``conditional_arm_entry_edges``.
 
     Args:
-        conditional_arm_edges: ``(cond_id, branch_kind) -> [(parent, child)]``.
+        conditional_arm_entry_edges: ``(cond_id, branch_kind) -> [(parent, child)]``.
         labels_to_remove: Labels that should be removed.
 
     Returns:
         A new dict with empty edge lists pruned.
     """
     filtered_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
-    for key, edge_list in conditional_arm_edges.items():
+    for key, edge_list in conditional_arm_entry_edges.items():
         filtered_edges = [
             (parent, child)
             for parent, child in edge_list
@@ -207,14 +207,14 @@ def _filter_conditional_arm_edges(
     return filtered_arm_edges
 
 
-def _filter_conditional_edge_ops(
-    conditional_edge_ops: Dict[Tuple[str, str, int, str], List[int]],
+def _filter_conditional_edge_call_indices(
+    conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]],
     labels_to_remove_no_pass: Set[str],
 ) -> Dict[Tuple[str, str, int, str], List[int]]:
-    """Drop removed labels from ``conditional_edge_ops`` keys.
+    """Drop removed labels from ``conditional_edge_call_indices`` keys.
 
     Args:
-        conditional_edge_ops: ``(parent_no_pass, child_no_pass, cond_id, branch_kind) -> pass list``.
+        conditional_edge_call_indices: ``(parent_no_pass, child_no_pass, cond_id, branch_kind) -> pass list``.
         labels_to_remove_no_pass: Pass-stripped labels that should be removed.
 
     Returns:
@@ -222,7 +222,7 @@ def _filter_conditional_edge_ops(
     """
     return {
         key: call_indexs
-        for key, call_indexs in conditional_edge_ops.items()
+        for key, call_indexs in conditional_edge_call_indices.items()
         if key[0] not in labels_to_remove_no_pass and key[1] not in labels_to_remove_no_pass
     }
 
@@ -237,27 +237,27 @@ def _scrub_layer_entry_conditional_fields(
         layer_entry: Surviving layer entry to scrub.
         labels_to_remove: Labels that were removed elsewhere in the log.
     """
-    layer_entry.cond_branch_start_children = [
+    layer_entry.conditional_entry_children = [
         child_label
-        for child_label in layer_entry.cond_branch_start_children
+        for child_label in layer_entry.conditional_entry_children
         if child_label not in labels_to_remove
     ]
-    layer_entry.cond_branch_children_by_cond = _filter_cond_branch_children_by_cond(
-        layer_entry.cond_branch_children_by_cond,
+    layer_entry.conditional_arm_children = _filter_conditional_arm_children(
+        layer_entry.conditional_arm_children,
         labels_to_remove,
     )
-    layer_entry.cond_branch_then_children = [
+    layer_entry.conditional_then_children = [
         child_label
-        for child_label in layer_entry.cond_branch_then_children
+        for child_label in layer_entry.conditional_then_children
         if child_label not in labels_to_remove
     ]
-    layer_entry.cond_branch_elif_children = _filter_cond_branch_elif_children(
-        layer_entry.cond_branch_elif_children,
+    layer_entry.conditional_elif_children = _filter_conditional_elif_children(
+        layer_entry.conditional_elif_children,
         labels_to_remove,
     )
-    layer_entry.cond_branch_else_children = [
+    layer_entry.conditional_else_children = [
         child_label
-        for child_label in layer_entry.cond_branch_else_children
+        for child_label in layer_entry.conditional_else_children
         if child_label not in labels_to_remove
     ]
 
@@ -270,27 +270,27 @@ def _scrub_layer_log_conditional_fields(self: "Trace", labels_to_remove_no_pass:
         labels_to_remove_no_pass: Pass-stripped labels that were removed.
     """
     for layer_log in getattr(self, "layer_logs", {}).values():
-        layer_log.cond_branch_start_children = [
+        layer_log.conditional_entry_children = [
             child_label
-            for child_label in layer_log.cond_branch_start_children
+            for child_label in layer_log.conditional_entry_children
             if child_label not in labels_to_remove_no_pass
         ]
-        layer_log.cond_branch_children_by_cond = _filter_cond_branch_children_by_cond(
-            layer_log.cond_branch_children_by_cond,
+        layer_log.conditional_arm_children = _filter_conditional_arm_children(
+            layer_log.conditional_arm_children,
             labels_to_remove_no_pass,
         )
-        layer_log.cond_branch_then_children = [
+        layer_log.conditional_then_children = [
             child_label
-            for child_label in layer_log.cond_branch_then_children
+            for child_label in layer_log.conditional_then_children
             if child_label not in labels_to_remove_no_pass
         ]
-        layer_log.cond_branch_elif_children = _filter_cond_branch_elif_children(
-            layer_log.cond_branch_elif_children,
+        layer_log.conditional_elif_children = _filter_conditional_elif_children(
+            layer_log.conditional_elif_children,
             labels_to_remove_no_pass,
         )
-        layer_log.cond_branch_else_children = [
+        layer_log.conditional_else_children = [
             child_label
-            for child_label in layer_log.cond_branch_else_children
+            for child_label in layer_log.conditional_else_children
             if child_label not in labels_to_remove_no_pass
         ]
 
@@ -315,15 +315,15 @@ def _scrub_conditional_fields_after_removal(
 
     _scrub_layer_log_conditional_fields(self, labels_to_remove_no_pass)
 
-    self.conditional_arm_edges = _filter_conditional_arm_edges(
-        self.conditional_arm_edges,
+    self.conditional_arm_entry_edges = _filter_conditional_arm_entry_edges(
+        self.conditional_arm_entry_edges,
         labels_to_remove,
     )
-    self.conditional_edge_ops = _filter_conditional_edge_ops(
-        self.conditional_edge_ops,
+    self.conditional_edge_call_indices = _filter_conditional_edge_call_indices(
+        self.conditional_edge_call_indices,
         labels_to_remove_no_pass,
     )
-    for conditional_event in self.conditional_events:
+    for conditional_event in self.conditional_records:
         conditional_event.bool_layers = [
             layer_label
             for layer_label in conditional_event.bool_layers

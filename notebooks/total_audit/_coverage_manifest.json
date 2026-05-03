@@ -459,23 +459,23 @@
       },
       {
         "kind": "field",
-        "name": "cond_branch_children_by_cond"
+        "name": "conditional_arm_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_elif_children"
+        "name": "conditional_elif_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_else_children"
+        "name": "conditional_else_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_start_children"
+        "name": "conditional_entry_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_then_children"
+        "name": "conditional_then_children"
       },
       {
         "kind": "field",
@@ -483,7 +483,7 @@
       },
       {
         "kind": "field",
-        "name": "conditional_branch_stacks"
+        "name": "conditional_role_stacks"
       },
       {
         "kind": "field",
@@ -925,19 +925,19 @@
       },
       {
         "kind": "field",
-        "name": "bool_conditional_id"
+        "name": "terminal_conditional_id"
       },
       {
         "kind": "field",
-        "name": "bool_context_kind"
+        "name": "conditional_context_kind"
       },
       {
         "kind": "field",
-        "name": "bool_is_branch"
+        "name": "is_terminal_conditional_bool"
       },
       {
         "kind": "field",
-        "name": "bool_wrapper_kind"
+        "name": "conditional_wrapper_kind"
       },
       {
         "kind": "field",
@@ -989,23 +989,23 @@
       },
       {
         "kind": "field",
-        "name": "cond_branch_children_by_cond"
+        "name": "conditional_arm_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_elif_children"
+        "name": "conditional_elif_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_else_children"
+        "name": "conditional_else_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_start_children"
+        "name": "conditional_entry_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_then_children"
+        "name": "conditional_then_children"
       },
       {
         "kind": "field",
@@ -1197,7 +1197,7 @@
       },
       {
         "kind": "field",
-        "name": "in_cond_branch"
+        "name": "is_in_conditional_body"
       },
       {
         "kind": "field",
@@ -1799,7 +1799,7 @@
       },
       {
         "kind": "field",
-        "name": "conditional_arm_edges"
+        "name": "conditional_arm_entry_edges"
       },
       {
         "kind": "field",
@@ -1807,23 +1807,23 @@
       },
       {
         "kind": "field",
-        "name": "conditional_edge_ops"
+        "name": "conditional_edge_call_indices"
       },
       {
         "kind": "property",
-        "name": "conditional_elif_edges"
+        "name": "conditional_elif_entry_edges"
       },
       {
         "kind": "property",
-        "name": "conditional_else_edges"
+        "name": "conditional_else_entry_edges"
       },
       {
         "kind": "field",
-        "name": "conditional_events"
+        "name": "conditional_records"
       },
       {
         "kind": "property",
-        "name": "conditional_then_edges"
+        "name": "conditional_then_entry_edges"
       },
       {
         "kind": "field",

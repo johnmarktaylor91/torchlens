@@ -48,12 +48,12 @@ eviction. Step order is load-bearing.
 
 ## Step 5: Conditional Attribution
 Step 5 builds AST indexes, classifies terminal scalar bools, materializes dense
-`conditional_events`, runs a backward flood from branch bools, attributes forward arm edges,
+`conditional_records`, runs a backward flood from branch bools, attributes forward arm edges,
 then derives legacy THEN/ELIF/ELSE views. Canonical structures are:
-- `Trace.conditional_events`
-- `Trace.conditional_arm_edges`
-- `Trace.conditional_edge_ops`
-- `cond_branch_children_by_cond` on `OpLog` and `LayerLog`
+- `Trace.conditional_records`
+- `Trace.conditional_arm_entry_edges`
+- `Trace.conditional_edge_call_indices`
+- `conditional_arm_children` on `OpLog` and `LayerLog`
 
 ## Loop Detection
 Loop detection groups repeated operations by operation equivalence, expands isomorphic

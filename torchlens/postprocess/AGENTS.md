@@ -12,8 +12,8 @@
 
 ## Step 5 Conditional Branch Detection
 - Implementation is in `control_flow.py` with AST support from `ast_branches.py`.
-- Primary data is cond-id-aware: `conditional_events`, `conditional_arm_edges`,
-  `conditional_edge_ops`, `cond_branch_children_by_cond`.
+- Primary data is cond-id-aware: `conditional_records`, `conditional_arm_entry_edges`,
+  `conditional_edge_call_indices`, `conditional_arm_children`.
 - Legacy THEN/ELIF/ELSE fields are derived compatibility views.
 - Backward flood is parent-only; do not make it bidirectional.
 - Ternary `IfExp` attribution depends on source `col_offset` when arms share a line.

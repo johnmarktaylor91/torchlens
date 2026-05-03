@@ -201,13 +201,13 @@ class TestBranchFastSkip:
 
         # And the conditional collections must remain at their empty defaults.
         assert log.internally_terminated_bool_ops == []
-        assert log.conditional_events == []
+        assert log.conditional_records == []
         assert log.conditional_branch_edges == []
-        assert log.conditional_then_edges == []
-        assert log.conditional_elif_edges == []
-        assert log.conditional_else_edges == []
-        assert log.conditional_arm_edges == {}
-        assert log.conditional_edge_ops == {}
+        assert log.conditional_then_entry_edges == []
+        assert log.conditional_elif_entry_edges == []
+        assert log.conditional_else_entry_edges == []
+        assert log.conditional_arm_entry_edges == {}
+        assert log.conditional_edge_call_indices == {}
 
     def test_slow_path_runs_when_conditional_present(self) -> None:
         """A model with an if-branch must still run the full slow path."""
@@ -229,7 +229,7 @@ class TestBranchFastSkip:
             "Expected attribute_op to run for a model with a real conditional "
             "branch; the fast-skip is incorrectly engaging."
         )
-        assert len(log.conditional_events) >= 1
+        assert len(log.conditional_records) >= 1
         assert len(log.internally_terminated_bool_ops) >= 1
 
     def test_empty_model_does_not_crash(self) -> None:
@@ -246,7 +246,7 @@ class TestBranchFastSkip:
         model = _EmptyForward()
         x = torch.zeros(2, 2)
         log = torchlens.trace(model, x)
-        assert log.conditional_events == []
+        assert log.conditional_records == []
 
 
 # ---------------------------------------------------------------------------

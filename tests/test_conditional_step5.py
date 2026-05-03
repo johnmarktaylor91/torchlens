@@ -155,8 +155,8 @@ def _get_only_event(trace: Trace) -> ConditionalEvent:
         The only materialized conditional event.
     """
 
-    assert len(trace.conditional_events) == 1
-    return trace.conditional_events[0]
+    assert len(trace.conditional_records) == 1
+    return trace.conditional_records[0]
 
 
 def _get_terminal_bool_layers(trace: Trace) -> List[OpLog]:
@@ -210,28 +210,28 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
 
     expected_then_edges = [
         (parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind == "then"
         for parent_label, child_label in edge_list
     ]
     expected_elif_edges = [
         (conditional_id, int(branch_kind.split("_")[1]), parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind.startswith("elif_")
         for parent_label, child_label in edge_list
     ]
     expected_else_edges = [
         (conditional_id, parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind == "else"
         for parent_label, child_label in edge_list
     ]
 
-    assert trace.conditional_then_edges == expected_then_edges
-    assert trace.conditional_elif_edges == expected_elif_edges
-    assert trace.conditional_else_edges == expected_else_edges
+    assert trace.conditional_then_entry_edges == expected_then_edges
+    assert trace.conditional_elif_entry_edges == expected_elif_edges
+    assert trace.conditional_else_entry_edges == expected_else_edges
 
-    for call_indexs in trace.conditional_edge_ops.values():
+    for call_indexs in trace.conditional_edge_call_indices.values():
         assert call_indexs == sorted(call_indexs)
 
     for layer in trace.layer_list:
@@ -239,7 +239,7 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
             set(
                 chain.from_iterable(
                     branch_children.get("then", [])
-                    for branch_children in layer.cond_branch_children_by_cond.values()
+                    for branch_children in layer.conditional_arm_children.values()
                 )
             )
         )
@@ -247,13 +247,13 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
             set(
                 chain.from_iterable(
                     branch_children.get("else", [])
-                    for branch_children in layer.cond_branch_children_by_cond.values()
+                    for branch_children in layer.conditional_arm_children.values()
                 )
             )
         )
         expected_elif_children: Dict[int, List[str]] = {}
         grouped_elif_children: Dict[int, set[str]] = defaultdict(set)
-        for branch_children in layer.cond_branch_children_by_cond.values():
+        for branch_children in layer.conditional_arm_children.values():
             for branch_kind, child_labels in branch_children.items():
                 if not branch_kind.startswith("elif_"):
                     continue
@@ -262,9 +262,9 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
         for elif_index, child_labels in sorted(grouped_elif_children.items()):
             expected_elif_children[elif_index] = sorted(child_labels)
 
-        assert layer.cond_branch_then_children == expected_then_children
-        assert layer.cond_branch_elif_children == expected_elif_children
-        assert layer.cond_branch_else_children == expected_else_children
+        assert layer.conditional_then_children == expected_then_children
+        assert layer.conditional_elif_children == expected_elif_children
+        assert layer.conditional_else_children == expected_else_children
 
 
 @pytest.mark.smoke
@@ -286,25 +286,29 @@ def test_simple_if_else_model_step5_pipeline() -> None:
     negative_bool = _get_terminal_bool_layers(negative_log)
     assert len(positive_bool) == 1
     assert len(negative_bool) == 1
-    assert positive_bool[0].bool_context_kind == "if_test"
-    assert positive_bool[0].bool_is_branch is True
-    assert positive_bool[0].bool_conditional_id == 0
-    assert negative_bool[0].bool_context_kind == "if_test"
-    assert negative_bool[0].bool_is_branch is True
-    assert negative_bool[0].bool_conditional_id == 0
+    assert positive_bool[0].conditional_context_kind == "if_test"
+    assert positive_bool[0].is_terminal_conditional_bool is True
+    assert positive_bool[0].terminal_conditional_id == 0
+    assert negative_bool[0].conditional_context_kind == "if_test"
+    assert negative_bool[0].is_terminal_conditional_bool is True
+    assert negative_bool[0].terminal_conditional_id == 0
 
     assert positive_log.conditional_branch_edges
     assert negative_log.conditional_branch_edges
-    assert (0, "then") in positive_log.conditional_arm_edges
-    assert (0, "else") in negative_log.conditional_arm_edges
+    assert (0, "then") in positive_log.conditional_arm_entry_edges
+    assert (0, "else") in negative_log.conditional_arm_entry_edges
 
     relu_layer = _find_single_layer(positive_log, "relu")
     sigmoid_layer = _find_single_layer(negative_log, "sigmoid")
     assert relu_layer.conditional_branch_stack == [(0, "then")]
     assert sigmoid_layer.conditional_branch_stack == [(0, "else")]
 
-    assert all(call_indexs == [1] for call_indexs in positive_log.conditional_edge_ops.values())
-    assert all(call_indexs == [1] for call_indexs in negative_log.conditional_edge_ops.values())
+    assert all(
+        call_indexs == [1] for call_indexs in positive_log.conditional_edge_call_indices.values()
+    )
+    assert all(
+        call_indexs == [1] for call_indexs in negative_log.conditional_edge_call_indices.values()
+    )
 
     _assert_derived_views_consistent(positive_log)
     _assert_derived_views_consistent(negative_log)
@@ -328,8 +332,10 @@ def test_elif_ladder_model_step5_pipeline() -> None:
 
         assert event.kind == "if_chain"
         assert set(event.branch_ranges) == {"then", "elif_1", "elif_2", "else"}
-        assert (0, branch_kind) in trace.conditional_arm_edges
-        assert all(call_indexs == [1] for call_indexs in trace.conditional_edge_ops.values())
+        assert (0, branch_kind) in trace.conditional_arm_entry_edges
+        assert all(
+            call_indexs == [1] for call_indexs in trace.conditional_edge_call_indices.values()
+        )
 
         target_layer = _find_single_layer(trace, func_name)
         assert target_layer.conditional_branch_stack == [(0, branch_kind)]
@@ -347,11 +353,11 @@ def test_assert_not_branch_model_step5_pipeline() -> None:
     bool_layers = _get_terminal_bool_layers(trace)
 
     assert len(bool_layers) == 1
-    assert bool_layers[0].bool_context_kind == "assert"
-    assert bool_layers[0].bool_is_branch is False
-    assert bool_layers[0].bool_conditional_id is None
-    assert trace.conditional_events == []
-    assert trace.conditional_arm_edges == {}
+    assert bool_layers[0].conditional_context_kind == "assert"
+    assert bool_layers[0].is_terminal_conditional_bool is False
+    assert bool_layers[0].terminal_conditional_id is None
+    assert trace.conditional_records == []
+    assert trace.conditional_arm_entry_edges == {}
     assert trace.conditional_branch_edges == []
 
     _assert_derived_views_consistent(trace)
@@ -372,10 +378,10 @@ def test_save_code_context_false_still_attributes_branches() -> None:
     assert event.kind == "if_chain"
     assert set(event.branch_ranges) == {"then", "else"}
     assert len(bool_layers) == 1
-    assert bool_layers[0].bool_context_kind == "if_test"
-    assert bool_layers[0].bool_is_branch is True
-    assert bool_layers[0].bool_conditional_id == 0
-    assert (0, "then") in trace.conditional_arm_edges
+    assert bool_layers[0].conditional_context_kind == "if_test"
+    assert bool_layers[0].is_terminal_conditional_bool is True
+    assert bool_layers[0].terminal_conditional_id == 0
+    assert (0, "then") in trace.conditional_arm_entry_edges
     assert relu_layer.conditional_branch_stack == [(0, "then")]
 
     _assert_derived_views_consistent(trace)

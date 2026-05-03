@@ -64,8 +64,8 @@ ENTRY_FIELD_USAGE: dict[str, str] = {
     "parents": "Forward-edge construction.",
     "children": "Fallback edge construction and skip detection.",
     "parent_arg_positions": "Argument-position edge labels.",
-    "cond_branch_start_children": "IF-edge styling.",
-    "cond_branch_then_children": "THEN-edge styling.",
+    "conditional_entry_children": "IF-edge styling.",
+    "conditional_then_children": "THEN-edge styling.",
     "recurrent_ops": "Recurrent-edge styling.",
     "min_distance_from_input": "Skip-edge heuristics.",
     "module": "Leaf-module line in labels.",
@@ -378,9 +378,9 @@ def _is_recurrent_edge(parent: Any, child: Any) -> bool:
 
 def _classify_forward_edge(parent: Any, child: Any) -> str:
     child_label = getattr(child, "layer_label", "")
-    if child_label in (getattr(parent, "cond_branch_then_children", None) or []):
+    if child_label in (getattr(parent, "conditional_then_children", None) or []):
         return "then"
-    if child_label in (getattr(parent, "cond_branch_start_children", None) or []):
+    if child_label in (getattr(parent, "conditional_entry_children", None) or []):
         return "if"
     if getattr(parent, "is_buffer", False):
         return "buffer"

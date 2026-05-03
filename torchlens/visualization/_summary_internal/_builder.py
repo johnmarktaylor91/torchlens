@@ -1034,7 +1034,7 @@ def _build_control_flow_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List
         Control-flow rows and footer lines.
     """
     rows: List[Dict[str, str]] = []
-    for event in trace.conditional_events:
+    for event in trace.conditional_records:
         branch_kinds = _event_branch_kinds(trace, event)
         rows.append(
             {
@@ -1459,7 +1459,9 @@ def _event_branch_kinds(trace: "Trace", event: "ConditionalEvent") -> List[str]:
         Branch kinds observed for the event.
     """
     branch_kinds = {
-        branch_kind for (cond_id, branch_kind) in trace.conditional_arm_edges if cond_id == event.id
+        branch_kind
+        for (cond_id, branch_kind) in trace.conditional_arm_entry_edges
+        if cond_id == event.id
     }
     return sorted(branch_kinds)
 
@@ -1517,7 +1519,7 @@ def _event_branch_op_count(trace: "Trace", event: "ConditionalEvent") -> int:
     """
     return sum(
         len(edges)
-        for (cond_id, _branch_kind), edges in trace.conditional_arm_edges.items()
+        for (cond_id, _branch_kind), edges in trace.conditional_arm_entry_edges.items()
         if cond_id == event.id
     )
 

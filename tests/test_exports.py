@@ -186,7 +186,7 @@ def test_tabular_exports_round_trip_and_old_custom_methods_warn(
 
     expected = export_log.to_pandas()
     assert "func_config" in expected.columns
-    assert "cond_branch_then_children" in expected.columns
+    assert "conditional_then_children" in expected.columns
 
     csv_path = tl.export.csv(export_log, tmp_path / "model.csv")
     csv_df = pd.read_csv(csv_path)

@@ -51,8 +51,8 @@ Single-pass layers delegate unknown attrs to `ops[1]`. Multi-pass per-pass field
 helper modules.
 
 ### Conditional Metadata
-Primary structures are dense-id based: `conditional_events`, `conditional_arm_edges`,
-`conditional_edge_ops`, and `cond_branch_children_by_cond`. Legacy THEN/ELIF/ELSE
+Primary structures are dense-id based: `conditional_records`, `conditional_arm_entry_edges`,
+`conditional_edge_call_indices`, and `conditional_arm_children`. Legacy THEN/ELIF/ELSE
 fields are derived views for compatibility and rendering.
 
 ### Portable I/O

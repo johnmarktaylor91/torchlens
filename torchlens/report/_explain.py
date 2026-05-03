@@ -271,7 +271,7 @@ def _dynamic_control_flow_line(log: Any) -> str:
         Dynamic-control-flow summary.
     """
 
-    event_count = _safe_len(getattr(log, "conditional_events", None))
+    event_count = _safe_len(getattr(log, "conditional_records", None))
     has_branching = bool(getattr(log, "has_conditional_branching", False))
     if event_count or has_branching:
         return (

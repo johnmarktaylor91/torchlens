@@ -709,7 +709,7 @@ def apply_live_hooks_to_outputs(
             self, func, func_name, args, kwargs, out_orig, exec_ctx, func_call_id
         )
     )
-    layer_type = shared_fields["layer_type"]
+    layer_type = shared_fields["type"]
     replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor] = {}
     predicted_layer_counter = self._layer_counter
     predicted_type_counter = self._raw_layer_type_counter[layer_type]
@@ -969,7 +969,7 @@ def log_function_output_tensors_predicate(
                 "raw_label": _label_raw,
                 "_label_raw": _label_raw,
                 "capture_index": capture_index,
-                "layer_type": layer_type,
+                "type": layer_type,
                 "type_index": type_index,
                 "func_name": func_name,
                 "parent_labels": parent_labels,
@@ -1051,20 +1051,20 @@ def _build_graph_relationship_fields(
     fields_dict["internal_source_ancestors"] = internal_source_ancestors
     fields_dict["is_internal_sink"] = False
     fields_dict["is_terminal_bool"] = False
-    fields_dict["bool_is_branch"] = False
-    fields_dict["bool_context_kind"] = None
-    fields_dict["bool_wrapper_kind"] = None
-    fields_dict["bool_conditional_id"] = None
+    fields_dict["is_terminal_conditional_bool"] = False
+    fields_dict["conditional_context_kind"] = None
+    fields_dict["conditional_wrapper_kind"] = None
+    fields_dict["terminal_conditional_id"] = None
     fields_dict["in_conditionals"] = []
     fields_dict["terminal_bool_for"] = None
-    fields_dict["in_cond_branch"] = False
+    fields_dict["is_in_conditional_body"] = False
     fields_dict["conditional_branch_stack"] = []
     fields_dict["conditional_branch_depth"] = 0
-    fields_dict["cond_branch_start_children"] = []
-    fields_dict["cond_branch_then_children"] = []
-    fields_dict["cond_branch_elif_children"] = {}
-    fields_dict["cond_branch_else_children"] = []
-    fields_dict["cond_branch_children_by_cond"] = {}
+    fields_dict["conditional_entry_children"] = []
+    fields_dict["conditional_then_children"] = []
+    fields_dict["conditional_elif_children"] = {}
+    fields_dict["conditional_else_children"] = []
+    fields_dict["conditional_arm_children"] = {}
 
     is_part_of_iterable_output = any(
         issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set]
@@ -1181,7 +1181,7 @@ def _build_shared_fields_dict(
     fields_dict: dict[str, Any] = {}
 
     # General info
-    fields_dict["layer_type"] = layer_type
+    fields_dict["type"] = layer_type
     fields_dict["detach_saved_activations"] = self.detach_saved_activations
     fields_dict["output_device"] = self.output_device
     fields_dict["_construction_done"] = False
@@ -1883,7 +1883,7 @@ def _log_output_tensor_info(
         parent_param_ops: Dict mapping param barcodes to their current pass number.
         fields_dict: Per-tensor fields dict to populate (mutated in place).
     """
-    layer_type = fields_dict["layer_type"]
+    layer_type = fields_dict["type"]
     indiv_param_barcodes = list(parent_param_ops.keys())
     self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
@@ -1956,7 +1956,7 @@ def _log_output_tensor_info(
     fields_dict["layer_label_w_pass_short"] = None
     fields_dict["layer_label_no_pass"] = None
     fields_dict["layer_label_no_pass_short"] = None
-    fields_dict["layer_type"] = layer_type
+    fields_dict["type"] = layer_type
     fields_dict["_layer_label_raw"] = _label_raw
     fields_dict["type_index"] = type_index
     fields_dict["num_calls"] = 1

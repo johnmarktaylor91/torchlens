@@ -17,6 +17,83 @@ if TYPE_CHECKING:
     from .layer_log import LayerLog
 
 
+class GradFnCallAccessor:
+    """Scoped dict-like accessor for GradFnCallLog entries owned by a GradFnLog."""
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_label": FieldPolicy.KEEP,
+    }
+
+    def __init__(self, calls: dict[int, GradFnCallLog] | None = None, label: str = "") -> None:
+        """Initialize the accessor.
+
+        Parameters
+        ----------
+        calls:
+            Mapping from 1-based call index to GradFnCallLog.
+        label:
+            Owning GradFnLog label used for pass-qualified lookup.
+        """
+
+        self._dict: dict[int, GradFnCallLog] = dict(calls or {})
+        self._label = label
+
+    def __getitem__(self, key: int | str) -> GradFnCallLog:
+        """Return a GradFnCallLog by call index or pass-qualified label."""
+
+        if isinstance(key, int):
+            return self._dict[key]
+        if ":" in key:
+            base, _, call_index_str = key.rpartition(":")
+            if base == self._label:
+                return self._dict[int(call_index_str)]
+        raise KeyError(f"GradFn call '{key}' not found in scoped calls.")
+
+    def __setitem__(self, key: int, value: GradFnCallLog) -> None:
+        """Set a GradFnCallLog by call index."""
+
+        self._dict[key] = value
+
+    def __contains__(self, key: object) -> bool:
+        """Return whether key resolves to a GradFnCallLog."""
+
+        if isinstance(key, int):
+            return key in self._dict
+        if isinstance(key, str):
+            try:
+                self[key]
+            except (KeyError, ValueError):
+                return False
+            return True
+        return False
+
+    def __iter__(self) -> Iterator[int]:
+        """Iterate call-index keys."""
+
+        return iter(self._dict)
+
+    def __len__(self) -> int:
+        """Return the number of scoped calls."""
+
+        return len(self._dict)
+
+    def keys(self) -> list[int]:
+        """Return call-index keys."""
+
+        return list(self._dict.keys())
+
+    def values(self) -> list[GradFnCallLog]:
+        """Return scoped GradFnCallLog values."""
+
+        return list(self._dict.values())
+
+    def items(self) -> list[tuple[int, GradFnCallLog]]:
+        """Return ``(call_index, GradFnCallLog)`` pairs."""
+
+        return list(self._dict.items())
+
+
 def _clone_grad_value(value: Any) -> Any:
     """Detach and clone tensors in a nested autograd hook payload.
 
@@ -71,7 +148,13 @@ class GradFnLog:
     has_op: bool = True
     op: "LayerLog | None" = None
     next_grad_fn_ids: list[int] = field(default_factory=list)
-    ops: dict[int, GradFnCallLog] = field(default_factory=dict)
+    ops: dict[int, GradFnCallLog] | GradFnCallAccessor = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Promote call storage to a scoped accessor."""
+
+        if not isinstance(self.ops, GradFnCallAccessor):
+            self.ops = GradFnCallAccessor(self.ops, self.label)  # type: ignore[assignment]
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -92,6 +175,7 @@ class GradFnLog:
             },
         )
         self.__dict__.update(state)
+        self.__post_init__()
 
     @property
     def num_calls(self) -> int:

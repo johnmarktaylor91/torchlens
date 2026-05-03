@@ -1088,7 +1088,7 @@ def _get_root_event(trace: Trace) -> ConditionalEvent:
         Root event with no parent conditional.
     """
     root_events = [
-        event for event in trace.conditional_events if event.parent_conditional_id is None
+        event for event in trace.conditional_records if event.parent_conditional_id is None
     ]
     assert len(root_events) == 1
     return root_events[0]
@@ -1110,7 +1110,7 @@ def _get_child_event(trace: Trace, parent_id: int) -> ConditionalEvent:
         Nested conditional event.
     """
     child_events = [
-        event for event in trace.conditional_events if event.parent_conditional_id == parent_id
+        event for event in trace.conditional_records if event.parent_conditional_id == parent_id
     ]
     assert len(child_events) == 1
     return child_events[0]
@@ -1119,7 +1119,7 @@ def _get_child_event(trace: Trace, parent_id: int) -> ConditionalEvent:
 def _collect_branch_child_labels(
     branch_children_by_cond: dict[int, dict[str, list[str]]],
 ) -> set[str]:
-    """Collect child labels from a nested ``cond_branch_children_by_cond`` mapping.
+    """Collect child labels from a nested ``conditional_arm_children`` mapping.
 
     Parameters
     ----------
@@ -1156,20 +1156,20 @@ def _collect_model_conditional_labels(trace: Trace) -> set[str]:
     for parent_label, child_label in trace.conditional_branch_edges:
         referenced_labels.add(parent_label)
         referenced_labels.add(child_label)
-    for parent_label, child_label in trace.conditional_then_edges:
+    for parent_label, child_label in trace.conditional_then_entry_edges:
         referenced_labels.add(parent_label)
         referenced_labels.add(child_label)
-    for _, _, parent_label, child_label in trace.conditional_elif_edges:
+    for _, _, parent_label, child_label in trace.conditional_elif_entry_edges:
         referenced_labels.add(parent_label)
         referenced_labels.add(child_label)
-    for _, parent_label, child_label in trace.conditional_else_edges:
+    for _, parent_label, child_label in trace.conditional_else_entry_edges:
         referenced_labels.add(parent_label)
         referenced_labels.add(child_label)
-    for edge_list in trace.conditional_arm_edges.values():
+    for edge_list in trace.conditional_arm_entry_edges.values():
         for parent_label, child_label in edge_list:
             referenced_labels.add(parent_label)
             referenced_labels.add(child_label)
-    for event in trace.conditional_events:
+    for event in trace.conditional_records:
         referenced_labels.update(event.bool_layers)
     return referenced_labels
 
@@ -1182,12 +1182,12 @@ def _assert_branchless_log(trace: Trace) -> None:
     trace:
         Logged model execution.
     """
-    assert trace.conditional_events == []
+    assert trace.conditional_records == []
     assert trace.conditional_branch_edges == []
-    assert trace.conditional_arm_edges == {}
-    assert trace.conditional_then_edges == []
-    assert trace.conditional_elif_edges == []
-    assert trace.conditional_else_edges == []
+    assert trace.conditional_arm_entry_edges == {}
+    assert trace.conditional_then_entry_edges == []
+    assert trace.conditional_elif_entry_edges == []
+    assert trace.conditional_else_entry_edges == []
 
 
 def _assert_derived_views_consistent(trace: Trace) -> None:
@@ -1200,28 +1200,28 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
     """
     expected_then_edges = [
         (parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind == "then"
         for parent_label, child_label in edge_list
     ]
     expected_elif_edges = [
         (conditional_id, int(branch_kind.split("_")[1]), parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind.startswith("elif_")
         for parent_label, child_label in edge_list
     ]
     expected_else_edges = [
         (conditional_id, parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind == "else"
         for parent_label, child_label in edge_list
     ]
 
-    assert trace.conditional_then_edges == expected_then_edges
-    assert trace.conditional_elif_edges == expected_elif_edges
-    assert trace.conditional_else_edges == expected_else_edges
+    assert trace.conditional_then_entry_edges == expected_then_edges
+    assert trace.conditional_elif_entry_edges == expected_elif_edges
+    assert trace.conditional_else_entry_edges == expected_else_edges
 
-    for call_indexs in trace.conditional_edge_ops.values():
+    for call_indexs in trace.conditional_edge_call_indices.values():
         assert call_indexs == sorted(call_indexs)
         assert len(call_indexs) == len(set(call_indexs))
 
@@ -1289,8 +1289,8 @@ def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str
     raise AssertionError(f"Could not find edge line for {parent_label!r} -> {child_label!r}")
 
 
-def _assert_conditional_edge_ops_exact(trace: Trace) -> None:
-    """Assert ``conditional_edge_ops`` matches unrolled arm edges exactly.
+def _assert_conditional_edge_call_indices_exact(trace: Trace) -> None:
+    """Assert ``conditional_edge_call_indices`` matches unrolled arm edges exactly.
 
     Parameters
     ----------
@@ -1298,7 +1298,7 @@ def _assert_conditional_edge_ops_exact(trace: Trace) -> None:
         Logged model execution.
     """
     actual_unrolled_edges: set[tuple[str, str, int, str, int]] = set()
-    for (conditional_id, branch_kind), edge_list in trace.conditional_arm_edges.items():
+    for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             actual_unrolled_edges.add(
                 (
@@ -1310,7 +1310,7 @@ def _assert_conditional_edge_ops_exact(trace: Trace) -> None:
                 )
             )
 
-    for edge_key, call_indexs in trace.conditional_edge_ops.items():
+    for edge_key, call_indexs in trace.conditional_edge_call_indices.items():
         assert call_indexs == sorted(call_indexs)
         assert len(call_indexs) == len(set(call_indexs))
         parent_no_pass, child_no_pass, conditional_id, branch_kind = edge_key
@@ -1327,7 +1327,7 @@ def _assert_conditional_edge_ops_exact(trace: Trace) -> None:
         parent_no_pass, child_no_pass, conditional_id, branch_kind, call_index = actual_edge
         assert (
             call_index
-            in trace.conditional_edge_ops[
+            in trace.conditional_edge_call_indices[
                 (parent_no_pass, child_no_pass, conditional_id, branch_kind)
             ]
         )
@@ -1375,10 +1375,10 @@ def test_simple_if_else_model_cross_verifies_invariants_rendering_and_lifecycle(
     negative_bool = _get_terminal_bool_layers(negative_log)[0]
     relu_layer = _find_only_layer(positive_log, "relu")
     sigmoid_layer = _find_only_layer(negative_log, "sigmoid")
-    then_parent, then_child = positive_render_log.conditional_arm_edges[
+    then_parent, then_child = positive_render_log.conditional_arm_entry_edges[
         (positive_event.id, "then")
     ][0]
-    else_parent, else_child = negative_render_log.conditional_arm_edges[
+    else_parent, else_child = negative_render_log.conditional_arm_entry_edges[
         (negative_event.id, "else")
     ][0]
 
@@ -1386,12 +1386,12 @@ def test_simple_if_else_model_cross_verifies_invariants_rendering_and_lifecycle(
     assert negative_event.kind == "if_chain"
     assert set(positive_event.branch_ranges) == {"then", "else"}
     assert set(negative_event.branch_ranges) == {"then", "else"}
-    assert positive_bool.bool_is_branch is True
-    assert positive_bool.bool_context_kind == "if_test"
-    assert positive_bool.bool_conditional_id == positive_event.id
-    assert negative_bool.bool_is_branch is True
-    assert negative_bool.bool_context_kind == "if_test"
-    assert negative_bool.bool_conditional_id == negative_event.id
+    assert positive_bool.is_terminal_conditional_bool is True
+    assert positive_bool.conditional_context_kind == "if_test"
+    assert positive_bool.terminal_conditional_id == positive_event.id
+    assert negative_bool.is_terminal_conditional_bool is True
+    assert negative_bool.conditional_context_kind == "if_test"
+    assert negative_bool.terminal_conditional_id == negative_event.id
     assert relu_layer.conditional_branch_stack == [(positive_event.id, "then")]
     assert sigmoid_layer.conditional_branch_stack == [(negative_event.id, "else")]
     assert "THEN" in _find_edge_line(positive_dot, then_parent, then_child)
@@ -1417,12 +1417,14 @@ def test_elif_ladder_model_cross_verifies_all_arms_and_render_labels() -> None:
         dot_source, render_log = _render_dot_source(ElifLadderModel(), input_tensor)
         event = _get_root_event(trace)
         branch_layer = _find_only_layer(trace, func_name)
-        parent_label, child_label = render_log.conditional_arm_edges[(event.id, branch_kind)][0]
+        parent_label, child_label = render_log.conditional_arm_entry_edges[(event.id, branch_kind)][
+            0
+        ]
 
         assert event.kind == "if_chain"
         assert set(event.branch_ranges) == {"then", "elif_1", "elif_2", "else"}
         assert branch_layer.conditional_branch_stack == [(event.id, branch_kind)]
-        assert {layer.bool_conditional_id for layer in _get_terminal_bool_layers(trace)} == {
+        assert {layer.terminal_conditional_id for layer in _get_terminal_bool_layers(trace)} == {
             event.id
         }
         assert label_text in _find_edge_line(dot_source, parent_label, child_label)
@@ -1438,7 +1440,7 @@ def test_nested_if_then_if_model_materializes_nested_branch_stack() -> None:
     relu_layer = _find_only_layer(trace, "relu")
     sigmoid_layer = _find_only_layer(trace, "sigmoid")
 
-    assert len(trace.conditional_events) == 2
+    assert len(trace.conditional_records) == 2
     assert inner_event.parent_branch_kind == "then"
     assert relu_layer.conditional_branch_stack == [(root_event.id, "then")]
     assert sigmoid_layer.conditional_branch_stack == [
@@ -1456,7 +1458,7 @@ def test_nested_in_else_model_materializes_else_to_inner_then_stack() -> None:
     neg_layer = _find_only_layer(trace, "neg")
     sigmoid_layer = _find_only_layer(trace, "sigmoid")
 
-    assert len(trace.conditional_events) == 2
+    assert len(trace.conditional_records) == 2
     assert inner_event.parent_branch_kind == "else"
     assert neg_layer.conditional_branch_stack == [(root_event.id, "else")]
     assert sigmoid_layer.conditional_branch_stack == [
@@ -1474,13 +1476,13 @@ def test_multiline_predicate_model_tracks_multiline_if_event() -> None:
     bool_layers = _get_terminal_bool_layers(trace)
     relu_layer = _find_only_layer(trace, "relu")
 
-    assert len(trace.conditional_events) == 1
+    assert len(trace.conditional_records) == 1
     assert event.kind == "if_chain"
     assert set(event.branch_ranges) == {"then", "else"}
     assert event.test_span[0] < event.test_span[2]
     assert len(bool_layers) == 2
-    assert all(layer.bool_context_kind == "if_test" for layer in bool_layers)
-    assert all(layer.bool_is_branch is True for layer in bool_layers)
+    assert all(layer.conditional_context_kind == "if_test" for layer in bool_layers)
+    assert all(layer.is_terminal_conditional_bool is True for layer in bool_layers)
     assert relu_layer.conditional_branch_stack == [(event.id, "then")]
 
 
@@ -1494,7 +1496,7 @@ def test_branch_uses_only_parameter_model_records_parameter_entry_edge() -> None
     assert (
         bias_view_layer.layer_label,
         branch_add_layer.layer_label,
-    ) in trace.conditional_arm_edges[(event.id, "then")]
+    ) in trace.conditional_arm_entry_edges[(event.id, "then")]
     assert bias_view_layer.uses_params is True
     assert branch_add_layer.parents == [bias_view_layer.layer_label]
     assert bias_view_layer.conditional_branch_stack == []
@@ -1510,7 +1512,7 @@ def test_branch_uses_only_constant_model_records_constant_entry_edge() -> None:
     assert (
         const_layer.layer_label,
         branch_add_layer.layer_label,
-    ) in trace.conditional_arm_edges[(event.id, "then")]
+    ) in trace.conditional_arm_entry_edges[(event.id, "then")]
     assert const_layer.conditional_branch_stack == []
     assert branch_add_layer.conditional_branch_stack == [(event.id, "then")]
 
@@ -1536,16 +1538,16 @@ def test_multi_arm_entry_nested_model_duplicates_entry_edge_per_conditional() ->
     )
 
     edge = (bias_view_layer.layer_label, inner_branch_add.layer_label)
-    assert edge in trace.conditional_arm_edges[(outer_event.id, "then")]
-    assert edge in trace.conditional_arm_edges[(inner_event.id, "then")]
+    assert edge in trace.conditional_arm_entry_edges[(outer_event.id, "then")]
+    assert edge in trace.conditional_arm_entry_edges[(inner_event.id, "then")]
     parent_layer = trace[bias_view_layer.layer_label]
-    assert parent_layer.cond_branch_children_by_cond[outer_event.id]["then"] == [
+    assert parent_layer.conditional_arm_children[outer_event.id]["then"] == [
         inner_branch_add.layer_label
     ]
-    assert parent_layer.cond_branch_children_by_cond[inner_event.id]["then"] == [
+    assert parent_layer.conditional_arm_children[inner_event.id]["then"] == [
         inner_branch_add.layer_label
     ]
-    assert parent_layer.cond_branch_then_children == [inner_branch_add.layer_label]
+    assert parent_layer.conditional_then_children == [inner_branch_add.layer_label]
 
 
 def test_if_bool_cast_model_marks_wrapper_kind_without_losing_branch_attribution() -> None:
@@ -1555,10 +1557,10 @@ def test_if_bool_cast_model_marks_wrapper_kind_without_losing_branch_attribution
     bool_layer = _get_terminal_bool_layers(trace)[0]
     relu_layer = _find_only_layer(trace, "relu")
 
-    assert bool_layer.bool_context_kind == "if_test"
-    assert bool_layer.bool_is_branch is True
-    assert bool_layer.bool_wrapper_kind == "bool_cast"
-    assert bool_layer.bool_conditional_id == event.id
+    assert bool_layer.conditional_context_kind == "if_test"
+    assert bool_layer.is_terminal_conditional_bool is True
+    assert bool_layer.conditional_wrapper_kind == "bool_cast"
+    assert bool_layer.terminal_conditional_id == event.id
     assert relu_layer.conditional_branch_stack == [(event.id, "then")]
 
 
@@ -1572,7 +1574,7 @@ def test_looped_if_alternating_model_has_exactly_two_signatures() -> None:
         lambda layer_log: layer_log.num_calls > 1,
     )
 
-    assert linear_layer.conditional_branch_stacks == [
+    assert linear_layer.conditional_role_stacks == [
         [(conditional_id, "then")],
         [(conditional_id, "else")],
     ]
@@ -1593,8 +1595,8 @@ def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
         lambda layer_log: layer_log.num_calls > 1,
     )
 
-    assert linear_layer.in_cond_branch is True
-    assert linear_layer.conditional_branch_stacks == [
+    assert linear_layer.is_in_conditional_body is True
+    assert linear_layer.conditional_role_stacks == [
         [(conditional_id, "then")],
         [(conditional_id, "else")],
     ]
@@ -1614,8 +1616,8 @@ def test_rolled_mixed_arm_model_records_exact_ops_and_composite_render_label() -
         vis_mode="rolled",
     )
     conditional_id = _get_root_event(trace).id
-    then_edges = trace.conditional_arm_edges[(conditional_id, "then")]
-    else_edges = trace.conditional_arm_edges[(conditional_id, "else")]
+    then_edges = trace.conditional_arm_entry_edges[(conditional_id, "then")]
+    else_edges = trace.conditional_arm_entry_edges[(conditional_id, "else")]
     parent_label, child_label = then_edges[0]
     parent_no_pass = parent_label.split(":")[0]
     child_no_pass = child_label.split(":")[0]
@@ -1623,21 +1625,25 @@ def test_rolled_mixed_arm_model_records_exact_ops_and_composite_render_label() -
 
     assert len(then_edges) == 2
     assert len(else_edges) == 2
-    assert trace.conditional_edge_ops[(parent_no_pass, child_no_pass, conditional_id, "then")] == [
+    assert trace.conditional_edge_call_indices[
+        (parent_no_pass, child_no_pass, conditional_id, "then")
+    ] == [
         1,
         3,
     ]
-    assert trace.conditional_edge_ops[(parent_no_pass, child_no_pass, conditional_id, "else")] == [
+    assert trace.conditional_edge_call_indices[
+        (parent_no_pass, child_no_pass, conditional_id, "else")
+    ] == [
         2,
         4,
     ]
     assert "THEN(1,3) / ELSE(2,4)" in edge_line
     assert _find_edge_line(dot_source, parent_label, child_label) == _find_edge_line(
         dot_source,
-        render_log.conditional_arm_edges[(conditional_id, "then")][0][0],
-        render_log.conditional_arm_edges[(conditional_id, "then")][0][1],
+        render_log.conditional_arm_entry_edges[(conditional_id, "then")][0][0],
+        render_log.conditional_arm_entry_edges[(conditional_id, "then")][0][1],
     )
-    _assert_conditional_edge_ops_exact(trace)
+    _assert_conditional_edge_call_indices_exact(trace)
     assert check_metadata_invariants(trace) is True
 
 
@@ -1666,7 +1672,9 @@ def test_nested_helper_same_name_model_distinguishes_helpers_by_code_firstlineno
     relu_layer = _find_only_layer(positive_log, "relu")
     square_layer = _find_only_layer(negative_log, "square")
     outer_two_event = next(
-        event for event in negative_log.conditional_events if "outer_two" in event.function_qualname
+        event
+        for event in negative_log.conditional_records
+        if "outer_two" in event.function_qualname
     )
 
     helper_frames = [
@@ -1674,10 +1682,10 @@ def test_nested_helper_same_name_model_distinguishes_helpers_by_code_firstlineno
         for layer in bool_layers
     ]
 
-    assert len(positive_log.conditional_events) == 2
-    assert len({layer.bool_conditional_id for layer in bool_layers}) == 2
+    assert len(positive_log.conditional_records) == 2
+    assert len({layer.terminal_conditional_id for layer in bool_layers}) == 2
     assert len({frame.code_firstlineno for frame in helper_frames}) == 2
-    assert relu_layer.conditional_branch_stack == [(bool_layers[0].bool_conditional_id, "then")]
+    assert relu_layer.conditional_branch_stack == [(bool_layers[0].terminal_conditional_id, "then")]
     assert square_layer.conditional_branch_stack == [(outer_two_event.id, "then")]
 
 
@@ -1689,7 +1697,9 @@ def test_nested_qualname_model_distinguishes_method_and_nested_helper() -> None:
     """Distinct qualnames keep a method helper separate from a nested helper."""
     positive_log = _log_model(NestedQualnameModel(), torch.ones(2, 2))
     negative_log = _log_model(NestedQualnameModel(), -torch.ones(2, 2))
-    root_events = sorted(positive_log.conditional_events, key=lambda event: event.function_qualname)
+    root_events = sorted(
+        positive_log.conditional_records, key=lambda event: event.function_qualname
+    )
     relu_layer = _find_only_layer(positive_log, "relu")
     square_layer = _find_only_layer(negative_log, "square")
 
@@ -1700,7 +1710,7 @@ def test_nested_qualname_model_distinguishes_method_and_nested_helper() -> None:
     )
     method_event = next(
         event
-        for event in negative_log.conditional_events
+        for event in negative_log.conditional_records
         if event.function_qualname.endswith(".helper") and "<locals>" not in event.function_qualname
     )
     assert relu_layer.conditional_branch_stack == [(nested_event.id, "then")]
@@ -1747,7 +1757,7 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
     relu_layer = _find_only_layer(trace, "relu")
 
     assert relu_layer.conditional_branch_stack == []
-    assert trace.conditional_arm_edges == {}
+    assert trace.conditional_arm_entry_edges == {}
 
 
 def test_decorated_forward_model_preserves_or_gracefully_skips_branch_attribution() -> None:
@@ -1755,12 +1765,12 @@ def test_decorated_forward_model_preserves_or_gracefully_skips_branch_attributio
     trace = _log_model(DecoratedForwardModel(), torch.ones(2, 2))
     relu_layer = _find_only_layer(trace, "relu")
 
-    if trace.conditional_events:
+    if trace.conditional_records:
         event = _get_root_event(trace)
         assert relu_layer.conditional_branch_stack == [(event.id, "then")]
     else:
         assert relu_layer.conditional_branch_stack == []
-        assert trace.conditional_arm_edges == {}
+        assert trace.conditional_arm_entry_edges == {}
 
 
 @pytest.mark.parametrize(
@@ -1782,8 +1792,8 @@ def test_non_branch_bool_models_do_not_materialise_branch_metadata(
     bool_layers = _get_terminal_bool_layers(trace)
 
     assert len(bool_layers) >= 1
-    assert all(layer.bool_context_kind == expected_context for layer in bool_layers)
-    assert all(layer.bool_is_branch is False for layer in bool_layers)
+    assert all(layer.conditional_context_kind == expected_context for layer in bool_layers)
+    assert all(layer.is_terminal_conditional_bool is False for layer in bool_layers)
     _assert_branchless_log(trace)
 
 
@@ -1794,8 +1804,8 @@ def test_ternary_ifexp_model_is_classified_as_ifexp_not_if_chain() -> None:
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
     assert event.kind == "ifexp"
-    assert bool_layer.bool_context_kind == "ifexp"
-    assert bool_layer.bool_is_branch is True
+    assert bool_layer.conditional_context_kind == "ifexp"
+    assert bool_layer.is_terminal_conditional_bool is True
 
 
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="match guards require Python 3.10+")
@@ -1804,10 +1814,10 @@ def test_match_guard_model_classifies_bool_without_materialising_branch_metadata
     trace = _log_model(_make_match_guard_model(), torch.ones(2, 2))
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    if bool_layer.bool_context_kind == "unknown":
+    if bool_layer.conditional_context_kind == "unknown":
         pytest.skip("Runtime-compiled match guards are not source-indexed in this environment")
-    assert bool_layer.bool_context_kind == "match_guard"
-    assert bool_layer.bool_is_branch is False
+    assert bool_layer.conditional_context_kind == "match_guard"
+    assert bool_layer.is_terminal_conditional_bool is False
     _assert_branchless_log(trace)
 
 
@@ -1834,7 +1844,7 @@ def test_compound_negated_and_walrus_ifs_still_attribute_the_taken_branch(
     if isinstance(model, AndOrIfModel):
         bool_layers = _get_terminal_bool_layers(trace)
         assert len(bool_layers) >= 2
-        assert {layer.bool_conditional_id for layer in bool_layers} == {event.id}
+        assert {layer.terminal_conditional_id for layer in bool_layers} == {event.id}
 
 
 @pytest.mark.parametrize(
@@ -1928,8 +1938,8 @@ def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> 
     )
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    assert bool_layer.bool_context_kind == "assert"
-    assert bool_layer.bool_is_branch is False
+    assert bool_layer.conditional_context_kind == "assert"
+    assert bool_layer.is_terminal_conditional_bool is False
     assert len(bool_layer.code_context) > 0
     assert all(frame.source_loading_enabled is False for frame in bool_layer.code_context)
     _assert_branchless_log(trace)
@@ -1959,34 +1969,34 @@ def test_keep_unsaved_layers_false_model_scrubs_removed_labels_from_conditional_
     assert {
         label
         for layer in pruned_log.layer_list
-        for label in _collect_branch_child_labels(layer.cond_branch_children_by_cond)
+        for label in _collect_branch_child_labels(layer.conditional_arm_children)
     }.isdisjoint(removed_labels)
     assert {
         label
         for layer_log in pruned_log.layer_logs.values()
-        for label in _collect_branch_child_labels(layer_log.cond_branch_children_by_cond)
+        for label in _collect_branch_child_labels(layer_log.conditional_arm_children)
     }.isdisjoint(removed_no_pass)
     assert all(
         parent_label not in removed_no_pass and child_label not in removed_no_pass
-        for parent_label, child_label, _, _ in pruned_log.conditional_edge_ops
+        for parent_label, child_label, _, _ in pruned_log.conditional_edge_call_indices
     )
     assert all(
         removed_label not in event.bool_layers
         for removed_label in removed_labels
-        for event in pruned_log.conditional_events
+        for event in pruned_log.conditional_records
     )
     assert all(
-        removed_label not in layer_log.cond_branch_start_children
+        removed_label not in layer_log.conditional_entry_children
         for removed_label in removed_no_pass
         for layer_log in pruned_log.layer_logs.values()
     )
     assert all(
-        removed_label not in layer_log.cond_branch_then_children
+        removed_label not in layer_log.conditional_then_children
         for removed_label in removed_no_pass
         for layer_log in pruned_log.layer_logs.values()
     )
     assert all(
-        removed_label not in layer_log.cond_branch_else_children
+        removed_label not in layer_log.conditional_else_children
         for removed_label in removed_no_pass
         for layer_log in pruned_log.layer_logs.values()
     )
@@ -1994,7 +2004,7 @@ def test_keep_unsaved_layers_false_model_scrubs_removed_labels_from_conditional_
         removed_label not in child_labels
         for removed_label in removed_no_pass
         for layer_log in pruned_log.layer_logs.values()
-        for child_labels in layer_log.cond_branch_elif_children.values()
+        for child_labels in layer_log.conditional_elif_children.values()
     )
 
 
@@ -2009,21 +2019,21 @@ def test_to_pandas_conditional_model_populates_live_conditional_columns() -> Non
     branch_row = layer_df.loc[layer_df["layer_label"] == branch_layer.layer_label].iloc[0]
 
     assert isinstance(layer_df, pd.DataFrame)
-    assert bool(bool_row["bool_is_branch"]) is True
-    assert bool_row["bool_context_kind"] == "if_test"
-    assert int(bool_row["bool_conditional_id"]) == 0
+    assert bool(bool_row["is_terminal_conditional_bool"]) is True
+    assert bool_row["conditional_context_kind"] == "if_test"
+    assert int(bool_row["terminal_conditional_id"]) == 0
     assert int(branch_row["conditional_branch_depth"]) == 1
     assert branch_row["conditional_branch_stack"] == "cond_0:then"
-    assert branch_row["cond_branch_then_children"] == []
-    assert branch_row["cond_branch_elif_children"] == {}
-    assert branch_row["cond_branch_else_children"] == []
+    assert branch_row["conditional_then_children"] == []
+    assert branch_row["conditional_elif_children"] == {}
+    assert branch_row["conditional_else_children"] == []
 
 
 def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate() -> None:
     """Branch-entry edges retain the branch label and move arg labels to the head or x label."""
     dot_source, trace = _render_dot_source(BranchEntryWithArgLabelModel(), torch.ones(2, 2))
     conditional_id = _get_root_event(trace).id
-    parent_label, child_label = trace.conditional_arm_edges[(conditional_id, "then")][0]
+    parent_label, child_label = trace.conditional_arm_entry_edges[(conditional_id, "then")][0]
     edge_line = _find_edge_line(dot_source, parent_label, child_label)
 
     assert 'label=<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>' in edge_line
@@ -2042,8 +2052,8 @@ def test_basic_ternary_model_attributes_then_arm_as_ifexp() -> None:
 
     assert event.kind == "ifexp"
     assert set(event.branch_ranges) == {"then", "else"}
-    assert bool_layer.bool_context_kind == "ifexp"
-    assert bool_layer.bool_is_branch is True
+    assert bool_layer.conditional_context_kind == "ifexp"
+    assert bool_layer.is_terminal_conditional_bool is True
     assert linear_layer.conditional_branch_stack == [(event.id, "then")]
 
 
@@ -2058,7 +2068,7 @@ def test_nested_ternary_model_records_parent_child_ifexp_events() -> None:
         [(outer_event.id, "then"), (inner_event.id, "then")],
     )
 
-    assert len(trace.conditional_events) == 2
+    assert len(trace.conditional_records) == 2
     assert outer_event.kind == "ifexp"
     assert inner_event.kind == "ifexp"
     assert inner_event.parent_branch_kind == "then"
@@ -2071,8 +2081,8 @@ def test_nested_ternary_model_records_parent_child_ifexp_events() -> None:
 def test_ternary_inside_if_model_records_mixed_if_and_ifexp_stack() -> None:
     """An inner ternary keeps both the outer ``if_chain`` and inner ``ifexp`` stack."""
     trace = _log_model(TernaryInsideIfModel(), torch.ones(1, 2))
-    outer_event = next(event for event in trace.conditional_events if event.kind == "if_chain")
-    inner_event = next(event for event in trace.conditional_events if event.kind == "ifexp")
+    outer_event = next(event for event in trace.conditional_records if event.kind == "if_chain")
+    inner_event = next(event for event in trace.conditional_records if event.kind == "ifexp")
     linear_layer = _find_only_layer(
         trace,
         "linear",
@@ -2087,7 +2097,7 @@ def test_ternary_inside_if_model_records_mixed_if_and_ifexp_stack() -> None:
     ]
 
 
-def test_ternary_with_bool_cast_model_marks_bool_wrapper_kind() -> None:
+def test_ternary_with_bool_cast_model_marks_conditional_wrapper_kind() -> None:
     """``bool(...)`` wrappers inside ternaries keep ``ifexp`` attribution."""
     trace = _log_model(TernaryWithBoolCastModel(), torch.ones(1, 2))
     event = _get_root_event(trace)
@@ -2095,9 +2105,9 @@ def test_ternary_with_bool_cast_model_marks_bool_wrapper_kind() -> None:
     linear_layer = _find_only_layer(trace, "linear", [(event.id, "then")])
 
     assert event.kind == "ifexp"
-    assert bool_layer.bool_context_kind == "ifexp"
-    assert bool_layer.bool_wrapper_kind == "bool_cast"
-    assert bool_layer.bool_is_branch is True
+    assert bool_layer.conditional_context_kind == "ifexp"
+    assert bool_layer.conditional_wrapper_kind == "bool_cast"
+    assert bool_layer.is_terminal_conditional_bool is True
     assert linear_layer.conditional_branch_stack == [(event.id, "then")]
 
 
@@ -2110,8 +2120,8 @@ def test_ternary_py310_fail_closed_model_drops_same_line_arm_attribution() -> No
     trace = _log_model(TernaryPy310FailClosedModel(), torch.ones(1, 2))
     linear_layers = [layer for layer in trace.layer_list if layer.func_name == "linear"]
 
-    assert len(trace.conditional_events) == 1
-    assert trace.conditional_arm_edges == {}
+    assert len(trace.conditional_records) == 1
+    assert trace.conditional_arm_entry_edges == {}
     assert all(layer.conditional_branch_stack == [] for layer in linear_layers)
 
 

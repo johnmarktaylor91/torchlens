@@ -243,17 +243,17 @@ def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
         layers_to_save="all",
         save_code_context=True,
     )
-    conditional_id = trace.conditional_events[0].id
+    conditional_id = trace.conditional_records[0].id
     parent_layer = next(
         layer
         for layer in trace.layer_logs.values()
-        if conditional_id in layer.cond_branch_children_by_cond
-        and "then" in layer.cond_branch_children_by_cond[conditional_id]
-        and "else" in layer.cond_branch_children_by_cond[conditional_id]
+        if conditional_id in layer.conditional_arm_children
+        and "then" in layer.conditional_arm_children[conditional_id]
+        and "else" in layer.conditional_arm_children[conditional_id]
     )
 
-    assert parent_layer.cond_branch_then_children
-    assert parent_layer.cond_branch_else_children
+    assert parent_layer.conditional_then_children
+    assert parent_layer.conditional_else_children
     assert check_metadata_invariants(trace) is True
 
 
@@ -267,11 +267,11 @@ def test_conditional_then_invariant_catches_derived_view_corruption() -> None:
         save_code_context=True,
     )
     parent_layer = next(
-        layer for layer in trace.layer_logs.values() if layer.cond_branch_then_children
+        layer for layer in trace.layer_logs.values() if layer.conditional_then_children
     )
-    parent_layer.cond_branch_then_children = []
+    parent_layer.conditional_then_children = []
 
-    with pytest.raises(MetadataInvariantError, match="cond_branch_then_children"):
+    with pytest.raises(MetadataInvariantError, match="conditional_then_children"):
         check_metadata_invariants(trace)
 
 

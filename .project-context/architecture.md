@@ -115,22 +115,22 @@ passes maintained via identical increment logic.
 Step 5 now runs as six ordered phases:
 1. 5a builds AST file indexes for source files referenced by terminal bool frames.
 2. 5b classifies terminal scalar bools and records structural `ConditionalKey`s.
-3. 5c materializes dense `ModelLog.conditional_events` IDs and rewrites bool metadata.
+3. 5c materializes dense `ModelLog.conditional_records` IDs and rewrites bool metadata.
 4. 5d runs the backward-only flood that marks branch-start parents.
 5. 5e attributes ops and forward edges to branch arms, populating
-   `conditional_arm_edges` and `cond_branch_children_by_cond`.
+   `conditional_arm_entry_edges` and `conditional_arm_children`.
 6. 5f derives legacy THEN/ELIF/ELSE views and records `conditional_edge_passes` for
    rolled-mode divergence.
 
 Primary branch metadata is cond-id-aware:
-- `ModelLog.conditional_events` stores the canonical event records.
-- `ModelLog.conditional_arm_edges` stores arm-entry edges keyed by `(cond_id, branch_kind)`.
+- `ModelLog.conditional_records` stores the canonical event records.
+- `ModelLog.conditional_arm_entry_edges` stores arm-entry edges keyed by `(cond_id, branch_kind)`.
 - `ModelLog.conditional_edge_passes` stores pass numbers for rolled edges whose arm labels
   vary across passes.
-- `cond_branch_children_by_cond` on `LayerPassLog` / `LayerLog` stores per-node branch children.
+- `conditional_arm_children` on `LayerPassLog` / `LayerLog` stores per-node branch children.
 
-Legacy `conditional_then_edges`, `conditional_elif_edges`, `conditional_else_edges`,
-`cond_branch_then_children`, `cond_branch_elif_children`, and `cond_branch_else_children`
+Legacy `conditional_then_entry_edges`, `conditional_elif_entry_edges`, `conditional_else_entry_edges`,
+`conditional_then_children`, `conditional_elif_children`, and `conditional_else_children`
 are derived views computed from those primary structures.
 
 ### Barcode Nesting Detection

@@ -204,13 +204,14 @@ class OpLog:
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "_tracing_finished": FieldPolicy.KEEP,
         "_construction_done": FieldPolicy.DROP,
+        "_is_in_conditional_body": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
         "layer_label_short": FieldPolicy.KEEP,
         "layer_label_w_pass": FieldPolicy.KEEP,
         "layer_label_w_pass_short": FieldPolicy.KEEP,
         "layer_label_no_pass": FieldPolicy.KEEP,
         "layer_label_no_pass_short": FieldPolicy.KEEP,
-        "layer_type": FieldPolicy.KEEP,
+        "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
         "trace_index": FieldPolicy.KEEP,
         "call_index": FieldPolicy.KEEP,
@@ -317,22 +318,22 @@ class OpLog:
         "internal_source_ancestors": FieldPolicy.KEEP,
         "is_internal_sink": FieldPolicy.KEEP,
         "is_terminal_bool": FieldPolicy.KEEP,
-        "bool_is_branch": FieldPolicy.KEEP,
-        "bool_context_kind": FieldPolicy.KEEP,
-        "bool_wrapper_kind": FieldPolicy.KEEP,
-        "bool_conditional_id": FieldPolicy.KEEP,
+        "is_terminal_conditional_bool": FieldPolicy.KEEP,
+        "conditional_context_kind": FieldPolicy.KEEP,
+        "conditional_wrapper_kind": FieldPolicy.KEEP,
+        "terminal_conditional_id": FieldPolicy.KEEP,
         "is_scalar_bool": FieldPolicy.KEEP,
         "bool_value": FieldPolicy.KEEP,
         "in_conditionals": FieldPolicy.KEEP,
         "terminal_bool_for": FieldPolicy.KEEP,
-        "in_cond_branch": FieldPolicy.KEEP,
+        "is_in_conditional_body": FieldPolicy.KEEP,
         "conditional_branch_stack": FieldPolicy.KEEP,
         "conditional_branch_depth": FieldPolicy.KEEP,
-        "cond_branch_start_children": FieldPolicy.KEEP,
-        "cond_branch_then_children": FieldPolicy.KEEP,
-        "cond_branch_elif_children": FieldPolicy.KEEP,
-        "cond_branch_else_children": FieldPolicy.KEEP,
-        "cond_branch_children_by_cond": FieldPolicy.KEEP,
+        "conditional_entry_children": FieldPolicy.KEEP,
+        "conditional_then_children": FieldPolicy.KEEP,
+        "conditional_elif_children": FieldPolicy.KEEP,
+        "conditional_else_children": FieldPolicy.KEEP,
+        "conditional_arm_children": FieldPolicy.KEEP,
         "module": FieldPolicy.KEEP,
         "_address_normalized": FieldPolicy.KEEP,
         "modules": FieldPolicy.KEEP,
@@ -469,7 +470,7 @@ class OpLog:
         self.layer_label_w_pass_short = fields_dict["layer_label_w_pass_short"]
         self.layer_label_no_pass = fields_dict["layer_label_no_pass"]
         self.layer_label_no_pass_short = fields_dict["layer_label_no_pass_short"]
-        self.layer_type = fields_dict["layer_type"]
+        self.type = fields_dict["type"]
         self.type_index = fields_dict["type_index"]
         self.trace_index = fields_dict["trace_index"]
         self.call_index = fields_dict["call_index"]
@@ -600,22 +601,22 @@ class OpLog:
 
         # Conditional info
         self.is_terminal_bool = fields_dict["is_terminal_bool"]
-        self.bool_is_branch = fields_dict["bool_is_branch"]
-        self.bool_context_kind = fields_dict["bool_context_kind"]
-        self.bool_wrapper_kind = fields_dict["bool_wrapper_kind"]
-        self.bool_conditional_id = fields_dict["bool_conditional_id"]
+        self.is_terminal_conditional_bool = fields_dict["is_terminal_conditional_bool"]
+        self.conditional_context_kind = fields_dict["conditional_context_kind"]
+        self.conditional_wrapper_kind = fields_dict["conditional_wrapper_kind"]
+        self.terminal_conditional_id = fields_dict["terminal_conditional_id"]
         self.is_scalar_bool = fields_dict["is_scalar_bool"]
         self.bool_value = fields_dict["bool_value"]
         self.in_conditionals = fields_dict["in_conditionals"]
         self.terminal_bool_for = fields_dict["terminal_bool_for"]
-        self.in_cond_branch = fields_dict["in_cond_branch"]
+        self.is_in_conditional_body = fields_dict["is_in_conditional_body"]
         self.conditional_branch_stack = fields_dict["conditional_branch_stack"]
         self.conditional_branch_depth = fields_dict["conditional_branch_depth"]
-        self.cond_branch_start_children = fields_dict["cond_branch_start_children"]
-        self.cond_branch_then_children = fields_dict["cond_branch_then_children"]
-        self.cond_branch_elif_children = fields_dict["cond_branch_elif_children"]
-        self.cond_branch_else_children = fields_dict["cond_branch_else_children"]
-        self.cond_branch_children_by_cond = fields_dict["cond_branch_children_by_cond"]
+        self.conditional_entry_children = fields_dict["conditional_entry_children"]
+        self.conditional_then_children = fields_dict["conditional_then_children"]
+        self.conditional_elif_children = fields_dict["conditional_elif_children"]
+        self.conditional_else_children = fields_dict["conditional_else_children"]
+        self.conditional_arm_children = fields_dict["conditional_arm_children"]
 
         # Module info
         self.module = fields_dict["module"]
@@ -647,6 +648,18 @@ class OpLog:
         self._pending_transformed_grad_blob_id: Optional[str] = None
         self.parent_layer_log: Optional["LayerLog"] = None
         object.__setattr__(self, "_construction_done", True)
+
+    @property
+    def layer_type(self) -> str:
+        """Return the operation type token used by existing internal callers."""
+
+        return cast(str, self.type)
+
+    @layer_type.setter
+    def layer_type(self, value: str) -> None:
+        """Set the operation type token through the legacy internal name."""
+
+        self.type = value
 
     @property
     def macs_forward(self) -> Optional[int]:
@@ -727,7 +740,23 @@ class OpLog:
     def is_in_conditional_body(self) -> bool:
         """Whether this op is in a conditional arm body."""
 
-        return any(role.role == "body" for role in self.in_conditionals or [])
+        if self.has_output_descendant and not self.conditional_entry_children:
+            return False
+        return bool(self.__dict__.get("_is_in_conditional_body", False)) or any(
+            role.role == "body" for role in self.in_conditionals or []
+        )
+
+    @is_in_conditional_body.setter
+    def is_in_conditional_body(self, value: bool) -> None:
+        """Set the cached conditional-body predicate used during postprocessing."""
+
+        self.__dict__["_is_in_conditional_body"] = value
+
+    @is_in_conditional_body.deleter
+    def is_in_conditional_body(self) -> None:
+        """Delete the cached conditional-body predicate during cleanup."""
+
+        self.__dict__.pop("_is_in_conditional_body", None)
 
     @property
     def conditional_depth(self) -> int:

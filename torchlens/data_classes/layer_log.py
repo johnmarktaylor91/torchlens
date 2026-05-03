@@ -20,10 +20,10 @@ When merging multiple ops into one LayerLog, these aggregate fields are merged:
   - ``has_input_ancestor``: OR across ops
   - ``io_role``: character-level merge of "I", "O", "IO" strings
   - ``is_atomic_module_op``: OR across ops
-  - ``in_cond_branch``: OR across ops
-  - ``conditional_branch_stacks`` / ``conditional_branch_stack_ops``:
+  - ``is_in_conditional_body``: OR across ops
+  - ``conditional_role_stacks`` / ``conditional_branch_stack_ops``:
     unique per-pass stack signatures and their pass numbers
-  - ``cond_branch_children_by_cond`` and derived child views:
+  - ``conditional_arm_children`` and derived child views:
     pass-stripped ordered unions across ops
 All other 78+ fields use the first pass's values only.
 ``output_of_modules`` / ``output_of_module_calls`` are NOT updated across ops
@@ -46,6 +46,88 @@ if TYPE_CHECKING:
     from .param_log import ParamLog
 
 
+class OpAccessor:
+    """Scoped dict-like accessor for the OpLog entries owned by one LayerLog."""
+
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {"_dict": FieldPolicy.KEEP}
+
+    def __init__(self, ops: Dict[int, "OpLog"] | None = None) -> None:
+        """Initialize the accessor.
+
+        Parameters
+        ----------
+        ops:
+            Mapping from 1-based call index to OpLog.
+        """
+
+        self._dict: Dict[int, "OpLog"] = dict(ops or {})
+
+    def __getitem__(self, key: int | str) -> "OpLog":
+        """Return an OpLog by call index or pass-qualified label."""
+
+        if isinstance(key, int):
+            return self._dict[key]
+        for op_log in self._dict.values():
+            if key in {
+                op_log.layer_label,
+                op_log.layer_label_w_pass,
+                op_log.layer_label_no_pass,
+                op_log.layer_label_short,
+                op_log.layer_label_w_pass_short,
+                op_log.layer_label_no_pass_short,
+            }:
+                return op_log
+        raise KeyError(f"Op '{key}' not found in scoped LayerLog ops.")
+
+    def __setitem__(self, key: int, value: "OpLog") -> None:
+        """Set an OpLog by call index."""
+
+        self._dict[key] = value
+
+    def __contains__(self, key: object) -> bool:
+        """Return whether key resolves to an OpLog."""
+
+        if isinstance(key, int):
+            return key in self._dict
+        if isinstance(key, str):
+            try:
+                self[key]
+            except KeyError:
+                return False
+            return True
+        return False
+
+    def __iter__(self) -> Iterator[int]:
+        """Iterate call-index keys."""
+
+        return iter(self._dict)
+
+    def __len__(self) -> int:
+        """Return the number of scoped ops."""
+
+        return len(self._dict)
+
+    def get(self, key: int, default: "OpLog | None" = None) -> "OpLog | None":
+        """Return an OpLog by call index, or default."""
+
+        return self._dict.get(key, default)
+
+    def keys(self) -> list[int]:
+        """Return call-index keys."""
+
+        return list(self._dict.keys())
+
+    def values(self) -> list["OpLog"]:
+        """Return scoped OpLog values."""
+
+        return list(self._dict.values())
+
+    def items(self) -> list[tuple[int, "OpLog"]]:
+        """Return ``(call_index, OpLog)`` pairs."""
+
+        return list(self._dict.items())
+
+
 class LayerLog:
     """Aggregate per-layer metadata for a logged model operation.
 
@@ -62,6 +144,7 @@ class LayerLog:
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_is_in_conditional_body": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
         "layer_label_short": FieldPolicy.KEEP,
         "layer_type": FieldPolicy.KEEP,
@@ -125,18 +208,18 @@ class LayerLog:
         "bool_value": FieldPolicy.KEEP,
         "in_conditionals": FieldPolicy.KEEP,
         "terminal_bool_for": FieldPolicy.KEEP,
-        "in_cond_branch": FieldPolicy.KEEP,
-        "conditional_branch_stacks": FieldPolicy.KEEP,
+        "is_in_conditional_body": FieldPolicy.KEEP,
+        "conditional_role_stacks": FieldPolicy.KEEP,
         "conditional_branch_stack_ops": FieldPolicy.KEEP,
-        "cond_branch_children_by_cond": FieldPolicy.KEEP,
+        "conditional_arm_children": FieldPolicy.KEEP,
         "module": FieldPolicy.KEEP,
         "modules": FieldPolicy.KEEP,
         "output_of_modules": FieldPolicy.KEEP,
         "output_of_module_calls": FieldPolicy.KEEP,
-        "cond_branch_start_children": FieldPolicy.KEEP,
-        "cond_branch_then_children": FieldPolicy.KEEP,
-        "cond_branch_elif_children": FieldPolicy.KEEP,
-        "cond_branch_else_children": FieldPolicy.KEEP,
+        "conditional_entry_children": FieldPolicy.KEEP,
+        "conditional_then_children": FieldPolicy.KEEP,
+        "conditional_elif_children": FieldPolicy.KEEP,
+        "conditional_else_children": FieldPolicy.KEEP,
         "has_input_ancestor": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
@@ -233,10 +316,10 @@ class LayerLog:
         self.bool_value = first_pass.bool_value
         self.in_conditionals = first_pass.in_conditionals
         self.terminal_bool_for = first_pass.terminal_bool_for
-        self.in_cond_branch = first_pass.in_cond_branch
-        self.conditional_branch_stacks: List[List[Tuple[int, str]]] = []
+        self.is_in_conditional_body = first_pass.is_in_conditional_body
+        self.conditional_role_stacks: List[List[Tuple[int, str]]] = []
         self.conditional_branch_stack_ops: Dict[Tuple[Tuple[int, str], ...], List[int]] = {}
-        self.cond_branch_children_by_cond: Dict[int, Dict[str, List[str]]] = {}
+        self.conditional_arm_children: Dict[int, Dict[str, List[str]]] = {}
 
         # Module (static containment)
         self.module = first_pass.module
@@ -248,17 +331,17 @@ class LayerLog:
         # and is_atomic_module_op (OR).  All others keep first-pass values.
         self.output_of_modules = first_pass.output_of_modules
         self.output_of_module_calls = first_pass.output_of_module_calls
-        self.cond_branch_start_children = first_pass.cond_branch_start_children
-        self.cond_branch_then_children = first_pass.cond_branch_then_children
-        self.cond_branch_elif_children = first_pass.cond_branch_elif_children
-        self.cond_branch_else_children = first_pass.cond_branch_else_children
+        self.conditional_entry_children = first_pass.conditional_entry_children
+        self.conditional_then_children = first_pass.conditional_then_children
+        self.conditional_elif_children = first_pass.conditional_elif_children
+        self.conditional_else_children = first_pass.conditional_else_children
         self.has_input_ancestor = first_pass.has_input_ancestor
         self.io_role = first_pass.io_role
         self.buffer_pass = first_pass.buffer_pass
         self.is_atomic_module_op = first_pass.is_atomic_module_op
 
         # Pass management
-        self.ops: Dict[int, "OpLog"] = {}
+        self.ops = OpAccessor()
         self.call_labels: List[str] = []
 
     @property
@@ -696,7 +779,23 @@ class LayerLog:
     def is_in_conditional_body(self) -> bool:
         """Whether this layer is in a conditional arm body."""
 
-        return any(role.role == "body" for role in self.in_conditionals or [])
+        if getattr(self, "has_output_descendant", False) and not self.conditional_entry_children:
+            return False
+        return bool(self.__dict__.get("_is_in_conditional_body", False)) or any(
+            role.role == "body" for role in self.in_conditionals or []
+        )
+
+    @is_in_conditional_body.setter
+    def is_in_conditional_body(self, value: bool) -> None:
+        """Set the cached conditional-body predicate used during aggregation."""
+
+        self.__dict__["_is_in_conditional_body"] = value
+
+    @is_in_conditional_body.deleter
+    def is_in_conditional_body(self) -> None:
+        """Delete the cached conditional-body predicate during cleanup."""
+
+        self.__dict__.pop("_is_in_conditional_body", None)
 
     @property
     def conditional_depth(self) -> int:

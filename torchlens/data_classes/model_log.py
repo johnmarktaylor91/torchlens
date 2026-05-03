@@ -119,7 +119,7 @@ from .interface import (
     _str_during_pass,
 )
 from .grad_fn_log import GradFnAccessor, GradFnLog
-from .layer_log import LayerLog
+from .layer_log import LayerLog, OpAccessor
 from .op_log import OpLog, TensorLog
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
@@ -400,14 +400,14 @@ class _CallableDict(dict[Any, Any]):
         return dict(self)
 
 
-def _legacy_conditional_then_edges(
-    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+def _legacy_conditional_then_entry_edges(
+    conditional_arm_entry_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
 ) -> List[Tuple[str, str]]:
     """Return the legacy THEN-edge view from canonical conditional arm edges.
 
     Parameters
     ----------
-    conditional_arm_edges:
+    conditional_arm_entry_edges:
         Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
 
     Returns
@@ -418,20 +418,20 @@ def _legacy_conditional_then_edges(
 
     return [
         edge
-        for (_conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        for (_conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
         if branch_kind == "then"
         for edge in edges
     ]
 
 
-def _legacy_conditional_elif_edges(
-    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+def _legacy_conditional_elif_entry_edges(
+    conditional_arm_entry_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
 ) -> List[Tuple[int, int, str, str]]:
     """Return the legacy ELIF-edge view from canonical conditional arm edges.
 
     Parameters
     ----------
-    conditional_arm_edges:
+    conditional_arm_entry_edges:
         Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
 
     Returns
@@ -442,20 +442,20 @@ def _legacy_conditional_elif_edges(
 
     return [
         (conditional_id, int(branch_kind.split("_", 1)[1]), parent, child)
-        for (conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
         if branch_kind.startswith("elif_")
         for parent, child in edges
     ]
 
 
-def _legacy_conditional_else_edges(
-    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+def _legacy_conditional_else_entry_edges(
+    conditional_arm_entry_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
 ) -> List[Tuple[int, str, str]]:
     """Return the legacy ELSE-edge view from canonical conditional arm edges.
 
     Parameters
     ----------
-    conditional_arm_edges:
+    conditional_arm_entry_edges:
         Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
 
     Returns
@@ -466,13 +466,15 @@ def _legacy_conditional_else_edges(
 
     return [
         (conditional_id, parent, child)
-        for (conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
         if branch_kind == "else"
         for parent, child in edges
     ]
 
 
-def _normalize_conditional_arm_edges(value: Any) -> dict[tuple[int, str], list[tuple[str, str]]]:
+def _normalize_conditional_arm_entry_edges(
+    value: Any,
+) -> dict[tuple[int, str], list[tuple[str, str]]]:
     """Return conditional arm edges in canonical flat-key form.
 
     Parameters
@@ -502,7 +504,7 @@ def _normalize_conditional_arm_edges(value: Any) -> dict[tuple[int, str], list[t
 
 
 def _append_conditional_arm_edge(
-    conditional_arm_edges: dict[tuple[int, str], list[tuple[str, str]]],
+    conditional_arm_entry_edges: dict[tuple[int, str], list[tuple[str, str]]],
     key: tuple[int, str],
     edge: tuple[str, str],
 ) -> None:
@@ -510,7 +512,7 @@ def _append_conditional_arm_edge(
 
     Parameters
     ----------
-    conditional_arm_edges:
+    conditional_arm_entry_edges:
         Canonical edge mapping to mutate.
     key:
         ``(conditional_id, arm_kind)`` edge bucket.
@@ -518,10 +520,10 @@ def _append_conditional_arm_edge(
         ``(parent_label, child_label)`` edge tuple.
     """
 
-    edges = conditional_arm_edges.setdefault(key, [])
+    edges = conditional_arm_entry_edges.setdefault(key, [])
     if not isinstance(edges, list):
         edges = []
-        conditional_arm_edges[key] = edges
+        conditional_arm_entry_edges[key] = edges
     edges.append(edge)
 
 
@@ -642,9 +644,9 @@ class Trace:
         "internal_sink_ops": FieldPolicy.KEEP,
         "internally_terminated_bool_ops": FieldPolicy.KEEP,
         "conditional_branch_edges": FieldPolicy.KEEP,
-        "conditional_events": FieldPolicy.KEEP,
-        "conditional_arm_edges": FieldPolicy.KEEP,
-        "conditional_edge_ops": FieldPolicy.KEEP,
+        "conditional_records": FieldPolicy.KEEP,
+        "conditional_arm_entry_edges": FieldPolicy.KEEP,
+        "conditional_edge_call_indices": FieldPolicy.KEEP,
         "conditionals": FieldPolicy.KEEP,
         "ops_with_saved_outs": FieldPolicy.KEEP,
         "orphan_ops": FieldPolicy.KEEP,
@@ -887,9 +889,9 @@ class Trace:
         self.internal_sink_ops: List[str] = []
         self.internally_terminated_bool_ops: List[str] = []
         self.conditional_branch_edges: List[Tuple[str, str]] = []
-        self.conditional_events: List[ConditionalEvent] = []
-        self.conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
-        self.conditional_edge_ops: Dict[Tuple[str, str, int, str], List[int]] = {}
+        self.conditional_records: List[ConditionalEvent] = []
+        self.conditional_arm_entry_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
+        self.conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]] = {}
         self.conditionals = ConditionalAccessor()
         self.ops_with_saved_outs: List[str] = []
         self.orphan_ops: List[str] = []
@@ -1840,9 +1842,11 @@ class Trace:
                 for key, value in parent_layer_log.__dict__.items()
             }
             fork_layer_log.source_trace = self
-            fork_layer_log.ops = OrderedDict(
-                (call_index, remap_pass(layer_pass))
-                for call_index, layer_pass in parent_layer_log.ops.items()
+            fork_layer_log.ops = OpAccessor(
+                OrderedDict(
+                    (call_index, remap_pass(layer_pass))
+                    for call_index, layer_pass in parent_layer_log.ops.items()
+                )
             )
             for layer_pass in fork_layer_log.ops.values():
                 layer_pass.parent_layer_log = fork_layer_log
@@ -2176,26 +2180,26 @@ class Trace:
             }
         if state["train_mode"] is None:
             state["train_mode"] = False
-        conditional_arm_edges = _normalize_conditional_arm_edges(
-            state.get("conditional_arm_edges") or {}
+        conditional_arm_entry_edges = _normalize_conditional_arm_entry_edges(
+            state.get("conditional_arm_entry_edges") or {}
         )
-        for parent, child in state.pop("conditional_then_edges", []) or []:
-            _append_conditional_arm_edge(conditional_arm_edges, (0, "then"), (parent, child))
+        for parent, child in state.pop("conditional_then_entry_edges", []) or []:
+            _append_conditional_arm_edge(conditional_arm_entry_edges, (0, "then"), (parent, child))
         for conditional_id, elif_index, parent, child in (
-            state.pop("conditional_elif_edges", []) or []
+            state.pop("conditional_elif_entry_edges", []) or []
         ):
             _append_conditional_arm_edge(
-                conditional_arm_edges,
+                conditional_arm_entry_edges,
                 (conditional_id, f"elif_{elif_index}"),
                 (parent, child),
             )
-        for conditional_id, parent, child in state.pop("conditional_else_edges", []) or []:
+        for conditional_id, parent, child in state.pop("conditional_else_entry_edges", []) or []:
             _append_conditional_arm_edge(
-                conditional_arm_edges,
+                conditional_arm_entry_edges,
                 (conditional_id, "else"),
                 (parent, child),
             )
-        state["conditional_arm_edges"] = conditional_arm_edges
+        state["conditional_arm_entry_edges"] = conditional_arm_entry_edges
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})
@@ -2430,8 +2434,8 @@ class Trace:
         self.out_postfunc = value
 
     @property
-    def conditional_then_edges(self) -> List[Tuple[str, str]]:
-        """Deprecated THEN-edge view derived from ``conditional_arm_edges``.
+    def conditional_then_entry_edges(self) -> List[Tuple[str, str]]:
+        """Deprecated THEN-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
         -------
@@ -2439,11 +2443,11 @@ class Trace:
             Legacy ``(parent, child)`` edge view.
         """
 
-        warn_deprecated_alias("conditional_then_edges", "conditional_arm_edges")
-        return _legacy_conditional_then_edges(self.conditional_arm_edges)
+        warn_deprecated_alias("conditional_then_entry_edges", "conditional_arm_entry_edges")
+        return _legacy_conditional_then_entry_edges(self.conditional_arm_entry_edges)
 
-    @conditional_then_edges.setter
-    def conditional_then_edges(self, value: List[Tuple[str, str]]) -> None:
+    @conditional_then_entry_edges.setter
+    def conditional_then_entry_edges(self, value: List[Tuple[str, str]]) -> None:
         """Set the deprecated THEN-edge view by updating canonical arm edges.
 
         Parameters
@@ -2453,16 +2457,18 @@ class Trace:
             conditional id 0 because the legacy view did not carry ids.
         """
 
-        warn_deprecated_alias("conditional_then_edges", "conditional_arm_edges")
-        self.conditional_arm_edges = {
-            key: edges for key, edges in self.conditional_arm_edges.items() if key[1] != "then"
+        warn_deprecated_alias("conditional_then_entry_edges", "conditional_arm_entry_edges")
+        self.conditional_arm_entry_edges = {
+            key: edges
+            for key, edges in self.conditional_arm_entry_edges.items()
+            if key[1] != "then"
         }
         if value:
-            self.conditional_arm_edges[(0, "then")] = list(value)
+            self.conditional_arm_entry_edges[(0, "then")] = list(value)
 
     @property
-    def conditional_elif_edges(self) -> List[Tuple[int, int, str, str]]:
-        """Deprecated ELIF-edge view derived from ``conditional_arm_edges``.
+    def conditional_elif_entry_edges(self) -> List[Tuple[int, int, str, str]]:
+        """Deprecated ELIF-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
         -------
@@ -2470,11 +2476,11 @@ class Trace:
             Legacy ``(cond_id, elif_index, parent, child)`` edge view.
         """
 
-        warn_deprecated_alias("conditional_elif_edges", "conditional_arm_edges")
-        return _legacy_conditional_elif_edges(self.conditional_arm_edges)
+        warn_deprecated_alias("conditional_elif_entry_edges", "conditional_arm_entry_edges")
+        return _legacy_conditional_elif_entry_edges(self.conditional_arm_entry_edges)
 
-    @conditional_elif_edges.setter
-    def conditional_elif_edges(self, value: List[Tuple[int, int, str, str]]) -> None:
+    @conditional_elif_entry_edges.setter
+    def conditional_elif_entry_edges(self, value: List[Tuple[int, int, str, str]]) -> None:
         """Set the deprecated ELIF-edge view by updating canonical arm edges.
 
         Parameters
@@ -2483,20 +2489,20 @@ class Trace:
             Legacy ``(cond_id, elif_index, parent, child)`` edge list.
         """
 
-        warn_deprecated_alias("conditional_elif_edges", "conditional_arm_edges")
-        self.conditional_arm_edges = {
+        warn_deprecated_alias("conditional_elif_entry_edges", "conditional_arm_entry_edges")
+        self.conditional_arm_entry_edges = {
             key: edges
-            for key, edges in self.conditional_arm_edges.items()
+            for key, edges in self.conditional_arm_entry_edges.items()
             if not key[1].startswith("elif_")
         }
         for conditional_id, elif_index, parent, child in value:
-            self.conditional_arm_edges.setdefault(
+            self.conditional_arm_entry_edges.setdefault(
                 (conditional_id, f"elif_{elif_index}"), []
             ).append((parent, child))
 
     @property
-    def conditional_else_edges(self) -> List[Tuple[int, str, str]]:
-        """Deprecated ELSE-edge view derived from ``conditional_arm_edges``.
+    def conditional_else_entry_edges(self) -> List[Tuple[int, str, str]]:
+        """Deprecated ELSE-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
         -------
@@ -2504,11 +2510,11 @@ class Trace:
             Legacy ``(cond_id, parent, child)`` edge view.
         """
 
-        warn_deprecated_alias("conditional_else_edges", "conditional_arm_edges")
-        return _legacy_conditional_else_edges(self.conditional_arm_edges)
+        warn_deprecated_alias("conditional_else_entry_edges", "conditional_arm_entry_edges")
+        return _legacy_conditional_else_entry_edges(self.conditional_arm_entry_edges)
 
-    @conditional_else_edges.setter
-    def conditional_else_edges(self, value: List[Tuple[int, str, str]]) -> None:
+    @conditional_else_entry_edges.setter
+    def conditional_else_entry_edges(self, value: List[Tuple[int, str, str]]) -> None:
         """Set the deprecated ELSE-edge view by updating canonical arm edges.
 
         Parameters
@@ -2517,12 +2523,14 @@ class Trace:
             Legacy ``(cond_id, parent, child)`` edge list.
         """
 
-        warn_deprecated_alias("conditional_else_edges", "conditional_arm_edges")
-        self.conditional_arm_edges = {
-            key: edges for key, edges in self.conditional_arm_edges.items() if key[1] != "else"
+        warn_deprecated_alias("conditional_else_entry_edges", "conditional_arm_entry_edges")
+        self.conditional_arm_entry_edges = {
+            key: edges
+            for key, edges in self.conditional_arm_entry_edges.items()
+            if key[1] != "else"
         }
         for conditional_id, parent, child in value:
-            self.conditional_arm_edges.setdefault((conditional_id, "else"), []).append(
+            self.conditional_arm_entry_edges.setdefault((conditional_id, "else"), []).append(
                 (parent, child)
             )
 
@@ -2544,7 +2552,7 @@ class Trace:
     @property
     def has_conditional_branching(self) -> bool:
         """Whether any layer is in a conditional branch."""
-        return any(entry.in_cond_branch for entry in self.layer_list)
+        return any(entry.is_in_conditional_body for entry in self.layer_list)
 
     @property
     def has_conditionals(self) -> bool:
@@ -3371,14 +3379,14 @@ class Trace:
             "module",
             "modules",
             "conditional_branch_depth",
-            "bool_is_branch",
-            "bool_context_kind",
-            "bool_wrapper_kind",
-            "bool_conditional_id",
+            "is_terminal_conditional_bool",
+            "conditional_context_kind",
+            "conditional_wrapper_kind",
+            "terminal_conditional_id",
             "conditional_branch_stack",
-            "cond_branch_then_children",
-            "cond_branch_elif_children",
-            "cond_branch_else_children",
+            "conditional_then_children",
+            "conditional_elif_children",
+            "conditional_else_children",
         ]
 
         fields_to_change_type = {
@@ -3403,7 +3411,7 @@ class Trace:
             "is_submodule_input": bool,
             "is_submodule_output": bool,
             "conditional_branch_depth": int,
-            "bool_is_branch": bool,
+            "is_terminal_conditional_bool": bool,
         }
 
         model_df_dictlist = []
@@ -3421,7 +3429,7 @@ class Trace:
 
         for column_name in fields_to_change_type:
             model_df[column_name] = model_df[column_name].astype(fields_to_change_type[column_name])
-        model_df["bool_conditional_id"] = model_df["bool_conditional_id"].astype("Int64")
+        model_df["terminal_conditional_id"] = model_df["terminal_conditional_id"].astype("Int64")
 
         return model_df
 
