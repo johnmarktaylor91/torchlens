@@ -7,7 +7,7 @@
       },
       {
         "kind": "attribute",
-        "name": "FORK_POLICY"
+        "name": "FIELD_FORK_POLICY"
       },
       {
         "kind": "attribute",
@@ -155,7 +155,7 @@
       },
       {
         "kind": "method",
-        "name": "save_tensor_data"
+        "name": "save_activation"
       },
       {
         "kind": "method",
@@ -229,7 +229,7 @@
       },
       {
         "kind": "method",
-        "name": "remove_all_but"
+        "name": "remove_except"
       },
       {
         "kind": "method",
@@ -499,11 +499,11 @@
       },
       {
         "kind": "property",
-        "name": "creation_index"
+        "name": "capture_index"
       },
       {
         "kind": "field",
-        "name": "detach_saved_tensors"
+        "name": "detach_saved_activations"
       },
       {
         "kind": "property",
@@ -535,7 +535,7 @@
       },
       {
         "kind": "property",
-        "name": "func_call_stack"
+        "name": "code_context"
       },
       {
         "kind": "field",
@@ -675,7 +675,7 @@
       },
       {
         "kind": "field",
-        "name": "overall_index"
+        "name": "trace_index"
       },
       {
         "kind": "field",
@@ -743,7 +743,7 @@
       },
       {
         "kind": "property",
-        "name": "op_index"
+        "name": "compute_index"
       },
       {
         "kind": "field",
@@ -885,7 +885,7 @@
       },
       {
         "kind": "attribute",
-        "name": "FORK_POLICY"
+        "name": "FIELD_FORK_POLICY"
       },
       {
         "kind": "attribute",
@@ -1037,11 +1037,11 @@
       },
       {
         "kind": "field",
-        "name": "creation_index"
+        "name": "capture_index"
       },
       {
         "kind": "field",
-        "name": "detach_saved_tensors"
+        "name": "detach_saved_activations"
       },
       {
         "kind": "field",
@@ -1057,7 +1057,7 @@
       },
       {
         "kind": "field",
-        "name": "feeds_output"
+        "name": "is_output_parent"
       },
       {
         "kind": "field",
@@ -1085,7 +1085,7 @@
       },
       {
         "kind": "field",
-        "name": "func_call_stack"
+        "name": "code_context"
       },
       {
         "kind": "field",
@@ -1245,7 +1245,7 @@
       },
       {
         "kind": "field",
-        "name": "is_atomic_module_output"
+        "name": "is_atomic_module_op"
       },
       {
         "kind": "field",
@@ -1309,7 +1309,7 @@
       },
       {
         "kind": "field",
-        "name": "overall_index"
+        "name": "trace_index"
       },
       {
         "kind": "field",
@@ -1437,7 +1437,7 @@
       },
       {
         "kind": "field",
-        "name": "op_index"
+        "name": "compute_index"
       },
       {
         "kind": "field",
@@ -1513,7 +1513,7 @@
       },
       {
         "kind": "method",
-        "name": "save_tensor_data"
+        "name": "save_activation"
       },
       {
         "kind": "field",
@@ -1599,7 +1599,7 @@
       },
       {
         "kind": "attribute",
-        "name": "FORK_POLICY"
+        "name": "FIELD_FORK_POLICY"
       },
       {
         "kind": "attribute",
@@ -1779,7 +1779,7 @@
       },
       {
         "kind": "field",
-        "name": "capture_full_args"
+        "name": "capture_args_template"
       },
       {
         "kind": "field",
@@ -1835,11 +1835,11 @@
       },
       {
         "kind": "field",
-        "name": "detach_saved_tensorss"
+        "name": "detach_saved_activations"
       },
       {
         "kind": "field",
-        "name": "detect_loops"
+        "name": "recurrence_detection"
       },
       {
         "kind": "method",
@@ -1875,7 +1875,7 @@
       },
       {
         "kind": "field",
-        "name": "forward_lineno"
+        "name": "forward_source_line"
       },
       {
         "kind": "field",
@@ -1935,7 +1935,7 @@
       },
       {
         "kind": "field",
-        "name": "internally_initialized_ops"
+        "name": "internal_source_ops"
       },
       {
         "kind": "field",
@@ -1943,7 +1943,7 @@
       },
       {
         "kind": "field",
-        "name": "internally_terminated_ops"
+        "name": "internal_sink_ops"
       },
       {
         "kind": "field",
@@ -2083,7 +2083,7 @@
       },
       {
         "kind": "property",
-        "name": "num_intervening_grad_fns"
+        "name": "num_grad_fns_without_op"
       },
       {
         "kind": "field",
@@ -2107,7 +2107,7 @@
       },
       {
         "kind": "field",
-        "name": "operation_history"
+        "name": "ledger"
       },
       {
         "kind": "field",
@@ -2219,7 +2219,7 @@
       },
       {
         "kind": "field",
-        "name": "save_function_args"
+        "name": "save_arg_values"
       },
       {
         "kind": "field",
@@ -2299,7 +2299,7 @@
       },
       {
         "kind": "field",
-        "name": "function_calls_duration"
+        "name": "func_calls_duration"
       },
       {
         "kind": "property",
@@ -2549,7 +2549,7 @@
       },
       {
         "kind": "property",
-        "name": "is_shared"
+        "name": "has_multiple_addresses"
       },
       {
         "kind": "field",
@@ -2711,7 +2711,7 @@
       },
       {
         "kind": "property",
-        "name": "is_shared"
+        "name": "has_multiple_addresses"
       },
       {
         "kind": "field",
@@ -2805,7 +2805,7 @@
       },
       {
         "kind": "field",
-        "name": "linked_params"
+        "name": "co_parent_params"
       },
       {
         "kind": "field",
@@ -3723,7 +3723,7 @@
         "_ATTR_SKIP_SET",
         "_AUTOCAST_DEVICES",
         "_cuda_available",
-        "_get_func_call_stack",
+        "_get_code_context",
         "_is_cuda_available",
         "_model_expects_single_arg",
         "_safe_copy_arg",
