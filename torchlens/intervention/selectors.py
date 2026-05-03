@@ -595,8 +595,8 @@ def _module_pass_matches(module_pass: str, address: str) -> bool:
         Whether the module pass belongs to the requested address.
     """
 
-    address = module_pass.rsplit(":", 1)[0]
-    return module_pass == address or address == address
+    module_address = module_pass.rsplit(":", 1)[0]
+    return module_pass == address or module_address == address
 
 
 __all__ = [

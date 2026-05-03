@@ -913,6 +913,43 @@ class OpLog:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
         read_io_format_version(state, cls_name=type(self).__name__)
+        old_key_map = {
+            "tensor_label_raw": "_label_raw",
+            "operation_num": "op_num",
+            "activation": "out",
+            "transformed_activation": "transformed_out",
+            "has_saved_activations": "has_saved_outs",
+            "activation_postfunc": "out_postfunc",
+            "activation_shape": "shape",
+            "transformed_activation_shape": "transformed_out_shape",
+            "activation_dtype": "dtype",
+            "transformed_activation_dtype": "transformed_out_dtype",
+            "activation_memory": "memory",
+            "transformed_activation_memory": "transformed_out_memory",
+            "is_part_of_iterable_output": "is_part_of_iterable_output",
+            "iterable_output_index": "multi_output_index",
+            "grad_fn_object": "grad_fn",
+            "corresponding_grad_fn": "grad_fn_log",
+            "is_input_layer": "is_input",
+            "is_output_layer": "is_output",
+            "is_output_ancestor": "has_output_descendant",
+            "is_buffer_layer": "is_buffer",
+            "internally_initialized": "is_internal_source",
+            "internally_terminated": "is_internal_sink",
+            "parent_param_barcodes": "_param_barcodes",
+            "module_passes_entered": "module_ops_entered",
+            "modules_exited": "output_of_modules",
+            "module_passes_exited": "output_of_module_calls",
+            "is_leaf_module_output": "is_atomic_module_output",
+            "leaf_module_pass": "atomic_module_call",
+            "module_entry_exit_threads_inputs": "_module_boundary_thread_inputs",
+            "module_entry_exit_thread_output": "_module_boundary_thread_output",
+            "activation_ref": "out_ref",
+            "gradient_ref": "grad_ref",
+        }
+        for old_key, new_key in old_key_map.items():
+            if new_key not in state and old_key in state:
+                state[new_key] = state.pop(old_key)
         default_fill_state(
             state,
             defaults=self.DEFAULT_FILL_STATE,

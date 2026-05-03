@@ -49,7 +49,7 @@ class TestTraceGC:
     def test_trace_gc_without_cleanup(self):
         """del trace; gc.collect() should release the Trace."""
         model = _SimpleLinear()
-        trace = tl.trace_fn(model, torch.randn(1, 5))
+        trace = tl.trace(model, torch.randn(1, 5))
         ref = weakref.ref(trace)
         del trace
         gc.collect()
@@ -58,7 +58,7 @@ class TestTraceGC:
     def test_trace_gc_with_cleanup(self):
         """cleanup() + del + gc.collect() should release the Trace."""
         model = _SimpleLinear()
-        trace = tl.trace_fn(model, torch.randn(1, 5))
+        trace = tl.trace(model, torch.randn(1, 5))
         ref = weakref.ref(trace)
         trace.cleanup()
         del trace
@@ -69,7 +69,7 @@ class TestTraceGC:
         """After cleanup + del trace, model params should be GC-able."""
         model = _SimpleLinear()
         param_ref = weakref.ref(list(model.parameters())[0])
-        trace = tl.trace_fn(model, torch.randn(1, 5))
+        trace = tl.trace(model, torch.randn(1, 5))
         trace.cleanup()
         del trace
         del model
@@ -80,7 +80,7 @@ class TestTraceGC:
         """release_param_refs() then del model -> model GC'd while log alive."""
         model = _TwoLayerNet()
         model_ref = weakref.ref(model)
-        trace = tl.trace_fn(model, torch.randn(1, 5))
+        trace = tl.trace(model, torch.randn(1, 5))
         trace.release_param_refs()
         del model
         gc.collect()
@@ -122,7 +122,7 @@ class TestTraceGC:
         model = _TwoLayerNet()
         x = torch.randn(1, 5)
         # Two-pass path: exhaustive first, then fast via save_new_outs
-        trace = tl.trace_fn(model, x, layers_to_save=None)
+        trace = tl.trace(model, x, layers_to_save=None)
 
         # Warm up
         trace.save_new_outs(model, torch.randn(1, 5), layers_to_save="all")
@@ -146,7 +146,7 @@ class TestTraceGC:
     def test_cleanup_breaks_param_ref(self):
         """After cleanup, all ParamLog._param_ref should be None."""
         model = _TwoLayerNet()
-        trace = tl.trace_fn(model, torch.randn(1, 5))
+        trace = tl.trace(model, torch.randn(1, 5))
         param_logs = list(trace.param_logs)
         trace.cleanup()
         for pl in param_logs:
@@ -156,7 +156,7 @@ class TestTraceGC:
         """backward(), release_param_refs(), verify grad info is cached."""
         model = _TwoLayerNet()
         x = torch.randn(1, 5)
-        trace = tl.trace_fn(model, x, save_grads=True)
+        trace = tl.trace(model, x, save_grads=True)
         # Run backward to populate grads
         out = model(x)
         out.sum().backward()
@@ -180,7 +180,7 @@ class TestTraceGC:
     def test_transient_data_cleared(self):
         """Verify _module_build_data/metadata/forward_args are cleared after postprocess."""
         model = _TwoLayerNet()
-        trace = tl.trace_fn(model, torch.randn(1, 5))
+        trace = tl.trace(model, torch.randn(1, 5))
         # _module_build_data should be empty after postprocessing
         assert len(trace._module_build_data) == 0 or all(
             (len(v) == 0 if hasattr(v, "__len__") else True)
@@ -194,7 +194,7 @@ class TestTraceGC:
     def test_raw_layer_dict_cleared_after_cleanup(self):
         """Verify _raw_layer_dict is cleared after cleanup()."""
         model = _TwoLayerNet()
-        trace = tl.trace_fn(model, torch.randn(1, 5))
+        trace = tl.trace(model, torch.randn(1, 5))
         # _raw_layer_dict is populated during capture; still present after trace
         assert len(trace._raw_layer_dict) > 0
         trace.cleanup()

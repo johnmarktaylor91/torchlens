@@ -137,7 +137,7 @@ def test_step_19_finalizes_bundle_and_keeps_outs_in_memory(tmp_path: Path) -> No
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    trace = tl.trace_fn(
+    trace = tl.trace(
         model,
         inputs,
         save_outs_to=bundle_path,
@@ -164,7 +164,7 @@ def test_step_20_evicts_streamed_outs_when_requested(tmp_path: Path) -> None:
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    trace = tl.trace_fn(
+    trace = tl.trace(
         model,
         inputs,
         save_outs_to=bundle_path,
@@ -257,7 +257,7 @@ def test_out_sink_receives_saved_tensors_and_is_mutually_exclusive(
         received.append((label, tensor))
 
     model, inputs = _make_streaming_model()
-    trace = tl.trace_fn(model, inputs, out_sink=_sink, layers_to_save="all")
+    trace = tl.trace(model, inputs, out_sink=_sink, layers_to_save="all")
     capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
 
     assert received
@@ -302,7 +302,7 @@ def test_selective_out_sink_still_works() -> None:
         received.append((label, tensor))
 
     model, inputs = _make_streaming_model()
-    trace = tl.trace_fn(model, inputs, out_sink=_sink, layers_to_save="linear")
+    trace = tl.trace(model, inputs, out_sink=_sink, layers_to_save="linear")
 
     capture_time_layers = [layer for layer in _saved_layers(trace) if not layer.is_output]
     assert capture_time_layers
@@ -336,7 +336,7 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    trace = tl.trace_fn(
+    trace = tl.trace(
         model,
         inputs,
         save_outs_to=bundle_path,

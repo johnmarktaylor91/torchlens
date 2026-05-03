@@ -429,14 +429,14 @@ def _log_module_hierarchy_info_for_layer(
     _module_ops_seen = _shadow_sets["module_ops"]
     mbd = self._module_build_data
 
-    module_call_label = None
+    parent_call_label = None
     layer_label = layer_entry.layer_label
-    for module_index, module_call_label in enumerate(layer_entry.modules):
-        if isinstance(module_call_label, str):
-            module_name, module_pass = module_call_label.rsplit(":", 1)
+    for module_index, raw_module_call_label in enumerate(layer_entry.modules):
+        if isinstance(raw_module_call_label, str):
+            module_name, module_pass = raw_module_call_label.rsplit(":", 1)
             module_pass = int(module_pass)  # type: ignore[assignment]
         else:
-            module_name, module_pass = module_call_label
+            module_name, module_pass = raw_module_call_label
         module_pass_nice_label = f"{module_name}:{module_pass}"
         mbd["module_num_tensors"][module_name] += 1
         mbd["module_call_index_tensors"][module_pass_nice_label] += 1
@@ -450,12 +450,12 @@ def _log_module_hierarchy_info_for_layer(
             _top_level_module_ops_seen.add(module_pass_nice_label)
             mbd["top_level_module_ops"].append(module_pass_nice_label)
         else:
-            if (module_call_label is not None) and (
-                module_pass_nice_label not in _module_pass_children_seen[module_call_label]
+            if (parent_call_label is not None) and (
+                module_pass_nice_label not in _module_pass_children_seen[parent_call_label]
             ):
-                _module_pass_children_seen[module_call_label].add(module_pass_nice_label)
-                mbd["module_pass_children"][module_call_label].append(module_pass_nice_label)
-        module_call_label = module_pass_nice_label
+                _module_pass_children_seen[parent_call_label].add(module_pass_nice_label)
+                mbd["module_pass_children"][parent_call_label].append(module_pass_nice_label)
+        parent_call_label = module_pass_nice_label
         if mbd["module_num_calls"][module_name] < module_pass:
             mbd["module_num_calls"][module_name] = module_pass
         if module_name not in _addresses_seen:

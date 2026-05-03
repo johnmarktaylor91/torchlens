@@ -720,7 +720,7 @@ def show_model_graph(*args: Any, **kwargs: Any) -> Any:
 
 @_functools.wraps(_moved_draw_backward)
 def draw_backward(*args: Any, **kwargs: Any) -> Any:
-    """Deprecated top-level wrapper for ``torchlens.visualization.show_backward_graph``.
+    """Deprecated top-level wrapper for ``torchlens.visualization.draw_backward``.
 
     Parameters
     ----------
@@ -728,7 +728,7 @@ def draw_backward(*args: Any, **kwargs: Any) -> Any:
         Legacy arguments forwarded unchanged.
     """
 
-    _warn_moved_name("show_backward_graph", "torchlens.visualization", "show_backward_graph")
+    _warn_moved_name("draw_backward", "torchlens.visualization", "draw_backward")
     return _moved_draw_backward(*args, **kwargs)
 
 

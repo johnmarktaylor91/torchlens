@@ -209,15 +209,16 @@ def _str_after_pass(self: "Trace") -> str:
         s += " (no layer outs are saved):"
     else:
         s += " (* means layer has saved outs):"
-    for layer_ind, layer_barcode in enumerate(self.layer_labels):
-        call_index = self.layer_dict_main_keys[layer_barcode].call_index
-        total_ops = self.layer_dict_main_keys[layer_barcode].num_calls
+    for layer_ind, layer_entry in enumerate(self.layer_list):
+        layer_barcode = layer_entry.layer_label
+        call_index = layer_entry.call_index
+        total_ops = layer_entry.num_calls
         if total_ops > 1:
             pass_str = f" ({call_index}/{total_ops} ops)"
         else:
             pass_str = ""
 
-        if self.layer_dict_main_keys[layer_barcode].has_saved_outs and (not self._layers_saved):
+        if layer_entry.has_saved_outs and (not self._layers_saved):
             s += "\n\t\t* "
         else:
             s += "\n\t\t  "

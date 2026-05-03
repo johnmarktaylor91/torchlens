@@ -3,11 +3,11 @@
 import ast
 import inspect
 
-from torchlens.data_classes import trace as trace_module
+import torchlens.data_classes.model_log as trace_module
 
 
 EXPECTED_MODELLOG_METHODS = {
-    "render_graph",
+    "draw",
     "render_dagua_graph",
     "to_dagua_graph",
     "visualization_field_audit",

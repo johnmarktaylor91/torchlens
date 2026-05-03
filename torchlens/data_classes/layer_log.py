@@ -365,6 +365,10 @@ class LayerLog:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
         read_io_format_version(state, cls_name=type(self).__name__)
+        if "ops" not in state and "passes" in state:
+            state["ops"] = state.pop("passes")
+        if "call_labels" not in state and "pass_labels" in state:
+            state["call_labels"] = state.pop("pass_labels")
         default_fill_state(
             state,
             defaults={

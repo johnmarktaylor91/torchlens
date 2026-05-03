@@ -302,7 +302,7 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
 
 def test_to_pandas_exports_conditional_columns() -> None:
     """`to_pandas()` exposes the Phase 3 conditional export columns."""
-    trace = tl.trace_fn(_TinyModel(), torch.ones(1, 3), layers_to_save="all")
+    trace = tl.trace(_TinyModel(), torch.ones(1, 3), layers_to_save="all")
     target_layer = next(
         layer for layer in trace.layer_list if layer.layer_type not in {"input", "output"}
     )

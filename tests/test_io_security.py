@@ -65,7 +65,7 @@ def _build_bundle(tmp_path: Path, *, name: str = "bundle.tl") -> Path:
     torch.manual_seed(0)
     model = _SecurityIOModel()
     inputs = torch.randn(2, 4)
-    trace = tl.trace_fn(model, inputs, layers_to_save="all", random_seed=0)
+    trace = tl.trace(model, inputs, layers_to_save="all", random_seed=0)
     bundle_path = tmp_path / name
     save(trace, bundle_path)
     return bundle_path

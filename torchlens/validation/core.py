@@ -221,8 +221,9 @@ def validate_saved_outs(
             return False
 
     # Completeness check: BFS must visit every layer in the graph.
-    if len(validated_layers) < len(self.layer_labels):
-        unreached = set(self.layer_labels) - validated_layers
+    expected_layers = set(self.layer_labels)
+    if len(validated_layers) < len(expected_layers):
+        unreached = expected_layers - validated_layers
         print(
             f"All saved outs were accurate, but some layers were not reached (check that "
             f"child args logged accurately): {unreached}"

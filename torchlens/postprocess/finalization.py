@@ -49,8 +49,7 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
     returned to the user are clean.
     """
     tensors_to_undecorate = []
-    for layer_label in self.layer_labels:
-        layer_entry = self.layer_dict_main_keys[layer_label]
+    for layer_entry in self.layer_list:
         if layer_entry.out is not None:
             tensors_to_undecorate.append(layer_entry.out)
         if getattr(layer_entry, "transformed_out", None) is not None:

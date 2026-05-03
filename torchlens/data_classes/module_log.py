@@ -236,6 +236,14 @@ class ModuleCallLog:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state with version-aware default filling."""
         read_io_format_version(state, cls_name=type(self).__name__)
+        if "address" not in state and "module_address" in state:
+            state["address"] = state.pop("module_address")
+        if "call_index" not in state and "pass_num" in state:
+            state["call_index"] = state.pop("pass_num")
+        if "call_label" not in state and "pass_label" in state:
+            state["call_label"] = state.pop("pass_label")
+        if "all_addresses" not in state and "all_module_addresses" in state:
+            state["all_addresses"] = state.pop("all_module_addresses")
         default_fill_state(
             state,
             defaults={

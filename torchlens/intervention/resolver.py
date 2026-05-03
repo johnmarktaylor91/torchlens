@@ -578,8 +578,8 @@ def _module_label_matches(module_pass: str, address: str) -> bool:
         Whether the labels refer to the same module boundary.
     """
 
-    address = module_pass.rsplit(":", 1)[0]
-    return module_pass == address or address == address
+    module_address = module_pass.rsplit(":", 1)[0]
+    return module_pass == address or module_address == address
 
 
 def _predicate_payload(value: Any) -> tuple[Callable[["OpLog"], bool], str | None]:

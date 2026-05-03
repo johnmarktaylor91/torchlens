@@ -24,7 +24,7 @@ class M(nn.Module):
     def forward(self, x):
         return x + 1
 
-log = tl.trace_fn(M(), torch.ones(1), layers_to_save=None)
+log = tl.trace(M(), torch.ones(1), layers_to_save=None)
 try:
     try:
         log.draw(vis_renderer="dagua", vis_save_only=True, vis_fileformat="svg")

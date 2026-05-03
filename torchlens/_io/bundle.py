@@ -46,6 +46,56 @@ PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
 
+_RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
+    ("torchlens.data_classes.model_log", "ModelLog"): (
+        "torchlens.data_classes.model_log",
+        "Trace",
+    ),
+    ("torchlens.data_classes.layer_pass_log", "LayerPassLog"): (
+        "torchlens.data_classes.op_log",
+        "OpLog",
+    ),
+    ("torchlens.data_classes.layer_pass_log", "TensorLog"): (
+        "torchlens.data_classes.op_log",
+        "TensorLog",
+    ),
+    ("torchlens.data_classes.module_log", "ModulePassLog"): (
+        "torchlens.data_classes.module_log",
+        "ModuleCallLog",
+    ),
+    ("torchlens.data_classes.grad_fn_pass_log", "GradFnPassLog"): (
+        "torchlens.data_classes.grad_fn_call_log",
+        "GradFnCallLog",
+    ),
+    ("torchlens.multi_trace.node_view", "NodeView"): (
+        "torchlens.multi_trace.super_op",
+        "SuperOp",
+    ),
+}
+
+
+class _RenameAwareUnpickler(pickle.Unpickler):
+    """Unpickler for portable fixtures written before locked class/module renames."""
+
+    def find_class(self, module: str, name: str) -> Any:
+        """Resolve renamed TorchLens classes while unpickling old bundle metadata.
+
+        Parameters
+        ----------
+        module:
+            Pickled module path.
+        name:
+            Pickled global name.
+
+        Returns
+        -------
+        Any
+            Resolved class or global.
+        """
+
+        module, name = _RENAMED_PICKLE_GLOBALS.get((module, name), (module, name))
+        return super().find_class(module, name)
+
 
 @dataclass(frozen=True)
 class _FastCopySpec:
@@ -434,7 +484,7 @@ def _load_trace_payload(
 
         python_major_mismatch = _python_major_mismatch(manifest)
         with metadata_path.open("rb") as handle:
-            scrubbed_state = pickle.load(handle)
+            scrubbed_state = _RenameAwareUnpickler(handle).load()
     except TorchLensIOError:
         raise
     except (pickle.UnpicklingError, EOFError) as exc:

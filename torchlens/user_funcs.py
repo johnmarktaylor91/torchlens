@@ -4,7 +4,7 @@ This module contains every user-facing function:
   - ``trace``  - the main entry point (runs model, returns Trace)
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
-  - ``show_backward_graph`` - backward grad_fn visualization wrapper
+  - ``draw_backward`` - backward grad_fn visualization wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
   - ``get_model_metadata`` - deprecated alias for ``log_model_metadata``
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness

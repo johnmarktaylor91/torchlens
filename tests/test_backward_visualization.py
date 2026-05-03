@@ -81,8 +81,8 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
 
 
 @pytest.mark.smoke
-def test_show_backward_graph_renders(tmp_path: Path) -> None:
-    """show_backward_graph returns DOT source and writes a non-empty output file."""
+def test_draw_backward_renders(tmp_path: Path) -> None:
+    """draw_backward returns DOT source and writes a non-empty output file."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
     outpath = tmp_path / "backward_graph"
 
@@ -158,8 +158,8 @@ def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_show_backward_graph_top_level_function(tmp_path: Path) -> None:
-    """The top-level ``tl.show_backward_graph`` helper renders a Trace."""
+def test_draw_backward_top_level_function(tmp_path: Path) -> None:
+    """The top-level ``tl.draw_backward`` helper renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = tl.draw_backward(
@@ -173,8 +173,8 @@ def test_show_backward_graph_top_level_function(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_show_backward_graph_errors_without_log_backward() -> None:
-    """show_backward_graph errors clearly before explicit backward capture."""
+def test_draw_backward_errors_without_log_backward() -> None:
+    """draw_backward errors clearly before explicit backward capture."""
     trace = tl.trace(
         _LinearReluModel(),
         torch.randn(2, 3, requires_grad=True),

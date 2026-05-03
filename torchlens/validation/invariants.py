@@ -266,17 +266,17 @@ def _check_trace_self_consistency(ml: "Trace") -> None:
     """
     name = "trace_self_consistency"
 
-    # layer_labels vs layer_list length
-    if len(ml.layer_labels) != len(ml.layer_list):
+    # op_labels vs layer_list length
+    if len(ml.op_labels) != len(ml.layer_list):
         raise MetadataInvariantError(
             name,
-            f"len(layer_labels)={len(ml.layer_labels)} != len(layer_list)={len(ml.layer_list)}",
+            f"len(op_labels)={len(ml.op_labels)} != len(layer_list)={len(ml.layer_list)}",
         )
 
     # No duplicate labels
-    if len(ml.layer_labels) != len(set(ml.layer_labels)):
-        dupes = [lbl for lbl in ml.layer_labels if ml.layer_labels.count(lbl) > 1]
-        raise MetadataInvariantError(name, f"Duplicate layer_labels: {set(dupes)}")
+    if len(ml.op_labels) != len(set(ml.op_labels)):
+        dupes = [lbl for lbl in ml.op_labels if ml.op_labels.count(lbl) > 1]
+        raise MetadataInvariantError(name, f"Duplicate op_labels: {set(dupes)}")
 
     # num_ops counts computational layers only (excludes input, output,
     # buffer).  We check per-layer flags instead of comparing against label

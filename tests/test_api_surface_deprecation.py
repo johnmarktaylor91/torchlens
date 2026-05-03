@@ -70,7 +70,7 @@ WRAPPER_CASES = [
     ("validate_saved_outs", torchlens.validation.validate_saved_outs),
     ("summary", torchlens.visualization.summary),
     ("show_model_graph", torchlens.visualization.show_model_graph),
-    ("show_backward_graph", torchlens.visualization.show_backward_graph),
+    ("draw_backward", torchlens.visualization.draw_backward),
     ("load_intervention_spec", torchlens.io.load_intervention_spec),
 ]
 
@@ -189,7 +189,7 @@ def test_show_model_graph_legacy_kwargs(
     assert result is None
 
 
-def test_show_backward_graph_legacy_kwargs(
+def test_draw_backward_legacy_kwargs(
     tmp_path: Path, small_model: _TinyModel, small_input: torch.Tensor
 ) -> None:
     """Top-level backward graph helper should accept representative legacy kwargs."""

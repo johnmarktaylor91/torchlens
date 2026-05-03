@@ -63,7 +63,7 @@ class TinyTransformer(nn.Module):
             dim_feedforward=8,
             dropout=0.0,
             batch_first=True,
-            out="gelu",
+            activation="gelu",
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=1)
         self.norm = nn.LayerNorm(6)
