@@ -34,7 +34,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "layers_to_save",
     "keep_unsaved_layers",
     "output_device",
-    "save_function_args",
+    "save_arg_values",
     "save_grads",
     "grads_to_save",
     "save_code_context",
@@ -43,8 +43,8 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "source_context_lines",
     "optimizer",
     "compute_input_output_distances",
-    "detach_saved_tensorss",
-    "detect_recurrent_patterns",
+    "detach_saved_activations",
+    "recurrence_detection",
     "intervention_ready",
     "hooks",
     "unwrap_when_done",
@@ -124,7 +124,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
     "keep_unsaved_layers": "keep_unsaved_layers",
     "output_device": "output_device",
-    "save_function_args": "save_function_args",
+    "save_arg_values": "save_arg_values",
     "save_grads": "save_grads",
     "grads_to_save": "grads_to_save",
     "save_code_context": "save_code_context",
@@ -135,9 +135,8 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "optimizer": "optimizer",
     "compute_input_output_distances": "compute_input_output_distances",
     "mark_layer_depths": "compute_input_output_distances",
-    "detach_saved_tensorss": "detach_saved_tensorss",
-    "detect_recurrent_patterns": "detect_recurrent_patterns",
-    "detect_loops": "detect_recurrent_patterns",
+    "detach_saved_activations": "detach_saved_activations",
+    "recurrence_detection": "recurrence_detection",
     "intervention_ready": "intervention_ready",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
@@ -521,7 +520,7 @@ class CaptureOptions:
         Whether metadata-only layers remain in the returned log.
     output_device:
         Device placement for saved tensors.
-    save_function_args:
+    save_arg_values:
         Whether non-tensor function arguments are captured.
     save_grads:
         Whether backward grads are captured.
@@ -539,9 +538,9 @@ class CaptureOptions:
         Optional optimizer used to annotate optimized parameters.
     compute_input_output_distances:
         Whether input/output graph distances are computed.
-    detach_saved_tensorss:
+    detach_saved_activations:
         Whether saved tensors are detached from autograd.
-    detect_recurrent_patterns:
+    recurrence_detection:
         Whether repeated graph patterns are detected during postprocess.
     intervention_ready:
         Whether replay-template metadata is captured for intervention APIs.
@@ -579,7 +578,7 @@ class CaptureOptions:
     layers_to_save: str | list[Any] | None = "all"
     keep_unsaved_layers: bool = True
     output_device: OutputDeviceLiteral = "same"
-    save_function_args: bool = False
+    save_arg_values: bool = False
     save_grads: bool = False
     grads_to_save: str | list[Any] | None = "all"
     save_code_context: bool = False
@@ -588,8 +587,8 @@ class CaptureOptions:
     source_context_lines: int = 7
     optimizer: Any = None
     compute_input_output_distances: bool = False
-    detach_saved_tensorss: bool = False
-    detect_recurrent_patterns: bool = True
+    detach_saved_activations: bool = False
+    recurrence_detection: bool = True
     intervention_ready: bool = False
     hooks: Any | None = None
     unwrap_when_done: bool = False
@@ -609,7 +608,7 @@ class CaptureOptions:
         layers_to_save: str | list[Any] | None | MissingType = MISSING,
         keep_unsaved_layers: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
-        save_function_args: bool | MissingType = MISSING,
+        save_arg_values: bool | MissingType = MISSING,
         save_grads: bool | MissingType = MISSING,
         grads_to_save: str | list[Any] | None | MissingType = MISSING,
         save_code_context: bool | MissingType = MISSING,
@@ -618,8 +617,8 @@ class CaptureOptions:
         source_context_lines: int | MissingType = MISSING,
         optimizer: Any | MissingType = MISSING,
         compute_input_output_distances: bool | MissingType = MISSING,
-        detach_saved_tensorss: bool | MissingType = MISSING,
-        detect_recurrent_patterns: bool | MissingType = MISSING,
+        detach_saved_activations: bool | MissingType = MISSING,
+        recurrence_detection: bool | MissingType = MISSING,
         intervention_ready: bool | MissingType = MISSING,
         hooks: Any | MissingType = MISSING,
         unwrap_when_done: bool | MissingType = MISSING,
@@ -635,7 +634,6 @@ class CaptureOptions:
         *,
         mark_layer_depths: bool | MissingType = MISSING,
         num_context_lines: int | MissingType = MISSING,
-        detect_loops: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
@@ -654,14 +652,6 @@ class CaptureOptions:
                 )
             warn_deprecated_alias("num_context_lines", "capture.source_context_lines")
             source_context_lines = num_context_lines
-        if detect_loops is not MISSING:
-            if detect_recurrent_patterns is not MISSING:
-                raise TypeError(
-                    "kwarg detect_loops deprecated, use detect_recurrent_patterns; do not pass both"
-                )
-            warn_deprecated_alias("detect_loops", "capture.detect_recurrent_patterns")
-            detect_recurrent_patterns = detect_loops
-
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "layers_to_save": _resolve_option_value(
@@ -673,8 +663,8 @@ class CaptureOptions:
             "output_device": _resolve_option_value(
                 "output_device", output_device, "same", specified_fields
             ),
-            "save_function_args": _resolve_option_value(
-                "save_function_args", save_function_args, False, specified_fields
+            "save_arg_values": _resolve_option_value(
+                "save_arg_values", save_arg_values, False, specified_fields
             ),
             "save_grads": _resolve_option_value("save_grads", save_grads, False, specified_fields),
             "grads_to_save": _resolve_option_value(
@@ -699,11 +689,11 @@ class CaptureOptions:
                 False,
                 specified_fields,
             ),
-            "detach_saved_tensorss": _resolve_option_value(
-                "detach_saved_tensorss", detach_saved_tensorss, False, specified_fields
+            "detach_saved_activations": _resolve_option_value(
+                "detach_saved_activations", detach_saved_activations, False, specified_fields
             ),
-            "detect_recurrent_patterns": _resolve_option_value(
-                "detect_recurrent_patterns", detect_recurrent_patterns, True, specified_fields
+            "recurrence_detection": _resolve_option_value(
+                "recurrence_detection", recurrence_detection, True, specified_fields
             ),
             "intervention_ready": _resolve_option_value(
                 "intervention_ready", intervention_ready, False, specified_fields
@@ -1432,7 +1422,6 @@ def merge_capture_options(
     for old_name, new_name in (
         ("num_context_lines", "source_context_lines"),
         ("mark_layer_depths", "compute_input_output_distances"),
-        ("detect_loops", "detect_recurrent_patterns"),
     ):
         if (
             flat_values.get(old_name, MISSING) is not MISSING

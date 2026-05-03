@@ -93,10 +93,10 @@ class TestSinglePassDelegation:
             pass_log = layer_log.ops[1]
             assert layer_log.has_saved_outs == pass_log.has_saved_outs
 
-    def test_op_index_delegation(self, simple_log):
+    def test_compute_index_delegation(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
             pass_log = layer_log.ops[1]
-            assert layer_log.op_index == pass_log.op_index
+            assert layer_log.compute_index == pass_log.compute_index
 
     def test_fallback_getattr_delegation(self, simple_log):
         """__getattr__ fallback delegates arbitrary per-pass fields."""

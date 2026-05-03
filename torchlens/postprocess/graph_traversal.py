@@ -17,7 +17,7 @@ import torch
 from ..utils.display import identity
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
-from ..utils.introspection import _get_func_call_stack
+from ..utils.introspection import _get_code_context
 from ..data_classes.op_log import OpLog
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ def _add_output_layers(
         self._layer_counter += 1
         new_output_node._label_raw = f"output_{i + 1}_raw"
         new_output_node._layer_label_raw = new_output_node._label_raw
-        new_output_node.creation_index = self._layer_counter
+        new_output_node.capture_index = self._layer_counter
         output_address = "output"
         if output_addresses[i] != "":
             output_address += f".{output_addresses[i]}"
@@ -69,7 +69,7 @@ def _add_output_layers(
 
         new_output_node.func = identity
         new_output_node.func_name = "none"
-        new_output_node.func_call_stack = _get_func_call_stack(
+        new_output_node.code_context = _get_code_context(
             self.num_context_lines,
             source_loading_enabled=self.save_code_context,
             disable_col_offset=False,
@@ -114,7 +114,7 @@ def _add_output_layers(
         new_output_node.output_of_modules = [mod_pass[0] for mod_pass in output_node.modules]
         new_output_node.output_of_module_calls = output_node.modules
         new_output_node.is_submodule_output = False
-        new_output_node.is_atomic_module_output = False
+        new_output_node.is_atomic_module_op = False
         new_output_node._module_boundary_threads_inputs = {}
         new_output_node._module_boundary_thread_output = []
 
@@ -461,8 +461,8 @@ def _log_internally_terminated_tensor(self: "Trace", tensor_label: str) -> None:
     """Mark a tensor as terminated inside the model (no children reaching an output node)."""
     layer_entry = self[tensor_label]
     layer_entry.is_internal_sink = True
-    if tensor_label not in self.internally_terminated_ops:
-        self.internally_terminated_ops.append(tensor_label)
+    if tensor_label not in self.internal_sink_ops:
+        self.internal_sink_ops.append(tensor_label)
         if layer_entry.is_scalar_bool and (tensor_label not in self.internally_terminated_bool_ops):
             self.internally_terminated_bool_ops.append(tensor_label)
             layer_entry.is_terminal_bool = True

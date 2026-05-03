@@ -1537,11 +1537,11 @@ def test_trace_layers_to_save(default_input1):
     assert saved_entry.out is not None
 
 
-def test_trace_save_function_args(default_input1):
-    """Test save_function_args=True populates saved_args on entries."""
+def test_trace_save_arg_values(default_input1):
+    """Test save_arg_values=True populates saved_args on entries."""
     model = example_models.SimpleFF()
-    mh = trace(model, default_input1, save_function_args=True)
-    assert mh.save_function_args is True
+    mh = trace(model, default_input1, save_arg_values=True)
+    assert mh.save_arg_values is True
     # At least one non-input layer should have saved_args
     found = False
     for label in mh.layer_labels:
@@ -1591,8 +1591,9 @@ def test_trace_getitem_by_index(default_input1):
     mh = trace(model, default_input1)
     first = mh[0]
     last = mh[-1]
-    assert first.layer_label == mh.layer_labels[0]
-    assert last.layer_label == mh.layer_labels[-1]
+    layer_labels = [layer.layer_label for layer in mh.layer_list]
+    assert first.layer_label == layer_labels[0]
+    assert last.layer_label == layer_labels[-1]
 
 
 def test_trace_getitem_by_label(default_input1):
@@ -1608,7 +1609,7 @@ def test_trace_len(default_input1):
     """Test len(Trace) matches layer count."""
     model = example_models.SimpleFF()
     mh = trace(model, default_input1)
-    assert len(mh) == len(mh.layer_labels)
+    assert len(mh) == len(mh.layer_list)
 
 
 def test_trace_iter(default_input1):
@@ -1616,7 +1617,7 @@ def test_trace_iter(default_input1):
     model = example_models.SimpleFF()
     mh = trace(model, default_input1)
     items = list(mh)
-    assert len(items) == len(mh.layer_labels)
+    assert len(items) == len(mh.layer_list)
 
 
 def test_trace_layer_labels(default_input1):
@@ -1666,7 +1667,7 @@ def test_view_mutation_unsqueeze(input_2d):
     """Mutation through unsqueeze view should be logged without error."""
     model = example_models.ViewMutationUnsqueeze()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1675,7 +1676,7 @@ def test_view_mutation_reshape(input_2d):
     """Mutation through reshape view should be logged without error."""
     model = example_models.ViewMutationReshape()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1684,7 +1685,7 @@ def test_view_mutation_transpose(input_2d):
     """Mutation through transpose view should be logged without error."""
     model = example_models.ViewMutationTranspose()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1693,7 +1694,7 @@ def test_multiple_view_mutations(input_2d):
     """Multiple views mutated independently should be logged without error."""
     model = example_models.MultipleViewMutations()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1702,7 +1703,7 @@ def test_chained_view_mutation(input_2d):
     """Mutation through chained views should be logged without error."""
     model = example_models.ChainedViewMutation()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1711,7 +1712,7 @@ def test_output_matches_parent_no_false_positive(input_2d):
     """No mutation model: verify no false-positive child tensor variations."""
     model = example_models.OutputMatchesParent()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # No layer should have child tensor variations since nothing is mutated
@@ -3915,12 +3916,12 @@ def test_autocast_mid_forward():
 
 
 # =============================================================================
-# Loop detection comparison (detect_loops=True vs False)
+# Loop detection comparison (recurrence_detection=True vs False)
 # =============================================================================
 # These tests render the same looping models with and without full loop
 # detection, producing side-by-side visualizations for manual comparison.
-# With detect_loops=True: repeated operations are collapsed into multi-pass layers.
-# With detect_loops=False: only same-param operations are grouped.
+# With recurrence_detection=True: repeated operations are collapsed into multi-pass layers.
+# With recurrence_detection=False: only same-param operations are grouped.
 
 
 LOOP_COMPARISON_DIR = opj(VIS_OUTPUT_DIR, "loop-comparison")
@@ -3941,7 +3942,7 @@ def _render_both(model, x, name):
         vis_save_only=True,
         vis_mode="rolled",
         vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_on"),
-        detect_loops=True,
+        recurrence_detection=True,
     )
     show_model_graph(
         model,
@@ -3949,7 +3950,7 @@ def _render_both(model, x, name):
         vis_save_only=True,
         vis_mode="rolled",
         vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off"),
-        detect_loops=False,
+        recurrence_detection=False,
     )
     # Also render unrolled for the no-loops case
     show_model_graph(
@@ -3958,7 +3959,7 @@ def _render_both(model, x, name):
         vis_save_only=True,
         vis_mode="unrolled",
         vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off_unrolled"),
-        detect_loops=False,
+        recurrence_detection=False,
     )
 
 

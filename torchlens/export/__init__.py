@@ -222,7 +222,7 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
         live_bytes += bytes_value
         events.append(
             {
-                "operation": getattr(layer, "op_index", None),
+                "operation": getattr(layer, "compute_index", None),
                 "layer": getattr(layer, "layer_label", None),
                 "tensor_bytes": bytes_value,
                 "cumulative_tensor_bytes": live_bytes,

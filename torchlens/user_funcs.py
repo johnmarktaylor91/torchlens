@@ -660,8 +660,8 @@ def _run_model_and_save_specified_outs(
     save_raw_outs: bool = True,
     save_raw_grads: bool = True,
     mark_layer_depths: bool = False,
-    detach_saved_tensorss: bool = False,
-    save_function_args: bool = False,
+    detach_saved_activations: bool = False,
+    save_arg_values: bool = False,
     save_grads: bool = False,
     grads_to_save: str | list[int | str] | None = "all",
     random_seed: int | None = None,
@@ -669,7 +669,7 @@ def _run_model_and_save_specified_outs(
     optimizer: Any = None,
     save_code_context: bool = False,
     save_rng_states: bool = False,
-    detect_loops: bool = True,
+    recurrence_detection: bool = True,
     save_outs_to: str | Path | None = None,
     keep_outs_in_memory: bool = True,
     save_grads_to: str | Path | None = None,
@@ -714,15 +714,15 @@ def _run_model_and_save_specified_outs(
             Metadata always describes the raw grad.
         mark_layer_depths: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
-        detach_saved_tensorss: If True, saved tensors are detached from the autograd graph.
-        save_function_args: If True, store the non-tensor arguments to each function call.
+        detach_saved_activations: If True, saved tensors are detached from the autograd graph.
+        save_arg_values: If True, store the non-tensor arguments to each function call.
             Required for validation replay (``validate_saved_outs``).
         save_grads: If True, register backward hooks to capture grads.
         grads_to_save: Which layer grads to save.
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
-        detect_loops: If True (default), run full isomorphic subgraph expansion to
+        recurrence_detection: If True (default), run full isomorphic subgraph expansion to
             detect repeated patterns (loops). Set this to False when the forward pass has
             more than about 1M operations and postprocessing speed matters; the False path
             skips the expensive expansion step and only groups operations that share the
@@ -789,16 +789,16 @@ def _run_model_and_save_specified_outs(
         save_raw_outs=save_raw_outs,
         save_raw_grads=save_raw_grads,
         keep_unsaved_layers=keep_unsaved_layers,
-        save_function_args=save_function_args,
+        save_arg_values=save_arg_values,
         save_grads=save_grads,
         grads_to_save=grads_to_save,
-        detach_saved_tensorss=detach_saved_tensorss,
+        detach_saved_activations=detach_saved_activations,
         mark_layer_depths=mark_layer_depths,
         num_context_lines=num_context_lines,
         optimizer=optimizer,
         save_code_context=save_code_context,
         save_rng_states=save_rng_states,
-        detect_loops=detect_loops,
+        recurrence_detection=recurrence_detection,
         verbose=verbose,
         train_mode=train_mode,
         module_filter=module_filter,
@@ -806,7 +806,7 @@ def _run_model_and_save_specified_outs(
     )
     trace.name = name
     forward_code = getattr(model.forward, "__code__", None)
-    trace.forward_lineno = getattr(forward_code, "co_firstlineno", None)
+    trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
     trace.intervention_ready = intervention_ready
     if hook_plan:
         trace.run_state = RunState.LIVE_CAPTURED
@@ -861,8 +861,8 @@ def trace(
     save_raw_grads: bool | MissingType = MISSING,
     out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     mark_layer_depths: bool | MissingType = MISSING,
-    detach_saved_tensorss: bool | MissingType = MISSING,
-    save_function_args: bool | MissingType = MISSING,
+    detach_saved_activations: bool | MissingType = MISSING,
+    save_arg_values: bool | MissingType = MISSING,
     save_grads: bool | MissingType = MISSING,
     grads_to_save: str | list[Any] | None | MissingType = MISSING,
     save_code_context: bool | MissingType = MISSING,
@@ -893,7 +893,6 @@ def trace(
     random_seed: int | None | MissingType = MISSING,
     num_context_lines: int | MissingType = MISSING,
     optimizer: Any | MissingType = MISSING,
-    detect_loops: bool | MissingType = MISSING,
     save_outs_to: str | Path | None | MissingType = MISSING,
     keep_outs_in_memory: bool | MissingType = MISSING,
     save_grads_to: str | Path | None | MissingType = MISSING,
@@ -905,7 +904,7 @@ def trace(
     verbose: bool | MissingType = MISSING,
     source_context_lines: int | MissingType = MISSING,
     compute_input_output_distances: bool | MissingType = MISSING,
-    detect_recurrent_patterns: bool | MissingType = MISSING,
+    recurrence_detection: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
     save: SaveOptions | None = None,
     visualization: VisualizationOptions | None = None,
@@ -971,8 +970,8 @@ def trace(
             grad tensors in memory; raw grad metadata is still populated.
         mark_layer_depths: Deprecated alias for
             ``compute_input_output_distances``.
-        detach_saved_tensorss: If True, detach saved tensors from the autograd graph.
-        save_function_args: Store non-tensor args for each function call (needed for
+        detach_saved_activations: If True, detach saved tensors from the autograd graph.
+        save_arg_values: Store non-tensor args for each function call (needed for
             ``validate_forward_pass``).
         save_grads: Capture grads during a subsequent backward pass.
         grads_to_save: Which layer grads to save. When omitted, explicit
@@ -1018,7 +1017,7 @@ def trace(
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Deprecated alias for ``source_context_lines``.
         optimizer: Optional optimizer to annotate which params are being optimized.
-        detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
+        recurrence_detection: Deprecated alias for ``recurrence_detection``.
         save_outs_to: Deprecated alias for ``streaming.bundle_path``.
         keep_outs_in_memory: Deprecated alias for
             ``streaming.retain_in_memory``.
@@ -1031,7 +1030,7 @@ def trace(
         intervention_ready: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence. This does not imply
-            ``save_function_args=True``.
+            ``save_arg_values=True``.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
             ``Trace.attach_hooks`` and executes during this capture when supplied.
         unwrap_when_done: If True, restore original torch callables after logging.
@@ -1040,7 +1039,7 @@ def trace(
         source_context_lines: Lines of source context to capture per function call.
         compute_input_output_distances: Compute BFS distances from inputs/outputs
             (expensive).
-        detect_recurrent_patterns: If True (default), run full isomorphic
+        recurrence_detection: If True (default), run full isomorphic
             subgraph expansion. Set this to False when the forward pass has more than
             about 1M operations and postprocessing speed matters; the False path skips
             the expensive expansion step and only groups operations that share the same
@@ -1095,7 +1094,7 @@ def trace(
         layers_to_save=layers_to_save,
         keep_unsaved_layers=keep_unsaved_layers,
         output_device=output_device,
-        save_function_args=save_function_args,
+        save_arg_values=save_arg_values,
         save_grads=save_grads,
         grads_to_save=grads_to_save,
         save_code_context=save_code_context,
@@ -1106,9 +1105,8 @@ def trace(
         optimizer=optimizer,
         compute_input_output_distances=compute_input_output_distances,
         mark_layer_depths=mark_layer_depths,
-        detach_saved_tensorss=detach_saved_tensorss,
-        detect_recurrent_patterns=detect_recurrent_patterns,
-        detect_loops=detect_loops,
+        detach_saved_activations=detach_saved_activations,
+        recurrence_detection=recurrence_detection,
         intervention_ready=intervention_ready,
         hooks=hooks,
         unwrap_when_done=unwrap_when_done,
@@ -1169,7 +1167,7 @@ def trace(
     grad_transform = save_options.grad_transform
     save_raw_outs = save_options.save_raw_outs
     save_raw_grads = save_options.save_raw_grads
-    save_function_args = capture_options.save_function_args
+    save_arg_values = capture_options.save_arg_values
     save_grads = capture_options.save_grads
     save_code_context = capture_options.save_code_context
     save_rng_states = capture_options.save_rng_states
@@ -1177,8 +1175,8 @@ def trace(
     source_context_lines = capture_options.source_context_lines
     optimizer = capture_options.optimizer
     compute_input_output_distances = capture_options.compute_input_output_distances
-    detach_saved_tensorss = capture_options.detach_saved_tensorss
-    detect_recurrent_patterns = capture_options.detect_recurrent_patterns
+    detach_saved_activations = capture_options.detach_saved_activations
+    recurrence_detection = capture_options.recurrence_detection
     intervention_ready = capture_options.intervention_ready
     hooks = capture_options.hooks
     unwrap_when_done = capture_options.unwrap_when_done
@@ -1233,7 +1231,7 @@ def trace(
     validate_training_compatibility(
         train_mode=train_mode_value,
         streaming=streaming_options,
-        detach_saved_tensorss=detach_saved_tensorss,
+        detach_saved_activations=detach_saved_activations,
         inference_mode_active=torch.is_inference_mode_enabled(),
     )
 
@@ -1259,15 +1257,15 @@ def trace(
             "layers_to_save": layers_to_save,
             "keep_unsaved_layers": keep_unsaved_layers,
             "output_device": output_device,
-            "save_function_args": save_function_args,
+            "save_arg_values": save_arg_values,
             "save_grads": save_grads,
             "grads_to_save": grads_to_save_resolved,
             "save_code_context": save_code_context,
             "save_rng_states": save_rng_states,
             "source_context_lines": source_context_lines,
             "compute_input_output_distances": compute_input_output_distances,
-            "detach_saved_tensorss": detach_saved_tensorss,
-            "detect_recurrent_patterns": detect_recurrent_patterns,
+            "detach_saved_activations": detach_saved_activations,
+            "recurrence_detection": recurrence_detection,
             "train_mode": train_mode_value,
         }
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
@@ -1309,8 +1307,8 @@ def trace(
             save_raw_outs=save_raw_outs,
             save_raw_grads=save_raw_grads,
             mark_layer_depths=compute_input_output_distances,
-            detach_saved_tensorss=detach_saved_tensorss,
-            save_function_args=save_function_args,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
             save_grads=save_grads,
             grads_to_save=grads_to_save_resolved,
             random_seed=random_seed,
@@ -1318,7 +1316,7 @@ def trace(
             optimizer=optimizer,
             save_code_context=save_code_context,
             save_rng_states=save_rng_states,
-            detect_loops=detect_recurrent_patterns,
+            recurrence_detection=recurrence_detection,
             save_outs_to=streaming_options.bundle_path,
             keep_outs_in_memory=streaming_options.retain_in_memory,
             save_grads_to=save_grads_to_value,
@@ -1360,8 +1358,8 @@ def trace(
             save_raw_outs=save_raw_outs,
             save_raw_grads=save_raw_grads,
             mark_layer_depths=compute_input_output_distances,
-            detach_saved_tensorss=detach_saved_tensorss,
-            save_function_args=save_function_args,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
             save_grads=False,
             grads_to_save=None,
             random_seed=random_seed,
@@ -1369,7 +1367,7 @@ def trace(
             optimizer=optimizer,
             save_code_context=save_code_context,
             save_rng_states=save_rng_states,
-            detect_loops=detect_recurrent_patterns,
+            recurrence_detection=recurrence_detection,
             save_outs_to=streaming_options.bundle_path,
             keep_outs_in_memory=streaming_options.retain_in_memory,
             save_grads_to=save_grads_to_value,
@@ -1506,7 +1504,7 @@ def summary(
         input_kwargs=input_kwargs,
         layers_to_save=None,
         keep_unsaved_layers=True,
-        detect_loops=True,
+        recurrence_detection=True,
     )
     try:
         return trace.summary(**summary_kwargs)
@@ -1543,9 +1541,8 @@ def show_model_graph(
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: int | None = None,
-    detect_loops: bool | MissingType = MISSING,
     verbose: bool = False,
-    detect_recurrent_patterns: bool | MissingType = MISSING,
+    recurrence_detection: bool | MissingType = MISSING,
     visualization: VisualizationOptions | None = None,
 ) -> None:
     """Convenience wrapper: visualize the computational graph without saving outs.
@@ -1594,8 +1591,7 @@ def show_model_graph(
             while that object is still alive.
         vis_node_mode: Deprecated alias for ``visualization.node_mode``.
         random_seed: Fixed RNG seed for stochastic models.
-        detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
-        detect_recurrent_patterns: If True (default), run full isomorphic
+        recurrence_detection: If True (default), run full isomorphic
             subgraph expansion. Set this to False when the forward pass has more than
             about 1M operations and postprocessing speed matters; the False path skips
             the expensive expansion step and only groups operations that share the same
@@ -1612,13 +1608,9 @@ def show_model_graph(
         input_kwargs = {}
     check_model_and_input_variants(model, input_args, input_kwargs)
 
-    detect_recurrent_patterns = resolve_renamed_kwarg(
-        old_name="detect_loops",
-        new_name="detect_recurrent_patterns",
-        old_value=detect_loops,
-        new_value=detect_recurrent_patterns,
-        default=True,
-    )
+    if recurrence_detection is MISSING:
+        recurrence_detection = True
+    recurrence_detection_enabled = bool(recurrence_detection)
     visualization_options = merge_visualization_options(
         function_default_mode="unrolled",
         visualization=visualization,
@@ -1656,10 +1648,10 @@ def show_model_graph(
         layers_to_save=None,
         out_transform=None,
         mark_layer_depths=False,
-        detach_saved_tensorss=False,
+        detach_saved_activations=False,
         save_grads=False,
         random_seed=random_seed,
-        detect_loops=detect_recurrent_patterns,
+        recurrence_detection=recurrence_detection_enabled,
         verbose=verbose,
     )
     # Render in a try/finally so temporary tl_ attributes on the model are
@@ -2081,7 +2073,7 @@ def validate_forward_pass(
     **How it works:**
 
     1. Run model.forward() *without* TorchLens to get ground-truth output tensors.
-    2. Run ``trace`` with ``save_function_args=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_arg_values=True`` and ``layers_to_save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
        layer-by-layer from saved outs, checking that the output matches
@@ -2090,7 +2082,7 @@ def validate_forward_pass(
     4. If ``validate_metadata=True``, run comprehensive invariant checks on all
        metadata cross-references (graph edges, module containment, labels, etc.).
 
-    **Why save_function_args=True is required:**  The validation replay re-executes
+    **Why save_arg_values=True is required:**  The validation replay re-executes
     each function using its saved non-tensor arguments (e.g., stride, padding for
     conv2d).  Without them, replay cannot reconstruct the correct computation.
 
@@ -2153,7 +2145,7 @@ def validate_forward_pass(
         model.load_state_dict(state_dict)
 
         # Step 2: Run the model *through* TorchLens, saving all outs.
-        # save_function_args=True is essential - the replay needs each function's
+        # save_arg_values=True is essential - the replay needs each function's
         # non-tensor arguments to re-execute the computation from saved outs.
         trace = _run_model_and_save_specified_outs(
             model=model,
@@ -2163,9 +2155,9 @@ def validate_forward_pass(
             keep_unsaved_layers=True,
             out_transform=None,
             mark_layer_depths=False,
-            detach_saved_tensorss=False,
+            detach_saved_activations=False,
             save_grads=False,
-            save_function_args=True,
+            save_arg_values=True,
             random_seed=random_seed,
             save_rng_states=True,
         )

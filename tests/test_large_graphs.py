@@ -29,7 +29,7 @@ def _ensure_output_dir():
 def _count_nodes(model, x):
     """Log forward pass and return node count."""
     ml = trace_fn(model, x)
-    count = len(ml.layer_labels)
+    count = len(ml.layer_list)
     ml.cleanup()
     return count
 

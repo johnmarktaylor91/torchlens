@@ -204,7 +204,7 @@ def validate_saved_outs(
     # Edge-counting approach: a parent is enqueued only after ALL its child
     # edges are validated (validated_child_edges == set(children)).
     validated_child_edges_for_each_layer: Dict[str, Set[str]] = defaultdict(set)
-    validated_layers = set(self.output_layers + self.internally_terminated_ops)
+    validated_layers = set(self.output_layers + self.internal_sink_ops)
     layers_to_validate_parents_for = deque(validated_layers)
 
     while len(layers_to_validate_parents_for) > 0:
@@ -221,7 +221,7 @@ def validate_saved_outs(
             return False
 
     # Completeness check: BFS must visit every layer in the graph.
-    expected_layers = set(self.layer_labels)
+    expected_layers = {layer.layer_label for layer in self.layer_list}
     if len(validated_layers) < len(expected_layers):
         unreached = expected_layers - validated_layers
         print(
@@ -673,7 +673,7 @@ def _deep_numeric_replay_matches_saved(
         return False
     if layer.func_name not in DEEP_NUMERIC_REPLAY_FUNCS:
         return False
-    if layer.op_index < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
+    if layer.compute_index < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
         return False
     if recomputed_output.shape != saved_output.shape:
         return False

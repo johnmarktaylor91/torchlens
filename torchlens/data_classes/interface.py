@@ -115,7 +115,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
         ]
         entries_with_substr = {
-            self.layer_dict_all_keys[key].creation_index: self.layer_dict_all_keys[key]
+            self.layer_dict_all_keys[key].capture_index: self.layer_dict_all_keys[key]
             for key in keys_with_substr
         }
         if len(entries_with_substr) == 1:
@@ -237,8 +237,8 @@ def _str_during_pass(self: "Trace") -> str:
     s += f"\n\tRandom seed: {self.random_seed}"
     s += f"\n\tInput tensors: {self.input_layers}"
     s += f"\n\tOutput tensors: {self.output_layers}"
-    s += f"\n\tInternally initialized tensors: {self.internally_initialized_ops}"
-    s += f"\n\tInternally terminated tensors: {self.internally_terminated_ops}"
+    s += f"\n\tInternally initialized tensors: {self.internal_source_ops}"
+    s += f"\n\tInternally terminated tensors: {self.internal_sink_ops}"
     s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_ops}"
     s += f"\n\tBuffer tensors: {self.buffer_layers}"
     s += "\n\tRaw layer labels:"

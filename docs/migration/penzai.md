@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | Name and select model subtrees | `tl.in_module`, `tl.module`, and exact labels after discovery | Similar goal; TorchLens uses PyTorch module addresses and op labels. |
 | Functional model surgery | `fork`, `set`, `attach_hooks`, `replay`, `rerun` | TorchLens mutates logs, not model definitions. |
-| Inspect intermediate values | `log.find_sites(...).first().activation` | Equivalent for captured tensors. |
+| Inspect intermediate values | `log.find_sites(...).first().out` | Equivalent for captured tensors. |
 | Patch or replace a value | `set(site, tensor)` or `attach_hooks(site, helper)` | Equivalent for visible activations. |
 | Declarative named axes | Use explicit tensor shapes and `feature_axis` where helpers require it | No named-axis system; deferred to v2.x. |
 | Transformer-specific layer abstractions | Discover PyTorch module/op sites | No built-in Penzai transformer abstraction parity. |

@@ -46,7 +46,7 @@ def _build_live_log() -> Trace:
         model,
         x,
         layers_to_save="all",
-        save_function_args=True,
+        save_arg_values=True,
         save_rng_states=True,
         save_code_context=True,
         random_seed=0,

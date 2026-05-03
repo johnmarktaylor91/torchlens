@@ -52,7 +52,7 @@ from .._errors import TorchLensPostfuncError
 from .._run_state import RunState
 from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
-from ..intervention.types import LAYER_PASS_LOG_FORK_POLICY
+from ..intervention.types import LAYER_PASS_LOG_FIELD_FORK_POLICY
 from ..intervention.errors import DirectActivationWriteWarning
 from .._state import pause_logging
 from ..utils.tensor_utils import (
@@ -198,8 +198,8 @@ class OpLog:
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_label_raw": FieldPolicy.KEEP,
         "_layer_label_raw": FieldPolicy.KEEP,
-        "op_index": FieldPolicy.KEEP,
-        "creation_index": FieldPolicy.KEEP,
+        "compute_index": FieldPolicy.KEEP,
+        "capture_index": FieldPolicy.KEEP,
         "source_trace": FieldPolicy.DROP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "_tracing_finished": FieldPolicy.KEEP,
@@ -212,7 +212,7 @@ class OpLog:
         "layer_label_no_pass_short": FieldPolicy.KEEP,
         "layer_type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
-        "overall_index": FieldPolicy.KEEP,
+        "trace_index": FieldPolicy.KEEP,
         "call_index": FieldPolicy.KEEP,
         "num_calls": FieldPolicy.KEEP,
         "lookup_keys": FieldPolicy.KEEP,
@@ -223,7 +223,7 @@ class OpLog:
         "out_postfunc": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "interventions": FieldPolicy.DROP,
-        "detach_saved_tensors": FieldPolicy.KEEP,
+        "detach_saved_activations": FieldPolicy.KEEP,
         "has_saved_args": FieldPolicy.KEEP,
         "saved_args": FieldPolicy.BLOB_RECURSIVE,
         "saved_kwargs": FieldPolicy.BLOB_RECURSIVE,
@@ -254,7 +254,7 @@ class OpLog:
         "func": FieldPolicy.DROP,
         "func_call_id": FieldPolicy.KEEP,
         "func_name": FieldPolicy.KEEP,
-        "func_call_stack": FieldPolicy.KEEP,
+        "code_context": FieldPolicy.KEEP,
         "func_duration": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
@@ -300,7 +300,7 @@ class OpLog:
         "min_distance_from_input": FieldPolicy.KEEP,
         "max_distance_from_input": FieldPolicy.KEEP,
         "is_output": FieldPolicy.KEEP,
-        "feeds_output": FieldPolicy.KEEP,
+        "is_output_parent": FieldPolicy.KEEP,
         "is_final_output": FieldPolicy.KEEP,
         "has_output_descendant": FieldPolicy.KEEP,
         "output_descendants": FieldPolicy.KEEP,
@@ -323,6 +323,8 @@ class OpLog:
         "bool_conditional_id": FieldPolicy.KEEP,
         "is_scalar_bool": FieldPolicy.KEEP,
         "bool_value": FieldPolicy.KEEP,
+        "in_conditionals": FieldPolicy.KEEP,
+        "terminal_bool_for": FieldPolicy.KEEP,
         "in_cond_branch": FieldPolicy.KEEP,
         "conditional_branch_stack": FieldPolicy.KEEP,
         "conditional_branch_depth": FieldPolicy.KEEP,
@@ -340,7 +342,7 @@ class OpLog:
         "output_of_modules": FieldPolicy.KEEP,
         "output_of_module_calls": FieldPolicy.KEEP,
         "is_submodule_output": FieldPolicy.KEEP,
-        "is_atomic_module_output": FieldPolicy.KEEP,
+        "is_atomic_module_op": FieldPolicy.KEEP,
         "atomic_module_call": FieldPolicy.KEEP,
         "_module_boundary_threads_inputs": FieldPolicy.KEEP,
         "_module_boundary_thread_output": FieldPolicy.KEEP,
@@ -353,7 +355,7 @@ class OpLog:
         "_pending_transformed_grad_blob_id": FieldPolicy.DROP,
         "parent_layer_log": FieldPolicy.DROP,
     }
-    FORK_POLICY = LAYER_PASS_LOG_FORK_POLICY
+    FIELD_FORK_POLICY = LAYER_PASS_LOG_FIELD_FORK_POLICY
     DEFAULT_FILL_STATE = _LAYER_PASS_LOG_DEFAULT_FILL
     _construction_done: bool = False
 
@@ -453,8 +455,8 @@ class OpLog:
         # General info:
         self._label_raw = fields_dict["_label_raw"]
         self._layer_label_raw = fields_dict["_layer_label_raw"]
-        self.op_index = fields_dict["op_index"]
-        self.creation_index = fields_dict["creation_index"]
+        self.compute_index = fields_dict["compute_index"]
+        self.capture_index = fields_dict["capture_index"]
         # Store as weakref to break circular reference (Trace -> layer_list -> entry -> Trace).
         _sml = fields_dict["source_trace"]
         self._source_trace_ref = weakref.ref(_sml) if _sml is not None else None
@@ -469,7 +471,7 @@ class OpLog:
         self.layer_label_no_pass_short = fields_dict["layer_label_no_pass_short"]
         self.layer_type = fields_dict["layer_type"]
         self.type_index = fields_dict["type_index"]
-        self.overall_index = fields_dict["overall_index"]
+        self.trace_index = fields_dict["trace_index"]
         self.call_index = fields_dict["call_index"]
         self.num_calls = fields_dict["num_calls"]
         self.lookup_keys = fields_dict["lookup_keys"]
@@ -482,7 +484,7 @@ class OpLog:
         self.out_postfunc = fields_dict["out_postfunc"]
         self.annotations: Dict[str, Any] = fields_dict["annotations"]
         self.interventions = fields_dict["interventions"]
-        self.detach_saved_tensors = fields_dict["detach_saved_tensors"]
+        self.detach_saved_activations = fields_dict["detach_saved_activations"]
         self.has_saved_args = fields_dict["has_saved_args"]
         self.saved_args = fields_dict["saved_args"]
         self.saved_kwargs = fields_dict["saved_kwargs"]
@@ -522,7 +524,7 @@ class OpLog:
         self.func = fields_dict["func"]
         self.func_call_id = fields_dict["func_call_id"]
         self.func_name = fields_dict["func_name"]
-        self.func_call_stack: List["FuncCallLocation"] = fields_dict["func_call_stack"]
+        self.code_context: List["FuncCallLocation"] = fields_dict["code_context"]
         self.func_duration = fields_dict["func_duration"]
         self.flops_forward = fields_dict["flops_forward"]
         self.flops_backward = fields_dict["flops_backward"]
@@ -579,7 +581,7 @@ class OpLog:
         self.min_distance_from_input = fields_dict["min_distance_from_input"]
         self.max_distance_from_input = fields_dict["max_distance_from_input"]
         self.is_output = fields_dict["is_output"]
-        self.feeds_output = fields_dict["feeds_output"]
+        self.is_output_parent = fields_dict["is_output_parent"]
         self.is_final_output = fields_dict["is_final_output"]
         self.has_output_descendant = fields_dict["has_output_descendant"]
         self.output_descendants = fields_dict["output_descendants"]
@@ -604,6 +606,8 @@ class OpLog:
         self.bool_conditional_id = fields_dict["bool_conditional_id"]
         self.is_scalar_bool = fields_dict["is_scalar_bool"]
         self.bool_value = fields_dict["bool_value"]
+        self.in_conditionals = fields_dict["in_conditionals"]
+        self.terminal_bool_for = fields_dict["terminal_bool_for"]
         self.in_cond_branch = fields_dict["in_cond_branch"]
         self.conditional_branch_stack = fields_dict["conditional_branch_stack"]
         self.conditional_branch_depth = fields_dict["conditional_branch_depth"]
@@ -623,7 +627,7 @@ class OpLog:
         self.output_of_modules = fields_dict["output_of_modules"]
         self.output_of_module_calls = fields_dict["output_of_module_calls"]
         self.is_submodule_output = fields_dict["is_submodule_output"]
-        self.is_atomic_module_output = fields_dict["is_atomic_module_output"]
+        self.is_atomic_module_op = fields_dict["is_atomic_module_op"]
         self.atomic_module_call = fields_dict["atomic_module_call"]
         self._module_boundary_threads_inputs = fields_dict["_module_boundary_threads_inputs"]
         self._module_boundary_thread_output = fields_dict["_module_boundary_thread_output"]
@@ -706,6 +710,30 @@ class OpLog:
     def has_co_parents(self) -> bool:
         """Whether this layer shares children with other layers."""
         return len(self.co_parents) > 0
+
+    @property
+    def is_in_conditional(self) -> bool:
+        """Whether this op participates in any conditional role."""
+
+        return bool(self.in_conditionals)
+
+    @property
+    def is_in_conditional_evaluation(self) -> bool:
+        """Whether this op computes a conditional arm condition."""
+
+        return any(role.role == "evaluation" for role in self.in_conditionals or [])
+
+    @property
+    def is_in_conditional_body(self) -> bool:
+        """Whether this op is in a conditional arm body."""
+
+        return any(role.role == "body" for role in self.in_conditionals or [])
+
+    @property
+    def conditional_depth(self) -> int:
+        """Number of distinct conditionals this op participates in."""
+
+        return len({role.conditional_id for role in self.in_conditionals or []})
 
     @property
     def uses_params(self) -> bool:
@@ -940,7 +968,7 @@ class OpLog:
             "module_passes_entered": "module_ops_entered",
             "modules_exited": "output_of_modules",
             "module_passes_exited": "output_of_module_calls",
-            "is_leaf_module_output": "is_atomic_module_output",
+            "is_leaf_module_output": "is_atomic_module_op",
             "leaf_module_pass": "atomic_module_call",
             "module_entry_exit_threads_inputs": "_module_boundary_thread_inputs",
             "module_entry_exit_thread_output": "_module_boundary_thread_output",
@@ -1035,12 +1063,12 @@ class OpLog:
         copied_entry = type(self)(fields_dict)
         return copied_entry
 
-    def save_tensor_data(
+    def save_activation(
         self,
         t: torch.Tensor,
         t_args: Union[List[Any], Tuple[Any, ...]],
         t_kwargs: Dict[str, Any],
-        save_function_args: bool,
+        save_arg_values: bool,
         out_postfunc: Optional[Callable[..., Any]] = None,
     ) -> None:
         """Save the output tensor (and optionally args) for this operation.
@@ -1057,7 +1085,7 @@ class OpLog:
             t: The output tensor of the operation.
             t_args: Positional arguments passed to the operation.
             t_kwargs: Keyword arguments passed to the operation.
-            save_function_args: Whether to deep-copy and store args/kwargs.
+            save_arg_values: Whether to deep-copy and store args/kwargs.
             out_postfunc: Optional transform applied to the tensor
                 before storing (e.g. detach, to-numpy, normalize).
         """
@@ -1065,7 +1093,7 @@ class OpLog:
         writer = getattr(trace, "_out_writer", None) if trace is not None else None
         try:
             # Clone the tensor, optionally detaching from autograd graph.
-            raw_out = safe_copy(t, self.detach_saved_tensors)
+            raw_out = safe_copy(t, self.detach_saved_activations)
             # Move to the user-requested output device if needed.
             if self.output_device not in [str(raw_out.device), "same"]:
                 raw_out = safe_to(raw_out, self.output_device)
@@ -1076,7 +1104,7 @@ class OpLog:
 
             save_raw_outs = getattr(trace, "save_raw_outs", True)
             store_raw = save_raw_outs or out_postfunc is None
-            if trace is not None and store_raw and not getattr(trace, "save_function_args", False):
+            if trace is not None and store_raw and not getattr(trace, "save_arg_values", False):
                 hash_cache = getattr(trace, "_out_hash_cache", None)
                 if hash_cache is None:
                     hash_cache = {}
@@ -1144,7 +1172,7 @@ class OpLog:
                 )
 
         # Tensor args and kwargs:
-        if save_function_args:
+        if save_arg_values:
             self.has_saved_args = True
             self._internal_set("saved_args", [_recursive_safe_copy(arg) for arg in t_args])
             self._internal_set(
@@ -1396,7 +1424,7 @@ class OpLog:
         s += f"\n\tComputed from params: {self.uses_params}"
         s += f"\n\tComputed in modules: {self.modules}"
         s += f"\n\tOutput of modules: {self.output_of_module_calls}"
-        if self.is_atomic_module_output:
+        if self.is_atomic_module_op:
             s += " (bottom-level submodule output)"
         else:
             s += " (not bottom-level submodule output)"
@@ -1427,7 +1455,7 @@ class OpLog:
             pass_str = ", "
         sml = self.source_trace
         num_ops = sml.num_ops if sml is not None else "?"
-        s = f"Layer {self.layer_label_no_pass}{pass_str}operation {self.op_index}/{num_ops}:"
+        s = f"Layer {self.layer_label_no_pass}{pass_str}operation {self.compute_index}/{num_ops}:"
         s += f"\n\tOutput tensor: shape={self.shape}, dype={self.dtype}, size={self.memory_str}"
         if not self.has_saved_outs:
             s += " (not saved)"
@@ -1456,7 +1484,7 @@ class OpLog:
             s += f"\n\tOutput of modules: {output_of_modules_str}"
         else:
             s += "\n\tOutput of modules: none"
-        if self.is_atomic_module_output:
+        if self.is_atomic_module_op:
             s += f"\n\tOutput of bottom-level module: {self.atomic_module_call}"
         lookup_keys_str = ", ".join([str(key) for key in self.lookup_keys])
         s += f"\n\tLookup keys: {lookup_keys_str}"

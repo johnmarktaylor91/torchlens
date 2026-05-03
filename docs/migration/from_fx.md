@@ -5,7 +5,7 @@ eager model and records what actually executed for one concrete input.
 
 | torch.fx construct | TorchLens equivalent |
 | --- | --- |
-| `symbolic_trace(model)` followed by `graph_module(x)`. | `log_forward_pass(model, x)` and inspect the eager-operation log. |
+| `symbolic_trace(model)` followed by `graph_module(x)`. | `trace(model, x)` and inspect the eager-operation log. |
 
 Their construct:
 
@@ -53,6 +53,6 @@ class Tiny(nn.Module):
         return torch.relu(self.proj(x))
 
 
-log = tl.log_forward_pass(Tiny(), torch.tensor([[2.0, 3.0]]), vis_opt="none")
-RESULT = log["linear_1_1"].activation.detach().tolist()
+log = tl.trace(Tiny(), torch.tensor([[2.0, 3.0]]), vis_opt="none")
+RESULT = log["linear_1_1"].out.detach().tolist()
 ```

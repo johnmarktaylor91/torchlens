@@ -277,7 +277,7 @@ def _compact_size(size: float) -> str:
 def _first_call_location(layer_log: "LayerLog") -> Any | None:
     """Return the first captured call-stack location for a layer."""
 
-    call_stack = _get_optional_attr(layer_log, "func_call_stack")
+    call_stack = _get_optional_attr(layer_log, "code_context")
     if isinstance(call_stack, list) and call_stack:
         return call_stack[0]
     return None

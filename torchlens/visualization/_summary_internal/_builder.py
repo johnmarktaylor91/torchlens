@@ -193,7 +193,7 @@ def format_discoverability_summary(trace: "Trace") -> str:
         f"  input_shape: {_input_shape_summary(trace)}",
         f"  capture_timestamp: {_capture_timestamp(trace)}",
         f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
-        f"  capture_full_args: {bool(getattr(trace, 'capture_full_args', False))}",
+        f"  capture_args_template: {bool(getattr(trace, 'capture_args_template', False))}",
         "Run state:",
         f"  run_state: {_run_state_name(trace)}",
         f"  direct_write_dirty: {bool(getattr(trace, '_has_direct_writes', False))}",
@@ -428,7 +428,7 @@ def _recent_operation_lines(trace: "Trace") -> list[str]:
         Indented operation lines.
     """
 
-    history = list(getattr(trace, "operation_history", []) or [])
+    history = list(getattr(trace, "ledger", []) or [])
     if not history:
         return ["  none"]
     lines = []

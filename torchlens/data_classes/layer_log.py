@@ -5,7 +5,7 @@ logical layer across recurrent ops.  For non-recurrent models (the
 common case), every LayerLog wraps exactly one OpLog.
 
 **Delegation pattern**: For single-pass layers, per-pass fields (out,
-grad, op_index, etc.) are accessible directly on the LayerLog
+grad, compute_index, etc.) are accessible directly on the LayerLog
 via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``ops[1]``.
 For multi-pass layers, accessing these fields raises ``ValueError`` (NOT
 ``AttributeError``) directing the user to ``layer_log.ops[N].field``.
@@ -19,7 +19,7 @@ the user a clear error message.
 When merging multiple ops into one LayerLog, these aggregate fields are merged:
   - ``has_input_ancestor``: OR across ops
   - ``io_role``: character-level merge of "I", "O", "IO" strings
-  - ``is_atomic_module_output``: OR across ops
+  - ``is_atomic_module_op``: OR across ops
   - ``in_cond_branch``: OR across ops
   - ``conditional_branch_stacks`` / ``conditional_branch_stack_ops``:
     unique per-pass stack signatures and their pass numbers
@@ -66,7 +66,7 @@ class LayerLog:
         "layer_label_short": FieldPolicy.KEEP,
         "layer_type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
-        "overall_index": FieldPolicy.KEEP,
+        "trace_index": FieldPolicy.KEEP,
         "num_calls": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "func": FieldPolicy.DROP,
@@ -94,7 +94,7 @@ class LayerLog:
         "output_device": FieldPolicy.KEEP,
         "out_postfunc": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "detach_saved_tensors": FieldPolicy.KEEP,
+        "detach_saved_activations": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
         "transformed_grad": FieldPolicy.BLOB,
         "transformed_grad_shape": FieldPolicy.KEEP,
@@ -123,6 +123,8 @@ class LayerLog:
         "is_terminal_bool": FieldPolicy.KEEP,
         "is_scalar_bool": FieldPolicy.KEEP,
         "bool_value": FieldPolicy.KEEP,
+        "in_conditionals": FieldPolicy.KEEP,
+        "terminal_bool_for": FieldPolicy.KEEP,
         "in_cond_branch": FieldPolicy.KEEP,
         "conditional_branch_stacks": FieldPolicy.KEEP,
         "conditional_branch_stack_ops": FieldPolicy.KEEP,
@@ -138,7 +140,7 @@ class LayerLog:
         "has_input_ancestor": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
-        "is_atomic_module_output": FieldPolicy.KEEP,
+        "is_atomic_module_op": FieldPolicy.KEEP,
         "ops": FieldPolicy.KEEP,
         "call_labels": FieldPolicy.KEEP,
     }
@@ -154,7 +156,7 @@ class LayerLog:
         self.layer_label_short = first_pass.layer_label_no_pass_short
         self.layer_type = first_pass.layer_type
         self.type_index = first_pass.type_index
-        self.overall_index = first_pass.overall_index
+        self.trace_index = first_pass.trace_index
         self.num_calls = first_pass.num_calls
         # Store as weakref to break circular reference (Trace -> layer_logs -> LayerLog -> Trace).
         _sml = first_pass.source_trace
@@ -191,7 +193,7 @@ class LayerLog:
         self.output_device = first_pass.output_device
         self.out_postfunc = first_pass.out_postfunc
         self.annotations: Dict[str, Any] = {}
-        self.detach_saved_tensors = first_pass.detach_saved_tensors
+        self.detach_saved_activations = first_pass.detach_saved_activations
         self.save_grads = first_pass.save_grads
         self.transformed_grad_shape = first_pass.transformed_grad_shape
         self.transformed_grad_dtype = first_pass.transformed_grad_dtype
@@ -229,6 +231,8 @@ class LayerLog:
         self.is_terminal_bool = first_pass.is_terminal_bool
         self.is_scalar_bool = first_pass.is_scalar_bool
         self.bool_value = first_pass.bool_value
+        self.in_conditionals = first_pass.in_conditionals
+        self.terminal_bool_for = first_pass.terminal_bool_for
         self.in_cond_branch = first_pass.in_cond_branch
         self.conditional_branch_stacks: List[List[Tuple[int, str]]] = []
         self.conditional_branch_stack_ops: Dict[Tuple[Tuple[int, str], ...], List[int]] = {}
@@ -241,7 +245,7 @@ class LayerLog:
         # Fields stored as aggregate for vis compatibility.
         # Initialized from first pass.  For multi-pass layers, _build_layer_logs
         # merges only has_input_ancestor (OR), io_role (char-merge),
-        # and is_atomic_module_output (OR).  All others keep first-pass values.
+        # and is_atomic_module_op (OR).  All others keep first-pass values.
         self.output_of_modules = first_pass.output_of_modules
         self.output_of_module_calls = first_pass.output_of_module_calls
         self.cond_branch_start_children = first_pass.cond_branch_start_children
@@ -251,7 +255,7 @@ class LayerLog:
         self.has_input_ancestor = first_pass.has_input_ancestor
         self.io_role = first_pass.io_role
         self.buffer_pass = first_pass.buffer_pass
-        self.is_atomic_module_output = first_pass.is_atomic_module_output
+        self.is_atomic_module_op = first_pass.is_atomic_module_op
 
         # Pass management
         self.ops: Dict[int, "OpLog"] = {}
@@ -496,7 +500,7 @@ class LayerLog:
         return cast(bool, self._single_pass_or_error("has_grad"))
 
     @property
-    def func_call_stack(self) -> Any:
+    def code_context(self) -> Any:
         """Return the captured call stack for a single-pass layer.
 
         Returns
@@ -504,7 +508,7 @@ class LayerLog:
         Any
             Function call stack from the only pass.
         """
-        return self._single_pass_or_error("func_call_stack")
+        return self._single_pass_or_error("code_context")
 
     @property
     def func_duration(self) -> Any:
@@ -529,7 +533,7 @@ class LayerLog:
         return self._single_pass_or_error("func_rng_states")
 
     @property
-    def op_index(self) -> int:
+    def compute_index(self) -> int:
         """Return the operation number for a single-pass layer.
 
         Returns
@@ -537,7 +541,7 @@ class LayerLog:
         int
             Operation number from the only pass.
         """
-        return cast(int, self._single_pass_or_error("op_index"))
+        return cast(int, self._single_pass_or_error("compute_index"))
 
     @property
     def call_index(self) -> int:
@@ -551,7 +555,7 @@ class LayerLog:
         return cast(int, self._single_pass_or_error("call_index"))
 
     @property
-    def creation_index(self) -> int:
+    def capture_index(self) -> int:
         """Return the creation-order index for a single-pass layer.
 
         Returns
@@ -559,7 +563,7 @@ class LayerLog:
         int
             Creation-order value from the only pass.
         """
-        return cast(int, self._single_pass_or_error("creation_index"))
+        return cast(int, self._single_pass_or_error("capture_index"))
 
     @property
     def lookup_keys(self) -> list[str]:
@@ -677,6 +681,30 @@ class LayerLog:
         return any(p.has_co_parents for p in self.ops.values())
 
     @property
+    def is_in_conditional(self) -> bool:
+        """Whether this layer participates in any conditional role."""
+
+        return bool(self.in_conditionals)
+
+    @property
+    def is_in_conditional_evaluation(self) -> bool:
+        """Whether this layer computes a conditional arm condition."""
+
+        return any(role.role == "evaluation" for role in self.in_conditionals or [])
+
+    @property
+    def is_in_conditional_body(self) -> bool:
+        """Whether this layer is in a conditional arm body."""
+
+        return any(role.role == "body" for role in self.in_conditionals or [])
+
+    @property
+    def conditional_depth(self) -> int:
+        """Number of distinct conditionals this layer participates in."""
+
+        return len({role.conditional_id for role in self.in_conditionals or []})
+
+    @property
     def _tracing_finished(self) -> bool:
         sml = self.source_trace
         if sml is None:
@@ -789,7 +817,7 @@ class LayerLog:
         """Set of module ops exited across all ops."""
         result = set()
         for pass_log in self.ops.values():
-            if pass_log.is_atomic_module_output:
+            if pass_log.is_atomic_module_op:
                 result.add(pass_log.atomic_module_call)
         return result
 

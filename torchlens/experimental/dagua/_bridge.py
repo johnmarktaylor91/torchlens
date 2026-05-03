@@ -71,7 +71,7 @@ ENTRY_FIELD_USAGE: dict[str, str] = {
     "module": "Leaf-module line in labels.",
     "modules": "Cluster nesting.",
     "is_submodule_output": "Rectangle/module-output shape override.",
-    "is_atomic_module_output": "Rectangle/module-output shape override.",
+    "is_atomic_module_op": "Rectangle/module-output shape override.",
     "has_grad": "Backward-edge inclusion in unrolled mode.",
     "interventions": "Per-node intervention fire-record summary.",
 }
@@ -498,7 +498,7 @@ def trace_to_dagua_graph(
         if getattr(entry, "is_buffer", False):
             shape_override = buffer_shape
         elif getattr(entry, "is_submodule_output", False) or getattr(
-            entry, "is_atomic_module_output", False
+            entry, "is_atomic_module_op", False
         ):
             shape_override = module_shape
 

@@ -72,7 +72,7 @@ class BufferLog(OpLog):
         return [] if self.buffer_address is None else [self.buffer_address]
 
     @property
-    def is_shared(self) -> bool:
+    def has_multiple_addresses(self) -> bool:
         """Return whether this buffer is registered at multiple addresses.
 
         Returns

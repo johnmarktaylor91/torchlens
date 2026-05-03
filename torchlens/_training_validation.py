@@ -74,7 +74,7 @@ def validate_training_compatibility(
     *,
     train_mode: bool,
     streaming: Any,
-    detach_saved_tensorss: bool | None = None,
+    detach_saved_activations: bool | None = None,
     save_outs_to: str | Path | None = None,
     inference_mode_active: bool | None = None,
 ) -> None:
@@ -86,7 +86,7 @@ def validate_training_compatibility(
         Whether the caller requested training-compatible out retention.
     streaming:
         Streaming options object, or ``None``.
-    detach_saved_tensorss:
+    detach_saved_activations:
         Whether saved tensors are explicitly detached.
     save_outs_to:
         Legacy disk-save path, if supplied outside grouped streaming options.
@@ -108,9 +108,9 @@ def validate_training_compatibility(
         raise TrainingModeConfigError(
             "train_mode=True is not compatible with slow/replay out disk saves"
         )
-    if detach_saved_tensorss is True:
+    if detach_saved_activations is True:
         raise TrainingModeConfigError(
-            "train_mode=True requires detach_saved_tensorss=False so grads can propagate"
+            "train_mode=True requires detach_saved_activations=False so grads can propagate"
         )
     if inference_mode_active is True:
         raise TrainingModeConfigError(

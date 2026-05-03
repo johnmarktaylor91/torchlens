@@ -932,10 +932,10 @@ def _enqueue_nondeterminism_note(hook: HookContext, helper_name: str) -> None:
     """
 
     note = f"{helper_name} used unseeded stochastic RNG at {hook.layer_log.get('layer_label')}"
-    hook.run_ctx.setdefault("operation_history_notes", []).append(note)
-    operation_history = hook.run_ctx.get("operation_history")
-    if isinstance(operation_history, list):
-        operation_history.append(note)
+    hook.run_ctx.setdefault("ledger_notes", []).append(note)
+    ledger = hook.run_ctx.get("ledger")
+    if isinstance(ledger, list):
+        ledger.append(note)
 
 
 def _source_tensor_or_out(source: Any, out: torch.Tensor) -> torch.Tensor:

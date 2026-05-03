@@ -413,10 +413,10 @@ def test_save_new_outs_train_mode_overrides() -> None:
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        detach_saved_tensorss=True,
+        detach_saved_activations=True,
         random_seed=0,
     )
-    original_layer_flags = [layer.detach_saved_tensors for layer in trace]
+    original_layer_flags = [layer.detach_saved_activations for layer in trace]
 
     trace.save_new_outs(
         model,
@@ -427,9 +427,9 @@ def test_save_new_outs_train_mode_overrides() -> None:
 
     saved = trace[trace.output_layers[0]].out
     assert saved.grad_fn is not None
-    assert trace.detach_saved_tensorss is True
+    assert trace.detach_saved_activations is True
     assert trace.train_mode is False
-    assert [layer.detach_saved_tensors for layer in trace] == original_layer_flags
+    assert [layer.detach_saved_activations for layer in trace] == original_layer_flags
     trace.cleanup()
 
 
@@ -494,10 +494,10 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     trace = tl.trace(
         model,
         torch.ones(2, 4, requires_grad=True),
-        detach_saved_tensorss=True,
+        detach_saved_activations=True,
         random_seed=0,
     )
-    original_layer_flags = [layer.detach_saved_tensors for layer in trace]
+    original_layer_flags = [layer.detach_saved_activations for layer in trace]
 
     def divergent_forward(self: BranchMismatchModel, x: torch.Tensor) -> torch.Tensor:
         """Run a different operation sequence from the exhaustive pass."""
@@ -519,7 +519,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     else:
         raise AssertionError("Expected fast-pass graph mismatch")
 
-    assert trace.detach_saved_tensorss is True
+    assert trace.detach_saved_activations is True
     assert trace.train_mode is False
-    assert [layer.detach_saved_tensors for layer in trace] == original_layer_flags
+    assert [layer.detach_saved_activations for layer in trace] == original_layer_flags
     trace.cleanup()

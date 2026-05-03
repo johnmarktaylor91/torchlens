@@ -471,26 +471,26 @@ def _make_nested_log():
 
 
 def test_corruption_graph_ordering_duplicate_rt_num():
-    """Duplicate creation_index triggers graph_ordering error."""
+    """Duplicate capture_index triggers graph_ordering error."""
     log = _make_clean_log()
-    # Set two layers to the same creation_index
-    log.layer_list[0].creation_index = log.layer_list[1].creation_index
+    # Set two layers to the same capture_index
+    log.layer_list[0].capture_index = log.layer_list[1].capture_index
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
 def test_corruption_graph_ordering_topo_violation():
-    """Parent with higher creation_index than child triggers error."""
+    """Parent with higher capture_index than child triggers error."""
     log = _make_clean_log()
     # Find a layer with parents and swap rt nums to break topo order
     for lpl in log.layer_list:
         if lpl.parents:
             parent = log[lpl.parents[0]]
             # Give parent a higher rt num than child
-            parent.creation_index, lpl.creation_index = (
-                lpl.creation_index,
-                parent.creation_index,
+            parent.capture_index, lpl.capture_index = (
+                lpl.capture_index,
+                parent.capture_index,
             )
             break
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
@@ -783,15 +783,15 @@ class TestValidationBugfixes:
 
 
 class TestValidationNoSavedArgs:
-    """Validation with save_function_args=False."""
+    """Validation with save_arg_values=False."""
 
     def test_validation_no_args(self):
-        """validate with save_function_args=False should not crash."""
+        """validate with save_arg_values=False should not crash."""
         from torchlens import trace as trace_fn
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, save_function_args=False)
+        log = trace_fn(model, x, save_arg_values=False)
         assert log is not None
 
 

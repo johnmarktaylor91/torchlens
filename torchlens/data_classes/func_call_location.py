@@ -7,7 +7,7 @@ signature and docstring.
 
 **Dual construction paths**:
 
-1. **New path** (from ``_get_func_call_stack`` in capture/call_stack.py):
+1. **New path** (from ``_get_code_context`` in capture/call_stack.py):
    Receives ``file``, ``line_number``, ``func_name``,
    ``num_context_lines_requested``, and ``_frame_func_obj``.  Function
    signature/docstring metadata is snapshotted immediately so the live function
@@ -67,7 +67,7 @@ class FuncCallLocation:
 
     Supports two construction paths:
 
-    **New path** (from ``_get_func_call_stack``): pass ``file``, ``line_number``,
+    **New path** (from ``_get_code_context``): pass ``file``, ``line_number``,
     ``func_name``, ``num_context_lines_requested``, and optionally
     ``_frame_func_obj``.  Source context and signature/docstring are loaded
     lazily on first access.

@@ -21,6 +21,7 @@ The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 
 from os import PathLike
 from collections.abc import Iterator
+import weakref
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import torch
@@ -74,9 +75,10 @@ class ParamLog:
         "barcode": FieldPolicy.KEEP,
         "has_optimizer": FieldPolicy.KEEP,
         "_param_ref": FieldPolicy.DROP,
+        "_source_trace_ref": FieldPolicy.DROP,
         "num_calls": FieldPolicy.KEEP,
         "used_by_layers": FieldPolicy.KEEP,
-        "linked_params": FieldPolicy.KEEP,
+        "co_parent_params": FieldPolicy.KEEP,
         "_has_grad": FieldPolicy.KEEP,
         "_grad_shape": FieldPolicy.KEEP,
         "_grad_dtype": FieldPolicy.KEEP,
@@ -118,11 +120,12 @@ class ParamLog:
         # Prevents GC of the parameter while this ParamLog is alive (acceptable
         # because Trace lifetime <= model lifetime; cleanup() clears it).
         self._param_ref: Optional[torch.nn.Parameter] = None
+        self._source_trace_ref: Any = None
 
         # Populated during postprocessing:
         self.num_calls: int = 1  # how many forward ops used this param
         self.used_by_layers: List[str] = []  # layer labels that used this param
-        self.linked_params: List[str] = []  # other param addresses sharing the same tensor
+        self.co_parent_params: List[str] = []  # other param addresses sharing the same tensor
         self._has_grad: bool = False  # one-shot flag: once True, no further checks
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
@@ -153,7 +156,7 @@ class ParamLog:
         return self.dtype in _QUANTIZED_DTYPES
 
     @property
-    def is_shared(self) -> bool:
+    def has_multiple_addresses(self) -> bool:
         """Return whether this parameter is registered at multiple addresses.
 
         Returns
@@ -162,7 +165,38 @@ class ParamLog:
             Whether multiple parameter addresses share this tensor.
         """
 
-        return len(self.all_addresses) > 1 or bool(self.linked_params)
+        return len(self.all_addresses) > 1 or bool(self.co_parent_params)
+
+    @property
+    def source_trace(self) -> Any:
+        """Owning Trace, if still alive."""
+
+        ref = self._source_trace_ref
+        return None if ref is None else ref()
+
+    @source_trace.setter
+    def source_trace(self, value: Any) -> None:
+        """Set the owning Trace weakref."""
+
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    @property
+    def module(self) -> Any:
+        """Primary owning ModuleLog."""
+
+        trace = self.source_trace
+        if trace is None:
+            return None
+        return trace.modules[self.module_address]
+
+    @property
+    def modules(self) -> list[Any]:
+        """All owning ModuleLogs."""
+
+        trace = self.source_trace
+        if trace is None:
+            return []
+        return [trace.modules[address] for address in self.all_module_addresses]
 
     @property
     def grad(self) -> torch.Tensor | None:
@@ -320,8 +354,8 @@ class ParamLog:
         ]
         if self.used_by_layers:
             lines.append(f"  used by: {', '.join(self.used_by_layers)}")
-        if self.linked_params:
-            lines.append(f"  linked: {', '.join(self.linked_params)}")
+        if self.co_parent_params:
+            lines.append(f"  linked: {', '.join(self.co_parent_params)}")
         if self.has_optimizer is not None:
             lines.append(f"  has_optimizer: {self.has_optimizer}")
         if self.num_calls > 1:
@@ -341,13 +375,14 @@ class ParamLog:
         """Return pickle state with live parameter references stripped."""
         state = self.__dict__.copy()
         state["_param_ref"] = None
+        state["_source_trace_ref"] = None
         state["io_format_version"] = IO_FORMAT_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state without reviving live parameter references."""
         read_io_format_version(state, cls_name=type(self).__name__)
-        default_fill_state(state, defaults={"_param_ref": None})
+        default_fill_state(state, defaults={"_param_ref": None, "_source_trace_ref": None})
         self.__dict__.update(state)
 
 

@@ -406,12 +406,12 @@ def classify_bool(filename: str, line: int, col: Optional[int] = None) -> BoolCl
     return BoolClassification("unknown", None, None, None)
 
 
-def attribute_op(func_call_stack: List[FuncCallLocation]) -> List[Tuple[ConditionalKey, str]]:
+def attribute_op(code_context: List[FuncCallLocation]) -> List[Tuple[ConditionalKey, str]]:
     """Attribute an operation to enclosing conditional branch arms.
 
     Parameters
     ----------
-    func_call_stack:
+    code_context:
         Runtime call stack, ordered shallowest-to-deepest.
 
     Returns
@@ -422,7 +422,7 @@ def attribute_op(func_call_stack: List[FuncCallLocation]) -> List[Tuple[Conditio
     """
 
     branch_stack: List[Tuple[ConditionalKey, str]] = []
-    for frame in func_call_stack:
+    for frame in code_context:
         file_index = get_file_index(frame.file)
         if file_index is None:
             continue

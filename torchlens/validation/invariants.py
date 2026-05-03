@@ -19,7 +19,7 @@ and raises ``MetadataInvariantError`` on the first failure.
   L. Equivalence group symmetry (equivalent_ops labels are valid)
 
 **Phase 2 -- Semantic invariants:**
-  M. Graph ordering (creation_index uniqueness/monotonicity, topological order, no raw labels)
+  M. Graph ordering (capture_index uniqueness/monotonicity, topological order, no raw labels)
   N. Loop detection invariants (recurrent_ops symmetry, func identity, param sharing, pass numbering)
   O. Distance / reachability (min <= max, input/output layer distances == 0, ancestor/descendent consistency)
   P. Graph connectivity (non-input non-buffer layers have parents, orphans removed)
@@ -239,7 +239,7 @@ def _func_call_group_signature(layer: "OpLog") -> tuple[object, ...]:
 
     return (
         layer.func_name,
-        tuple(repr(location) for location in (layer.func_call_stack or ())),
+        tuple(repr(location) for location in (layer.code_context or ())),
         repr(layer.args_template),
         repr(layer.kwargs_template),
         repr(layer.container_spec),
@@ -350,8 +350,8 @@ _SPECIAL_LIST_FLAG_PAIRS = [
     ("input_layers", "is_input"),
     ("output_layers", "is_output"),
     ("buffer_layers", "is_buffer"),
-    ("internally_initialized_ops", "is_internal_source"),
-    ("internally_terminated_ops", "is_internal_sink"),
+    ("internal_source_ops", "is_internal_source"),
+    ("internal_sink_ops", "is_internal_sink"),
 ]
 
 
@@ -501,7 +501,7 @@ def _check_op_log_fields(ml: "Trace") -> None:
     - Saved tensor shape/dtype match actual out (when saved).
     - Pass numbering: call_index >= 1, num_calls >= call_index.
     - Computational layers have callable func and non-empty func_name.
-    - op_index >= 1 for non-input/non-buffer layers.
+    - compute_index >= 1 for non-input/non-buffer layers.
     - module_call_depth matches len(modules).
     - Label format: pass-qualified label has ':' iff multi-pass; no-pass label never has ':'.
     """
@@ -540,14 +540,16 @@ def _check_op_log_fields(ml: "Trace") -> None:
             if not lpl.func_name:
                 raise MetadataInvariantError(name, f"Layer {label}: func_name is empty")
 
-        # Operation numbering (input/buffer/output bookkeeping layers have op_index=0)
+        # Operation numbering (input/buffer/output bookkeeping layers have compute_index=0)
         if not (lpl.is_input or lpl.is_buffer or lpl.is_output):
-            if lpl.op_index is not None and lpl.op_index < 1:
-                raise MetadataInvariantError(name, f"Layer {label}: op_index={lpl.op_index} < 1")
-        if lpl.creation_index < 1:
+            if lpl.compute_index is not None and lpl.compute_index < 1:
+                raise MetadataInvariantError(
+                    name, f"Layer {label}: compute_index={lpl.compute_index} < 1"
+                )
+        if lpl.capture_index < 1:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: creation_index={lpl.creation_index} < 1",
+                f"Layer {label}: capture_index={lpl.capture_index} < 1",
             )
 
         # Module nesting depth
@@ -1484,7 +1486,7 @@ def _check_module_hierarchy(ml: "Trace") -> None:
                 # For shared modules, addr may be an alias that the parent
                 # lists under a different address prefix.  Check if any of the
                 # parent's address_children resolve to the same ModuleLog.
-                if not mod_log.is_shared:
+                if not mod_log.has_multiple_addresses:
                     raise MetadataInvariantError(
                         name,
                         f"ModuleLog '{addr}' has address_parent='{mod_log.address_parent}' "
@@ -1504,7 +1506,7 @@ def _check_module_hierarchy(ml: "Trace") -> None:
                 # alias's parent, which may differ from the current parent addr.
                 # This is expected — there is only one ModuleLog per module
                 # instance, so address_parent always reflects the primary path.
-                if not child.is_shared:
+                if not child.has_multiple_addresses:
                     raise MetadataInvariantError(
                         name,
                         f"ModuleLog '{addr}' lists '{child_addr}' as address_child, "
@@ -1710,35 +1712,35 @@ def _check_graph_ordering(ml: "Trace") -> None:
     """Check M: graph ordering invariants.
 
     Validates:
-    - creation_index is unique across all layers and monotonically
+    - capture_index is unique across all layers and monotonically
       increasing in layer_list order.
-    - op_index is unique among computational layers (non-input, non-buffer,
+    - compute_index is unique among computational layers (non-input, non-buffer,
       non-output).
-    - Topological order: every parent's creation_index < child's.
+    - Topological order: every parent's capture_index < child's.
     - No raw labels (``l_\\d+``) survive postprocessing.
     """
     name = "graph_ordering"
 
-    # creation_index uniqueness and monotonicity
+    # capture_index uniqueness and monotonicity
     seen_rt_nums: dict[int, str] = {}
     prev_rt = -1
     for lpl in ml.layer_list:
-        rt = lpl.creation_index
+        rt = lpl.capture_index
         if rt in seen_rt_nums:
             raise MetadataInvariantError(
                 name,
-                f"Duplicate creation_index={rt}: '{seen_rt_nums[rt]}' and '{lpl.layer_label}'",
+                f"Duplicate capture_index={rt}: '{seen_rt_nums[rt]}' and '{lpl.layer_label}'",
             )
         seen_rt_nums[rt] = lpl.layer_label
         if rt <= prev_rt:
             raise MetadataInvariantError(
                 name,
-                f"creation_index not monotonically increasing: "
+                f"capture_index not monotonically increasing: "
                 f"{prev_rt} then {rt} at '{lpl.layer_label}'",
             )
         prev_rt = rt
 
-    # op_index uniqueness among computational layers
+    # compute_index uniqueness among computational layers
     input_set = set(ml.input_layers)
     buffer_set = set(ml.buffer_layers)
     output_set = set(ml.output_layers)
@@ -1747,24 +1749,24 @@ def _check_graph_ordering(ml: "Trace") -> None:
         label = lpl.layer_label
         if label in input_set or label in buffer_set or label in output_set:
             continue
-        op = lpl.op_index
+        op = lpl.compute_index
         if op is not None:
             if op in seen_op_nums:
                 raise MetadataInvariantError(
                     name,
-                    f"Duplicate op_index={op}: '{seen_op_nums[op]}' and '{label}'",
+                    f"Duplicate compute_index={op}: '{seen_op_nums[op]}' and '{label}'",
                 )
             seen_op_nums[op] = label
 
-    # Topological order: parent.creation_index < child.creation_index
-    rt_map = {lpl.layer_label: lpl.creation_index for lpl in ml.layer_list}
+    # Topological order: parent.capture_index < child.capture_index
+    rt_map = {lpl.layer_label: lpl.capture_index for lpl in ml.layer_list}
     for lpl in ml.layer_list:
         for p in lpl.parents:
-            if rt_map.get(p, -1) >= lpl.creation_index:
+            if rt_map.get(p, -1) >= lpl.capture_index:
                 raise MetadataInvariantError(
                     name,
                     f"Topological violation: parent '{p}' (rt={rt_map.get(p)}) "
-                    f">= child '{lpl.layer_label}' (rt={lpl.creation_index})",
+                    f">= child '{lpl.layer_label}' (rt={lpl.capture_index})",
                 )
 
     # No raw labels survive postprocessing

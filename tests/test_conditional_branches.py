@@ -1670,7 +1670,7 @@ def test_nested_helper_same_name_model_distinguishes_helpers_by_code_firstlineno
     )
 
     helper_frames = [
-        next(frame for frame in layer.func_call_stack if frame.func_name == "helper")
+        next(frame for frame in layer.code_context if frame.func_name == "helper")
         for layer in bool_layers
     ]
 
@@ -1715,7 +1715,7 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ambiguous fallback scope resolution leaves branch stacks empty instead of guessing."""
-    original_get_stack = introspection._get_func_call_stack
+    original_get_stack = introspection._get_code_context
     original_get_file_index = ast_branches.get_file_index
 
     def _stack_without_qualname(*args: object, **kwargs: object) -> list[object]:
@@ -1737,10 +1737,10 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
             index.scopes.append(replace(helper_scopes[0], qualname="shadow.<locals>.helper"))
         return index
 
-    monkeypatch.setattr(introspection, "_get_func_call_stack", _stack_without_qualname)
-    monkeypatch.setattr(output_tensors, "_get_func_call_stack", _stack_without_qualname)
-    monkeypatch.setattr(source_tensors, "_get_func_call_stack", _stack_without_qualname)
-    monkeypatch.setattr(graph_traversal, "_get_func_call_stack", _stack_without_qualname)
+    monkeypatch.setattr(introspection, "_get_code_context", _stack_without_qualname)
+    monkeypatch.setattr(output_tensors, "_get_code_context", _stack_without_qualname)
+    monkeypatch.setattr(source_tensors, "_get_code_context", _stack_without_qualname)
+    monkeypatch.setattr(graph_traversal, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(ast_branches, "get_file_index", _ambiguous_file_index)
 
     trace = _log_model(SameLineNestedDefModel(), torch.ones(2, 2))
@@ -1884,13 +1884,13 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
         entry for entry in trace.layer_list if not entry.is_input and entry.func_name != "none"
     ]
     assert captured_entries
-    assert all(len(entry.func_call_stack) > 0 for entry in captured_entries)
+    assert all(len(entry.code_context) > 0 for entry in captured_entries)
     assert relu_layer.conditional_branch_stack == [(event.id, "then")]
 
     with monkeypatch.context() as local_patch:
         local_patch.setattr(linecache, "getlines", _tracking_getlines)
         for entry in captured_entries:
-            for frame in entry.func_call_stack:
+            for frame in entry.code_context:
                 assert frame.file is not None
                 assert frame.line_number is not None
                 assert frame.code_firstlineno is not None
@@ -1912,7 +1912,7 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
 
     roundtrip_log = pickle.loads(pickle.dumps(trace))
     roundtrip_stack = next(
-        entry.func_call_stack for entry in roundtrip_log.layer_list if not entry.is_input
+        entry.code_context for entry in roundtrip_log.layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -1930,8 +1930,8 @@ def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> 
 
     assert bool_layer.bool_context_kind == "assert"
     assert bool_layer.bool_is_branch is False
-    assert len(bool_layer.func_call_stack) > 0
-    assert all(frame.source_loading_enabled is False for frame in bool_layer.func_call_stack)
+    assert len(bool_layer.code_context) > 0
+    assert all(frame.source_loading_enabled is False for frame in bool_layer.code_context)
     _assert_branchless_log(trace)
 
 
@@ -2127,7 +2127,7 @@ def test_ternary_multi_op_one_line_model_attributes_each_arm_by_column_offset() 
     negative_sub = _find_only_layer(negative_log, "sub")
 
     if all(
-        frame.col_offset is None for frame in positive_mul.func_call_stack if frame.file == __file__
+        frame.col_offset is None for frame in positive_mul.code_context if frame.file == __file__
     ):
         pytest.skip(
             "Column offsets are unavailable for this one-line ternary in the current runtime"

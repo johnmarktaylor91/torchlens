@@ -12,7 +12,7 @@ A leaf op is a single decorated PyTorch operation such as `torch.relu`,
 the most direct intervention targets:
 
 ```python
-log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
 log.find_sites(tl.func("relu"))
 edited = log.fork("zero_relu").attach_hooks(tl.func("relu"), tl.zero_ablate()).replay()
 ```

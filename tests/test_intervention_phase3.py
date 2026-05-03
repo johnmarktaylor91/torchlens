@@ -208,7 +208,7 @@ def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
 
     assert torch.equal(seeded_a(out, hook=context), seeded_b(out, hook=context))
     _ = unseeded(out, hook=context)
-    assert any("noise used unseeded" in note for note in context.run_ctx["operation_history_notes"])
+    assert any("noise used unseeded" in note for note in context.run_ctx["ledger_notes"])
 
 
 @pytest.mark.smoke

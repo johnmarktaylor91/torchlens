@@ -265,7 +265,7 @@ def _apply_live_hooks(
             args=(current_out,),
             kwargs={},
         )
-        previous_notes = tuple(hook_context.run_ctx.get("operation_history_notes", ()))
+        previous_notes = tuple(hook_context.run_ctx.get("ledger_notes", ()))
         result = _execute_hook(
             normalized_entry.normalized_callable,
             current_out,
@@ -374,7 +374,7 @@ def _build_live_fire_record(
     """
 
     helper_name = _hook_display_name(entry)
-    new_notes = tuple(run_ctx.get("operation_history_notes", ()))[len(previous_notes) :]
+    new_notes = tuple(run_ctx.get("ledger_notes", ()))[len(previous_notes) :]
     helper_kwargs = dict(entry.helper_spec.kwargs) if entry.helper_spec is not None else {}
     return FireRecord(
         target_label=site._layer_label_raw,

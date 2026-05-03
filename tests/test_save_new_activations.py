@@ -285,11 +285,11 @@ class TestSaveNewActivationsStateReset:
     """Stale state in save_new_outs."""
 
     def test_timing_reset(self):
-        """function_calls_duration should be fresh."""
+        """func_calls_duration should be fresh."""
         model = _SimpleLinear()
         log = trace_fn(model, torch.randn(2, 10), layers_to_save="all")
         log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
-        assert log.function_calls_duration >= 0
+        assert log.func_calls_duration >= 0
 
     def test_lookup_keys_clean(self):
         """Lookup caches should not have stale entries."""

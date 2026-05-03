@@ -147,7 +147,7 @@ class GradFnLog:
         return self.label
 
     @property
-    def child_grad_fn_labels(self) -> list[str]:
+    def children(self) -> list[str]:
         """Return labels of child grad_fn nodes.
 
         Returns

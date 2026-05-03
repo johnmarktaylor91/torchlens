@@ -9,7 +9,7 @@ smallest capture surface that answers your question.
 import torchlens as tl
 from torchlens.options import CaptureOptions
 
-log = tl.log_forward_pass(
+log = tl.trace(
     model,
     x,
     vis_opt="none",

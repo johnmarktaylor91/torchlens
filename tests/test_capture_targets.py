@@ -21,12 +21,12 @@ class _KpiModel(torch.nn.Module):
         return y
 
 
-def test_capture_memory_fields_and_forward_lineno() -> None:
+def test_capture_memory_fields_and_forward_source_line() -> None:
     """Populate Phase 4 OpLog memory fields and forward line number."""
 
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     log = tl.trace(model, torch.ones(1, 2))
-    assert isinstance(log.forward_lineno, int)
+    assert isinstance(log.forward_source_line, int)
     assert all(hasattr(layer, "bytes_delta_at_call") for layer in log.layer_list)
     assert all(hasattr(layer, "bytes_peak_at_call") for layer in log.layer_list)
 

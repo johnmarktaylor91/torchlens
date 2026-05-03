@@ -180,7 +180,7 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
         model,
         inputs,
         layers_to_save="all",
-        save_function_args=True,
+        save_arg_values=True,
         random_seed=0,
     )
 

@@ -159,7 +159,7 @@ class BoundaryNode:
     is_buffer: bool = False
     has_input_ancestor: bool = True
     is_final_output: bool = False
-    is_atomic_module_output: bool = False
+    is_atomic_module_op: bool = False
     output_of_modules: list[str] = field(default_factory=list)
     is_input: bool = False
     is_output: bool = False
@@ -171,7 +171,7 @@ class BoundaryNode:
     num_calls: int = 1
     call_index: int = 1
     type_index: int = 1
-    overall_index: int = 1
+    trace_index: int = 1
     shape: tuple[Any, ...] = ()
     memory_str: str = "0 B"
     io_role: str = ""
@@ -1689,7 +1689,7 @@ def _collapse_address_for_node(
         return None
 
     modules = list(node.modules)
-    if getattr(node, "is_atomic_module_output", False):
+    if getattr(node, "is_atomic_module_op", False):
         modules = modules[:-1]
     if not modules:
         return None
@@ -1728,7 +1728,7 @@ def _is_collapsed_module(
 
     Special cases:
     - ``vis_call_depth == 0``: show all layers, never collapse (#94).
-    - ``is_atomic_module_output``: the node represents the output of
+    - ``is_atomic_module_op``: the node represents the output of
       its innermost module, so its effective nesting depth is one less (it
       visually "belongs" to the parent scope).
 
@@ -1752,7 +1752,7 @@ def _is_collapsed_module(
     node_call_depth = len(node.modules)
     # Bottom-level submodule outputs are rendered at the parent nesting level,
     # not their own, so subtract 1 from their effective depth.
-    if getattr(node, "is_atomic_module_output", False):
+    if getattr(node, "is_atomic_module_op", False):
         node_call_depth -= 1
 
     if node_call_depth >= vis_call_depth:
@@ -2092,7 +2092,7 @@ def _get_node_address_shape_color(
     else:
         only_non_buffer_layer = False
 
-    if (node.is_atomic_module_output or only_non_buffer_layer) and (len(node.modules) > 0):
+    if (node.is_atomic_module_op or only_non_buffer_layer) and (len(node.modules) > 0):
         if isinstance(source_node, OpLog):
             module_pass_exited = node.modules[-1]
             module, _ = module_pass_exited.split(":")
@@ -2362,9 +2362,7 @@ def compute_default_node_lines(
     if layer_log.layer_type in ["input", "output", "buffer"]:
         title = f"{layer_log.layer_type}_{layer_log.type_index}{call_label}"
     else:
-        title = (
-            f"{layer_log.layer_type}_{layer_log.type_index}_{layer_log.overall_index}{call_label}"
-        )
+        title = f"{layer_log.layer_type}_{layer_log.type_index}_{layer_log.trace_index}{call_label}"
 
     lines: list[str] = []
     if layer_log.is_terminal_bool:
@@ -2488,7 +2486,7 @@ def _make_node_label(
     if node.layer_type in ["input", "output", "buffer"]:
         node_title = f"<b>{node.layer_type}_{node.type_index}{call_label}</b>"
     else:
-        node_title = f"<b>{node.layer_type}_{node.type_index}_{node.overall_index}{call_label}</b>"
+        node_title = f"<b>{node.layer_type}_{node.type_index}_{node.trace_index}{call_label}</b>"
 
     if node.is_terminal_bool:
         label_text = str(node.bool_value).upper()
@@ -2824,9 +2822,9 @@ def _add_edges_for_node(
             child_modules = child_node.modules[:]
             parent_modules = parent_node.modules[:]
             # Adjust for bottom-level submodule outputs (they belong to parent scope).
-            if child_node.is_atomic_module_output:
+            if child_node.is_atomic_module_op:
                 child_modules = child_modules[:-1]
-            if parent_node.is_atomic_module_output:
+            if parent_node.is_atomic_module_op:
                 parent_modules = parent_modules[:-1]
             if child_modules[:vis_call_depth] == parent_modules[:vis_call_depth]:
                 continue
@@ -3597,7 +3595,7 @@ def _get_lowest_module_for_two_nodes(
     top-level graph, not any subgraph).
 
     Special handling:
-    - ``is_atomic_module_output`` nodes are adjusted to their parent
+    - ``is_atomic_module_op`` nodes are adjusted to their parent
       scope (they represent the module's output, rendered one level up).
     - Rolled mode: pass suffixes are stripped from module names so that all
       ops share the same cluster.
@@ -3620,7 +3618,7 @@ def _get_lowest_module_for_two_nodes(
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
-    if node1.is_atomic_module_output:
+    if node1.is_atomic_module_op:
         node1_nested_modules = node1_modules[:-1]
     else:
         node1_nested_modules = node1_modules[:]
@@ -3633,9 +3631,9 @@ def _get_lowest_module_for_two_nodes(
         return -1  # no submodule contains them both.
 
     if node1 == node2:
-        if node1.is_atomic_module_output and (len(node1_modules) == 1):
+        if node1.is_atomic_module_op and (len(node1_modules) == 1):
             return -1
-        elif node1.is_atomic_module_output and (len(node1_modules) > 1):
+        elif node1.is_atomic_module_op and (len(node1_modules) > 1):
             module = node1_modules[-2]
         else:
             module = node1_modules[-1]

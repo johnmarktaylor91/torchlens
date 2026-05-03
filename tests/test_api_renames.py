@@ -295,7 +295,7 @@ def test_trace_validate_saved_outs_warns_once(
             True,
             "mark_layer_depths",
         ),
-        ("detect_loops", "detect_recurrent_patterns", False, "detect_loops"),
+        ("recurrence_detection", "recurrence_detection", False, "recurrence_detection"),
     ],
 )
 def test_trace_old_renamed_kwargs_warn(
@@ -329,7 +329,7 @@ def test_trace_old_renamed_kwargs_warn(
     [
         ("source_context_lines", 6, "num_context_lines"),
         ("compute_input_output_distances", True, "mark_layer_depths"),
-        ("detect_recurrent_patterns", False, "detect_loops"),
+        ("recurrence_detection", False, "recurrence_detection"),
     ],
 )
 def test_trace_new_renamed_kwargs_do_not_warn(
@@ -433,7 +433,6 @@ def test_save_options_out_postfunc_alias_warns() -> None:
     [
         ("num_context_lines", "source_context_lines", 5, 6),
         ("mark_layer_depths", "compute_input_output_distances", True, False),
-        ("detect_loops", "detect_recurrent_patterns", True, False),
     ],
 )
 def test_trace_mixing_old_and_new_renamed_kwargs_raises(
@@ -480,7 +479,7 @@ def test_old_kwarg_warning_deduplicates_per_process(
     assert len(_deprecation_messages(records)) == 1
 
 
-def test_show_model_graph_new_detect_recurrent_patterns_has_no_warning(
+def test_show_model_graph_new_recurrence_detection_has_no_warning(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
 ) -> None:
     """The canonical recurrent-pattern kwarg should work on ``show_model_graph``."""
@@ -489,42 +488,25 @@ def test_show_model_graph_new_detect_recurrent_patterns_has_no_warning(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.visualization.show_model_graph(
-            _TinyModel(), _tiny_input(), detect_recurrent_patterns=False
-        )
+        tl.visualization.show_model_graph(_TinyModel(), _tiny_input(), recurrence_detection=False)
 
-    assert captured["detect_loops"] is False
+    assert captured["recurrence_detection"] is False
     assert _deprecation_messages(records) == []
 
 
-def test_show_model_graph_old_detect_loops_warns(
+def test_show_model_graph_recurrence_detection(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
 ) -> None:
-    """The deprecated recurrent-pattern kwarg should still work on ``show_model_graph``."""
+    """The recurrence-detection kwarg should pass through to capture options."""
 
     captured, _dummy_log = stubbed_runner
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.visualization.show_model_graph(_TinyModel(), _tiny_input(), detect_loops=False)
+        tl.visualization.show_model_graph(_TinyModel(), _tiny_input(), recurrence_detection=False)
 
-    assert captured["detect_loops"] is False
-    assert len(_deprecation_messages(records)) == 1
-
-
-def test_show_model_graph_mixing_detect_loop_names_raises() -> None:
-    """Mixing old and new recurrent-pattern kwarg names should fail."""
-
-    with pytest.raises(
-        TypeError,
-        match="kwarg detect_loops deprecated, use detect_recurrent_patterns; do not pass both",
-    ):
-        tl.visualization.show_model_graph(
-            _TinyModel(),
-            _tiny_input(),
-            detect_loops=True,
-            detect_recurrent_patterns=False,
-        )
+    assert captured["recurrence_detection"] is False
+    assert not _deprecation_messages(records)
 
 
 @pytest.mark.parametrize(

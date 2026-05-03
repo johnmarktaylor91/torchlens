@@ -36,7 +36,7 @@ def test_save_new_outs_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        detach_saved_tensorss=True,
+        detach_saved_activations=True,
         random_seed=0,
     )
     trace.save_new_outs(

@@ -495,7 +495,7 @@ def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
             delattr(obj, field)
 
 
-def _get_func_call_stack(
+def _get_code_context(
     num_context_lines: int = 7,
     source_loading_enabled: bool = True,
     disable_col_offset: bool = False,

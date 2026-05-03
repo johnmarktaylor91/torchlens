@@ -37,10 +37,8 @@ from . import (
 from ._io.bundle import load, save
 from .stats import aggregate
 from .data_classes.layer_log import LayerLog
-from .data_classes.module_log import ModuleCallLog, ModuleLog
 from .data_classes.op_log import OpLog
 from .data_classes.model_log import Trace
-from .multi_trace import SuperLayer, SuperLayerAccessor, SuperOp, SuperOpAccessor, TraceAccessor
 from .intervention import (
     Bundle,
     bwd_hook,
@@ -783,13 +781,6 @@ __all__ = [
     "Trace",
     "LayerLog",
     "OpLog",
-    "ModuleLog",
-    "ModuleCallLog",
-    "TraceAccessor",
-    "SuperOp",
-    "SuperLayer",
-    "SuperOpAccessor",
-    "SuperLayerAccessor",
     "Bundle",
     "label",
     "func",

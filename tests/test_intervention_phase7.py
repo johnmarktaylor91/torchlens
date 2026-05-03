@@ -125,7 +125,7 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
     original_hash = log.graph_shape_hash
-    original_history_len = len(log.operation_history)
+    original_history_len = len(log.ledger)
 
     result = log.rerun(ReluAdd(), x)
 
@@ -133,8 +133,8 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
     assert log.run_state is RunState.RERUN_PROPAGATED
     assert log.graph_shape_hash == original_hash
     assert log.last_run_ctx["engine"] == "rerun"
-    assert len(log.operation_history) == original_history_len + 1
-    assert log.operation_history[-1]["engine"] == "rerun"
+    assert len(log.ledger) == original_history_len + 1
+    assert log.ledger[-1]["engine"] == "rerun"
 
 
 @pytest.mark.smoke
@@ -167,7 +167,7 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
     original_hash = log.graph_shape_hash
     original_labels = tuple(log.layer_labels)
     log.rerun(ReluAdd(), x)
-    history_after_success = list(log.operation_history)
+    history_after_success = list(log.ledger)
 
     with pytest.raises(RuntimeError, match="boom"):
         log.rerun(BadModel(), x)
@@ -175,7 +175,7 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
     assert log.run_state is RunState.RERUN_PROPAGATED
     assert log.graph_shape_hash == original_hash
     assert tuple(log.layer_labels) == original_labels
-    assert log.operation_history == history_after_success
+    assert log.ledger == history_after_success
 
 
 def test_rerun_strict_divergence_raises_before_swap() -> None:
@@ -220,7 +220,7 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     log.name = "kept"
     log.parent_run = "parent-sentinel"  # type: ignore[assignment]
     log._intervention_spec = spec
-    log.operation_history = history
+    log.ledger = history
     log._warned_direct_write = True
     log._warned_mutate_in_place = True
     log.model_id = 123
@@ -238,7 +238,7 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     assert log.name == "kept"
     assert log.parent_run == "parent-sentinel"
     assert log._intervention_spec is spec
-    assert log.operation_history is history
+    assert log.ledger is history
     assert log._warned_direct_write is True
     assert log._warned_mutate_in_place is True
     assert log.model_id == 123

@@ -1308,7 +1308,7 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
 ) -> None:
     """Ambiguous fallback scope resolution leaves branch stacks empty instead of guessing."""
 
-    original_get_stack = introspection._get_func_call_stack
+    original_get_stack = introspection._get_code_context
     original_get_file_index = ast_branches.get_file_index
 
     def _stack_without_qualname(*args: object, **kwargs: object) -> list[object]:
@@ -1334,10 +1334,10 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
             index.scopes.append(replace(helper_scopes[0], qualname="shadow.<locals>.helper"))
         return index
 
-    monkeypatch.setattr(introspection, "_get_func_call_stack", _stack_without_qualname)
-    monkeypatch.setattr(output_tensors, "_get_func_call_stack", _stack_without_qualname)
-    monkeypatch.setattr(source_tensors, "_get_func_call_stack", _stack_without_qualname)
-    monkeypatch.setattr(graph_traversal, "_get_func_call_stack", _stack_without_qualname)
+    monkeypatch.setattr(introspection, "_get_code_context", _stack_without_qualname)
+    monkeypatch.setattr(output_tensors, "_get_code_context", _stack_without_qualname)
+    monkeypatch.setattr(source_tensors, "_get_code_context", _stack_without_qualname)
+    monkeypatch.setattr(graph_traversal, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(ast_branches, "get_file_index", _ambiguous_file_index)
 
     trace = _log_model(SameLineNestedDefModel(), torch.ones(2, 2))
@@ -1564,7 +1564,7 @@ def test_ternary_py311_records_non_none_column_offsets_for_ifexp_frames() -> Non
     trace = _log_model(TernaryPy310FailClosedModel(), torch.ones(1, 2))
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    assert any(frame.col_offset is not None for frame in bool_layer.func_call_stack)
+    assert any(frame.col_offset is not None for frame in bool_layer.code_context)
     assert trace.conditional_arm_edges
 
 
@@ -1650,8 +1650,8 @@ def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> 
 
     assert bool_layer.bool_context_kind == "assert"
     assert bool_layer.bool_is_branch is False
-    assert len(bool_layer.func_call_stack) > 0
-    assert all(frame.source_loading_enabled is False for frame in bool_layer.func_call_stack)
+    assert len(bool_layer.code_context) > 0
+    assert all(frame.source_loading_enabled is False for frame in bool_layer.code_context)
     _assert_branchless_log(trace)
 
 

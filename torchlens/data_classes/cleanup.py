@@ -369,9 +369,9 @@ def _scrub_intervention_fields_after_removal(
         else:
             layer_entry.interventions = interventions
 
-    self.operation_history = [
+    self.ledger = [
         record
-        for record in getattr(self, "operation_history", [])
+        for record in getattr(self, "ledger", [])
         if not _record_mentions_removed_label(record, labels_to_remove)
     ]
     intervention_spec = getattr(self, "_intervention_spec", None)
@@ -458,8 +458,8 @@ _LIST_FIELDS_TO_CLEAN = [
     "input_layers",
     "output_layers",
     "buffer_layers",
-    "internally_initialized_ops",
-    "internally_terminated_ops",
+    "internal_source_ops",
+    "internal_sink_ops",
     "internally_terminated_bool_ops",
     "ops_with_saved_outs",
     "ops_with_saved_grads",
@@ -482,8 +482,8 @@ def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
     remove_entry_from_list(self.input_layers, layer_to_remove)
     remove_entry_from_list(self.output_layers, layer_to_remove)
     remove_entry_from_list(self.buffer_layers, layer_to_remove)
-    remove_entry_from_list(self.internally_initialized_ops, layer_to_remove)
-    remove_entry_from_list(self.internally_terminated_ops, layer_to_remove)
+    remove_entry_from_list(self.internal_source_ops, layer_to_remove)
+    remove_entry_from_list(self.internal_sink_ops, layer_to_remove)
     remove_entry_from_list(self.internally_terminated_bool_ops, layer_to_remove)
     remove_entry_from_list(self.ops_with_saved_outs, layer_to_remove)
     remove_entry_from_list(self.ops_with_saved_grads, layer_to_remove)

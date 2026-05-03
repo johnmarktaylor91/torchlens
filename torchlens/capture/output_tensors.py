@@ -28,7 +28,7 @@ pause_logging usage:
     ``pause_logging()`` temporarily disables the logging toggle so that
     utility operations (e.g., ``get_memory_amount``, ``safe_copy``,
     ``out_postfunc``) don't get logged as model operations.  It is
-    used inside ``save_tensor_data`` and wherever helper functions call
+    used inside ``save_activation`` and wherever helper functions call
     decorated torch custom_methods on tensors.
 """
 
@@ -47,7 +47,7 @@ from .. import _state as _st
 from .._state import pause_logging
 from ..errors import CaptureError
 from ..utils.introspection import (
-    _get_func_call_stack,
+    _get_code_context,
     get_attr_values_from_tensor_list,
     get_vars_of_type_from_obj,
 )
@@ -955,11 +955,11 @@ def log_function_output_tensors_predicate(
         self._layer_counter += 1
         self._raw_layer_type_counter[layer_type] += 1
         state.op_counts[layer_type] = state.op_counts.get(layer_type, 0) + 1
-        state.op_index += 1
+        state.compute_index += 1
         state.event_index += 1
-        creation_index = self._layer_counter
+        capture_index = self._layer_counter
         type_index = self._raw_layer_type_counter[layer_type]
-        _label_raw = f"{layer_type}_{type_index}_{creation_index}_raw"
+        _label_raw = f"{layer_type}_{type_index}_{capture_index}_raw"
         out.tl__label_raw = _label_raw
         module_frame = state.module_stack[-1] if state.module_stack else None
         ctx = _build_record_context(
@@ -968,7 +968,7 @@ def log_function_output_tensors_predicate(
                 "label": _label_raw,
                 "raw_label": _label_raw,
                 "_label_raw": _label_raw,
-                "creation_index": creation_index,
+                "capture_index": capture_index,
                 "layer_type": layer_type,
                 "type_index": type_index,
                 "func_name": func_name,
@@ -985,7 +985,7 @@ def log_function_output_tensors_predicate(
             op_counts=state.op_counts,
             pass_index=state.pass_index,
             event_index=state.event_index,
-            op_index=state.op_index,
+            compute_index=state.compute_index,
             time_since_pass_start=time.time() - self.start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
@@ -1034,7 +1034,7 @@ def _build_graph_relationship_fields(
     fields_dict["min_distance_from_input"] = None
     fields_dict["max_distance_from_input"] = None
     fields_dict["is_output"] = False
-    fields_dict["feeds_output"] = False
+    fields_dict["is_output_parent"] = False
     fields_dict["is_final_output"] = False
     fields_dict["has_output_descendant"] = False
     fields_dict["output_descendants"] = set()
@@ -1055,6 +1055,8 @@ def _build_graph_relationship_fields(
     fields_dict["bool_context_kind"] = None
     fields_dict["bool_wrapper_kind"] = None
     fields_dict["bool_conditional_id"] = None
+    fields_dict["in_conditionals"] = []
+    fields_dict["terminal_bool_for"] = None
     fields_dict["in_cond_branch"] = False
     fields_dict["conditional_branch_stack"] = []
     fields_dict["conditional_branch_depth"] = 0
@@ -1134,7 +1136,7 @@ def _build_module_context_fields(
     fields_dict["output_of_modules"] = []
     fields_dict["output_of_module_calls"] = []
     fields_dict["is_submodule_output"] = False
-    fields_dict["is_atomic_module_output"] = False
+    fields_dict["is_atomic_module_op"] = False
     fields_dict["atomic_module_call"] = None
     fields_dict["_module_boundary_threads_inputs"] = {
         p._label_raw: p._module_boundary_thread_output[:] for p in parent_layer_entries
@@ -1180,12 +1182,12 @@ def _build_shared_fields_dict(
 
     # General info
     fields_dict["layer_type"] = layer_type
-    fields_dict["detach_saved_tensors"] = self.detach_saved_tensorss
+    fields_dict["detach_saved_activations"] = self.detach_saved_activations
     fields_dict["output_device"] = self.output_device
     fields_dict["_construction_done"] = False
     fields_dict["interventions"] = []
     should_capture_template = bool(
-        getattr(self, "intervention_ready", False) or getattr(self, "capture_full_args", False)
+        getattr(self, "intervention_ready", False) or getattr(self, "capture_args_template", False)
     )
     if should_capture_template:
         captured_template = _build_args_template(func, args, kwargs)
@@ -1213,7 +1215,7 @@ def _build_shared_fields_dict(
     fields_dict["func"] = func
     fields_dict["func_call_id"] = func_call_id
     fields_dict["func_name"] = func_name
-    fields_dict["func_call_stack"] = _get_func_call_stack(
+    fields_dict["code_context"] = _get_code_context(
         self.num_context_lines,
         source_loading_enabled=self.save_code_context,
         disable_col_offset=False,
@@ -1256,7 +1258,7 @@ def _classify_new_tensor_in_trace(
 ) -> None:
     """Update Trace categories (internally_initialized, merge points) for a new tensor."""
     if fields_dict["is_internal_source"]:
-        self.internally_initialized_ops.append(new_tensor_label)
+        self.internal_source_ops.append(new_tensor_label)
     if fields_dict["has_input_ancestor"] and any(
         (
             self[parent_layer].has_internal_source_ancestor
@@ -1289,7 +1291,7 @@ def _tag_tensor_and_track_variations(
 
     for parent_label in new_layer_entry.parents:
         parent = self[parent_label]
-        if parent.has_saved_outs and self.save_function_args:
+        if parent.has_saved_outs and self.save_arg_values:
             parent_tensor_contents = _get_parent_contents(
                 parent_label,
                 arg_copies,
@@ -1480,9 +1482,9 @@ def log_function_output_tensors_fast(
         # The raw label reconstructed here MUST match the exhaustive pass's label.
         self._layer_counter += 1
         self._raw_layer_type_counter[layer_type] += 1
-        creation_index = self._layer_counter
+        capture_index = self._layer_counter
         type_index = self._raw_layer_type_counter[layer_type]
-        _label_raw = f"{layer_type}_{type_index}_{creation_index}_raw"
+        _label_raw = f"{layer_type}_{type_index}_{capture_index}_raw"
         # Skip orphans — these were pruned from the graph during postprocessing.
         if _label_raw in self.orphan_ops:
             continue
@@ -1519,7 +1521,7 @@ def log_function_output_tensors_fast(
         # all match the exhaustive pass.  Any mismatch means dynamic control flow
         # changed the graph and the fast pass cannot proceed.
         if (
-            orig_layer_entry.creation_index != self._layer_counter
+            orig_layer_entry.capture_index != self._layer_counter
             or orig_layer_entry.layer_type != layer_type
             or orig_layer_entry._label_raw != _label_raw
             or set(orig_layer_entry.parents) != set(parent_layer_labels_orig)
@@ -1533,13 +1535,13 @@ def log_function_output_tensors_fast(
 
         # Save out data if this layer is in the save list.
         layer_nums_to_save = cast(Any, self._layer_nums_to_save)
-        if (layer_nums_to_save == "all") or (orig_layer_entry.creation_index in layer_nums_to_save):
+        if (layer_nums_to_save == "all") or (orig_layer_entry.capture_index in layer_nums_to_save):
             self.ops_with_saved_outs.append(orig_layer_entry.layer_label)
-            orig_layer_entry.save_tensor_data(
+            orig_layer_entry.save_activation(
                 out,
                 arg_copies,
                 kwarg_copies,
-                self.save_function_args,
+                self.save_arg_values,
                 self.out_postfunc,
             )
             # Output layers are identity wrappers whose out come
@@ -1885,9 +1887,9 @@ def _log_output_tensor_info(
     indiv_param_barcodes = list(parent_param_ops.keys())
     self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
-    creation_index = self._layer_counter
+    capture_index = self._layer_counter
     type_index = self._raw_layer_type_counter[layer_type]
-    _label_raw = f"{layer_type}_{type_index}_{creation_index}_raw"
+    _label_raw = f"{layer_type}_{type_index}_{capture_index}_raw"
 
     # Determine operation equivalence type — the fingerprint used by loop detection
     # to group structurally identical operations (same layer across ops).
@@ -1940,10 +1942,10 @@ def _log_output_tensor_info(
 
     # General info
     fields_dict["_label_raw"] = _label_raw
-    fields_dict["overall_index"] = None
+    fields_dict["trace_index"] = None
     fields_dict["recurrent_ops"] = []
-    fields_dict["creation_index"] = creation_index
-    fields_dict["op_index"] = None
+    fields_dict["capture_index"] = capture_index
+    fields_dict["compute_index"] = None
     fields_dict["source_trace"] = self
     fields_dict["_tracing_finished"] = False
 
@@ -2044,13 +2046,13 @@ def _make_layer_log_entry(
         keep_by_predicate = bool(module_filter(new_entry))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     if keep_by_predicate and (
-        (layer_nums_to_save == "all") or (new_entry.creation_index in layer_nums_to_save)
+        (layer_nums_to_save == "all") or (new_entry.capture_index in layer_nums_to_save)
     ):
-        new_entry.save_tensor_data(
+        new_entry.save_activation(
             t,
             t_args,
             t_kwargs,
-            self.save_function_args,
+            self.save_arg_values,
             out_postfunc,
         )
         self.ops_with_saved_outs.append(new_entry._label_raw)

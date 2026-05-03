@@ -27,7 +27,7 @@ Legacy top-level shims for `validate_forward_pass`, `validate_backward_pass`, an
 
 ## Forward Replay Flow
 1. Run the model for ground truth output.
-2. Run `trace(..., layers_to_save="all", save_function_args=True)`.
+2. Run `trace(..., layers_to_save="all", save_arg_values=True)`.
 3. Check logged output matches ground truth.
 4. Walk backward from outputs, replaying each saved operation from saved parents.
 5. Perturb parents to ensure output sensitivity unless exempt.

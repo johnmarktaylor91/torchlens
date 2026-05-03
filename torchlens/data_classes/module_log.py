@@ -24,6 +24,7 @@ This matches each accessor's natural granularity.
 
 import weakref
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
@@ -37,8 +38,25 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from .buffer_log import BufferAccessor
+    from .func_call_location import FuncCallLocation
     from .model_log import Trace
     from .param_log import ParamAccessor
+
+
+@dataclass
+class HookInfo:
+    """Summary of one PyTorch module hook registry."""
+
+    count: int = 0
+    names: List[str] = field(default_factory=list)
+    qualnames: List[str] = field(default_factory=list)
+    source_locations: List["FuncCallLocation"] = field(default_factory=list)
+
+    @property
+    def has_any(self) -> bool:
+        """Whether the registry has hooks."""
+
+        return self.count > 0
 
 
 def _module_call_log_to_row(module_call_log: "ModuleCallLog") -> Dict[str, Any]:
@@ -82,6 +100,7 @@ class ModuleCallLog:
         "call_parent": FieldPolicy.KEEP,
         "call_children": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
+        "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
 
     def __init__(
@@ -97,6 +116,7 @@ class ModuleCallLog:
         call_parent: Optional[str] = None,
         call_children: Optional[List[str]] = None,
         all_addresses: Optional[List[str]] = None,
+        _source_trace: "Trace | None" = None,
     ) -> None:
         self.address = address
         self.call_index = call_index
@@ -111,6 +131,7 @@ class ModuleCallLog:
         self.call_parent = call_parent
         self.call_children = call_children if call_children is not None else []
         self.all_addresses = all_addresses if all_addresses is not None else [address]
+        self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
 
     @property
     def num_layers(self) -> int:
@@ -118,9 +139,112 @@ class ModuleCallLog:
         return len(self.layers)
 
     @property
-    def is_shared(self) -> bool:
+    def has_multiple_addresses(self) -> bool:
         """Whether this module appears at multiple addresses."""
         return len(self.all_addresses) > 1
+
+    @property
+    def _source_trace(self) -> "Trace | None":
+        """Owning Trace, if still alive."""
+
+        ref = self.__dict__.get("_source_trace_ref")
+        if ref is None:
+            return None
+        return cast("Trace | None", ref())
+
+    @_source_trace.setter
+    def _source_trace(self, value: "Trace | None") -> None:
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    def _output_values(self, field_name: str) -> list[Any]:
+        """Return one field from all output layers."""
+
+        trace = self._source_trace
+        if trace is None:
+            return []
+        return [getattr(trace[layer_label], field_name) for layer_label in self.output_layers]
+
+    def _single_output_value(self, field_name: str) -> Any:
+        """Return one output field, requiring exactly one output."""
+
+        values = self._output_values(field_name)
+        if len(values) != 1:
+            raise ValueError(
+                f"ModuleCall '{self.call_label}' has {len(values)} outputs; use plural access."
+            )
+        return values[0]
+
+    @property
+    def outs(self) -> list[Any]:
+        """Saved output tensors for this module call."""
+
+        return self._output_values("out")
+
+    @property
+    def out(self) -> Any:
+        """Saved output tensor for a single-output module call."""
+
+        return self._single_output_value("out")
+
+    @property
+    def out_shapes(self) -> list[Any]:
+        """Output shapes for this module call."""
+
+        return self._output_values("shape")
+
+    @property
+    def out_shape(self) -> Any:
+        """Output shape for a single-output module call."""
+
+        return self._single_output_value("shape")
+
+    @property
+    def out_dtypes(self) -> list[Any]:
+        """Output dtypes for this module call."""
+
+        return self._output_values("dtype")
+
+    @property
+    def out_dtype(self) -> Any:
+        """Output dtype for a single-output module call."""
+
+        return self._single_output_value("dtype")
+
+    @property
+    def out_memories(self) -> list[Any]:
+        """Output memories for this module call."""
+
+        return self._output_values("memory")
+
+    @property
+    def out_memory(self) -> Any:
+        """Output memory for a single-output module call."""
+
+        return self._single_output_value("memory")
+
+    @property
+    def out_memories_str(self) -> list[str]:
+        """Human-readable output memories for this module call."""
+
+        return [human_readable_size(memory or 0) for memory in self.out_memories]
+
+    @property
+    def out_memory_str(self) -> str:
+        """Human-readable output memory for a single-output module call."""
+
+        return human_readable_size(self.out_memory or 0)
+
+    @property
+    def grads(self) -> list[Any]:
+        """Saved output gradients for this module call."""
+
+        return self._output_values("grad")
+
+    @property
+    def grad(self) -> Any:
+        """Saved output gradient for a single-output module call."""
+
+        return self._single_output_value("grad")
 
     @property
     def inputs(self) -> List[str]:
@@ -250,6 +374,7 @@ class ModuleCallLog:
                 "all_addresses": [state["address"]],
                 "forward_args_summary": "",
                 "forward_kwargs_summary": "",
+                "_source_trace_ref": None,
             },
         )
         self.__dict__.update(state)
@@ -303,8 +428,12 @@ class ModuleLog:
         "buffer_layers": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
         "is_train_mode": FieldPolicy.KEEP,
-        "has_forward_hooks": FieldPolicy.KEEP,
-        "has_backward_hooks": FieldPolicy.KEEP,
+        "forward_pre_hook_info": FieldPolicy.KEEP,
+        "forward_hook_info": FieldPolicy.KEEP,
+        "backward_pre_hook_info": FieldPolicy.KEEP,
+        "backward_hook_info": FieldPolicy.KEEP,
+        "full_backward_pre_hook_info": FieldPolicy.KEEP,
+        "full_backward_hook_info": FieldPolicy.KEEP,
         "custom_attributes": FieldPolicy.BLOB_RECURSIVE,
         "custom_methods": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
@@ -352,8 +481,12 @@ class ModuleLog:
         buffer_layers: Optional[List[str]] = None,
         # Module state
         is_train_mode: bool = True,
-        has_forward_hooks: bool = False,
-        has_backward_hooks: bool = False,
+        forward_pre_hook_info: HookInfo | None = None,
+        forward_hook_info: HookInfo | None = None,
+        backward_pre_hook_info: HookInfo | None = None,
+        backward_hook_info: HookInfo | None = None,
+        full_backward_pre_hook_info: HookInfo | None = None,
+        full_backward_hook_info: HookInfo | None = None,
         custom_attributes: Optional[Dict[str, Any]] = None,
         custom_methods: Optional[List[str]] = None,
         # Back-reference
@@ -402,8 +535,12 @@ class ModuleLog:
         self._buffer_accessor: Any = None  # populated by _build_module_logs
 
         self.is_train_mode = is_train_mode
-        self.has_forward_hooks = has_forward_hooks
-        self.has_backward_hooks = has_backward_hooks
+        self.forward_pre_hook_info = forward_pre_hook_info or HookInfo()
+        self.forward_hook_info = forward_hook_info or HookInfo()
+        self.backward_pre_hook_info = backward_pre_hook_info or HookInfo()
+        self.backward_hook_info = backward_hook_info or HookInfo()
+        self.full_backward_pre_hook_info = full_backward_pre_hook_info or HookInfo()
+        self.full_backward_hook_info = full_backward_hook_info or HookInfo()
         self.custom_attributes = custom_attributes if custom_attributes is not None else {}
         self.custom_methods = custom_methods if custom_methods is not None else []
 
@@ -423,7 +560,7 @@ class ModuleLog:
         return "" if self.address == "self" else self.address.rsplit(".", 1)[-1]
 
     @property
-    def is_shared(self) -> bool:
+    def has_multiple_addresses(self) -> bool:
         """Whether this module appears at multiple addresses."""
         return len(self.all_addresses) > 1
 
@@ -442,6 +579,23 @@ class ModuleLog:
             Human-readable parameter memory amount.
         """
         return human_readable_size(self.param_memory)
+
+    @property
+    def has_forward_hooks(self) -> bool:
+        """Whether any forward hook registry is nonempty."""
+
+        return self.forward_pre_hook_info.has_any or self.forward_hook_info.has_any
+
+    @property
+    def has_backward_hooks(self) -> bool:
+        """Whether any backward hook registry is nonempty."""
+
+        return (
+            self.backward_pre_hook_info.has_any
+            or self.backward_hook_info.has_any
+            or self.full_backward_pre_hook_info.has_any
+            or self.full_backward_hook_info.has_any
+        )
 
     @property
     def _source_trace(self) -> "Trace | None":
@@ -466,7 +620,23 @@ class ModuleLog:
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state without touching disk."""
         read_io_format_version(state, cls_name=type(self).__name__)
-        default_fill_state(state, defaults={"_buffer_accessor": None, "_source_trace_ref": None})
+        default_fill_state(
+            state,
+            defaults={
+                "_buffer_accessor": None,
+                "_source_trace_ref": None,
+                "forward_pre_hook_info": HookInfo(),
+                "forward_hook_info": HookInfo(
+                    count=int(bool(state.pop("has_forward_hooks", False)))
+                ),
+                "backward_pre_hook_info": HookInfo(),
+                "backward_hook_info": HookInfo(
+                    count=int(bool(state.pop("has_backward_hooks", False)))
+                ),
+                "full_backward_pre_hook_info": HookInfo(),
+                "full_backward_hook_info": HookInfo(),
+            },
+        )
         self.__dict__.update(state)
 
     # --- Per-call delegating properties ---
@@ -540,6 +710,57 @@ class ModuleLog:
         """
         return cast("dict[str, Any] | None", self._single_pass_or_error("forward_kwargs"))
 
+    def _single_call_or_error(self) -> ModuleCallLog:
+        """Return the only ModuleCallLog or raise for multi-call modules."""
+
+        if self.num_calls != 1 or 1 not in self.ops:
+            raise ValueError(
+                f"Module '{self.address}' has {self.num_calls} calls; use module.calls[N]."
+            )
+        return self.ops[1]
+
+    @property
+    def calls(self) -> Dict[int, ModuleCallLog]:
+        """Scoped module-call collection."""
+
+        return self.ops
+
+    @property
+    def outs(self) -> list[Any]:
+        """Saved output tensors for a single-call module."""
+
+        return self._single_call_or_error().outs
+
+    @property
+    def out(self) -> Any:
+        """Saved output tensor for a single-call, single-output module."""
+
+        return self._single_call_or_error().out
+
+    @property
+    def out_shapes(self) -> list[Any]:
+        """Output shapes for a single-call module."""
+
+        return self._single_call_or_error().out_shapes
+
+    @property
+    def out_shape(self) -> Any:
+        """Output shape for a single-call, single-output module."""
+
+        return self._single_call_or_error().out_shape
+
+    @property
+    def grads(self) -> list[Any]:
+        """Saved output gradients for a single-call module."""
+
+        return self._single_call_or_error().grads
+
+    @property
+    def grad(self) -> Any:
+        """Saved output gradient for a single-call, single-output module."""
+
+        return self._single_call_or_error().grad
+
     @property
     def buffers(self) -> "BufferAccessor":
         """Scoped BufferAccessor for buffers belonging to this module."""
@@ -600,30 +821,6 @@ class ModuleLog:
         """Total MACs (forward + backward) for this module."""
         return self.flops // 2
 
-    @property
-    def grad(self) -> torch.Tensor | List[torch.Tensor] | None:
-        """Aggregate saved grads across layers in this module.
-
-        Returns
-        -------
-        torch.Tensor | List[torch.Tensor] | None
-            A stacked tensor when layer grad shapes match, a list when
-            shapes differ, or ``None`` when no layer grads were saved.
-        """
-        if self._source_trace is None:
-            return None
-        grads = [
-            self._source_trace[layer_label].grad
-            for layer_label in self.layers
-            if getattr(self._source_trace[layer_label], "has_grad", False)
-        ]
-        if not grads:
-            return None
-        first_shape = grads[0].shape
-        if all(grad.shape == first_shape for grad in grads):
-            return torch.stack(grads)
-        return grads
-
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""
         lines = [
@@ -633,7 +830,7 @@ class ModuleLog:
             f"  num_layers: {self.num_layers}",
             f"  num_calls: {self.num_calls}",
         ]
-        if self.is_shared:
+        if self.has_multiple_addresses:
             lines.append(f"  aliases: {self.all_addresses}")
         if self.address_children:
             lines.append(f"  children: {self.address_children}")

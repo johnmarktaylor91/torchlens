@@ -373,7 +373,7 @@ class Bundle:
         self._supergraph = None
         return log
 
-    def remove_all_but(self, keep: list[str]) -> None:
+    def remove_except(self, keep: list[str]) -> None:
         """Remove every member whose name is not listed in ``keep``.
 
         Parameters
@@ -427,6 +427,23 @@ class Bundle:
             raise ValueError("Bundle capacity must be at least 1.")
         self._capacity = n
         self._enforce_capacity()
+
+    def set_capacity(self, n: int | None) -> "Bundle":
+        """Set member capacity and return this bundle.
+
+        Parameters
+        ----------
+        n:
+            Maximum member count, or ``None`` to remove the cap.
+
+        Returns
+        -------
+        Bundle
+            This bundle.
+        """
+
+        self.capacity = n
+        return self
 
     def clear(self) -> None:
         """Remove all non-baseline members.
@@ -539,6 +556,22 @@ class Bundle:
         """
 
         return {name: fn(member) for name, member in self._members.items()}
+
+    def joint_metric(self, fn: Callable[["Bundle"], Any]) -> Any:
+        """Apply a function to the bundle as a whole.
+
+        Parameters
+        ----------
+        fn:
+            Callable receiving this bundle.
+
+        Returns
+        -------
+        Any
+            Return value from ``fn``.
+        """
+
+        return fn(self)
 
     def show(self, method: str = "graph", **kwargs: Any) -> dict[str, str | None]:
         """Render each bundle member graph as a member-keyed strip.

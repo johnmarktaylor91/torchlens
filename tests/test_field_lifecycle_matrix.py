@@ -12,7 +12,10 @@ from torchlens._run_state import RunState
 from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from torchlens.data_classes.op_log import OpLog
 from torchlens.data_classes.model_log import Trace
-from torchlens.intervention.types import LAYER_PASS_LOG_FORK_POLICY, MODEL_LOG_FORK_POLICY
+from torchlens.intervention.types import (
+    LAYER_PASS_LOG_FIELD_FORK_POLICY,
+    MODEL_LOG_FIELD_FORK_POLICY,
+)
 
 
 class _LifecycleModel(nn.Module):
@@ -77,7 +80,7 @@ def test_field_lifecycle_matrix_modellog() -> None:
 
     ordered_fields = set(MODEL_LOG_FIELD_ORDER)
     assert ordered_fields <= set(Trace.PORTABLE_STATE_SPEC)
-    assert ordered_fields <= set(MODEL_LOG_FORK_POLICY)
+    assert ordered_fields <= set(MODEL_LOG_FIELD_FORK_POLICY)
     assert ordered_fields <= set(Trace.DEFAULT_FILL_STATE)
 
 
@@ -86,7 +89,7 @@ def test_field_lifecycle_matrix_op_log() -> None:
 
     ordered_fields = set(LAYER_PASS_LOG_FIELD_ORDER)
     assert ordered_fields <= set(OpLog.PORTABLE_STATE_SPEC)
-    assert ordered_fields <= set(LAYER_PASS_LOG_FORK_POLICY)
+    assert ordered_fields <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
     assert ordered_fields <= set(OpLog.DEFAULT_FILL_STATE)
 
 

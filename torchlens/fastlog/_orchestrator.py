@@ -78,7 +78,7 @@ def _reset_state_for_pass(
     state.sample_id = sample_id
     state.pass_index = pass_index
     state.event_index = 0
-    state.op_index = 0
+    state.compute_index = 0
 
 
 def _emit_root_module_event(
@@ -105,7 +105,7 @@ def _emit_root_module_event(
         op_counts=state.op_counts,
         pass_index=state.pass_index,
         event_index=state.event_index,
-        op_index=None,
+        compute_index=None,
         time_since_pass_start=time.time() - trace.start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,

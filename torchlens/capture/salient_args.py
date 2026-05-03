@@ -2,7 +2,7 @@
 
 Salient args are the computation-defining hyperparameters (kernel_size, stride,
 num_heads, dropout_p, etc.) that researchers want to see at a glance without
-enabling full ``save_function_args=True`` (which deep-copies everything).
+enabling full ``save_arg_values=True`` (which deep-copies everything).
 
 The registry maps normalized ``layer_type`` strings to extractor functions.
 Each extractor receives the raw args/kwargs and optionally param_shapes,

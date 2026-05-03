@@ -252,8 +252,9 @@ class TestMultiPassModules:
         log = trace_fn(model, input_2d)
         ml = log.modules["fc1"]
         assert ml.num_calls > 1
+        assert ml.layers
         with pytest.raises(AttributeError, match="ops"):
-            _ = ml.layers
+            _ = ml.forward_args
 
     def test_pass_access(self, input_2d):
         model = example_models.RecurrentParamsSimple()
@@ -329,7 +330,7 @@ class TestModuleLogIntegration:
     def test_root_layers_equals_model_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         root = log.root_module
-        assert root.layers == log.layer_labels
+        assert root.layers == [layer.layer_label for layer in log.layer_list]
 
     def test_root_params_count(self):
         log = trace_fn(_make_simple_model(), _simple_input())

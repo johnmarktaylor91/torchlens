@@ -72,12 +72,12 @@ class TestParamLogFields:
         assert isinstance(pl.memory, int)
         assert isinstance(pl.memory_str, str)
         assert isinstance(pl.trainable, bool)
-        assert isinstance(pl.address, str)
-        assert isinstance(pl.module_type, str)
+        assert isinstance(pl.module_address, str)
+        assert isinstance(pl.module_class_name, str)
         assert isinstance(pl.barcode, str)
         assert isinstance(pl.num_calls, int)
         assert isinstance(pl.used_by_layers, list)
-        assert isinstance(pl.linked_params, list)
+        assert isinstance(pl.co_parent_params, list)
 
     def test_repr_contains_key_info(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -199,7 +199,7 @@ class TestParamMetadata:
         pl = mh.params["0.weight"]
         assert pl.address == "0.weight"
         assert pl.name == "weight"
-        assert pl.address == "0"
+        assert pl.module_address == "0"
 
     def test_shape_and_dtype(self):
         model = _make_simple_model()
@@ -223,8 +223,8 @@ class TestParamMetadata:
     def test_module_info(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params["0.weight"]
-        assert pl.address == "0"
-        assert pl.module_type == "Linear"
+        assert pl.module_address == "0"
+        assert pl.module_class_name == "Linear"
 
     def test_fsize_positive(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -290,15 +290,15 @@ class TestLinkedParams:
         mh = trace_fn(_make_simple_model(), _simple_input())
         w = mh.params["0.weight"]
         b = mh.params["0.bias"]
-        assert b.address in w.linked_params
-        assert w.address in b.linked_params
+        assert b.address in w.co_parent_params
+        assert w.address in b.co_parent_params
 
     def test_linked_symmetric(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            for other_addr in pl.linked_params:
+            for other_addr in pl.co_parent_params:
                 other = mh.params[other_addr]
-                assert pl.address in other.linked_params
+                assert pl.address in other.co_parent_params
 
 
 # ---------------------------------------------------------------------------

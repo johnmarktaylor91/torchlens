@@ -160,11 +160,11 @@ def test_multi_output_layers(small_input):
     assert len(mh.output_layers) >= 2
 
 
-def test_internally_initialized_ops(small_input):
+def test_internal_source_ops(small_input):
     model = example_models.SimpleInternallyGenerated()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.internally_initialized_ops, list)
-    assert len(mh.internally_initialized_ops) > 0
+    assert isinstance(mh.internal_source_ops, list)
+    assert len(mh.internal_source_ops) > 0
 
 
 def test_equivalent_ops(input_2d):
@@ -379,12 +379,9 @@ def test_distances_with_flag(small_input):
 def test_recurrent_call_indexbers(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
-    found_multi_pass = False
-    for label in mh.layer_labels:
-        entry = mh[label]
-        if entry.call_index > 1:
-            found_multi_pass = True
-            break
+    found_multi_pass = any(
+        op.call_index > 1 for layer in mh.layer_logs.values() for op in layer.ops.values()
+    )
     assert found_multi_pass, "Recurrent model should have layers with call_index > 1"
 
 
@@ -427,7 +424,7 @@ def test_layer_logs_fewer_than_layer_list(input_2d):
 def test_trace_len(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert len(mh) == len(mh.layer_labels)
+    assert len(mh) == len(mh.layer_list)
 
 
 def test_getitem_by_positive_index(small_input):
@@ -456,7 +453,7 @@ def test_trace_iter(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
     items = list(mh)
-    assert len(items) == len(mh.layer_labels)
+    assert len(items) == len(mh.layer_list)
 
 
 def test_layer_labels_properties(small_input):
@@ -477,21 +474,21 @@ def test_layer_labels_properties(small_input):
 
 def test_saved_args_populated(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, save_function_args=True)
-    assert mh.save_function_args is True
+    mh = trace_fn(model, small_input, save_arg_values=True)
+    assert mh.save_arg_values is True
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
         if not entry.is_input and entry.saved_args is not None:
             found = True
             break
-    assert found, "save_function_args=True should populate saved_args"
+    assert found, "save_arg_values=True should populate saved_args"
 
 
 def test_saved_args_not_populated(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert mh.save_function_args is False
+    assert mh.save_arg_values is False
 
 
 # =============================================================================
@@ -865,27 +862,27 @@ def test_flops_sdpa():
 # =============================================================================
 
 
-def _get_func_call_stack_with_flag(small_input, save_code_context: bool):
-    """Helper: return a non-input layer's func_call_stack for either source-loading mode."""
+def _get_code_context_with_flag(small_input, save_code_context: bool):
+    """Helper: return a non-input layer's code_context for either source-loading mode."""
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input, save_code_context=save_code_context)
     for label in mh.layer_labels:
         entry = mh[label]
         if not entry.is_input:
-            return entry.func_call_stack, mh
+            return entry.code_context, mh
     raise RuntimeError("No non-input layer found")
 
 
-def _get_func_call_stack(small_input):
-    """Helper: run a model and return the func_call_stack from a non-input layer."""
-    return _get_func_call_stack_with_flag(small_input, save_code_context=True)
+def _get_code_context(small_input):
+    """Helper: run a model and return the code_context from a non-input layer."""
+    return _get_code_context_with_flag(small_input, save_code_context=True)
 
 
 # --- Class structure ---
 
 
-def test_func_call_stack_returns_list_of_func_call_locations(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+def test_code_context_returns_list_of_func_call_locations(small_input):
+    stack, _ = _get_code_context(small_input)
     assert isinstance(stack, list)
     assert len(stack) > 0
     for loc in stack:
@@ -893,7 +890,7 @@ def test_func_call_stack_returns_list_of_func_call_locations(small_input):
 
 
 def test_func_call_location_fields_populated(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     loc = stack[0]
     assert isinstance(loc.file, str)
     assert isinstance(loc.line_number, int)
@@ -906,7 +903,7 @@ def test_func_call_location_fields_populated(small_input):
 
 
 def test_optional_fields_are_str_or_none(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         assert loc.func_signature is None or isinstance(loc.func_signature, str)
         assert loc.func_docstring is None or isinstance(loc.func_docstring, str)
@@ -916,7 +913,7 @@ def test_optional_fields_are_str_or_none(small_input):
 
 
 def test_forward_frame_present(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     func_names = [loc.func_name for loc in stack]
     assert "forward" in func_names
 
@@ -925,7 +922,7 @@ def test_no_torchlens_internals_in_stack(small_input):
     import os
 
     torchlens_pkg_dir = os.path.dirname(os.path.abspath(torchlens.__file__))
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         assert not loc.file.startswith(torchlens_pkg_dir), (
             f"Internal file {loc.file} should not appear in stack"
@@ -933,7 +930,7 @@ def test_no_torchlens_internals_in_stack(small_input):
 
 
 def test_call_line_is_stripped(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.call_line:
             assert loc.call_line == loc.call_line.strip()
@@ -943,7 +940,7 @@ def test_call_line_is_stripped(small_input):
 
 
 def test_repr_contains_key_info(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     # Find a frame with code context
     loc = None
     for entry in stack:
@@ -976,15 +973,15 @@ def test_repr_source_unavailable():
 
 
 def test_func_call_location_no_source_state_with_save_code_context_off(small_input, monkeypatch):
-    stack, mh = _get_func_call_stack_with_flag(small_input, save_code_context=False)
+    stack, mh = _get_code_context_with_flag(small_input, save_code_context=False)
     assert isinstance(stack, list)
     assert len(stack) > 0
     captured_entries = [
         entry for entry in mh.layer_list if not entry.is_input and entry.func_name != "none"
     ]
-    assert all(len(entry.func_call_stack) > 0 for entry in captured_entries)
+    assert all(len(entry.code_context) > 0 for entry in captured_entries)
     for entry in captured_entries:
-        for frame in entry.func_call_stack:
+        for frame in entry.code_context:
             assert frame.file is not None
             assert frame.line_number is not None
             assert frame.code_firstlineno is not None
@@ -1023,7 +1020,7 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
 
     mh_roundtrip = pickle.loads(pickle.dumps(mh))
     roundtrip_stack = next(
-        entry.func_call_stack for entry in mh_roundtrip.layer_list if not entry.is_input
+        entry.code_context for entry in mh_roundtrip.layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -1031,7 +1028,7 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
 
 
 def test_getitem_returns_context_line(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     loc = None
     for entry in stack:
         if entry.code_context is not None and len(entry.code_context) > 0:
@@ -1042,7 +1039,7 @@ def test_getitem_returns_context_line(small_input):
 
 
 def test_getitem_slice(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     loc = None
     for entry in stack:
         if entry.code_context is not None and len(entry.code_context) >= 3:
@@ -1056,7 +1053,7 @@ def test_getitem_slice(small_input):
 
 
 def test_len_matches_code_context(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.code_context is not None:
             assert len(loc) == len(loc.code_context) == loc.num_context_lines
@@ -1066,7 +1063,7 @@ def test_len_matches_code_context(small_input):
 
 
 def test_default_num_context_lines(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.code_context is not None:
             assert loc.num_context_lines == 15  # 7 + 1 + 7
@@ -1078,8 +1075,8 @@ def test_custom_num_context_lines(small_input):
     mh = trace_fn(model, small_input, num_context_lines=3, save_code_context=True)
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input and entry.func_call_stack:
-            for loc in entry.func_call_stack:
+        if not entry.is_input and entry.code_context:
+            for loc in entry.code_context:
                 if loc.code_context is not None:
                     assert loc.num_context_lines == 7  # 3 + 1 + 3
                     return
@@ -1096,7 +1093,7 @@ def test_num_context_lines_stored_on_trace(small_input):
 
 
 def test_code_context_labeled_has_arrow(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.code_context is not None:
             assert loc.code_context_labeled.count("  --->  ") == 1
@@ -1104,7 +1101,7 @@ def test_code_context_labeled_has_arrow(small_input):
 
 
 def test_code_context_labeled_arrow_points_to_call_line(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.code_context is not None and loc.call_line:
             for line in loc.code_context_labeled.split("\n"):
@@ -1124,7 +1121,7 @@ def valid_mh_and_ground_truth():
     """Return a valid (Trace, ground_truth_tensors) pair for SimpleFF."""
     model = example_models.SimpleFF()
     x = torch.rand(2, 3, 32, 32)
-    mh = trace_fn(model, x, layers_to_save="all", save_function_args=True)
+    mh = trace_fn(model, x, layers_to_save="all", save_arg_values=True)
     ground_truth = [mh[label].out.clone() for label in mh.output_layers]
     return mh, ground_truth
 

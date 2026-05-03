@@ -68,9 +68,9 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             type_index = layer_type_counter[layer_type]
             layer_type_counter[layer_type] += 1
             if layer_type in ["input", "buffer"]:
-                overall_index = 0  # Input/buffer don't get a total order number.
+                trace_index = 0  # Input/buffer don't get a total order number.
             else:
-                overall_index = layer_total_counter
+                trace_index = layer_total_counter
                 layer_total_counter += 1
 
         else:
@@ -80,17 +80,17 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             layer_type = first_pass_tensor.layer_type
             type_index = first_pass_tensor.type_index
             if layer_type in ["input", "buffer"]:
-                overall_index = 0
+                trace_index = 0
             else:
-                overall_index = first_pass_tensor.overall_index
+                trace_index = first_pass_tensor.trace_index
         tensor_log_entry.type_index = type_index
-        tensor_log_entry.overall_index = overall_index
+        tensor_log_entry.trace_index = trace_index
 
         if layer_type not in ["input", "output", "buffer"]:
             tensor_log_entry.layer_label_w_pass = (
-                f"{layer_type}_{type_index}_{overall_index}:{call_index}"
+                f"{layer_type}_{type_index}_{trace_index}:{call_index}"
             )
-            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}_{overall_index}"
+            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}_{trace_index}"
         else:
             tensor_log_entry.layer_label_w_pass = f"{layer_type}_{type_index}:{call_index}"
             tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}"
@@ -127,7 +127,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     ``in`` checks on lists for large models.
     """
     unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
-    op_index = 1
+    compute_index = 1
     mbd = self._module_build_data
 
     # Shadow sets for O(1) membership checks in _log_module_hierarchy_info_for_layer.
@@ -144,13 +144,13 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
     for t, layer_entry in enumerate(self):
         if layer_entry.layer_type in ["input", "buffer"]:
-            layer_entry.op_index = 0
+            layer_entry.compute_index = 0
         elif layer_entry.layer_type == "output":
-            layer_entry.op_index = None  # fix later
+            layer_entry.compute_index = None  # fix later
         else:
-            layer_entry.op_index = op_index
+            layer_entry.compute_index = compute_index
             self.num_ops += 1
-            op_index += 1
+            compute_index += 1
 
         # Replace any layer names with their final names:
         _replace_layer_names_for_layer_entry(self, layer_entry)
@@ -183,16 +183,16 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         # Tally elapsed time:
 
-        self.function_calls_duration += layer_entry.func_duration
+        self.func_calls_duration += layer_entry.func_duration
 
-    _finalize_output_op_indexs(self)
+    _finalize_output_compute_indexs(self)
     _build_module_hierarchy_dicts(self)
 
 
-def _finalize_output_op_indexs(self: "Trace") -> None:
-    """Assign op_index to output layers (deferred until total is known)."""
+def _finalize_output_compute_indexs(self: "Trace") -> None:
+    """Assign compute_index to output layers (deferred until total is known)."""
     for layer in self.output_layers:
-        self[layer].op_index = self.num_ops
+        self[layer].compute_index = self.num_ops
 
 
 def _build_module_hierarchy_dicts(self: "Trace") -> None:
@@ -715,9 +715,9 @@ def _add_lookup_keys_for_layer_entry(
     layer_entry.lookup_keys = lookup_keys_for_tensor
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
-            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.creation_index
+            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.capture_index
             self.layer_dict_all_keys[lookup_key] = layer_entry
-        self._layer_num_to_lookup_keys_dict[layer_entry.creation_index].append(lookup_key)
+        self._layer_num_to_lookup_keys_dict[layer_entry.capture_index].append(lookup_key)
 
 
 def _trim_and_reorder_layer_entry_fields(layer_entry: OpLog) -> None:
@@ -756,9 +756,9 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         "input_layers",
         "output_layers",
         "buffer_layers",
-        "internally_initialized_ops",
+        "internal_source_ops",
         "_layers_where_internal_branches_merge_with_input",
-        "internally_terminated_ops",
+        "internal_sink_ops",
         "internally_terminated_bool_ops",
         "ops_with_saved_grads",
         "ops_with_saved_outs",
@@ -820,8 +820,8 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
             for layer_label in conditional_event.bool_layers
         ]
 
-    self.operation_history = _rename_label_dataclass(
-        getattr(self, "operation_history", []), self._raw_to_final_layer_labels
+    self.ledger = _rename_label_dataclass(
+        getattr(self, "ledger", []), self._raw_to_final_layer_labels
     )
     if getattr(self, "_intervention_spec", None) is not None:
         self._intervention_spec = _rename_label_dataclass(

@@ -173,7 +173,7 @@ def _intervention_lines(log: Any) -> list[str]:
     spec = getattr(log, "_intervention_spec", None)
     target_specs = tuple(getattr(spec, "target_value_specs", ()) or ())
     hook_specs = tuple(getattr(spec, "hook_specs", ()) or ())
-    history = list(getattr(log, "operation_history", []) or [])
+    history = list(getattr(log, "ledger", []) or [])
     if not target_specs and not hook_specs and not history:
         return ["- No interventions are recorded on this log."]
     return [
@@ -227,7 +227,7 @@ def _shared_parameter_line(log: Any) -> str:
 
     shared = 0
     for param_log in getattr(log, "param_logs", []) or []:
-        linked = getattr(param_log, "linked_params", ()) or ()
+        linked = getattr(param_log, "co_parent_params", ()) or ()
         if linked:
             shared += 1
     if shared:

@@ -138,7 +138,7 @@ def _build_file_indexes(
     file_indexes: Dict[str, Optional[ast_branches.FileIndex]] = {}
     for bool_label in _iter_terminal_scalar_bool_labels(self):
         bool_layer = self[bool_label]
-        for frame in bool_layer.func_call_stack:
+        for frame in bool_layer.code_context:
             if frame.file in file_indexes:
                 continue
             file_indexes[frame.file] = ast_branches.get_file_index(frame.file)
@@ -168,7 +168,7 @@ def _classify_bool_layers(
     for bool_label in _iter_terminal_scalar_bool_labels(self):
         bool_layer = self[bool_label]
         classification = ast_branches.BoolClassification("unknown", None, None, None)
-        for frame in reversed(bool_layer.func_call_stack):
+        for frame in reversed(bool_layer.code_context):
             frame_classification = ast_branches.classify_bool(
                 frame.file,
                 frame.line_number,
@@ -345,7 +345,7 @@ def _attribute_branches_forward(
     for layer_label in self._raw_layer_labels_list:
         layer = self[layer_label]
         layer.conditional_branch_stack = _translate_conditional_stack(
-            layer.func_call_stack,
+            layer.code_context,
             events_by_key,
         )
         layer.conditional_branch_depth = len(layer.conditional_branch_stack)
@@ -478,14 +478,14 @@ def _build_conditional_record_lookup(
 
 
 def _translate_conditional_stack(
-    func_call_stack: List["FuncCallLocation"],
+    code_context: List["FuncCallLocation"],
     events_by_key: Dict[ast_branches.ConditionalKey, "ConditionalEvent"],
 ) -> List[Tuple[int, str]]:
     """Translate a structural AST branch stack into dense conditional IDs.
 
     Parameters
     ----------
-    func_call_stack:
+    code_context:
         Captured runtime call stack for one operation.
     events_by_key:
         Structural-to-dense conditional event lookup created in phase 5c.
@@ -498,7 +498,7 @@ def _translate_conditional_stack(
     """
 
     translated_stack: List[Tuple[int, str]] = []
-    for conditional_key, branch_kind in _attribute_op_with_scope_fallback(func_call_stack):
+    for conditional_key, branch_kind in _attribute_op_with_scope_fallback(code_context):
         if conditional_key not in events_by_key:
             continue
         translated_stack.append((events_by_key[conditional_key].id, branch_kind))
@@ -506,13 +506,13 @@ def _translate_conditional_stack(
 
 
 def _attribute_op_with_scope_fallback(
-    func_call_stack: List["FuncCallLocation"],
+    code_context: List["FuncCallLocation"],
 ) -> List[Tuple[ast_branches.ConditionalKey, str]]:
     """Attribute an op, retrying decorated-function scope resolution when needed.
 
     Parameters
     ----------
-    func_call_stack:
+    code_context:
         Captured runtime call stack for one operation.
 
     Returns
@@ -522,12 +522,12 @@ def _attribute_op_with_scope_fallback(
         outer-to-inner.
     """
 
-    branch_stack = ast_branches.attribute_op(func_call_stack)
+    branch_stack = ast_branches.attribute_op(code_context)
     if branch_stack:
         return branch_stack
 
     fallback_branch_stack: List[Tuple[ast_branches.ConditionalKey, str]] = []
-    for frame in func_call_stack:
+    for frame in code_context:
         file_index = ast_branches.get_file_index(frame.file)
         if file_index is None:
             continue

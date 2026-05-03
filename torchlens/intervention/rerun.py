@@ -90,7 +90,7 @@ def rerun(
     divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
     log.replace_run_state_from(new_log)
 
-    history_record = _build_operation_history_record(
+    history_record = _build_ledger_record(
         log,
         started_at=started_at,
         old_hash=old_hash,
@@ -607,8 +607,8 @@ def _capture_with_active_spec(
         save_raw_outs=getattr(log, "save_raw_outs", True),
         save_raw_grads=getattr(log, "save_raw_grads", True),
         mark_layer_depths=getattr(log, "mark_layer_depths", False),
-        detach_saved_tensorss=getattr(log, "detach_saved_tensorss", False),
-        save_function_args=getattr(log, "save_function_args", False),
+        detach_saved_activations=getattr(log, "detach_saved_activations", False),
+        save_arg_values=getattr(log, "save_arg_values", False),
         save_grads=getattr(log, "save_grads", False),
         grads_to_save=getattr(log, "grads_to_save", "all"),
         random_seed=getattr(log, "random_seed", None),
@@ -616,7 +616,7 @@ def _capture_with_active_spec(
         optimizer=getattr(log, "_optimizer", None),
         save_code_context=getattr(log, "save_code_context", False),
         save_rng_states=getattr(log, "save_rng_states", False),
-        detect_loops=getattr(log, "detect_loops", True),
+        recurrence_detection=getattr(log, "recurrence_detection", True),
         intervention_ready=True,
         intervention_spec=intervention_spec,
         normalized_hook_plan=hook_plan,
@@ -659,7 +659,7 @@ def _validate_rerun_result(new_log: "Trace", old_log: "Trace", *, strict: bool) 
     return 1
 
 
-def _build_operation_history_record(
+def _build_ledger_record(
     log: "Trace",
     *,
     started_at: float,

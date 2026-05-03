@@ -62,7 +62,7 @@ def _build_record_context(
     op_counts: Mapping[str, int] | None = None,
     pass_index: int = 0,
     event_index: int = 0,
-    op_index: int | None = None,
+    compute_index: int | None = None,
     time_since_pass_start: float = 0.0,
     include_source_events: bool = False,
     sample_id: str | int | None = None,
@@ -85,7 +85,7 @@ def _build_record_context(
         Forward pass index for this recording session.
     event_index:
         Chronological event index within the pass.
-    op_index:
+    compute_index:
         Operation index for torch-function events.
     time_since_pass_start:
         Elapsed seconds since the pass began.
@@ -131,10 +131,10 @@ def _build_record_context(
         raw_label=raw_label,
         pass_index=pass_index,
         event_index=event_index,
-        op_index=op_index,
+        compute_index=compute_index,
         layer_type=layer_type,
         type_index=type_index,
-        creation_index=_read_field(data, "creation_index"),
+        capture_index=_read_field(data, "capture_index"),
         func_name=_read_field(data, "func_name"),
         address=_read_field(data, "address"),
         module_type=_read_field(data, "module_type"),

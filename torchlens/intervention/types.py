@@ -663,8 +663,8 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     )
 
 
-MODEL_LOG_FORK_POLICY = _build_trace_fork_policy()
-LAYER_PASS_LOG_FORK_POLICY = _build_op_log_fork_policy()
+MODEL_LOG_FIELD_FORK_POLICY = _build_trace_fork_policy()
+LAYER_PASS_LOG_FIELD_FORK_POLICY = _build_op_log_fork_policy()
 
 __all__ = [
     "CapturedArgTemplate",
@@ -685,10 +685,10 @@ __all__ = [
     "HelperSpec",
     "HookSpec",
     "InterventionSpec",
-    "LAYER_PASS_LOG_FORK_POLICY",
+    "LAYER_PASS_LOG_FIELD_FORK_POLICY",
     "LiteralTensor",
     "LiteralValue",
-    "MODEL_LOG_FORK_POLICY",
+    "MODEL_LOG_FIELD_FORK_POLICY",
     "NamedField",
     "OutputPathComponent",
     "ParentRef",

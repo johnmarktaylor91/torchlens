@@ -64,15 +64,15 @@ def test_train_mode_inference_mode_wrapped_forward_errors() -> None:
             )
 
 
-def test_train_mode_detach_saved_tensorss_errors() -> None:
+def test_train_mode_detach_saved_activations_errors() -> None:
     """train_mode rejects explicit detaching because the options conflict."""
 
-    with pytest.raises(ValueError, match="detach_saved_tensorss=False"):
+    with pytest.raises(ValueError, match="detach_saved_activations=False"):
         tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,
-            detach_saved_tensorss=True,
+            detach_saved_activations=True,
         )
 
 

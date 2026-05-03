@@ -147,7 +147,7 @@ def _group_by_shared_params(self: "Trace") -> None:
     # For multi-member groups, set _layer_label_raw to the first member's raw label.
     for key, members in param_barcode_groups.items():
         if len(members) > 1:
-            leader = min(members, key=lambda x: self[x].creation_index)
+            leader = min(members, key=lambda x: self[x].capture_index)
             leader_raw = self[leader]._layer_label_raw
             for label in members:
                 self[label]._layer_label_raw = leader_raw
@@ -180,10 +180,10 @@ def _detect_and_label_loops(self: "Trace") -> None:
     reconciles any resulting conflicts.
     """
     # Pre-compute sort keys to avoid repeated attribute lookups in the heap.
-    _sort_keys = {label: self[label].creation_index for label in self._raw_layer_labels_list}
+    _sort_keys = {label: self[label].capture_index for label in self._raw_layer_labels_list}
 
     # Seed the heap with root nodes (inputs + internally-initialized tensors).
-    initial_labels = self.input_layers + self.internally_initialized_ops
+    initial_labels = self.input_layers + self.internal_source_ops
     node_heap = [(_sort_keys[label], label) for label in initial_labels]
     heapq.heapify(node_heap)
     heap_seen = set(initial_labels)
@@ -250,7 +250,7 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
         groups[entry._layer_label_raw].append(entry._label_raw)
 
     for raw_label, members in groups.items():
-        members_sorted = sorted(members, key=lambda x: self[x].creation_index)
+        members_sorted = sorted(members, key=lambda x: self[x].capture_index)
         for pass_index, member_label in enumerate(members_sorted):
             member = self[member_label]
             member.recurrent_ops = members_sorted
@@ -714,7 +714,7 @@ def _finalize_layer_assignments(
         if len(layer_nodes) < max([len(self[layer].recurrent_ops) for layer in layer_nodes]):
             continue
         # convert to list and sort
-        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].creation_index)  # type: ignore[assignment]
+        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].capture_index)  # type: ignore[assignment]
         # Unify equivalence_class: when param-sharing merges nodes
         # from different iso groups (e.g., shared module called from different
         # parent blocks), their equivalence types may differ due to module path

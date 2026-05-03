@@ -468,7 +468,7 @@ class TestNestedTupleArgs:
         """Nested tuples/lists in saved_args should be independent copies."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, save_function_args=True)
+        log = trace_fn(model, x, save_arg_values=True)
         found_args = False
         for label in log.layer_labels:
             entry = log[label]

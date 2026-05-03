@@ -38,7 +38,7 @@ layer.ops             # dict[int, OpLog]
 - `copy()` shallow-copies selected graph/conditional fields and deep-copies the rest.
 - `out` for some output/getitem cases may reference parent saved data directly.
 - `grad` is a bare reference; do not mutate it in-place.
-- `save_tensor_data()` must route through `safe_copy()` and respect `train_mode`.
+- `save_activation()` must route through `safe_copy()` and respect `train_mode`.
 - `TensorLog` is a compatibility alias from `op_log.py`; new docs should prefer
   `OpLog` unless referring to the alias itself.
 

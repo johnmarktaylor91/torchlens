@@ -38,7 +38,7 @@ def _build_live_log() -> Trace:
         model,
         x,
         layers_to_save="all",
-        save_function_args=True,
+        save_arg_values=True,
         save_rng_states=True,
         save_code_context=True,
         random_seed=0,
@@ -60,8 +60,8 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
         FuncCallLocation: next(
             frame
             for layer in live_log.layer_list
-            for frame in layer.func_call_stack
-            if layer.func_call_stack
+            for frame in layer.code_context
+            if layer.code_context
         ),
     }
 

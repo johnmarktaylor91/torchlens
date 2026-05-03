@@ -344,7 +344,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
     (one bool check, then call original).  When ``True``, it:
 
     1. Registers any buffer tensors seen for the first time.
-    2. Snapshots args (if ``save_function_args``), timing, RNG, and autocast state.
+    2. Snapshots args (if ``save_arg_values``), timing, RNG, and autocast state.
     3. Calls the original function.
     4. Detects **nested calls** via a barcode mechanism (see below).
     5. Handles **in-place ops** by copying the output and propagating the label back.
@@ -438,7 +438,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             return out
 
         # Snapshot args before the call in case in-place ops mutate them.
-        if trace.save_function_args:
+        if trace.save_arg_values:
             arg_copies = tuple([safe_copy(arg) for arg in args])
             kwarg_copies = {k: safe_copy(v) for k, v in kwargs.items()}
         else:

@@ -30,7 +30,7 @@ from torch import nn
 
 from .._errors import TorchLensPostfuncError
 from .._training_validation import TrainingModeConfigError
-from ..utils.introspection import _get_func_call_stack, get_attr_values_from_tensor_list
+from ..utils.introspection import _get_code_context, get_attr_values_from_tensor_list
 from ..utils.tensor_utils import get_memory_amount
 from ..utils.rng import log_current_rng_states
 from ..data_classes.buffer_log import BufferLog
@@ -82,7 +82,7 @@ def log_source_tensor_predicate(
     self._layer_counter += 1
     self._raw_layer_type_counter[source] += 1
     state.event_index += 1
-    creation_index = self._layer_counter
+    capture_index = self._layer_counter
     type_index = self._raw_layer_type_counter[source]
     tensor_label = f"{source}_{type_index}_raw"
     setattr(t, "tl__label_raw", tensor_label)
@@ -97,7 +97,7 @@ def log_source_tensor_predicate(
             "label": tensor_label,
             "raw_label": tensor_label,
             "_label_raw": tensor_label,
-            "creation_index": creation_index,
+            "capture_index": capture_index,
             "layer_type": source,
             "type_index": type_index,
             "func_name": None,
@@ -112,7 +112,7 @@ def log_source_tensor_predicate(
         op_counts=state.op_counts,
         pass_index=state.pass_index,
         event_index=state.event_index,
-        op_index=None,
+        compute_index=None,
         time_since_pass_start=time.time() - self.start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
@@ -170,7 +170,7 @@ def log_source_tensor_exhaustive(
     # Fetch counters and increment to be ready for next tensor to be logged
     self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
-    creation_index = self._layer_counter
+    capture_index = self._layer_counter
     type_index = self._raw_layer_type_counter[layer_type]
 
     tensor_label = f"{layer_type}_{type_index}_raw"
@@ -220,8 +220,8 @@ def log_source_tensor_exhaustive(
         # General info:
         "_label_raw": tensor_label,
         "_layer_label_raw": tensor_label,
-        "creation_index": creation_index,
-        "op_index": None,
+        "capture_index": capture_index,
+        "compute_index": None,
         "source_trace": self,
         "_tracing_finished": False,
         "_construction_done": False,
@@ -234,7 +234,7 @@ def log_source_tensor_exhaustive(
         "layer_label_no_pass_short": None,
         "layer_type": layer_type,
         "type_index": type_index,
-        "overall_index": None,
+        "trace_index": None,
         "call_index": 1,
         "num_calls": 1,
         "lookup_keys": [],
@@ -245,7 +245,7 @@ def log_source_tensor_exhaustive(
         "out_postfunc": self.out_postfunc,
         "annotations": {},
         "interventions": [],
-        "detach_saved_tensors": self.detach_saved_tensorss,
+        "detach_saved_activations": self.detach_saved_activations,
         "output_device": self.output_device,
         "has_saved_args": False,
         "saved_args": None,
@@ -280,7 +280,7 @@ def log_source_tensor_exhaustive(
         "func": None,
         "func_call_id": None,
         "func_name": "none",
-        "func_call_stack": _get_func_call_stack(
+        "code_context": _get_code_context(
             self.num_context_lines,
             source_loading_enabled=self.save_code_context,
             disable_col_offset=False,
@@ -333,7 +333,7 @@ def log_source_tensor_exhaustive(
         "min_distance_from_input": None,
         "max_distance_from_input": None,
         "is_output": False,
-        "feeds_output": False,
+        "is_output_parent": False,
         "is_final_output": False,
         "has_output_descendant": False,
         "output_descendants": set(),
@@ -357,6 +357,8 @@ def log_source_tensor_exhaustive(
         "bool_conditional_id": None,
         "is_scalar_bool": False,
         "bool_value": None,
+        "in_conditionals": [],
+        "terminal_bool_for": None,
         "in_cond_branch": False,
         "conditional_branch_stack": [],
         "conditional_branch_depth": 0,
@@ -374,7 +376,7 @@ def log_source_tensor_exhaustive(
         "output_of_modules": [],
         "output_of_module_calls": [],
         "is_submodule_output": False,
-        "is_atomic_module_output": False,
+        "is_atomic_module_op": False,
         "atomic_module_call": None,
         "_module_boundary_threads_inputs": [],
         "_module_boundary_thread_output": [],
@@ -398,7 +400,7 @@ def log_source_tensor_exhaustive(
         self.input_layers.append(tensor_label)
     if source == "buffer":
         self.buffer_layers.append(tensor_label)
-        self.internally_initialized_ops.append(tensor_label)
+        self.internal_source_ops.append(tensor_label)
 
     # Register backward hook for grad capture if requested.
     if self.save_grads:
@@ -437,9 +439,9 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
     orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
     previous_shape = orig_layer_entry.shape
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
-    if (layer_nums_to_save == "all") or (orig_layer_entry.creation_index in layer_nums_to_save):
+    if (layer_nums_to_save == "all") or (orig_layer_entry.capture_index in layer_nums_to_save):
         self.ops_with_saved_outs.append(orig_layer_entry.layer_label)
-        orig_layer_entry.save_tensor_data(t, [], {}, self.save_function_args, self.out_postfunc)
+        orig_layer_entry.save_activation(t, [], {}, self.save_arg_values, self.out_postfunc)
 
     # Minimal graph consistency validation (#99)
     new_shape = tuple(t.shape)

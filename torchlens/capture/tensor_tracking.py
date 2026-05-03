@@ -87,7 +87,7 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
     layer_log_entry = self[tensor_label]
     layers_to_update = [tensor_label]
     # Output layers are identity wrappers; propagate grad to them too.
-    if layer_log_entry.feeds_output:
+    if layer_log_entry.is_output_parent:
         for child_layer in layer_log_entry.children:
             if self[child_layer].is_output:
                 layers_to_update.append(child_layer)
@@ -96,12 +96,14 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
         layer = self[layer_label]
         selection = getattr(self, "_grad_layer_nums_to_save", "all")
         if selection != "all":
-            if selection in [None, "none", []] or layer.creation_index not in selection:
+            if selection in [None, "none", []] or layer.capture_index not in selection:
                 continue
         if layer_label not in self._saved_grads_set:
             self._saved_grads_set.add(layer_label)
             self.ops_with_saved_grads.append(layer_label)
         layer.log_tensor_grad(grad)
+        self.saved_gradient_memory += layer.grad_memory
+        self.total_gradient_memory += layer.grad_memory
 
 
 def _locate_parent_tensors_in_args(

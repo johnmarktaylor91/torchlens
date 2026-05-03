@@ -103,7 +103,7 @@ def _context_from_layer(
             "label": getattr(op_log, "layer_label", raw_label),
             "raw_label": raw_label,
             "_label_raw": raw_label,
-            "creation_index": getattr(op_log, "creation_index", None),
+            "capture_index": getattr(op_log, "capture_index", None),
             "layer_type": layer_type,
             "type_index": getattr(op_log, "type_index", None),
             "func_name": getattr(op_log, "func_name", None),
@@ -122,7 +122,7 @@ def _context_from_layer(
         op_counts=op_counts,
         pass_index=max(int(getattr(op_log, "call_index", 1)) - 1, 0),
         event_index=event_index,
-        op_index=int(getattr(op_log, "op_index", event_index)),
+        compute_index=int(getattr(op_log, "compute_index", event_index)),
         time_since_pass_start=0.0,
         include_source_events=True,
     )

@@ -48,7 +48,7 @@ class _LazyIOModel(nn.Module):
 def _build_log(
     *,
     seed: int = 0,
-    save_function_args: bool = False,
+    save_arg_values: bool = False,
     save_rng_states: bool = False,
 ) -> Trace:
     """Build a deterministic ``Trace`` for lazy I/O tests.
@@ -57,7 +57,7 @@ def _build_log(
     ----------
     seed:
         Random seed used for model initialization and inputs.
-    save_function_args:
+    save_arg_values:
         Whether function arguments should be captured in the log.
     save_rng_states:
         Whether RNG state tensors should be captured in the log.
@@ -75,7 +75,7 @@ def _build_log(
         model,
         inputs,
         layers_to_save="all",
-        save_function_args=save_function_args,
+        save_arg_values=save_arg_values,
         save_rng_states=save_rng_states,
         random_seed=seed,
     )
@@ -85,7 +85,7 @@ def _save_bundle(
     tmp_path: Path,
     *,
     seed: int = 0,
-    save_function_args: bool = False,
+    save_arg_values: bool = False,
     save_rng_states: bool = False,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
@@ -99,7 +99,7 @@ def _save_bundle(
         Temporary test directory.
     seed:
         Random seed used for model initialization and inputs.
-    save_function_args:
+    save_arg_values:
         Whether function arguments should be captured in the source log.
     save_rng_states:
         Whether RNG state tensors should be captured in the source log.
@@ -118,7 +118,7 @@ def _save_bundle(
 
     trace = _build_log(
         seed=seed,
-        save_function_args=save_function_args,
+        save_arg_values=save_arg_values,
         save_rng_states=save_rng_states,
     )
     bundle_path = tmp_path / path_name
@@ -329,7 +329,7 @@ def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> N
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_function_args=True,
+        save_arg_values=True,
         include_saved_args=True,
         path_name="saved_args.tl",
     )
@@ -355,7 +355,7 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_function_args=True,
+        save_arg_values=True,
         include_saved_args=True,
         path_name="saved_args.tl",
     )
@@ -375,7 +375,7 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_function_args=True,
+        save_arg_values=True,
         save_rng_states=True,
         include_saved_args=True,
         include_rng_states=True,

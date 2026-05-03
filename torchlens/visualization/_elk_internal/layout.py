@@ -1258,9 +1258,9 @@ def render_elk_direct(
             if is_collapsed and child_is_collapsed and tail_name != head_name:
                 p_mods = node.modules[:]
                 c_mods = child_node.modules[:]
-                if node.is_atomic_module_output:
+                if node.is_atomic_module_op:
                     p_mods = p_mods[:-1]
-                if child_node.is_atomic_module_output:
+                if child_node.is_atomic_module_op:
                     c_mods = c_mods[:-1]
                 if p_mods[:vis_call_depth] == c_mods[:vis_call_depth]:
                     continue

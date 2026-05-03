@@ -36,6 +36,8 @@ from torch import nn
 
 from .. import _state
 from ..data_classes.param_log import ParamAccessor, ParamLog
+from ..data_classes.func_call_location import FuncCallLocation
+from ..data_classes.module_log import HookInfo
 from ..utils.tensor_utils import get_memory_amount
 from ..utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
 from ..utils.hashing import make_random_barcode
@@ -217,6 +219,21 @@ def _prepare_model_session(
     _module_class_metadata_cache.clear()
     _state._dir_cache.clear()
     trace.model_name = str(type(model).__name__)
+    try:
+        trace.model_source_file = inspect.getfile(type(model))
+        trace.model_source_line = inspect.getsourcelines(type(model))[1]
+    except (OSError, TypeError):
+        trace.model_source_file = None
+        trace.model_source_line = None
+    try:
+        forward_func = model.forward
+        trace.forward_source_file = inspect.getsourcefile(forward_func) or inspect.getfile(
+            forward_func
+        )
+        trace.forward_source_line = inspect.getsourcelines(forward_func)[1]
+    except (OSError, TypeError):
+        trace.forward_source_file = None
+        trace.forward_source_line = None
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
@@ -279,13 +296,14 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             if pid in seen_param_ids:
                 existing_address = param_id_to_address[pid]
                 alias_address = f"{address}.{param_name}" if address else param_name
-                if alias_address not in param_logs[existing_address].linked_params:
-                    param_logs[existing_address].linked_params.append(alias_address)
+                if alias_address not in param_logs[existing_address].co_parent_params:
+                    param_logs[existing_address].co_parent_params.append(alias_address)
                 continue
             seen_param_ids.add(pid)
 
-            address = f"{address}.{param_name}" if address else param_name
-            param_id_to_address[pid] = address
+            module_address = address or "self"
+            param_address = f"{address}.{param_name}" if address else param_name
+            param_id_to_address[pid] = param_address
 
             # Save original requires_grad before forcing True.
             param.tl_requires_grad = param.requires_grad  # type: ignore[attr-defined]
@@ -294,25 +312,25 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
 
             barcode = make_random_barcode()
             param.tl_param_barcode = barcode  # type: ignore[attr-defined]
-            param.tl_param_address = address  # type: ignore[attr-defined]
+            param.tl_param_address = param_address  # type: ignore[attr-defined]
             param.tl_call_index = 0  # type: ignore[attr-defined]
 
             param_fsize = get_memory_amount(param)
             param_log = ParamLog(
-                module_address=address,
+                module_address=module_address,
                 name=param_name,
                 shape=tuple(param.shape),
                 dtype=param.dtype,
                 num_params=param.numel(),
                 memory=param_fsize,
                 trainable=param.tl_requires_grad,  # type: ignore[attr-defined]
-                address=address,
+                address=param_address,
                 module_type=module_type,
                 barcode=barcode,
                 has_optimizer=id(param) in optimized_param_ids if optimizer is not None else None,
             )
             param_log._param_ref = param
-            param_logs[address] = param_log
+            param_logs[param_address] = param_log
 
     trace.param_logs = ParamAccessor(param_logs)
 
@@ -394,6 +412,50 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
     return meta
 
 
+def _hook_info_from_registry(registry: Any) -> HookInfo:
+    """Build HookInfo for a PyTorch module hook registry.
+
+    Parameters
+    ----------
+    registry:
+        PyTorch hook registry mapping handle ids to callables.
+
+    Returns
+    -------
+    HookInfo
+        Portable hook metadata summary.
+    """
+
+    hooks = list(registry.values())
+    names: list[str] = []
+    qualnames: list[str] = []
+    source_locations: list[FuncCallLocation] = []
+    for hook in hooks:
+        names.append(getattr(hook, "__name__", type(hook).__name__))
+        qualname = getattr(hook, "__qualname__", names[-1])
+        module_name = getattr(hook, "__module__", "")
+        qualnames.append(f"{module_name}.{qualname}" if module_name else qualname)
+        try:
+            source_file = inspect.getsourcefile(hook) or inspect.getfile(hook)
+            source_line = inspect.getsourcelines(hook)[1]
+        except (OSError, TypeError):
+            continue
+        source_locations.append(
+            FuncCallLocation(
+                file=source_file,
+                line_number=source_line,
+                func_name=qualnames[-1],
+                source_loading_enabled=False,
+            )
+        )
+    return HookInfo(
+        count=len(hooks),
+        names=names,
+        qualnames=qualnames,
+        source_locations=source_locations,
+    )
+
+
 def _capture_module_metadata(
     trace: "Trace",
     module: nn.Module,
@@ -445,8 +507,20 @@ def _capture_module_metadata(
             meta["forward_docstring"] = doc
 
     # Instance-specific fields
-    meta["has_forward_hooks"] = bool(module._forward_hooks)
-    meta["has_backward_hooks"] = bool(module._backward_hooks)
+    meta["forward_pre_hook_info"] = _hook_info_from_registry(
+        getattr(module, "_forward_pre_hooks", {})
+    )
+    meta["forward_hook_info"] = _hook_info_from_registry(getattr(module, "_forward_hooks", {}))
+    meta["backward_pre_hook_info"] = _hook_info_from_registry(
+        getattr(module, "_backward_pre_hooks", {})
+    )
+    meta["backward_hook_info"] = _hook_info_from_registry(getattr(module, "_backward_hooks", {}))
+    meta["full_backward_pre_hook_info"] = _hook_info_from_registry(
+        getattr(module, "_full_backward_pre_hooks", {})
+    )
+    meta["full_backward_hook_info"] = _hook_info_from_registry(
+        getattr(module, "_full_backward_hooks", {})
+    )
     meta["is_train_mode"] = module.training
 
     child_addresses = []
@@ -693,7 +767,7 @@ def _handle_module_exit(
             t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
         layer_entry = trace._raw_layer_dict[t.tl__label_raw]
         layer_entry.is_submodule_output = True
-        layer_entry.is_atomic_module_output = _is_bottom_level_submodule_exit(trace, t, module)
+        layer_entry.is_atomic_module_op = _is_bottom_level_submodule_exit(trace, t, module)
         layer_entry.output_of_modules.append(address)
         layer_entry.output_of_module_calls.append((address, module_call_index))
         # Record module exit in chronological thread (matches "+" from entry).
@@ -817,7 +891,7 @@ def module_forward_decorator(
                 op_counts=state.op_counts,
                 pass_index=state.pass_index,
                 event_index=state.event_index,
-                op_index=None,
+                compute_index=None,
                 time_since_pass_start=0.0,
                 include_source_events=state.options.include_source_events,
                 sample_id=state.sample_id,
@@ -847,7 +921,7 @@ def module_forward_decorator(
                     op_counts=state.op_counts,
                     pass_index=state.pass_index,
                     event_index=state.event_index,
-                    op_index=None,
+                    compute_index=None,
                     time_since_pass_start=0.0,
                     include_source_events=state.options.include_source_events,
                     sample_id=state.sample_id,
@@ -907,13 +981,13 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
     sub_id = id(submodule)
 
     # Case 1: already determined in a prior call.
-    if layer_entry.is_atomic_module_output:
+    if layer_entry.is_atomic_module_op:
         return True
 
     # Case 2: tensor originated inside the model with no inputs entering
     # this submodule (e.g. a buffer-derived tensor in a leaf module).
     if layer_entry.is_internal_source and len(trace._mod_entered[sub_id]) == 0:
-        layer_entry.is_atomic_module_output = True
+        layer_entry.is_atomic_module_op = True
         layer_entry.atomic_module_call = (
             subaddress,
             trace._mod_call_index[sub_id],
@@ -927,10 +1001,10 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
         parent_tensor = trace[parent_label]
         parent_modules_entered = parent_tensor.modules_entered
         if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != subaddress):
-            layer_entry.is_atomic_module_output = False
+            layer_entry.is_atomic_module_op = False
             return False
 
-    layer_entry.is_atomic_module_output = True
+    layer_entry.is_atomic_module_op = True
     layer_entry.atomic_module_call = (
         subaddress,
         trace._mod_call_index[sub_id],

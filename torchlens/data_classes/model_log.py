@@ -94,7 +94,7 @@ from ..options import (
 from ..intervention.types import (
     FrozenInterventionSpec,
     ForkFieldPolicy,
-    MODEL_LOG_FORK_POLICY,
+    MODEL_LOG_FIELD_FORK_POLICY,
     InterventionSpec,
     Relationship,
     TargetSpec,
@@ -126,10 +126,10 @@ from .._source_links import file_line_text, terminal_file_line_link, vscode_file
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "name": None,
     "intervention_ready": False,
-    "capture_full_args": False,
+    "capture_args_template": False,
     "parent_run": None,
     "_intervention_spec": None,
-    "operation_history": [],
+    "ledger": [],
     "last_run_ctx": None,
     "_has_direct_writes": False,
     "_warned_direct_write": False,
@@ -153,7 +153,10 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "report_values": {},
     "observer_spans": [],
     "manual_tensor_connections": [],
-    "forward_lineno": None,
+    "forward_source_line": None,
+    "forward_source_file": None,
+    "model_source_file": None,
+    "model_source_line": None,
     "capture_cache_hit": False,
     "capture_cache_key": None,
     "capture_cache_path": None,
@@ -163,6 +166,10 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_out_hash_cache": {},
     "is_appended": False,
     "relationship_evidence": {},
+    "total_gradient_memory": 0,
+    "saved_gradient_memory": 0,
+    "total_param_gradient_memory": 0,
+    "forward_peak_memory": 0,
 }
 _MODEL_LOG_DEFAULT_FILL = {
     **{field_name: None for field_name in MODEL_LOG_FIELD_ORDER},
@@ -214,6 +221,145 @@ class ConditionalEvent:
     parent_conditional_id: Optional[int]
     parent_branch_kind: Optional[str]
     bool_layers: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ConditionalRoleRef:
+    """One op's participation in a conditional arm.
+
+    Attributes
+    ----------
+    conditional_id:
+        Stable id of the Conditional this op participates in.
+    arm_index:
+        Index of the arm within ``Conditional.arms``.
+    arm_kind:
+        Arm kind: ``"then"``, ``"elif"``, or ``"else"``.
+    role:
+        Role within the arm: ``"evaluation"`` or ``"body"``.
+    """
+
+    conditional_id: str
+    arm_index: int
+    arm_kind: Literal["then", "elif", "else"]
+    role: Literal["evaluation", "body"]
+
+
+@dataclass
+class ConditionalArm:
+    """One arm of an if-chain."""
+
+    kind: Literal["then", "elif", "else"]
+    evaluation_op_labels: list[str] = field(default_factory=list)
+    terminal_bool_op_label: str | None = None
+    bool_value_at_run: bool | None = None
+    condition_evaluated: bool = False
+    evaluation_entry_edge: tuple[str, str] | None = None
+    execution_op_labels: list[str] = field(default_factory=list)
+    fired: bool = False
+    execution_entry_edge: tuple[str, str] | None = None
+
+
+@dataclass
+class Conditional:
+    """One if-chain at one source location."""
+
+    id: str
+    arms: list[ConditionalArm]
+    fired_arm_index: int | None
+    fired_arm_kind: Literal["then", "elif", "else"] | None
+    source_file: str | None
+    source_line: int | None
+
+    @property
+    def source_location(self) -> str | None:
+        """Combined ``file:line`` location, if available."""
+
+        if self.source_file is None or self.source_line is None:
+            return None
+        return f"{self.source_file}:{self.source_line}"
+
+    @property
+    def fired_arm(self) -> ConditionalArm | None:
+        """Direct access to the fired arm, if any."""
+
+        if self.fired_arm_index is None:
+            return None
+        if self.fired_arm_index < 0 or self.fired_arm_index >= len(self.arms):
+            return None
+        return self.arms[self.fired_arm_index]
+
+    @property
+    def has_else(self) -> bool:
+        """Whether this conditional has an else arm."""
+
+        return any(arm.kind == "else" for arm in self.arms)
+
+    @property
+    def has_elif(self) -> bool:
+        """Whether this conditional has one or more elif arms."""
+
+        return any(arm.kind == "elif" for arm in self.arms)
+
+    @property
+    def num_arms(self) -> int:
+        """Number of arms."""
+
+        return len(self.arms)
+
+    @property
+    def num_elifs(self) -> int:
+        """Number of elif arms."""
+
+        return sum(arm.kind == "elif" for arm in self.arms)
+
+
+class ConditionalAccessor:
+    """Dict-like accessor for Conditional records."""
+
+    def __init__(self, conditionals: list[Conditional] | None = None) -> None:
+        """Initialize from conditionals in trace order.
+
+        Parameters
+        ----------
+        conditionals:
+            Conditional records to expose.
+        """
+
+        self._list = list(conditionals or [])
+        self._dict = {conditional.id: conditional for conditional in self._list}
+
+    def __getitem__(self, key: int | str) -> Conditional:
+        """Return a Conditional by ordinal or id."""
+
+        if isinstance(key, int):
+            return self._list[key]
+        return self._dict[key]
+
+    def __len__(self) -> int:
+        """Return the number of conditionals."""
+
+        return len(self._list)
+
+    def __iter__(self) -> Iterator[Conditional]:
+        """Iterate conditionals in trace order."""
+
+        return iter(self._list)
+
+    def keys(self) -> list[str]:
+        """Return conditional ids."""
+
+        return list(self._dict.keys())
+
+    def values(self) -> list[Conditional]:
+        """Return conditional records."""
+
+        return list(self._list)
+
+    def items(self) -> list[tuple[str, Conditional]]:
+        """Return ``(id, Conditional)`` pairs."""
+
+        return [(conditional.id, conditional) for conditional in self._list]
 
 
 class _CallableList(list[Any]):
@@ -326,6 +472,59 @@ def _legacy_conditional_else_edges(
     ]
 
 
+def _normalize_conditional_arm_edges(value: Any) -> dict[tuple[int, str], list[tuple[str, str]]]:
+    """Return conditional arm edges in canonical flat-key form.
+
+    Parameters
+    ----------
+    value:
+        Stored conditional arm edge state from current or older portable bundles.
+
+    Returns
+    -------
+    dict[tuple[int, str], list[tuple[str, str]]]
+        Mapping from ``(conditional_id, arm_kind)`` to edge tuples.
+    """
+
+    normalized: dict[tuple[int, str], list[tuple[str, str]]] = {}
+    if not isinstance(value, Mapping):
+        return normalized
+    for raw_key, raw_edges in value.items():
+        if isinstance(raw_key, tuple) and len(raw_key) == 2 and isinstance(raw_key[1], str):
+            normalized[(int(raw_key[0]), raw_key[1])] = list(raw_edges or [])
+            continue
+        if not isinstance(raw_edges, Mapping):
+            continue
+        conditional_id = int(raw_key)
+        for arm_kind, arm_edges in raw_edges.items():
+            normalized[(conditional_id, str(arm_kind))] = list(arm_edges or [])
+    return normalized
+
+
+def _append_conditional_arm_edge(
+    conditional_arm_edges: dict[tuple[int, str], list[tuple[str, str]]],
+    key: tuple[int, str],
+    edge: tuple[str, str],
+) -> None:
+    """Append one conditional arm edge, replacing malformed legacy values.
+
+    Parameters
+    ----------
+    conditional_arm_edges:
+        Canonical edge mapping to mutate.
+    key:
+        ``(conditional_id, arm_kind)`` edge bucket.
+    edge:
+        ``(parent_label, child_label)`` edge tuple.
+    """
+
+    edges = conditional_arm_edges.setdefault(key, [])
+    if not isinstance(edges, list):
+        edges = []
+        conditional_arm_edges[key] = edges
+    edges.append(edge)
+
+
 class Trace:
     """Top-level container for a logged forward pass.
 
@@ -350,7 +549,7 @@ class Trace:
         "_layers_saved": FieldPolicy.KEEP,
         "keep_unsaved_layers": FieldPolicy.KEEP,
         "intervention_ready": FieldPolicy.KEEP,
-        "capture_full_args": FieldPolicy.KEEP,
+        "capture_args_template": FieldPolicy.KEEP,
         "out_postfunc": FieldPolicy.DROP,
         "_out_transform_repr": FieldPolicy.KEEP,
         "save_raw_outs": FieldPolicy.KEEP,
@@ -367,7 +566,7 @@ class Trace:
         "_current_func_barcode": FieldPolicy.KEEP,
         "random_seed": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
-        "detach_saved_tensorss": FieldPolicy.KEEP,
+        "detach_saved_activations": FieldPolicy.KEEP,
         "train_mode": FieldPolicy.DROP,
         "module_filter": FieldPolicy.DROP,
         "emit_nvtx": FieldPolicy.KEEP,
@@ -376,7 +575,10 @@ class Trace:
         "report_values": FieldPolicy.KEEP,
         "observer_spans": FieldPolicy.KEEP,
         "manual_tensor_connections": FieldPolicy.KEEP,
-        "forward_lineno": FieldPolicy.KEEP,
+        "forward_source_file": FieldPolicy.KEEP,
+        "forward_source_line": FieldPolicy.KEEP,
+        "model_source_file": FieldPolicy.KEEP,
+        "model_source_line": FieldPolicy.KEEP,
         "capture_cache_hit": FieldPolicy.KEEP,
         "capture_cache_key": FieldPolicy.KEEP,
         "capture_cache_path": FieldPolicy.KEEP,
@@ -384,7 +586,7 @@ class Trace:
         "streaming_pass_logs": FieldPolicy.DROP,
         "num_streamed_ops": FieldPolicy.KEEP,
         "_out_hash_cache": FieldPolicy.DROP,
-        "save_function_args": FieldPolicy.KEEP,
+        "save_arg_values": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
         "grads_to_save": FieldPolicy.KEEP,
         "_grad_layer_nums_to_save": FieldPolicy.KEEP,
@@ -393,13 +595,13 @@ class Trace:
         "save_raw_grads": FieldPolicy.KEEP,
         "save_code_context": FieldPolicy.KEEP,
         "save_rng_states": FieldPolicy.KEEP,
-        "detect_loops": FieldPolicy.KEEP,
+        "recurrence_detection": FieldPolicy.KEEP,
         "verbose": FieldPolicy.KEEP,
         "has_grads": FieldPolicy.KEEP,
         "mark_layer_depths": FieldPolicy.KEEP,
         "graph_shape_hash": FieldPolicy.KEEP,
         "_intervention_spec": FieldPolicy.DROP,
-        "operation_history": FieldPolicy.KEEP,
+        "ledger": FieldPolicy.KEEP,
         "last_run_ctx": FieldPolicy.DROP,
         "_has_direct_writes": FieldPolicy.KEEP,
         "_warned_direct_write": FieldPolicy.DROP,
@@ -435,14 +637,15 @@ class Trace:
         "buffer_layers": FieldPolicy.KEEP,
         "buffer_num_calls": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
-        "internally_initialized_ops": FieldPolicy.KEEP,
+        "internal_source_ops": FieldPolicy.KEEP,
         "_layers_where_internal_branches_merge_with_input": FieldPolicy.KEEP,
-        "internally_terminated_ops": FieldPolicy.KEEP,
+        "internal_sink_ops": FieldPolicy.KEEP,
         "internally_terminated_bool_ops": FieldPolicy.KEEP,
         "conditional_branch_edges": FieldPolicy.KEEP,
         "conditional_events": FieldPolicy.KEEP,
         "conditional_arm_edges": FieldPolicy.KEEP,
         "conditional_edge_ops": FieldPolicy.KEEP,
+        "conditionals": FieldPolicy.KEEP,
         "ops_with_saved_outs": FieldPolicy.KEEP,
         "orphan_ops": FieldPolicy.KEEP,
         "unlogged_ops": FieldPolicy.KEEP,
@@ -451,9 +654,11 @@ class Trace:
         "layers_with_params": FieldPolicy.KEEP,
         "equivalent_ops": FieldPolicy.KEEP,
         "total_out_memory": FieldPolicy.KEEP,
+        "total_gradient_memory": FieldPolicy.KEEP,
         "autograd_saved_memory": FieldPolicy.KEEP,
         "num_saved_ops": FieldPolicy.KEEP,
         "saved_out_memory": FieldPolicy.KEEP,
+        "saved_gradient_memory": FieldPolicy.KEEP,
         "param_logs": FieldPolicy.KEEP,
         "num_param_tensors": FieldPolicy.KEEP,
         "num_layers_with_params": FieldPolicy.KEEP,
@@ -461,6 +666,8 @@ class Trace:
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
         "param_memory": FieldPolicy.KEEP,
+        "total_param_gradient_memory": FieldPolicy.KEEP,
+        "forward_peak_memory": FieldPolicy.KEEP,
         "_mod_call_index": FieldPolicy.DROP,
         "_mod_call_labels": FieldPolicy.DROP,
         "_mod_entered": FieldPolicy.DROP,
@@ -482,7 +689,7 @@ class Trace:
         "setup_duration": FieldPolicy.KEEP,
         "forward_duration": FieldPolicy.KEEP,
         "cleanup_duration": FieldPolicy.KEEP,
-        "function_calls_duration": FieldPolicy.KEEP,
+        "func_calls_duration": FieldPolicy.KEEP,
         "has_backward_pass": FieldPolicy.KEEP,
         "grad_fn_logs": FieldPolicy.KEEP,
         "grad_fn_order": FieldPolicy.KEEP,
@@ -501,16 +708,16 @@ class Trace:
         save_raw_outs: bool = True,
         save_raw_grads: bool = True,
         keep_unsaved_layers: bool = True,
-        save_function_args: bool = False,
+        save_arg_values: bool = False,
         save_grads: bool = False,
         grads_to_save: Any = "all",
-        detach_saved_tensorss: bool = False,
+        detach_saved_activations: bool = False,
         mark_layer_depths: bool = True,
         num_context_lines: int = 7,
         optimizer: torch.optim.Optimizer | None = None,
         save_code_context: bool = False,
         save_rng_states: bool = False,
-        detect_loops: bool = True,
+        recurrence_detection: bool = True,
         verbose: bool = False,
         train_mode: bool = False,
         module_filter: Callable[[Any], bool] | None = None,
@@ -527,10 +734,10 @@ class Trace:
             save_raw_grads: Whether raw grads are retained when a postfunc is set.
             keep_unsaved_layers: If False, layers without saved outs are removed
                 from the final log (but still logged during the pass).
-            save_function_args: Whether to deep-copy each operation's input arguments.
+            save_arg_values: Whether to deep-copy each operation's input arguments.
             save_grads: Whether to register grad hooks for backward pass.
             grads_to_save: Which layer grads should be saved.
-            detach_saved_tensorss: Whether to detach saved tensors from the autograd graph.
+            detach_saved_activations: Whether to detach saved tensors from the autograd graph.
             mark_layer_depths: Whether to compute BFS distances from
                 inputs/outputs for each layer.
             num_context_lines: Number of source-code context lines to capture
@@ -563,7 +770,7 @@ class Trace:
         self._layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
         self.intervention_ready = False
-        self.capture_full_args = False
+        self.capture_args_template = False
         self.out_postfunc = out_postfunc
         self._out_transform_repr = repr(out_postfunc) if out_postfunc is not None else None
         self.save_raw_outs = save_raw_outs
@@ -583,14 +790,17 @@ class Trace:
         self._current_func_barcode = None
         self.random_seed = None
         self.output_device = output_device
-        self.detach_saved_tensorss = detach_saved_tensorss
+        self.detach_saved_activations = detach_saved_activations
         self.train_mode = train_mode
         self.module_filter = module_filter
         self.emit_nvtx = emit_nvtx
         self.raise_on_nan: bool = False
         self.trace_annotations: Dict[str, Any] = {}
         self.manual_tensor_connections: List[Tuple[str, str]] = []
-        self.forward_lineno: int | None = None
+        self.forward_source_file: str | None = None
+        self.forward_source_line: int | None = None
+        self.model_source_file: str | None = None
+        self.model_source_line: int | None = None
         self.capture_cache_hit: bool = False
         self.capture_cache_key: str | None = None
         self.capture_cache_path: str | None = None
@@ -598,18 +808,18 @@ class Trace:
         self.streaming_pass_logs: List["Trace"] = []
         self.num_streamed_ops: int = 1
         self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
-        self.save_function_args = save_function_args
+        self.save_arg_values = save_arg_values
         self.save_grads = save_grads
         self.grads_to_save = grads_to_save
         self.save_code_context = save_code_context
         self.save_rng_states = save_rng_states
-        self.detect_loops = detect_loops
+        self.recurrence_detection = recurrence_detection
         self.verbose = verbose
         self.has_grads = False
         self.mark_layer_depths = mark_layer_depths
         self.graph_shape_hash: str | None = None
         self._intervention_spec: InterventionSpec | None = InterventionSpec()
-        self.operation_history: list[Any] = []
+        self.ledger: list[Any] = []
         self.observer_spans: list[dict[str, Any]] = list(_state._active_record_spans)
         self.report_values: dict[str, Any] = {}
         self.last_run_ctx: Any | None = None
@@ -672,14 +882,15 @@ class Trace:
         self.buffer_layers: List[str] = []
         self.buffer_num_calls: Dict[str, int] = {}
         self._buffer_accessor = None
-        self.internally_initialized_ops: List[str] = []
+        self.internal_source_ops: List[str] = []
         self._layers_where_internal_branches_merge_with_input: List[str] = []
-        self.internally_terminated_ops: List[str] = []
+        self.internal_sink_ops: List[str] = []
         self.internally_terminated_bool_ops: List[str] = []
         self.conditional_branch_edges: List[Tuple[str, str]] = []
         self.conditional_events: List[ConditionalEvent] = []
         self.conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
         self.conditional_edge_ops: Dict[Tuple[str, str, int, str], List[int]] = {}
+        self.conditionals = ConditionalAccessor()
         self.ops_with_saved_outs: List[str] = []
         self.orphan_ops: List[str] = []
         self.unlogged_ops: List[str] = []
@@ -692,9 +903,11 @@ class Trace:
 
         # Aggregate tensor statistics (computed during postprocessing):
         self.total_out_memory: int = 0
+        self.total_gradient_memory: int = 0
         self.autograd_saved_memory: Optional[int] = None
         self.num_saved_ops: int = 0  # layers with has_saved_outs=True
         self.saved_out_memory: int = 0
+        self.saved_gradient_memory: int = 0
 
         # Param info:
         self.param_logs: "ParamAccessor" = ParamAccessor({})
@@ -704,6 +917,8 @@ class Trace:
         self.num_params_trainable: int = 0
         self.num_params_frozen: int = 0
         self.param_memory: int = 0
+        self.total_param_gradient_memory: int = 0
+        self.forward_peak_memory: int = 0
 
         # Session-scoped per-module tracking dicts (keyed by id(module)).
         # These replace the old tl_* attrs that were set directly on nn.Module
@@ -730,7 +945,7 @@ class Trace:
         self.setup_duration: float = 0
         self.forward_duration: float = 0
         self.cleanup_duration: float = 0
-        self.function_calls_duration: float = 0
+        self.func_calls_duration: float = 0
         self.has_backward_pass: bool = False
         self.grad_fn_logs: Dict[int, GradFnLog] = OrderedDict()
         self.grad_fn_order: List[int] = []
@@ -1279,7 +1494,7 @@ class Trace:
         return fork
 
     def _record_operation(self, op: str, **payload: Any) -> None:
-        """Append a structured operation record to ``operation_history``.
+        """Append a structured operation record to ``ledger``.
 
         Parameters
         ----------
@@ -1294,7 +1509,7 @@ class Trace:
             The history list is mutated in place.
         """
 
-        self.operation_history.append(
+        self.ledger.append(
             {
                 "op": op,
                 "spec_revision": self._spec_revision,
@@ -1477,7 +1692,7 @@ class Trace:
         fork.parent_run = weakref.ref(self)
         fork.name = name or self._next_fork_name()
         fork._intervention_spec = copy.deepcopy(self._ensure_intervention_spec())
-        fork.operation_history = copy.deepcopy(self.operation_history)
+        fork.ledger = copy.deepcopy(self.ledger)
         fork.relationship_evidence = copy.deepcopy(self.relationship_evidence)
         fork._out_recipe_revision = self._out_recipe_revision
         fork._spec_revision = self._spec_revision
@@ -1496,9 +1711,7 @@ class Trace:
 
         base_name = self.name or "trace"
         fork_count = sum(
-            1
-            for record in self.operation_history
-            if isinstance(record, dict) and record.get("op") == "fork"
+            1 for record in self.ledger if isinstance(record, dict) and record.get("op") == "fork"
         )
         return f"{base_name}_fork_{fork_count + 1}"
 
@@ -1518,7 +1731,7 @@ class Trace:
             Field value for the fork.
         """
 
-        policy = MODEL_LOG_FORK_POLICY.get(field_name, self._default_fork_policy(value))
+        policy = MODEL_LOG_FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
             return value
         if policy is ForkFieldPolicy.FORK_RECONSTRUCT:
@@ -1575,7 +1788,7 @@ class Trace:
 
         if field_name in {"_source_trace_ref", "parent_layer_log"}:
             return None
-        policy = OpLog.FORK_POLICY.get(field_name, self._default_fork_policy(value))
+        policy = OpLog.FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
             return value
         if policy is ForkFieldPolicy.FORK_RECONSTRUCT:
@@ -1933,7 +2146,10 @@ class Trace:
                 "report_values": {},
                 "observer_spans": [],
                 "manual_tensor_connections": [],
-                "forward_lineno": None,
+                "forward_source_file": None,
+                "forward_source_line": None,
+                "model_source_file": None,
+                "model_source_line": None,
                 "capture_cache_hit": False,
                 "capture_cache_key": None,
                 "capture_cache_path": None,
@@ -1942,6 +2158,11 @@ class Trace:
                 "num_streamed_ops": 1,
                 "_out_hash_cache": {},
                 "_last_hook_handle_ids": (),
+                "conditionals": ConditionalAccessor(),
+                "total_gradient_memory": 0,
+                "saved_gradient_memory": 0,
+                "total_param_gradient_memory": 0,
+                "forward_peak_memory": 0,
             },
         )
         if state.get("_intervention_spec") is None:
@@ -1955,17 +2176,25 @@ class Trace:
             }
         if state["train_mode"] is None:
             state["train_mode"] = False
-        conditional_arm_edges = dict(state.get("conditional_arm_edges") or {})
+        conditional_arm_edges = _normalize_conditional_arm_edges(
+            state.get("conditional_arm_edges") or {}
+        )
         for parent, child in state.pop("conditional_then_edges", []) or []:
-            conditional_arm_edges.setdefault((0, "then"), []).append((parent, child))
+            _append_conditional_arm_edge(conditional_arm_edges, (0, "then"), (parent, child))
         for conditional_id, elif_index, parent, child in (
             state.pop("conditional_elif_edges", []) or []
         ):
-            conditional_arm_edges.setdefault((conditional_id, f"elif_{elif_index}"), []).append(
-                (parent, child)
+            _append_conditional_arm_edge(
+                conditional_arm_edges,
+                (conditional_id, f"elif_{elif_index}"),
+                (parent, child),
             )
         for conditional_id, parent, child in state.pop("conditional_else_edges", []) or []:
-            conditional_arm_edges.setdefault((conditional_id, "else"), []).append((parent, child))
+            _append_conditional_arm_edge(
+                conditional_arm_edges,
+                (conditional_id, "else"),
+                (parent, child),
+            )
         state["conditional_arm_edges"] = conditional_arm_edges
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
@@ -2021,7 +2250,7 @@ class Trace:
             "name",
             "parent_run",
             "_intervention_spec",
-            "operation_history",
+            "ledger",
             "_warned_direct_write",
             "_warned_mutate_in_place",
             "model_id",
@@ -2318,6 +2547,40 @@ class Trace:
         return any(entry.in_cond_branch for entry in self.layer_list)
 
     @property
+    def has_conditionals(self) -> bool:
+        """Whether this Trace contains conditional-flow records."""
+
+        return len(self.conditionals) > 0
+
+    @property
+    def num_conditionals(self) -> int:
+        """Number of conditional-flow records."""
+
+        return len(self.conditionals)
+
+    @property
+    def is_dynamic_graph(self) -> bool:
+        """Whether execution depends on runtime tensor values."""
+
+        return self.has_conditionals
+
+    @property
+    def forward_source_location(self) -> str | None:
+        """Combined forward source location."""
+
+        if self.forward_source_file is None or self.forward_source_line is None:
+            return None
+        return f"{self.forward_source_file}:{self.forward_source_line}"
+
+    @property
+    def model_source_location(self) -> str | None:
+        """Combined model class source location."""
+
+        if self.model_source_file is None or self.model_source_line is None:
+            return None
+        return f"{self.model_source_file}:{self.model_source_line}"
+
+    @property
     def num_tensors(self) -> int:
         """Total number of tensor operations."""
         return len(self)
@@ -2328,9 +2591,33 @@ class Trace:
         return human_readable_size(self.total_out_memory)
 
     @property
+    def total_gradient_memory_str(self) -> str:
+        """Human-readable total gradient tensor size."""
+
+        return human_readable_size(self.total_gradient_memory)
+
+    @property
     def saved_out_memory_str(self) -> str:
         """Human-readable saved tensor size."""
         return human_readable_size(self.saved_out_memory)
+
+    @property
+    def saved_gradient_memory_str(self) -> str:
+        """Human-readable saved gradient tensor size."""
+
+        return human_readable_size(self.saved_gradient_memory)
+
+    @property
+    def total_param_gradient_memory_str(self) -> str:
+        """Human-readable total parameter-gradient memory."""
+
+        return human_readable_size(self.total_param_gradient_memory)
+
+    @property
+    def forward_peak_memory_str(self) -> str:
+        """Human-readable forward peak memory."""
+
+        return human_readable_size(self.forward_peak_memory)
 
     @property
     def duration(self) -> float:
@@ -2342,7 +2629,7 @@ class Trace:
     @property
     def overhead_duration(self) -> float:
         """Time spent on TorchLens overhead (total minus function calls)."""
-        return self.duration - self.function_calls_duration
+        return self.duration - self.func_calls_duration
 
     # ********************************************
     # ************* FLOPs Properties *************
@@ -2482,13 +2769,44 @@ class Trace:
         return len(self.grad_fn_logs)
 
     @property
-    def num_intervening_grad_fns(self) -> int:
+    def num_grad_fns_without_op(self) -> int:
         """Number of grad_fn nodes without a corresponding forward LayerLog."""
         return sum(1 for grad_fn in self.grad_fn_logs.values() if grad_fn.has_op)
 
     # ********************************************
     # ******** Public Convenience Methods ********
     # ********************************************
+
+    def show(self, method: str = "graph", **kwargs: Any) -> str | None:
+        """Render this trace using a lightweight notebook-friendly dispatcher.
+
+        Parameters
+        ----------
+        method:
+            Display method. ``"graph"`` delegates to :meth:`draw`, ``"repr"``
+            returns ``repr(self)``, and ``"html"`` returns ``_repr_html_()``.
+        **kwargs:
+            Visualization keyword arguments forwarded to :meth:`draw`. The
+            legacy ``vis_opt`` spelling is accepted as an alias for ``vis_mode``.
+
+        Returns
+        -------
+        str | None
+            Rendered representation, Graphviz DOT source, or ``None`` when
+            rendering is explicitly disabled with ``vis_opt="none"`` or
+            ``vis_mode="none"``.
+        """
+
+        vis_opt = kwargs.pop("vis_opt", None)
+        if vis_opt is not None and "vis_mode" not in kwargs:
+            kwargs["vis_mode"] = vis_opt
+        if kwargs.get("vis_mode") == "none":
+            return None
+        if method == "repr":
+            return repr(self)
+        if method == "html":
+            return self._repr_html_()
+        return cast("str | None", self.draw(**kwargs))
 
     def draw(
         self,
@@ -2693,7 +3011,7 @@ class Trace:
                 continue
             if not has_nonfinite:
                 continue
-            stack = getattr(layer, "func_call_stack", None) or []
+            stack = getattr(layer, "code_context", None) or []
             location = "source unavailable"
             if stack:
                 frame = stack[0]
@@ -3008,10 +3326,10 @@ class Trace:
             "layer_label_no_pass_short",
             "layer_type",
             "type_index",
-            "overall_index",
+            "trace_index",
             "num_calls",
             "call_index",
-            "op_index",
+            "compute_index",
             "shape",
             "dtype",
             "memory",
@@ -3065,10 +3383,10 @@ class Trace:
 
         fields_to_change_type = {
             "type_index": int,
-            "overall_index": int,
+            "trace_index": int,
             "num_calls": int,
             "call_index": int,
-            "op_index": int,
+            "compute_index": int,
             "is_inplace": bool,
             "is_input": bool,
             "is_output": bool,
@@ -3551,5 +3869,5 @@ class Trace:
         }
 
 
-Trace.FORK_POLICY = MODEL_LOG_FORK_POLICY  # type: ignore[attr-defined]
+Trace.FIELD_FORK_POLICY = MODEL_LOG_FIELD_FORK_POLICY  # type: ignore[attr-defined]
 Trace.DEFAULT_FILL_STATE = _MODEL_LOG_DEFAULT_FILL  # type: ignore[attr-defined]

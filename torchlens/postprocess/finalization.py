@@ -5,7 +5,7 @@ Step 13 (_undecorate_all_saved_tensors): Removes tl__label_raw attribute from
 Step 14: torch.cuda.empty_cache() — handled inline in __init__.py.
 Step 15 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
 Step 16 (_finalize_param_logs): Populates ParamLog reverse mappings (used_by_layers,
-    linked_params), num_calls, and clears Parameter tensor references.
+    co_parent_params), num_calls, and clears Parameter tensor references.
 Step 16.5 (_build_layer_logs): Groups OpLog entries by layer_label_no_pass to
     create aggregate LayerLog objects. Static identity fields still use first-pass
     values, while aggregate fields merge across ops, including conditional
@@ -87,14 +87,14 @@ def _finalize_param_logs(self: "Trace") -> None:
 
     For each OpLog with _param_logs:
     - Adds the layer's label to each ParamLog's used_by_layers list.
-    - Links params that co-occur in the same operation (linked_params).
+    - Links params that co-occur in the same operation (co_parent_params).
     - Sets num_calls = max(1, len(used_by_layers)).
 
     Then clears actual Parameter tensor references (parent_params) from
     OpLog entries to reduce memory, while preserving ParamLog._param_ref
     for potential backward() calls by the user.
     """
-    # Build used_by_layers and linked_params from OpLog entries
+    # Build used_by_layers and co_parent_params from OpLog entries
     for layer_entry in self.layer_list:
         if not layer_entry._param_logs:
             continue
@@ -104,12 +104,13 @@ def _finalize_param_logs(self: "Trace") -> None:
                 pl.used_by_layers.append(layer_entry.layer_label)
             # Link to other params in the same operation
             for other_addr in addresses_in_op:
-                if other_addr != pl.address and other_addr not in pl.linked_params:
-                    pl.linked_params.append(other_addr)
+                if other_addr != pl.address and other_addr not in pl.co_parent_params:
+                    pl.co_parent_params.append(other_addr)
 
     # Populate num_calls: how many times this parameter was used in the forward pass
     for pl in self.param_logs:
         pl.num_calls = max(1, len(pl.used_by_layers))
+        pl.source_trace = self
 
     # ParamLog grad metadata is populated lazily via backward hooks in _log_tensor_grad.
     # Each ParamLog holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
@@ -182,8 +183,12 @@ def _build_root_module_log(
         has_trainable_params=root_num_trainable > 0,
         buffer_layers=list(self.buffer_layers),
         is_train_mode=root_meta.get("is_train_mode", True),
-        has_forward_hooks=root_meta.get("has_forward_hooks", False),
-        has_backward_hooks=root_meta.get("has_backward_hooks", False),
+        forward_pre_hook_info=root_meta.get("forward_pre_hook_info"),
+        forward_hook_info=root_meta.get("forward_hook_info"),
+        backward_pre_hook_info=root_meta.get("backward_pre_hook_info"),
+        backward_hook_info=root_meta.get("backward_hook_info"),
+        full_backward_pre_hook_info=root_meta.get("full_backward_pre_hook_info"),
+        full_backward_hook_info=root_meta.get("full_backward_hook_info"),
         custom_attributes=root_meta.get("custom_attributes", {}),
         custom_methods=root_meta.get("custom_methods", []),
         _source_trace=self,
@@ -199,6 +204,7 @@ def _build_root_module_log(
         call_parent=None,
         call_children=mbd["top_level_module_ops"][:],
         all_addresses=root_meta.get("all_addresses", ["self"]),
+        _source_trace=self,
     )
     root_module.ops = {1: root_pass}
     pass_dict["self:1"] = root_pass
@@ -454,6 +460,7 @@ def _build_submodule_call_logs(
             call_parent=call_parent_pass,
             call_children=call_children_pass,
             all_addresses=all_addresses,
+            _source_trace=self,
         )
         ops[call_index] = module_call_log
         pass_dict[call_label] = module_call_log
@@ -566,7 +573,8 @@ def _build_module_logs(self: "Trace") -> None:
     # Pre-compute param_logs grouped by module address
     self._param_logs_by_module = defaultdict(list)  # type: ignore[attr-defined]
     for pl in self.param_logs:
-        self._param_logs_by_module[pl.address].append(pl)  # type: ignore[attr-defined]
+        for module_address in pl.all_module_addresses:
+            self._param_logs_by_module[module_address].append(pl)  # type: ignore[attr-defined]
 
     # Pre-compute reverse mapping: child_call_label -> parent_call_label
     _child_to_parent_pass = {}
@@ -680,8 +688,12 @@ def _build_module_logs(self: "Trace") -> None:
             is_train_mode=mbd["module_training_modes"].get(
                 address, meta.get("is_train_mode", True)
             ),
-            has_forward_hooks=meta.get("has_forward_hooks", False),
-            has_backward_hooks=meta.get("has_backward_hooks", False),
+            forward_pre_hook_info=meta.get("forward_pre_hook_info"),
+            forward_hook_info=meta.get("forward_hook_info"),
+            backward_pre_hook_info=meta.get("backward_pre_hook_info"),
+            backward_hook_info=meta.get("backward_hook_info"),
+            full_backward_pre_hook_info=meta.get("full_backward_pre_hook_info"),
+            full_backward_hook_info=meta.get("full_backward_hook_info"),
             custom_attributes=meta.get("custom_attributes", {}),
             custom_methods=meta.get("custom_methods", []),
             _source_trace=self,
@@ -722,7 +734,7 @@ def _build_layer_logs(self: "Trace") -> None:
     1. has_input_ancestor: OR across ops (True if ANY pass has an input ancestor).
     2. io_role: Character-wise merge with '*' for differing characters
        (e.g., "output.0" + "output.1" -> "output.*").
-    3. is_atomic_module_output: OR across ops.
+    3. is_atomic_module_op: OR across ops.
     4. in_cond_branch: OR across ops.
     5. conditional_branch_stacks / conditional_branch_stack_ops:
        unique stack signatures in first-seen order plus sorted pass maps.
@@ -773,9 +785,9 @@ def _build_layer_logs(self: "Trace") -> None:
                 if merged.endswith("*"):
                     merged = merged.rstrip("*") + "*"
                 layer_log.io_role = merged
-            # Merge field 3/3: is_atomic_module_output (OR across ops).
-            if pass_log.is_atomic_module_output:
-                layer_log.is_atomic_module_output = True
+            # Merge field 3/3: is_atomic_module_op (OR across ops).
+            if pass_log.is_atomic_module_op:
+                layer_log.is_atomic_module_op = True
 
         layer_log.ops[pass_log.call_index] = pass_log
         layer_log.call_labels.append(pass_log.layer_label)
@@ -788,7 +800,7 @@ def _build_layer_logs(self: "Trace") -> None:
         for pass_log in layer_log.ops.values():
             linked_labels = []
             for param_log in getattr(pass_log, "_param_logs", []):
-                for linked_address in getattr(param_log, "linked_params", []):
+                for linked_address in getattr(param_log, "co_parent_params", []):
                     linked_labels.append(f"{param_log.address} → {linked_address}")
             if linked_labels:
                 pass_log.annotations["tied_parameter_notation"] = linked_labels
@@ -815,6 +827,98 @@ def _build_layer_logs(self: "Trace") -> None:
     self.autograd_saved_memory = autograd_saved_memory if has_autograd_saved_value else None
     self.layer_logs = layer_logs
     _rebuild_conditional_edge_ops(self)
+    _build_conditional_records(self)
+
+
+def _build_conditional_records(self: "Trace") -> None:
+    """Build the public ConditionalAccessor from conditional postprocess data."""
+
+    from ..data_classes.model_log import (
+        Conditional,
+        ConditionalAccessor,
+        ConditionalArm,
+        ConditionalRoleRef,
+    )
+
+    conditionals: list[Conditional] = []
+    event_by_id = {event.id: event for event in self.conditional_events}
+    for event in self.conditional_events:
+        terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
+        conditional_id = f"cond_{terminal_bool_label}"
+        branch_kinds = [
+            branch_kind
+            for cond_id, branch_kind in self.conditional_arm_edges
+            if cond_id == event.id
+        ]
+        ordered_branch_kinds = ["then"]
+        ordered_branch_kinds.extend(
+            sorted(
+                (kind for kind in branch_kinds if kind.startswith("elif_")),
+                key=lambda kind: int(kind.split("_", 1)[1]),
+            )
+        )
+        if "else" in branch_kinds:
+            ordered_branch_kinds.append("else")
+
+        arms: list[ConditionalArm] = []
+        for branch_kind in ordered_branch_kinds:
+            kind = "elif" if branch_kind.startswith("elif_") else branch_kind
+            edge_list = list(self.conditional_arm_edges.get((event.id, branch_kind), []))
+            execution_labels = list(dict.fromkeys(child for _parent, child in edge_list))
+            evaluation_labels = list(event.bool_layers) if kind in {"then", "elif"} else []
+            terminal_bool = terminal_bool_label if kind == "then" and event.bool_layers else None
+            bool_value = None
+            if terminal_bool is not None and terminal_bool in self.layer_dict_all_keys:
+                bool_value = getattr(self.layer_dict_all_keys[terminal_bool], "bool_value", None)
+            arm = ConditionalArm(
+                kind=kind,  # type: ignore[arg-type]
+                evaluation_op_labels=evaluation_labels,
+                terminal_bool_op_label=terminal_bool,
+                bool_value_at_run=bool_value,
+                condition_evaluated=bool(evaluation_labels) or kind == "else",
+                evaluation_entry_edge=(event.bool_layers[0], event.bool_layers[0])
+                if event.bool_layers and kind in {"then", "elif"}
+                else None,
+                execution_op_labels=execution_labels,
+                fired=bool(execution_labels),
+                execution_entry_edge=edge_list[0] if edge_list else None,
+            )
+            arms.append(arm)
+
+        fired_arm_index = next((index for index, arm in enumerate(arms) if arm.fired), None)
+        fired_arm_kind = arms[fired_arm_index].kind if fired_arm_index is not None else None
+        conditionals.append(
+            Conditional(
+                id=conditional_id,
+                arms=arms,
+                fired_arm_index=fired_arm_index,
+                fired_arm_kind=fired_arm_kind,
+                source_file=event.source_file,
+                source_line=event.if_stmt_span[0] if event.if_stmt_span else None,
+            )
+        )
+
+    for layer in self.layer_list:
+        roles = []
+        for conditional in conditionals:
+            for arm_index, arm in enumerate(conditional.arms):
+                if layer.layer_label in arm.evaluation_op_labels:
+                    roles.append(
+                        ConditionalRoleRef(conditional.id, arm_index, arm.kind, "evaluation")
+                    )
+                if layer.layer_label in arm.execution_op_labels:
+                    roles.append(ConditionalRoleRef(conditional.id, arm_index, arm.kind, "body"))
+        layer.in_conditionals = roles
+        if layer.bool_conditional_id is not None and layer.bool_conditional_id in event_by_id:
+            event = event_by_id[layer.bool_conditional_id]
+            event_index = [conditional.id for conditional in conditionals].index(
+                f"cond_{event.bool_layers[0] if event.bool_layers else event.id}"
+            )
+            layer.terminal_bool_for = (conditionals[event_index].id, 0)
+        else:
+            layer.terminal_bool_for = None
+
+    self.conditionals = ConditionalAccessor(conditionals)
 
 
 def _set_tracing_finished(self: "Trace") -> None:
@@ -859,7 +963,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
         self,
         include_outs=True,
         include_grads=self.save_grads,
-        include_saved_args=self.save_function_args,
+        include_saved_args=self.save_arg_values,
         include_rng_states=self.save_rng_states,
     )
     scrubbed_state, blob_specs = _reuse_streamed_blob_ids(

@@ -77,7 +77,7 @@ def _selected_for_grad_save(trace: Any, layer_label: str | None) -> bool:
         return True
     if selection in [None, "none", []]:
         return False
-    return trace[layer_label].creation_index in selection
+    return trace[layer_label].capture_index in selection
 
 
 def _normalize_grad_fn_type(grad_fn: Any) -> str:
@@ -126,7 +126,7 @@ def _grad_fn_label_parts(
     if layer_label is not None:
         layer = trace.layers[layer_label]
         type_num = layer.type_index
-        total_num = layer.overall_index
+        total_num = layer.trace_index
     else:
         type_counter[grad_fn_type] = type_counter.get(grad_fn_type, 0) + 1
         type_num = type_counter[grad_fn_type]
@@ -354,6 +354,9 @@ def _run_backward_with_capture(
     _backend, after = _memory_snapshot(loss.device)
     trace.backward_memory_backend = backend
     trace.backward_peak_memory += max(0, after - before)
+    trace.total_param_gradient_memory = sum(
+        param_log.grad_memory for param_log in getattr(trace, "param_logs", [])
+    )
     trace.backward_num_calls += 1
     return result
 

@@ -13,8 +13,8 @@ from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDE
 from torchlens.data_classes.op_log import OpLog
 from torchlens.data_classes.model_log import Trace
 from torchlens.intervention.types import (
-    LAYER_PASS_LOG_FORK_POLICY,
-    MODEL_LOG_FORK_POLICY,
+    LAYER_PASS_LOG_FIELD_FORK_POLICY,
+    MODEL_LOG_FIELD_FORK_POLICY,
     ForkFieldPolicy,
     Relationship,
 )
@@ -57,10 +57,10 @@ def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
     """Every ordered field has portable, fork, and default-fill policy coverage."""
 
     assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.PORTABLE_STATE_SPEC)
-    assert set(MODEL_LOG_FIELD_ORDER) <= set(MODEL_LOG_FORK_POLICY)
+    assert set(MODEL_LOG_FIELD_ORDER) <= set(MODEL_LOG_FIELD_FORK_POLICY)
     assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.DEFAULT_FILL_STATE)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(OpLog.PORTABLE_STATE_SPEC)
-    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LAYER_PASS_LOG_FORK_POLICY)
+    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(OpLog.DEFAULT_FILL_STATE)
 
 
@@ -70,8 +70,8 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
 
     log_a = Trace("a")
     log_b = Trace("b")
-    log_a.operation_history.append({"op": "sentinel"})
-    assert log_b.operation_history == []
+    log_a.ledger.append({"op": "sentinel"})
+    assert log_b.ledger == []
     assert log_a.run_state is RunState.PRISTINE
     assert all(value is Relationship.UNKNOWN for value in log_a.relationship_evidence.values())
 
@@ -79,7 +79,7 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
     pass_b = next(iter(_capture_tiny_log()))
     pass_a.interventions.append({"op": "sentinel"})
     assert pass_b.interventions == []
-    assert LAYER_PASS_LOG_FORK_POLICY["interventions"] is ForkFieldPolicy.FORK_COPY
+    assert LAYER_PASS_LOG_FIELD_FORK_POLICY["interventions"] is ForkFieldPolicy.FORK_COPY
 
 
 @pytest.mark.smoke

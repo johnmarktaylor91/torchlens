@@ -48,7 +48,7 @@ from .introspection import (
     nested_assign,
     iter_accessible_attributes,
     remove_attributes_with_prefix,
-    _get_func_call_stack,
+    _get_code_context,
 )
 from .collections import (
     is_iterable,
@@ -678,7 +678,7 @@ __all__ = [
     "_ATTR_SKIP_SET",
     "_AUTOCAST_DEVICES",
     "_cuda_available",
-    "_get_func_call_stack",
+    "_get_code_context",
     "_is_cuda_available",
     "_model_expects_single_arg",
     "_safe_copy_arg",

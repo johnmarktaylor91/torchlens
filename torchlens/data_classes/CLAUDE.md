@@ -65,7 +65,7 @@ conditional consistency when removing entries.
 use first-pass values; only selected graph/role fields are merged across ops.
 
 ## Autograd Contract
-`OpLog.save_tensor_data()` is the slow/replay choke point for saved tensor copies.
+`OpLog.save_activation()` is the slow/replay choke point for saved tensor copies.
 `train_mode=True` keeps saved floating tensors graph-connected, rejects contradictory
 detaching/disk-only configs, and must restore all flags in `finally` paths.
 

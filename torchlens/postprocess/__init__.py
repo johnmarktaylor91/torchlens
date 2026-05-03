@@ -144,11 +144,11 @@ def postprocess(
     # Step 8: Identify all loops, mark repeated layers.
     loop_desc = (
         "  Step 8: Loop detection (full)"
-        if self.detect_loops
+        if self.recurrence_detection
         else "  Step 8: Loop detection (params only)"
     )
     with _vtimed(self, loop_desc):
-        if self.detect_loops:
+        if self.recurrence_detection:
             _detect_and_label_loops(self)
         else:
             _group_by_shared_params(self)
@@ -250,13 +250,13 @@ def postprocess_fast(self: "Trace") -> None:
         parent_transformed = parent_layer.transformed_out
         output_layer._internal_set(
             "out",
-            safe_copy(parent_contents, detach_tensor=self.detach_saved_tensorss)
+            safe_copy(parent_contents, detach_tensor=self.detach_saved_activations)
             if parent_contents is not None
             else None,
         )
         output_layer._internal_set(
             "transformed_out",
-            safe_copy(parent_transformed, detach_tensor=self.detach_saved_tensorss)
+            safe_copy(parent_transformed, detach_tensor=self.detach_saved_activations)
             if isinstance(parent_transformed, torch.Tensor)
             else parent_transformed,
         )
@@ -286,7 +286,7 @@ def postprocess_fast(self: "Trace") -> None:
     # Note: _build_module_logs is NOT called here because module structure
     # doesn't change between ops and _module_build_data isn't repopulated
     # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
-    if self.intervention_ready and not getattr(self, "capture_full_args", False):
+    if self.intervention_ready and not getattr(self, "capture_args_template", False):
         self.intervention_ready = False
     self.graph_shape_hash = compute_graph_shape_hash(self)
     _set_tracing_finished(self)

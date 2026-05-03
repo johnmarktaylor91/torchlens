@@ -68,10 +68,10 @@ class RecordContext:
     raw_label: str | None
     pass_index: int
     event_index: int
-    op_index: int | None
+    compute_index: int | None
     layer_type: str | None
     type_index: int | None
-    creation_index: int | None
+    capture_index: int | None
     func_name: str | None
     address: str | None
     module_type: str | None

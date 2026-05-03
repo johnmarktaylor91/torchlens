@@ -91,17 +91,17 @@ def save_new_outs(
         Nothing; mutates ``self`` in place with new out values.
     """
     if train_mode is not None:
-        model_detach_saved_tensorss = self.detach_saved_tensorss
+        model_detach_saved_activations = self.detach_saved_activations
         model_train_mode = getattr(self, "train_mode", False)
-        layer_detach_saved_tensorss = {
-            layer_log_entry: layer_log_entry.detach_saved_tensors for layer_log_entry in self
+        layer_detach_saved_activations = {
+            layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
         }
-        target_detach_saved_tensorss = False if train_mode else self.detach_saved_tensorss
+        target_detach_saved_activations = False if train_mode else self.detach_saved_activations
         try:
-            self.detach_saved_tensorss = target_detach_saved_tensorss
+            self.detach_saved_activations = target_detach_saved_activations
             self.train_mode = train_mode
-            for layer_log_entry in layer_detach_saved_tensorss:
-                layer_log_entry.detach_saved_tensors = target_detach_saved_tensorss
+            for layer_log_entry in layer_detach_saved_activations:
+                layer_log_entry.detach_saved_activations = target_detach_saved_activations
             save_new_outs(
                 self,
                 model=model,
@@ -113,10 +113,10 @@ def save_new_outs(
                 train_mode=None,
             )
         finally:
-            self.detach_saved_tensorss = model_detach_saved_tensorss
+            self.detach_saved_activations = model_detach_saved_activations
             self.train_mode = model_train_mode
-            for layer_log_entry, detach_saved_tensors in layer_detach_saved_tensorss.items():
-                layer_log_entry.detach_saved_tensors = detach_saved_tensors
+            for layer_log_entry, detach_saved_activations in layer_detach_saved_activations.items():
+                layer_log_entry.detach_saved_activations = detach_saved_activations
         return
 
     # Switch to fast mode: reuse graph structure, only capture new outs.
@@ -152,7 +152,9 @@ def save_new_outs(
     self.unlogged_ops = []
     self.num_saved_ops = 0
     self.saved_out_memory = 0
-    self.function_calls_duration = 0  # #87: reset timing
+    self.total_gradient_memory = 0
+    self.saved_gradient_memory = 0
+    self.func_calls_duration = 0  # #87: reset timing
     # Reset counters so fast-pass operations align 1:1 with exhaustive-pass labels.
     # Counter alignment is the mechanism that lets the fast pass verify the graph
     # hasn't changed: same counter value → same raw label → same operation.
@@ -207,7 +209,7 @@ def _get_input_arg_names(model: nn.Module, input_args: list[Any]) -> list[str]:
 def _get_op_nums_from_user_labels(
     self: "Trace", which_layers: str | list[str | int] | None
 ) -> list[int] | str:
-    """Resolve user-provided layer identifiers to internal creation_index values.
+    """Resolve user-provided layer identifiers to internal capture_index values.
 
     Supports exact key match, substring match across all lookup keys, and the
     special sentinel ``"all"`` (which ops through as-is).  Returns sorted
@@ -223,7 +225,7 @@ def _get_op_nums_from_user_labels(
     if isinstance(which_layers, BaseSelector):
         return sorted(
             {
-                site.creation_index
+                site.capture_index
                 for site in self.resolve_sites(
                     which_layers,
                     strict=False,
@@ -238,7 +240,7 @@ def _get_op_nums_from_user_labels(
     for layer_key in which_layers:
         if isinstance(layer_key, BaseSelector):
             raw_layer_nums_to_save.update(
-                site.creation_index
+                site.capture_index
                 for site in self.resolve_sites(
                     layer_key,
                     strict=False,
@@ -253,7 +255,7 @@ def _get_op_nums_from_user_labels(
         keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
-                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].creation_index)
+                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].capture_index)
             continue
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
@@ -389,7 +391,7 @@ def _extract_and_mark_outputs(
 
     Called AFTER the forward pass completes (outside ``active_logging``), so
     operations here don't trigger logging.  Marks each output tensor's graph
-    entry as ``feeds_output=True`` so postprocessing can identify them.
+    entry as ``is_output_parent=True`` so postprocessing can identify them.
 
     Deduplication is by address string (not tensor identity) to handle cases
     where the same tensor appears at multiple output positions.
@@ -436,7 +438,7 @@ def _extract_and_mark_outputs(
         _label_raw = getattr(t, "tl__label_raw")
         if self.capture_mode == "exhaustive":
             self.output_layers.append(_label_raw)
-        self._raw_layer_dict[_label_raw].feeds_output = True
+        self._raw_layer_dict[_label_raw].is_output_parent = True
 
     return output_tensors, output_tensor_addresses
 
@@ -514,7 +516,7 @@ def run_and_log_inputs_through_model(
             output_entry = self[output_label]
             for parent_label in output_entry.parents:
                 parent_entry = self[parent_label]
-                output_parent_nums.add(parent_entry.creation_index)
+                output_parent_nums.add(parent_entry.capture_index)
         if output_parent_nums:
             combined = set(layer_nums_to_save) | output_parent_nums
             self._layer_nums_to_save = sorted(combined)

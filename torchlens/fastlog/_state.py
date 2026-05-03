@@ -80,7 +80,7 @@ class RecordingState:
     sample_id: str | int | None = None
     pass_index: int = 0
     event_index: int = 0
-    op_index: int = 0
+    compute_index: int = 0
     no_tensor_capture: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
     storage_intent: StorageIntent = field(init=False)
