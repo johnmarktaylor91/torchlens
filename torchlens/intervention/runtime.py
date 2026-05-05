@@ -15,6 +15,13 @@ from .errors import HookSignatureError, HookValueError
 from .hooks import HookContext, NormalizedHookEntry, make_hook_context, live_selector_matches_site
 from .types import FireRecord
 
+_TL_REPLACEMENT_ATTRS = (
+    "tl__label_raw",
+    "tl_tensor_label_raw",
+    "tl_buffer_address",
+    "tl_buffer_parent",
+)
+
 
 @contextmanager
 def active_intervention_context(
@@ -200,6 +207,7 @@ def validate_hook_output(
             "expected torch.Tensor"
         )
     if force_shape_change:
+        _copy_tl_replacement_attrs(out, result)
         return result
     if result.dtype != out.dtype:
         raise HookValueError(
@@ -216,7 +224,36 @@ def validate_hook_output(
             f"hook returned shape {tuple(result.shape)} at {_site_name(hook_context)}; "
             f"expected {tuple(out.shape)}"
         )
+    _copy_tl_replacement_attrs(out, result)
     return result
+
+
+def _copy_tl_replacement_attrs(source: torch.Tensor, replacement: torch.Tensor) -> None:
+    """Copy TorchLens tensor metadata from an original out to a replacement.
+
+    Parameters
+    ----------
+    source:
+        Original activation supplied to a user hook.
+    replacement:
+        Tensor returned by the hook.
+
+    Returns
+    -------
+    None
+        The replacement tensor is annotated in place when PyTorch permits
+        dynamic tensor attributes.
+    """
+
+    if replacement is source:
+        return
+    for attr_name in _TL_REPLACEMENT_ATTRS:
+        if not hasattr(source, attr_name):
+            continue
+        try:
+            setattr(replacement, attr_name, getattr(source, attr_name))
+        except Exception:
+            continue
 
 
 def _apply_live_hooks(

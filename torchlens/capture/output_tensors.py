@@ -862,6 +862,7 @@ def _apply_live_fire_records_to_entry(entry: OpLog) -> None:
     if not records:
         return
     entry.interventions.extend(records)
+    entry.intervention_replaced = True
     tensor = entry.out if isinstance(entry.out, torch.Tensor) else None
     if tensor is not None:
         _set_saved_out_metadata(entry, tensor)
@@ -1968,6 +1969,7 @@ def _log_output_tensor_info(
     fields_dict["has_saved_outs"] = False
     fields_dict["out_postfunc"] = self.out_postfunc
     fields_dict["annotations"] = {}
+    fields_dict["intervention_replaced"] = False
     fields_dict["has_saved_args"] = False
     fields_dict["saved_args"] = None
     fields_dict["saved_kwargs"] = None

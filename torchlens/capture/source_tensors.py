@@ -245,6 +245,7 @@ def log_source_tensor_exhaustive(
         "out_postfunc": self.out_postfunc,
         "annotations": {},
         "interventions": [],
+        "intervention_replaced": False,
         "detach_saved_activations": self.detach_saved_activations,
         "output_device": self.output_device,
         "has_saved_args": False,

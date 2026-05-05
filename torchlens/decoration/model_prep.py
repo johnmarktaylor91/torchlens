@@ -25,9 +25,10 @@ fast mode, it skips entry/exit tracking entirely but still handles
 
 import inspect
 import itertools
+import copy
 import warnings
 from collections.abc import Callable
-from collections import deque
+from collections import defaultdict, deque
 from functools import wraps
 from typing import Any, TYPE_CHECKING, cast
 
@@ -42,6 +43,7 @@ from ..utils.tensor_utils import get_memory_amount
 from ..utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
 from ..utils.hashing import make_random_barcode
 from ..capture.source_tensors import log_source_tensor
+from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 
 # Cache class-level module metadata (inspect.getsourcelines, inspect.signature, etc.)
 # shared across instances of the same class type. Cleared at the start of each
@@ -262,6 +264,7 @@ def _prepare_model_session(
             trace._mod_call_labels[mod_id] = []
             trace._mod_entered[mod_id] = []
             trace._mod_exited[mod_id] = []
+        _wrap_user_forward_hooks(module)
     if trace.capture_mode != "predicate":
         _create_session_param_logs(trace, model, optimizer)
     prepare_buffer_tensors(trace, model)
@@ -701,6 +704,15 @@ def _handle_module_entry(
         if (not hasattr(t, "tl__label_raw")) and hasattr(t, "tl_buffer_address"):
             log_source_tensor(trace, t, "buffer", getattr(t, "tl_buffer_address"))
         if not hasattr(t, "tl__label_raw"):
+            # Raw ``register_forward_hook`` replacements run after this
+            # module-forward wrapper has already handled the replaced module's
+            # exit, so the first recoverable point may be the next downstream
+            # module entry.
+            parent_labels = (
+                trace._raw_layer_labels_list[-1:] if trace._raw_layer_labels_list else []
+            )
+            _ensure_module_output_tensor_logged(trace, t, module, parent_labels)
+        if not hasattr(t, "tl__label_raw"):
             continue  # Skip untracked tensors (e.g. external constants) (#117)
         layer_entry = trace._raw_layer_dict[t.tl__label_raw]
         input_tensor_labels.add(t.tl__label_raw)
@@ -725,6 +737,333 @@ def _handle_module_entry(
     # Catch buffers created dynamically (e.g. in forward()) after initial scan.
     _tag_untagged_buffers(module)
     return input_tensor_labels, input_tensor_labels_at_entry
+
+
+def _next_intervention_replacement_label(trace: "Trace") -> tuple[str, int, int]:
+    """Return a fresh raw label for a user-injected module output tensor.
+
+    Parameters
+    ----------
+    trace:
+        Active model log whose raw layer counters should be advanced.
+
+    Returns
+    -------
+    tuple[str, int, int]
+        Raw label, capture index, and per-type index.
+    """
+
+    layer_type = "interventionreplacement"
+    trace._layer_counter += 1
+    trace._raw_layer_type_counter[layer_type] += 1
+    capture_index = trace._layer_counter
+    type_index = trace._raw_layer_type_counter[layer_type]
+    return f"{layer_type}_{type_index}_{capture_index}_raw", capture_index, type_index
+
+
+def _copy_field_value_for_replacement(value: Any) -> Any:
+    """Copy mutable OpLog field values without cloning tensors.
+
+    Parameters
+    ----------
+    value:
+        Field value from a parent layer entry.
+
+    Returns
+    -------
+    Any
+        A structurally independent copy for container fields, or the original
+        immutable/scalar/tensor reference otherwise.
+    """
+
+    if isinstance(value, (list, dict, set, defaultdict)):
+        return copy.copy(value)
+    return value
+
+
+def _ensure_module_output_tensor_logged(
+    trace: "Trace",
+    tensor: torch.Tensor,
+    module: nn.Module,
+    parent_labels: list[str],
+) -> None:
+    """Log a fresh entry for an unlabeled tensor returned from a module hook.
+
+    Parameters
+    ----------
+    trace:
+        Active model log.
+    tensor:
+        Replacement output tensor that lacks ``tl__label_raw``.
+    module:
+        Module whose forward return value was replaced.
+    parent_labels:
+        Raw labels for tensors that entered the module.
+
+    Returns
+    -------
+    None
+        The tensor is tagged and a replacement OpLog is inserted into the raw
+        graph so downstream module-exit and op logging can continue.
+    """
+
+    from ..capture.output_tensors import _make_layer_log_entry
+
+    parent_entries = [trace._raw_layer_dict[label] for label in parent_labels]
+    template_entry = parent_entries[0] if parent_entries else None
+    raw_label, capture_index, type_index = _next_intervention_replacement_label(trace)
+    fields_dict = {
+        field_name: _copy_field_value_for_replacement(getattr(template_entry, field_name, None))
+        for field_name in LAYER_PASS_LOG_FIELD_ORDER
+    }
+    address = cast(str, module.tl_address)
+    module_call_index = trace._mod_call_index[id(module)]
+    root_ancestors: set[str] = set()
+    input_ancestors: set[str] = set()
+    internal_source_ancestors: set[str] = set()
+    for parent_entry in parent_entries:
+        root_ancestors.update(parent_entry.root_ancestors or set())
+        input_ancestors.update(parent_entry.input_ancestors or set())
+        internal_source_ancestors.update(parent_entry.internal_source_ancestors or set())
+
+    fields_dict.update(
+        {
+            "_label_raw": raw_label,
+            "_layer_label_raw": raw_label,
+            "capture_index": capture_index,
+            "compute_index": None,
+            "source_trace": trace,
+            "_tracing_finished": False,
+            "_construction_done": False,
+            "layer_label": None,
+            "layer_label_short": None,
+            "layer_label_w_pass": None,
+            "layer_label_w_pass_short": None,
+            "layer_label_no_pass": None,
+            "layer_label_no_pass_short": None,
+            "type": "interventionreplacement",
+            "type_index": type_index,
+            "trace_index": None,
+            "call_index": 1,
+            "num_calls": 1,
+            "lookup_keys": [],
+            "out": None,
+            "transformed_out": None,
+            "has_saved_outs": False,
+            "out_postfunc": trace.out_postfunc,
+            "annotations": {},
+            "interventions": [],
+            "intervention_replaced": True,
+            "detach_saved_activations": trace.detach_saved_activations,
+            "output_device": trace.output_device,
+            "has_saved_args": False,
+            "saved_args": None,
+            "saved_kwargs": None,
+            "args_template": None,
+            "kwargs_template": None,
+            "shape": tuple(tensor.shape),
+            "transformed_out_shape": None,
+            "dtype": tensor.dtype,
+            "transformed_out_dtype": None,
+            "memory": get_memory_amount(tensor),
+            "transformed_out_memory": None,
+            "bytes_delta_at_call": 0,
+            "bytes_peak_at_call": 0,
+            "autograd_saved_memory": None,
+            "num_autograd_saved_tensors": None,
+            "has_output_variations": False,
+            "output_versions_per_child": {},
+            "grad": None,
+            "transformed_grad": None,
+            "save_grads": trace.save_grads,
+            "has_grad": False,
+            "grad_shape": None,
+            "transformed_grad_shape": None,
+            "grad_dtype": None,
+            "transformed_grad_dtype": None,
+            "grad_memory": 0,
+            "transformed_grad_memory": None,
+            "func": None,
+            "func_call_id": None,
+            "func_name": "intervention_replacement",
+            "code_context": [],
+            "func_duration": 0,
+            "flops_forward": 0,
+            "flops_backward": 0,
+            "func_rng_states": {},
+            "func_autocast_state": {},
+            "arg_names": (),
+            "num_args_total": 0,
+            "num_pos_args": 0,
+            "num_kwargs": 0,
+            "non_tensor_pos_args": [],
+            "non_tensor_kwargs": {},
+            "func_non_tensor_args": [],
+            "is_inplace": False,
+            "grad_fn_name": type(tensor.grad_fn).__name__,
+            "grad_fn_id": id(tensor.grad_fn) if tensor.grad_fn is not None else None,
+            "grad_fn": tensor.grad_fn,
+            "grad_fn_log": None,
+            "is_part_of_iterable_output": False,
+            "multi_output_index": None,
+            "container_path": (),
+            "container_spec": None,
+            "parent_params": [],
+            "_param_barcodes": [],
+            "parent_param_ops": {},
+            "_param_logs": [],
+            "param_shapes": [],
+            "num_params": 0,
+            "num_params_trainable": 0,
+            "num_params_frozen": 0,
+            "param_memory": 0,
+            "equivalence_class": raw_label,
+            "equivalent_ops": trace.equivalent_ops[raw_label],
+            "recurrent_ops": [],
+            "parents": parent_labels,
+            "parent_arg_positions": {"args": {}, "kwargs": {}},
+            "edge_uses": [],
+            "root_ancestors": root_ancestors or {raw_label},
+            "children": [],
+            "has_children": False,
+            "is_input": False,
+            "has_input_ancestor": any(entry.has_input_ancestor for entry in parent_entries),
+            "input_ancestors": input_ancestors,
+            "min_distance_from_input": None,
+            "max_distance_from_input": None,
+            "is_output": False,
+            "is_output_parent": False,
+            "is_final_output": False,
+            "has_output_descendant": False,
+            "output_descendants": set(),
+            "min_distance_from_output": None,
+            "max_distance_from_output": None,
+            "io_role": None,
+            "is_buffer": False,
+            "buffer_address": None,
+            "buffer_pass": None,
+            "buffer_parent": None,
+            "is_internal_source": not parent_entries,
+            "has_internal_source_ancestor": any(
+                entry.has_internal_source_ancestor for entry in parent_entries
+            ),
+            "internal_source_parents": [],
+            "internal_source_ancestors": internal_source_ancestors,
+            "is_internal_sink": False,
+            "is_terminal_bool": False,
+            "is_terminal_conditional_bool": False,
+            "conditional_context_kind": None,
+            "conditional_wrapper_kind": None,
+            "terminal_conditional_id": None,
+            "is_scalar_bool": bool(tensor.dtype == torch.bool and tensor.dim() == 0),
+            "bool_value": None,
+            "in_conditionals": [],
+            "terminal_bool_for": None,
+            "is_in_conditional_body": False,
+            "conditional_branch_stack": [],
+            "conditional_branch_depth": 0,
+            "conditional_entry_children": [],
+            "conditional_then_children": [],
+            "conditional_elif_children": {},
+            "conditional_else_children": [],
+            "conditional_arm_children": {},
+            "module": (address, module_call_index),
+            "_address_normalized": None,
+            "modules": [(address, module_call_index)] if address else [],
+            "modules_entered": [],
+            "module_entry_argnames": defaultdict(list),
+            "module_ops_entered": [],
+            "output_of_modules": [],
+            "output_of_module_calls": [],
+            "is_submodule_output": False,
+            "is_atomic_module_op": False,
+            "atomic_module_call": None,
+            "_module_boundary_threads_inputs": {
+                parent._label_raw: parent._module_boundary_thread_output[:]
+                for parent in parent_entries
+            },
+            "_module_boundary_thread_output": [],
+            "func_config": {},
+        }
+    )
+    trace.equivalent_ops[raw_label].add(raw_label)
+    new_entry = _make_layer_log_entry(trace, tensor, fields_dict, (), {}, trace.out_postfunc)
+    for parent_entry in parent_entries:
+        parent_entry.children.append(raw_label)
+        parent_entry.has_children = True
+    tensor.tl__label_raw = new_entry._label_raw  # type: ignore[attr-defined]
+    if trace.save_grads:
+        from ..capture.output_tensors import _add_backward_hook
+
+        _add_backward_hook(trace, tensor, tensor.tl__label_raw)  # type: ignore[attr-defined]
+
+
+def _wrap_user_forward_hooks(module: nn.Module) -> None:
+    """Wrap raw PyTorch forward hooks so tensor replacements stay logged.
+
+    Parameters
+    ----------
+    module:
+        Module whose registered forward hooks should be normalized.
+
+    Returns
+    -------
+    None
+        Hook callables in ``module._forward_hooks`` are replaced in place once.
+    """
+
+    hooks = getattr(module, "_forward_hooks", None)
+    if not hooks:
+        return
+    for hook_id, hook_fn in list(hooks.items()):
+        if getattr(hook_fn, "tl_tensor_replacement_wrapped", False):
+            continue
+        hooks[hook_id] = _make_user_forward_hook_wrapper(module, hook_fn)
+
+
+def _make_user_forward_hook_wrapper(
+    module: nn.Module, hook_fn: Callable[..., Any]
+) -> Callable[..., Any]:
+    """Return a forward-hook wrapper that instruments replacement tensors.
+
+    Parameters
+    ----------
+    module:
+        Module that owns the hook.
+    hook_fn:
+        User-supplied PyTorch forward hook.
+
+    Returns
+    -------
+    Callable[..., Any]
+        Wrapped hook preserving the original return value.
+    """
+
+    @wraps(hook_fn)
+    def wrapped_hook(*hook_args: Any, **hook_kwargs: Any) -> Any:
+        """Run a raw forward hook and repair TorchLens metadata on replacements."""
+
+        original_output = hook_args[-1] if hook_args else None
+        result = hook_fn(*hook_args, **hook_kwargs)
+        if result is None or result is original_output:
+            return result
+        trace = _state._active_trace
+        if trace is None or not _state._logging_enabled:
+            return result
+        parent_labels = [
+            getattr(tensor, "tl__label_raw")
+            for tensor in get_vars_of_type_from_obj(original_output, torch.Tensor, search_depth=4)
+            if hasattr(tensor, "tl__label_raw")
+        ]
+        for replacement in get_vars_of_type_from_obj(result, torch.Tensor, search_depth=4):
+            if hasattr(replacement, "tl__label_raw"):
+                trace._raw_layer_dict[replacement.tl__label_raw].intervention_replaced = True
+            else:
+                _ensure_module_output_tensor_logged(trace, replacement, module, parent_labels)
+        return result
+
+    wrapped_hook.tl_tensor_replacement_wrapped = True  # type: ignore[attr-defined]
+    return wrapped_hook
 
 
 def _handle_module_exit(
@@ -765,7 +1104,12 @@ def _handle_module_exit(
             hasattr(t, "tl__label_raw") and t.tl__label_raw in input_tensor_labels
         ):
             t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
+        if not hasattr(t, "tl__label_raw"):
+            parent_labels = list(dict.fromkeys(input_tensor_labels_at_entry))
+            _ensure_module_output_tensor_logged(trace, t, module, parent_labels)
         layer_entry = trace._raw_layer_dict[t.tl__label_raw]
+        if getattr(module, "_forward_hooks", None):
+            layer_entry.intervention_replaced = True
         layer_entry.is_submodule_output = True
         layer_entry.is_atomic_module_op = _is_bottom_level_submodule_exit(trace, t, module)
         layer_entry.output_of_modules.append(address)

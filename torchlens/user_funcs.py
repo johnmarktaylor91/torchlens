@@ -19,11 +19,13 @@ two-pass path (save specific layers).
 """
 
 import collections.abc
+import copy
 import hashlib
 import json
 import os
 import pickle
 import random
+from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
 
@@ -162,6 +164,30 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
             parent_entry.has_children = True
         if parent_label not in child_entry.parents:
             child_entry.parents.append(parent_label)
+
+
+def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.Tensor]:
+    """Clone a module ``state_dict`` while preserving PyTorch metadata.
+
+    Parameters
+    ----------
+    model:
+        Module whose state should be cloned.
+
+    Returns
+    -------
+    OrderedDict[str, torch.Tensor]
+        Detached tensor clones plus any private ``_metadata`` needed by module
+        implementations such as torchvision MNASNet during ``load_state_dict``.
+    """
+
+    original_state = model.state_dict()
+    cloned_state = OrderedDict(
+        (name, tensor.detach().clone()) for name, tensor in original_state.items()
+    )
+    if hasattr(original_state, "_metadata"):
+        cloned_state._metadata = copy.deepcopy(original_state._metadata)  # type: ignore[attr-defined]
+    return cloned_state
 
 
 def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:
@@ -2122,7 +2148,7 @@ def validate_forward_pass(
     # Step 1: Get ground-truth outputs by running the model *outside* TorchLens.
     # Save state_dict first because requires_grad forcing during logging can
     # alter parameter metadata; we restore it afterward.
-    state_dict = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
+    state_dict = _clone_state_dict_with_metadata(model)
     trace: Trace | None = None
     outs_are_valid = False
     try:

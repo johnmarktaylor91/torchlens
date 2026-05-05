@@ -63,6 +63,28 @@ position, so `def hook(activation, *, hook): ...` and
 `lambda g, *, hook: ...` are both valid. Hooks must return the replacement
 tensor.
 
+## Raw PyTorch Forward Hooks
+
+The TorchLens intervention API is the preferred path when you want selectors,
+fire records, replay, rerun, or saved intervention specs. Raw
+`nn.Module.register_forward_hook` also works during `tl.trace()` /
+`tl.log_forward_pass()` when you need module-local PyTorch behavior:
+
+```python
+def halve_relu(module, args, output):
+    return output * 0.5
+
+handle = model.relu.register_forward_hook(halve_relu)
+try:
+    log = tl.trace(model, x, vis_opt="none")
+finally:
+    handle.remove()
+```
+
+If a raw hook returns a new tensor, TorchLens instruments that replacement and
+marks the corresponding layer pass with `intervention_replaced=True`, so
+downstream op-level graph structure remains available.
+
 ## ModelLog Mutators
 
 | Method | Use |

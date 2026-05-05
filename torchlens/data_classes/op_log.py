@@ -99,6 +99,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "transformed_grad_memory": None,
     "func_call_id": None,
     "container_path": (),
+    "intervention_replaced": False,
     "interventions": [],
     "container_spec": None,
     "args_template": None,
@@ -224,6 +225,7 @@ class OpLog:
         "out_postfunc": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "interventions": FieldPolicy.DROP,
+        "intervention_replaced": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "has_saved_args": FieldPolicy.KEEP,
         "saved_args": FieldPolicy.BLOB_RECURSIVE,
@@ -485,6 +487,7 @@ class OpLog:
         self.out_postfunc = fields_dict["out_postfunc"]
         self.annotations: Dict[str, Any] = fields_dict["annotations"]
         self.interventions = fields_dict["interventions"]
+        self.intervention_replaced = fields_dict["intervention_replaced"]
         self.detach_saved_activations = fields_dict["detach_saved_activations"]
         self.has_saved_args = fields_dict["has_saved_args"]
         self.saved_args = fields_dict["saved_args"]

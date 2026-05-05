@@ -177,6 +177,7 @@ class LayerLog:
         "output_device": FieldPolicy.KEEP,
         "out_postfunc": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
+        "intervention_replaced": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
         "transformed_grad": FieldPolicy.BLOB,
@@ -276,6 +277,7 @@ class LayerLog:
         self.output_device = first_pass.output_device
         self.out_postfunc = first_pass.out_postfunc
         self.annotations: Dict[str, Any] = {}
+        self.intervention_replaced = first_pass.intervention_replaced
         self.detach_saved_activations = first_pass.detach_saved_activations
         self.save_grads = first_pass.save_grads
         self.transformed_grad_shape = first_pass.transformed_grad_shape

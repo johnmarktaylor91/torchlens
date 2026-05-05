@@ -1202,6 +1202,11 @@ class Trace:
     ) -> Any:
         """Attach sticky hooks to the current intervention spec.
 
+        Raw PyTorch ``register_forward_hook`` remains supported for users who
+        need module-local replacement logic outside this API; during active
+        TorchLens captures, returned replacement tensors are instrumented so the
+        graph can continue through downstream ops.
+
         Parameters
         ----------
         hooks_or_site:

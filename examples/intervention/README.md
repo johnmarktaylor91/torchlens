@@ -19,3 +19,4 @@ small local PyTorch model unless noted otherwise.
 14. `14_per_position_steering.py` - steer with a per-position direction tensor.
 15. `15_publishing_for_reproducibility.py` - save a portable `.tlspec/` and load it back.
 16. `16_pearl_style_tl_do.py` - use the top-level `tl.do` shortcut.
+17. `17_raw_forward_hook_replacement.py` - replace a module output with raw PyTorch `register_forward_hook`.
