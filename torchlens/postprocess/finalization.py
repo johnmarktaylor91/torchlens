@@ -846,19 +846,18 @@ def _build_conditional_records(self: "Trace") -> None:
     for event in self.conditional_records:
         terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
         conditional_id = f"cond_{terminal_bool_label}"
-        branch_kinds = [
-            branch_kind
-            for cond_id, branch_kind in self.conditional_arm_entry_edges
-            if cond_id == event.id
-        ]
+        # Use AST-derived branch_ranges so every static arm is materialized,
+        # regardless of which arm fired at runtime. fired-vs-not is captured
+        # per-arm via ConditionalArm.fired below.
+        ast_branch_kinds = list(event.branch_ranges)
         ordered_branch_kinds = ["then"]
         ordered_branch_kinds.extend(
             sorted(
-                (kind for kind in branch_kinds if kind.startswith("elif_")),
+                (kind for kind in ast_branch_kinds if kind.startswith("elif_")),
                 key=lambda kind: int(kind.split("_", 1)[1]),
             )
         )
-        if "else" in branch_kinds:
+        if "else" in ast_branch_kinds:
             ordered_branch_kinds.append("else")
 
         arms: list[ConditionalArm] = []
