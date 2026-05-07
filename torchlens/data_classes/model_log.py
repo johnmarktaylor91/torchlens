@@ -675,6 +675,7 @@ class Trace:
         "_mod_entered": FieldPolicy.DROP,
         "_mod_exited": FieldPolicy.DROP,
         "_module_build_data": FieldPolicy.DROP,
+        "_grad_fn_strong_refs": FieldPolicy.DROP,
         "_module_logs": FieldPolicy.DROP,
         "_module_metadata": FieldPolicy.DROP,
         "_module_forward_args": FieldPolicy.DROP,
@@ -933,6 +934,11 @@ class Trace:
 
         # Transient module build data (consumed by _build_module_logs, then cleared):
         self._module_build_data: Dict[str, Any] = _init_module_build_data()
+
+        # Strong refs to discovered grad_fn objects so Python cannot recycle
+        # their memory addresses while ``next_grad_fn_ids`` references them
+        # by ``id()``. Populated by ``_walk_and_hook_backward_graph``.
+        self._grad_fn_strong_refs: List[Any] = []
 
         # Structured module info:
         self._module_logs: ModuleAccessor = ModuleAccessor({})

@@ -12,7 +12,12 @@ from torch import nn
 
 
 class TinyBranchCNN(nn.Module):
-    """Tiny conv net with one tensor-driven if/else branch."""
+    """Tiny conv net with one tensor-driven if/else branch.
+
+    Each arm consumes ``x`` directly so the conditional fork at ``input_1`` has
+    both the test edge (IF) and the executed body edge (THEN / ELSE) emanating
+    from a single node in the rendered graph.
+    """
 
     def __init__(self) -> None:
         super().__init__()
@@ -21,11 +26,10 @@ class TinyBranchCNN(nn.Module):
         self.down_head = nn.Linear(4, 3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        pooled = F.relu(self.conv(x)).mean(dim=(2, 3))
         if x.mean() > 0:
-            y = self.up_head(pooled)
+            y = self.up_head(F.relu(self.conv(x)).mean(dim=(2, 3)))
         else:
-            y = self.down_head(-pooled)
+            y = self.down_head(F.relu(self.conv(x)).mean(dim=(2, 3)).neg())
         return y
 
 

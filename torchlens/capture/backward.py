@@ -252,6 +252,12 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
     seen: set[int] = set()
     handles: list[Any] = []
     type_counter: dict[str, int] = {}
+    # Keep strong refs to every discovered grad_fn for the trace's lifetime so
+    # Python cannot recycle their memory addresses. ``id()`` is used as the
+    # primary key for ``grad_fn_logs`` and ``next_grad_fn_ids``; if leaf nodes
+    # like AccumulateGrad were gc'd, their ids could be reused by later-created
+    # grad_fns (e.g. the output clone wrapper), creating phantom cycles.
+    trace._grad_fn_strong_refs.append(loss.grad_fn)
     if trace.backward_root_grad_fn_id is None:
         trace.backward_root_grad_fn_id = id(loss.grad_fn)
     trace.has_backward_pass = True
@@ -263,6 +269,7 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             continue
         seen.add(grad_fn_id)
         next_grad_fns = list(_iter_next_grad_fns(grad_fn))
+        trace._grad_fn_strong_refs.extend(next_grad_fns)
         queue.extend(next_grad_fns)
         layer_label = layer_lookup.get(grad_fn_id)
         grad_fn_log = trace.grad_fn_logs.get(grad_fn_id)
