@@ -176,8 +176,8 @@ def _resolve_member_name(bundle: "Bundle", member: str | "Trace") -> str:
     raise KeyError("Trace is not a member of this Bundle.")
 
 
-def _layer_to_supergraph_node(bundle: "Bundle") -> dict[int, str]:
-    """Map concrete layer objects to their supergraph node names.
+def _layer_to_supergraph_node(bundle: "Bundle") -> dict[str, str]:
+    """Map layer labels to their supergraph node names.
 
     Parameters
     ----------
@@ -186,14 +186,20 @@ def _layer_to_supergraph_node(bundle: "Bundle") -> dict[int, str]:
 
     Returns
     -------
-    dict[int, str]
-        ``id(layer)`` to supergraph node name.
+    dict[str, str]
+        ``layer.layer_label`` to supergraph node name. Keyed by label rather
+        than ``id(layer)`` because ``bundle.aligned_pairs`` and
+        ``bundle.supergraph.nodes`` materialize independent layer objects with
+        different ``id()`` values; an id-keyed lookup misses every entry, the
+        delta lookup falls back to ``0.0``, and the diff renders all-white.
     """
 
-    lookup: dict[int, str] = {}
+    lookup: dict[str, str] = {}
     for node_name, node in bundle.supergraph.nodes.items():
         for layer in getattr(node, "layer_refs", {}).values():
-            lookup[id(layer)] = str(node_name)
+            label = str(getattr(layer, "layer_label", ""))
+            if label:
+                lookup[label] = str(node_name)
     return lookup
 
 
@@ -204,7 +210,7 @@ def _build_dot(
     left_name: str,
     right_name: str,
     delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[int, str],
+    layer_to_node: dict[str, str],
     theme_name: str,
     include_unmatched: bool,
 ) -> graphviz.Digraph:
@@ -331,7 +337,7 @@ def _right_delta_values(
     pairs: list[tuple[Any, Any]],
     right_name: str,
     delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[int, str],
+    layer_to_node: dict[str, str],
 ) -> list[float]:
     """Return right-side delta values for color normalization.
 
@@ -354,7 +360,9 @@ def _right_delta_values(
 
     values: list[float] = []
     for left_layer, right_layer in pairs:
-        node_name = layer_to_node.get(id(left_layer), layer_to_node.get(id(right_layer)))
+        left_label = str(getattr(left_layer, "layer_label", ""))
+        right_label = str(getattr(right_layer, "layer_label", ""))
+        node_name = layer_to_node.get(left_label) or layer_to_node.get(right_label)
         if node_name is None:
             continue
         value = float(delta_map.get(node_name, {}).get(right_name, 0.0))
@@ -368,7 +376,7 @@ def _select_pairs(
     *,
     right_name: str,
     delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[int, str],
+    layer_to_node: dict[str, str],
     max_pairs: int | None,
 ) -> list[tuple[Any, Any]]:
     """Select high-signal aligned pairs for a compact hero diff.
@@ -398,7 +406,9 @@ def _select_pairs(
         raise ValueError("max_pairs must be at least 1 or None.")
     scored: list[tuple[float, int, tuple[Any, Any]]] = []
     for index, (left_layer, right_layer) in enumerate(pairs):
-        node_name = layer_to_node.get(id(left_layer), layer_to_node.get(id(right_layer)))
+        left_label = str(getattr(left_layer, "layer_label", ""))
+        right_label = str(getattr(right_layer, "layer_label", ""))
+        node_name = layer_to_node.get(left_label) or layer_to_node.get(right_label)
         value = float(delta_map.get(str(node_name), {}).get(right_name, 0.0))
         scored.append((value, index, (left_layer, right_layer)))
     chosen_indexes = {
@@ -416,7 +426,7 @@ def _add_side_cluster(
     member_name: str,
     compared_member_name: str,
     delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[int, str],
+    layer_to_node: dict[str, str],
     max_delta: float,
     unmatched_layer_ids: set[int],
 ) -> None:
@@ -458,7 +468,8 @@ def _add_side_cluster(
             style="rounded",
         )
         for layer in layers:
-            node_name = layer_to_node.get(id(layer), str(getattr(layer, "layer_label", "node")))
+            label = str(getattr(layer, "layer_label", "node"))
+            node_name = layer_to_node.get(label, label)
             value = float(delta_map.get(node_name, {}).get(compared_member_name, 0.0))
             subgraph.node(
                 _node_id(side, layer),
