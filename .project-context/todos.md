@@ -449,8 +449,16 @@ but are natural follow-ons. Pick up after MVP ships.
   named hook points into a custom attention impl. TorchLens shouldn't
   modify the model; instead, let users hand us a *recipe* that says
   "when you see this op, here's how to name and slice its output."
-  Once registered, the slices become virtual sub-fields on the OpLog
-  with their own labels.
+
+  Architecturally **layered on top of the `op.outs` API** owned by the
+  tensor-container entry above. Recipes don't introduce a new dict;
+  they add entries to the same `op.outs` populated by container
+  introspection. Same lookup, same renderer story, same save/load
+  contract. The provenance flag on `op.outs` is what distinguishes
+  recipe-derived entries (views of a packed tensor; mutating one
+  mutates the parent) from container-derived entries (independent
+  tensors; safe to mutate in isolation). Ship containers first; recipes
+  is incremental once that infrastructure exists.
 
   Lookup target after recipe application:
   ```
@@ -458,42 +466,84 @@ but are natural follow-ons. Pick up after MVP ships.
   trace["transformer.blocks.0.attn.qkv_proj.query.head_3"]
   ```
 
-  Concrete shape:
-  - `tl.trace(model, x, slicing_recipes=[...])` — recipes accept a
-    pattern (glob/regex over layer label or module path) plus a slicing
-    spec.
-  - Slicing spec options to consider:
-    - Index tuples (general, verbose).
-    - Reshape + named-axes (richer, matches einops' vocabulary).
-    - Helper builders: `tl.slice(dim=-1, parts={"q": (0,h), "k": (h,2*h), "v": (2*h,3*h)})`,
-      `tl.heads(num_heads=12, head_dim=64)`.
-  - Composition: `qkv_proj` -> `{q,k,v}` -> `{head_0..head_N}`. So
-    `query.head_3` is a sub-sub-slice; recipes apply recursively.
-  - Slices should be tensor views (no compute, no extra memory) where
-    possible; materialize only on access.
+  User-facing API surface:
+  - **Default: auto-detect.** `tl.trace(hf_model, x)` recognizes common
+    architectures and applies built-in recipes automatically. Most users
+    never write a recipe.
+  - **Override: explicit recipes.** `tl.trace(model, x, slicing_recipes=[...])`
+    accepts patterns (glob/regex over layer label or module path) plus
+    slicing specs. For custom models or non-HF architectures.
+  - **Disable: opt-out.** `slicing_recipes=False` to skip auto-detection
+    entirely. Useful for users who want raw tensors only.
+  - **Inspect what fired:** `trace.applied_recipes` returning
+    `{"transformer.h.0.attn": "gpt2_combined_qkv@v1", ...}` so users can
+    verify detection was correct. Critical for debugging silent
+    mis-slicing — wrong slicing produces plausible-looking nonsense.
 
-  Built-in recipe library for common architectures:
-  - Combined QKV split (`qkv_proj` -> q/k/v).
-  - Separate QKV (some models have distinct `q_proj`/`k_proj`/`v_proj`
-    — recipe just adds `.head_N` per-head views).
-  - Multi-head reshape: `(b, s, n_heads, head_dim)` -> per-head views.
-  - GQA / MQA variants (grouped/multi-query attention).
+  Slicing spec options to consider:
+  - Index tuples (general, verbose).
+  - Reshape + named-axes (richer, matches einops' vocabulary).
+  - Helper builders: `tl.slice(dim=-1, parts={"q": (0,h), "k": (h,2*h), "v": (2*h,3*h)})`,
+    `tl.heads(num_heads=12, head_dim=64)`.
+
+  Composition: `qkv_proj` -> `{q,k,v}` -> `{head_0..head_N}`. Keys in
+  `op.outs` are dotted strings; `query.head_3` is a single flat key,
+  not a nested object. Recipes register slices with dotted names
+  directly. Slices are tensor views (no compute, no extra memory)
+  where possible; materialize only on access.
+
+  Auto-detection design:
+  - Pattern-match strictly on module class identity
+    (`type(submodule).__module__.startswith("transformers.")` plus the
+    class name). False positives are catastrophic — wrong slicing gives
+    plausible-looking nonsense activations. Better to fall back to
+    "no recipe applied" than to mis-slice.
+  - Built-in registry kept intentionally small in core: ship recipes
+    for ~5 dominant architecture patterns (BERT-style, GPT-2 combined
+    QKV, GPT-NeoX/LLaMA separate QKV, GQA/MQA, T5 with relative pos).
+  - Long tail goes to a `torchlens-bridges-hf` extension package
+    (appliance pattern, like the existing `bridge.captum` etc.).
+
+  Recipe versioning + stability framing:
+  - Recipes are explicitly a **convenience feature**. Core capture API
+    gets strict semver; recipe behavior evolves more freely. Document
+    this so users opt into looser stability promises by depending on
+    them.
+  - Every recipe gets a version tag (`gpt2_combined_qkv@v1`) recorded
+    in `trace.applied_recipes`. If we ever fix a recipe, ship `@v2` and
+    let users pin via `slicing_recipes={"@v1"}` or similar.
+  - Convenience features tend to creep into being load-bearing — once
+    `query.head_3` is in a published paper, you can't remove it. The
+    versioning + provenance plumbing exists specifically to mitigate
+    this.
+
+  Hard constraint: recipes name SLICES of existing captured tensors —
+  they must NEVER synthesize new ops. The moment a recipe says "now
+  compute attention scores from these Q/K," it becomes a
+  model-modification tool, not a metadata layer. That's the trap
+  TransformerLens is in (their reimplementation of attention diverges
+  from HF over time). Stay strict: recipes name slices, nothing else.
 
   Intervention surface:
-  - `trace.do("...qkv_proj.query.head_3", tl.zero_ablate())` should
-    write into the slice of the larger tensor. Semantics are well-defined
-    (slice is a view) but worth a doc-level safety note: mutating a slice
-    propagates to the parent tensor's downstream consumers.
+  - `trace.do("...qkv_proj.query.head_3", tl.zero_ablate())` writes
+    into the slice of the larger tensor. Semantics are well-defined
+    (slice is a view, parent tensor is what flows downstream) but
+    worth a doc-level safety note: mutating a slice propagates to the
+    parent tensor's downstream consumers. That's the intended behavior
+    for ablation, but a footgun if the user thinks the slice is
+    independent. The provenance flag on `op.outs` lets the intervention
+    API surface a clear "this is a view; mutation propagates" warning
+    when needed.
 
   Visualization:
   - Default off — fan-out per head explodes node count.
-  - `view='attention_heads'` (or similar) expands the sub-fields into
-    rendered sub-nodes. Pairs with the "tensor container" todo: same
-    idea, semantically named slices instead of struct fields.
+  - `view='expand_outs'` (or `view='attention_heads'`) expands the
+    sub-fields into rendered sub-nodes. Same renderer code path as the
+    container fan-out from the entry above.
 
   Pairs naturally with the eventual HuggingFace bridge — ship pre-built
-  recipes for common HF architectures (BERT-style, GPT-style, T5-style,
-  Llama-style with GQA) so users don't hand-build for every model.
+  recipes for common HF architectures so users don't hand-build for
+  every model.
 
 - Accept FX-style qualpath as a documented secondary lookup key
   (raised 2026-05-07). Coordinates with the metadata-field todo below
@@ -556,34 +606,52 @@ but are natural follow-ons. Pick up after MVP ships.
   aren't a public spec and shift between PyTorch versions; promise
   consistent-with-our-rules output, not byte-equal-to-FX-forever output.
 
-- Better support for "tensor container" data structures (raised 2026-05-07).
-  Many real models pass and return tensors via containers, not bare
-  `torch.Tensor`s: HuggingFace `ModelOutput` dataclasses, `NamedTuple`s,
-  Detectron2 `Instances`, custom classes with tensor attributes, dict /
-  list / tuple of tensors. Today TorchLens handles a few cases ad-hoc
+- Better support for "tensor container" data structures + the unified
+  `op.outs` API (raised 2026-05-07). Many real models pass and return
+  tensors via containers, not bare `torch.Tensor`s: HuggingFace
+  `ModelOutput` dataclasses, `NamedTuple`s, Detectron2 `Instances`, dict
+  / list / tuple of tensors. Today TorchLens handles a few cases ad-hoc
   (see `_move_nested_to_device`, `_collate_batch` in
-  `torchlens/__init__.py`) but there's no general pattern for treating
-  containers as first-class. Three concrete pieces to consider:
+  `torchlens/__init__.py`); there's no general pattern.
+
+  This entry owns the **`op.outs` API design**. Both this feature and
+  the recipe-slicing entry below populate the same dict; ship containers
+  first because the auto-detection story is simpler (pytree introspection
+  on the returned object, no user config). Once `op.outs` exists,
+  recipes layer on top by adding more entries to it at log-time.
 
   Capture / log surface. When a forward function returns a container,
-  recursively descend (use `torch.utils._pytree` — already PyTorch's
-  own answer to this) and log each tensor leaf as its own OpLog with a
-  path-style label, e.g. `myblock_1.logits`, `myblock_1.attn_mask`.
-  Field path becomes part of the lookup key (`trace["myblock_1.logits"]`)
-  and the source-of-truth for matching across traces in a Bundle.
+  recursively descend with `torch.utils._pytree` (PyTorch's own answer
+  to this — see thread-local discussion) and populate `op.outs` with
+  `{field_path: tensor}`. Field path becomes part of the lookup key
+  (`trace["myblock_1.logits"]`) and the alignment key for Bundles.
 
-  Lookup ergonomics. Decide what `op.out` returns when the op produced
-  a container. Two options: (a) `.out` returns the container as-is, with
-  `.outs` returning a flat dict of `{field_path: tensor}`, or (b) pytree-
-  flatten by default and reconstruct on demand. Option (a) is friendlier
-  for users who want the original object; (b) keeps invariants cleaner.
+  Unified `op.outs` API:
+  - `op.out` — primary output tensor (current behavior, unchanged).
+    For container outputs, this returns the container as-is so users
+    can pass it through downstream code that expects the original
+    structure.
+  - `op.outs: dict[str, Tensor]` — flat dict of named tensor leaves.
+    Keys are dotted paths for nested structure (`past_key_values.0`,
+    `attentions.3`). Mirrors PyTree's `tree_flatten` semantics.
+  - `op.outs_provenance` (or per-key metadata, TBD): a small flag
+    indicating whether each entry is independent ("container") or a
+    view into the parent ("recipe"). Drives mutation-safety semantics
+    in the intervention API — see the recipe entry below for why this
+    matters.
 
   Visualization. Container outputs render as a single node whose label
   lists the field names + per-field shapes (compact "struct" view). For
-  power users, a `view='unpack_containers'` mode could split into one
-  child node per field with a dotted edge from container -> field. Most
-  models won't need this — default to the compact view, opt in for the
-  fan-out.
+  power users, a `view='unpack_containers'` mode (or a unified
+  `view='expand_outs'`) splits into one child node per field with a
+  dotted edge from container -> field. Default to compact; opt in for
+  fan-out. Same renderer hook serves recipe-derived outs.
+
+  Save / load. `op.outs` for containers is reconstructable from the
+  pytree-flattened leaves + the `treespec`. Save the leaves + spec in
+  the portable bundle; reconstruct the dict on load. Recipe-derived
+  entries are dropped on save and re-applied on load by replaying the
+  recipe.
 
   Skip: full custom-class introspection (arbitrary user classes with
   hidden tensor attrs). Stick to PyTree-registered types + the common
