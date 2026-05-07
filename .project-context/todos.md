@@ -441,6 +441,41 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Accept FX-style qualpath as a documented secondary lookup key
+  (raised 2026-05-07). Coordinates with the metadata-field todo below
+  (`OpLog.fx_qualpath`); ship the field first, then make it queryable.
+  Goal: ease translation for users coming from `torch.fx.symbolic_trace`
+  / TorchDynamo printouts who already think in
+  `encoder.block_2.attention.relu` form. Lookup canonically still routes
+  through `trace["relu_1_2"]`; this is a secondary form, not a replacement.
+
+  Concrete shape:
+  - Accept `trace["encoder.block_2.attention.relu"]` (structural path)
+    and `trace["encoder.block_2.attention.relu_0"]` (path + FX-style
+    disambiguator) and resolve to the corresponding OpLog.
+  - Pick ONE FX flavor (recommendation: `torch.fx.symbolic_trace`'s
+    convention, since it's the most canonical and most stable).
+    Document the exact disambiguation rule WE commit to, independent of
+    upstream FX evolution. If FX's rule diverges from ours later, ours
+    stays put — we're a separate contract.
+  - Add to the resolver's "did you mean…" suggestions when a near-miss
+    is detected.
+
+  Mandatory caveats in the docs:
+  - PyTorch-only. Cross-framework callers (MLX, eventual tinygrad) will
+    not have this lookup form.
+  - Refactor-fragile, same as our existing `module_path` lookup
+    (`trace["encoder.layer.0"]`) — renaming a wrapper or inserting a
+    `Sequential` shifts the path. Not a regression vs current state.
+  - Names will not always byte-equal what `torch.fx.symbolic_trace` /
+    Dynamo / `torch.export` print, especially for re-invocations and
+    around graph-break boundaries. We commit to a stable convention; we
+    do not commit to tracking upstream FX naming changes.
+
+  Don't add as a hidden / undocumented form. The right shape is
+  "documented, caveated, mentioned" or nothing — see discussion in the
+  2026-05-07 thread.
+
 - Surface FX-style call-site qualpath as a metadata field (raised 2026-05-07).
   We deliberately don't accept `encoder.block_2.attention.relu` as a TorchLens
   lookup key (canonical lookup stays `trace["relu_1_2"]`), but the
