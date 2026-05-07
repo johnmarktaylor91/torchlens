@@ -441,6 +441,42 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Multi-arm conditional traversal / "all paths" view (raised 2026-05-07).
+  Today TorchLens captures only the executed arm; unfired arms appear in
+  `event.branch_ranges` (AST) and `Conditional.arms` (with `fired=False`)
+  but have no recorded ops, no tensors, and don't show up in the graph.
+  Worth surfacing the full source-static control flow, not just the
+  taken path. Two tiers, ship in order:
+
+  Tier 1 — Static AST sketch. From `event.branch_ranges` + the source
+  file, extract per-arm source spans and render placeholder nodes for
+  each unfired arm under the bool node, labeled `THEN/ELIF_N/ELSE`,
+  styled distinctively (dashed border, gray fill) to mark "not executed
+  this run". No tensor metadata, no FLOPs. Cheap, safe, opt in with
+  `view_unfired_arms=True` (or via a `view='all_paths'` knob). Fixes
+  the "I see THEN but no ELSE in the graph" surprise users hit on
+  asymmetric conditionals.
+
+  Tier 2 — Multi-run traversal Bundle. User supplies N inputs that
+  collectively trigger every arm; TorchLens traces each, then unions
+  them into a single rendered view that shares the common prefix and
+  forks at each `Conditional`. Implementation sketch: build a
+  `Bundle({'arm=then': trace_pos, 'arm=else': trace_neg, ...})` and add
+  a `bundle.show_paths(...)` renderer that detects which Conditional
+  fired in each member and aligns arms accordingly. Reuses the existing
+  Bundle alignment + supergraph plumbing. Naming TBD —
+  `bundle.show_paths()` or `trace.show_with_alternatives(others)`.
+  Bonus: a `trace.suggest_alt_inputs()` helper that, given one trace,
+  uses the bool's source location + recorded inputs to suggest a
+  perturbation that flips the arm — quick smoke way to enumerate
+  paths without hand-crafting inputs.
+
+  Forcing-by-override (monkey-patch the bool to return False when it
+  evaluated True) is tempting but unsafe: branches often depend on
+  tensor shape / dtype / NaN, and forcing the "wrong" arm can crash
+  or produce malformed tensors that propagate. Skip for v1; let the
+  user supply real inputs.
+
 - Combined forward+backward graph rendering (raised 2026-05-07). Today
   `trace.draw()` shows forward only and `trace.draw_backward()` shows
   the autograd graph only. Niche but valuable: a single SVG that places
