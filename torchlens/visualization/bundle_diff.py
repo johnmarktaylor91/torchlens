@@ -249,8 +249,11 @@ def _build_dot(
             "splines": "ortho",
             "nodesep": "0.32",
             "ranksep": "0.34",
-            "size": "12,8!",
-            "ratio": "fill",
+            # Let graphviz auto-size to the natural aspect ratio. A hard
+            # ``size: 12,8!`` combined with ``ratio: fill`` forces a 1.5:1
+            # box; when the natural graph aspect is taller (e.g. 1.69:1 for
+            # the default paired layout) the bottom-positioned caption gets
+            # pushed outside the SVG viewBox and clipped.
             "label": _CAPTION + "\\nLegend: blue→white→red = increasing L2 delta.",
             "labelloc": "b",
             "labeljust": "l",
