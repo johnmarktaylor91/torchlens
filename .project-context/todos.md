@@ -441,6 +441,20 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Bundle diff color scale is semantically wrong (raised 2026-05-07).
+  `torchlens/visualization/bundle_diff.py:_delta_color` uses a
+  blue → white → red gradient over `[0, 0.5*max, max]`. Diverging
+  blue-white-red is conventionally signed: white = neutral/zero,
+  blue = negative, red = positive. The L2 delta we render is
+  unsigned and bounded `[0, max]` — zero IS the neutral point.
+  Fix: switch to a sequential single-hue colormap (e.g. white → red,
+  or pale-blue → dark-blue) so the visual rests on white-ish at zero
+  delta and saturates at max, with no implication of "directionality".
+  Update legend labels accordingly (`zero` / `mid` / `max` rather than
+  `low` / `mid` / `high`). Sites: `_delta_color`, `_add_legend`, and
+  the snapshot/demo SVGs. Surfaced during the 2026-05-07 demo notebook
+  push.
+
 - Rethink the parameter name `activation_postfunc` itself. Current name is
   awkward (`-postfunc` suffix) and the semantic now reads as a "transform"
   hook, not a "post-processing function" (after the raw-vs-transformed
