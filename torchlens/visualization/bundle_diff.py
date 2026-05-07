@@ -241,7 +241,11 @@ def _build_dot(
         comment="TorchLens bundle diff",
         format="svg",
     )
-    graph_attrs = theme_graph_attrs(theme, font_size=18, dpi=100)
+    # ``dpi=72`` (graphviz default) keeps the SVG viewBox in the same units as
+    # graphviz's internal layout coords. Higher DPI inserts a ``scale(dpi/72)``
+    # on the inner ``<g>`` while leaving viewBox in internal coords, which
+    # makes content extend past the viewBox and clip vertically.
+    graph_attrs = theme_graph_attrs(theme, font_size=18, dpi=72)
     graph_attrs.update(
         {
             "rankdir": "TB",
