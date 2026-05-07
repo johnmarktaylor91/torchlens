@@ -466,19 +466,58 @@ but are natural follow-ons. Pick up after MVP ships.
   trace["transformer.blocks.0.attn.qkv_proj.query.head_3"]
   ```
 
-  User-facing API surface:
-  - **Default: auto-detect.** `tl.trace(hf_model, x)` recognizes common
-    architectures and applies built-in recipes automatically. Most users
-    never write a recipe.
-  - **Override: explicit recipes.** `tl.trace(model, x, slicing_recipes=[...])`
-    accepts patterns (glob/regex over layer label or module path) plus
-    slicing specs. For custom models or non-HF architectures.
-  - **Disable: opt-out.** `slicing_recipes=False` to skip auto-detection
-    entirely. Useful for users who want raw tensors only.
-  - **Inspect what fired:** `trace.applied_recipes` returning
-    `{"transformer.h.0.attn": "gpt2_combined_qkv@v1", ...}` so users can
-    verify detection was correct. Critical for debugging silent
-    mis-slicing — wrong slicing produces plausible-looking nonsense.
+  User-facing API surface — three orthogonal supply mechanisms that compose:
+
+  1. **Auto-detect (default-on).** `tl.trace(hf_model, x)` recognizes
+     common architectures and applies built-in recipes automatically.
+     Most users never write a recipe. Strict class-identity matching;
+     no fuzzy fallback.
+  2. **Explicit at trace time.** `tl.trace(model, x, slicing_recipes=[...])`
+     accepts patterns (glob/regex over layer label or module path) plus
+     slicing specs. Stacks with auto-detect by default; pass
+     `auto_detect=False` to disable detection while keeping explicit
+     recipes. For custom models or non-HF architectures.
+  3. **Post-hoc on the trace.** `trace.apply_recipes([...])` on an
+     already-captured (or `tl.load`-ed) trace. Recipes slice already-
+     captured tensors — no re-execution needed. Two payoffs:
+     (a) **iteration loop** — developing a recipe, you tweak the spec
+     and re-apply without re-running the model (huge for big models).
+     (b) **loaded traces** — apply recipes to a `.tlspec` from disk;
+     the saved tensors are enough, recipe code re-runs locally.
+
+  Disable everything: `slicing_recipes=False, auto_detect=False`.
+  Useful for users who want raw `op.out` tensors only.
+
+  Conflict resolution: when explicit + auto both define a key like
+  `query` on the same op, **user-explicit wins**. Emit a
+  `MultiMatchWarning`-style notification (mirror the existing pattern
+  used for selector matches) so the user sees that an auto-detected
+  recipe was shadowed.
+
+  Inspect what fired: `trace.applied_recipes` returns
+  `{"transformer.h.0.attn": "gpt2_combined_qkv@v1", ...}` so users can
+  verify detection was correct. Critical for debugging silent
+  mis-slicing — wrong slicing produces plausible-looking nonsense.
+
+  Save / load behavior:
+  - Recipes are NOT serialized into the portable bundle. Recipe code
+    can carry closures / refs to user state; not safe to pickle into
+    a tlspec.
+  - `trace.applied_recipes` (just names + version tags) IS serialized
+    so a loaded trace can re-resolve from the registry by name.
+  - Custom user recipes that aren't in the registry: don't survive
+    save/load. User re-applies on the loaded trace via
+    `loaded.apply_recipes([...])`. Document this clearly.
+
+  Out-of-scope mechanisms (deliberately rejected):
+  - **Global registry** (`tl.recipes.register(...)`). Action-at-a-
+    distance — same `tl.trace(...)` call gives different results
+    depending on hidden global state. Hurts reproducibility. Pass them
+    in explicitly.
+  - **Mutating the model** (`tl.attach_recipes(model, [...])`).
+    TorchLens stays a passive observer; we don't write recipe metadata
+    onto `nn.Module` instances. Recipes live with the trace, not the
+    model.
 
   Slicing spec options to consider:
   - Index tuples (general, verbose).
