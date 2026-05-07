@@ -441,6 +441,60 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Tensor-slicing recipes for semantic sub-addressing (raised 2026-05-07).
+  Modern attention models pack Q/K/V into one tensor (`qkv_proj` output
+  is `(batch, seq, 3 * num_heads * head_dim)`), then split + reshape
+  per-head. Interpretability users want to address a specific head's
+  query/key/value directly — TransformerLens does this by inserting
+  named hook points into a custom attention impl. TorchLens shouldn't
+  modify the model; instead, let users hand us a *recipe* that says
+  "when you see this op, here's how to name and slice its output."
+  Once registered, the slices become virtual sub-fields on the OpLog
+  with their own labels.
+
+  Lookup target after recipe application:
+  ```
+  trace["transformer.blocks.0.attn.qkv_proj.query"]
+  trace["transformer.blocks.0.attn.qkv_proj.query.head_3"]
+  ```
+
+  Concrete shape:
+  - `tl.trace(model, x, slicing_recipes=[...])` — recipes accept a
+    pattern (glob/regex over layer label or module path) plus a slicing
+    spec.
+  - Slicing spec options to consider:
+    - Index tuples (general, verbose).
+    - Reshape + named-axes (richer, matches einops' vocabulary).
+    - Helper builders: `tl.slice(dim=-1, parts={"q": (0,h), "k": (h,2*h), "v": (2*h,3*h)})`,
+      `tl.heads(num_heads=12, head_dim=64)`.
+  - Composition: `qkv_proj` -> `{q,k,v}` -> `{head_0..head_N}`. So
+    `query.head_3` is a sub-sub-slice; recipes apply recursively.
+  - Slices should be tensor views (no compute, no extra memory) where
+    possible; materialize only on access.
+
+  Built-in recipe library for common architectures:
+  - Combined QKV split (`qkv_proj` -> q/k/v).
+  - Separate QKV (some models have distinct `q_proj`/`k_proj`/`v_proj`
+    — recipe just adds `.head_N` per-head views).
+  - Multi-head reshape: `(b, s, n_heads, head_dim)` -> per-head views.
+  - GQA / MQA variants (grouped/multi-query attention).
+
+  Intervention surface:
+  - `trace.do("...qkv_proj.query.head_3", tl.zero_ablate())` should
+    write into the slice of the larger tensor. Semantics are well-defined
+    (slice is a view) but worth a doc-level safety note: mutating a slice
+    propagates to the parent tensor's downstream consumers.
+
+  Visualization:
+  - Default off — fan-out per head explodes node count.
+  - `view='attention_heads'` (or similar) expands the sub-fields into
+    rendered sub-nodes. Pairs with the "tensor container" todo: same
+    idea, semantically named slices instead of struct fields.
+
+  Pairs naturally with the eventual HuggingFace bridge — ship pre-built
+  recipes for common HF architectures (BERT-style, GPT-style, T5-style,
+  Llama-style with GQA) so users don't hand-build for every model.
+
 - Accept FX-style qualpath as a documented secondary lookup key
   (raised 2026-05-07). Coordinates with the metadata-field todo below
   (`OpLog.fx_qualpath`); ship the field first, then make it queryable.
