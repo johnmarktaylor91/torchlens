@@ -441,6 +441,40 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Better support for "tensor container" data structures (raised 2026-05-07).
+  Many real models pass and return tensors via containers, not bare
+  `torch.Tensor`s: HuggingFace `ModelOutput` dataclasses, `NamedTuple`s,
+  Detectron2 `Instances`, custom classes with tensor attributes, dict /
+  list / tuple of tensors. Today TorchLens handles a few cases ad-hoc
+  (see `_move_nested_to_device`, `_collate_batch` in
+  `torchlens/__init__.py`) but there's no general pattern for treating
+  containers as first-class. Three concrete pieces to consider:
+
+  Capture / log surface. When a forward function returns a container,
+  recursively descend (use `torch.utils._pytree` — already PyTorch's
+  own answer to this) and log each tensor leaf as its own OpLog with a
+  path-style label, e.g. `myblock_1.logits`, `myblock_1.attn_mask`.
+  Field path becomes part of the lookup key (`trace["myblock_1.logits"]`)
+  and the source-of-truth for matching across traces in a Bundle.
+
+  Lookup ergonomics. Decide what `op.out` returns when the op produced
+  a container. Two options: (a) `.out` returns the container as-is, with
+  `.outs` returning a flat dict of `{field_path: tensor}`, or (b) pytree-
+  flatten by default and reconstruct on demand. Option (a) is friendlier
+  for users who want the original object; (b) keeps invariants cleaner.
+
+  Visualization. Container outputs render as a single node whose label
+  lists the field names + per-field shapes (compact "struct" view). For
+  power users, a `view='unpack_containers'` mode could split into one
+  child node per field with a dotted edge from container -> field. Most
+  models won't need this — default to the compact view, opt in for the
+  fan-out.
+
+  Skip: full custom-class introspection (arbitrary user classes with
+  hidden tensor attrs). Stick to PyTree-registered types + the common
+  shipped containers (NamedTuple, dataclass, dict, list, tuple). Users
+  can register their custom classes via the standard PyTree API.
+
 - Multi-arm conditional traversal / "all paths" view (raised 2026-05-07).
   Today TorchLens captures only the executed arm; unfired arms appear in
   `event.branch_ranges` (AST) and `Conditional.arms` (with `fired=False`)
