@@ -441,6 +441,22 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Some Trace-level intervention/inspection verbs should ALSO be available
+  on the resolved log object (raised 2026-05-07). Today the user writes
+  `trace.do('conv2d_2_1', tl.mean_ablate())`, which is fine but somewhat
+  awkward when you already have a handle on the layer/op. A user with
+  `op = trace['conv2d_2_1']` (or `trace.layers[...]` / `trace.ops[...]`)
+  would naturally expect `op.do(tl.mean_ablate())` to apply the same
+  intervention scoped to that op, no label repetition. Same pattern for
+  other selector-first verbs (`set`, `attach_hooks`, `replay`, `find_sites`
+  scoped to this op as default, etc.). Implementation note: keep Trace as
+  the source of truth for the intervention spec; LayerLog/OpLog methods
+  should resolve back to the owning Trace and call its method with the
+  pre-resolved label/site. Watch for the case where a LayerLog is detached
+  from its source Trace (e.g. after a load) — surface a clear error rather
+  than silently no-op. Surface during a UX-focused naming/ergonomics pass
+  before the 2.0 marketing push.
+
 - Bundle diff color scale is semantically wrong (raised 2026-05-07).
   `torchlens/visualization/bundle_diff.py:_delta_color` uses a
   blue → white → red gradient over `[0, 0.5*max, max]`. Diverging
