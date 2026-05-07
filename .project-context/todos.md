@@ -441,6 +441,32 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Surface FX-style call-site qualpath as a metadata field (raised 2026-05-07).
+  We deliberately don't accept `encoder.block_2.attention.relu` as a TorchLens
+  lookup key (canonical lookup stays `trace["relu_1_2"]`), but the
+  symbolic-trace-flavored string is useful for cross-tool reference and for
+  users coming from FX / `torch.fx`. File as a non-key metadata field.
+  Concrete shape:
+  - `OpLog.fx_qualpath` (e.g. `encoder.block_2.attention.relu`) — the
+    structural module-call path, stable across re-invocations of the same
+    module method in one forward pass.
+  - `OpLog.fx_call_index` (0/1/2/...) — disambiguator that mirrors FX's
+    `relu_0` / `relu_1` suffixing when a method is called multiple times.
+    Together these reproduce FX's `relu_0` form on demand.
+  - `LayerLog.fx_qualpath` when all member ops share one path; otherwise
+    expose as a list since a single LayerLog can span recurrent re-uses.
+  - `ModuleLog` already has `module_address` (user-defined PyTorch path);
+    the new field is specifically the call-site path, which can differ
+    when the same module is invoked from multiple parents.
+  Cost: negligible. We already track `op.containing_modules`; the qualpath
+  is just a derived join. Naming MUST telegraph "metadata, not key" — pick
+  `fx_qualpath` / `pytorch_qualpath` / `module_call_path`, NOT
+  `module_address` (which would invite the lookup-pattern misuse we're
+  avoiding). Document one caveat: FX/Dynamo's exact disambiguation rules
+  (Sequential indexing, anonymous-module handling, `_modules` ordering)
+  aren't a public spec and shift between PyTorch versions; promise
+  consistent-with-our-rules output, not byte-equal-to-FX-forever output.
+
 - Better support for "tensor container" data structures (raised 2026-05-07).
   Many real models pass and return tensors via containers, not bare
   `torch.Tensor`s: HuggingFace `ModelOutput` dataclasses, `NamedTuple`s,
