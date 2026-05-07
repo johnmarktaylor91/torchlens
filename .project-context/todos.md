@@ -441,6 +441,23 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Combined forward+backward graph rendering (raised 2026-05-07). Today
+  `trace.draw()` shows forward only and `trace.draw_backward()` shows
+  the autograd graph only. Niche but valuable: a single SVG that places
+  forward op nodes alongside their corresponding `grad_fn` nodes, with
+  a distinctive edge style linking each forward op to its backward
+  partner (e.g. dashed light-purple, matching the existing
+  `GRADIENT_ARROW_COLOR = "#9197F6"`). Useful for: (a) teaching how
+  autograd actually wires the graph, (b) debugging which forward op
+  produced a specific grad_fn (the `[i]` "intervening" nodes are not
+  obvious), (c) per-op autograd-saved-bytes attribution at a glance.
+  Default off; opt in with `view='both'` (or similar) when
+  `trace.has_backward_pass`. Watch for visual density on real models
+  (ResNet-18 already has ~70 forward nodes; doubling makes it noisy)
+  — recommend pairing with the existing `module=` focus and skip/collapse
+  knobs so users can scope the combined view to a region of interest.
+  Adjacent to the `backward_pass_sprint.md` parking lot.
+
 - Some Trace-level intervention/inspection verbs should ALSO be available
   on the resolved log object (raised 2026-05-07). Today the user writes
   `trace.do('conv2d_2_1', tl.mean_ablate())`, which is fine but somewhat
