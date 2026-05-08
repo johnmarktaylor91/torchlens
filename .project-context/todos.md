@@ -441,6 +441,90 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Generic `transform=` kwarg on `tl.trace` + raw-input rendering
+  (raised 2026-05-07). Refines the text-input idea below into a
+  cleaner architecture: instead of putting tokenization in a bridge,
+  add a generic preprocessing primitive to core that ANY domain can
+  use, store the original input alongside the trace, and render it
+  in the graph's input node. The HF text-input bridge entry below
+  becomes a ~5-line wrapper around this primitive.
+
+  Core primitive:
+  ```
+  trace = tl.trace(model, raw_input, transform=callable)
+  ```
+  - `transform` is `user_input -> model_input`. Runs once before
+    the trace starts.
+  - `Trace.raw_input` (or `Trace.user_input`) holds the original;
+    `Trace.input_args` holds what the model received (current
+    behavior, unchanged).
+  - Multi-arg models: transform should handle (a) single value ->
+    tensor, (b) tuple -> tuple, (c) dict -> dict-of-kwargs (matching
+    `model.forward` signature). HF tokenizers naturally return
+    dict-shaped output — auto-`**unpack` when the transform returns
+    a Mapping.
+  - Composition is the user's job. Single callable, not a list.
+    `transform=lambda x: tokenize(preprocess(x))` is fine.
+
+  Save / load policy:
+  - Default: save a small representation of the raw input (thumbnail
+    for images, truncated string for text — say, first ~10 KB).
+    Don't round-trip the original — privacy-sensitive prompts and
+    large image bytes don't belong in a portable artifact.
+  - `tl.trace(..., save_raw_input='small'|True|False)` overrides.
+  - Transformed model input we already save (it's the input node's
+    `op.out`).
+
+  Visualization — the genuinely fun part. Graphviz has `image=` and
+  HTML-table labels; this is afternoon-scale, not month-scale.
+  - **Text inputs:** HTML-table label with the prompt as content,
+    aggressive truncation (~80 chars + ellipsis). For HF
+    `trace_text` callers we additionally render token boundaries as
+    `|`-separated chunks with token IDs aligned underneath in a
+    second row.
+  - **Image inputs:** save a 200x200 thumbnail to the output dir,
+    set `image=` + `imagescale=true` + `shape=none` on the input
+    node. Graphviz embeds it. Done.
+  - **Audio inputs:** matplotlib waveform sketch -> PNG -> graphviz
+    `image=`. Same pattern.
+  - **Multimodal:** input becomes a cluster, one sub-node per
+    modality. We already use clusters for modules; reuse the
+    primitive.
+  - **Hover / clickable.** `tooltip=` for full untruncated metadata
+    (file path, dimensions, byte size); `URL=` for click-out to the
+    original (`file:///...` for image paths). Free; pure attribute
+    plumbing.
+
+  Renderer dispatch:
+  ```
+  def _render_raw_input(value):
+      if isinstance(value, str): ...
+      if isinstance(value, PIL.Image.Image): ...
+      if isinstance(value, np.ndarray) and value.ndim == 3: ...
+      if torch.is_tensor(value) and value.ndim == 4 and value.shape[1] in (1,3): ...
+      if isinstance(value, dict): ...
+      return None  # fall back to existing tensor-shape display
+  ```
+  ~30 lines + per-modality helpers (~15 lines each). User extension
+  via `tl.register_input_renderer(MyType, fn)` if anyone asks; not
+  required for v1.
+
+  No `view='raw_input'` toggle — just always render when we know how.
+  Unknown type falls back to the existing default, no regression.
+
+  Bonus side-benefit: better error messages. If `transform` produced
+  a tensor of wrong shape for the model, we can surface
+  `"You passed text='...'; transform produced tensor (1, 5);
+  model expected (B, 1024)"`. Currently we can only show the tensor
+  side.
+
+  Out of scope: animation / autoregressive-generation visualization
+  (different feature; needs multi-trace alignment + SVG animation
+  primitives). Defer.
+
+  Total scope: ~100 lines all-in for primitive + dispatch + per-
+  modality renderers. Genuinely an afternoon.
+
 - HuggingFace bridge: text-input ergonomics for language models
   (raised 2026-05-07). TransformerLens lets users feed raw text to a
   language model and auto-applies tokenization + embedding lookup.
