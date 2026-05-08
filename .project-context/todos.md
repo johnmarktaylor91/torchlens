@@ -550,6 +550,25 @@ but are natural follow-ons. Pick up after MVP ships.
   model expected (B, 1024)"`. Currently we can only show the tensor
   side.
 
+  Symmetric output_transform. Mirrors the input side: a callable that
+  maps `model_output -> user_form` (logits -> ImageNet label, vocab
+  logits -> decoded text, detection output -> labeled boxes). Stored
+  on the trace alongside the input transform; runs once after the
+  forward; populates `Trace.raw_output` for rendering and downstream
+  use. The output node in the rendered graph shows the human-readable
+  form (e.g. "Egyptian cat (45.2%)") in addition to or instead of the
+  tensor shape. Same plugin dispatch as input rendering — built-in
+  transforms include `tl.transforms.imagenet_topk(k=5)`,
+  `tl.transforms.hf_decode(tokenizer, top_k=1)`,
+  `tl.transforms.softmax_topk(k, labels=...)`, etc. Serialization
+  policy matches input transform: code isn't pickled; only the
+  computed user-form is saved (with size cap). `trace.rerun(...)`
+  re-applies both transforms — preprocess the new input, decode the
+  new output — so the rerun loop reads end-to-end. Killer compound
+  case: text-in / text-out language models render the prompt on the
+  input node, the predicted continuation on the output node, the
+  whole graph in between. Trace as narrative.
+
   Trace stores transform; rerun reuses it. The `Trace` object holds
   a strong ref to the `transform` callable for its in-memory life so
   `trace.rerun(new_user_input)` re-applies it automatically:
