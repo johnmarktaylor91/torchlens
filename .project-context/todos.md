@@ -441,6 +441,71 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- HuggingFace bridge: text-input ergonomics for language models
+  (raised 2026-05-07). TransformerLens lets users feed raw text to a
+  language model and auto-applies tokenization + embedding lookup.
+  Pleasant UX. We can match the ergonomics WITHOUT TransformerLens's
+  architecture-reimplementation cost — we just preprocess the input
+  and then run the genuine HF forward.
+
+  Architectural placement: this lives in `tl.bridge.hf`, NOT in core
+  `tl.trace`. The trap is making `tl.trace(model, x)` accept strings
+  for some models and tensors for others — that couples core to the
+  text-model domain, then vision wants `trace_image`, audio wants
+  `trace_audio`, multimodal wants all-of-the-above, and core ends up
+  knowing about every model domain. Keep core's contract clean:
+  `tl.trace(model, x)` runs `model(x)`, no domain magic. The HF bridge
+  is where HF-specific conveniences live, alongside the auto-detect
+  recipe registry from the slicing-recipes todo.
+
+  API surface:
+  ```
+  trace = tl.bridge.hf.trace_text(model, "Once upon a time")
+  trace = tl.bridge.hf.trace_text(model, ["batch", "of", "prompts"])
+  trace = tl.bridge.hf.trace_text(
+      model,
+      [{"role": "user", "content": "hi"}],
+      chat_template=True,
+  )
+  ```
+
+  What it does (~30 lines of HF-specific glue):
+  1. Find the tokenizer. Use `tokenizer=` kwarg if passed; else look
+     for `model.config.tokenizer_class` and `AutoTokenizer.from_pretrained`
+     against the model's name-or-path. Fail loud if neither resolves —
+     don't guess.
+  2. Detect chat template (`tokenizer.chat_template is not None`) and
+     apply when the user passes a string + `chat_template=True` or a
+     list-of-message-dicts.
+  3. Tokenize -> tensor (`return_tensors="pt"`).
+  4. Move encoded inputs to the model's device.
+  5. Call `tl.trace(model, **encoded_inputs)` — the trace is of the
+     real HF forward pass, not a TorchLens reimplementation.
+
+  Pairs with the slicing-recipes auto-detect: the same model-class
+  identification machinery that fires `gpt2_combined_qkv@v1` recipe
+  also picks the right tokenizer. Single registry, two payloads.
+
+  Vision analogue (later, separate todo): `tl.bridge.vision.trace_image`
+  could do PIL load + resize + normalize. Same pattern, different
+  domain. Don't ship until there's demand — keeps the bridge surface
+  scoped.
+
+  What we DON'T do (deliberately different from TransformerLens):
+  - No `HookedTransformer`-style reimplementation of architectures.
+    TransformerLens's text-input magic is intertwined with their
+    custom forward implementations; ours is preprocessing only. The
+    genuine HF model runs; we just feed it tokens.
+  - No global "register a text input" hook on the model. The bridge
+    function is a one-shot wrapper, not a state-changing
+    registration. Same reproducibility argument as recipes.
+
+  Skip / non-goals: chat-history management, generation streaming
+  (use HF's `model.generate(...)` and trace inside if needed), prompt
+  templating beyond what `tokenizer.apply_chat_template` already
+  provides. We're a tracing tool that happens to know how to feed
+  text to a transformer; we're not an inference framework.
+
 - Tensor-slicing recipes for semantic sub-addressing (raised 2026-05-07).
   Modern attention models pack Q/K/V into one tensor (`qkv_proj` output
   is `(batch, seq, 3 * num_heads * head_dim)`), then split + reshape
