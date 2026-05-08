@@ -550,6 +550,75 @@ but are natural follow-ons. Pick up after MVP ships.
   model expected (B, 1024)"`. Currently we can only show the tensor
   side.
 
+  Layer visualizers — the symmetric extension to intermediate nodes.
+  Same plugin dispatch, same `image=` mechanism, same shared helpers.
+  Each layer (or any matched subset) gets an inline thumbnail
+  decorating its rendered node body, replacing the boring
+  "shape (KB)" line with something semantic.
+
+  ```
+  trace = tl.trace(
+      model, x,
+      layer_visualizers={
+          tl.func("conv2d"): tl.viz.channel_grid(n=16),
+          tl.func("relu"):   tl.viz.heatmap(),
+          "transformer.blocks.*.attn": tl.viz.attention_heatmap(),
+          "embedding_1": tl.viz.tsne(n=200),
+      },
+  )
+  ```
+
+  Contract: `visualizer(tensor, *, layer_label=None) -> PIL.Image | str`.
+  PIL.Image gets embedded as a graphviz node image; string is used
+  as an HTML-label body. One function, one return type, one contract.
+
+  Selectors reuse the existing intervention selector vocabulary
+  (`tl.func`, `tl.module`, label lists, glob patterns). No new
+  selector machinery; same matching rules as `find_sites`,
+  `attach_hooks`, `do`.
+
+  Default: nothing rendered per-layer (current behavior). Selective
+  opt-in is critical — ResNet-50 with 50 layers is fine; LLaMA-7B
+  with hundreds is unrenderably noisy. Force the user to choose
+  what's worth showing.
+
+  Built-in library (all afternoon-scale):
+  - `tl.viz.heatmap()` — channel-averaged 2D heatmap with colormap.
+  - `tl.viz.channel_grid(n=16)` — mosaic of first-N channels for
+    conv activations.
+  - `tl.viz.histogram()` — value distribution.
+  - `tl.viz.attention_heatmap()` — attention matrix render
+    (auto-detects shape).
+  - `tl.viz.tsne()` / `tl.viz.pca_2d()` / `tl.viz.umap()` /
+    `tl.viz.mds()` — 2D projection for embedding-shaped tensors
+    (rows as points).
+  - `tl.viz.violin()` — per-channel value distributions.
+
+  Rendering timing: **eager at trace time**, not lazy at draw time.
+  Tensors are in memory during capture; render and save thumbnails
+  to the trace's tmp dir as each matched layer fires. Lazy rendering
+  means re-traversing tensors on every `.draw()` call and risks them
+  having been evicted under streaming/eviction mode. Eager + cached
+  PNG paths makes draw-time cheap and idempotent.
+
+  Save/load: visualizers are code (drop on save). Rendered PNG
+  thumbnails CAN ride along in the portable bundle (small,
+  self-contained, useful for offline viewing) — opt in via
+  `tl.trace(..., save_visualizations=True)`. On load without code:
+  you get the cached thumbnails. With code: re-render against
+  loaded tensors.
+
+  Shares infra with input/output rendering and the `tl.viz.batch_summary`
+  helpers from the batched-input section above. Same montage code
+  works for an activation grid as for a batch-of-images input node.
+
+  Compound payoff: input image (cat) → conv1 channel grid → relu
+  heatmap → attention pattern → top-5 output labels w/ confidences.
+  Whole graph reads as a visual tour through the model's processing.
+  Combined with the intervention API: fork, ablate, rerun, and
+  visualizations change across the bundle — publication-quality
+  figure with no extra code.
+
   Symmetric output_transform. Mirrors the input side: a callable that
   maps `model_output -> user_form` (logits -> ImageNet label, vocab
   logits -> decoded text, detection output -> labeled boxes). Stored
