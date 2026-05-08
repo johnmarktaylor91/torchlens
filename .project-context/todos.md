@@ -512,6 +512,38 @@ but are natural follow-ons. Pick up after MVP ships.
   No `view='raw_input'` toggle — just always render when we know how.
   Unknown type falls back to the existing default, no regression.
 
+  Batched inputs. The input node represents the whole batch; render it
+  as a summary. Shared sampling policy across modalities:
+
+  - `batch == 1` (or no batch dim): full single-item render.
+  - `batch <= 4`: render all items.
+  - `batch > 4`: render first 4 + `+N more` badge.
+
+  Per-modality summarization:
+
+  - **Images.** PIL montage — grid of thumbnails on a fixed canvas
+    (~600x600 cap so the SVG doesn't bloat). `cols = ceil(sqrt(n))`,
+    thumbnails sized to fit. Save as one PNG, set `image=` on the
+    node. ~15 lines.
+  - **Text.** HTML-label table — one row per prompt, truncated to
+    ~60 chars per row, max 4 rows + `+N more` footer. Pure
+    HTML-label markup, no image file.
+  - **Audio.** Stack mini-waveforms vertically up to 4; above that,
+    first + count. matplotlib for the waveform; same `image=` pattern
+    as single-audio.
+  - **Heterogeneous / multimodal batches.** Defer — fall back to the
+    existing tensor-shape display. Add later if anyone asks.
+
+  Override via `tl.trace(..., batch_render='all' | 'first' |
+  'first_n:N' | 'shape_only')`. Defaults are good for ~95% of cases.
+
+  Important: the batch-summarize helpers should be a reusable building
+  block, not entangled with the input node renderer. Same
+  `_montage` / `_text_table` / `_waveform_stack` helpers should be
+  available wherever batched tensors get visualized (future
+  activation-image rendering, bundle visuals, etc.). Lay them out as
+  a small `tl.viz.batch_summary` module from day one.
+
   Bonus side-benefit: better error messages. If `transform` produced
   a tensor of wrong shape for the model, we can surface
   `"You passed text='...'; transform produced tensor (1, 5);
