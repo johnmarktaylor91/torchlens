@@ -518,12 +518,67 @@ but are natural follow-ons. Pick up after MVP ships.
   model expected (B, 1024)"`. Currently we can only show the tensor
   side.
 
+  Trace stores transform; rerun reuses it. The `Trace` object holds
+  a strong ref to the `transform` callable for its in-memory life so
+  `trace.rerun(new_user_input)` re-applies it automatically:
+
+  ```
+  trace = tl.trace(model, "the cat sat", transform=tokenize)
+  trace.rerun("the dog sat")          # auto-applies tokenize
+  trace.rerun(["batched", "prompts"])  # same
+  trace.rerun(tensor, transform=False) # bypass; raw model input
+  ```
+
+  Resolution rule: if the trace has a stored transform and
+  `transform=False` isn't passed, apply it. Right default — users
+  almost always want "feed me another prompt," rarely "I built
+  tokens manually." Composes naturally with `fork` + `do` + `bundle`:
+  one-line prompt swap inside an intervention experiment instead of
+  the user keeping a tokenizer reference around.
+
+  Loaded traces: transform isn't serialized (code with potential
+  closures, not safe to pickle into a tlspec). `tl.load(path).rerun("...")`
+  raises with a clear message: "This trace was loaded from disk and
+  has no associated transform; pass `transform=callable` explicitly
+  or rerun with a pre-transformed tensor." Don't try to be clever.
+
+  Built-in transforms for common cases. Once the primitive ships,
+  add a small library of pre-built transforms so users don't reach
+  for `tokenizer(text, return_tensors="pt")` boilerplate. Same
+  appliance pattern as recipes: small core registry, long tail in
+  bridges.
+
+  Sketch:
+  - `tl.transforms.hf_tokenize(tokenizer)` -> callable. Wraps a HF
+    tokenizer; returns a dict suitable for `**`-unpack into
+    `model.forward`. Auto-applies chat template if the tokenizer has
+    one and input looks like a message list.
+  - `tl.transforms.hf_tokenize_for(model)` -> callable. As above but
+    auto-resolves the tokenizer from the model. Lives in
+    `tl.bridge.hf` since it depends on `transformers`.
+  - `tl.transforms.image_preprocess(size=224, mean=..., std=...)` ->
+    callable. Standard ImageNet-style preprocessing on a PIL Image
+    or path string. Lives in `tl.bridge.vision` (later).
+  - `tl.transforms.audio_resample(target_sr=16000)` -> callable.
+    Audio resample to model's expected sample rate. Lives in
+    `tl.bridge.audio` (much later, only if demand).
+
+  Once these exist, the HF text-input ergonomic shrinks to:
+  ```
+  trace = tl.trace(model, "hello", transform=tl.transforms.hf_tokenize_for(model))
+  ```
+  And `tl.bridge.hf.trace_text(model, "hello")` is a 3-line
+  convenience wrapper that fills in the transform default.
+
   Out of scope: animation / autoregressive-generation visualization
   (different feature; needs multi-trace alignment + SVG animation
   primitives). Defer.
 
-  Total scope: ~100 lines all-in for primitive + dispatch + per-
-  modality renderers. Genuinely an afternoon.
+  Total scope: ~100 lines for primitive + dispatch + per-modality
+  renderers + rerun integration. Built-in transform library adds
+  another ~50-100 lines per ecosystem (HF / vision / audio). Genuinely
+  an afternoon for the primitive; another afternoon-or-two for the
+  built-ins.
 
 - HuggingFace bridge: text-input ergonomics for language models
   (raised 2026-05-07). TransformerLens lets users feed raw text to a
