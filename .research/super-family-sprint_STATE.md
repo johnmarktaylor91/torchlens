@@ -1,8 +1,8 @@
 ---
 run: super-family-sprint
 created: 2026-05-09T12:22:36-04:00
-state: PHASE_1_RUNNING
-current_round: 1
+state: DONE
+current_round: 8
 ---
 
 # super-family-sprint -- Sprint State
@@ -122,4 +122,11 @@ Plus phase-specific checks:
 
 | Round | Start | End | Commit | Result | Notes |
 |---|---|---|---|---|---|
-| 1 | 2026-05-09T12:30 | -- | -- | RUNNING | Phase 1: Accessor[T] base extraction; codex pid=3883775; log=/tmp/super-sprint_phase1.log |
+| 1 | 2026-05-09T12:30 | 2026-05-09T13:30 | fbf17d4 | DONE (smoke 170/170) | Phase 1: Accessor[T] base shipped. 8 accessors refactored. 688 ins / 275 del. Codex held back from committing due to pre-existing tier-2 failures (nnsight env + uncommitted rendering.py colon edits) — bisected against main, confirmed unrelated, committed manually. |
+| 2 | 2026-05-09T12:50 | 2026-05-09T13:17 | d25d9a2 | DONE (smoke 170/170, bundle 5/5) | Phase 2: Super[T] base + _TensorBearing mixin. Codex chose mixin option (a) per prompt recommendation. Bundle round-trip OK. Brief race with my parallel todos commit untangled via soft-reset. |
+| 3 | 2026-05-09T13:18 | 2026-05-09T13:25 | 3232674 | DONE (smoke 170/170, bundle 78/78) | Phase 3: SuperAccessor[T, S] base. SuperOpAccessor / SuperLayerAccessor reduced to ~5 lines each. |
+| 4 | 2026-05-09T13:30 | 2026-05-09T13:41 | 46d230e | DONE (smoke 170/170, bundle 78/78) | Phase 4: multi_trace/ folded into intervention/_super/ + _topology/ + _metrics.py. multi_trace/ deleted. |
+| 5 | 2026-05-09T13:43 | 2026-05-09T14:05 | 005a72d | DONE (smoke 170/170, bundle 78/78) | Phase 5: 6 new Super classes + 6 new Bundle accessors. module_calls + grad_fn_calls included (no carve-out). |
+| 6 | 2026-05-09T14:08 | 2026-05-09T14:39 | 10ca3f2 | DONE (smoke 170/170, bundle 78/78) | Phase 6: 13 structural-agreement predicates on Bundle (is_structurally_consistent + shared/divergent for op/layer/module/param/buffer/grad_fn). |
+| 7 | 2026-05-09T14:42 | 2026-05-09T15:12 | d0e7db0 | DONE (smoke 170/170, bundle 78/78) | Phase 7: bundle.at(label) auto-detect dispatcher. |
+| 8 | 2026-05-09T15:15 | 2026-05-09T16:00 | this commit | DONE (shutdown) | Phase 8: docs, MEMORY.md marker, sprint summary, and final tier-2 confirmation. |

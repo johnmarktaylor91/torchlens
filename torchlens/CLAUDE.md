@@ -57,7 +57,8 @@ detaching or disk-only out storage.
 - `validation/` - forward replay, backward validation, metadata invariants, `.tlspec` schema checks.
 - `visualization/` - Graphviz rendering, ELK layout, NodeSpec, themes, overlays, bundle diff.
 - `intervention/` - selectors, sites, hooks, helpers, Bundle, fork/replay/rerun/save.
-- `multi_trace/` - internal bundle supergraph and node diff support.
+- `intervention/_super/` - internal Bundle-level Super* aligned views and accessors.
+- `intervention/_topology/` - internal bundle supergraph and topology diff support.
 - `bridge/`, `compat/`, `callbacks/` - optional integrations and migration facades.
 - `viewer/`, `paper/`, `notebook/`, `llm/`, `neuro/` - appliance package boundaries gated by extras.
 
