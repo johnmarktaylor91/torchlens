@@ -2916,6 +2916,29 @@ class Trace:
             return_graph=return_graph,
         )
 
+    def render_graph(self, *args: Any, **kwargs: Any) -> Any:
+        """Render the computational graph using the deprecated legacy name.
+
+        Parameters
+        ----------
+        *args:
+            Positional arguments forwarded to :meth:`draw`.
+        **kwargs:
+            Keyword arguments forwarded to :meth:`draw`.
+
+        Returns
+        -------
+        Any
+            The value returned by :meth:`draw`.
+        """
+
+        warnings.warn(
+            "Trace.render_graph() is deprecated; use Trace.draw() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.draw(*args, **kwargs)
+
     def add_node_overlay(
         self,
         scores: Mapping[str, Any],

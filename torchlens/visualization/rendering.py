@@ -32,6 +32,7 @@ Key mechanisms:
 """
 
 import copy
+import os
 import subprocess
 import sys
 import warnings
@@ -213,6 +214,39 @@ _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tra
 # Commutative functions: argument order doesn't matter, so we skip arg-position
 # labels on their incoming edges to reduce visual clutter.
 COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
+
+
+def _is_headless_linux() -> bool:
+    """Return whether the current process is a Linux shell without a display.
+
+    Returns
+    -------
+    bool
+        ``True`` when running on Linux with no ``DISPLAY`` environment
+        variable, which means Graphviz viewer dispatch would usually fall
+        through to a failing ``xdg-open`` call.
+    """
+
+    return sys.platform.startswith("linux") and not os.environ.get("DISPLAY")
+
+
+def _view_rendered_file(filepath: str) -> None:
+    """Open a rendered visualization file when a local viewer is available.
+
+    Parameters
+    ----------
+    filepath:
+        Rendered artifact path.
+    """
+
+    if _is_headless_linux():
+        print(f"[headless detected; saved to {filepath}; pass vis_save_only=False to force open]")
+        return
+
+    try:
+        graphviz.backend.viewing.view(filepath)
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        print(f"[viewer open failed; saved to {filepath}: {exc}]")
 
 
 def _normalize_buffer_visibility(
@@ -772,7 +806,7 @@ def draw(
             cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
             subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
             if not vis_save_only:
-                graphviz.backend.viewing.view(rendered_path)
+                _view_rendered_file(rendered_path)
         _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
     except subprocess.TimeoutExpired:
         warnings.warn(
@@ -974,7 +1008,7 @@ def render_backward_graph(
         cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
         subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
         if not vis_save_only:
-            graphviz.backend.viewing.view(rendered_path)
+            _view_rendered_file(rendered_path)
         _vprint(self, f"Backward graph saved to {vis_outpath}.{vis_fileformat}")
     except subprocess.TimeoutExpired:
         warnings.warn(
