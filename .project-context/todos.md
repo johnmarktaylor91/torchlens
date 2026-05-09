@@ -463,6 +463,77 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- `keep_orphans=True` flag to retain island ops for tracking
+  (raised 2026-05-09). Today `_remove_orphan_nodes` (postprocess
+  Step 3) flood-fills bidirectionally from input AND output and
+  removes any node unreachable from both. The surviving "orphans"
+  it purges are NOT input-connected dead ends (those are kept) —
+  they are TRUE islands: internally-generated subgraphs with no
+  input ancestry AND no output descendancy. Examples:
+  `_ = torch.arange(10).mean()` inside forward, scratch
+  `torch.eye(3) @ torch.eye(3)` arithmetic, discarded `torch.zeros`.
+  Almost always computational lint, not user-meaningful.
+
+  Niche debugging value: a user who expected an internal tensor
+  (e.g., `pos_emb = torch.arange(seq_len)` they forgot to add to
+  embeddings) to flow somewhere should be able to discover that
+  it ran but went nowhere. Today they get `trace.orphan_ops`
+  (label list); we can do better.
+
+  Proposed flag:
+
+  ```
+  trace = tl.trace(model, x, keep_orphans=True)
+  # or via the canonical capture options:
+  trace = tl.trace(model, x, capture=tl.CaptureOptions(keep_orphans=True))
+  ```
+
+  Default `False` (historical behavior; orphans are usually noise).
+  Opt-in `True` keeps orphans in the data with `is_orphan=True` flag
+  and a proper `trace.orphans` accessor (now trivial post-Phase-1
+  Accessor[T] base — ~10 lines).
+
+  Module attribution for orphans (the user's specific concern):
+  TorchLens has TWO attribution channels and only ONE is graph-
+  dependent.
+  - **At-execution-time** (`op.containing_modules`): captured when
+    the op fires, from the live `nn.Module` call stack. Doesn't
+    care about graph topology. Works for orphans created inside
+    a module's `forward()` -- attribution is correct.
+  - **Postprocess graph-walk fix-up** (`_fix_modules_for_internal_tensors`,
+    Step 6): infers module by walking descendants. Doesn't work for
+    islands. Skip explicitly when `keep_orphans=True`.
+
+  The honest gap: orphans created OUTSIDE any module forward (e.g.,
+  during model setup) have empty `containing_modules` because the
+  call stack was empty at execution time -- accurately reflecting
+  "this op wasn't called from any module."
+
+  Implementation shape (~half day):
+  1. `capture.keep_orphans: bool = False` in CaptureOptions.
+  2. `_remove_orphan_nodes` branches on flag: when True, set
+     `is_orphan=True` on raw nodes; keep them in `_raw_layer_dict`.
+  3. `_fix_modules_for_internal_tensors` skips orphans.
+  4. Downstream postprocess steps (loop detection, labeling,
+     finalization) explicitly exclude orphans from main-graph
+     operations -- they don't participate in loop grouping or
+     final-label renames.
+  5. Promote `trace.orphans` from label list to `Accessor[OpLog]`
+     (post-Phase-1 base makes this trivial).
+  6. Visualization: orphans hidden by default; `vis_show_orphans=True`
+     renders in distinct gray-dashed style so they're visually marked
+     as not-part-of-the-real-computation.
+  7. Validation: skip orphans by default; `validate(..., include_orphans=True)`
+     opts in.
+  8. Save/load: `is_orphan` round-trips via PORTABLE_STATE_SPEC.
+     Orphan tensors obey the same `layers_to_save` / streaming rules
+     as anything else; if memory becomes a concern, a future
+     `save_orphans=False` knob can split storage from existence.
+
+  Slot in after Phase 8 of the super-family-sprint (post-hygiene)
+  or as a small standalone PR. Bounded; uses Phase 1's Accessor[T]
+  base; no architectural risk.
+
 - Comprehensive naming pass before TorchLens 2.0 marketing push
   (raised 2026-05-09). Pinning the rule from the morning naming
   riff: every public name has to pass the read-aloud test. Anything
