@@ -3850,7 +3850,12 @@ class Trace:
 
         from ..intervention.rerun import rerun as _impl
 
-        return _impl(self, rerun_model, transformed_input, replay=replay_options)
+        result = _impl(self, rerun_model, transformed_input, replay=replay_options)
+        # Atomic swap rebuilds Trace state; restore raw_input to the new
+        # user-supplied value so visualization / save-load report the
+        # current input rather than the prior trace's.
+        result.raw_input = user_input
+        return result
 
     def _apply_rerun_transform(
         self,
