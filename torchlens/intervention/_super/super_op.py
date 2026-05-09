@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from ._super_accessor_base import SuperAccessor
-from ._super_base import Super, _TensorBearing
+from ._accessor_base import SuperAccessor
+from ._base import Super, _TensorBearing
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ..data_classes.layer_log import LayerLog
-    from ..data_classes.op_log import OpLog
-    from .topology import SupergraphNode
+    from ...data_classes.layer_log import LayerLog
+    from ...data_classes.op_log import OpLog
+    from .._topology.topology import SupergraphNode
 
 
 class SuperOp(Super["OpLog"], _TensorBearing):

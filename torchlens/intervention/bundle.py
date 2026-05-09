@@ -10,14 +10,14 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import torch
 
 from .._run_state import RunState
-from ..multi_trace.metrics import is_scalar_like, relative_l1_scalar, resolve_metric
-from ..multi_trace.super_op import (
+from ._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from ._super.super_op import (
     SuperLayerAccessor,
     SuperOp,
     SuperOpAccessor,
     TraceAccessor,
 )
-from ..multi_trace.topology import Supergraph, build_supergraph
+from ._topology.topology import Supergraph, build_supergraph
 from .errors import (
     BaselineUndeterminedError,
     BundleMemberError,
@@ -1260,7 +1260,7 @@ def _bundle_delta_map(
     Parameters
     ----------
     metric:
-        Metric name from ``torchlens.multi_trace.metrics`` or a callable.
+        Metric name from ``torchlens.intervention._metrics`` or a callable.
     baseline:
         Baseline member name or log. Defaults to the configured baseline, then
         the first member.

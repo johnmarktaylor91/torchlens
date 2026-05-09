@@ -6,7 +6,7 @@ from typing import Any, Callable, Generic, Literal, TypeVar, cast
 
 import torch
 
-from .metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from .._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
 
 T = TypeVar("T")
 S = TypeVar("S", bound="Super[Any]")

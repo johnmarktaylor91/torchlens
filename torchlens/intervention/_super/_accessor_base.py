@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any, Generic, TypeVar
 
-from ._super_base import Super
+from ._base import Super
 
 T = TypeVar("T")
 S = TypeVar("S", bound=Super[Any])
