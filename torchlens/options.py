@@ -34,6 +34,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "layers_to_save",
     "transform",
     "save_raw_input",
+    "batch_render",
     "output_transform",
     "save_raw_output",
     "layer_visualizers",
@@ -131,6 +132,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
     "transform": "transform",
     "save_raw_input": "save_raw_input",
+    "batch_render": "batch_render",
     "output_transform": "output_transform",
     "save_raw_output": "save_raw_output",
     "layer_visualizers": "layer_visualizers",
@@ -536,6 +538,10 @@ class CaptureOptions:
         Raw user-input save policy for portable bundles. ``"small"`` stores a
         bounded representation, ``True`` stores the full object, and ``False``
         drops it when saving.
+    batch_render:
+        Raw-input batch rendering policy for visualization. Supported values are
+        ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
+        ``"shape_only"``.
     output_transform:
         Optional callable applied once to the model output after ``model.forward``.
     save_raw_output:
@@ -611,6 +617,7 @@ class CaptureOptions:
     layers_to_save: str | list[Any] | None = "all"
     transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
+    batch_render: str = "auto"
     output_transform: Callable[[Any], Any] | None = None
     save_raw_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
@@ -648,6 +655,7 @@ class CaptureOptions:
         layers_to_save: str | list[Any] | None | MissingType = MISSING,
         transform: Callable[[Any], Any] | None | MissingType = MISSING,
         save_raw_input: str | bool | MissingType = MISSING,
+        batch_render: str | MissingType = MISSING,
         output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
         save_raw_output: str | bool | MissingType = MISSING,
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None | MissingType = MISSING,
@@ -707,6 +715,9 @@ class CaptureOptions:
             "transform": _resolve_option_value("transform", transform, None, specified_fields),
             "save_raw_input": _resolve_option_value(
                 "save_raw_input", save_raw_input, "small", specified_fields
+            ),
+            "batch_render": _resolve_option_value(
+                "batch_render", batch_render, "auto", specified_fields
             ),
             "output_transform": _resolve_option_value(
                 "output_transform", output_transform, None, specified_fields

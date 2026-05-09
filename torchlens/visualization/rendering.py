@@ -35,9 +35,12 @@ import copy
 import os
 import subprocess
 import sys
+import tempfile
 import warnings
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -54,6 +57,7 @@ from typing import (
 
 import graphviz
 import torch
+from PIL import Image
 
 from .._literals import (
     BufferVisibilityLiteral,
@@ -68,6 +72,7 @@ from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
 from ..data_classes.op_log import OpLog
 from ..data_classes.layer_log import LayerLog
+from ..viz import batch_summary
 from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
 from .node_spec import (
     INTERVENTION_HOOK_BORDER_COLOR,
@@ -1889,7 +1894,11 @@ def _build_layer_node(
     # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
     node_args = _node_spec_to_graphviz_args(spec)
     if node.is_input:
-        raw_input_attrs = _render_raw_input(getattr(self, "raw_input", None))
+        raw_input_attrs = _render_raw_input(
+            self,
+            getattr(self, "raw_input", None),
+            batch_render=getattr(self, "batch_render", "auto"),
+        )
         if raw_input_attrs is not None:
             node_args.update(raw_input_attrs)
     elif node.is_output:
@@ -1918,13 +1927,22 @@ def _build_layer_node(
     return node_color
 
 
-def _render_raw_input(value: Any) -> dict[str, str] | None:
+def _render_raw_input(
+    trace: "Trace",
+    value: Any,
+    *,
+    batch_render: str = "auto",
+) -> dict[str, str] | None:
     """Return Graphviz attributes for a renderable raw input value.
 
     Parameters
     ----------
+    trace:
+        Trace that owns the rendered input node.
     value:
         Raw user input stored on the owning ``Trace``.
+    batch_render:
+        Batch rendering policy.
 
     Returns
     -------
@@ -1933,13 +1951,264 @@ def _render_raw_input(value: Any) -> dict[str, str] | None:
         default tensor-shape rendering should be used.
     """
 
+    max_items = _batch_render_limit(batch_render)
+    if max_items == 0:
+        return None
     if isinstance(value, str):
         text = _truncate_raw_input_text(value, limit=80)
         return {
             "label": render_lines_to_html(["input", text]),
             "tooltip": value,
         }
+    include_more = batch_render != "first"
+    if isinstance(value, torch.Tensor):
+        return _render_raw_input_tensor_batch(
+            trace,
+            value,
+            max_items=max_items,
+            include_more=include_more,
+        )
+    sequence = _raw_input_sequence(value)
+    if sequence is None:
+        return None
+    if len(sequence) == 1:
+        return _render_raw_input(trace, sequence[0], batch_render="first")
+    if all(isinstance(item, str) for item in sequence):
+        strings = cast(Sequence[str], sequence)
+        if not include_more:
+            strings = strings[:max_items]
+        return {
+            "label": batch_summary.text_table(strings, max_items),
+            "tooltip": repr(strings),
+        }
+    if all(isinstance(item, Image.Image) for item in sequence):
+        images = cast(Sequence[Image.Image], sequence)
+        total = len(images) if include_more else min(len(images), max_items)
+        return _render_raw_input_image_batch(trace, images, max_items=max_items, total=total)
     return None
+
+
+def _batch_render_limit(batch_render: str) -> int:
+    """Return the maximum number of raw-input batch items to render.
+
+    Parameters
+    ----------
+    batch_render:
+        Batch rendering policy string.
+
+    Returns
+    -------
+    int
+        Maximum number of items to render; zero means shape-only fallback.
+
+    Raises
+    ------
+    ValueError
+        If ``batch_render`` is unsupported.
+    """
+
+    if batch_render == "auto":
+        return 4
+    if batch_render == "all":
+        return 16
+    if batch_render == "first":
+        return 1
+    if batch_render == "shape_only":
+        return 0
+    if batch_render.startswith("first_n:"):
+        raw_n = batch_render.removeprefix("first_n:")
+        try:
+            n_items = int(raw_n)
+        except ValueError as exc:
+            raise ValueError("batch_render first_n value must be an integer.") from exc
+        if n_items < 1:
+            raise ValueError("batch_render first_n value must be at least 1.")
+        return min(n_items, 16)
+    raise ValueError("batch_render must be 'auto', 'all', 'first', 'first_n:<N>', or 'shape_only'.")
+
+
+def _raw_input_sequence(value: Any) -> Sequence[Any] | None:
+    """Return a concrete raw-input sequence when ``value`` is a batch container.
+
+    Parameters
+    ----------
+    value:
+        Candidate raw input.
+
+    Returns
+    -------
+    Sequence[Any] | None
+        Concrete sequence for batch rendering, or ``None`` for fallback.
+    """
+
+    if isinstance(value, str | bytes | bytearray | Mapping):
+        return None
+    if isinstance(value, Sequence):
+        return value
+    if isinstance(value, Iterable) and hasattr(value, "__len__"):
+        return tuple(value)
+    return None
+
+
+def _render_raw_input_tensor_batch(
+    trace: "Trace",
+    tensor: torch.Tensor,
+    *,
+    max_items: int,
+    include_more: bool,
+) -> dict[str, str] | None:
+    """Return render attributes for a batched raw-input tensor.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the rendered input node.
+    tensor:
+        Candidate raw-input tensor.
+    max_items:
+        Maximum number of batch items to render.
+    include_more:
+        Whether to annotate hidden batch items.
+
+    Returns
+    -------
+    dict[str, str] | None
+        Graphviz attributes or ``None`` for shape fallback.
+    """
+
+    if tensor.dim() < 2 or int(tensor.shape[0]) <= 1:
+        return None
+    images = _tensor_batch_to_images(tensor, max_items=max_items)
+    if images is None:
+        return None
+    return _render_raw_input_image_batch(
+        trace,
+        images,
+        max_items=max_items,
+        total=int(tensor.shape[0]) if include_more else len(images),
+    )
+
+
+def _render_raw_input_image_batch(
+    trace: "Trace",
+    images: Sequence[Image.Image],
+    *,
+    max_items: int,
+    total: int,
+) -> dict[str, str] | None:
+    """Return Graphviz attributes for a PIL image batch.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the rendered input node.
+    images:
+        PIL images to summarize.
+    max_items:
+        Maximum number of images to render.
+    total:
+        Total batch size before sampling.
+
+    Returns
+    -------
+    dict[str, str] | None
+        Graphviz attributes or ``None`` for shape fallback.
+    """
+
+    if not images:
+        return None
+    image_dir = _raw_input_visualizer_dir(trace)
+    image_path = image_dir / "input_batch_montage.png"
+    batch_summary.montage(images, max_items).save(image_path)
+    label_lines = ["input"]
+    more_count = total - min(total, max_items)
+    if more_count > 0:
+        label_lines.append(f"+{more_count} more")
+    return {
+        "image": str(image_path),
+        "imagescale": "true",
+        "label": render_lines_to_html(label_lines),
+        "labelloc": "b",
+        "shape": "none",
+        "tooltip": f"{total} input images",
+    }
+
+
+def _raw_input_visualizer_dir(trace: "Trace") -> Path:
+    """Return a directory for raw-input visualization artifacts.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the rendered input node.
+
+    Returns
+    -------
+    Path
+        Directory where image artifacts can be written.
+    """
+
+    output_dir = getattr(trace, "_visualizer_dir", None)
+    if output_dir is None:
+        output_dir = tempfile.mkdtemp(prefix="torchlens_visualizers_")
+        trace._visualizer_dir = str(output_dir)
+    input_dir = Path(output_dir) / "raw_inputs"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    return input_dir
+
+
+def _tensor_batch_to_images(tensor: torch.Tensor, *, max_items: int) -> list[Image.Image] | None:
+    """Convert a 4D image tensor batch into PIL images.
+
+    Parameters
+    ----------
+    tensor:
+        Candidate tensor with shape ``(B, C, H, W)``.
+    max_items:
+        Maximum number of batch items to convert.
+
+    Returns
+    -------
+    list[Image.Image] | None
+        Converted images, or ``None`` for non-image tensors.
+    """
+
+    if tensor.dim() != 4 or int(tensor.shape[1]) not in {1, 3}:
+        return None
+    shown = tensor.detach().cpu()[:max_items].float()
+    images = []
+    for item in shown:
+        item = _normalize_image_tensor(item)
+        if item.shape[0] == 1:
+            array = (item.squeeze(0).numpy() * 255).astype("uint8")
+            images.append(Image.fromarray(array, mode="L").convert("RGB"))
+        else:
+            array = (item.permute(1, 2, 0).numpy() * 255).astype("uint8")
+            images.append(Image.fromarray(array, mode="RGB"))
+    return images
+
+
+def _normalize_image_tensor(tensor: torch.Tensor) -> torch.Tensor:
+    """Normalize an image tensor into the ``[0, 1]`` display range.
+
+    Parameters
+    ----------
+    tensor:
+        Image tensor with shape ``(C, H, W)``.
+
+    Returns
+    -------
+    torch.Tensor
+        Float tensor clipped or min-max normalized to ``[0, 1]``.
+    """
+
+    if float(tensor.min()) >= 0.0 and float(tensor.max()) <= 1.0:
+        return tensor.clamp(0.0, 1.0)
+    min_value = tensor.min()
+    max_value = tensor.max()
+    if bool(torch.isclose(max_value, min_value)):
+        return torch.zeros_like(tensor)
+    return ((tensor - min_value) / (max_value - min_value)).clamp(0.0, 1.0)
 
 
 def _render_raw_output(value: Any) -> dict[str, str] | None:

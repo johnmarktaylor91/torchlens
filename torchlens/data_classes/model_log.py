@@ -133,6 +133,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "raw_input": None,
     "_transform": None,
     "save_raw_input": "small",
+    "batch_render": "auto",
     "raw_output": None,
     "_output_transform": None,
     "save_raw_output": "small",
@@ -641,6 +642,7 @@ class Trace:
         "raw_input": FieldPolicy.KEEP,
         "_transform": FieldPolicy.DROP,
         "save_raw_input": FieldPolicy.KEEP,
+        "batch_render": FieldPolicy.KEEP,
         "raw_output": FieldPolicy.KEEP,
         "_output_transform": FieldPolicy.DROP,
         "save_raw_output": FieldPolicy.KEEP,
@@ -824,6 +826,7 @@ class Trace:
         transform: Callable[[Any], Any] | None = None,
         raw_input: Any | None = None,
         save_raw_input: str | bool = "small",
+        batch_render: str = "auto",
         output_transform: Callable[[Any], Any] | None = None,
         raw_output: Any | None = None,
         save_raw_output: str | bool = "small",
@@ -861,6 +864,7 @@ class Trace:
                 model-ready input.
             raw_input: Original user input before ``transform`` was applied.
             save_raw_input: Portable save policy for ``raw_input``.
+            batch_render: Raw-input batch rendering policy for visualization.
             output_transform: Optional callable used to convert model output into
                 human-readable metadata.
             raw_output: Human-readable model output after ``output_transform``.
@@ -894,6 +898,7 @@ class Trace:
         self.raw_input = raw_input
         self._transform = transform
         self.save_raw_input = save_raw_input
+        self.batch_render = batch_render
         self.raw_output = raw_output
         self._output_transform = output_transform
         self.save_raw_output = save_raw_output
@@ -2400,6 +2405,7 @@ class Trace:
             "_intervention_spec",
             "_transform",
             "save_raw_input",
+            "batch_render",
             "_output_transform",
             "save_raw_output",
             "ledger",

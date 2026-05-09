@@ -46,6 +46,7 @@ MODEL_LOG_FIELD_ORDER = [
     "raw_input",
     "_transform",
     "save_raw_input",
+    "batch_render",
     "raw_output",
     "_output_transform",
     "save_raw_output",

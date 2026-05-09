@@ -9,9 +9,17 @@ from typing import Any
 import torch
 from PIL import Image, ImageDraw
 
+from . import batch_summary
 from ..visualization.bundle_diff import bundle_diff
 
-__all__ = ["bundle_diff", "causal_trace_heatmap", "channel_grid", "heatmap", "histogram"]
+__all__ = [
+    "batch_summary",
+    "bundle_diff",
+    "causal_trace_heatmap",
+    "channel_grid",
+    "heatmap",
+    "histogram",
+]
 
 _HEATMAP_COLORS = (
     (68, 1, 84),

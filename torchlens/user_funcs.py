@@ -719,6 +719,7 @@ def _run_model_and_save_specified_outs(
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",
+    batch_render: str = "auto",
     output_transform: Callable[[Any], Any] | None = None,
     save_raw_output: str | bool = "small",
     layer_visualizers: dict[Any, Callable[..., Any]] | None = None,
@@ -791,6 +792,7 @@ def _run_model_and_save_specified_outs(
         transform: Optional callable used to produce model-ready inputs from raw user input.
         raw_input: Original user input before ``transform`` was applied.
         save_raw_input: Portable save policy for the original raw input.
+        batch_render: Raw-input batch rendering policy for visualization.
         output_transform: Optional callable used to produce human-readable
             output metadata from model output.
         save_raw_output: Portable save policy for the transformed raw output.
@@ -855,6 +857,7 @@ def _run_model_and_save_specified_outs(
         transform=transform,
         raw_input=raw_input,
         save_raw_input=save_raw_input,
+        batch_render=batch_render,
         output_transform=output_transform,
         save_raw_output=save_raw_output,
         layer_visualizers=layer_visualizers,
@@ -1001,6 +1004,7 @@ def trace(
     layers_to_save: str | list[Any] | None | MissingType = MISSING,
     transform: Callable[[Any], Any] | None | MissingType = MISSING,
     save_raw_input: str | bool | MissingType = MISSING,
+    batch_render: str | MissingType = MISSING,
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
     save_raw_output: str | bool | MissingType = MISSING,
     layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType = MISSING,
@@ -1106,6 +1110,9 @@ def trace(
             model with ``**transformed``.
         save_raw_input: Raw user-input save policy for portable bundles:
             ``"small"`` (default), ``True``, or ``False``.
+        batch_render: Raw-input batch rendering policy for visualization:
+            ``"auto"`` (default), ``"all"``, ``"first"``, ``"first_n:<N>"``,
+            or ``"shape_only"``.
         output_transform: Optional callable applied once to the model output
             after ``model.forward``. The returned value is stored as
             ``Trace.raw_output`` and does not affect the computational graph.
@@ -1263,6 +1270,7 @@ def trace(
         layers_to_save=layers_to_save,
         transform=transform,
         save_raw_input=save_raw_input,
+        batch_render=batch_render,
         output_transform=output_transform,
         save_raw_output=save_raw_output,
         layer_visualizers=layer_visualizers,
@@ -1351,6 +1359,7 @@ def trace(
     )
     layers_to_save = capture_options.layers_to_save
     save_raw_input_policy = capture_options.save_raw_input
+    batch_render_policy = capture_options.batch_render
     output_transform_value = capture_options.output_transform
     save_raw_output_policy = capture_options.save_raw_output
     layer_visualizers_value = capture_options.layer_visualizers
@@ -1475,6 +1484,7 @@ def trace(
             cached_log.capture_cache_hit = True
             cached_log.capture_cache_key = cache_key
             cached_log.capture_cache_path = str(cache_path)
+            cached_log.batch_render = batch_render_policy
             return cached_log
     if streaming_options.bundle_path is not None and uses_two_pass:
         raise TorchLensIOError(
@@ -1533,6 +1543,7 @@ def trace(
             transform=input_transform,
             raw_input=raw_input,
             save_raw_input=save_raw_input_policy,
+            batch_render=batch_render_policy,
             output_transform=output_transform_value,
             save_raw_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
@@ -1592,6 +1603,7 @@ def trace(
             transform=input_transform,
             raw_input=raw_input,
             save_raw_input=save_raw_input_policy,
+            batch_render=batch_render_policy,
             output_transform=output_transform_value,
             save_raw_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
