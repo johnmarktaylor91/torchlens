@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
+import re
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
@@ -59,12 +60,32 @@ _REQUIRED_RELATIONSHIPS: dict[str, Relationship] = {
     "diff": Relationship.SHARED_GRAPH_SAME_INPUT,
 }
 
+_OP_LABEL_RE = re.compile(r"^.+_\d+_\d+$")
+_BARE_LAYER_LABEL_RE = re.compile(r"^.+_\d+$")
+_PASS_CALL_RE = re.compile(r"^(.+):(\d+)$")
+_COMMON_PARAM_SUFFIXES = (".weight", ".bias")
+_COMMON_BUFFER_SUFFIXES = (".running_mean", ".running_var", ".num_batches_tracked")
+_BUNDLE_ACCESSOR_NAMES = (
+    "ops",
+    "layers",
+    "modules",
+    "params",
+    "buffers",
+    "grad_fns",
+    "module_calls",
+    "grad_fn_calls",
+)
+
+
+class AmbiguousLabelError(KeyError):
+    """Raised when ``Bundle.at`` finds a label in multiple accessors."""
+
 
 class _BundleAccessorClassView:
     """Class-level placeholder for Bundle accessor properties."""
 
 
-class _BundleAccessorProperty(property):
+class _BundleAccessorProperty:
     """Property that exposes Bundle accessors without inflating method counts."""
 
     def __init__(self, accessor_cls: type[Any]) -> None:
@@ -76,11 +97,14 @@ class _BundleAccessorProperty(property):
             Accessor class to instantiate for Bundle instances.
         """
 
-        super().__init__()
         self._accessor_cls = accessor_cls
         self._class_view = _BundleAccessorClassView()
 
-    def __get__(self, instance: "Bundle | None", owner: type["Bundle"]) -> Any:
+    def __get__(
+        self,
+        instance: "Bundle | None",
+        owner: type["Bundle"] | None = None,
+    ) -> Any:
         """Return a class view or an accessor on instances.
 
         Parameters
@@ -560,23 +584,302 @@ class Bundle:
             raise BundleMemberError(f"site {site!r} failed to resolve for bundle members: {detail}")
         return SuperOp.from_members(site, layer_members)
 
-    def at(self, label: str) -> SuperOp | Any:
-        """Return a cross-member view by label.
+    def at(self, label: str) -> Any:
+        """Return the matching cross-member Super view for ``label``.
 
         Parameters
         ----------
         label:
-            Pass-qualified Op label or aggregate Layer label.
+            Label from any Bundle accessor family.
 
         Returns
         -------
-        SuperOp | Any
-            Op view for pass-qualified labels, otherwise Layer view.
+        Any
+            Matching ``Super*`` view.
+
+        Raises
+        ------
+        AmbiguousLabelError
+            If an unrecognized-format label is present in multiple accessors.
+        KeyError
+            If the label is absent from every accessor.
+        TypeError
+            If ``label`` is not a string.
+        """
+
+        if not isinstance(label, str):
+            raise TypeError(f"Bundle.at labels must be strings, got {type(label).__name__}.")
+
+        preferred_names = self._preferred_accessor_names(label)
+        for accessor_name in preferred_names:
+            try:
+                return self._accessor_by_name(accessor_name)[label]
+            except KeyError:
+                continue
+
+        remaining_names = [
+            accessor_name
+            for accessor_name in _BUNDLE_ACCESSOR_NAMES
+            if accessor_name not in preferred_names
+        ]
+        matches = self._matching_accessor_names(label, remaining_names)
+        if len(matches) == 1:
+            return self._accessor_by_name(matches[0])[label]
+        if len(matches) > 1:
+            raise AmbiguousLabelError(self._ambiguous_label_message(label, matches))
+        raise KeyError(self._missing_label_message(label))
+
+    def _accessor_by_name(self, accessor_name: str) -> Any:
+        """Return one label accessor by public Bundle attribute name.
+
+        Parameters
+        ----------
+        accessor_name:
+            Accessor attribute name.
+
+        Returns
+        -------
+        Any
+            Accessor object.
+        """
+
+        return getattr(self, accessor_name)
+
+    def _preferred_accessor_names(self, label: str) -> list[str]:
+        """Return format-preferred accessors for ``label`` in dispatch order.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+
+        Returns
+        -------
+        list[str]
+            Accessor names to try before key-presence fallback.
+        """
+
+        call_base = self._pass_call_base(label)
+        if call_base is not None:
+            if self._looks_like_pass_qualified_op_label(call_base):
+                return ["ops"]
+            if self._looks_like_grad_fn_label(call_base):
+                return ["grad_fn_calls"]
+            return ["module_calls"]
+
+        if self._looks_like_pass_qualified_op_label(label):
+            return ["ops"]
+        if self._looks_like_bare_layer_label(label):
+            return ["layers"]
+        if self._looks_like_module_address(label):
+            return ["modules"]
+        if self._looks_like_param_name(label):
+            return ["params"]
+        if self._looks_like_buffer_name(label):
+            return ["buffers"]
+        if self._looks_like_grad_fn_label(label):
+            return ["grad_fns"]
+        return []
+
+    def _matching_accessor_names(
+        self,
+        label: str,
+        accessor_names: Sequence[str],
+    ) -> list[str]:
+        """Return accessors that contain ``label``.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+        accessor_names:
+            Accessor names to inspect.
+
+        Returns
+        -------
+        list[str]
+            Public accessor names where ``label`` resolves.
+        """
+
+        matches: list[str] = []
+        for accessor_name in accessor_names:
+            accessor = self._accessor_by_name(accessor_name)
+            if label in accessor:
+                matches.append(accessor_name)
+        return matches
+
+    def _missing_label_message(self, label: str) -> str:
+        """Build a missing-label error message with accessor suggestions.
+
+        Parameters
+        ----------
+        label:
+            Missing label.
+
+        Returns
+        -------
+        str
+            Error message.
+        """
+
+        suggestions: list[str] = []
+        seen: set[str] = set()
+        for accessor_name in _BUNDLE_ACCESSOR_NAMES:
+            accessor = self._accessor_by_name(accessor_name)
+            for suggestion in accessor._suggest(label):
+                if suggestion not in seen:
+                    seen.add(suggestion)
+                    suggestions.append(suggestion)
+        if suggestions:
+            suggestion_str = ", ".join(repr(suggestion) for suggestion in suggestions)
+            return f"Label {label!r} not found. Did you mean {suggestion_str}?"
+        return f"Label {label!r} not found."
+
+    def _ambiguous_label_message(self, label: str, matches: Sequence[str]) -> str:
+        """Build an ambiguity error message for ``Bundle.at``.
+
+        Parameters
+        ----------
+        label:
+            Ambiguous label.
+        matches:
+            Public accessor names that contain the label.
+
+        Returns
+        -------
+        str
+            Error message.
+        """
+
+        match_str = " and ".join(f"bundle.{name}" for name in matches)
+        disambiguators = " or ".join(f"bundle.{name}[{label!r}]" for name in matches)
+        return f"Label {label!r} matches {match_str}; use {disambiguators} explicitly."
+
+    @staticmethod
+    def _pass_call_base(label: str) -> str | None:
+        """Return the base label for ``base:N`` call labels.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+
+        Returns
+        -------
+        str | None
+            Base label when ``label`` has a numeric call suffix.
+        """
+
+        match = _PASS_CALL_RE.match(label)
+        return match.group(1) if match is not None else None
+
+    @staticmethod
+    def _looks_like_pass_qualified_op_label(label: str) -> bool:
+        """Return whether ``label`` has pass-qualified op label shape.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+
+        Returns
+        -------
+        bool
+            Whether the label resembles ``op_type_group_pass``.
+        """
+
+        return _OP_LABEL_RE.match(label) is not None
+
+    @staticmethod
+    def _looks_like_bare_layer_label(label: str) -> bool:
+        """Return whether ``label`` has aggregate layer label shape.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+
+        Returns
+        -------
+        bool
+            Whether the label resembles ``op_type_group`` but not an op label.
+        """
+
+        return _BARE_LAYER_LABEL_RE.match(label) is not None and _OP_LABEL_RE.match(label) is None
+
+    @staticmethod
+    def _looks_like_module_address(label: str) -> bool:
+        """Return whether ``label`` resembles a module address.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+
+        Returns
+        -------
+        bool
+            Whether the label has dotted or numeric module-address shape.
         """
 
         if ":" in label:
-            return self.ops[label]
-        return self.layers[label]
+            return False
+        if label.isdecimal():
+            return True
+        return "." in label and not (
+            label.endswith(_COMMON_PARAM_SUFFIXES) or label.endswith(_COMMON_BUFFER_SUFFIXES)
+        )
+
+    @staticmethod
+    def _looks_like_param_name(label: str) -> bool:
+        """Return whether ``label`` resembles a parameter path.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+
+        Returns
+        -------
+        bool
+            Whether the label has a common parameter suffix.
+        """
+
+        return label.endswith(_COMMON_PARAM_SUFFIXES)
+
+    @staticmethod
+    def _looks_like_buffer_name(label: str) -> bool:
+        """Return whether ``label`` resembles a buffer path.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+
+        Returns
+        -------
+        bool
+            Whether the label has a common buffer suffix.
+        """
+
+        return label.endswith(_COMMON_BUFFER_SUFFIXES)
+
+    @staticmethod
+    def _looks_like_grad_fn_label(label: str) -> bool:
+        """Return whether ``label`` resembles a grad-fn label.
+
+        Parameters
+        ----------
+        label:
+            Candidate label.
+
+        Returns
+        -------
+        bool
+            Whether the label has TorchLens backward grad-fn label shape.
+        """
+
+        return "_back_" in label
 
     def add(self, log: "Trace", name: str | None = None) -> "Bundle":
         """Add one member log and invalidate the cached supergraph.
@@ -1921,4 +2224,4 @@ def _bundle_show_diff(
     return bundle_diff(self, metric=metric, layout=layout, **kwargs)
 
 
-__all__ = ["Bundle"]
+__all__ = ["AmbiguousLabelError", "Bundle"]
