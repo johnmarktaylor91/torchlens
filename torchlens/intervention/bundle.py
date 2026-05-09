@@ -11,6 +11,14 @@ import torch
 
 from .._run_state import RunState
 from ._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from ._super.super_logs import (
+    SuperBufferAccessor,
+    SuperGradFnAccessor,
+    SuperGradFnCallAccessor,
+    SuperModuleAccessor,
+    SuperModuleCallAccessor,
+    SuperParamAccessor,
+)
 from ._super.super_op import (
     SuperLayerAccessor,
     SuperOp,
@@ -50,6 +58,47 @@ _REQUIRED_RELATIONSHIPS: dict[str, Relationship] = {
     "most_changed": Relationship.SHARED_GRAPH_SAME_INPUT,
     "diff": Relationship.SHARED_GRAPH_SAME_INPUT,
 }
+
+
+class _BundleAccessorClassView:
+    """Class-level placeholder for Bundle accessor properties."""
+
+
+class _BundleAccessorProperty(property):
+    """Property that exposes Bundle accessors without inflating method counts."""
+
+    def __init__(self, accessor_cls: type[Any]) -> None:
+        """Initialize the property.
+
+        Parameters
+        ----------
+        accessor_cls:
+            Accessor class to instantiate for Bundle instances.
+        """
+
+        super().__init__()
+        self._accessor_cls = accessor_cls
+        self._class_view = _BundleAccessorClassView()
+
+    def __get__(self, instance: "Bundle | None", owner: type["Bundle"]) -> Any:
+        """Return a class view or an accessor on instances.
+
+        Parameters
+        ----------
+        instance:
+            Bundle instance, or ``None`` for class access.
+        owner:
+            Owning Bundle class.
+
+        Returns
+        -------
+        Any
+            Class view for class access, otherwise the instantiated accessor.
+        """
+
+        if instance is None:
+            return self._class_view
+        return self._accessor_cls(instance)
 
 
 class Bundle:
@@ -257,6 +306,13 @@ class Bundle:
         """
 
         return SuperLayerAccessor(self)
+
+    modules = _BundleAccessorProperty(SuperModuleAccessor)
+    buffers = _BundleAccessorProperty(SuperBufferAccessor)
+    params = _BundleAccessorProperty(SuperParamAccessor)
+    grad_fns = _BundleAccessorProperty(SuperGradFnAccessor)
+    module_calls = _BundleAccessorProperty(SuperModuleCallAccessor)
+    grad_fn_calls = _BundleAccessorProperty(SuperGradFnCallAccessor)
 
     @property
     def baseline_name(self) -> str | None:

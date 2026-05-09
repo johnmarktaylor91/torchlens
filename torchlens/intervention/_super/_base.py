@@ -353,14 +353,33 @@ class _TensorBearing:
 
         output: dict[str, torch.Tensor | None] = {}
         for name, member in self._members.items():
-            if field == "out":
-                has_value = getattr(member, "has_saved_outs", False)
-                value = getattr(member, "out", None) if has_value else None
-            else:
-                has_value = getattr(member, "has_grad", False)
-                value = getattr(member, "grad", None) if has_value else None
+            value = self._get_tensor(member, field)
             output[name] = value if isinstance(value, torch.Tensor) else None
         return output
+
+    def _get_tensor(self, member: Any, field: _TENSOR_FIELD_LITERAL) -> torch.Tensor | None:
+        """Return one tensor-bearing field from ``member``.
+
+        Parameters
+        ----------
+        member:
+            Tensor-bearing member object.
+        field:
+            Tensor field to collect.
+
+        Returns
+        -------
+        torch.Tensor | None
+            Tensor value when available.
+        """
+
+        if field == "out":
+            has_value = getattr(member, "has_saved_outs", False)
+            value = getattr(member, "out", None) if has_value else None
+        else:
+            has_value = getattr(member, "has_grad", False)
+            value = getattr(member, "grad", None) if has_value else None
+        return value if isinstance(value, torch.Tensor) else None
 
     def _stacked(self, field: _TENSOR_FIELD_LITERAL) -> torch.Tensor:
         """Stack or concatenate a tensor field across members.
