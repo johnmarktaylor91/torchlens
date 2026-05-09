@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from ._super_accessor_base import SuperAccessor
 from ._super_base import Super, _TensorBearing
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
+    from ..data_classes.layer_log import LayerLog
     from ..data_classes.op_log import OpLog
     from .topology import SupergraphNode
 
@@ -77,68 +79,7 @@ class SuperLayer(SuperOp):
     """View of a single aggregate layer label across all bundle members."""
 
 
-class _BundleLabelAccessor:
-    """Dict-like accessor for cross-member bundle labels."""
-
-    def __init__(self, bundle: Any, *, pass_qualified: bool) -> None:
-        """Initialize a bundle label accessor.
-
-        Parameters
-        ----------
-        bundle:
-            Bundle instance that owns the member traces.
-        pass_qualified:
-            Whether this accessor resolves pass-qualified Op labels.
-        """
-
-        self._bundle = bundle
-        self._pass_qualified = pass_qualified
-
-    def __getitem__(self, label: str) -> SuperOp | SuperLayer:
-        """Return a cross-member view for ``label``.
-
-        Parameters
-        ----------
-        label:
-            Layer or Op label to resolve in each bundle member.
-
-        Returns
-        -------
-        SuperOp | SuperLayer
-            Cross-member view.
-        """
-
-        members: dict[str, Any] = {}
-        for name, trace in self._bundle.members.items():
-            members[name] = trace.layers[label]
-        if self._pass_qualified:
-            return SuperOp.from_members(label, members)
-        return SuperLayer.from_members(label, members)
-
-    def __contains__(self, label: object) -> bool:
-        """Return whether every member contains ``label``.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        bool
-            Whether the label resolves in every member.
-        """
-
-        if not isinstance(label, str):
-            return False
-        try:
-            self[label]
-        except (KeyError, ValueError):
-            return False
-        return True
-
-
-class SuperOpAccessor(_BundleLabelAccessor):
+class SuperOpAccessor(SuperAccessor["OpLog", SuperOp]):
     """Dict-like Bundle accessor returning SuperOp objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -150,10 +91,35 @@ class SuperOpAccessor(_BundleLabelAccessor):
             Bundle instance.
         """
 
-        super().__init__(bundle, pass_qualified=True)
+        super().__init__(bundle, super_cls=SuperOp)
+
+    def _resolve_in_member(self, trace: Any, label: str) -> OpLog | None:
+        """Resolve ``label`` to an OpLog within one member trace.
+
+        Parameters
+        ----------
+        trace:
+            Bundle member trace.
+        label:
+            Candidate Op label.
+
+        Returns
+        -------
+        OpLog | None
+            Matching OpLog, or ``None`` when unresolved.
+        """
+        try:
+            resolved = trace.layers[label]
+        except (KeyError, ValueError):
+            return None
+        if type(resolved).__name__ == "OpLog":
+            return cast("OpLog", resolved)
+        if type(resolved).__name__ == "LayerLog" and len(resolved.ops) == 1:
+            return cast("OpLog", resolved.ops[1])
+        return None
 
 
-class SuperLayerAccessor(_BundleLabelAccessor):
+class SuperLayerAccessor(SuperAccessor["LayerLog", SuperLayer]):
     """Dict-like Bundle accessor returning SuperLayer objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -165,7 +131,28 @@ class SuperLayerAccessor(_BundleLabelAccessor):
             Bundle instance.
         """
 
-        super().__init__(bundle, pass_qualified=False)
+        super().__init__(bundle, super_cls=SuperLayer)
+
+    def _resolve_in_member(self, trace: Any, label: str) -> LayerLog | None:
+        """Resolve ``label`` to a LayerLog within one member trace.
+
+        Parameters
+        ----------
+        trace:
+            Bundle member trace.
+        label:
+            Candidate layer label.
+
+        Returns
+        -------
+        LayerLog | None
+            Matching LayerLog, or ``None`` when unresolved.
+        """
+        try:
+            resolved = trace.layers[label]
+        except (KeyError, ValueError):
+            return None
+        return cast("LayerLog", resolved) if type(resolved).__name__ == "LayerLog" else None
 
 
 class TraceAccessor:
