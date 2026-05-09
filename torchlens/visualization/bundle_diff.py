@@ -28,7 +28,7 @@ _CAPTION = (
 )
 _ARIA_LABEL = (
     "TorchLens bundle diff: clean versus zero ablate layer1.0.relu. "
-    "Blue means lower delta, white means no or middle delta, red means higher delta."
+    "White means zero delta; red intensity scales with the L2 delta magnitude."
 )
 
 
@@ -264,7 +264,7 @@ def _build_dot(
             # box; when the natural graph aspect is taller (e.g. 1.69:1 for
             # the default paired layout) the bottom-positioned caption gets
             # pushed outside the SVG viewBox and clipped.
-            "label": _CAPTION + "\\nLegend: blue→white→red = increasing L2 delta.",
+            "label": _CAPTION + "\\nLegend: white→red = increasing L2 delta.",
             "labelloc": "b",
             "labeljust": "l",
             "fontname": "Helvetica",
@@ -555,10 +555,10 @@ def _add_legend(dot: graphviz.Digraph) -> None:
         legend.attr(label="delta_map", color="#D0D0D0", style="rounded", labelloc="t")
         legend.node(
             "legend_low",
-            label="low",
+            label="zero",
             shape="box",
             style="filled,rounded",
-            fillcolor="#3B6FB6",
+            fillcolor="#FFFFFF",
             color="#222222",
         )
         legend.node(
@@ -566,12 +566,12 @@ def _add_legend(dot: graphviz.Digraph) -> None:
             label="mid",
             shape="box",
             style="filled,rounded",
-            fillcolor="#FFFFFF",
+            fillcolor=_interpolate("#FFFFFF", "#C93F3F", 0.5),
             color="#222222",
         )
         legend.node(
             "legend_high",
-            label="high",
+            label="max",
             shape="box",
             style="filled,rounded",
             fillcolor="#C93F3F",
@@ -693,7 +693,7 @@ def _node_penwidth(layer: Any) -> str:
 
 
 def _delta_color(value: float, max_delta: float) -> str:
-    """Map a non-negative delta value to a blue-white-red color.
+    """Map a non-negative delta value to a white-to-red color.
 
     Parameters
     ----------
@@ -705,17 +705,14 @@ def _delta_color(value: float, max_delta: float) -> str:
     Returns
     -------
     str
-        Hex color.
+        Hex color. White at zero delta, progressively red as the delta
+        approaches ``max_delta``.
     """
 
     if max_delta <= 0.0:
         return "#FFFFFF"
     normalized = max(0.0, min(1.0, value / max_delta))
-    if normalized <= 0.5:
-        frac = normalized / 0.5
-        return _interpolate("#3B6FB6", "#FFFFFF", frac)
-    frac = (normalized - 0.5) / 0.5
-    return _interpolate("#FFFFFF", "#C93F3F", frac)
+    return _interpolate("#FFFFFF", "#C93F3F", normalized)
 
 
 def _interpolate(start: str, end: str, fraction: float) -> str:
