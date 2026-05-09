@@ -292,6 +292,8 @@ def _mark_conditional_branches_if_backward_flood(
 
     self.conditional_branch_edges = []
     for layer in self:
+        if getattr(layer, "is_orphan", False):
+            continue
         layer.conditional_entry_children = []
         layer.is_in_conditional_body = False
 
@@ -344,6 +346,8 @@ def _attribute_branches_forward(
 
     for layer_label in self._raw_layer_labels_list:
         layer = self[layer_label]
+        if getattr(layer, "is_orphan", False):
+            continue
         layer.conditional_branch_stack = _translate_conditional_stack(
             layer.code_context,
             events_by_key,
@@ -353,8 +357,12 @@ def _attribute_branches_forward(
 
     for parent_label in self._raw_layer_labels_list:
         parent_layer = self[parent_label]
+        if getattr(parent_layer, "is_orphan", False):
+            continue
         for child_label in parent_layer.children:
             child_layer = self[child_label]
+            if getattr(child_layer, "is_orphan", False):
+                continue
             gained_entries = _get_gained_branch_entries(
                 parent_layer.conditional_branch_stack,
                 child_layer.conditional_branch_stack,
@@ -395,6 +403,8 @@ def _materialize_derived_views(self: "Trace") -> None:
 
     for layer_label in self._raw_layer_labels_list:
         layer = self[layer_label]
+        if getattr(layer, "is_orphan", False):
+            continue
         layer.conditional_then_children = sorted(
             set(
                 chain.from_iterable(
@@ -445,7 +455,9 @@ def _iter_terminal_scalar_bool_labels(self: "Trace") -> List[str]:
     return [
         layer_label
         for layer_label in self._raw_layer_labels_list
-        if layer_label in terminal_bool_labels and self[layer_label].is_scalar_bool
+        if layer_label in terminal_bool_labels
+        and self[layer_label].is_scalar_bool
+        and not getattr(self[layer_label], "is_orphan", False)
     ]
 
 
@@ -651,10 +663,16 @@ def _fix_modules_for_internal_tensors(self: "Trace") -> None:
     while len(node_stack) > 0:
         node_label = node_stack.pop()
         node = self[node_label]
+        if getattr(node, "is_orphan", False):
+            continue
         # Propagate modules backward to internal-only parent nodes:
         for parent_label in node.parents:
             parent_node = self[parent_label]
-            if (not parent_node.has_input_ancestor) and (parent_label not in nodes_seen):
+            if (
+                not parent_node.has_input_ancestor
+                and parent_label not in nodes_seen
+                and not getattr(parent_node, "is_orphan", False)
+            ):
                 _fix_modules_for_single_internal_tensor(
                     node, parent_node, "parent", node_stack, nodes_seen
                 )
@@ -667,6 +685,7 @@ def _fix_modules_for_internal_tensors(self: "Trace") -> None:
                 or child_node.has_input_ancestor
                 or child_label in nodes_seen
                 or child_node.is_output
+                or getattr(child_node, "is_orphan", False)
             ):
                 continue
             _fix_modules_for_single_internal_tensor(
@@ -678,6 +697,8 @@ def _fix_modules_for_internal_tensors(self: "Trace") -> None:
     # different modules as distinct equivalence types.
     _module_str_cache = {}
     for layer in self:
+        if getattr(layer, "is_orphan", False):
+            continue
         cm_key = tuple(layer.modules)
         if cm_key not in _module_str_cache:
             _module_str_cache[cm_key] = "_".join([module_pass[0] for module_pass in layer.modules])

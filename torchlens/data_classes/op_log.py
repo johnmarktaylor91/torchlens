@@ -105,6 +105,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "args_template": None,
     "kwargs_template": None,
     "edge_uses": [],
+    "is_orphan": False,
     "_address_normalized": None,
     "_construction_done": True,
 }
@@ -313,6 +314,7 @@ class OpLog:
         "is_final_output": FieldPolicy.KEEP,
         "has_output_descendant": FieldPolicy.KEEP,
         "output_descendants": FieldPolicy.KEEP,
+        "is_orphan": FieldPolicy.KEEP,
         "min_distance_from_output": FieldPolicy.KEEP,
         "max_distance_from_output": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
@@ -601,6 +603,7 @@ class OpLog:
         self.is_final_output = fields_dict["is_final_output"]
         self.has_output_descendant = fields_dict["has_output_descendant"]
         self.output_descendants = fields_dict["output_descendants"]
+        self.is_orphan: bool = fields_dict["is_orphan"]
         self.min_distance_from_output = fields_dict["min_distance_from_output"]
         self.max_distance_from_output = fields_dict["max_distance_from_output"]
         self.io_role = fields_dict["io_role"]

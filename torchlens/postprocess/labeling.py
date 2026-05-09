@@ -532,18 +532,25 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
     layers_to_remove = []
     # Quick loop to count how many tensors are saved:
     for layer_entry in self:
+        if getattr(layer_entry, "is_orphan", False):
+            continue
         if layer_entry.has_saved_outs:
             self.num_saved_ops += 1
 
     retained_call_group_labels = _labels_in_replay_ready_call_groups_to_retain(self)
 
     if self.keep_unsaved_layers:
-        num_logged_tensors = len(self)
+        num_logged_tensors = sum(
+            1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
+        )
     else:
         num_logged_tensors = sum(
             1
             for layer_entry in self
-            if layer_entry.has_saved_outs or layer_entry.layer_label in retained_call_group_labels
+            if not getattr(layer_entry, "is_orphan", False)
+            and (
+                layer_entry.has_saved_outs or layer_entry.layer_label in retained_call_group_labels
+            )
         )
 
     self.layer_list = []
@@ -556,6 +563,8 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
     i = 0
     for raw_tensor_label in self._raw_layer_labels_list:
         layer_entry = self._raw_layer_dict[raw_tensor_label]
+        if getattr(layer_entry, "is_orphan", False):
+            continue
         # Determine valid lookup keys and relate them to the tensor's realtime operation number:
         should_keep_for_replay = layer_entry.layer_label in retained_call_group_labels
         if (
@@ -585,7 +594,10 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
     if layers_to_remove:
         self._batch_remove_log_entries(layers_to_remove, remove_references=True)
 
-    if (self.num_saved_ops == len(self)) or self.keep_unsaved_layers:
+    num_non_orphan_ops = sum(
+        1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
+    )
+    if (self.num_saved_ops == num_non_orphan_ops) or self.keep_unsaved_layers:
         self._layers_logged = True
     else:
         self._layers_logged = False
@@ -611,11 +623,17 @@ def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
 
     call_groups: dict[int, list[OpLog]] = defaultdict(list)
     for layer_entry in self:
+        if getattr(layer_entry, "is_orphan", False):
+            continue
         func_call_id = getattr(layer_entry, "func_call_id", None)
         if func_call_id is not None:
             call_groups[func_call_id].append(layer_entry)
 
-    labels_to_keep = {layer_entry.layer_label for layer_entry in self if layer_entry.has_saved_outs}
+    labels_to_keep = {
+        layer_entry.layer_label
+        for layer_entry in self
+        if layer_entry.has_saved_outs and not getattr(layer_entry, "is_orphan", False)
+    }
     label_to_entry = {layer_entry.layer_label: layer_entry for layer_entry in self}
     changed = True
     while changed:

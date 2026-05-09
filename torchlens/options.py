@@ -33,6 +33,7 @@ GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "layers_to_save",
     "keep_unsaved_layers",
+    "keep_orphans",
     "output_device",
     "save_arg_values",
     "save_grads",
@@ -123,6 +124,7 @@ _STREAMING_FIELDS: Final[tuple[str, ...]] = (
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
     "keep_unsaved_layers": "keep_unsaved_layers",
+    "keep_orphans": "keep_orphans",
     "output_device": "output_device",
     "save_arg_values": "save_arg_values",
     "save_grads": "save_grads",
@@ -518,6 +520,9 @@ class CaptureOptions:
         Activation layer selector to capture.
     keep_unsaved_layers:
         Whether metadata-only layers remain in the returned log.
+    keep_orphans:
+        Whether island ops are retained in raw metadata and exposed via
+        ``trace.orphans``.
     output_device:
         Device placement for saved tensors.
     save_arg_values:
@@ -577,6 +582,7 @@ class CaptureOptions:
 
     layers_to_save: str | list[Any] | None = "all"
     keep_unsaved_layers: bool = True
+    keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
     save_arg_values: bool = False
     save_grads: bool = False
@@ -607,6 +613,7 @@ class CaptureOptions:
         self,
         layers_to_save: str | list[Any] | None | MissingType = MISSING,
         keep_unsaved_layers: bool | MissingType = MISSING,
+        keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
         save_arg_values: bool | MissingType = MISSING,
         save_grads: bool | MissingType = MISSING,
@@ -659,6 +666,9 @@ class CaptureOptions:
             ),
             "keep_unsaved_layers": _resolve_option_value(
                 "keep_unsaved_layers", keep_unsaved_layers, True, specified_fields
+            ),
+            "keep_orphans": _resolve_option_value(
+                "keep_orphans", keep_orphans, False, specified_fields
             ),
             "output_device": _resolve_option_value(
                 "output_device", output_device, "same", specified_fields

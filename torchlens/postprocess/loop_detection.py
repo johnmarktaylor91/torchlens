@@ -140,6 +140,8 @@ def _group_by_shared_params(self: "Trace") -> None:
     param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     for label in self._raw_layer_labels_list:
         node = self[label]
+        if getattr(node, "is_orphan", False):
+            continue
         if node.uses_params and node._param_barcodes:
             key = (node.func_name, tuple(sorted(node._param_barcodes)))
             param_barcode_groups[key].append(label)
@@ -183,7 +185,11 @@ def _detect_and_label_loops(self: "Trace") -> None:
     _sort_keys = {label: self[label].capture_index for label in self._raw_layer_labels_list}
 
     # Seed the heap with root nodes (inputs + internally-initialized tensors).
-    initial_labels = self.input_layers + self.internal_source_ops
+    initial_labels = [
+        label
+        for label in self.input_layers + self.internal_source_ops
+        if not getattr(self[label], "is_orphan", False)
+    ]
     node_heap = [(_sort_keys[label], label) for label in initial_labels]
     heapq.heapify(node_heap)
     heap_seen = set(initial_labels)
@@ -203,8 +209,10 @@ def _detect_and_label_loops(self: "Trace") -> None:
         # Push children of ALL equivalent operations onto the heap to ensure
         # downstream nodes are eventually visited, even if this node is skipped.
         for equiv_op in node.equivalent_ops:
+            if getattr(self[equiv_op], "is_orphan", False):
+                continue
             for child in self[equiv_op].children:
-                if child not in heap_seen:
+                if child not in heap_seen and not getattr(self[child], "is_orphan", False):
                     heap_seen.add(child)
                     heapq.heappush(node_heap, (_sort_keys[child], child))
 
@@ -247,6 +255,8 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
     """
     groups: dict[str, list[str]] = defaultdict(list)
     for entry in self:
+        if getattr(entry, "is_orphan", False):
+            continue
         groups[entry._layer_label_raw].append(entry._label_raw)
 
     for raw_label, members in groups.items():
@@ -280,7 +290,11 @@ def _expand_isomorphic_subgraphs(self: "Trace", node: OpLog) -> None:
     Args:
         node: The node whose equivalent_ops set will be expanded.
     """
-    equivalent_operation_starting_labels = sorted(list(node.equivalent_ops))
+    equivalent_operation_starting_labels = sorted(
+        label for label in node.equivalent_ops if not getattr(self[label], "is_orphan", False)
+    )
+    if not equivalent_operation_starting_labels:
+        return
 
     # Create one SubgraphInfo per starting node.
     sg_info: dict[str, SubgraphInfo] = {}

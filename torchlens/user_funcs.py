@@ -680,6 +680,7 @@ def _run_model_and_save_specified_outs(
     input_kwargs: dict[Any, Any] | None,
     layers_to_save: str | list[int | str] | None = "all",
     keep_unsaved_layers: bool = True,
+    keep_orphans: bool = False,
     output_device: OutputDeviceLiteral = "same",
     out_transform: ActivationPostfunc | None = None,
     grad_transform: GradientPostfunc | None = None,
@@ -730,6 +731,8 @@ def _run_model_and_save_specified_outs(
             names before the fast replay. Example: use
             ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
             requested saved outs in the returned log.
+        keep_orphans: If True, island ops are retained in raw metadata and exposed via
+            ``trace.orphans`` while remaining hidden from the main graph.
         output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
         out_transform: Optional transform applied to each out before storage
             (e.g., channel-wise averaging to reduce memory).
@@ -815,6 +818,7 @@ def _run_model_and_save_specified_outs(
         save_raw_outs=save_raw_outs,
         save_raw_grads=save_raw_grads,
         keep_unsaved_layers=keep_unsaved_layers,
+        keep_orphans=keep_orphans,
         save_arg_values=save_arg_values,
         save_grads=save_grads,
         grads_to_save=grads_to_save,
@@ -880,6 +884,7 @@ def trace(
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] | None | MissingType = MISSING,
     keep_unsaved_layers: bool | MissingType = MISSING,
+    keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
     out_transform: ActivationPostfunc | None | MissingType = MISSING,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
@@ -982,6 +987,8 @@ def trace(
             names before the fast replay. Example: use
             ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
             requested saved outs in the final log.
+        keep_orphans: If True, retain island ops in raw metadata and expose them via
+            ``trace.orphans``. Default False preserves pruning behavior.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
         out_transform: Optional function applied to each out before saving. The
             raw out remains in ``layer.tensor``/``layer.out`` by default, and
@@ -1119,6 +1126,7 @@ def trace(
         capture=capture,
         layers_to_save=layers_to_save,
         keep_unsaved_layers=keep_unsaved_layers,
+        keep_orphans=keep_orphans,
         output_device=output_device,
         save_arg_values=save_arg_values,
         save_grads=save_grads,
@@ -1188,6 +1196,7 @@ def trace(
     )
     layers_to_save = capture_options.layers_to_save
     keep_unsaved_layers = capture_options.keep_unsaved_layers
+    keep_orphans = capture_options.keep_orphans
     output_device = capture_options.output_device
     out_transform = save_options.out_transform
     grad_transform = save_options.grad_transform
@@ -1282,6 +1291,7 @@ def trace(
         cache_config = {
             "layers_to_save": layers_to_save,
             "keep_unsaved_layers": keep_unsaved_layers,
+            "keep_orphans": keep_orphans,
             "output_device": output_device,
             "save_arg_values": save_arg_values,
             "save_grads": save_grads,
@@ -1327,6 +1337,7 @@ def trace(
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             keep_unsaved_layers=keep_unsaved_layers,
+            keep_orphans=keep_orphans,
             output_device=output_device,
             out_transform=out_transform,
             grad_transform=grad_transform,
@@ -1378,6 +1389,7 @@ def trace(
             input_kwargs=input_kwargs,
             layers_to_save=None,
             keep_unsaved_layers=True,
+            keep_orphans=keep_orphans,
             output_device=output_device,
             out_transform=out_transform,
             grad_transform=grad_transform,

@@ -1039,6 +1039,7 @@ def _build_graph_relationship_fields(
     fields_dict["is_final_output"] = False
     fields_dict["has_output_descendant"] = False
     fields_dict["output_descendants"] = set()
+    fields_dict["is_orphan"] = False
     fields_dict["min_distance_from_output"] = None
     fields_dict["max_distance_from_output"] = None
     fields_dict["io_role"] = None

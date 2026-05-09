@@ -111,6 +111,7 @@ from .cleanup import (
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
 from ..utils.display import human_readable_size
+from ._accessor_base import Accessor
 from .interface import (
     _format_conditional_branch_stack,
     _getitem_after_pass,
@@ -149,6 +150,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "module_filter": None,
     "emit_nvtx": False,
     "raise_on_nan": False,
+    "keep_orphans": False,
     "trace_annotations": {},
     "report_values": {},
     "observer_spans": [],
@@ -362,6 +364,78 @@ class ConditionalAccessor:
         return [(conditional.id, conditional) for conditional in self._list]
 
 
+class OrphanAccessor(Accessor[OpLog]):
+    """Dict-like accessor for retained orphan ``OpLog`` records."""
+
+    def __init__(self, orphan_ops: Mapping[str, OpLog] | None = None) -> None:
+        """Initialize from raw orphan labels.
+
+        Parameters
+        ----------
+        orphan_ops:
+            Mapping from raw orphan labels to retained orphan operation logs.
+        """
+
+        super().__init__(orphan_ops or {})
+
+    def _resolve_substring(self, key: str) -> OpLog | None:
+        """Resolve by any orphan label variant or unique substring.
+
+        Parameters
+        ----------
+        key:
+            Lookup key or substring.
+
+        Returns
+        -------
+        OpLog | None
+            Matching orphan operation, or ``None`` if not found or ambiguous.
+        """
+
+        exact_matches = [
+            orphan
+            for orphan in self._dict.values()
+            if key
+            in {
+                orphan.layer_label,
+                orphan.layer_label_short,
+                orphan.layer_label_w_pass,
+                orphan.layer_label_w_pass_short,
+                orphan.layer_label_no_pass,
+                orphan.layer_label_no_pass_short,
+                orphan._label_raw,
+            }
+        ]
+        if len(exact_matches) == 1:
+            return exact_matches[0]
+
+        substring_matches = [
+            orphan
+            for orphan in self._dict.values()
+            if any(
+                label is not None and key.lower() in str(label).lower()
+                for label in (
+                    orphan.layer_label,
+                    orphan.layer_label_short,
+                    orphan.layer_label_w_pass,
+                    orphan.layer_label_w_pass_short,
+                    orphan.layer_label_no_pass,
+                    orphan.layer_label_no_pass_short,
+                    orphan._label_raw,
+                )
+            )
+        ]
+        if len(substring_matches) == 1:
+            return substring_matches[0]
+        return None
+
+    @property
+    def _item_kind(self) -> str:
+        """Return display name used in generic ``KeyError`` messages."""
+
+        return "orphan"
+
+
 class _CallableList(list[Any]):
     """List that returns a plain list when called.
 
@@ -550,6 +624,7 @@ class Trace:
         "_layers_logged": FieldPolicy.KEEP,
         "_layers_saved": FieldPolicy.KEEP,
         "keep_unsaved_layers": FieldPolicy.KEEP,
+        "keep_orphans": FieldPolicy.KEEP,
         "intervention_ready": FieldPolicy.KEEP,
         "capture_args_template": FieldPolicy.KEEP,
         "out_postfunc": FieldPolicy.DROP,
@@ -711,6 +786,7 @@ class Trace:
         save_raw_outs: bool = True,
         save_raw_grads: bool = True,
         keep_unsaved_layers: bool = True,
+        keep_orphans: bool = False,
         save_arg_values: bool = False,
         save_grads: bool = False,
         grads_to_save: Any = "all",
@@ -737,6 +813,8 @@ class Trace:
             save_raw_grads: Whether raw grads are retained when a postfunc is set.
             keep_unsaved_layers: If False, layers without saved outs are removed
                 from the final log (but still logged during the pass).
+            keep_orphans: If True, orphan island ops remain in raw metadata and
+                are exposed via ``trace.orphans``.
             save_arg_values: Whether to deep-copy each operation's input arguments.
             save_grads: Whether to register grad hooks for backward pass.
             grads_to_save: Which layer grads should be saved.
@@ -772,6 +850,7 @@ class Trace:
         self._layers_logged = False
         self._layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
+        self.keep_orphans = keep_orphans
         self.intervention_ready = False
         self.capture_args_template = False
         self.out_postfunc = out_postfunc
@@ -2157,6 +2236,7 @@ class Trace:
                 "train_mode": False,
                 "module_filter": None,
                 "raise_on_nan": False,
+                "keep_orphans": False,
                 "trace_annotations": {},
                 "report_values": {},
                 "observer_spans": [],
@@ -2776,6 +2856,18 @@ class Trace:
     def buffers(self) -> "BufferAccessor":
         """Access buffer metadata by address, short name, or index."""
         return self._buffer_accessor  # type: ignore[return-value]
+
+    @property
+    def orphans(self) -> OrphanAccessor:
+        """Access retained orphan island operations by raw or final label."""
+
+        orphan_dict = OrderedDict(
+            (label, self._raw_layer_dict[label])
+            for label in self.orphan_ops
+            if label in self._raw_layer_dict
+            and getattr(self._raw_layer_dict[label], "is_orphan", False)
+        )
+        return OrphanAccessor(orphan_dict)
 
     @property
     def grad_fns(self) -> GradFnAccessor:

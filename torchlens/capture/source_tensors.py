@@ -338,6 +338,7 @@ def log_source_tensor_exhaustive(
         "is_final_output": False,
         "has_output_descendant": False,
         "output_descendants": set(),
+        "is_orphan": False,
         "min_distance_from_output": None,
         "max_distance_from_output": None,
         "io_role": io_role,
