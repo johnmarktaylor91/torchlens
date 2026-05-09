@@ -712,6 +712,9 @@ def _run_model_and_save_specified_outs(
     module_filter: Callable[[Any], bool] | None = None,
     emit_nvtx: bool = False,
     raise_on_nan: bool = False,
+    transform: Callable[[Any], Any] | None = None,
+    raw_input: Any | None = None,
+    save_raw_input: str | bool = "small",
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
 
@@ -777,6 +780,9 @@ def _run_model_and_save_specified_outs(
         emit_nvtx: If True, emit NVTX ranges around decorated torch operations.
         raise_on_nan: If True, stop capture at the first NaN or Inf tensor and raise
             ``CaptureError`` with the offending operation metadata.
+        transform: Optional callable used to produce model-ready inputs from raw user input.
+        raw_input: Original user input before ``transform`` was applied.
+        save_raw_input: Portable save policy for the original raw input.
 
     Returns:
         Fully-populated Trace.
@@ -833,6 +839,9 @@ def _run_model_and_save_specified_outs(
         train_mode=train_mode,
         module_filter=module_filter,
         emit_nvtx=emit_nvtx,
+        transform=transform,
+        raw_input=raw_input,
+        save_raw_input=save_raw_input,
     )
     trace.name = name
     forward_code = getattr(model.forward, "__code__", None)
@@ -883,6 +892,8 @@ def trace(
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] | None | MissingType = MISSING,
+    transform: Callable[[Any], Any] | None | MissingType = MISSING,
+    save_raw_input: str | bool | MissingType = MISSING,
     keep_unsaved_layers: bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -979,6 +990,11 @@ def trace(
         model: PyTorch model.
         input_args: Positional args for ``model.forward()``; a single tensor or list.
         input_kwargs: Keyword args for ``model.forward()``.
+        transform: Optional callable applied once to ``input_args`` before
+            ``model.forward``. If it returns a mapping, TorchLens calls the
+            model with ``**transformed``.
+        save_raw_input: Raw user-input save policy for portable bundles:
+            ``"small"`` (default), ``True``, or ``False``.
         layers_to_save: Which layers to save outs for (see above).
         keep_unsaved_layers: If False, layers without saved outs are removed from
             the returned Trace (they still exist during processing). When
@@ -1114,7 +1130,6 @@ def trace(
     warn_parallel()
     _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)
-    check_model_and_input_variants(model, input_args, input_kwargs)
 
     if out_postfunc is not MISSING:
         if out_transform is not MISSING:
@@ -1125,6 +1140,8 @@ def trace(
     capture_options = merge_capture_options(
         capture=capture,
         layers_to_save=layers_to_save,
+        transform=transform,
+        save_raw_input=save_raw_input,
         keep_unsaved_layers=keep_unsaved_layers,
         keep_orphans=keep_orphans,
         output_device=output_device,
@@ -1153,6 +1170,19 @@ def trace(
         stop_after=stop_after,
         raise_on_nan=raise_on_nan,
     )
+    raw_input = None
+    input_transform = capture_options.transform
+    if input_transform is not None:
+        raw_input = input_args
+        transformed_input = input_transform(input_args)
+        if isinstance(transformed_input, collections.abc.Mapping):
+            input_args = []
+            input_kwargs = dict(transformed_input)
+        else:
+            input_args = transformed_input
+            input_kwargs = None
+
+    check_model_and_input_variants(model, input_args, input_kwargs)
     save_options = merge_save_options(
         save=save,
         out_transform=out_transform,
@@ -1195,6 +1225,7 @@ def trace(
         out_sink=out_sink,
     )
     layers_to_save = capture_options.layers_to_save
+    save_raw_input_policy = capture_options.save_raw_input
     keep_unsaved_layers = capture_options.keep_unsaved_layers
     keep_orphans = capture_options.keep_orphans
     output_device = capture_options.output_device
@@ -1369,6 +1400,9 @@ def trace(
             module_filter=module_filter_value,
             emit_nvtx=capture_options.emit_nvtx,
             raise_on_nan=raise_on_nan_value,
+            transform=input_transform,
+            raw_input=raw_input,
+            save_raw_input=save_raw_input_policy,
         )
     else:
         # --- TWO-PASS path ---
@@ -1421,6 +1455,9 @@ def trace(
             module_filter=module_filter_value,
             emit_nvtx=capture_options.emit_nvtx,
             raise_on_nan=raise_on_nan_value,
+            transform=input_transform,
+            raw_input=raw_input,
+            save_raw_input=save_raw_input_policy,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching outs.

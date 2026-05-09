@@ -1872,6 +1872,10 @@ def _build_layer_node(
     # Graphviz node names can't contain colons (used for port syntax), so
     # replace ":" with "pass" in pass-qualified labels (e.g., "relu_1:2" -> "relu_1pass2").
     node_args = _node_spec_to_graphviz_args(spec)
+    if node.is_input:
+        raw_input_attrs = _render_raw_input(getattr(self, "raw_input", None))
+        if raw_input_attrs is not None:
+            node_args.update(raw_input_attrs)
     node_args["name"] = node.layer_label.replace(":", "pass")
     hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
     if hidden_buffer_addresses and not (node.is_input or node.is_output or node.is_buffer):
@@ -1892,6 +1896,51 @@ def _build_layer_node(
             s.node(node.layer_label.replace(":", "pass"))
 
     return node_color
+
+
+def _render_raw_input(value: Any) -> dict[str, str] | None:
+    """Return Graphviz attributes for a renderable raw input value.
+
+    Parameters
+    ----------
+    value:
+        Raw user input stored on the owning ``Trace``.
+
+    Returns
+    -------
+    dict[str, str] | None
+        Node attributes to merge into an input-node spec, or ``None`` when the
+        default tensor-shape rendering should be used.
+    """
+
+    if isinstance(value, str):
+        text = _truncate_raw_input_text(value, limit=80)
+        return {
+            "label": render_lines_to_html(["input", text]),
+            "tooltip": value,
+        }
+    return None
+
+
+def _truncate_raw_input_text(text: str, *, limit: int) -> str:
+    """Return ``text`` truncated to a display-safe length.
+
+    Parameters
+    ----------
+    text:
+        Text to truncate.
+    limit:
+        Maximum displayed character count including the ellipsis.
+
+    Returns
+    -------
+    str
+        Original text or a shortened form ending in ``...``.
+    """
+
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)] + "..."
 
 
 def _intervention_hook_node_name(site_label: str) -> str:

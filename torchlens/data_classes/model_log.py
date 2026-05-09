@@ -124,10 +124,15 @@ from .layer_log import LayerLog, OpAccessor
 from .op_log import OpLog, TensorLog
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
+_USE_STORED_TRANSFORM = object()
+
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "name": None,
     "intervention_ready": False,
     "capture_args_template": False,
+    "raw_input": None,
+    "_transform": None,
+    "save_raw_input": "small",
     "parent_run": None,
     "_intervention_spec": None,
     "ledger": [],
@@ -627,6 +632,9 @@ class Trace:
         "keep_orphans": FieldPolicy.KEEP,
         "intervention_ready": FieldPolicy.KEEP,
         "capture_args_template": FieldPolicy.KEEP,
+        "raw_input": FieldPolicy.KEEP,
+        "_transform": FieldPolicy.DROP,
+        "save_raw_input": FieldPolicy.KEEP,
         "out_postfunc": FieldPolicy.DROP,
         "_out_transform_repr": FieldPolicy.KEEP,
         "save_raw_outs": FieldPolicy.KEEP,
@@ -801,6 +809,9 @@ class Trace:
         train_mode: bool = False,
         module_filter: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
+        transform: Callable[[Any], Any] | None = None,
+        raw_input: Any | None = None,
+        save_raw_input: str | bool = "small",
     ) -> None:
         """Initialise a fresh Trace for a new logging session.
 
@@ -829,6 +840,10 @@ class Trace:
             train_mode: Session-time flag for training-compatible out retention.
                 Portable bundle load restores the default ``False`` value.
             emit_nvtx: Whether decorated torch operations should emit NVTX ranges.
+            transform: Optional callable used to convert raw user input into
+                model-ready input.
+            raw_input: Original user input before ``transform`` was applied.
+            save_raw_input: Portable save policy for ``raw_input``.
         """
         # Callables are effectively immutable - deepcopy is unnecessary.
 
@@ -853,6 +868,9 @@ class Trace:
         self.keep_orphans = keep_orphans
         self.intervention_ready = False
         self.capture_args_template = False
+        self.raw_input = raw_input
+        self._transform = transform
+        self.save_raw_input = save_raw_input
         self.out_postfunc = out_postfunc
         self._out_transform_repr = repr(out_postfunc) if out_postfunc is not None else None
         self.save_raw_outs = save_raw_outs
@@ -3781,21 +3799,24 @@ class Trace:
 
     def rerun(
         self,
-        model: nn.Module,
+        model: Any = None,
         x: Any = None,
         *,
         append: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
+        transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
     ) -> "Trace":
         """Re-execute a model with this log's active intervention spec.
 
         Parameters
         ----------
         model:
-            Model to execute through TorchLens decorated wrappers.
+            Model to execute through TorchLens decorated wrappers. When omitted,
+            the live model captured by this ``Trace`` is reused if still available.
         x:
-            Forward input. Phase 7 requires callers to pass this explicitly.
+            Forward input. If ``model`` is omitted, the first positional argument
+            is treated as the new user input.
         append:
             If true, append a compatible chunk along batch dimension 0.
         strict:
@@ -3807,11 +3828,76 @@ class Trace:
             This model log, mutated in place after a validated atomic swap.
         """
 
+        rerun_model: nn.Module | None
+        if isinstance(model, nn.Module):
+            rerun_model = model
+            user_input = x
+        else:
+            source_ref = getattr(self, "_source_model_ref", None)
+            user_input = model
+            if x is not None:
+                raise TypeError("Pass either rerun(model, x) or rerun(new_user_input), not both.")
+            transformed_input = self._apply_rerun_transform(user_input, transform=transform)
+            rerun_model = source_ref() if source_ref is not None else None
+            if rerun_model is None:
+                raise RuntimeError(
+                    "This Trace does not retain a live model reference. Pass the model as "
+                    "`trace.rerun(model, input)`."
+                )
         replay_options = merge_replay_options(replay=replay, append=append, strict=strict)
+        if isinstance(model, nn.Module):
+            transformed_input = self._apply_rerun_transform(user_input, transform=transform)
 
         from ..intervention.rerun import rerun as _impl
 
-        return _impl(self, model, x, replay=replay_options)
+        return _impl(self, rerun_model, transformed_input, replay=replay_options)
+
+    def _apply_rerun_transform(
+        self,
+        user_input: Any,
+        *,
+        transform: Callable[[Any], Any] | bool | object,
+    ) -> Any:
+        """Apply the stored or explicit input transform for ``rerun``.
+
+        Parameters
+        ----------
+        user_input:
+            New user input supplied to ``rerun``.
+        transform:
+            Sentinel to reuse the stored transform, ``False`` to bypass, or an
+            explicit callable to use for this rerun.
+
+        Returns
+        -------
+        Any
+            Model-ready rerun input.
+
+        Raises
+        ------
+        RuntimeError
+            If a likely raw text input is supplied after loading a trace whose
+            transform callable was intentionally not serialized.
+        """
+
+        stored_transform = getattr(self, "_transform", None)
+        if transform is _USE_STORED_TRANSFORM and stored_transform is not None:
+            return stored_transform(user_input)
+        if transform is False:
+            return user_input
+        if callable(transform):
+            return transform(user_input)
+        if (
+            transform is _USE_STORED_TRANSFORM
+            and stored_transform is None
+            and isinstance(user_input, str)
+        ):
+            raise RuntimeError(
+                "This Trace was loaded without a stored transform. "
+                "Pass `transform=callable` explicitly or call rerun with "
+                "an already-transformed model input."
+            )
+        return user_input
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log.

@@ -32,6 +32,8 @@ GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "layers_to_save",
+    "transform",
+    "save_raw_input",
     "keep_unsaved_layers",
     "keep_orphans",
     "output_device",
@@ -123,6 +125,8 @@ _STREAMING_FIELDS: Final[tuple[str, ...]] = (
 
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
+    "transform": "transform",
+    "save_raw_input": "save_raw_input",
     "keep_unsaved_layers": "keep_unsaved_layers",
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
@@ -518,6 +522,12 @@ class CaptureOptions:
     ----------
     layers_to_save:
         Activation layer selector to capture.
+    transform:
+        Optional callable applied once to the user input before ``model.forward``.
+    save_raw_input:
+        Raw user-input save policy for portable bundles. ``"small"`` stores a
+        bounded representation, ``True`` stores the full object, and ``False``
+        drops it when saving.
     keep_unsaved_layers:
         Whether metadata-only layers remain in the returned log.
     keep_orphans:
@@ -581,6 +591,8 @@ class CaptureOptions:
     """
 
     layers_to_save: str | list[Any] | None = "all"
+    transform: Callable[[Any], Any] | None = None
+    save_raw_input: str | bool = "small"
     keep_unsaved_layers: bool = True
     keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
@@ -612,6 +624,8 @@ class CaptureOptions:
     def __init__(
         self,
         layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        transform: Callable[[Any], Any] | None | MissingType = MISSING,
+        save_raw_input: str | bool | MissingType = MISSING,
         keep_unsaved_layers: bool | MissingType = MISSING,
         keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -663,6 +677,10 @@ class CaptureOptions:
         values: dict[str, Any] = {
             "layers_to_save": _resolve_option_value(
                 "layers_to_save", layers_to_save, "all", specified_fields
+            ),
+            "transform": _resolve_option_value("transform", transform, None, specified_fields),
+            "save_raw_input": _resolve_option_value(
+                "save_raw_input", save_raw_input, "small", specified_fields
             ),
             "keep_unsaved_layers": _resolve_option_value(
                 "keep_unsaved_layers", keep_unsaved_layers, True, specified_fields

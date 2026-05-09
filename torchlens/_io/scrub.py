@@ -9,6 +9,7 @@ are dropped or stringified before writing ``metadata.pkl``.
 
 from __future__ import annotations
 
+import logging
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
 from typing import Any, TypeAlias
@@ -21,6 +22,9 @@ from ..data_classes.model_log import Trace
 BlobSpec: TypeAlias = tuple[str, torch.Tensor, str, str]
 
 _SIMPLE_KEEP_TYPES = (str, int, float, bool, type(None), torch.dtype, torch.device)
+_RAW_INPUT_TEXT_LIMIT = 10_000
+_RAW_INPUT_TENSOR_BYTES_LIMIT = 1_000_000
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -207,6 +211,10 @@ def _scrub_field(
 ) -> Any:
     """Scrub one object field according to its effective field policy."""
 
+    if isinstance(owner, Trace) and field_name == "raw_input":
+        return _scrub_raw_input_for_save(
+            owner, field_value, options, memo, blob_specs, blob_counter
+        )
     if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
         return None
     if policy == FieldPolicy.STRINGIFY:
@@ -223,6 +231,84 @@ def _scrub_field(
             blob_counter=blob_counter,
         )
     return _scrub_value(field_value, options, memo, blob_specs, blob_counter)
+
+
+def _scrub_raw_input_for_save(
+    owner: Trace,
+    value: Any,
+    options: _ScrubOptions,
+    memo: dict[int, Any],
+    blob_specs: list[BlobSpec],
+    blob_counter: list[int],
+) -> Any:
+    """Apply ``Trace.save_raw_input`` before portable metadata serialization.
+
+    Parameters
+    ----------
+    owner:
+        Trace carrying the raw-input save policy.
+    value:
+        Raw user input to serialize.
+    options:
+        Active scrub options.
+    memo:
+        Object-identity memo for recursive scrubbing.
+    blob_specs:
+        Accumulated tensor blob specs.
+    blob_counter:
+        Mutable blob id counter.
+
+    Returns
+    -------
+    Any
+        Scrubbed raw input, a bounded placeholder, or ``None``.
+    """
+
+    policy = getattr(owner, "save_raw_input", "small")
+    if policy is False:
+        return None
+    if policy is True:
+        return _scrub_value(value, options, memo, blob_specs, blob_counter)
+    if policy != "small":
+        raise TorchLensIOError("save_raw_input must be 'small', True, or False.")
+    return _small_raw_input_value(value)
+
+
+def _small_raw_input_value(value: Any) -> Any:
+    """Return a bounded portable representation of a raw input value.
+
+    Parameters
+    ----------
+    value:
+        Raw user input.
+
+    Returns
+    -------
+    Any
+        Truncated string, small tensor, recursively bounded container, or
+        ``None`` when the value is too large or unsupported.
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value[:_RAW_INPUT_TEXT_LIMIT]
+    if isinstance(value, torch.Tensor):
+        tensor_bytes = value.nelement() * value.element_size()
+        if tensor_bytes <= _RAW_INPUT_TENSOR_BYTES_LIMIT:
+            return value
+        _LOGGER.debug("Dropping raw_input tensor over small-policy cap: %s bytes", tensor_bytes)
+        return None
+    if isinstance(value, list):
+        return [_small_raw_input_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_small_raw_input_value(item) for item in value)
+    if isinstance(value, dict):
+        return {key: _small_raw_input_value(item) for key, item in value.items()}
+    _LOGGER.debug(
+        "Dropping unsupported raw_input type under small policy: %s", type(value).__name__
+    )
+    return None
 
 
 def _blobify_tensor_field(
