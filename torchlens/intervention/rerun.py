@@ -36,6 +36,7 @@ def rerun(
     append: bool | MissingType = MISSING,
     strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
+    output_transform: Any | None = None,
 ) -> "Trace":
     """Full-forward rerun with the active intervention spec from ``log``.
 
@@ -60,6 +61,9 @@ def rerun(
         If true, graph-shape divergence raises ``ControlFlowDivergenceError``.
         If false, divergence emits ``ControlFlowDivergenceWarning`` and the
         atomic swap proceeds.
+    output_transform:
+        Optional callable applied to the fresh model output for raw-output
+        metadata storage.
 
     Returns
     -------
@@ -85,6 +89,7 @@ def rerun(
             x,
             intervention_spec=spec,
             hook_plan=hook_plan,
+            output_transform=output_transform,
         )
 
     divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
@@ -164,6 +169,7 @@ def _append_rerun(
             x,
             intervention_spec=spec,
             hook_plan=hook_plan,
+            output_transform=getattr(log, "_output_transform", None),
         )
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
@@ -565,6 +571,7 @@ def _capture_with_active_spec(
     *,
     intervention_spec: Any | None,
     hook_plan: list["NormalizedHookEntry"],
+    output_transform: Any | None,
 ) -> "Trace":
     """Build a fresh rerun ``Trace`` with active hooks installed.
 
@@ -580,6 +587,9 @@ def _capture_with_active_spec(
         Active intervention spec exposed through runtime state.
     hook_plan:
         Normalized live hook plan derived from the spec.
+    output_transform:
+        Optional callable applied to the fresh model output for raw-output
+        metadata storage.
 
     Returns
     -------
@@ -622,6 +632,8 @@ def _capture_with_active_spec(
         normalized_hook_plan=hook_plan,
         verbose=getattr(log, "verbose", False),
         train_mode=getattr(log, "train_mode", False),
+        output_transform=output_transform,
+        save_raw_output=getattr(log, "save_raw_output", "small"),
     )
 
 

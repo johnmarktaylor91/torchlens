@@ -34,6 +34,8 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "layers_to_save",
     "transform",
     "save_raw_input",
+    "output_transform",
+    "save_raw_output",
     "keep_unsaved_layers",
     "keep_orphans",
     "output_device",
@@ -127,6 +129,8 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
     "transform": "transform",
     "save_raw_input": "save_raw_input",
+    "output_transform": "output_transform",
+    "save_raw_output": "save_raw_output",
     "keep_unsaved_layers": "keep_unsaved_layers",
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
@@ -528,6 +532,12 @@ class CaptureOptions:
         Raw user-input save policy for portable bundles. ``"small"`` stores a
         bounded representation, ``True`` stores the full object, and ``False``
         drops it when saving.
+    output_transform:
+        Optional callable applied once to the model output after ``model.forward``.
+    save_raw_output:
+        Raw model-output save policy for portable bundles. ``"small"`` stores a
+        bounded representation, ``True`` stores the full object, and ``False``
+        drops it when saving.
     keep_unsaved_layers:
         Whether metadata-only layers remain in the returned log.
     keep_orphans:
@@ -593,6 +603,8 @@ class CaptureOptions:
     layers_to_save: str | list[Any] | None = "all"
     transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
+    output_transform: Callable[[Any], Any] | None = None
+    save_raw_output: str | bool = "small"
     keep_unsaved_layers: bool = True
     keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
@@ -626,6 +638,8 @@ class CaptureOptions:
         layers_to_save: str | list[Any] | None | MissingType = MISSING,
         transform: Callable[[Any], Any] | None | MissingType = MISSING,
         save_raw_input: str | bool | MissingType = MISSING,
+        output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
+        save_raw_output: str | bool | MissingType = MISSING,
         keep_unsaved_layers: bool | MissingType = MISSING,
         keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -681,6 +695,12 @@ class CaptureOptions:
             "transform": _resolve_option_value("transform", transform, None, specified_fields),
             "save_raw_input": _resolve_option_value(
                 "save_raw_input", save_raw_input, "small", specified_fields
+            ),
+            "output_transform": _resolve_option_value(
+                "output_transform", output_transform, None, specified_fields
+            ),
+            "save_raw_output": _resolve_option_value(
+                "save_raw_output", save_raw_output, "small", specified_fields
             ),
             "keep_unsaved_layers": _resolve_option_value(
                 "keep_unsaved_layers", keep_unsaved_layers, True, specified_fields

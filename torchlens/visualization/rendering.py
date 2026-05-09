@@ -1876,6 +1876,10 @@ def _build_layer_node(
         raw_input_attrs = _render_raw_input(getattr(self, "raw_input", None))
         if raw_input_attrs is not None:
             node_args.update(raw_input_attrs)
+    elif node.is_output:
+        raw_output_attrs = _render_raw_output(getattr(self, "raw_output", None))
+        if raw_output_attrs is not None:
+            node_args.update(raw_output_attrs)
     node_args["name"] = node.layer_label.replace(":", "pass")
     hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
     if hidden_buffer_addresses and not (node.is_input or node.is_output or node.is_buffer):
@@ -1920,6 +1924,95 @@ def _render_raw_input(value: Any) -> dict[str, str] | None:
             "tooltip": value,
         }
     return None
+
+
+def _render_raw_output(value: Any) -> dict[str, str] | None:
+    """Return Graphviz attributes for a renderable raw output value.
+
+    Parameters
+    ----------
+    value:
+        Human-readable output metadata stored on the owning ``Trace``.
+
+    Returns
+    -------
+    dict[str, str] | None
+        Node attributes to merge into an output-node spec, or ``None`` when the
+        default tensor-shape rendering should be used.
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = _truncate_raw_input_text(value, limit=80)
+        return {
+            "label": render_lines_to_html(["output", text]),
+            "tooltip": value,
+        }
+    if _is_label_score_sequence(value):
+        lines = ["output", *[_format_label_score_row(label, score) for label, score in value]]
+        return {
+            "label": render_lines_to_html(lines),
+            "tooltip": repr(value),
+        }
+    if isinstance(value, Mapping):
+        rows = list(value.items())[:5]
+        lines = [
+            "output",
+            *[f"{key}: {_truncate_raw_input_text(str(item), limit=60)}" for key, item in rows],
+        ]
+        return {
+            "label": render_lines_to_html(lines),
+            "tooltip": repr(value),
+        }
+    return None
+
+
+def _is_label_score_sequence(value: Any) -> bool:
+    """Return whether ``value`` is a flat list of label-score pairs.
+
+    Parameters
+    ----------
+    value:
+        Candidate raw output value.
+
+    Returns
+    -------
+    bool
+        Whether ``value`` can be rendered as prediction rows.
+    """
+
+    return isinstance(value, list) and all(
+        isinstance(item, tuple)
+        and len(item) == 2
+        and isinstance(item[0], str | int | float)
+        and isinstance(item[1], int | float)
+        for item in value
+    )
+
+
+def _format_label_score_row(label: Any, score: int | float) -> str:
+    """Format one label-score prediction row.
+
+    Parameters
+    ----------
+    label:
+        Prediction label.
+    score:
+        Prediction confidence or score.
+
+    Returns
+    -------
+    str
+        Display row for the output node.
+    """
+
+    label_text = _truncate_raw_input_text(str(label), limit=48)
+    if 0 <= float(score) <= 1:
+        score_text = f"{float(score):.0%}"
+    else:
+        score_text = f"{float(score):.3g}"
+    return f"{label_text} {score_text}"
 
 
 def _truncate_raw_input_text(text: str, *, limit: int) -> str:

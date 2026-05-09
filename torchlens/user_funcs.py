@@ -715,6 +715,8 @@ def _run_model_and_save_specified_outs(
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",
+    output_transform: Callable[[Any], Any] | None = None,
+    save_raw_output: str | bool = "small",
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
 
@@ -783,6 +785,9 @@ def _run_model_and_save_specified_outs(
         transform: Optional callable used to produce model-ready inputs from raw user input.
         raw_input: Original user input before ``transform`` was applied.
         save_raw_input: Portable save policy for the original raw input.
+        output_transform: Optional callable used to produce human-readable
+            output metadata from model output.
+        save_raw_output: Portable save policy for the transformed raw output.
 
     Returns:
         Fully-populated Trace.
@@ -842,6 +847,8 @@ def _run_model_and_save_specified_outs(
         transform=transform,
         raw_input=raw_input,
         save_raw_input=save_raw_input,
+        output_transform=output_transform,
+        save_raw_output=save_raw_output,
     )
     trace.name = name
     forward_code = getattr(model.forward, "__code__", None)
@@ -894,6 +901,8 @@ def trace(
     layers_to_save: str | list[Any] | None | MissingType = MISSING,
     transform: Callable[[Any], Any] | None | MissingType = MISSING,
     save_raw_input: str | bool | MissingType = MISSING,
+    output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
+    save_raw_output: str | bool | MissingType = MISSING,
     keep_unsaved_layers: bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -994,6 +1003,11 @@ def trace(
             ``model.forward``. If it returns a mapping, TorchLens calls the
             model with ``**transformed``.
         save_raw_input: Raw user-input save policy for portable bundles:
+            ``"small"`` (default), ``True``, or ``False``.
+        output_transform: Optional callable applied once to the model output
+            after ``model.forward``. The returned value is stored as
+            ``Trace.raw_output`` and does not affect the computational graph.
+        save_raw_output: Raw output save policy for portable bundles:
             ``"small"`` (default), ``True``, or ``False``.
         layers_to_save: Which layers to save outs for (see above).
         keep_unsaved_layers: If False, layers without saved outs are removed from
@@ -1142,6 +1156,8 @@ def trace(
         layers_to_save=layers_to_save,
         transform=transform,
         save_raw_input=save_raw_input,
+        output_transform=output_transform,
+        save_raw_output=save_raw_output,
         keep_unsaved_layers=keep_unsaved_layers,
         keep_orphans=keep_orphans,
         output_device=output_device,
@@ -1226,6 +1242,8 @@ def trace(
     )
     layers_to_save = capture_options.layers_to_save
     save_raw_input_policy = capture_options.save_raw_input
+    output_transform_value = capture_options.output_transform
+    save_raw_output_policy = capture_options.save_raw_output
     keep_unsaved_layers = capture_options.keep_unsaved_layers
     keep_orphans = capture_options.keep_orphans
     output_device = capture_options.output_device
@@ -1334,6 +1352,7 @@ def trace(
             "detach_saved_activations": detach_saved_activations,
             "recurrence_detection": recurrence_detection,
             "train_mode": train_mode_value,
+            "output_transform": repr(output_transform_value),
         }
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
         cache_root = _capture_cache_dir(cache_dir_value) / "capture"
@@ -1403,6 +1422,8 @@ def trace(
             transform=input_transform,
             raw_input=raw_input,
             save_raw_input=save_raw_input_policy,
+            output_transform=output_transform_value,
+            save_raw_output=save_raw_output_policy,
         )
     else:
         # --- TWO-PASS path ---
@@ -1458,6 +1479,8 @@ def trace(
             transform=input_transform,
             raw_input=raw_input,
             save_raw_input=save_raw_input_policy,
+            output_transform=output_transform_value,
+            save_raw_output=save_raw_output_policy,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching outs.

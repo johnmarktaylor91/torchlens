@@ -628,6 +628,7 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         share={
             "out_postfunc",
             "grad_transform",
+            "_output_transform",
             "_source_code_blob",
             "_source_model_ref",
             "_optimizer",

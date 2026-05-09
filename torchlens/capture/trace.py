@@ -574,6 +574,9 @@ def run_and_log_inputs_through_model(
 
             outputs = model(*input_args, **input_kwargs)
 
+        output_transform = getattr(self, "_output_transform", None)
+        self.raw_output = output_transform(outputs) if output_transform is not None else None
+
         self.forward_duration = time.time() - self.start_time - self.setup_duration
         _vprint(
             self,

@@ -24,6 +24,9 @@ BlobSpec: TypeAlias = tuple[str, torch.Tensor, str, str]
 _SIMPLE_KEEP_TYPES = (str, int, float, bool, type(None), torch.dtype, torch.device)
 _RAW_INPUT_TEXT_LIMIT = 10_000
 _RAW_INPUT_TENSOR_BYTES_LIMIT = 1_000_000
+_RAW_OUTPUT_TEXT_LIMIT = _RAW_INPUT_TEXT_LIMIT
+_RAW_OUTPUT_TENSOR_BYTES_LIMIT = _RAW_INPUT_TENSOR_BYTES_LIMIT
+_RAW_CONTAINER_ITEM_LIMIT = 20
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -211,9 +214,15 @@ def _scrub_field(
 ) -> Any:
     """Scrub one object field according to its effective field policy."""
 
-    if isinstance(owner, Trace) and field_name == "raw_input":
-        return _scrub_raw_input_for_save(
-            owner, field_value, options, memo, blob_specs, blob_counter
+    if isinstance(owner, Trace) and field_name in {"raw_input", "raw_output"}:
+        return _scrub_raw_value_for_save(
+            owner,
+            field_name,
+            field_value,
+            options,
+            memo,
+            blob_specs,
+            blob_counter,
         )
     if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
         return None
@@ -233,22 +242,25 @@ def _scrub_field(
     return _scrub_value(field_value, options, memo, blob_specs, blob_counter)
 
 
-def _scrub_raw_input_for_save(
+def _scrub_raw_value_for_save(
     owner: Trace,
+    field_name: str,
     value: Any,
     options: _ScrubOptions,
     memo: dict[int, Any],
     blob_specs: list[BlobSpec],
     blob_counter: list[int],
 ) -> Any:
-    """Apply ``Trace.save_raw_input`` before portable metadata serialization.
+    """Apply a raw-value save policy before portable metadata serialization.
 
     Parameters
     ----------
     owner:
-        Trace carrying the raw-input save policy.
+        Trace carrying the raw-value save policy.
+    field_name:
+        Raw-value field being serialized.
     value:
-        Raw user input to serialize.
+        Raw user input or output metadata to serialize.
     options:
         Active scrub options.
     memo:
@@ -261,26 +273,29 @@ def _scrub_raw_input_for_save(
     Returns
     -------
     Any
-        Scrubbed raw input, a bounded placeholder, or ``None``.
+        Scrubbed raw value, a bounded placeholder, or ``None``.
     """
 
-    policy = getattr(owner, "save_raw_input", "small")
+    policy_name = f"save_{field_name}"
+    policy = getattr(owner, policy_name, "small")
     if policy is False:
         return None
     if policy is True:
         return _scrub_value(value, options, memo, blob_specs, blob_counter)
     if policy != "small":
-        raise TorchLensIOError("save_raw_input must be 'small', True, or False.")
-    return _small_raw_input_value(value)
+        raise TorchLensIOError(f"{policy_name} must be 'small', True, or False.")
+    return _small_raw_value(value, field_name=field_name)
 
 
-def _small_raw_input_value(value: Any) -> Any:
-    """Return a bounded portable representation of a raw input value.
+def _small_raw_value(value: Any, *, field_name: str) -> Any:
+    """Return a bounded portable representation of a raw value.
 
     Parameters
     ----------
     value:
-        Raw user input.
+        Raw user input or output metadata.
+    field_name:
+        Raw-value field being serialized.
 
     Returns
     -------
@@ -292,21 +307,40 @@ def _small_raw_input_value(value: Any) -> Any:
     if value is None:
         return None
     if isinstance(value, str):
-        return value[:_RAW_INPUT_TEXT_LIMIT]
+        text_limit = _RAW_OUTPUT_TEXT_LIMIT if field_name == "raw_output" else _RAW_INPUT_TEXT_LIMIT
+        return value[:text_limit]
     if isinstance(value, torch.Tensor):
         tensor_bytes = value.nelement() * value.element_size()
-        if tensor_bytes <= _RAW_INPUT_TENSOR_BYTES_LIMIT:
+        tensor_limit = (
+            _RAW_OUTPUT_TENSOR_BYTES_LIMIT
+            if field_name == "raw_output"
+            else _RAW_INPUT_TENSOR_BYTES_LIMIT
+        )
+        if tensor_bytes <= tensor_limit:
             return value
-        _LOGGER.debug("Dropping raw_input tensor over small-policy cap: %s bytes", tensor_bytes)
+        _LOGGER.debug(
+            "Dropping %s tensor over small-policy cap: %s bytes", field_name, tensor_bytes
+        )
         return None
     if isinstance(value, list):
-        return [_small_raw_input_value(item) for item in value]
+        return [
+            _small_raw_value(item, field_name=field_name)
+            for item in value[:_RAW_CONTAINER_ITEM_LIMIT]
+        ]
     if isinstance(value, tuple):
-        return tuple(_small_raw_input_value(item) for item in value)
+        return tuple(
+            _small_raw_value(item, field_name=field_name)
+            for item in value[:_RAW_CONTAINER_ITEM_LIMIT]
+        )
     if isinstance(value, dict):
-        return {key: _small_raw_input_value(item) for key, item in value.items()}
+        return {
+            key: _small_raw_value(item, field_name=field_name)
+            for key, item in list(value.items())[:_RAW_CONTAINER_ITEM_LIMIT]
+        }
     _LOGGER.debug(
-        "Dropping unsupported raw_input type under small policy: %s", type(value).__name__
+        "Dropping unsupported %s type under small policy: %s",
+        field_name,
+        type(value).__name__,
     )
     return None
 

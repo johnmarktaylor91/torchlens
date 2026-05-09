@@ -133,6 +133,9 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "raw_input": None,
     "_transform": None,
     "save_raw_input": "small",
+    "raw_output": None,
+    "_output_transform": None,
+    "save_raw_output": "small",
     "parent_run": None,
     "_intervention_spec": None,
     "ledger": [],
@@ -635,6 +638,9 @@ class Trace:
         "raw_input": FieldPolicy.KEEP,
         "_transform": FieldPolicy.DROP,
         "save_raw_input": FieldPolicy.KEEP,
+        "raw_output": FieldPolicy.KEEP,
+        "_output_transform": FieldPolicy.DROP,
+        "save_raw_output": FieldPolicy.KEEP,
         "out_postfunc": FieldPolicy.DROP,
         "_out_transform_repr": FieldPolicy.KEEP,
         "save_raw_outs": FieldPolicy.KEEP,
@@ -812,6 +818,9 @@ class Trace:
         transform: Callable[[Any], Any] | None = None,
         raw_input: Any | None = None,
         save_raw_input: str | bool = "small",
+        output_transform: Callable[[Any], Any] | None = None,
+        raw_output: Any | None = None,
+        save_raw_output: str | bool = "small",
     ) -> None:
         """Initialise a fresh Trace for a new logging session.
 
@@ -844,6 +853,10 @@ class Trace:
                 model-ready input.
             raw_input: Original user input before ``transform`` was applied.
             save_raw_input: Portable save policy for ``raw_input``.
+            output_transform: Optional callable used to convert model output into
+                human-readable metadata.
+            raw_output: Human-readable model output after ``output_transform``.
+            save_raw_output: Portable save policy for ``raw_output``.
         """
         # Callables are effectively immutable - deepcopy is unnecessary.
 
@@ -871,6 +884,9 @@ class Trace:
         self.raw_input = raw_input
         self._transform = transform
         self.save_raw_input = save_raw_input
+        self.raw_output = raw_output
+        self._output_transform = output_transform
+        self.save_raw_output = save_raw_output
         self.out_postfunc = out_postfunc
         self._out_transform_repr = repr(out_postfunc) if out_postfunc is not None else None
         self.save_raw_outs = save_raw_outs
@@ -2226,6 +2242,9 @@ class Trace:
                 "io_format_version": IO_FORMAT_VERSION,
                 "_out_transform_repr": None,
                 "save_raw_outs": True,
+                "raw_output": None,
+                "_output_transform": None,
+                "save_raw_output": "small",
                 "input_annotations": {},
                 "grad_transform": None,
                 "grad_transform_repr": None,
@@ -2363,6 +2382,10 @@ class Trace:
             "name",
             "parent_run",
             "_intervention_spec",
+            "_transform",
+            "save_raw_input",
+            "_output_transform",
+            "save_raw_output",
             "ledger",
             "_warned_direct_write",
             "_warned_mutate_in_place",
@@ -3806,6 +3829,7 @@ class Trace:
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
         transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
     ) -> "Trace":
         """Re-execute a model with this log's active intervention spec.
 
@@ -3821,6 +3845,12 @@ class Trace:
             If true, append a compatible chunk along batch dimension 0.
         strict:
             Whether graph-shape divergence should raise instead of warn.
+        transform:
+            Stored-transform sentinel, ``False`` to bypass, or explicit input
+            transform callable for this rerun.
+        output_transform:
+            Stored-transform sentinel, ``False`` to bypass, or explicit output
+            transform callable for this rerun.
 
         Returns
         -------
@@ -3850,7 +3880,14 @@ class Trace:
 
         from ..intervention.rerun import rerun as _impl
 
-        result = _impl(self, rerun_model, transformed_input, replay=replay_options)
+        resolved_output_transform = self._resolve_rerun_output_transform(output_transform)
+        result = _impl(
+            self,
+            rerun_model,
+            transformed_input,
+            replay=replay_options,
+            output_transform=resolved_output_transform,
+        )
         # Atomic swap rebuilds Trace state; restore raw_input to the new
         # user-supplied value so visualization / save-load report the
         # current input rather than the prior trace's.
@@ -3903,6 +3940,33 @@ class Trace:
                 "an already-transformed model input."
             )
         return user_input
+
+    def _resolve_rerun_output_transform(
+        self,
+        output_transform: Callable[[Any], Any] | bool | object,
+    ) -> Callable[[Any], Any] | None:
+        """Resolve the output transform callable for ``rerun``.
+
+        Parameters
+        ----------
+        output_transform:
+            Sentinel to reuse the stored output transform, ``False`` to bypass,
+            or an explicit callable to use for this rerun.
+
+        Returns
+        -------
+        Callable[[Any], Any] | None
+            Output transform to apply to the fresh model output, or ``None``.
+        """
+
+        stored_transform = getattr(self, "_output_transform", None)
+        if output_transform is _USE_STORED_TRANSFORM:
+            return stored_transform
+        if output_transform is False:
+            return None
+        if callable(output_transform):
+            return output_transform
+        return None
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log.
