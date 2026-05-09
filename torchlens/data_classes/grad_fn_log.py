@@ -9,6 +9,7 @@ import torch
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
+from ._accessor_base import Accessor
 from .grad_fn_call_log import GradFnCallLog
 
 if TYPE_CHECKING:
@@ -17,11 +18,13 @@ if TYPE_CHECKING:
     from .layer_log import LayerLog
 
 
-class GradFnCallAccessor:
+class GradFnCallAccessor(Accessor[GradFnCallLog]):
     """Scoped dict-like accessor for GradFnCallLog entries owned by a GradFnLog."""
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_source_ref": FieldPolicy.WEAKREF_STRIP,
         "_label": FieldPolicy.KEEP,
     }
 
@@ -36,7 +39,7 @@ class GradFnCallAccessor:
             Owning GradFnLog label used for pass-qualified lookup.
         """
 
-        self._dict: dict[int, GradFnCallLog] = dict(calls or {})
+        super().__init__(calls or {})
         self._label = label
 
     def __getitem__(self, key: int | str) -> GradFnCallLog:
@@ -44,10 +47,9 @@ class GradFnCallAccessor:
 
         if isinstance(key, int):
             return self._dict[key]
-        if ":" in key:
-            base, _, call_index_str = key.rpartition(":")
-            if base == self._label:
-                return self._dict[int(call_index_str)]
+        resolved = self._resolve_pass_qualified(key)
+        if resolved is not None:
+            return resolved
         raise KeyError(f"GradFn call '{key}' not found in scoped calls.")
 
     def __setitem__(self, key: int, value: GradFnCallLog) -> None:
@@ -73,25 +75,15 @@ class GradFnCallAccessor:
 
         return iter(self._dict)
 
-    def __len__(self) -> int:
-        """Return the number of scoped calls."""
-
-        return len(self._dict)
-
-    def keys(self) -> list[int]:
-        """Return call-index keys."""
-
-        return list(self._dict.keys())
-
-    def values(self) -> list[GradFnCallLog]:
-        """Return scoped GradFnCallLog values."""
-
-        return list(self._dict.values())
-
-    def items(self) -> list[tuple[int, GradFnCallLog]]:
-        """Return ``(call_index, GradFnCallLog)`` pairs."""
-
-        return list(self._dict.items())
+    def _resolve_pass_qualified(self, key: str) -> GradFnCallLog | None:
+        """Resolve ``grad_fn_label:pass`` notation to a GradFnCallLog."""
+        base, _, call_index_str = key.rpartition(":")
+        if base == self._label:
+            try:
+                return self._dict[int(call_index_str)]
+            except (KeyError, ValueError):
+                return None
+        return None
 
 
 def _clone_grad_value(value: Any) -> Any:
@@ -287,7 +279,7 @@ class GradFnLog:
         return pd.DataFrame([row], columns=GRAD_FN_LOG_FIELD_ORDER)
 
 
-class GradFnAccessor:
+class GradFnAccessor(Accessor[GradFnLog | GradFnCallLog]):
     """Dict-like accessor for ``GradFnLog`` objects.
 
     Supports integer order, exact label, pass-qualified label, and first
@@ -304,63 +296,31 @@ class GradFnAccessor:
         grad_fn_order:
             Discovery-order list of grad_fn ids.
         """
-        self._dict = {grad_fn.label: grad_fn for grad_fn in grad_fn_logs.values()}
-        self._list = [grad_fn_logs[grad_fn_id] for grad_fn_id in grad_fn_order]
+        grad_fn_dict = {grad_fn.label: grad_fn for grad_fn in grad_fn_logs.values()}
+        grad_fn_list = [grad_fn_logs[grad_fn_id] for grad_fn_id in grad_fn_order]
+        super().__init__(grad_fn_dict, item_list=grad_fn_list)
 
-    def __getitem__(self, key: Union[int, str]) -> Union[GradFnLog, GradFnCallLog]:
-        """Return a grad_fn by index, label, pass label, or first substring match.
+    def _resolve_pass_qualified(self, key: str) -> GradFnCallLog | None:
+        """Resolve ``grad_fn_label:pass`` notation to a GradFnCallLog."""
+        base, _, pass_str = key.rpartition(":")
+        if base in self._dict:
+            try:
+                call_index = int(pass_str)
+                return self._dict[base].ops[call_index]
+            except (ValueError, KeyError):
+                return None
+        return None
 
-        Parameters
-        ----------
-        key:
-            Integer ordinal, exact grad_fn label, pass-qualified label, or label substring.
-
-        Returns
-        -------
-        Union[GradFnLog, GradFnCallLog]
-            Matching grad_fn log or grad_fn pass log.
-        """
-        if isinstance(key, int):
-            return self._list[key]
-        if key in self._dict:
-            return self._dict[key]
-        if ":" in key:
-            base, _, pass_str = key.rpartition(":")
-            if base in self._dict:
-                try:
-                    call_index = int(pass_str)
-                    return self._dict[base].ops[call_index]
-                except (ValueError, KeyError):
-                    pass
+    def _resolve_substring(self, key: str) -> GradFnLog | None:
+        """Resolve the first grad_fn whose label contains ``key``."""
         matches = [grad_fn for grad_fn in self._list if key in grad_fn.label]
         if matches:
             return matches[0]
-        raise KeyError(f"GradFn '{key}' not found. Valid labels: {list(self._dict.keys())[:10]}...")
+        return None
 
-    def __contains__(self, key: object) -> bool:
-        """Return True if key resolves to a grad_fn or grad_fn pass."""
-        if isinstance(key, int):
-            return 0 <= key < len(self._list)
-        if not isinstance(key, str):
-            return False
-        if key in self._dict:
-            return True
-        if ":" in key:
-            base, _, pass_str = key.rpartition(":")
-            if base in self._dict:
-                try:
-                    return int(pass_str) in self._dict[base].ops
-                except ValueError:
-                    return False
-        return any(key in grad_fn.label for grad_fn in self._list)
-
-    def __len__(self) -> int:
-        """Return the number of grad_fn logs."""
-        return len(self._list)
-
-    def __iter__(self) -> Iterator[GradFnLog]:
-        """Iterate over grad_fn logs in discovery order."""
-        return iter(self._list)
+    def _suggest(self, key: str) -> list[str]:
+        """Return valid grad_fn labels for error context."""
+        return list(self._dict.keys())[:10]
 
     def __repr__(self) -> str:
         """Format the accessor as a compact label summary."""

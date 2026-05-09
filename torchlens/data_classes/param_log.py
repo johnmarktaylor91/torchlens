@@ -29,6 +29,7 @@ import torch
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
+from ._accessor_base import Accessor
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -386,7 +387,7 @@ class ParamLog:
         self.__dict__.update(state)
 
 
-class ParamAccessor:
+class ParamAccessor(Accessor["ParamLog"]):
     """Dict-like accessor for ParamLog objects.
 
     Supports indexing by:
@@ -403,41 +404,24 @@ class ParamAccessor:
     }
 
     def __init__(self, param_logs: Dict[str, "ParamLog"]) -> None:
-        self._dict = param_logs  # address -> ParamLog
-        self._list = list(param_logs.values())  # insertion-order list
+        super().__init__(param_logs)
 
-    def __getitem__(self, key: Union[int, str]) -> "ParamLog":
-        """Retrieve a parameter by integer index, full address, or short name (e.g. 'weight')."""
-        if isinstance(key, int):
-            return self._list[key]
-        if key in self._dict:
-            return self._dict[key]
+    def _resolve_substring(self, key: str) -> "ParamLog | None":
+        """Resolve an unambiguous parameter short name."""
         # Fallback: match by short name (e.g. 'weight', 'bias')
         matches = [pl for pl in self._list if pl.name == key]
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
             raise KeyError(f"Ambiguous short name '{key}' — use full address")
-        raise KeyError(key)
+        return None
 
     def __contains__(self, key: object) -> bool:
         """Check membership by full address, short name, or integer index (#84)."""
-        if isinstance(key, int):
-            return 0 <= key < len(self._list)
-        if isinstance(key, str):
-            if key in self._dict:
-                return True
-            # Also check short name match
-            return any(pl.name == key for pl in self._list)
-        return False
-
-    def __len__(self) -> int:
-        """Return the number of parameters."""
-        return len(self._dict)
-
-    def __iter__(self) -> Iterator["ParamLog"]:
-        """Iterate over ParamLog objects in insertion order."""
-        return iter(self._list)
+        try:
+            return super().__contains__(key)
+        except KeyError:
+            return True
 
     def __repr__(self) -> str:
         """Format as a dict-like string of parameter addresses with shapes and status."""

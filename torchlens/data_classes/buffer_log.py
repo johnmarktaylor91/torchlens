@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cas
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
+from ._accessor_base import Accessor
 from .op_log import OpLog
 
 if TYPE_CHECKING:
@@ -128,7 +129,7 @@ class BufferLog(OpLog):
         super().__setstate__(state)
 
 
-class BufferAccessor:
+class BufferAccessor(Accessor["BufferLog"]):
     """Dict-like accessor for BufferLog objects.
 
     Supports indexing by:
@@ -150,39 +151,27 @@ class BufferAccessor:
         buffer_dict: Dict[str, "BufferLog"],
         source_trace: "Trace | None" = None,
     ) -> None:
-        self._dict = buffer_dict  # address -> BufferLog
-        self._list = list(buffer_dict.values())  # insertion-order list
+        source_ref = weakref.ref(source_trace) if source_trace is not None else None
+        super().__init__(buffer_dict, source_ref=source_ref)
         # Store as weakref to avoid preventing Trace GC.
-        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
+        self._source_ref = source_ref
 
-    def __getitem__(self, key: Union[int, str]) -> "BufferLog":
-        """Retrieve a buffer by integer index, full address, or short name."""
-        if isinstance(key, int):
-            return self._list[key]
-        if key in self._dict:
-            return self._dict[key]
+    def _resolve_substring(self, key: str) -> "BufferLog | None":
+        """Resolve an unambiguous buffer short name."""
         # Fallback: match by short name (e.g. 'running_mean')
         matches = [bl for bl in self._list if bl.name == key]
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
             raise KeyError(f"Ambiguous short name '{key}' -- use full address")
-        raise KeyError(key)
+        return None
 
-    def __contains__(self, key: str) -> bool:
+    def __contains__(self, key: object) -> bool:
         """Check membership by full address or short name."""
-        if key in self._dict:
+        try:
+            return super().__contains__(key)
+        except KeyError:
             return True
-        # Also check short names
-        return any(bl.name == key for bl in self._list)
-
-    def __len__(self) -> int:
-        """Return the number of buffers."""
-        return len(self._dict)
-
-    def __iter__(self) -> Iterator["BufferLog"]:
-        """Iterate over BufferLog objects in insertion order."""
-        return iter(self._list)
 
     def __repr__(self) -> str:
         """Format as a dict-like string of buffer addresses with shapes and dtypes."""

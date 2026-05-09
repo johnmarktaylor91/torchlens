@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Uni
 
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..utils.display import human_readable_size
+from ._accessor_base import Accessor
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -46,10 +47,14 @@ if TYPE_CHECKING:
     from .param_log import ParamLog
 
 
-class OpAccessor:
+class OpAccessor(Accessor["OpLog"]):
     """Scoped dict-like accessor for the OpLog entries owned by one LayerLog."""
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {"_dict": FieldPolicy.KEEP}
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_source_ref": FieldPolicy.WEAKREF_STRIP,
+    }
 
     def __init__(self, ops: Dict[int, "OpLog"] | None = None) -> None:
         """Initialize the accessor.
@@ -60,23 +65,16 @@ class OpAccessor:
             Mapping from 1-based call index to OpLog.
         """
 
-        self._dict: Dict[int, "OpLog"] = dict(ops or {})
+        super().__init__(ops or {})
 
     def __getitem__(self, key: int | str) -> "OpLog":
         """Return an OpLog by call index or pass-qualified label."""
 
         if isinstance(key, int):
             return self._dict[key]
-        for op_log in self._dict.values():
-            if key in {
-                op_log.layer_label,
-                op_log.layer_label_w_pass,
-                op_log.layer_label_no_pass,
-                op_log.layer_label_short,
-                op_log.layer_label_w_pass_short,
-                op_log.layer_label_no_pass_short,
-            }:
-                return op_log
+        resolved = self._resolve_substring(key)
+        if resolved is not None:
+            return resolved
         raise KeyError(f"Op '{key}' not found in scoped LayerLog ops.")
 
     def __setitem__(self, key: int, value: "OpLog") -> None:
@@ -102,30 +100,24 @@ class OpAccessor:
 
         return iter(self._dict)
 
-    def __len__(self) -> int:
-        """Return the number of scoped ops."""
-
-        return len(self._dict)
-
     def get(self, key: int, default: "OpLog | None" = None) -> "OpLog | None":
         """Return an OpLog by call index, or default."""
 
         return self._dict.get(key, default)
 
-    def keys(self) -> list[int]:
-        """Return call-index keys."""
-
-        return list(self._dict.keys())
-
-    def values(self) -> list["OpLog"]:
-        """Return scoped OpLog values."""
-
-        return list(self._dict.values())
-
-    def items(self) -> list[tuple[int, "OpLog"]]:
-        """Return ``(call_index, OpLog)`` pairs."""
-
-        return list(self._dict.items())
+    def _resolve_substring(self, key: str) -> "OpLog | None":
+        """Resolve OpLog by any scoped layer-label variant."""
+        for op_log in self._dict.values():
+            if key in {
+                op_log.layer_label,
+                op_log.layer_label_w_pass,
+                op_log.layer_label_no_pass,
+                op_log.layer_label_short,
+                op_log.layer_label_w_pass_short,
+                op_log.layer_label_no_pass_short,
+            }:
+                return op_log
+        return None
 
 
 class LayerLog:
@@ -1055,7 +1047,7 @@ class LayerLog:
         return cast(int, self.num_calls)
 
 
-class LayerAccessor:
+class LayerAccessor(Accessor[Union["LayerLog", "OpLog"]]):
     """Dict-like accessor for LayerLog objects.
 
     Supports indexing by:
@@ -1078,70 +1070,28 @@ class LayerAccessor:
         layer_logs: Dict[str, "LayerLog"],
         source_trace: Optional["Trace"] = None,
     ) -> None:
-        self._dict = layer_logs  # no-pass label -> LayerLog
-        self._list = list(layer_logs.values())  # execution-order list
+        source_ref = weakref.ref(source_trace) if source_trace is not None else None
+        super().__init__(layer_logs, source_ref=source_ref)
         # Store as weakref to avoid preventing Trace GC.
-        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
+        self._source_ref = source_ref
 
-    def __getitem__(self, key: Union[int, str]) -> Union["LayerLog", "OpLog"]:
-        """Return a LayerLog by label or index, or a OpLog by pass label.
+    def _resolve_pass_qualified(self, key: str) -> "OpLog | None":
+        """Resolve ``layer_label:pass`` notation to an OpLog."""
+        base, _, pass_str = key.rpartition(":")
+        if base in self._dict:
+            try:
+                call_index = int(pass_str)
+                return self._dict[base].ops[call_index]
+            except (ValueError, KeyError):
+                return None
+        return None
 
-        Pass notation ``"conv2d_1_1:2"`` splits on the last colon, looks up
-        the base LayerLog, and returns ``layer_log.ops[2]``.
-        """
-        if isinstance(key, int):
-            return self._list[key]
-        if key in self._dict:
-            return self._dict[key]
-        # Try pass notation: "conv2d_1_1:2" -> LayerLog.ops[2]
-        if ":" in key and self._source_ref is not None:
-            base, _, pass_str = key.rpartition(":")
-            if base in self._dict:
-                try:
-                    call_index = int(pass_str)
-                    return self._dict[base].ops[call_index]
-                except (ValueError, KeyError):
-                    pass
-        suggestions = []
+    def _suggest(self, key: str) -> list[str]:
+        """Return similar layer labels from the source Trace."""
         source = self._source_ref() if self._source_ref is not None else None
         if source is not None and hasattr(source, "find_layers"):
-            suggestions = source.find_layers(str(key))
-        if suggestions:
-            suggestion_str = ", ".join(repr(item) for item in suggestions)
-            raise KeyError(f"Layer '{key}' not found. Did you mean {suggestion_str}?")
-        raise KeyError(f"Layer '{key}' not found.")
-
-    def __contains__(self, key: object) -> bool:
-        return key in self._dict
-
-    def __dir__(self) -> List[str]:
-        """Return Python attributes plus layer labels for tab completion.
-
-        Returns
-        -------
-        List[str]
-            Attribute names and valid layer labels.
-        """
-
-        return sorted(set(super().__dir__()) | set(self._dict.keys()))
-
-    def _ipython_key_completions_(self) -> List[str]:
-        """Return layer labels for IPython ``obj[...]`` completion.
-
-        Returns
-        -------
-        List[str]
-            Valid layer labels.
-        """
-
-        return list(self._dict.keys())
-
-    def __len__(self) -> int:
-        return len(self._dict)
-
-    def __iter__(self) -> Iterator["LayerLog"]:
-        """Iterate over LayerLog objects in execution order."""
-        return iter(self._list)
+            return source.find_layers(str(key))
+        return []
 
     def by_operator(self, operator: str | None = None) -> Dict[str, int] | List[str]:
         """Group layers by Torch operator name.

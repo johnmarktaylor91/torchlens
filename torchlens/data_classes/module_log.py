@@ -33,6 +33,7 @@ import torch
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
+from ._accessor_base import Accessor
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -43,10 +44,14 @@ if TYPE_CHECKING:
     from .param_log import ParamAccessor
 
 
-class ModuleCallAccessor:
+class ModuleCallAccessor(Accessor["ModuleCallLog"]):
     """Scoped dict-like accessor for ModuleCallLog entries owned by a ModuleLog."""
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {"_dict": FieldPolicy.KEEP}
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_source_ref": FieldPolicy.WEAKREF_STRIP,
+    }
 
     def __init__(self, calls: Dict[int, "ModuleCallLog"] | None = None) -> None:
         """Initialize the accessor.
@@ -57,16 +62,16 @@ class ModuleCallAccessor:
             Mapping from 1-based call index to ModuleCallLog.
         """
 
-        self._dict: Dict[int, "ModuleCallLog"] = dict(calls or {})
+        super().__init__(calls or {})
 
     def __getitem__(self, key: int | str) -> "ModuleCallLog":
         """Return a ModuleCallLog by call index or call label."""
 
         if isinstance(key, int):
             return self._dict[key]
-        for call in self._dict.values():
-            if key == call.call_label:
-                return call
+        resolved = self._resolve_substring(key)
+        if resolved is not None:
+            return resolved
         raise KeyError(f"Module call '{key}' not found in scoped calls.")
 
     def __setitem__(self, key: int, value: "ModuleCallLog") -> None:
@@ -88,30 +93,17 @@ class ModuleCallAccessor:
 
         return iter(self._dict)
 
-    def __len__(self) -> int:
-        """Return the number of scoped calls."""
-
-        return len(self._dict)
-
     def get(self, key: int, default: "ModuleCallLog | None" = None) -> "ModuleCallLog | None":
         """Return a ModuleCallLog by call index, or default."""
 
         return self._dict.get(key, default)
 
-    def keys(self) -> list[int]:
-        """Return call-index keys."""
-
-        return list(self._dict.keys())
-
-    def values(self) -> list["ModuleCallLog"]:
-        """Return scoped ModuleCallLog values."""
-
-        return list(self._dict.values())
-
-    def items(self) -> list[tuple[int, "ModuleCallLog"]]:
-        """Return ``(call_index, ModuleCallLog)`` pairs."""
-
-        return list(self._dict.items())
+    def _resolve_substring(self, key: str) -> "ModuleCallLog | None":
+        """Resolve a ModuleCallLog by exact call label."""
+        for call in self._dict.values():
+            if key == call.call_label:
+                return call
+        return None
 
 
 @dataclass
@@ -1054,7 +1046,7 @@ class ModuleLog:
         self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
 
-class ModuleAccessor:
+class ModuleAccessor(Accessor[Union["ModuleLog", "ModuleCallLog"]]):
     """Dict-like accessor for ModuleLog objects.
 
     Supports indexing by:
@@ -1080,8 +1072,7 @@ class ModuleAccessor:
         module_list: Optional[List["ModuleLog"]] = None,
         pass_dict: Optional[Dict[str, "ModuleCallLog"]] = None,
     ) -> None:
-        self._dict = module_dict  # primary address -> ModuleLog
-        self._list = module_list if module_list is not None else list(module_dict.values())
+        super().__init__(module_dict, item_list=module_list)
         self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModuleCallLog
         # Alias map: for shared modules (same nn.Module at multiple addresses),
         # every non-primary address also resolves to the same ModuleLog.
@@ -1092,61 +1083,45 @@ class ModuleAccessor:
                     self._alias_dict[alias] = ml
 
     def __getitem__(self, key: Union[int, str]) -> Union["ModuleLog", "ModuleCallLog"]:
-        """Return a ModuleLog by address string or ordinal index, or a ModuleCallLog by pass label.
-
-        Shared modules (same nn.Module registered under multiple addresses) can
-        be looked up by any of their aliases.
-        """
-        if isinstance(key, int):
-            return self._list[key]
+        """Return a ModuleLog or ModuleCallLog by module-specific lookup rules."""
         if key == "":
             key = "self"
-        if key in self._dict:
-            return self._dict[key]
-        if key in self._alias_dict:
+        if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
-        if key in self._pass_dict:
+        if isinstance(key, str) and key in self._pass_dict:
             return self._pass_dict[key]
-        raise KeyError(f"Module '{key}' not found.")
+        return super().__getitem__(key)
 
     def __contains__(self, key: object) -> bool:
         """Return True if key is a known module address, alias, or pass label."""
         if key == "":
             key = "self"
-        return key in self._dict or key in self._alias_dict or key in self._pass_dict
+        return super().__contains__(key) or key in self._alias_dict or key in self._pass_dict
 
-    def __len__(self) -> int:
-        """Return the number of modules in this accessor."""
-        return len(self._dict)
-
-    def __dir__(self) -> List[str]:
+    def __dir__(self) -> list[str]:
         """Return Python attributes plus module addresses for tab completion.
 
         Returns
         -------
-        List[str]
+        list[str]
             Attribute names and valid module addresses.
         """
 
         keys = set(self._dict.keys()) | set(self._alias_dict.keys()) | set(self._pass_dict.keys())
         return sorted(set(super().__dir__()) | keys)
 
-    def _ipython_key_completions_(self) -> List[str]:
+    def _ipython_key_completions_(self) -> list[str]:
         """Return module addresses for IPython ``obj[...]`` completion.
 
         Returns
         -------
-        List[str]
+        list[str]
             Valid module addresses and pass labels.
         """
 
         return (
             list(self._dict.keys()) + list(self._alias_dict.keys()) + list(self._pass_dict.keys())
         )
-
-    def __iter__(self) -> Iterator["ModuleLog"]:
-        """Iterate over ModuleLog objects in address order."""
-        return iter(self._list)
 
     def __repr__(self) -> str:
         """Show a table of all modules with class, depth, param, layer, and pass counts."""
