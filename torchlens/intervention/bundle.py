@@ -101,6 +101,42 @@ class _BundleAccessorProperty(property):
         return self._accessor_cls(instance)
 
 
+class _BundleStructuralProperty:
+    """Descriptor exposing Bundle predicates without counting as a method."""
+
+    def __init__(self, getter: Callable[["Bundle"], Any]) -> None:
+        """Initialize the descriptor.
+
+        Parameters
+        ----------
+        getter:
+            Instance getter to call for Bundle instances.
+        """
+
+        self._getter = getter
+        self.__doc__ = getter.__doc__
+
+    def __get__(self, instance: "Bundle | None", owner: type["Bundle"]) -> Any:
+        """Return the descriptor on classes or computed value on instances.
+
+        Parameters
+        ----------
+        instance:
+            Bundle instance, or ``None`` for class access.
+        owner:
+            Owning Bundle class.
+
+        Returns
+        -------
+        Any
+            Descriptor for class access, otherwise the computed property value.
+        """
+
+        if instance is None:
+            return self
+        return self._getter(instance)
+
+
 class Bundle:
     """Flat container of Traces with relationship-gated operations.
 
@@ -313,6 +349,163 @@ class Bundle:
     grad_fns = _BundleAccessorProperty(SuperGradFnAccessor)
     module_calls = _BundleAccessorProperty(SuperModuleCallAccessor)
     grad_fn_calls = _BundleAccessorProperty(SuperGradFnCallAccessor)
+
+    @_BundleStructuralProperty
+    def is_structurally_consistent(self) -> bool:
+        """Return whether all members share the same graph-shape hash.
+
+        Returns
+        -------
+        bool
+            Whether every member has an equal ``graph_shape_hash`` value.
+        """
+
+        hashes = {getattr(member, "graph_shape_hash", None) for member in self._members.values()}
+        return len(hashes) == 1
+
+    @_BundleStructuralProperty
+    def shared_op_labels(self) -> list[str]:
+        """Return op labels present in every member.
+
+        Returns
+        -------
+        list[str]
+            Shared pass-qualified op labels, ordered by the first member.
+        """
+
+        return self._shared(lambda trace: getattr(trace, "op_labels", ()))
+
+    @_BundleStructuralProperty
+    def divergent_op_labels(self) -> list[str]:
+        """Return op labels not present in every member.
+
+        Returns
+        -------
+        list[str]
+            Pass-qualified op labels present in some but not all members.
+        """
+
+        return self._divergent(lambda trace: getattr(trace, "op_labels", ()))
+
+    @_BundleStructuralProperty
+    def shared_layer_labels(self) -> list[str]:
+        """Return layer labels present in every member.
+
+        Returns
+        -------
+        list[str]
+            Shared aggregate layer labels, ordered by the first member.
+        """
+
+        return self._shared(lambda trace: getattr(trace, "layer_labels", ()))
+
+    @_BundleStructuralProperty
+    def divergent_layer_labels(self) -> list[str]:
+        """Return layer labels not present in every member.
+
+        Returns
+        -------
+        list[str]
+            Aggregate layer labels present in some but not all members.
+        """
+
+        return self._divergent(lambda trace: getattr(trace, "layer_labels", ()))
+
+    @_BundleStructuralProperty
+    def shared_module_addresses(self) -> list[str]:
+        """Return module addresses present in every member.
+
+        Returns
+        -------
+        list[str]
+            Shared module addresses, ordered by the first member.
+        """
+
+        return self._shared(lambda trace: trace.modules.keys())
+
+    @_BundleStructuralProperty
+    def divergent_module_addresses(self) -> list[str]:
+        """Return module addresses not present in every member.
+
+        Returns
+        -------
+        list[str]
+            Module addresses present in some but not all members.
+        """
+
+        return self._divergent(lambda trace: trace.modules.keys())
+
+    @_BundleStructuralProperty
+    def shared_param_names(self) -> list[str]:
+        """Return parameter paths present in every member.
+
+        Returns
+        -------
+        list[str]
+            Shared parameter name paths, ordered by the first member.
+        """
+
+        return self._shared(lambda trace: trace.params.keys())
+
+    @_BundleStructuralProperty
+    def divergent_param_names(self) -> list[str]:
+        """Return parameter paths not present in every member.
+
+        Returns
+        -------
+        list[str]
+            Parameter name paths present in some but not all members.
+        """
+
+        return self._divergent(lambda trace: trace.params.keys())
+
+    @_BundleStructuralProperty
+    def shared_buffer_names(self) -> list[str]:
+        """Return buffer paths present in every member.
+
+        Returns
+        -------
+        list[str]
+            Shared buffer name paths, ordered by the first member.
+        """
+
+        return self._shared(lambda trace: trace.buffers.keys())
+
+    @_BundleStructuralProperty
+    def divergent_buffer_names(self) -> list[str]:
+        """Return buffer paths not present in every member.
+
+        Returns
+        -------
+        list[str]
+            Buffer name paths present in some but not all members.
+        """
+
+        return self._divergent(lambda trace: trace.buffers.keys())
+
+    @_BundleStructuralProperty
+    def shared_grad_fn_labels(self) -> list[str]:
+        """Return grad-fn labels present in every member.
+
+        Returns
+        -------
+        list[str]
+            Shared grad-fn labels, ordered by the first member.
+        """
+
+        return self._shared(lambda trace: trace.grad_fns.keys())
+
+    @_BundleStructuralProperty
+    def divergent_grad_fn_labels(self) -> list[str]:
+        """Return grad-fn labels not present in every member.
+
+        Returns
+        -------
+        list[str]
+            Grad-fn labels present in some but not all members.
+        """
+
+        return self._divergent(lambda trace: trace.grad_fns.keys())
 
     @property
     def baseline_name(self) -> str | None:
@@ -1037,6 +1230,81 @@ class Bundle:
         if self._supergraph is None:
             self._supergraph = build_supergraph(list(self._members.values()), list(self._members))
         return self._supergraph
+
+    def _shared(self, key_fn: Callable[["Trace"], Sequence[Any]]) -> list[str]:
+        """Return keys common to every member, ordered by the first member.
+
+        Parameters
+        ----------
+        key_fn:
+            Function returning candidate keys for one member trace.
+
+        Returns
+        -------
+        list[str]
+            Keys present in all members.
+        """
+
+        member_keys = self._member_key_lists(key_fn)
+        key_sets = [set(keys) for keys in member_keys]
+        shared = set.intersection(*key_sets)
+        return [key for key in member_keys[0] if key in shared]
+
+    def _divergent(self, key_fn: Callable[["Trace"], Sequence[Any]]) -> list[str]:
+        """Return keys present in some members but not every member.
+
+        Parameters
+        ----------
+        key_fn:
+            Function returning candidate keys for one member trace.
+
+        Returns
+        -------
+        list[str]
+            Keys present in at least one member and absent from at least one member.
+        """
+
+        member_keys = self._member_key_lists(key_fn)
+        key_sets = [set(keys) for keys in member_keys]
+        shared = set.intersection(*key_sets)
+        union = set.union(*key_sets)
+        divergent = union - shared
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for keys in member_keys:
+            for key in keys:
+                if key in divergent and key not in seen:
+                    ordered.append(key)
+                    seen.add(key)
+        return ordered
+
+    def _member_key_lists(self, key_fn: Callable[["Trace"], Sequence[Any]]) -> list[list[str]]:
+        """Return normalized per-member key lists with duplicates removed.
+
+        Parameters
+        ----------
+        key_fn:
+            Function returning candidate keys for one member trace.
+
+        Returns
+        -------
+        list[list[str]]
+            String keys for each member in member order.
+        """
+
+        member_keys: list[list[str]] = []
+        for member in self._members.values():
+            keys: list[str] = []
+            seen: set[str] = set()
+            for raw_key in key_fn(member):
+                if raw_key is None:
+                    continue
+                key = str(raw_key)
+                if key not in seen:
+                    keys.append(key)
+                    seen.add(key)
+            member_keys.append(keys)
+        return member_keys
 
     def _enforce_capacity(self) -> None:
         """Evict oldest non-baseline members when above capacity.
