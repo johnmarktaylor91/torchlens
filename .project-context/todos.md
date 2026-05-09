@@ -672,6 +672,44 @@ but are natural follow-ons. Pick up after MVP ships.
     on `naming-sprint-impl`). Do NOT bundle with feature work — pure
     rename pass, all-tests-green, no behavior changes.
 
+  Drop `-Log` suffix from log classes (raised 2026-05-09; bundle
+  with naming-sprint v3, NOT a separate sprint):
+
+  Following the precedent of `ModelLog -> Trace`: the `-Log` suffix
+  is naming-from-the-implementation-outward (the class IS a record-
+  of-a-thing, but the user thinks of it as "the layer," "the op").
+  Class names mostly surface in repr / type hints / introspection —
+  users access via `trace.layers["..."]` accessors and almost never
+  import the class directly. So the rename is mostly cosmetic from
+  the user's perspective but makes repr / docstrings cleaner.
+
+  **Principled rule**: drop `-Log` UNLESS the bare name collides with
+  a high-frequency PyTorch concept.
+
+  | Class | Bare name | Collision check | Verdict |
+  |---|---|---|---|
+  | `OpLog` | `Op` | weak | drop |
+  | `LayerLog` | `Layer` | weak | drop |
+  | `BufferLog` | `Buffer` | weak | drop |
+  | `ParamLog` | `Param` | weak (PyTorch uses `Parameter`) | drop |
+  | `GradFnLog` | `GradFn` | weak | drop |
+  | `ModuleLog` | `Module` | **strong (nn.Module is ubiquitous)** | **keep** |
+  | `ModuleCallLog` | compound noun, awkward either way | defer |
+  | `GradFnCallLog` | compound noun, awkward either way | defer |
+
+  The slight inconsistency (most lose `-Log`, `ModuleLog` keeps it)
+  is principled, not arbitrary. Document in the rename PR:
+  "ModuleLog keeps the qualifier because Module collides with
+  nn.Module."
+
+  Compound-noun cases (`ModuleCallLog`, `GradFnCallLog`) are
+  awkward either way; defer to a separate underlying-noun renaming
+  pass that may produce better names like `ModulePass` (matching the
+  existing `LayerPassLog -> OpLog` rename precedent).
+
+  Each rename ships with a deprecation alias for one minor cycle.
+  Coordinated batch pass — users update once, not five times.
+
 - Generic `transform=` kwarg on `tl.trace` + raw-input rendering
   (raised 2026-05-07). Refines the text-input idea below into a
   cleaner architecture: instead of putting tokenization in a bridge,
