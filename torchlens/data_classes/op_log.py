@@ -94,6 +94,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "transformed_out_shape": None,
     "transformed_out_dtype": None,
     "transformed_out_memory": None,
+    "visualizer_path": None,
     "transformed_grad": None,
     "transformed_grad_shape": None,
     "transformed_grad_dtype": None,
@@ -246,6 +247,7 @@ class OpLog:
         "transformed_out_dtype": FieldPolicy.KEEP,
         "memory": FieldPolicy.KEEP,
         "transformed_out_memory": FieldPolicy.KEEP,
+        "visualizer_path": FieldPolicy.KEEP,
         "autograd_saved_memory": FieldPolicy.KEEP,
         "num_autograd_saved_tensors": FieldPolicy.KEEP,
         "bytes_delta_at_call": FieldPolicy.KEEP,
@@ -515,6 +517,7 @@ class OpLog:
         self.transformed_out_dtype = fields_dict["transformed_out_dtype"]
         self.memory = fields_dict["memory"]
         self.transformed_out_memory = fields_dict["transformed_out_memory"]
+        self.visualizer_path: str | None = fields_dict["visualizer_path"]
         self.autograd_saved_memory: Optional[int] = fields_dict["autograd_saved_memory"]
         self.num_autograd_saved_tensors: Optional[int] = fields_dict["num_autograd_saved_tensors"]
         self.bytes_delta_at_call: Optional[int] = fields_dict["bytes_delta_at_call"]

@@ -25,6 +25,9 @@ import json
 import os
 import pickle
 import random
+import re
+import tempfile
+import warnings
 from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
@@ -76,6 +79,7 @@ from .visualization.code_panel import (
 )
 from .intervention.errors import InterventionReadyConflictError
 from .intervention.hooks import normalize_hook_plan
+from .intervention.resolver import resolve_sites
 from ._run_state import RunState
 
 
@@ -717,6 +721,8 @@ def _run_model_and_save_specified_outs(
     save_raw_input: str | bool = "small",
     output_transform: Callable[[Any], Any] | None = None,
     save_raw_output: str | bool = "small",
+    layer_visualizers: dict[Any, Callable[..., Any]] | None = None,
+    save_visualizations: bool = False,
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
 
@@ -788,6 +794,8 @@ def _run_model_and_save_specified_outs(
         output_transform: Optional callable used to produce human-readable
             output metadata from model output.
         save_raw_output: Portable save policy for the transformed raw output.
+        layer_visualizers: Optional mapping from selectors to thumbnail visualizer callables.
+        save_visualizations: Whether rendered thumbnails should persist in portable bundles.
 
     Returns:
         Fully-populated Trace.
@@ -849,6 +857,8 @@ def _run_model_and_save_specified_outs(
         save_raw_input=save_raw_input,
         output_transform=output_transform,
         save_raw_output=save_raw_output,
+        layer_visualizers=layer_visualizers,
+        save_visualizations=save_visualizations,
     )
     trace.name = name
     forward_code = getattr(model.forward, "__code__", None)
@@ -894,6 +904,96 @@ def _run_model_and_save_specified_outs(
     return trace
 
 
+def _render_layer_visualizers(
+    trace: Trace,
+    layer_visualizers: dict[Any, Callable[..., Any]],
+) -> None:
+    """Render configured per-layer visualizer thumbnails after capture.
+
+    Parameters
+    ----------
+    trace:
+        Completed trace whose layer outs may be rendered.
+    layer_visualizers:
+        Mapping from TorchLens site selectors to visualizer callables.
+    """
+
+    output_dir = Path(tempfile.mkdtemp(prefix="torchlens_visualizers_"))
+    trace._visualizer_dir = str(output_dir)
+    visualizer_dir = output_dir / "visualizers"
+    visualizer_dir.mkdir(parents=True, exist_ok=True)
+    max_fanout = max(1, len(trace.layer_list))
+
+    for selector, visualizer in layer_visualizers.items():
+        try:
+            selected_ops = tuple(resolve_sites(trace, selector, max_fanout=max_fanout))
+        except Exception as exc:
+            warnings.warn(
+                f"Skipping layer visualizer for selector {selector!r}: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
+        for op in selected_ops:
+            _render_one_layer_visualizer(visualizer_dir, op, visualizer)
+
+
+def _render_one_layer_visualizer(
+    visualizer_dir: Path,
+    op: Any,
+    visualizer: Callable[..., Any],
+) -> None:
+    """Render one op visualizer and store its output path on the op.
+
+    Parameters
+    ----------
+    visualizer_dir:
+        Directory that receives rendered files.
+    op:
+        Layer operation to render.
+    visualizer:
+        Callable accepting ``(tensor, *, layer_label=None)``.
+    """
+
+    if not bool(getattr(op, "has_saved_outs", False)) or getattr(op, "out", None) is None:
+        return
+    try:
+        rendered = visualizer(op.out, layer_label=getattr(op, "layer_label", None))
+        if rendered is None:
+            return
+        safe_label = _safe_visualizer_filename(str(op.layer_label))
+        if isinstance(rendered, str):
+            output_path = visualizer_dir / f"{safe_label}.html"
+            output_path.write_text(rendered, encoding="utf-8")
+        else:
+            output_path = visualizer_dir / f"{safe_label}.png"
+            rendered.save(output_path)
+        op.visualizer_path = str(output_path)
+    except Exception as exc:
+        warnings.warn(
+            f"Layer visualizer failed for {getattr(op, 'layer_label', '<unknown>')}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+def _safe_visualizer_filename(label: str) -> str:
+    """Return a filesystem-safe visualizer basename for a layer label.
+
+    Parameters
+    ----------
+    label:
+        Layer label to encode.
+
+    Returns
+    -------
+    str
+        Safe filename stem.
+    """
+
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", label.replace(":", "pass")).strip("_") or "layer"
+
+
 def trace(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -903,6 +1003,8 @@ def trace(
     save_raw_input: str | bool | MissingType = MISSING,
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
     save_raw_output: str | bool | MissingType = MISSING,
+    layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType = MISSING,
+    save_visualizations: bool | MissingType = MISSING,
     keep_unsaved_layers: bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -1009,6 +1111,11 @@ def trace(
             ``Trace.raw_output`` and does not affect the computational graph.
         save_raw_output: Raw output save policy for portable bundles:
             ``"small"`` (default), ``True``, or ``False``.
+        layer_visualizers: Optional mapping from site selectors to callables that render
+            saved layer outs as PIL images or HTML strings. Selector keys accept the same
+            vocabulary as ``find_sites``.
+        save_visualizations: If True, copy rendered visualizer PNG files into portable
+            bundles. Defaults to False.
         layers_to_save: Which layers to save outs for (see above).
         keep_unsaved_layers: If False, layers without saved outs are removed from
             the returned Trace (they still exist during processing). When
@@ -1158,6 +1265,8 @@ def trace(
         save_raw_input=save_raw_input,
         output_transform=output_transform,
         save_raw_output=save_raw_output,
+        layer_visualizers=layer_visualizers,
+        save_visualizations=save_visualizations,
         keep_unsaved_layers=keep_unsaved_layers,
         keep_orphans=keep_orphans,
         output_device=output_device,
@@ -1244,6 +1353,8 @@ def trace(
     save_raw_input_policy = capture_options.save_raw_input
     output_transform_value = capture_options.output_transform
     save_raw_output_policy = capture_options.save_raw_output
+    layer_visualizers_value = capture_options.layer_visualizers
+    save_visualizations_value = capture_options.save_visualizations
     keep_unsaved_layers = capture_options.keep_unsaved_layers
     keep_orphans = capture_options.keep_orphans
     output_device = capture_options.output_device
@@ -1424,6 +1535,8 @@ def trace(
             save_raw_input=save_raw_input_policy,
             output_transform=output_transform_value,
             save_raw_output=save_raw_output_policy,
+            layer_visualizers=layer_visualizers_value,
+            save_visualizations=save_visualizations_value,
         )
     else:
         # --- TWO-PASS path ---
@@ -1481,6 +1594,8 @@ def trace(
             save_raw_input=save_raw_input_policy,
             output_transform=output_transform_value,
             save_raw_output=save_raw_output_policy,
+            layer_visualizers=layer_visualizers_value,
+            save_visualizations=save_visualizations_value,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching outs.
@@ -1506,6 +1621,9 @@ def trace(
         f"{trace.num_saved_ops} saved, "
         f"{trace.total_out_memory_str}",
     )
+
+    if layer_visualizers_value:
+        _render_layer_visualizers(trace, layer_visualizers_value)
 
     # Visualize if desired.
     if visualization_options.mode != "none":

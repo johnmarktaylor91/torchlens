@@ -136,6 +136,9 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "raw_output": None,
     "_output_transform": None,
     "save_raw_output": "small",
+    "layer_visualizers": None,
+    "save_visualizations": False,
+    "_visualizer_dir": None,
     "parent_run": None,
     "_intervention_spec": None,
     "ledger": [],
@@ -641,6 +644,9 @@ class Trace:
         "raw_output": FieldPolicy.KEEP,
         "_output_transform": FieldPolicy.DROP,
         "save_raw_output": FieldPolicy.KEEP,
+        "layer_visualizers": FieldPolicy.DROP,
+        "save_visualizations": FieldPolicy.KEEP,
+        "_visualizer_dir": FieldPolicy.DROP,
         "out_postfunc": FieldPolicy.DROP,
         "_out_transform_repr": FieldPolicy.KEEP,
         "save_raw_outs": FieldPolicy.KEEP,
@@ -821,6 +827,8 @@ class Trace:
         output_transform: Callable[[Any], Any] | None = None,
         raw_output: Any | None = None,
         save_raw_output: str | bool = "small",
+        layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None,
+        save_visualizations: bool = False,
     ) -> None:
         """Initialise a fresh Trace for a new logging session.
 
@@ -857,6 +865,8 @@ class Trace:
                 human-readable metadata.
             raw_output: Human-readable model output after ``output_transform``.
             save_raw_output: Portable save policy for ``raw_output``.
+            layer_visualizers: Optional mapping of selectors to visualizer callables.
+            save_visualizations: Whether rendered visualizations should persist in bundles.
         """
         # Callables are effectively immutable - deepcopy is unnecessary.
 
@@ -887,6 +897,9 @@ class Trace:
         self.raw_output = raw_output
         self._output_transform = output_transform
         self.save_raw_output = save_raw_output
+        self.layer_visualizers = layer_visualizers
+        self.save_visualizations = save_visualizations
+        self._visualizer_dir: str | None = None
         self.out_postfunc = out_postfunc
         self._out_transform_repr = repr(out_postfunc) if out_postfunc is not None else None
         self.save_raw_outs = save_raw_outs
@@ -2245,6 +2258,9 @@ class Trace:
                 "raw_output": None,
                 "_output_transform": None,
                 "save_raw_output": "small",
+                "layer_visualizers": None,
+                "save_visualizations": False,
+                "_visualizer_dir": None,
                 "input_annotations": {},
                 "grad_transform": None,
                 "grad_transform_repr": None,

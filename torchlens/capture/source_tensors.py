@@ -259,6 +259,7 @@ def log_source_tensor_exhaustive(
         "transformed_out_dtype": None,
         "memory": memory,
         "transformed_out_memory": None,
+        "visualizer_path": None,
         "autograd_saved_memory": None,
         "num_autograd_saved_tensors": None,
         "bytes_delta_at_call": 0,

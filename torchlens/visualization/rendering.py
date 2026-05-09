@@ -1865,6 +1865,22 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
+    visualizer_path = getattr(node, "visualizer_path", None)
+    if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
+        default_spec = default_spec.replace(
+            image=visualizer_path,
+            shape="none",
+            style="",
+            fillcolor=None,
+            color=None,
+            fontcolor=node_color,
+            extra_attrs={
+                **default_spec.extra_attrs,
+                "imagescale": "true",
+                "labelloc": "b",
+                "fixedsize": "false",
+            },
+        )
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
@@ -2478,6 +2494,7 @@ def _node_spec_to_graphviz_args(spec: NodeSpec) -> dict[str, str]:
         "color": spec.color,
         "penwidth": spec.penwidth,
         "tooltip": spec.tooltip,
+        "image": spec.image,
     }
     for attr_name, attr_value in optional_attrs.items():
         if attr_value is not None:

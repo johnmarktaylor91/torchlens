@@ -1981,6 +1981,7 @@ def _log_output_tensor_info(
     with pause_logging():
         fields_dict["memory"] = t.nelement() * t.element_size()
     fields_dict["transformed_out_memory"] = None
+    fields_dict["visualizer_path"] = None
     fields_dict["bytes_delta_at_call"] = 0
     fields_dict["bytes_peak_at_call"] = 0
     (

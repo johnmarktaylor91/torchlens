@@ -54,6 +54,8 @@ class NodeSpec:
         Optional border width.
     tooltip:
         Optional node tooltip.
+    image:
+        Optional image path to embed in the node.
     extra_attrs:
         Additional Graphviz node attributes.
     """
@@ -66,6 +68,7 @@ class NodeSpec:
     color: str | None = None
     penwidth: float | None = None
     tooltip: str | None = None
+    image: str | None = None
     extra_attrs: dict[str, str] = field(default_factory=dict)
 
     def replace(self, **kwargs: Any) -> "NodeSpec":

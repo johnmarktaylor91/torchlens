@@ -213,6 +213,12 @@ def save(
             include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
         )
+        _apply_visualization_save_policy(
+            trace,
+            scrubbed_state=scrubbed_state,
+            bundle_path=bundle_path,
+            tmp_path=tmp_path,
+        )
         _raise_for_unmaterialized_nested_blob_refs(
             scrubbed_state,
             allowed_blob_ids={blob_id for blob_id, _, _, _ in blob_specs},
@@ -796,6 +802,53 @@ def _scrub_trace_for_bundle(
     finally:
         for attr_name, attr_value in transient_attrs.items():
             setattr(trace, attr_name, attr_value)
+
+
+def _apply_visualization_save_policy(
+    trace: Trace,
+    *,
+    scrubbed_state: dict[str, Any],
+    bundle_path: Path,
+    tmp_path: Path,
+) -> None:
+    """Copy or clear rendered visualizer paths in scrubbed bundle metadata.
+
+    Parameters
+    ----------
+    trace:
+        Live trace being saved.
+    scrubbed_state:
+        Scrubbed state that will be pickled.
+    bundle_path:
+        Final bundle path.
+    tmp_path:
+        Temporary bundle directory.
+    """
+
+    scrubbed_layers = scrubbed_state.get("layer_list")
+    if not isinstance(scrubbed_layers, list):
+        return
+    if not bool(getattr(trace, "save_visualizations", False)):
+        for layer in scrubbed_layers:
+            if hasattr(layer, "visualizer_path"):
+                layer.visualizer_path = None
+        return
+
+    visualizer_dir = tmp_path / "visualizers"
+    final_visualizer_dir = bundle_path / "visualizers"
+    for index, (live_layer, scrubbed_layer) in enumerate(zip(trace.layer_list, scrubbed_layers)):
+        source_path_value = getattr(live_layer, "visualizer_path", None)
+        if not isinstance(source_path_value, str):
+            continue
+        source_path = Path(source_path_value)
+        if not source_path.is_file():
+            scrubbed_layer.visualizer_path = None
+            continue
+        visualizer_dir.mkdir(parents=True, exist_ok=True)
+        destination_name = f"{index:05d}_{source_path.name}"
+        destination_path = visualizer_dir / destination_name
+        shutil.copy2(source_path, destination_path)
+        scrubbed_layer.visualizer_path = str(final_visualizer_dir / destination_name)
 
 
 def _write_tensor_blob(

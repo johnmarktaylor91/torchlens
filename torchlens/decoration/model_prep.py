@@ -867,6 +867,7 @@ def _ensure_module_output_tensor_logged(
             "transformed_out_dtype": None,
             "memory": get_memory_amount(tensor),
             "transformed_out_memory": None,
+            "visualizer_path": None,
             "bytes_delta_at_call": 0,
             "bytes_peak_at_call": 0,
             "autograd_saved_memory": None,
