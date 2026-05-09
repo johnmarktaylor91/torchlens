@@ -2,6 +2,28 @@
 
 ## Active Tasks
 
+### Trace.draw() ergonomics for headless / programmatic use (raised 2026-05-09)
+
+While verifying the DemoModel IF/THEN fix in the 10-minute notebook, hit two
+friction points worth revisiting:
+
+1. **`Trace.render_graph()` no longer exists** — was apparently renamed/removed
+   during the naming sprint. The replacement is `trace.draw()`, but the rename
+   isn't obvious and there's no deprecation shim. Audit external callers
+   (notebooks, docs, tests, downstream users) for stale `render_graph` references
+   and either add a deprecation alias or update all call sites.
+
+2. **`trace.draw()` auto-opens the rendered PDF via xdg-open**, which fails
+   noisily on headless boxes (`Error: no "view" rule for type "application/pdf"`)
+   and is generally unwanted in scripts/notebooks. Consider:
+   - Default `view=False` (or `auto_open=False`) on programmatic invocation
+   - A separate method like `trace.dot_source()` returning the DOT text without
+     side-effecting the filesystem or launching a viewer
+   - Detect non-interactive contexts (no DISPLAY, no Jupyter) and suppress
+     auto-open
+
+
+
 ### Intervention API v1 implementation-spec maintenance items (raised cycle 2 round 7, 2026-04-29)
 
 PLAN.md v5.2 is the final architecture/UI plan (6/6 SHIP-IT in round 7). These
@@ -440,6 +462,59 @@ but are natural follow-ons. Pick up after MVP ships.
   right one.
 
 ### Other improvements
+
+- Comprehensive naming pass before TorchLens 2.0 marketing push
+  (raised 2026-05-09). Pinning the rule from the morning naming
+  riff: every public name has to pass the read-aloud test. Anything
+  new that fails it gets pushed back; existing names that fail get
+  reviewed in this sprint. Already-penciled changes:
+  - `peek` -> `pluck` (charm + honesty about cost; matches
+    `purrr::pluck` semantics; pairs with `attach` as `attach`/`pluck`
+    symmetric verb pair on the trace; reinforces the dotted-path
+    walking we designed for the recipe/container `op.outs` work).
+    Singular extraction verb only — discrete one-thing action.
+  - `extract` stays as the batch verb — close enough to a key
+    function that it should be unmistakable and clear; `harvest`
+    was considered (better metaphor pair with `pluck`) but rejected
+    for now to keep charm budget focused.
+
+  Other candidates to revisit during the sprint:
+  - **Selectors** — workmanlike (`tl.func`, `tl.module`, `tl.label`).
+    Could ship a poetic library: `tl.starts_with`, `tl.ends_with`,
+    `tl.contains`, `tl.matches`, `tl.shaped_like((1, 4, 8, 8))`,
+    `tl.between("conv2d_1", "conv2d_5")`, `tl.where(predicate)`,
+    `tl.everything()`. Compose with existing func/module selectors.
+    Single biggest tidyverse-flavored move available.
+  - **`OpLog` / `LayerLog` / `ModuleLog` etc.** — `-Log` suffix is a
+    tell that we're naming from the implementation outward (records
+    in a log). User thinks "the layer," "the op." We renamed
+    `ModelLog` -> `Trace`; consider whether `OpLog` -> `Op`,
+    `LayerLog` -> `Layer` follows. Tradeoff: `Module` collides with
+    `nn.Module`; `Op` and `Layer` are general English/PyTorch words.
+    The qualifier may be load-bearing for clarity. Decide deliberately.
+  - **Comparison/aggregation verbs** — `most_changed`, `compare_at`,
+    `relationship`, `aligned_pairs`, `delta_map` reads as a
+    grab-bag. Tidyverse-shaped would be a single `compare()` verb
+    returning a tibble-shaped result with kwargs for direction and
+    metric. Worth a coherence pass.
+  - **Symmetric pairs** — audit for missing inverses. `set`/`unset`,
+    `attach`/`detach`, `fork`/`merge`, `do`/`undo` (don't have this;
+    should we?), `replay`/(nothing). When a verb has no inverse,
+    document it as out-of-scope or add the inverse.
+
+  Sprint hygiene:
+  - One canonical name per concept; deprecation alias for one minor
+    cycle on each rename. Drop deprecated aliases at the next major
+    bump.
+  - Family cohesion across subpackages — `tl.intervention.*`,
+    `tl.viz.*`, `tl.bridge.*`, `tl.transforms.*` should all sound
+    like one family. Lowercase verbs, return data, chain.
+  - Anti-name list: if anything ends in `-er` / `-tion` / `-Manager`
+    / `-Orchestrator` / `-Context` and isn't a borrowed domain word,
+    it's suspect.
+  - This is naming-sprint v3 (after the v1 + v2 we already shipped
+    on `naming-sprint-impl`). Do NOT bundle with feature work — pure
+    rename pass, all-tests-green, no behavior changes.
 
 - Generic `transform=` kwarg on `tl.trace` + raw-input rendering
   (raised 2026-05-07). Refines the text-input idea below into a
