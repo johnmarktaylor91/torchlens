@@ -338,6 +338,8 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "module",
     "_address_normalized",
     "modules",
+    "fx_qualpath",
+    "fx_call_index",
     "modules_entered",
     "module_ops_entered",
     "module_entry_argnames",
@@ -353,6 +355,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
 ]
 
 # Backward-compatible alias — OpLog was formerly called TensorLog.
+OP_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
 TENSOR_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
 
 LAYER_LOG_FIELD_ORDER = [

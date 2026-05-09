@@ -194,6 +194,12 @@ class OpLog:
     * ``parent_layer_log`` is a back-reference to the aggregate LayerLog
       that owns this pass.  It is set *outside* fields_dict during
       ``_build_layer_logs`` and is intentionally absent from FIELD_ORDER.
+    * ``fx_qualpath`` and ``fx_call_index`` expose metadata that mirrors
+      ``torch.fx.symbolic_trace`` naming conventions, computed independently
+      using TorchLens rules.  ``fx_qualpath`` is not a lookup key, so
+      ``trace[label]`` does not accept it.  Combine
+      ``fx_qualpath.replace(".", "_")`` with ``fx_call_index`` when an
+      FX-style name form is needed.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -339,6 +345,8 @@ class OpLog:
         "module": FieldPolicy.KEEP,
         "_address_normalized": FieldPolicy.KEEP,
         "modules": FieldPolicy.KEEP,
+        "fx_qualpath": FieldPolicy.KEEP,
+        "fx_call_index": FieldPolicy.KEEP,
         "modules_entered": FieldPolicy.KEEP,
         "module_entry_argnames": FieldPolicy.KEEP,
         "module_ops_entered": FieldPolicy.KEEP,
@@ -444,6 +452,10 @@ class OpLog:
         # Validate that fields_dict has exactly the expected keys:
         if "_address_normalized" not in fields_dict:
             fields_dict["_address_normalized"] = None
+        if "fx_qualpath" not in fields_dict:
+            fields_dict["fx_qualpath"] = None
+        if "fx_call_index" not in fields_dict:
+            fields_dict["fx_call_index"] = 0
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
             error_str = "Error initializing OpLog:"
@@ -625,6 +637,8 @@ class OpLog:
         self.module = fields_dict["module"]
         self._address_normalized = fields_dict["_address_normalized"]
         self.modules = fields_dict["modules"]
+        self.fx_qualpath: Optional[str] = fields_dict["fx_qualpath"]
+        self.fx_call_index: int = fields_dict["fx_call_index"]
         self.modules_entered = fields_dict["modules_entered"]
         self.module_entry_argnames = fields_dict["module_entry_argnames"]
         self.module_ops_entered = fields_dict["module_ops_entered"]

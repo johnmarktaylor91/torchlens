@@ -185,8 +185,59 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         self.func_calls_duration += layer_entry.func_duration
 
+    _compute_fx_qualpaths(self)
     _finalize_output_compute_indexs(self)
     _build_module_hierarchy_dicts(self)
+
+
+def _module_address_for_fx(module_call_label: Any) -> str:
+    """Return the module address portion of a module call label.
+
+    Parameters
+    ----------
+    module_call_label
+        Module call encoded as ``(address, call_index)`` or as the
+        postprocessed ``"address:call_index"`` string.
+
+    Returns
+    -------
+    str
+        The structural module address without the call index.
+    """
+
+    if isinstance(module_call_label, str):
+        module_address, _module_pass = module_call_label.rsplit(":", 1)
+        return module_address
+    module_address, _module_pass = module_call_label
+    return str(module_address)
+
+
+def _compute_fx_qualpaths(self: "Trace") -> None:
+    """Compute FX-style structural qualpath metadata for every OpLog.
+
+    ``modules`` stores cumulative module addresses, so the most nested module
+    address already contains the full dotted path.
+
+    Parameters
+    ----------
+    self
+        Trace being postprocessed.
+    """
+
+    fx_call_counts: dict[str, int] = {}
+    for layer_entry in self:
+        module_calls = getattr(layer_entry, "modules", None) or []
+        op_type_segment = str(layer_entry.func_name or layer_entry.layer_type or "").lower()
+        if not module_calls or not op_type_segment:
+            layer_entry.fx_qualpath = None
+            layer_entry.fx_call_index = 0
+            continue
+
+        module_address = _module_address_for_fx(module_calls[-1])
+        fx_qualpath = f"{module_address}.{op_type_segment}"
+        layer_entry.fx_qualpath = fx_qualpath
+        layer_entry.fx_call_index = fx_call_counts.get(fx_qualpath, 0)
+        fx_call_counts[fx_qualpath] = layer_entry.fx_call_index + 1
 
 
 def _finalize_output_compute_indexs(self: "Trace") -> None:
