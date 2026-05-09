@@ -463,6 +463,91 @@ but are natural follow-ons. Pick up after MVP ships.
 
 ### Other improvements
 
+- Replace input-tensor-derived module attribution with thread-local
+  call-stack snapshot (raised 2026-05-09). Vast simplification.
+
+  TODAY (three mechanisms, one concept):
+  1. `_get_input_module_info` (capture/source_tensors.py) walks an
+     op's input tensors, finds the most-deeply-nested parent's
+     module stack, applies the parent's `_module_boundary_thread_output`
+     transitions to get current state, returns that as `op.modules`.
+  2. Per-tensor `_module_boundary_thread_inputs` /
+     `_module_boundary_thread_output` track entry/exit events on
+     each tensor as it crosses module boundaries.
+  3. Postprocess Step 6 (`_fix_modules_for_internal_tensors`) walks
+     the graph propagating module info backward to internal tensors
+     that have no input parents (factory ops like `torch.arange`),
+     replaying entry/exit threads in reverse.
+
+  All three exist because module info is currently graph-derived
+  (inferred from tensor inputs), not call-stack-derived. Factory ops
+  and pure-internal subgraphs need the fix-up because they have no
+  input tensor to inherit from.
+
+  PROPOSED (one mechanism):
+  - Thread-local module call stack pushed/popped by entry/exit hooks.
+    The hooks already fire today; we just don't read them at op-time.
+  - At op capture: `fields_dict["modules"] = list(_state.module_call_stack)`.
+    Done. One line.
+  - Drop `_get_input_module_info`. Drop Step 6 (`_fix_modules_for_internal_tensors`)
+    entirely. Drop or relegate `_module_boundary_thread_*` fields
+    (kept only if rendering still needs per-tensor entry/exit
+    annotation; investigate).
+
+  Net effect:
+  - Three mechanisms collapse to one.
+  - Factory / orphan / internally-generated ops get correct module
+    attribution for free, no fix-up needed.
+  - The `keep_orphans=True` todo above becomes simpler — orphan
+    attribution is automatic via the call stack.
+  - Step 6 of postprocess deleted; pipeline shrinks to 19 steps.
+
+  Edge cases to validate before shipping:
+  - **Direct `forward()` calls bypassing `__call__`.** Hooks don't
+    fire if user does `submodule.forward(x)` directly. Today: input
+    derivation might recover module info from earlier-properly-called
+    parents. Call-stack: would miss the bypassed submodule. Check
+    test coverage; document as anti-pattern if relevant.
+  - **`output_of_modules` / `output_of_module_calls` derivation.**
+    These currently use `_module_boundary_thread_output` to identify
+    when a tensor exits a module. If we drop per-tensor threads, we
+    need a different derivation (probably: track module exit events
+    in the global thread + record which op was the "last op inside"
+    each module call as it pops).
+  - **Cross-module tensor flow semantics.** Today's input-derived
+    approach answers "where did this op's data originate?"; call-
+    stack answers "where was this op called from?". The call-stack
+    answer is what users almost certainly mean by `op.modules` /
+    `op.containing_modules` — confirm via the existing test suite +
+    audit notebook outputs.
+  - **Recurrent / loop modules.** Both approaches handle pass
+    indexing identically; no difference expected. Verify via the
+    existing loop-detection test suite.
+  - **Module-prep-time tensors (params/buffers).** Their attribution
+    comes from a separate prep-time channel
+    (`tl_module_address`/`tl_module_type`); unchanged by this
+    refactor.
+
+  Implementation cost: 1-2 days.
+  1. Add thread-local module call stack to `_state.py`. Push on
+     entry hook, pop on exit hook. Already-fired hooks just write
+     to the new stack as well as the existing per-tensor thread.
+  2. Replace `_get_input_module_info` call site at
+     `output_tensors.py:1129` with a stack snapshot.
+  3. Audit `output_of_modules` / `output_of_module_calls` derivation
+     and re-implement on the global thread if needed.
+  4. Delete `_fix_modules_for_internal_tensors` (Step 6) once the
+     above lands and tier-2 stays green.
+  5. Update `postprocess/CLAUDE.md` step table.
+  6. Decide on `_module_boundary_thread_*` fate: keep (for rendering)
+     vs drop (if no consumer remains).
+
+  Worth doing as a follow-on to the super-family-sprint or as a
+  small standalone refactor sprint. The simplification is genuine
+  and the data-model story gets cleaner: one channel for "where was
+  this op called from," with model-prep-time channel for static
+  param/buffer attribution. The graph-walk fix-up disappears.
+
 - `keep_orphans=True` flag to retain island ops for tracking
   (raised 2026-05-09). Today `_remove_orphan_nodes` (postprocess
   Step 3) flood-fills bidirectionally from input AND output and
