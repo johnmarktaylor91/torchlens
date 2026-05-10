@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Final, Mapping, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Final, Literal, Mapping, TypeVar, cast
 
 import torch
 
@@ -65,6 +65,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "stop_after",
     "emit_nvtx",
     "raise_on_nan",
+    "_module_containment_engine",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "output_dir",
@@ -648,6 +649,7 @@ class CaptureOptions:
     stop_after: Any | None = None
     emit_nvtx: bool = False
     raise_on_nan: bool = False
+    _module_containment_engine: Literal["thread_replay", "hook_stack", "both"] = "thread_replay"
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -686,6 +688,9 @@ class CaptureOptions:
         stop_after: Any | None | MissingType = MISSING,
         emit_nvtx: bool | MissingType = MISSING,
         raise_on_nan: bool | MissingType = MISSING,
+        _module_containment_engine: (
+            Literal["thread_replay", "hook_stack", "both"] | MissingType
+        ) = MISSING,
         *,
         mark_layer_depths: bool | MissingType = MISSING,
         num_context_lines: int | MissingType = MISSING,
@@ -792,7 +797,17 @@ class CaptureOptions:
             "raise_on_nan": _resolve_option_value(
                 "raise_on_nan", raise_on_nan, False, specified_fields
             ),
+            "_module_containment_engine": _resolve_option_value(
+                "_module_containment_engine",
+                _module_containment_engine,
+                "thread_replay",
+                specified_fields,
+            ),
         }
+        if values["_module_containment_engine"] not in {"thread_replay", "hook_stack", "both"}:
+            raise ValueError(
+                "_module_containment_engine must be 'thread_replay', 'hook_stack', or 'both'"
+            )
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 

@@ -221,6 +221,7 @@ def _prepare_model_session(
     """
     _module_class_metadata_cache.clear()
     _state._dir_cache.clear()
+    trace._exhaustive_module_stack = []
     trace.model_name = str(type(model).__name__)
     try:
         trace.model_source_file = inspect.getfile(type(model))
@@ -658,8 +659,7 @@ def _handle_module_entry(
     Called immediately before ``orig_forward(*args, **kwargs)`` in the
     ``module_forward_decorator``. Performs:
 
-    1. Increments the module's pass counter (supports multi-pass modules like
-       recurrent layers).
+    1. Reads the module's pass counter (incremented by ``_module_stack.push_frame``).
     2. Pushes a ``(address, call_index)`` label onto the module's pass stack
        (popped by ``_handle_module_exit``).
     3. Finds all input tensors and annotates their layer entries with module
@@ -685,8 +685,8 @@ def _handle_module_entry(
     address = cast(str, module.tl_address)
     mod_id = id(module)
     trace._module_build_data["module_training_modes"][address] = module.training
-    trace._mod_call_index[mod_id] += 1
     module_call_index = trace._mod_call_index[mod_id]
+    assert module_call_index > 0, "_module_stack.push_frame must increment before entry"
     module_call_label = (address, module_call_index)
     # Push onto stack — popped by _handle_module_exit (or exception handler).
     trace._mod_call_labels[mod_id].append(module_call_label)
@@ -972,6 +972,7 @@ def _ensure_module_output_tensor_logged(
             "module": (address, module_call_index),
             "_address_normalized": None,
             "modules": [(address, module_call_index)] if address else [],
+            "_modules_via_stack": [(address, module_call_index)] if address else [],
             "modules_entered": [],
             "module_entry_argnames": defaultdict(list),
             "module_ops_entered": [],
@@ -1274,22 +1275,28 @@ def module_forward_decorator(
                     state.append_context(exit_ctx)
                     _mstack.pop_frame(state.module_stack, frame)
 
-        # ---- Exhaustive mode: full entry → forward → exit ----
-        input_tensor_labels, input_tensor_labels_at_entry = _handle_module_entry(
-            trace, module, args, kwargs
-        )
+        # ---- Exhaustive mode: full entry -> forward -> exit ----
+        frame = _mstack.push_frame(trace, trace._exhaustive_module_stack, module)
         try:
-            out = orig_forward(*args, **kwargs)
-        except Exception:
-            # Exception safety: pop module pass label to keep the stack
-            # consistent, preventing corruption in subsequent forward calls (#122).
-            mod_id = id(module)
-            call_labels = trace._mod_call_labels.get(mod_id)
-            if call_labels:
-                call_labels.pop()
-            raise
-        _handle_module_exit(trace, module, out, input_tensor_labels, input_tensor_labels_at_entry)
-        return out
+            input_tensor_labels, input_tensor_labels_at_entry = _handle_module_entry(
+                trace, module, args, kwargs
+            )
+            try:
+                out = orig_forward(*args, **kwargs)
+            except Exception:
+                # Exception safety: pop module pass label to keep the stack
+                # consistent, preventing corruption in subsequent forward calls (#122).
+                mod_id = id(module)
+                call_labels = trace._mod_call_labels.get(mod_id)
+                if call_labels:
+                    call_labels.pop()
+                raise
+            _handle_module_exit(
+                trace, module, out, input_tensor_labels, input_tensor_labels_at_entry
+            )
+            return out
+        finally:
+            _mstack.pop_frame(trace._exhaustive_module_stack, frame)
 
     return decorated_forward
 

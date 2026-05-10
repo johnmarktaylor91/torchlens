@@ -64,6 +64,7 @@ if TYPE_CHECKING:
 
     from .._io.streaming import BundleStreamWriter
     from ..experimental.dagua._bridge import TorchLensRenderAudit
+    from ..fastlog.types import ModuleStackFrame
     from ..intervention.types import FireRecord
     from ..visualization.code_panel import CodePanelOption
     from .buffer_log import BufferAccessor
@@ -784,6 +785,8 @@ class Trace:
         "_defer_streaming_bundle_finalization": FieldPolicy.DROP,
         "_out_sink": FieldPolicy.DROP,
         "_in_exhaustive_pass": FieldPolicy.DROP,
+        "_module_containment_engine": FieldPolicy.DROP,
+        "_exhaustive_module_stack": FieldPolicy.DROP,
         "start_time": FieldPolicy.KEEP,
         "end_time": FieldPolicy.KEEP,
         "setup_duration": FieldPolicy.KEEP,
@@ -979,6 +982,8 @@ class Trace:
         self._defer_streaming_bundle_finalization: bool = False
         self._out_sink: Optional[Callable[[str, torch.Tensor], None]] = None
         self._in_exhaustive_pass: bool = True
+        self._module_containment_engine: str = "thread_replay"
+        self._exhaustive_module_stack: list["ModuleStackFrame"] = []
 
         # Model structure info (computed @properties: is_recurrent,
         # max_recurrent_loops, is_branching, has_conditional_branching)
@@ -2289,6 +2294,8 @@ class Trace:
                 "_defer_streaming_bundle_finalization": False,
                 "_out_sink": None,
                 "_in_exhaustive_pass": False,
+                "_module_containment_engine": "thread_replay",
+                "_exhaustive_module_stack": [],
                 "_source_code_blob": {},
                 "_source_model_ref": None,
                 "train_mode": False,

@@ -13,6 +13,11 @@ from _module_containment_snapshot import build_snapshot
 from fixtures.module_containment_models import ALL_FIXTURES, FixtureBuilder
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots" / "module_containment"
+# Synthetic hook replacement is intentionally snapshotted with hook-stack semantics:
+# downstream ops stay in the dynamic call stack instead of inheriting a replaced module.
+HOOK_STACK_FIXTURES = {
+    "raw_hook_replacement_synthetic",
+}
 
 
 def _unpack_fixture(result: tuple[Any, ...]) -> tuple[Any, Any, str, Any | None]:
@@ -75,8 +80,13 @@ def test_module_containment_snapshot(builder: FixtureBuilder) -> None:
     """Compare module-containment snapshot for one fixture."""
 
     model, input_args, fixture_name, hook_handle = _unpack_fixture(builder())
+    capture = (
+        tl.options.CaptureOptions(_module_containment_engine="hook_stack")
+        if fixture_name in HOOK_STACK_FIXTURES
+        else None
+    )
     try:
-        trace = tl.trace(model, input_args, vis_opt="none")
+        trace = tl.trace(model, input_args, vis_opt="none", capture=capture)
     finally:
         if hook_handle is not None:
             hook_handle.remove()

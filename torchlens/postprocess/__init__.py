@@ -70,6 +70,7 @@ from .labeling import (
     _trim_and_reorder_model_history_fields,
 )
 from .loop_detection import _detect_and_label_loops, _group_by_shared_params
+from ._module_stack_equality import assert_module_stack_equality
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -136,6 +137,9 @@ def postprocess(
     # Step 6: Annotate the containing modules for all internally-generated tensors.
     with _vtimed(self, "  Step 6: Fix module containment"):
         _fix_modules_for_internal_tensors(self)
+
+    # Phase 1 diagnostic: no-op unless the internal engine flag enables it.
+    assert_module_stack_equality(self)
 
     # Step 7: Fix the buffer ops and parent information.
     with _vtimed(self, "  Step 7: Fix buffer layers"):

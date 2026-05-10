@@ -95,9 +95,8 @@
         "proj:1"
       ],
       "module": "proj:1",
-      "module_call_depth": 2,
+      "module_call_depth": 1,
       "modules": [
-        "relu:1",
         "proj:1"
       ],
       "output_of_module_calls": [
@@ -164,8 +163,7 @@
       "input_layers": [],
       "layers": [
         "relu_1_1",
-        "interventionreplacement_1_2",
-        "linear_1_3"
+        "interventionreplacement_1_2"
       ],
       "output_layers": [
         "relu_1_1"
@@ -228,14 +226,13 @@
       "is_train_mode": true,
       "layers": [
         "relu_1_1",
-        "interventionreplacement_1_2",
-        "linear_1_3"
+        "interventionreplacement_1_2"
       ],
       "num_calls": 1,
       "num_param_tensors": 0,
-      "num_params": 20,
+      "num_params": 0,
       "num_params_frozen": 0,
-      "num_params_trainable": 20,
+      "num_params_trainable": 0,
       "output_layers": [
         "relu_1_1"
       ]
@@ -398,7 +395,6 @@
       "module_entry_argnames": {},
       "module_ops_entered": [],
       "modules": [
-        "relu:1",
         "proj:1"
       ],
       "output_of_module_calls": [

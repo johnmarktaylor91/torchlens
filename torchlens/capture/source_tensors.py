@@ -29,6 +29,7 @@ import torch
 from torch import nn
 
 from .._errors import TorchLensPostfuncError
+from ..decoration import _module_stack as _mstack
 from .._training_validation import TrainingModeConfigError
 from ..utils.introspection import _get_code_context, get_attr_values_from_tensor_list
 from ..utils.tensor_utils import get_memory_amount
@@ -44,6 +45,29 @@ from .tensor_tracking import _add_backward_hook, _update_tensor_modules
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
+
+
+def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
+    """Return the raw hook-stack module context for a source tensor.
+
+    Parameters
+    ----------
+    self:
+        Active trace.
+
+    Returns
+    -------
+    list[tuple[str, int]]
+        Raw ``(module_address, pass_index)`` stack snapshot, or an empty list
+        when the diagnostic engine is disabled.
+    """
+
+    if getattr(self, "_module_containment_engine", "thread_replay") == "thread_replay":
+        return []
+    return [
+        (frame.address, frame.pass_index)
+        for frame in _mstack.snapshot(self._exhaustive_module_stack)
+    ]
 
 
 def log_source_tensor(
@@ -373,6 +397,7 @@ def log_source_tensor_exhaustive(
         # Module info:
         "module": None,
         "modules": [],
+        "_modules_via_stack": _snapshot_exhaustive_module_stack(self),
         "modules_entered": [],
         "module_entry_argnames": defaultdict(list),
         "module_ops_entered": [],

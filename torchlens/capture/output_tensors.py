@@ -45,6 +45,7 @@ import torch
 
 from .. import _state as _st
 from .._state import pause_logging
+from ..decoration import _module_stack as _mstack
 from ..errors import CaptureError
 from ..utils.introspection import (
     _get_code_context,
@@ -108,6 +109,29 @@ if TYPE_CHECKING:
 
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
+
+
+def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
+    """Return the raw hook-stack module context for diagnostic comparison.
+
+    Parameters
+    ----------
+    self:
+        Active trace.
+
+    Returns
+    -------
+    list[tuple[str, int]]
+        Raw ``(module_address, pass_index)`` stack snapshot, or an empty list
+        when the diagnostic engine is disabled.
+    """
+
+    if getattr(self, "_module_containment_engine", "thread_replay") == "thread_replay":
+        return []
+    return [
+        (frame.address, frame.pass_index)
+        for frame in _mstack.snapshot(self._exhaustive_module_stack)
+    ]
 
 
 def _shape_or_none(tensor: torch.Tensor | None) -> tuple[int, ...] | None:
@@ -1238,6 +1262,7 @@ def _build_shared_fields_dict(
     )
     parent_param_ops = _build_param_fields(self, fields_dict, arg_parameters)
     _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
+    fields_dict["_modules_via_stack"] = _snapshot_exhaustive_module_stack(self)
 
     # Function config — lightweight hyperparameter extraction, always on.
     param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))
@@ -1913,6 +1938,11 @@ def _log_output_tensor_info(
 
     # equivalent_ops is a DIRECT reference to the Trace-level set —
     # all entries sharing this equivalence type point to the same set object.
+    # Defensive: if equivalence_class isn't yet registered (e.g. user-injected
+    # tensor through intervention/raw-hook with a fresh hash), create the
+    # set on demand rather than crashing with KeyError.
+    if equivalence_class not in self.equivalent_ops:
+        self.equivalent_ops[equivalence_class] = set()
     self.equivalent_ops[equivalence_class].add(_label_raw)
     fields_dict["equivalent_ops"] = self.equivalent_ops[equivalence_class]
 
