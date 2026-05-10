@@ -1,0 +1,496 @@
+{
+  "equivalence_partition": [
+    [
+      "input_1"
+    ],
+    [
+      "linear_1_1"
+    ],
+    [
+      "linear_2_3"
+    ],
+    [
+      "output_1"
+    ],
+    [
+      "relu_1_2"
+    ]
+  ],
+  "fixture_name": "tiny_mlp",
+  "layers": [
+    {
+      "in_submodule": false,
+      "label": "input_1",
+      "lookup_keys": [
+        "-5",
+        "0",
+        "input.input",
+        "input_1",
+        "input_1:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 0
+    },
+    {
+      "in_submodule": true,
+      "label": "linear_1_1",
+      "lookup_keys": [
+        "-4",
+        "0",
+        "0:1",
+        "1",
+        "linear_1",
+        "linear_1:1",
+        "linear_1_1",
+        "linear_1_1:1"
+      ],
+      "module": "0:1",
+      "module_call_depth": 1,
+      "modules": [
+        "0:1"
+      ],
+      "output_of_module_calls": [
+        "0:1"
+      ],
+      "output_of_modules": [
+        "0"
+      ],
+      "trace_index": 1
+    },
+    {
+      "in_submodule": true,
+      "label": "relu_1_2",
+      "lookup_keys": [
+        "-3",
+        "1",
+        "1:1",
+        "2",
+        "relu_1",
+        "relu_1:1",
+        "relu_1_2",
+        "relu_1_2:1"
+      ],
+      "module": "1:1",
+      "module_call_depth": 1,
+      "modules": [
+        "1:1"
+      ],
+      "output_of_module_calls": [
+        "1:1"
+      ],
+      "output_of_modules": [
+        "1"
+      ],
+      "trace_index": 2
+    },
+    {
+      "in_submodule": true,
+      "label": "linear_2_3",
+      "lookup_keys": [
+        "-2",
+        "2",
+        "2:1",
+        "3",
+        "linear_2",
+        "linear_2:1",
+        "linear_2_3",
+        "linear_2_3:1"
+      ],
+      "module": "2:1",
+      "module_call_depth": 1,
+      "modules": [
+        "2:1"
+      ],
+      "output_of_module_calls": [
+        "2:1"
+      ],
+      "output_of_modules": [
+        "2"
+      ],
+      "trace_index": 3
+    },
+    {
+      "in_submodule": false,
+      "label": "output_1",
+      "lookup_keys": [
+        "-1",
+        "2",
+        "2:1",
+        "4",
+        "output",
+        "output_1",
+        "output_1:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [
+        "2:1"
+      ],
+      "output_of_modules": [
+        "2"
+      ],
+      "trace_index": 4
+    }
+  ],
+  "module_calls": [
+    {
+      "address": "self",
+      "call_label": "self:1",
+      "forward_args_summary": "None",
+      "forward_kwargs_summary": "None",
+      "input_layers": [
+        "input_1"
+      ],
+      "layers": [
+        "input_1",
+        "linear_1_1",
+        "relu_1_2",
+        "linear_2_3",
+        "output_1"
+      ],
+      "output_layers": [
+        "output_1"
+      ]
+    },
+    {
+      "address": "0",
+      "call_label": "0:1",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "linear_1_1"
+      ],
+      "output_layers": [
+        "linear_1_1"
+      ]
+    },
+    {
+      "address": "1",
+      "call_label": "1:1",
+      "forward_args_summary": "[Tensor(shape=(2, 16), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "relu_1_2"
+      ],
+      "output_layers": [
+        "relu_1_2"
+      ]
+    },
+    {
+      "address": "2",
+      "call_label": "2:1",
+      "forward_args_summary": "[Tensor(shape=(2, 16), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "linear_2_3"
+      ],
+      "output_layers": [
+        "linear_2_3"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "address": "self",
+      "all_addresses": [
+        "self"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "self:1"
+      ],
+      "input_layers": [
+        "input_1"
+      ],
+      "is_train_mode": true,
+      "layers": [
+        "input_1",
+        "linear_1_1",
+        "relu_1_2",
+        "linear_2_3",
+        "output_1"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 4,
+      "num_params": 212,
+      "num_params_frozen": 0,
+      "num_params_trainable": 212,
+      "output_layers": [
+        "output_1"
+      ]
+    },
+    {
+      "address": "0",
+      "all_addresses": [
+        "0"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "0:1"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "linear_1_1"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 2,
+      "num_params": 144,
+      "num_params_frozen": 0,
+      "num_params_trainable": 144,
+      "output_layers": [
+        "linear_1_1"
+      ]
+    },
+    {
+      "address": "1",
+      "all_addresses": [
+        "1"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "1:1"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "relu_1_2"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 0,
+      "num_params": 0,
+      "num_params_frozen": 0,
+      "num_params_trainable": 0,
+      "output_layers": [
+        "relu_1_2"
+      ]
+    },
+    {
+      "address": "2",
+      "all_addresses": [
+        "2"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "2:1"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "linear_2_3"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 2,
+      "num_params": 68,
+      "num_params_frozen": 0,
+      "num_params_trainable": 68,
+      "output_layers": [
+        "linear_2_3"
+      ]
+    }
+  ],
+  "ops": [
+    {
+      "atomic_module_call": null,
+      "func_name": "none",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "input_1:1",
+      "lookup_keys": [
+        "-5",
+        "0",
+        "input.input",
+        "input_1",
+        "input_1",
+        "input_1:1",
+        "input_1:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {
+        "0:1": [
+          0
+        ]
+      },
+      "module_ops_entered": [
+        "0:1"
+      ],
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 0
+    },
+    {
+      "atomic_module_call": "0:1",
+      "func_name": "linear",
+      "fx_call_index": 0,
+      "fx_qualpath": "0.linear",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "linear_1_1:1",
+      "lookup_keys": [
+        "-4",
+        "0",
+        "0:1",
+        "1",
+        "linear_1",
+        "linear_1:1",
+        "linear_1_1",
+        "linear_1_1:1"
+      ],
+      "module": "0:1",
+      "module_entry_argnames": {
+        "1:1": [
+          0
+        ]
+      },
+      "module_ops_entered": [
+        "1:1"
+      ],
+      "modules": [
+        "0:1"
+      ],
+      "output_of_module_calls": [
+        "0:1"
+      ],
+      "output_of_modules": [
+        "0"
+      ],
+      "trace_index": 1
+    },
+    {
+      "atomic_module_call": "1:1",
+      "func_name": "relu",
+      "fx_call_index": 0,
+      "fx_qualpath": "1.relu",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "relu_1_2:1",
+      "lookup_keys": [
+        "-3",
+        "1",
+        "1:1",
+        "2",
+        "relu_1",
+        "relu_1:1",
+        "relu_1_2",
+        "relu_1_2:1"
+      ],
+      "module": "1:1",
+      "module_entry_argnames": {
+        "2:1": [
+          0
+        ]
+      },
+      "module_ops_entered": [
+        "2:1"
+      ],
+      "modules": [
+        "1:1"
+      ],
+      "output_of_module_calls": [
+        "1:1"
+      ],
+      "output_of_modules": [
+        "1"
+      ],
+      "trace_index": 2
+    },
+    {
+      "atomic_module_call": "2:1",
+      "func_name": "linear",
+      "fx_call_index": 0,
+      "fx_qualpath": "2.linear",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "linear_2_3:1",
+      "lookup_keys": [
+        "-2",
+        "2",
+        "2:1",
+        "3",
+        "linear_2",
+        "linear_2:1",
+        "linear_2_3",
+        "linear_2_3:1"
+      ],
+      "module": "2:1",
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [
+        "2:1"
+      ],
+      "output_of_module_calls": [
+        "2:1"
+      ],
+      "output_of_modules": [
+        "2"
+      ],
+      "trace_index": 3
+    },
+    {
+      "atomic_module_call": "2:1",
+      "func_name": "none",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "output_1:1",
+      "lookup_keys": [
+        "-1",
+        "2",
+        "2:1",
+        "4",
+        "output",
+        "output_1",
+        "output_1",
+        "output_1:1",
+        "output_1:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [],
+      "output_of_module_calls": [
+        "2:1"
+      ],
+      "output_of_modules": [
+        "2"
+      ],
+      "trace_index": 4
+    }
+  ],
+  "trace_summary": {
+    "total_flops_forward": 1104,
+    "uncalled_modules": []
+  }
+}

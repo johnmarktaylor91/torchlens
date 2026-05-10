@@ -1,0 +1,727 @@
+{
+  "equivalence_partition": [
+    [
+      "input_1"
+    ],
+    [
+      "linear_1_4"
+    ],
+    [
+      "lstmcell_1_3:1",
+      "lstmcell_1_3:2",
+      "lstmcell_1_3:3",
+      "lstmcell_1_3:4",
+      "lstmcell_1_3:5",
+      "lstmcell_1_3:6"
+    ],
+    [
+      "newzeros_1_1",
+      "newzeros_2_2"
+    ],
+    [
+      "output_1"
+    ]
+  ],
+  "fixture_name": "recurrent_lstm_cell",
+  "layers": [
+    {
+      "in_submodule": false,
+      "label": "input_1",
+      "lookup_keys": [
+        "-11",
+        "0",
+        "input.x",
+        "input_1",
+        "input_1:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 0
+    },
+    {
+      "in_submodule": false,
+      "label": "newzeros_1_1",
+      "lookup_keys": [
+        "-10",
+        "1",
+        "newzeros_1",
+        "newzeros_1:1",
+        "newzeros_1_1",
+        "newzeros_1_1:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 1
+    },
+    {
+      "in_submodule": false,
+      "label": "newzeros_2_2",
+      "lookup_keys": [
+        "-9",
+        "2",
+        "newzeros_2",
+        "newzeros_2:1",
+        "newzeros_2_2",
+        "newzeros_2_2:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 2
+    },
+    {
+      "in_submodule": true,
+      "label": "lstmcell_1_3",
+      "lookup_keys": [
+        "-3",
+        "-4",
+        "-5",
+        "-6",
+        "-7",
+        "-8",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "cell:1",
+        "cell:2",
+        "cell:3",
+        "lstmcell_1:1",
+        "lstmcell_1:2",
+        "lstmcell_1:3",
+        "lstmcell_1:4",
+        "lstmcell_1:5",
+        "lstmcell_1:6",
+        "lstmcell_1_3:1",
+        "lstmcell_1_3:2",
+        "lstmcell_1_3:3",
+        "lstmcell_1_3:4",
+        "lstmcell_1_3:5",
+        "lstmcell_1_3:6"
+      ],
+      "module": "cell:1",
+      "module_call_depth": 1,
+      "modules": [
+        "cell:1"
+      ],
+      "output_of_module_calls": [
+        "cell:1"
+      ],
+      "output_of_modules": [
+        "cell"
+      ],
+      "trace_index": 3
+    },
+    {
+      "in_submodule": true,
+      "label": "linear_1_4",
+      "lookup_keys": [
+        "-2",
+        "9",
+        "linear_1",
+        "linear_1:1",
+        "linear_1_4",
+        "linear_1_4:1",
+        "readout",
+        "readout:1"
+      ],
+      "module": "readout:1",
+      "module_call_depth": 1,
+      "modules": [
+        "readout:1"
+      ],
+      "output_of_module_calls": [
+        "readout:1"
+      ],
+      "output_of_modules": [
+        "readout"
+      ],
+      "trace_index": 4
+    },
+    {
+      "in_submodule": false,
+      "label": "output_1",
+      "lookup_keys": [
+        "-1",
+        "10",
+        "output",
+        "output_1",
+        "output_1:1",
+        "readout",
+        "readout:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [
+        "readout:1"
+      ],
+      "output_of_modules": [
+        "readout"
+      ],
+      "trace_index": 5
+    }
+  ],
+  "module_calls": [
+    {
+      "address": "self",
+      "call_label": "self:1",
+      "forward_args_summary": "None",
+      "forward_kwargs_summary": "None",
+      "input_layers": [
+        "input_1"
+      ],
+      "layers": [
+        "input_1",
+        "newzeros_1_1",
+        "newzeros_2_2",
+        "lstmcell_1_3",
+        "linear_1_4",
+        "output_1"
+      ],
+      "output_layers": [
+        "output_1"
+      ]
+    },
+    {
+      "address": "cell",
+      "call_label": "cell:1",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "lstmcell_1_3:1",
+        "lstmcell_1_3:2"
+      ],
+      "output_layers": [
+        "lstmcell_1_3:1",
+        "lstmcell_1_3:2"
+      ]
+    },
+    {
+      "address": "cell",
+      "call_label": "cell:2",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "lstmcell_1_3:3",
+        "lstmcell_1_3:4"
+      ],
+      "output_layers": [
+        "lstmcell_1_3:3",
+        "lstmcell_1_3:4"
+      ]
+    },
+    {
+      "address": "cell",
+      "call_label": "cell:3",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "lstmcell_1_3:5",
+        "lstmcell_1_3:6"
+      ],
+      "output_layers": [
+        "lstmcell_1_3:5",
+        "lstmcell_1_3:6"
+      ]
+    },
+    {
+      "address": "readout",
+      "call_label": "readout:1",
+      "forward_args_summary": "[Tensor(shape=(2, 16), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "linear_1_4"
+      ],
+      "output_layers": [
+        "linear_1_4"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "address": "self",
+      "all_addresses": [
+        "self"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "self:1"
+      ],
+      "input_layers": [
+        "input_1"
+      ],
+      "is_train_mode": true,
+      "layers": [
+        "input_1",
+        "newzeros_1_1",
+        "newzeros_2_2",
+        "lstmcell_1_3",
+        "linear_1_4",
+        "output_1"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 6,
+      "num_params": 1732,
+      "num_params_frozen": 0,
+      "num_params_trainable": 1732,
+      "output_layers": [
+        "output_1"
+      ]
+    },
+    {
+      "address": "cell",
+      "all_addresses": [
+        "cell"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "cell:1",
+        "cell:2",
+        "cell:3"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "lstmcell_1_3"
+      ],
+      "num_calls": 3,
+      "num_param_tensors": 4,
+      "num_params": 1664,
+      "num_params_frozen": 0,
+      "num_params_trainable": 1664,
+      "output_layers": [
+        "lstmcell_1_3"
+      ]
+    },
+    {
+      "address": "readout",
+      "all_addresses": [
+        "readout"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "readout:1"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "linear_1_4"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 2,
+      "num_params": 68,
+      "num_params_frozen": 0,
+      "num_params_trainable": 68,
+      "output_layers": [
+        "linear_1_4"
+      ]
+    }
+  ],
+  "ops": [
+    {
+      "atomic_module_call": null,
+      "func_name": "none",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "input_1:1",
+      "lookup_keys": [
+        "-11",
+        "0",
+        "input.x",
+        "input_1",
+        "input_1",
+        "input_1:1",
+        "input_1:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {
+        "cell:1": [
+          0
+        ],
+        "cell:2": [
+          0
+        ],
+        "cell:3": [
+          0
+        ]
+      },
+      "module_ops_entered": [
+        "cell:1",
+        "cell:2",
+        "cell:3"
+      ],
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 0
+    },
+    {
+      "atomic_module_call": null,
+      "func_name": "new_zeros",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": true,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "newzeros_1_1:1",
+      "lookup_keys": [
+        "-10",
+        "1",
+        "newzeros_1",
+        "newzeros_1:1",
+        "newzeros_1_1",
+        "newzeros_1_1:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {},
+      "module_ops_entered": [
+        "cell:1"
+      ],
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 1
+    },
+    {
+      "atomic_module_call": null,
+      "func_name": "new_zeros",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": true,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "newzeros_2_2:1",
+      "lookup_keys": [
+        "-9",
+        "2",
+        "newzeros_2",
+        "newzeros_2:1",
+        "newzeros_2_2",
+        "newzeros_2_2:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {},
+      "module_ops_entered": [
+        "cell:1"
+      ],
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 2
+    },
+    {
+      "atomic_module_call": "cell:1",
+      "func_name": "lstm_cell",
+      "fx_call_index": 0,
+      "fx_qualpath": "cell.lstm_cell",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "lstmcell_1_3:1",
+      "lookup_keys": [
+        "-8",
+        "3",
+        "cell:1",
+        "lstmcell_1:1",
+        "lstmcell_1_3:1"
+      ],
+      "module": "cell:1",
+      "module_entry_argnames": {},
+      "module_ops_entered": [
+        "cell:2"
+      ],
+      "modules": [
+        "cell:1"
+      ],
+      "output_of_module_calls": [
+        "cell:1"
+      ],
+      "output_of_modules": [
+        "cell"
+      ],
+      "trace_index": 3
+    },
+    {
+      "atomic_module_call": "cell:1",
+      "func_name": "lstm_cell",
+      "fx_call_index": 1,
+      "fx_qualpath": "cell.lstm_cell",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "lstmcell_1_3:2",
+      "lookup_keys": [
+        "-7",
+        "4",
+        "cell:1",
+        "lstmcell_1:2",
+        "lstmcell_1_3:2"
+      ],
+      "module": "cell:1",
+      "module_entry_argnames": {},
+      "module_ops_entered": [
+        "cell:2"
+      ],
+      "modules": [
+        "cell:1"
+      ],
+      "output_of_module_calls": [
+        "cell:1"
+      ],
+      "output_of_modules": [
+        "cell"
+      ],
+      "trace_index": 3
+    },
+    {
+      "atomic_module_call": "cell:2",
+      "func_name": "lstm_cell",
+      "fx_call_index": 2,
+      "fx_qualpath": "cell.lstm_cell",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "lstmcell_1_3:3",
+      "lookup_keys": [
+        "-6",
+        "5",
+        "cell:2",
+        "lstmcell_1:3",
+        "lstmcell_1_3:3"
+      ],
+      "module": "cell:2",
+      "module_entry_argnames": {},
+      "module_ops_entered": [
+        "cell:3"
+      ],
+      "modules": [
+        "cell:2"
+      ],
+      "output_of_module_calls": [
+        "cell:2"
+      ],
+      "output_of_modules": [
+        "cell"
+      ],
+      "trace_index": 3
+    },
+    {
+      "atomic_module_call": "cell:2",
+      "func_name": "lstm_cell",
+      "fx_call_index": 3,
+      "fx_qualpath": "cell.lstm_cell",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "lstmcell_1_3:4",
+      "lookup_keys": [
+        "-5",
+        "6",
+        "cell:2",
+        "lstmcell_1:4",
+        "lstmcell_1_3:4"
+      ],
+      "module": "cell:2",
+      "module_entry_argnames": {},
+      "module_ops_entered": [
+        "cell:3"
+      ],
+      "modules": [
+        "cell:2"
+      ],
+      "output_of_module_calls": [
+        "cell:2"
+      ],
+      "output_of_modules": [
+        "cell"
+      ],
+      "trace_index": 3
+    },
+    {
+      "atomic_module_call": "cell:3",
+      "func_name": "lstm_cell",
+      "fx_call_index": 4,
+      "fx_qualpath": "cell.lstm_cell",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "lstmcell_1_3:5",
+      "lookup_keys": [
+        "-4",
+        "7",
+        "cell:3",
+        "lstmcell_1:5",
+        "lstmcell_1_3:5"
+      ],
+      "module": "cell:3",
+      "module_entry_argnames": {
+        "readout:1": [
+          0
+        ]
+      },
+      "module_ops_entered": [
+        "readout:1"
+      ],
+      "modules": [
+        "cell:3"
+      ],
+      "output_of_module_calls": [
+        "cell:3"
+      ],
+      "output_of_modules": [
+        "cell"
+      ],
+      "trace_index": 3
+    },
+    {
+      "atomic_module_call": "cell:3",
+      "func_name": "lstm_cell",
+      "fx_call_index": 5,
+      "fx_qualpath": "cell.lstm_cell",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": true,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "lstmcell_1_3:6",
+      "lookup_keys": [
+        "-3",
+        "8",
+        "cell:3",
+        "lstmcell_1:6",
+        "lstmcell_1_3:6"
+      ],
+      "module": "cell:3",
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [
+        "cell:3"
+      ],
+      "output_of_module_calls": [
+        "cell:3"
+      ],
+      "output_of_modules": [
+        "cell"
+      ],
+      "trace_index": 3
+    },
+    {
+      "atomic_module_call": "readout:1",
+      "func_name": "linear",
+      "fx_call_index": 0,
+      "fx_qualpath": "readout.linear",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "linear_1_4:1",
+      "lookup_keys": [
+        "-2",
+        "9",
+        "linear_1",
+        "linear_1:1",
+        "linear_1_4",
+        "linear_1_4:1",
+        "readout",
+        "readout:1"
+      ],
+      "module": "readout:1",
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [
+        "readout:1"
+      ],
+      "output_of_module_calls": [
+        "readout:1"
+      ],
+      "output_of_modules": [
+        "readout"
+      ],
+      "trace_index": 4
+    },
+    {
+      "atomic_module_call": "readout:1",
+      "func_name": "none",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "output_1:1",
+      "lookup_keys": [
+        "-1",
+        "10",
+        "output",
+        "output_1",
+        "output_1",
+        "output_1:1",
+        "output_1:1",
+        "readout",
+        "readout:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [],
+      "output_of_module_calls": [
+        "readout:1"
+      ],
+      "output_of_modules": [
+        "readout"
+      ],
+      "trace_index": 5
+    }
+  ],
+  "trace_summary": {
+    "total_flops_forward": 528,
+    "uncalled_modules": []
+  }
+}
