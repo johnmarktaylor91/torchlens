@@ -16,11 +16,47 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import warnings
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Iterable, cast
 
 import graphviz
+
+
+def _open_file_quietly(filepath: str) -> None:
+    """Open ``filepath`` in the platform default viewer, suppressing viewer noise.
+
+    Replaces ``graphviz.backend.viewing.view`` to (a) silence ``xdg-open``
+    stderr on headless Linux boxes that have no registered viewer and
+    (b) skip the attempt entirely when no display is detected.
+
+    Parameters
+    ----------
+    filepath:
+        Rendered artifact path to open.
+    """
+
+    if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
+        return  # headless: no viewer, skip silently
+    try:
+        if sys.platform == "win32":
+            os.startfile(filepath)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(
+                ["open", filepath],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            subprocess.Popen(
+                ["xdg-open", filepath],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except (FileNotFoundError, OSError):
+        pass  # no viewer available; silently skip
+
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     pass
@@ -302,7 +338,7 @@ def render_dot_to_file(
             capture_output=True,
         )
         if not save_only:
-            graphviz.backend.viewing.view(rendered_path)
+            _open_file_quietly(rendered_path)
     except subprocess.TimeoutExpired:
         warnings.warn(
             timeout_warning

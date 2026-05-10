@@ -94,6 +94,8 @@ NodeSpecFn = Callable[["LayerLog", NodeSpec], NodeSpec | None]
 def render_lines_to_html(lines: list[str]) -> str:
     """Render plain-text node rows as a Graphviz HTML-like table label.
 
+    The first row is bolded as the node title; subsequent rows render plain.
+
     Parameters
     ----------
     lines:
@@ -105,7 +107,12 @@ def render_lines_to_html(lines: list[str]) -> str:
         A string suitable for Graphviz ``label=<...>`` syntax.
     """
 
-    rows = [f'<TR><TD ALIGN="CENTER">{escape(str(line), quote=False)}</TD></TR>' for line in lines]
+    rows = []
+    for index, line in enumerate(lines):
+        text = escape(str(line), quote=False)
+        if index == 0:
+            text = f"<B>{text}</B>"
+        rows.append(f'<TR><TD ALIGN="CENTER">{text}</TD></TR>')
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">'
         + "".join(rows)

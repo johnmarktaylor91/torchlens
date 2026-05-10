@@ -67,11 +67,13 @@ def bundle_diff(
     on:
         Tensor field forwarded to ``bundle.delta_map``.
     vis_outpath:
-        Output path, with or without ``.svg``.
+        Output path, with or without a recognised extension.
     vis_save_only:
         Whether to suppress opening the rendered artifact.
     vis_fileformat:
-        Output format. Phase 9 supports ``"svg"``.
+        Output format. Any Graphviz-supported format (e.g., ``"svg"``,
+        ``"pdf"``, ``"png"``). Accessibility metadata is only embedded for
+        ``"svg"``.
     theme:
         Visualization theme preset.
     max_pairs:
@@ -87,8 +89,6 @@ def bundle_diff(
 
     if layout != "paired":
         raise ValueError("bundle_diff layout must be 'paired'.")
-    if vis_fileformat != "svg":
-        raise ValueError("bundle_diff currently renders SVG only.")
 
     left_name, right_name = _resolve_side_names(bundle, left=left, right=right)
     baseline_ref = baseline if baseline is not None else left_name
@@ -113,7 +113,8 @@ def bundle_diff(
     )
     outpath = strip_known_extension(vis_outpath)
     source = render_dot_to_file(dot, outpath, vis_fileformat, vis_save_only)
-    _add_svg_accessibility(f"{outpath}.{vis_fileformat}")
+    if vis_fileformat == "svg":
+        _add_svg_accessibility(f"{outpath}.{vis_fileformat}")
     return source
 
 

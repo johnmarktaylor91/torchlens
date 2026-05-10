@@ -24,6 +24,8 @@ import tempfile
 import warnings
 from typing import Any, Optional, cast
 
+from .._render_utils import _open_file_quietly
+
 # Set the soft stack limit to match the hard limit once at import time.
 # Child processes (Node.js) inherit this, removing the need for preexec_fn
 # which forces fork+exec and COW-doubles virtual memory of large parent processes.
@@ -623,7 +625,7 @@ def render_with_sfdp(
     cmd = ["sfdp", f"-T{vis_fileformat}", "-Goverlap=prism", "-o", rendered_path, source_path]
     subprocess.run(cmd, timeout=timeout, check=True, capture_output=True)
     if not vis_save_only:
-        graphviz.backend.viewing.view(rendered_path)
+        _open_file_quietly(rendered_path)
 
 
 def render_with_elk(
@@ -674,7 +676,7 @@ def render_with_elk(
     try:
         subprocess.run(cmd, timeout=_SFDP_TIMEOUT, check=True, capture_output=True)
         if not vis_save_only:
-            graphviz.backend.viewing.view(rendered_path)
+            _open_file_quietly(rendered_path)
     finally:
         import os
 
@@ -1538,7 +1540,7 @@ def render_elk_direct(
         if not vis_save_only:
             import graphviz
 
-            graphviz.backend.viewing.view(rendered_path)
+            _open_file_quietly(rendered_path)
     finally:
         if os.path.exists(source_path):
             os.remove(source_path)
