@@ -43,3 +43,49 @@ class TinyMLP(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.out_proj(torch.relu(self.in_proj(x)))
+
+
+class LoopModule(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc2 = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for _ in range(3):
+            x = self.fc2(x)
+            x = nn.functional.relu(x)
+        return x
+
+
+class InnerModule(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.loop_module = LoopModule()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x + 1
+        x = nn.functional.relu(x)
+        x = self.loop_module(x)
+        return x
+
+
+class DemoModel(nn.Module):
+    """Kitchen-sink demo model: cos op, buffer add, conditional branch, loop module.
+
+    Defined in a real source file so TorchLens's AST inspector can label the
+    conditional branch arms (IF / THEN / ELSE) in the rendered graph.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(4, 4)
+        self.register_buffer("example_buffer", torch.tensor([1, 2, 3, 4]))
+        self.inner_module = InnerModule()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = torch.cos(x)
+        x = self.fc1(x) + self.example_buffer
+        if x.mean() > 0:
+            x = self.inner_module(x)
+        x = x + torch.rand(x.shape)
+        return x
