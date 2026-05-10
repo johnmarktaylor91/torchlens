@@ -22,7 +22,36 @@ import torch
 
 from ..errors._base import CompatibilityError
 
-IO_FORMAT_VERSION = 2
+IO_FORMAT_VERSION = 3
+_LEGACY_THREAD_WARNING_EMITTED: dict[str, bool] = {"flag": False}
+
+
+def _warn_legacy_thread_fields_dropped() -> None:
+    """Emit one deprecation warning for legacy thread-replay fields.
+
+    Older TorchLens portable bundles with ``io_format_version <= 2`` carried
+    private fields removed by the module-containment-refactor sprint. Current
+    load code drops those fields and uses the stored ``modules`` field
+    directly.
+    """
+
+    if not _LEGACY_THREAD_WARNING_EMITTED["flag"]:
+        warnings.warn(
+            "Loaded a TorchLens bundle from io_format_version<=2; "
+            "legacy thread-replay fields were dropped. "
+            "Module containment is reconstructed from hook-stack "
+            "snapshots in current capture; this load uses the stored "
+            "modules field directly.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        _LEGACY_THREAD_WARNING_EMITTED["flag"] = True
+
+
+def reset_legacy_thread_warning() -> None:
+    """Reset the once-per-process legacy-thread warning flag for tests."""
+
+    _LEGACY_THREAD_WARNING_EMITTED["flag"] = False
 
 
 class TorchLensIOError(CompatibilityError, RuntimeError):

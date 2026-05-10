@@ -1129,7 +1129,21 @@ class OpLog:
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
-        read_io_format_version(state, cls_name=type(self).__name__)
+        version = read_io_format_version(state, cls_name=type(self).__name__)
+        legacy_thread_keys = (
+            "_module_boundary_thread_output",
+            "_module_boundary_threads_inputs",
+            "module_entry_exit_threads_inputs",
+        )
+        dropped = False
+        for key in legacy_thread_keys:
+            if key in state:
+                state.pop(key)
+                dropped = True
+        if dropped and version < 3:
+            from .._io import _warn_legacy_thread_fields_dropped
+
+            _warn_legacy_thread_fields_dropped()
         old_key_map = {
             "tensor_label_raw": "_label_raw",
             "operation_num": "op_num",
