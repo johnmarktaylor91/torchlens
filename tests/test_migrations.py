@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+from importlib.metadata import PackageNotFoundError, version
+import linecache
 import re
 from pathlib import Path
 from typing import Any
@@ -71,6 +73,26 @@ def _iter_examples() -> list[tuple[str, str, Any, str]]:
     return examples
 
 
+def _skip_incompatible_optional_example(file_name: str, tool: str) -> None:
+    """Skip optional examples whose installed dependency is known incompatible.
+
+    Parameters
+    ----------
+    file_name:
+        Migration Markdown file name.
+    tool:
+        Tool key from the migration-test header.
+    """
+    if file_name == "from_nnsight.md" and tool == "nnsight":
+        try:
+            installed = version("nnsight")
+        except PackageNotFoundError:
+            return
+        major, minor, *_ = installed.split(".")
+        if int(major) > 0 or int(minor) >= 7:
+            pytest.skip("nnsight>=0.7 changed LanguageModel trace input semantics")
+
+
 @pytest.mark.parametrize(("file_name", "tool", "expected", "code"), _iter_examples())
 def test_migration_example_runs(file_name: str, tool: str, expected: Any, code: str) -> None:
     """Run one migration code block and verify its declared output."""
@@ -78,9 +100,20 @@ def test_migration_example_runs(file_name: str, tool: str, expected: Any, code: 
     module_name = OPTIONAL_IMPORTS[tool]
     if importlib.util.find_spec(module_name) is None:
         pytest.skip(f"{file_name} requires optional dependency {module_name!r}")
+    _skip_incompatible_optional_example(file_name, tool)
 
-    namespace: dict[str, Any] = {"__name__": f"migration_example_{tool}"}
-    exec(compile(code, f"{file_name}:{tool}", "exec"), namespace)
+    synthetic_filename = f"{file_name}:{tool}"
+    linecache.cache[synthetic_filename] = (
+        len(code),
+        None,
+        [f"{line}\n" for line in code.splitlines()],
+        synthetic_filename,
+    )
+    namespace: dict[str, Any] = {
+        "__file__": synthetic_filename,
+        "__name__": f"migration_example_{tool}",
+    }
+    exec(compile(code, synthetic_filename, "exec"), namespace)
     assert namespace["RESULT"] == expected
 
 
