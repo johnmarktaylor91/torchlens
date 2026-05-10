@@ -44,6 +44,7 @@ from ..utils.introspection import get_vars_of_type_from_obj, iter_accessible_att
 from ..utils.hashing import make_random_barcode
 from ..capture.source_tensors import log_source_tensor
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
+from . import _module_stack as _mstack
 
 # Cache class-level module metadata (inspect.getsourcelines, inspect.signature, etc.)
 # shared across instances of the same class type. Cleared at the start of each
@@ -1210,18 +1211,10 @@ def module_forward_decorator(
             from ..fastlog._predicate import _evaluate_keep_module
             from ..fastlog._record_context import _build_record_context
             from ..fastlog._state import get_active_recording_state
-            from ..fastlog.types import ActivationRecord, ModuleStackFrame
+            from ..fastlog.types import ActivationRecord
 
             state = get_active_recording_state()
-            mod_id = id(module)
-            trace._mod_call_index[mod_id] += 1
-            frame = ModuleStackFrame(
-                address=cast(str, module.tl_address),
-                module_type=cast(str, module.tl_module_type),
-                module_id=mod_id,
-                pass_index=trace._mod_call_index[mod_id],
-            )
-            state.module_stack.append(frame)
+            frame = _mstack.push_frame(trace, state.module_stack, module)
             state.event_index += 1
             enter_ctx = _build_record_context(
                 kind="module_enter",
@@ -1279,7 +1272,7 @@ def module_forward_decorator(
                     state.handle_predicate_exception(exit_ctx, exc)
                 finally:
                     state.append_context(exit_ctx)
-                    state.module_stack.pop()
+                    _mstack.pop_frame(state.module_stack, frame)
 
         # ---- Exhaustive mode: full entry → forward → exit ----
         input_tensor_labels, input_tensor_labels_at_entry = _handle_module_entry(
