@@ -463,7 +463,6 @@ _LIST_FIELDS_TO_CLEAN = [
     "internally_terminated_bool_ops",
     "ops_with_saved_outs",
     "ops_with_saved_grads",
-    "_layers_where_internal_branches_merge_with_input",
 ]
 
 
@@ -487,7 +486,6 @@ def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
     remove_entry_from_list(self.internally_terminated_bool_ops, layer_to_remove)
     remove_entry_from_list(self.ops_with_saved_outs, layer_to_remove)
     remove_entry_from_list(self.ops_with_saved_grads, layer_to_remove)
-    remove_entry_from_list(self._layers_where_internal_branches_merge_with_input, layer_to_remove)
 
     _scrub_conditional_fields_after_removal(self, {layer_to_remove}, self)
 

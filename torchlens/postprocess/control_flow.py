@@ -7,12 +7,9 @@ Step 5 (_mark_conditional_branches) now runs a six-phase conditional pipeline:
     5d. Backward-flood IF edges from branch-participating bools only.
     5e. Attribute executed ops to THEN/ELIF/ELSE arms across every forward edge.
     5f. Materialize derived compatibility views from the new primary structures.
-Step 6 (_fix_modules_for_internal_tensors): Internally-generated tensors
-    (constants, arange, etc.) don't know their containing module. This infers
-    module containment by tracing backward from known input-descendant tensors.
-    Also appends module path suffixes to equivalence_class — this is
-    INTENTIONAL and affects loop detection (Step 8), ensuring operations in
-    different modules are never grouped as the same layer.
+Step 6 (_fix_modules_for_internal_tensors): Append module path suffixes to
+    equivalence_class. This is INTENTIONAL and affects loop detection (Step 8),
+    ensuring operations in different modules are never grouped as the same layer.
 Step 7 (_fix_buffer_layers): Connects buffer parents, deduplicates identical
     buffers (same module, same value, same parent), and assigns buffer pass numbers.
 """
@@ -639,98 +636,26 @@ def _get_gained_branch_entries(
 
 
 def _fix_modules_for_internal_tensors(self: "Trace") -> None:
-    """Step 6: Infer module containment for internally-generated tensors.
+    """Step 6: Append module-path suffix to equivalence_class.
 
-    Internally-initialized tensors (constants, torch.arange results, etc.) are
-    created without any module context. This function starts from nodes where
-    internal branches merge with input-descendant tensors and propagates module
-    containment backward (to parents) and forward (to non-input-descendant
-    children) using the module entry/exit thread metadata recorded during the
-    forward pass.
+    Module containment for every captured op is set at op-creation time by
+    the wrap-forward stack helper (see torchlens.decoration._module_stack).
+    This step's only remaining job is appending the canonical module-path
+    suffix to ``equivalence_class`` so loop detection (Step 8) treats
+    same-function ops in different modules as distinct equivalence types.
 
-    After fixing module containment, appends the module path as a suffix to
-    each tensor's ``equivalence_class``. This is INTENTIONAL and
-    critical for Step 8 (loop detection): it ensures that operations with
-    identical function signatures but in different modules (e.g., relu in
-    linear1 vs relu in linear2) are never grouped as the same layer.
+    It is legitimate for an op to have empty ``modules`` here (input,
+    output, buffer, root-module, post-hook ops, orphan nodes). Such ops
+    receive an empty suffix.
     """
-    # Start from nodes where internally-initialized branches first merge with
-    # an input-descendant tensor — these nodes have known module containment
-    # that can be propagated backward to their internal ancestors.
-    node_stack = self._layers_where_internal_branches_merge_with_input[:]
-
-    nodes_seen: Set[str] = set()
-    while len(node_stack) > 0:
-        node_label = node_stack.pop()
-        node = self[node_label]
-        if getattr(node, "is_orphan", False):
-            continue
-        # Propagate modules backward to internal-only parent nodes:
-        for parent_label in node.parents:
-            parent_node = self[parent_label]
-            if (
-                not parent_node.has_input_ancestor
-                and parent_label not in nodes_seen
-                and not getattr(parent_node, "is_orphan", False)
-            ):
-                _fix_modules_for_single_internal_tensor(
-                    node, parent_node, "parent", node_stack, nodes_seen
-                )
-
-        # Propagate forward to internally-generated child nodes:
-        for child_label in node.children:
-            child_node = self[child_label]
-            if (
-                node.has_input_ancestor
-                or child_node.has_input_ancestor
-                or child_label in nodes_seen
-                or child_node.is_output
-                or getattr(child_node, "is_orphan", False)
-            ):
-                continue
-            _fix_modules_for_single_internal_tensor(
-                node, child_node, "child", node_stack, nodes_seen
-            )
-
-    # Append module path suffix to equivalence_class for ALL tensors.
-    # This ensures loop detection (Step 8) treats same-function operations in
-    # different modules as distinct equivalence types.
-    _module_str_cache = {}
+    module_str_cache: dict[tuple, str] = {}
     for layer in self:
         if getattr(layer, "is_orphan", False):
             continue
         cm_key = tuple(layer.modules)
-        if cm_key not in _module_str_cache:
-            _module_str_cache[cm_key] = "_".join([module_pass[0] for module_pass in layer.modules])
-        layer.equivalence_class += _module_str_cache[cm_key]
-
-
-def _fix_modules_for_single_internal_tensor(
-    starting_node: OpLog,
-    node_to_fix: OpLog,
-    node_type_to_fix: str,
-    node_stack: List[str],
-    nodes_seen: Set[str],
-) -> None:
-    """Fix the containing modules for a single internally-generated tensor.
-
-    Copies the module containment from ``starting_node`` (which has known module
-    info) to ``node_to_fix``. Module boundary thread replay was removed when
-    hook-stack capture became the primary containment engine.
-
-    Args:
-        starting_node: Source node with correct module containment.
-        node_to_fix: The internally-generated tensor to fix.
-        node_type_to_fix: 'parent' (fix going backward) or 'child' (fix going forward).
-        node_stack: Stack to push node_to_fix onto for further propagation.
-        nodes_seen: Set of already-processed nodes.
-    """
-    node_to_fix_label = node_to_fix._label_raw
-    if node_type_to_fix not in {"parent", "child"}:
-        raise ValueError("node_type_to_fix must be 'parent' or 'child'")
-    node_to_fix.modules = starting_node.modules.copy()
-    node_stack.append(node_to_fix_label)
-    nodes_seen.add(node_to_fix_label)
+        if cm_key not in module_str_cache:
+            module_str_cache[cm_key] = "_".join(module_pass[0] for module_pass in layer.modules)
+        layer.equivalence_class += module_str_cache[cm_key]
 
 
 def _fix_buffer_layers(self: "Trace") -> None:

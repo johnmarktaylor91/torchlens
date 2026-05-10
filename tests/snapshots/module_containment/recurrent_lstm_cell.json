@@ -42,7 +42,7 @@
       "trace_index": 0
     },
     {
-      "in_submodule": true,
+      "in_submodule": false,
       "label": "newzeros_1_1",
       "lookup_keys": [
         "-10",
@@ -52,17 +52,15 @@
         "newzeros_1_1",
         "newzeros_1_1:1"
       ],
-      "module": "cell:1",
-      "module_call_depth": 1,
-      "modules": [
-        "cell:1"
-      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "trace_index": 1
     },
     {
-      "in_submodule": true,
+      "in_submodule": false,
       "label": "newzeros_2_2",
       "lookup_keys": [
         "-9",
@@ -72,11 +70,9 @@
         "newzeros_2_2",
         "newzeros_2_2:1"
       ],
-      "module": "cell:1",
-      "module_call_depth": 1,
-      "modules": [
-        "cell:1"
-      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "trace_index": 2
@@ -202,13 +198,8 @@
       "call_label": "cell:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [
-        "newzeros_1_1",
-        "newzeros_2_2"
-      ],
+      "input_layers": [],
       "layers": [
-        "newzeros_1_1",
-        "newzeros_2_2",
         "lstmcell_1_3:1",
         "lstmcell_1_3:2"
       ],
@@ -303,14 +294,9 @@
         "cell:2",
         "cell:3"
       ],
-      "input_layers": [
-        "newzeros_1_1",
-        "newzeros_2_2"
-      ],
+      "input_layers": [],
       "is_train_mode": true,
       "layers": [
-        "newzeros_1_1",
-        "newzeros_2_2",
         "lstmcell_1_3"
       ],
       "num_calls": 3,
@@ -394,7 +380,7 @@
       "atomic_module_call": null,
       "func_name": "new_zeros",
       "fx_call_index": 0,
-      "fx_qualpath": "cell.new_zeros",
+      "fx_qualpath": null,
       "intervention_replaced": false,
       "is_atomic_module_op": false,
       "is_internal_sink": false,
@@ -410,14 +396,12 @@
         "newzeros_1_1",
         "newzeros_1_1:1"
       ],
-      "module": "cell:1",
+      "module": null,
       "module_entry_argnames": {},
       "module_ops_entered": [
         "cell:1"
       ],
-      "modules": [
-        "cell:1"
-      ],
+      "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "trace_index": 1
@@ -425,8 +409,8 @@
     {
       "atomic_module_call": null,
       "func_name": "new_zeros",
-      "fx_call_index": 1,
-      "fx_qualpath": "cell.new_zeros",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
       "intervention_replaced": false,
       "is_atomic_module_op": false,
       "is_internal_sink": false,
@@ -442,14 +426,12 @@
         "newzeros_2_2",
         "newzeros_2_2:1"
       ],
-      "module": "cell:1",
+      "module": null,
       "module_entry_argnames": {},
       "module_ops_entered": [
         "cell:1"
       ],
-      "modules": [
-        "cell:1"
-      ],
+      "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "trace_index": 2

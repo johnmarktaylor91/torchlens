@@ -145,7 +145,6 @@ MODEL_LOG_FIELD_ORDER = [
     "buffer_layers",
     "buffer_num_calls",
     "internal_source_ops",
-    "_layers_where_internal_branches_merge_with_input",
     "internal_sink_ops",
     "internally_terminated_bool_ops",
     "conditional_branch_edges",

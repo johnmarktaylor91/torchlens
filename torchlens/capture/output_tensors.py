@@ -1270,20 +1270,17 @@ def _build_shared_fields_dict(
 def _classify_new_tensor_in_trace(
     self: "Trace",
     fields_dict: dict[str, Any],
-    fields_dict_onetensor: dict[str, Any],
     new_tensor_label: str,
 ) -> None:
-    """Update Trace categories (internally_initialized, merge points) for a new tensor."""
+    """Update Trace categories for a new tensor.
+
+    Args:
+        self: Trace object being populated.
+        fields_dict: Shared field values for this wrapped output.
+        new_tensor_label: Raw label for the new tensor op.
+    """
     if fields_dict["is_internal_source"]:
         self.internal_source_ops.append(new_tensor_label)
-    if fields_dict["has_input_ancestor"] and any(
-        (
-            self[parent_layer].has_internal_source_ancestor
-            and not self[parent_layer].has_input_ancestor
-        )
-        for parent_layer in fields_dict_onetensor["parents"]
-    ):
-        self._layers_where_internal_branches_merge_with_input.append(new_tensor_label)
 
 
 def _tag_tensor_and_track_variations(
@@ -1428,7 +1425,7 @@ def log_function_output_tensors_exhaustive(
         new_tensor_label = new_layer_entry._label_raw
         _update_tensor_family_links(self, new_layer_entry)
 
-        _classify_new_tensor_in_trace(self, fields_dict, fields_dict_onetensor, new_tensor_label)
+        _classify_new_tensor_in_trace(self, fields_dict, new_tensor_label)
         _tag_tensor_and_track_variations(
             self,
             out,

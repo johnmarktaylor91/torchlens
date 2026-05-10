@@ -738,7 +738,6 @@ class Trace:
         "buffer_num_calls": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
         "internal_source_ops": FieldPolicy.KEEP,
-        "_layers_where_internal_branches_merge_with_input": FieldPolicy.KEEP,
         "internal_sink_ops": FieldPolicy.KEEP,
         "internally_terminated_bool_ops": FieldPolicy.KEEP,
         "conditional_branch_edges": FieldPolicy.KEEP,
@@ -1022,7 +1021,6 @@ class Trace:
         self.buffer_num_calls: Dict[str, int] = {}
         self._buffer_accessor = None
         self.internal_source_ops: List[str] = []
-        self._layers_where_internal_branches_merge_with_input: List[str] = []
         self.internal_sink_ops: List[str] = []
         self.internally_terminated_bool_ops: List[str] = []
         self.conditional_branch_edges: List[Tuple[str, str]] = []

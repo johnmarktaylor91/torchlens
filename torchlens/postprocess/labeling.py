@@ -826,7 +826,6 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         "output_layers",
         "buffer_layers",
         "internal_source_ops",
-        "_layers_where_internal_branches_merge_with_input",
         "internal_sink_ops",
         "internally_terminated_bool_ops",
         "ops_with_saved_grads",
