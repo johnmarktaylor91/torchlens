@@ -14,6 +14,7 @@ from typing import Any, cast
 
 import torch.nn as nn
 
+from .._tl import get_module_meta
 from ..fastlog.types import ModuleStackFrame
 
 
@@ -31,8 +32,8 @@ def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> 
         ``trace._exhaustive_module_stack`` (added in Phase 1) for
         exhaustive mode.
     module:
-        The nn.Module entering forward. Must have ``tl_address`` and
-        ``tl_module_type`` set by ``_prepare_model_once``.
+        The nn.Module entering forward. Must have ``_tl.address`` and
+        ``_tl.module_type`` set by ``_prepare_model_once``.
 
     Returns
     -------
@@ -41,9 +42,12 @@ def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> 
     """
     module_id = id(module)
     trace._mod_call_index[module_id] += 1
+    module_meta = get_module_meta(module)
+    if module_meta is None:
+        raise RuntimeError("Module is missing TorchLens metadata; was it prepared?")
     frame = ModuleStackFrame(
-        address=cast(str, module.tl_address),
-        module_type=cast(str, module.tl_module_type),
+        address=cast(str, module_meta.address),
+        module_type=cast(str, module_meta.module_type),
         module_id=module_id,
         pass_index=trace._mod_call_index[module_id],
     )

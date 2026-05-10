@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens
+from torchlens._tl import get_module_meta, get_tensor_label, is_decorated_function
 from torchlens.decoration import torch_funcs as torch_funcs_module
 from torchlens import _state, trace as trace_fn
 from torchlens.decoration.torch_funcs import (
@@ -129,7 +130,7 @@ class TestLazyDecoration:
     def test_import_does_not_decorate(self):
         """After import torchlens (with unwrapped state), torch functions are originals."""
         assert _state._is_decorated is False
-        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+        assert not is_decorated_function(torch.cos)
 
     @pytest.mark.smoke
     def test_trace_triggers_wrapping(self):
@@ -138,7 +139,7 @@ class TestLazyDecoration:
         model = SimpleModel()
         trace_fn(model, torch.randn(5))
         assert _state._is_decorated is True
-        assert getattr(torch.cos, "tl_is_decorated_function", False)
+        assert is_decorated_function(torch.cos)
 
     def test_stays_wrapped_after_trace(self):
         """After trace, torch stays wrapped for subsequent calls."""
@@ -157,7 +158,7 @@ class TestLazyDecoration:
         assert result is not None
         assert len(result.output_layers) > 0
         assert _state._is_decorated is False
-        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+        assert not is_decorated_function(torch.cos)
 
     def test_wrapped_context_manager(self):
         """wrapped() context manager wraps on entry, unwraps on exit."""
@@ -183,10 +184,10 @@ class TestLazyDecoration:
         for _ in range(3):
             wrap_torch()
             assert _state._is_decorated is True
-            assert getattr(torch.cos, "tl_is_decorated_function", False)
+            assert is_decorated_function(torch.cos)
             unwrap_torch()
             assert _state._is_decorated is False
-            assert not getattr(torch.cos, "tl_is_decorated_function", False)
+            assert not is_decorated_function(torch.cos)
 
     def test_trace_after_unwrap(self):
         """trace after explicit unwrap should auto-rewrap and work."""
@@ -278,7 +279,7 @@ class TestToggleState:
         x = torch.randn(3)
         y = torch.cos(x)
         assert y.shape == (3,)
-        assert not hasattr(y, "tl__label_raw")
+        assert get_tensor_label(y) is None
 
     def test_requires_grad_restored_after_exception(self):
         """requires_grad must be restored even when forward raises."""
@@ -301,20 +302,20 @@ class TestWrapUnwrap:
 
     def test_unwrap_restores_original_torch_function(self):
         """unwrap_torch strips TorchLens wrappers from torch callables."""
-        assert getattr(torch.cos, "tl_is_decorated_function", False)
+        assert is_decorated_function(torch.cos)
         unwrap_torch()
-        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+        assert not is_decorated_function(torch.cos)
         x = torch.randn(4)
         y = torch.cos(x)
         assert y.shape == x.shape
-        assert not hasattr(y, "tl__label_raw")
+        assert get_tensor_label(y) is None
 
     def test_wrap_restores_logging_after_unwrap(self):
         """wrap_torch after unwrap_torch re-enables logging."""
         unwrap_torch()
-        assert not getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
+        assert not is_decorated_function(torch.nn.functional.relu)
         wrap_torch()
-        assert getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
+        assert is_decorated_function(torch.nn.functional.relu)
         result = trace_fn(SimpleModel(), torch.randn(5))
         relu_layers = [label for label in result.layer_labels if "relu" in label.lower()]
         assert relu_layers
@@ -436,7 +437,7 @@ class TestPassthroughWhenOff:
         """Results must not have tl_ attributes when toggle is off."""
         x = torch.randn(3, 4)
         y = torch.matmul(x, x.T)
-        assert not hasattr(y, "tl__label_raw")
+        assert get_tensor_label(y) is None
         assert not hasattr(y, "tl_source_trace")
 
     def test_ops_normal_after_logging(self):
@@ -447,8 +448,8 @@ class TestPassthroughWhenOff:
         x = torch.randn(5)
         y = torch.relu(x)
         z = x.view(1, 5)
-        assert not hasattr(y, "tl__label_raw")
-        assert not hasattr(z, "tl__label_raw")
+        assert get_tensor_label(y) is None
+        assert get_tensor_label(z) is None
 
     def test_tensor_method_ops(self):
         """Tensor method operations like .view, .reshape must work."""
@@ -477,7 +478,7 @@ class TestDetachedImports:
         sys.modules["_test_detached_cos"] = mod
         try:
             # The function should be decorated
-            assert getattr(mod.cos, "tl_is_decorated_function", False)
+            assert is_decorated_function(mod.cos)
         finally:
             del sys.modules["_test_detached_cos"]
 
@@ -545,8 +546,8 @@ class TestDetachedImports:
         """torch.nn.functional functions should be decorated."""
         import torch.nn.functional as F
 
-        assert getattr(F.relu, "tl_is_decorated_function", False)
-        assert getattr(F.linear, "tl_is_decorated_function", False)
+        assert is_decorated_function(F.relu)
+        assert is_decorated_function(F.linear)
 
     def test_late_import_patched_incrementally(self):
         """Modules imported after torchlens should be patched on next crawl."""
@@ -563,7 +564,7 @@ class TestDetachedImports:
         try:
             # Trigger incremental crawl
             patch_detached_references()
-            assert getattr(mod.my_cos, "tl_is_decorated_function", False)
+            assert is_decorated_function(mod.my_cos)
         finally:
             sys.modules.pop(mod_name, None)
 
@@ -573,7 +574,7 @@ class TestDetachedImports:
         tl_modules = [k for k in sys.modules if k.startswith("torchlens")]
         assert len(tl_modules) > 0
         # _state itself should not have been modified by the crawl
-        assert not hasattr(_state, "tl_is_decorated_function")
+        assert not is_decorated_function(_state)
 
     def test_crawl_only_processes_new_modules(self):
         """Calling patch_detached_references twice should not re-scan."""
@@ -606,15 +607,15 @@ class TestPermanentModelPrep:
         assert model in _state._prepared_models
 
     def test_permanent_attrs_survive_sessions(self):
-        """tl_address and tl_module_type should persist after logging."""
+        """Module address and type metadata should persist after logging."""
         model = NestedModuleModel()
         trace_fn(model, torch.randn(5))
 
-        # Permanent attributes should still be there
-        assert hasattr(model.block[0], "tl_address")
-        assert hasattr(model.block[0], "tl_module_type")
-        assert model.block[0].tl_address == "block.0"
-        assert model.block[0].tl_module_type == "Linear"
+        # Permanent metadata should still be there
+        module_meta = get_module_meta(model.block[0])
+        assert module_meta is not None
+        assert module_meta.address == "block.0"
+        assert module_meta.module_type == "Linear"
 
     def test_session_attrs_cleaned(self):
         """Session-scoped tl_ attrs should be removed after logging."""
@@ -784,9 +785,9 @@ class TestWrapperTransparency:
         assert len(torch.cos.__doc__) > 0
 
     def test_is_decorated_flag(self):
-        """Decorated functions should have tl_is_decorated_function=True."""
-        assert getattr(torch.cos, "tl_is_decorated_function", False)
-        assert getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
+        """Decorated functions should be tagged."""
+        assert is_decorated_function(torch.cos)
+        assert is_decorated_function(torch.nn.functional.relu)
 
     def test_builtin_no_wrapped(self):
         """Built-in wrappers should NOT have __wrapped__ (JIT compat)."""
@@ -1194,10 +1195,10 @@ class TestSessionIsolation:
 
         result1 = trace_fn(model, x)
         # After first session, input tensor should be clean
-        assert not hasattr(x, "tl__label_raw")
+        assert get_tensor_label(x) is None
 
         result2 = trace_fn(model, x)
-        assert not hasattr(x, "tl__label_raw")
+        assert get_tensor_label(x) is None
 
         # Both sessions should have produced valid results
         assert len(result1.output_layers) > 0

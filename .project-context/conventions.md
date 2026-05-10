@@ -7,10 +7,10 @@
 - Subpackage CLAUDE.md files document each package
 
 ### Variables & Attributes
-- `tl_` prefix on tensor/module attributes during logging
-  - Permanent attrs (survive sessions): `tl_module_address`, `tl_module_type`
-  - Session attrs (cleaned per-call): `tl_source_model_log`, `tl_module_pass_num`, etc.
-- `_raw_` prefix for pre-postprocessing state (e.g., `tl_tensor_label_raw`)
+- TorchLens metadata attached to tensors, parameters, modules, or callables lives under
+  `obj._tl`; add fields to an existing `TorchLensMeta` subclass instead of adding
+  parallel host-object attributes.
+- `_raw_` prefix for pre-postprocessing state
 - `_final_` prefix for post-processed state
 - `_orig_` prefix for original (pre-decoration) references
 - `clean_` prefix for pre-decoration torch function imports (e.g., `clean_clone = torch.clone`)

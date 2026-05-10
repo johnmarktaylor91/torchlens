@@ -20,6 +20,8 @@ from typing import Any, Optional, cast
 import numpy as np
 import torch
 
+from .._tl import get_tensor_label, set_tensor_label
+
 # Maximum absolute tolerance for floating-point comparison in tensor_nanequal.
 # Used by validation replay to allow tiny numerical differences caused by
 # non-deterministic GPU reductions or float16 rounding.  Set conservatively
@@ -342,8 +344,9 @@ def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
                         vals_tensor = torch.zeros(x.shape, dtype=torch.float32)
             # Preserve the raw label so postprocessing can map this tensor
             # back to its Trace entry.
-            if hasattr(x, "tl__label_raw"):
-                setattr(vals_tensor, "tl__label_raw", getattr(x, "tl__label_raw"))
+            label = get_tensor_label(x)
+            if label is not None:
+                set_tensor_label(vals_tensor, label)
             if isinstance(x, torch.nn.Parameter):
                 return torch.nn.Parameter(vals_tensor)
             return vals_tensor

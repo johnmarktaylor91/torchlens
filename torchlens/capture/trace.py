@@ -36,6 +36,7 @@ import torch
 from torch import nn
 
 from .. import _state
+from .._tl import clear_meta, get_tensor_label
 from ..decoration.model_prep import (
     _ensure_model_prepared,
     _prepare_model_session,
@@ -406,7 +407,7 @@ def _extract_and_mark_outputs(
         ]
         output_specs_by_raw_label = {}
         for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs):
-            _label_raw = getattr(tensor, "tl__label_raw", None)
+            _label_raw = get_tensor_label(tensor)
             if _label_raw is not None:
                 output_specs_by_raw_label[_label_raw] = (
                     path,
@@ -437,9 +438,9 @@ def _extract_and_mark_outputs(
         # Only record output_layers during exhaustive pass; fast pass reuses the list.
         # Defensive: user-injected output tensors (raw register_forward_hook
         # returning a fresh tensor, intervention API replacements that don't
-        # propagate metadata, etc.) lack tl__label_raw. Skip them rather than
+        # propagate metadata, etc.) lack _tl labels. Skip them rather than
         # crashing — they aren't in our graph but the experiment can continue.
-        _label_raw = getattr(t, "tl__label_raw", None)
+        _label_raw = get_tensor_label(t)
         if _label_raw is None:
             continue
         if self.capture_mode == "exhaustive":
@@ -598,7 +599,7 @@ def run_and_log_inputs_through_model(
 
     except Exception as e:
         # active_logging's __exit__ already turned off the toggle.
-        # Clean up model session state and strip tl_ attributes from any
+        # Clean up model session state and strip TorchLens metadata from any
         # partially-constructed tensor entries to avoid stale references (#110).
         from ..partial import PartialTrace
 
@@ -610,12 +611,7 @@ def run_and_log_inputs_through_model(
         for label in list(self._raw_layer_dict.keys()):
             entry = self._raw_layer_dict.get(label)
             if entry is not None and hasattr(entry, "out") and entry.out is not None:
-                for attr in ("tl__label_raw",):
-                    if hasattr(entry.out, attr):
-                        try:
-                            delattr(entry.out, attr)
-                        except Exception:
-                            pass
+                clear_meta(entry.out)
         print(
             "************\nFeature extraction failed; returning model and environment to normal\n*************"
         )

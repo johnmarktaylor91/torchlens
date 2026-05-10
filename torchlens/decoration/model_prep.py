@@ -4,7 +4,7 @@ This module implements the model preparation pipeline, which has two phases:
 
 **Phase 1 — One-time preparation** (``_prepare_model_once``):
   Runs once per model instance (cached in ``_state._prepared_models`` WeakSet).
-  Assigns permanent attributes (``tl_address``, ``tl_module_type``) and
+  Assigns permanent ``_tl`` module metadata and
   wraps each submodule's ``forward`` with ``module_forward_decorator``. These
   survive across multiple ``trace`` calls.
 
@@ -36,6 +36,24 @@ import torch
 from torch import nn
 
 from .. import _state
+from .._tl import (
+    clear_meta,
+    get_buffer_address,
+    get_label_list,
+    get_module_meta,
+    get_param_meta,
+    get_tensor_label,
+    is_forward_call_decorated,
+    is_tensor_replacement_wrapped,
+    mark_forward_call_decorated,
+    mark_tensor_replacement_wrapped,
+    promote_label_to_buffer_parent_and_clear_label,
+    restore_param_requires_grad,
+    set_buffer_address,
+    set_module_meta,
+    set_param_meta,
+    set_tensor_label,
+)
 from ..data_classes.param_log import ParamAccessor, ParamLog
 from ..data_classes.func_call_location import FuncCallLocation
 from ..data_classes.module_log import HookInfo
@@ -81,18 +99,44 @@ _PYTORCH_INTERNAL = frozenset(
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
 
-# Session-scoped attributes set on parameters during _create_session_param_logs.
-_SESSION_PARAM_ATTRS = [
-    "tl_requires_grad",  # original requires_grad (restored on cleanup)
-    "tl_param_barcode",  # unique id for param-sharing detection
-    "tl_param_address",  # dotted address (e.g. "encoder.weight")
-    "tl_call_index",  # how many times this param has been used
-]
-
 
 # ---------------------------------------------------------------------------
 # Shared module traversal
 # ---------------------------------------------------------------------------
+
+
+def _module_address(module: nn.Module) -> str:
+    """Return a prepared module's TorchLens address.
+
+    Parameters
+    ----------
+    module:
+        Module to inspect.
+
+    Returns
+    -------
+    str
+        Prepared module address, or ``""`` for an unprepared/root fallback.
+    """
+    meta = get_module_meta(module)
+    return "" if meta is None or meta.address is None else meta.address
+
+
+def _module_type(module: nn.Module) -> str:
+    """Return a prepared module's TorchLens module type.
+
+    Parameters
+    ----------
+    module:
+        Module to inspect.
+
+    Returns
+    -------
+    str
+        Prepared module type, or the Python class name as a fallback.
+    """
+    meta = get_module_meta(module)
+    return type(module).__name__ if meta is None or meta.module_type is None else meta.module_type
 
 
 def _traverse_model_modules(
@@ -140,14 +184,14 @@ def _prepare_model_once(model: nn.Module) -> None:
        decoration. We replace it here (same as ``patch_model_instance`` but
        done during the DFS so children are caught too).
 
-    2. **Assigns permanent attributes** — ``tl_address`` (dotted path
-       like ``"encoder.layer.0.attention"``) and ``tl_module_type`` (class name).
-       These survive across sessions.
+    2. **Assigns permanent metadata** — ``_tl.address`` (dotted path
+       like ``"encoder.layer.0.attention"``) and ``_tl.module_type`` (class
+       name). These survive across sessions.
 
     3. **Wraps ``forward``** — Replaces ``module.forward`` with
        ``module_forward_decorator(module.forward, module)``. The wrapper is
        toggle-gated: no-op when logging is off, full entry/exit tracking when on.
-       The ``tl_forward_call_is_decorated`` sentinel prevents double-wrapping.
+       The ``_tl.forward_call_is_decorated`` sentinel prevents double-wrapping.
 
     The root module is skipped for type annotation and forward wrapping because
     its forward is called directly by ``trace`` with its own
@@ -156,7 +200,7 @@ def _prepare_model_once(model: nn.Module) -> None:
     if model in _state._prepared_models:
         return
 
-    model.tl_address = ""  # type: ignore[assignment]
+    set_module_meta(model, address="", module_type=str(type(model).__name__))
 
     def _visit_once(
         module: nn.Module,
@@ -175,20 +219,22 @@ def _prepare_model_once(model: nn.Module) -> None:
         # Annotate children with their full dotted address path.
         for child_name, child_module in named_children:
             child_address = f"{address}.{child_name}" if address else child_name
-            child_module.tl_address = child_address  # type: ignore[assignment]
+            set_module_meta(
+                child_module,
+                address=child_address,
+                module_type=str(type(child_module).__name__),
+            )
 
         # Root module is handled separately by trace.
         if is_root:
             return
 
-        module.tl_module_type = str(type(module).__name__)  # type: ignore[assignment]
+        set_module_meta(module, address=address, module_type=str(type(module).__name__))
 
         # Wrap forward with toggle-gated decorator (idempotent via sentinel).
-        if hasattr(module, "forward") and not hasattr(
-            module.forward, "tl_forward_call_is_decorated"
-        ):
+        if hasattr(module, "forward") and not is_forward_call_decorated(module.forward):
             module.forward = module_forward_decorator(module.forward, module)
-            module.forward.tl_forward_call_is_decorated = True  # type: ignore[attr-defined]
+            mark_forward_call_decorated(module.forward)
 
     _traverse_model_modules(model, _visit_once)
     _state._prepared_models.add(model)
@@ -211,11 +257,11 @@ def _prepare_model_session(
     1. Clears metadata caches (class metadata, dir cache).
     2. Captures module metadata (source file, signatures, hooks, etc.) into
        ``trace._module_metadata``.
-    3. Sets session-scoped ``tl_*`` attributes on each submodule (pass counters,
-       tensor entry/exit tracking lists, back-reference to trace).
+    3. Sets session-scoped Trace dictionaries for module pass counters and
+       tensor entry/exit tracking.
     4. Creates ``ParamLog`` objects and forces ``requires_grad=True`` on all
        parameters (needed so ``grad_fn`` chain is available for metadata).
-    5. Tags buffer tensors with ``tl_buffer_address``.
+    5. Tags buffer tensors with ``_tl.buffer_address``.
 
     All session-scoped state is cleaned up by ``_cleanup_model_session``.
     """
@@ -242,11 +288,11 @@ def _prepare_model_session(
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
 
-    # Use model.modules() + cached tl_address from phase 1, avoiding a
+    # Use model.modules() + cached module addresses from phase 1, avoiding a
     # second full DFS with string concatenation and list(named_children()) calls.
     for module in model.modules():
         is_root = module is model
-        address = getattr(module, "tl_address", "")
+        address = _module_address(module)
         named_children = list(module.named_children())
         _capture_module_metadata(
             trace,
@@ -257,9 +303,7 @@ def _prepare_model_session(
             is_root=is_root,
         )
         if not is_root:
-            trace._module_build_data["module_types"][cast(str, module.tl_address)] = cast(
-                str, module.tl_module_type
-            )
+            trace._module_build_data["module_types"][address] = _module_type(module)
             # Session-scoped tracking in Trace dicts (keyed by id(module)).
             mod_id = id(module)
             trace._mod_call_index[mod_id] = 0
@@ -278,7 +322,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     Outside ``train_mode``, ``requires_grad`` is forced True so that ``grad_fn``
     metadata is available on all intermediate tensors during the forward pass.
     In ``train_mode``, user-authored ``requires_grad`` values are preserved. The
-    original value is always saved to ``tl_requires_grad`` and restored during
+    original value is always saved to ``_tl.requires_grad_before_capture`` and restored during
     ``_cleanup_model_session``.
     """
     optimized_param_ids: set[int] = set()
@@ -291,7 +335,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     seen_param_ids: set[int] = set()
     param_id_to_address: dict[int, str] = {}
     for module in model.modules():
-        address = getattr(module, "tl_address", "")
+        address = _module_address(module)
         module_type = type(module).__name__
         for param_name, param in module._parameters.items():
             if param is None:
@@ -311,14 +355,17 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             param_id_to_address[pid] = param_address
 
             # Save original requires_grad before forcing True.
-            param.tl_requires_grad = param.requires_grad  # type: ignore[attr-defined]
+            requires_grad_before = param.requires_grad
             if not getattr(trace, "train_mode", False):
                 param.requires_grad = True
 
             barcode = make_random_barcode()
-            param.tl_param_barcode = barcode  # type: ignore[attr-defined]
-            param.tl_param_address = param_address  # type: ignore[attr-defined]
-            param.tl_call_index = 0  # type: ignore[attr-defined]
+            set_param_meta(
+                param,
+                barcode=barcode,
+                address=param_address,
+                requires_grad_before=requires_grad_before,
+            )
 
             param_fsize = get_memory_amount(param)
             param_log = ParamLog(
@@ -328,7 +375,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
                 dtype=param.dtype,
                 num_params=param.numel(),
                 memory=param_fsize,
-                trainable=param.tl_requires_grad,  # type: ignore[attr-defined]
+                trainable=requires_grad_before,
                 address=param_address,
                 module_type=module_type,
                 barcode=barcode,
@@ -473,7 +520,7 @@ def _capture_module_metadata(
 
     Records source file/line, signatures, docstrings, hooks, training mode,
     child addresses, user-defined attributes/custom_methods, and more. Must be called
-    while ``tl_*`` attrs are present on modules (before cleanup).
+    after permanent module metadata has been assigned.
 
     **Shared module handling**: If the same module object appears at multiple
     addresses (weight sharing), subsequent encounters just append to
@@ -559,7 +606,7 @@ def _capture_module_metadata(
 
 
 def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
-    """Tag buffer tensors with ``tl_buffer_address`` for later identification.
+    """Tag buffer tensors with ``_tl.buffer_address`` for later identification.
 
     Buffers are non-parameter tensors registered via ``register_buffer()`` or
     stored as plain tensor attributes. They are tagged here so that when a
@@ -573,17 +620,17 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     """
     _state._tagged_buffer_ids.clear()
     for submodule in model.modules():
-        module_addr = getattr(submodule, "tl_address", "")
+        module_addr = _module_address(submodule)
         # Scan registered buffers
         for buf_name, buf_tensor in submodule.named_buffers(recurse=False):
             if (
                 isinstance(buf_tensor, torch.Tensor)
                 and not isinstance(buf_tensor, torch.nn.Parameter)
-                and not hasattr(buf_tensor, "tl_buffer_address")
+                and get_buffer_address(buf_tensor) is None
             ):
                 buffer_address = f"{module_addr}.{buf_name}" if module_addr else buf_name
                 try:
-                    buf_tensor.tl_buffer_address = buffer_address  # type: ignore[attr-defined]
+                    set_buffer_address(buf_tensor, buffer_address)
                     _state._tagged_buffer_ids.add(id(buf_tensor))
                 except Exception:
                     pass
@@ -594,11 +641,11 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
             if (
                 isinstance(attr_val, torch.Tensor)
                 and not isinstance(attr_val, torch.nn.Parameter)
-                and not hasattr(attr_val, "tl_buffer_address")
+                and get_buffer_address(attr_val) is None
             ):
                 buffer_address = f"{module_addr}.{attr_name}" if module_addr else attr_name
                 try:
-                    attr_val.tl_buffer_address = buffer_address  # type: ignore[attr-defined]
+                    set_buffer_address(attr_val, buffer_address)
                     _state._tagged_buffer_ids.add(id(attr_val))
                 except Exception:
                     pass
@@ -607,13 +654,13 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
                     if (
                         isinstance(item, torch.Tensor)
                         and not isinstance(item, torch.nn.Parameter)
-                        and not hasattr(item, "tl_buffer_address")
+                        and get_buffer_address(item) is None
                     ):
                         item_addr = (
                             f"{module_addr}.{attr_name}.{i}" if module_addr else f"{attr_name}.{i}"
                         )
                         try:
-                            item.tl_buffer_address = item_addr  # type: ignore[attr-defined]
+                            set_buffer_address(item, item_addr)
                             _state._tagged_buffer_ids.add(id(item))
                         except Exception:
                             pass
@@ -625,27 +672,26 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
 
 
 def _tag_untagged_buffers(module: nn.Module) -> None:
-    """Tag any buffers that lack a ``tl_buffer_address`` attribute.
+    """Tag any buffers that lack ``_tl.buffer_address`` metadata.
 
     Called during ``_record_module_entry_metadata`` to catch buffers that were created
     dynamically (e.g. in ``forward()``) after the initial ``prepare_buffer_tensors``
-    scan. If a buffer already has a ``tl__label_raw`` from being logged as
-    an intermediate tensor, that label is moved to ``tl_buffer_parent`` and cleared
+    scan. If a buffer already has ``_tl.label_raw`` from being logged as
+    an intermediate tensor, that label is moved to ``_tl.buffer_parent`` and cleared
     so the buffer gets a fresh source-tensor entry on next use.
     """
     for buffer_name, buffer_tensor in module.named_buffers():
-        if hasattr(buffer_tensor, "tl_buffer_address"):
+        if get_buffer_address(buffer_tensor) is not None:
             continue
-        if module.tl_address == "":
+        module_addr = _module_address(module)
+        if module_addr == "":
             buffer_address = buffer_name
         else:
-            buffer_address = f"{module.tl_address}.{buffer_name}"
-        buffer_tensor.tl_buffer_address = buffer_address  # type: ignore[attr-defined]
+            buffer_address = f"{module_addr}.{buffer_name}"
+        set_buffer_address(buffer_tensor, buffer_address)
         # If this buffer was already logged as an intermediate tensor, save the
         # old label as parent and reset so it gets a proper buffer source entry.
-        if hasattr(buffer_tensor, "tl__label_raw"):
-            buffer_tensor.tl_buffer_parent = buffer_tensor.tl__label_raw  # type: ignore[attr-defined]
-            delattr(buffer_tensor, "tl__label_raw")
+        promote_label_to_buffer_parent_and_clear_label(buffer_tensor)
 
 
 def _record_module_entry_metadata(
@@ -672,7 +718,7 @@ def _record_module_entry_metadata(
         needed by ``_record_module_exit_metadata`` for pass-through detection and
         replacement-output recovery.
     """
-    address = cast(str, module.tl_address)
+    address = _module_address(module)
     mod_id = id(module)
     trace._module_build_data["module_training_modes"][address] = module.training
     module_call_index = trace._mod_call_index[mod_id]
@@ -692,9 +738,12 @@ def _record_module_entry_metadata(
     input_tensor_labels_at_entry = []
     for t in input_tensors:
         # Lazily register buffer tensors that haven't been logged yet.
-        if (not hasattr(t, "tl__label_raw")) and hasattr(t, "tl_buffer_address"):
-            log_source_tensor(trace, t, "buffer", getattr(t, "tl_buffer_address"))
-        if not hasattr(t, "tl__label_raw"):
+        label = get_tensor_label(t)
+        buffer_address = get_buffer_address(t)
+        if label is None and buffer_address is not None:
+            log_source_tensor(trace, t, "buffer", buffer_address)
+            label = get_tensor_label(t)
+        if label is None:
             # Raw ``register_forward_hook`` replacements run after this
             # module-forward wrapper has already handled the replaced module's
             # exit, so the first recoverable point may be the next downstream
@@ -703,11 +752,12 @@ def _record_module_entry_metadata(
                 trace._raw_layer_labels_list[-1:] if trace._raw_layer_labels_list else []
             )
             _ensure_module_output_tensor_logged(trace, t, module, parent_labels)
-        if not hasattr(t, "tl__label_raw"):
+            label = get_tensor_label(t)
+        if label is None:
             continue  # Skip untracked tensors (e.g. external constants) (#117)
-        layer_entry = trace._raw_layer_dict[t.tl__label_raw]
-        input_tensor_labels.add(t.tl__label_raw)
-        trace._mod_entered[mod_id].append(t.tl__label_raw)
+        layer_entry = trace._raw_layer_dict[label]
+        input_tensor_labels.add(label)
+        trace._mod_entered[mod_id].append(label)
         layer_entry.modules_entered.append(address)
         layer_entry.module_ops_entered.append(module_call_label)
         # Record which arg position this tensor occupies for this module pass.
@@ -718,8 +768,8 @@ def _record_module_entry_metadata(
                 ].append(arg_key)
                 trace._module_build_data["module_layer_argnames"][
                     (f"{module_call_label[0]}:{module_call_label[1]}")
-                ].append((t.tl__label_raw, arg_key))
-        input_tensor_labels_at_entry.append(t.tl__label_raw)
+                ].append((label, arg_key))
+        input_tensor_labels_at_entry.append(label)
 
     # Catch buffers created dynamically (e.g. in forward()) after initial scan.
     _tag_untagged_buffers(module)
@@ -781,7 +831,7 @@ def _ensure_module_output_tensor_logged(
     trace:
         Active model log.
     tensor:
-        Replacement output tensor that lacks ``tl__label_raw``.
+        Replacement output tensor that lacks ``_tl.label_raw``.
     module:
         Module whose forward return value was replaced.
     parent_labels:
@@ -803,7 +853,7 @@ def _ensure_module_output_tensor_logged(
         field_name: _copy_field_value_for_replacement(getattr(template_entry, field_name, None))
         for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }
-    address = cast(str, module.tl_address)
+    address = _module_address(module)
     module_call_index = trace._mod_call_index[id(module)]
     root_ancestors: set[str] = set()
     input_ancestors: set[str] = set()
@@ -974,11 +1024,11 @@ def _ensure_module_output_tensor_logged(
     for parent_entry in parent_entries:
         parent_entry.children.append(raw_label)
         parent_entry.has_children = True
-    tensor.tl__label_raw = new_entry._label_raw  # type: ignore[attr-defined]
+    set_tensor_label(tensor, new_entry._label_raw)
     if trace.save_grads:
         from ..capture.output_tensors import _add_backward_hook
 
-        _add_backward_hook(trace, tensor, tensor.tl__label_raw)  # type: ignore[attr-defined]
+        _add_backward_hook(trace, tensor, new_entry._label_raw)
 
 
 def _wrap_user_forward_hooks(module: nn.Module) -> None:
@@ -999,7 +1049,7 @@ def _wrap_user_forward_hooks(module: nn.Module) -> None:
     if not hooks:
         return
     for hook_id, hook_fn in list(hooks.items()):
-        if getattr(hook_fn, "tl_tensor_replacement_wrapped", False):
+        if is_tensor_replacement_wrapped(hook_fn):
             continue
         hooks[hook_id] = _make_user_forward_hook_wrapper(module, hook_fn)
 
@@ -1034,18 +1084,19 @@ def _make_user_forward_hook_wrapper(
         if trace is None or not _state._logging_enabled:
             return result
         parent_labels = [
-            getattr(tensor, "tl__label_raw")
+            label
             for tensor in get_vars_of_type_from_obj(original_output, torch.Tensor, search_depth=4)
-            if hasattr(tensor, "tl__label_raw")
+            if (label := get_tensor_label(tensor)) is not None
         ]
         for replacement in get_vars_of_type_from_obj(result, torch.Tensor, search_depth=4):
-            if hasattr(replacement, "tl__label_raw"):
-                trace._raw_layer_dict[replacement.tl__label_raw].intervention_replaced = True
+            replacement_label = get_tensor_label(replacement)
+            if replacement_label is not None:
+                trace._raw_layer_dict[replacement_label].intervention_replaced = True
             else:
                 _ensure_module_output_tensor_logged(trace, replacement, module, parent_labels)
         return result
 
-    wrapped_hook.tl_tensor_replacement_wrapped = True  # type: ignore[attr-defined]
+    mark_tensor_replacement_wrapped(wrapped_hook)
     return wrapped_hook
 
 
@@ -1063,7 +1114,7 @@ def _record_module_exit_metadata(
     boundary identity ops for pass-through outputs, recovers replacement outputs,
     and annotates output tensors with module-exit metadata.
     """
-    address = cast(str, module.tl_address)
+    address = _module_address(module)
     mod_id = id(module)
     module_call_index = trace._mod_call_index[mod_id]
     trace._mod_call_labels[mod_id].pop()
@@ -1072,21 +1123,26 @@ def _record_module_exit_metadata(
         # nn.Identity modules and pass-through tensors (output is same object
         # as input) need _decorated_identity() to create a distinct log entry
         # so the graph correctly shows the module boundary.
-        if (cast(str, module.tl_module_type).lower() == "identity") or (
-            hasattr(t, "tl__label_raw") and t.tl__label_raw in input_tensor_labels
+        tensor_label = get_tensor_label(t)
+        if (_module_type(module).lower() == "identity") or (
+            tensor_label is not None and tensor_label in input_tensor_labels
         ):
             t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
-        if not hasattr(t, "tl__label_raw"):
+            tensor_label = get_tensor_label(t)
+        if tensor_label is None:
             parent_labels = list(dict.fromkeys(input_tensor_labels_at_entry))
             _ensure_module_output_tensor_logged(trace, t, module, parent_labels)
-        layer_entry = trace._raw_layer_dict[t.tl__label_raw]
+            tensor_label = get_tensor_label(t)
+        if tensor_label is None:
+            continue
+        layer_entry = trace._raw_layer_dict[tensor_label]
         if getattr(module, "_forward_hooks", None):
             layer_entry.intervention_replaced = True
         layer_entry.is_submodule_output = True
         layer_entry.is_atomic_module_op = _is_bottom_level_submodule_exit(trace, t, module)
         layer_entry.output_of_modules.append(address)
         layer_entry.output_of_module_calls.append((address, module_call_index))
-        trace._mod_exited[mod_id].append(t.tl__label_raw)
+        trace._mod_exited[mod_id].append(tensor_label)
 
 
 def module_forward_decorator(
@@ -1142,16 +1198,15 @@ def module_forward_decorator(
             input_tensors_fast = get_vars_of_type_from_obj(
                 [args, kwargs], torch.Tensor, [torch.nn.Parameter], search_depth=5
             )
-            input_tensor_labels = {
-                t.tl__label_raw for t in input_tensors_fast if hasattr(t, "tl__label_raw")
-            }
+            input_tensor_labels = set(get_label_list(input_tensors_fast))
             out = orig_forward(*args, **kwargs)
             output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
             for t in output_tensors:
                 # Force _decorated_identity() for nn.Identity modules and pass-throughs
                 # to create a new tensor entry, matching what exhaustive mode does.
-                if (cast(str, module.tl_module_type).lower() == "identity") or (
-                    hasattr(t, "tl__label_raw") and t.tl__label_raw in input_tensor_labels
+                tensor_label = get_tensor_label(t)
+                if (_module_type(module).lower() == "identity") or (
+                    tensor_label is not None and tensor_label in input_tensor_labels
                 ):
                     t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
             return out
@@ -1269,8 +1324,11 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
     3. All parent tensors' most recent ``modules_entered`` is this submodule —
        the computation stayed within this module.
     """
-    layer_entry = trace._raw_layer_dict[getattr(t, "tl__label_raw")]
-    subaddress = cast(str, submodule.tl_address)
+    tensor_label = get_tensor_label(t)
+    if tensor_label is None:
+        raise KeyError("Tensor is missing TorchLens metadata")
+    layer_entry = trace._raw_layer_dict[tensor_label]
+    subaddress = _module_address(submodule)
     sub_id = id(submodule)
 
     # Case 1: already determined in a prior call.
@@ -1334,23 +1392,16 @@ def _cleanup_model_session(model: nn.Module, input_tensors: Any = None) -> None:
     """Clean up session-specific state after a ``trace`` call.
 
     Restores ``requires_grad`` to its original value on all parameters,
-    removes all session-scoped ``tl_*`` attributes from modules and params,
-    and strips ``tl__label_raw`` / ``tl_buffer_address`` from tensors.
+    removes all session-scoped parameter metadata, and strips session-scoped
+    tensor metadata.
 
-    **Does NOT** remove permanent attributes (``tl_address``,
-    ``tl_module_type``) or unwrap ``module.forward`` — those persist for
+    **Does NOT** remove permanent module metadata or unwrap ``module.forward`` — those persist for
     the lifetime of the model instance.
     """
     # Restore requires_grad and remove session-scoped param attributes
     for param in model.parameters():
-        if hasattr(param, "tl_requires_grad"):
-            param.requires_grad = param.tl_requires_grad
-        for attr_name in _SESSION_PARAM_ATTRS:
-            if hasattr(param, attr_name):
-                try:
-                    delattr(param, attr_name)
-                except (AttributeError, RuntimeError):
-                    pass
+        restore_param_requires_grad(param)
+        clear_meta(param)
 
     # Session-scoped module tracking data lives in Trace dicts (not on
     # modules), so no per-module cleanup iteration is needed — the dicts
@@ -1362,22 +1413,11 @@ def _cleanup_model_session(model: nn.Module, input_tensors: Any = None) -> None:
     # Clean tensor labels from input tensors
     if input_tensors:
         for t in input_tensors:
-            if hasattr(t, "tl__label_raw"):
-                delattr(t, "tl__label_raw")
-
-
-_TL_TENSOR_ATTRS = ("tl__label_raw", "tl_buffer_address", "tl_buffer_parent")
-
-
-def _strip_tl_attrs(tensor: torch.Tensor) -> None:
-    """Remove session-scoped tl_* attributes from a single tensor."""
-    for tl_attr in _TL_TENSOR_ATTRS:
-        if hasattr(tensor, tl_attr):
-            delattr(tensor, tl_attr)
+            clear_meta(t)
 
 
 def _undecorate_model_tensors(model: nn.Module) -> None:
-    """Remove session-scoped ``tl_*`` attributes from non-parameter tensors in the model.
+    """Remove session-scoped metadata from non-parameter tensors in the model.
 
     Uses ``__dict__`` scan (fast) instead of ``iter_accessible_attributes`` (slow
     dir() + getattr MRO walk). Handles tensors stored directly as attributes,
@@ -1387,20 +1427,20 @@ def _undecorate_model_tensors(model: nn.Module) -> None:
         for attr_val in submodule.__dict__.values():
             if isinstance(attr_val, torch.Tensor):
                 if not isinstance(attr_val, torch.nn.Parameter):
-                    _strip_tl_attrs(attr_val)
+                    clear_meta(attr_val)
             elif isinstance(attr_val, (list, tuple, set)):
                 for item in attr_val:
                     if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
-                        _strip_tl_attrs(item)
+                        clear_meta(item)
             elif isinstance(attr_val, dict):
                 for val in attr_val.values():
                     if isinstance(val, torch.Tensor) and not isinstance(val, torch.nn.Parameter):
-                        _strip_tl_attrs(val)
+                        clear_meta(val)
     # Also clean any tensors from the registered buffer dict (_buffers)
     for submodule in model.modules():
         for buf_tensor in submodule._buffers.values():
             if buf_tensor is not None:
-                _strip_tl_attrs(buf_tensor)
+                clear_meta(buf_tensor)
 
 
 # ---------------------------------------------------------------------------

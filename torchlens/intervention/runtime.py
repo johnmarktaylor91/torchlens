@@ -11,16 +11,10 @@ import torch
 
 from .. import _state
 from .._state import pause_logging
+from .._tl import copy_replacement_meta
 from .errors import HookSignatureError, HookValueError
 from .hooks import HookContext, NormalizedHookEntry, make_hook_context, live_selector_matches_site
 from .types import FireRecord
-
-_TL_REPLACEMENT_ATTRS = (
-    "tl__label_raw",
-    "tl_tensor_label_raw",
-    "tl_buffer_address",
-    "tl_buffer_parent",
-)
 
 
 @contextmanager
@@ -247,13 +241,10 @@ def _copy_tl_replacement_attrs(source: torch.Tensor, replacement: torch.Tensor) 
 
     if replacement is source:
         return
-    for attr_name in _TL_REPLACEMENT_ATTRS:
-        if not hasattr(source, attr_name):
-            continue
-        try:
-            setattr(replacement, attr_name, getattr(source, attr_name))
-        except Exception:
-            continue
+    try:
+        copy_replacement_meta(source, replacement)
+    except Exception:
+        pass
 
 
 def _apply_live_hooks(

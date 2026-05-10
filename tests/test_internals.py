@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 
 from torchlens import trace as trace_fn
+from torchlens._tl import get_tensor_label, set_tensor_label
 from torchlens.utils.tensor_utils import (
     get_memory_amount,
     print_override,
@@ -241,12 +242,11 @@ class TestSafeCopy:
         assert t.data_ptr() != copied.data_ptr()
 
     def test_safe_copy_preserves_label(self):
-        """safe_copy(detach_tensor=True) preserves tl__label_raw."""
+        """safe_copy(detach_tensor=True) preserves the TorchLens raw label."""
         t = torch.randn(3, 3)
-        t.tl__label_raw = "test_label"
+        set_tensor_label(t, "test_label")
         copied = safe_copy(t, detach_tensor=True)
-        assert hasattr(copied, "tl__label_raw")
-        assert copied.tl__label_raw == "test_label"
+        assert get_tensor_label(copied) == "test_label"
 
     def test_safe_copy_non_tensor(self):
         """safe_copy on non-tensors should return a shallow copy."""

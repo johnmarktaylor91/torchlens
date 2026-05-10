@@ -10,7 +10,7 @@ Source tensors differ from function-output tensors in several ways:
     initialized with ``has_internal_source_ancestor=True``.
   - Their ``func`` is None and ``func_name`` is ``"none"``.
   - Buffer labels follow ``"buffer_{N}_raw"``; input labels follow ``"input_{N}_raw"``.
-  - Buffers may carry a ``tl_buffer_parent`` attribute (set during model prep)
+  - Buffers may carry ``_tl.buffer_parent`` metadata (set during model prep)
     identifying the module that owns them.
   - Buffer entries are instantiated as ``BufferLog`` (a OpLog subclass
     that adds ``name`` and ``address`` fields).
@@ -29,17 +29,18 @@ import torch
 from torch import nn
 
 from .._errors import TorchLensPostfuncError
-from ..decoration import _module_stack as _mstack
+from .._tl import get_tensor_meta, set_tensor_label
 from .._training_validation import TrainingModeConfigError
-from ..utils.introspection import _get_code_context, get_attr_values_from_tensor_list
-from ..utils.tensor_utils import get_memory_amount
-from ..utils.rng import log_current_rng_states
 from ..data_classes.buffer_log import BufferLog
 from ..data_classes.op_log import OpLog
+from ..decoration import _module_stack as _mstack
 from ..fastlog._predicate import _evaluate_keep_op
 from ..fastlog._record_context import _build_record_context
 from ..fastlog._state import get_active_recording_state
 from ..fastlog.types import ActivationRecord
+from ..utils.introspection import _get_code_context
+from ..utils.rng import log_current_rng_states
+from ..utils.tensor_utils import get_memory_amount
 
 from .tensor_tracking import _add_backward_hook
 
@@ -106,7 +107,7 @@ def log_source_tensor_predicate(
     capture_index = self._layer_counter
     type_index = self._raw_layer_type_counter[source]
     tensor_label = f"{source}_{type_index}_raw"
-    setattr(t, "tl__label_raw", tensor_label)
+    set_tensor_label(t, tensor_label)
     if source == "input":
         self.input_layers.append(tensor_label)
     else:
@@ -226,12 +227,10 @@ def log_source_tensor_exhaustive(
         # Buffer equivalence keyed by module address so the same buffer
         # is recognized as the same layer across loop iterations.
         equivalence_class = f"buffer_{extra_addr}"
-        # tl_buffer_parent is set during model_prep on buffers that belong
+        # _tl.buffer_parent is set during model_prep on buffers that belong
         # to a specific module; None for detached or anonymous buffers.
-        if hasattr(t, "tl_buffer_parent"):
-            buffer_parent = t.tl_buffer_parent
-        else:
-            buffer_parent = None
+        tensor_meta = get_tensor_meta(t)
+        buffer_parent = None if tensor_meta is None else tensor_meta.buffer_parent
     else:
         raise ValueError("source must be either 'input' or 'buffer'")
 
@@ -415,10 +414,10 @@ def log_source_tensor_exhaustive(
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.out_postfunc)
 
     # Tag the live tensor so downstream operations can find this tensor's label.
-    t.tl__label_raw = tensor_label  # type: ignore[attr-defined]
+    set_tensor_label(t, tensor_label)
 
     # Register in Trace-level tracking structures.
-    self.equivalent_ops[equivalence_class].add(t.tl__label_raw)  # type: ignore[attr-defined]
+    self.equivalent_ops[equivalence_class].add(tensor_label)
     if source == "input":
         self.input_layers.append(tensor_label)
     if source == "buffer":
@@ -427,7 +426,7 @@ def log_source_tensor_exhaustive(
 
     # Register backward hook for grad capture if requested.
     if self.save_grads:
-        _add_backward_hook(self, t, t.tl__label_raw)  # type: ignore[attr-defined]
+        _add_backward_hook(self, t, tensor_label)
 
 
 def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
@@ -447,7 +446,7 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
     # outputs) because source tensors are identified only by type and type_num.
     _label_raw = f"{layer_type}_{type_index}_raw"
     # Tag tensor for downstream fast-path ops to identify it.
-    t.tl__label_raw = _label_raw  # type: ignore[attr-defined]
+    set_tensor_label(t, _label_raw)
     if _label_raw in self.orphan_ops:
         return
     orig_tensor_label = self._raw_to_final_layer_labels.get(_label_raw)

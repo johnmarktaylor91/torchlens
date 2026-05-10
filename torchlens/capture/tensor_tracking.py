@@ -35,8 +35,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..utils.hashing import make_random_barcode, make_short_barcode_from_input
+from .._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
 from ..data_classes.op_log import OpLog
+from ..utils.hashing import make_random_barcode, make_short_barcode_from_input
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -172,13 +173,19 @@ def _find_arg_positions_for_single_parent(
     iterfunc = iteration_strategies[arg_type]
 
     for arg_key, arg in iterfunc(arg_struct):  # type: ignore[operator]
-        if getattr(arg, "tl__label_raw", -1) == parent_entry._label_raw:
+        if (
+            not isinstance(arg, torch.nn.Parameter)
+            and get_tensor_label(arg) == parent_entry._label_raw
+        ):
             tensor_all_arg_positions[arg_type][arg_key] = parent_entry._label_raw
         elif type(arg) in [list, tuple, dict]:
             # Second level of nesting (e.g., torch.cat([tensor_a, tensor_b])).
             iterfunc2 = iteration_strategies[type(arg)]
             for sub_arg_key, sub_arg in iterfunc2(arg):  # type: ignore[operator]
-                if getattr(sub_arg, "tl__label_raw", -1) == parent_entry._label_raw:
+                if (
+                    not isinstance(sub_arg, torch.nn.Parameter)
+                    and get_tensor_label(sub_arg) == parent_entry._label_raw
+                ):
                     tensor_all_arg_positions[arg_type][(arg_key, sub_arg_key)] = (
                         parent_entry._label_raw
                     )
@@ -232,7 +239,7 @@ def _process_parent_param_ops(
 ) -> dict[str, int]:
     """Assign persistent barcodes to parameters and track their pass number.
 
-    On first encounter, each parameter gets a random barcode (``tl_param_barcode``)
+    On first encounter, each parameter gets a random barcode
     and pass number 1.  On subsequent encounters (same parameter used again in
     a later loop iteration), the pass number is incremented.
 
@@ -250,17 +257,20 @@ def _process_parent_param_ops(
     """
     parent_param_ops = {}
     for param in arg_parameters:
-        param_obj: Any = param
-        if not hasattr(param, "tl_param_barcode"):
+        meta = get_param_meta(param)
+        if meta is None or meta.param_barcode is None:
             # First time seeing this parameter — assign a unique barcode.
             param_barcode = make_random_barcode()
-            param_obj.tl_param_barcode = param_barcode
-            param_obj.tl_call_index = 1
+            set_param_meta(
+                param,
+                barcode=param_barcode,
+                address="",
+                requires_grad_before=param.requires_grad,
+            )
         else:
-            # Same parameter seen again (loop iteration) — increment pass.
-            param_barcode = param_obj.tl_param_barcode
-            param_obj.tl_call_index += 1
-        parent_param_ops[param_barcode] = param_obj.tl_call_index
+            param_barcode = meta.param_barcode
+        call_index = increment_param_call_index(param)
+        parent_param_ops[param_barcode] = call_index
     return parent_param_ops
 
 

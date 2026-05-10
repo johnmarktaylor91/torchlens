@@ -1,6 +1,6 @@
 """Steps 13-18: Tensor undecoration, timing, param logs, layer logs, module logs, pass finish.
 
-Step 13 (_undecorate_all_saved_tensors): Removes tl__label_raw attribute from
+Step 13 (_undecorate_all_saved_tensors): Removes TorchLens tensor metadata from
     all saved tensors and their creation args/kwargs.
 Step 14: torch.cuda.empty_cache() — handled inline in __init__.py.
 Step 15 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Literal, NamedTuple, Optional, TYPE_CHECKING
 
 import torch
 
+from .._tl import clear_meta
 from .._io import BlobRef, TorchLensIOError
 from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
@@ -41,12 +42,12 @@ if TYPE_CHECKING:
 
 
 def _undecorate_all_saved_tensors(self: "Trace") -> None:
-    """Step 13: Remove tl__label_raw from all saved tensors.
+    """Step 13: Remove TorchLens metadata from all saved tensors.
 
-    During logging, tensors are "decorated" with a tl__label_raw attribute
-    for tracking. This function strips that attribute from saved outs and
-    any tensors embedded in saved_args/saved_kwargs, so that tensors
-    returned to the user are clean.
+    During logging, tensors are tagged with private ``_tl`` metadata for
+    tracking. This function strips that metadata from saved outs and any
+    tensors embedded in saved_args/saved_kwargs, so tensors returned to the
+    user are clean.
     """
     tensors_to_undecorate = []
     for layer_entry in [*self.layer_list, *self.orphans.values()]:
@@ -65,8 +66,7 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
             )
 
     for t in tensors_to_undecorate:
-        if hasattr(t, "tl__label_raw"):
-            delattr(t, "tl__label_raw")
+        clear_meta(t)
 
 
 def _log_time_elapsed(self: "Trace") -> None:
@@ -586,7 +586,7 @@ def _build_module_logs(self: "Trace") -> None:
     # Build alias-to-metadata map for shared modules (same nn.Module instance
     # registered under multiple addresses). _module_metadata stores metadata
     # under the FIRST address visited by _capture_module_metadata, but
-    # tl_address may be overwritten to a LATER address by
+    # Module addresses may be overwritten to a LATER address by
     # _prepare_model_once. This map ensures all aliases resolve to the same meta.
     _metadata_by_alias: dict[str, dict[str, Any]] = {}
     for _primary_addr, _meta in self._module_metadata.items():

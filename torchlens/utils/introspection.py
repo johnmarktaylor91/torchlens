@@ -358,10 +358,10 @@ def _extend_search_stack_from_item(
 
 
 def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
-    """Collect a named ``tl_``-prefixed attribute from each tensor that has it.
+    """Collect a named attribute from each tensor that has it.
 
-    Used to extract logging metadata (e.g. ``tl__label_raw``) from a
-    list of tensors that may or may not have been tagged by the logging pipeline.
+    Used for generic tensor attribute scans where tensors may or may not carry
+    the requested attribute.
 
     Args:
         tensor_list: List of tensors to inspect.
@@ -482,13 +482,11 @@ def iter_accessible_attributes(
 def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
     """Remove all attributes from ``obj`` whose names start with ``prefix``.
 
-    Used during session cleanup to strip ``tl_``-prefixed logging metadata
-    from tensors and modules without needing an explicit list of every
-    possible attribute name.
+    This is a generic utility for caller-owned dynamic attributes.
 
     Args:
         obj: Object from which to remove attributes.
-        prefix: String prefix that marks fields to remove (e.g. ``"tl_"``).
+        prefix: String prefix that marks fields to remove.
     """
     for field in dir(obj):
         if field.startswith(prefix):

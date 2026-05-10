@@ -25,7 +25,7 @@
 - MAC convention is 2 FLOPs.
 
 ## output_tensors.py Gotchas
-- In-place ops rely on `safe_copy()` stripping `tl__label_raw` from clones so the
+- In-place ops rely on `safe_copy()` preserving the raw `_tl.label_raw` on clones so the
   mutation is logged as a new operation.
 - Barcode nesting detection distinguishes bottom-level ops from wrapper-level composites.
 - `out_postfunc` must run under `pause_logging()`.

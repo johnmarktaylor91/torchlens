@@ -10,6 +10,7 @@ import pytest
 import torchlens as tl
 
 from _module_containment_snapshot import build_snapshot
+from torchlens._tl import get_module_meta
 from fixtures.module_containment_models import ALL_FIXTURES, FixtureBuilder
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots" / "module_containment"
@@ -55,7 +56,9 @@ def _assert_lazy_address_stable(model: Any, fixture_name: str) -> None:
     if fixture_name != "lazy_linear_demo":
         return
     lazy_layer = model[0]
-    assert getattr(lazy_layer, "tl_address", None) == "0"
+    module_meta = get_module_meta(lazy_layer)
+    assert module_meta is not None
+    assert module_meta.address == "0"
 
 
 def _assert_synthetic_replacement_present(actual: dict[str, Any], fixture_name: str) -> None:

@@ -50,6 +50,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ._tl import get_tensor_label
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
 from .types import ActivationPostfunc, GradientPostfunc
@@ -155,8 +156,8 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
     trace = _state._active_trace
     if trace is None:
         raise RuntimeError("register_tensor_connection() must be called during trace.")
-    parent_label = getattr(parent, "tl__label_raw", None)
-    child_label = getattr(child, "tl__label_raw", None)
+    parent_label = get_tensor_label(parent)
+    child_label = get_tensor_label(child)
     if parent_label is None or child_label is None:
         raise ValueError("Both tensors must have TorchLens labels before registering an edge.")
     trace.manual_tensor_connections.append((parent_label, child_label))
@@ -1888,7 +1889,7 @@ def show_model_graph(
         recurrence_detection=recurrence_detection_enabled,
         verbose=verbose,
     )
-    # Render in a try/finally so temporary tl_ attributes on the model are
+    # Render in a try/finally so temporary TorchLens metadata on the model is
     # always cleaned up, even if Graphviz rendering raises.
     try:
         render_kwargs = visualization_to_render_kwargs(visualization_options)

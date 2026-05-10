@@ -45,11 +45,11 @@ import torch
 
 from .. import _state as _st
 from .._state import pause_logging
+from .._tl import get_label_list, get_param_meta, get_tensor_label, set_tensor_label
 from ..decoration import _module_stack as _mstack
 from ..errors import CaptureError
 from ..utils.introspection import (
     _get_code_context,
-    get_attr_values_from_tensor_list,
     get_vars_of_type_from_obj,
 )
 from ..utils.tensor_utils import get_memory_amount, safe_copy, tensor_nanequal
@@ -497,7 +497,7 @@ def _classify_arg_component(value: Any, notes: list[str]) -> ArgComponent:
         Tagged replay template component.
     """
 
-    label = getattr(value, "tl__label_raw", None)
+    label = None if isinstance(value, torch.nn.Parameter) else get_tensor_label(value)
     if isinstance(label, str):
         return ParentRef(label)
     if isinstance(value, torch.Tensor):
@@ -966,7 +966,7 @@ def log_function_output_tensors_predicate(
     state = get_active_recording_state()
     layer_type = func_name.lower().replace("_", "")
     arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, {})
-    parent_labels = tuple(get_attr_values_from_tensor_list(arg_tensors, "tl__label_raw"))
+    parent_labels = tuple(get_label_list(arg_tensors))
     out_iter = ensure_iterable(out_orig)
 
     for output_index, out in enumerate(out_iter):
@@ -980,7 +980,7 @@ def log_function_output_tensors_predicate(
         capture_index = self._layer_counter
         type_index = self._raw_layer_type_counter[layer_type]
         _label_raw = f"{layer_type}_{type_index}_{capture_index}_raw"
-        out.tl__label_raw = _label_raw
+        set_tensor_label(out, _label_raw)
         module_frame = state.module_stack[-1] if state.module_stack else None
         ctx = _build_record_context(
             kind="op",
@@ -1122,7 +1122,8 @@ def _build_param_fields(
 
     _param_logs = []
     for param in arg_parameters:
-        addr = getattr(param, "tl_param_address", None)
+        param_meta = get_param_meta(param)
+        addr = None if param_meta is None else param_meta.param_address
         if addr is not None and addr in self.param_logs:
             _param_logs.append(self.param_logs[addr])
 
@@ -1192,7 +1193,7 @@ def _build_shared_fields_dict(
     # (which become metadata and feed into equivalence_class hashing).
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
-    parent_layer_labels = get_attr_values_from_tensor_list(arg_tensors, "tl__label_raw")
+    parent_layer_labels = get_label_list(arg_tensors)
     parent_layer_entries = [self[label] for label in parent_layer_labels]
 
     fields_dict: dict[str, Any] = {}
@@ -1299,9 +1300,10 @@ def _tag_tensor_and_track_variations(
     ``output_versions_per_child``.  This is critical for validation replay,
     which needs the actual input values each child operation saw.
     """
-    out.tl__label_raw = fields_dict_onetensor["_label_raw"]  # type: ignore[attr-defined]
+    out_label = fields_dict_onetensor["_label_raw"]
+    set_tensor_label(out, out_label)
     if self.save_grads:
-        _add_backward_hook(self, out, out.tl__label_raw)  # type: ignore[attr-defined]
+        _add_backward_hook(self, out, out_label)
 
     for parent_label in new_layer_entry.parents:
         parent = self[parent_label]
@@ -1338,7 +1340,7 @@ def log_function_output_tensors_exhaustive(
       1. Build per-tensor fields (label, shape, equivalence type, FLOPs).
       2. Create a OpLog entry and optionally save out data.
       3. Update bidirectional family links (parent→child, sibling, spouse).
-      4. Tag the output tensor with ``tl__label_raw`` so downstream
+      4. Tag the output tensor with ``_tl.label_raw`` so downstream
          operations can identify it as a parent.
       5. Track parent content variations (for in-place mutation detection).
 
@@ -1503,7 +1505,7 @@ def log_function_output_tensors_fast(
         if _label_raw in self.orphan_ops:
             continue
         # Map parent raw labels → final labels for graph-change verification.
-        parent_layer_labels_raw = get_attr_values_from_tensor_list(arg_tensors, "tl__label_raw")
+        parent_layer_labels_raw = get_label_list(arg_tensors)
         parent_layer_labels_orig = []
         for raw_label in parent_layer_labels_raw:
             if raw_label in self._raw_to_final_layer_labels:
@@ -1514,7 +1516,7 @@ def log_function_output_tensors_fast(
                     f"and not in orphan_ops. The computational graph may have changed."
                 )
         # Tag tensor so downstream ops can find this tensor's label.
-        out.tl__label_raw = _label_raw
+        set_tensor_label(out, _label_raw)
         if _label_raw not in self._raw_to_final_layer_labels:
             raise ValueError(
                 "The computational graph changed for this forward pass compared to the original "
@@ -1628,7 +1630,7 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
 
     Two conditions must hold:
       1. ``out`` must be a torch.Tensor (non-tensor outputs like ints are skipped).
-      2. Either the tensor is genuinely new (no ``tl__label_raw`` attribute),
+      2. Either the tensor is genuinely new (no ``_tl.label_raw`` value),
          OR this is a bottom-level function.  Bottom-level functions are leaf
          operations in the decoration nesting — even if they return an already-
          labeled tensor (in-place ops), we log them to capture the operation.
@@ -1641,7 +1643,7 @@ def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
     if type(out) is not torch.Tensor:
         return False
 
-    if (not hasattr(out, "tl__label_raw")) or is_bottom_level_func:
+    if (get_tensor_label(out) is None) or is_bottom_level_func:
         return True
     else:
         return False
@@ -1933,8 +1935,8 @@ def _log_output_tensor_info(
     self.equivalent_ops[equivalence_class].add(_label_raw)
     fields_dict["equivalent_ops"] = self.equivalent_ops[equivalence_class]
 
-    # In-place ops return the same tensor object, which already has tl__label_raw.
-    fields_dict["is_inplace"] = hasattr(t, "tl__label_raw")
+    # In-place ops return the same tensor object, which already has a raw label.
+    fields_dict["is_inplace"] = get_tensor_label(t) is not None
     fields_dict["grad_fn_name"] = type(t.grad_fn).__name__
     fields_dict["grad_fn_id"] = id(t.grad_fn) if t.grad_fn is not None else None
     # Autograd Function objects do not consistently support weak references.

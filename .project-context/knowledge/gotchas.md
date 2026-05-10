@@ -7,10 +7,10 @@
 - [decoration] `__wrapped__` removed from built-in function wrappers to prevent `inspect.unwrap` failures with `torch.jit.script`
 - [decoration] Fast-path module decorator skips `_handle_module_entry` entirely — counter alignment must be replicated manually at model_prep.py:506-511
 - [decoration] `_module_class_metadata_cache` cleared at session start to avoid stale `inspect.getsourcelines` data
-- [capture] `safe_copy` strips `tl_tensor_label_raw` from clone — critical for in-place op detection
+- [capture] `safe_copy` preserves raw `_tl.label_raw` on clones — critical for in-place op detection
 - [capture] `pause_logging()` must wrap `activation_postfunc`, `get_tensor_memory_amount()`, and any internal torch ops to prevent infinite recursive logging
 - [capture] `arg_positions` dynamic cache never cleared on torch version upgrades — could serve stale specs
-- [capture] Buffer guard at `torch_funcs.py:108` must check `not hasattr(t, "tl_tensor_label_raw")` to prevent duplicate buffer entries
+- [capture] Buffer guard in `torch_funcs.py` must check for a missing raw `_tl.label_raw` to prevent duplicate buffer entries
 - [data_classes] Adding new fields requires updating BOTH the class definition AND `constants.py` FIELD_ORDER
 - [data_classes] Python property/__getattr__ trap: If `@property` raises `AttributeError`, Python falls through to `__getattr__`. Use `ValueError` instead.
 - [data_classes] `copy()` on LayerPassLog: shallow-copies 8 specific fields, deep-copies rest — safe only because downstream uses assignment not mutation

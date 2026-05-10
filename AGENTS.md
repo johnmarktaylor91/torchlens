@@ -24,7 +24,8 @@ Key entry points:
 ## Conventions
 - Conventional commits: prefer `docs(scope):`, `chore(scope):`, `test(scope):` for
   non-release changes; never use major-bump markers casually.
-- `tl_` prefix on tensor/module attributes during logging
+- TorchLens host-object metadata lives under `obj._tl`; sub-fields are snake_case and
+  new metadata should extend a `TorchLensMeta` subclass rather than adding `tl_*` attrs.
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state
 - FIELD_ORDER constants in `constants.py` define canonical field sets; update both class
   fields and constants when adding fields

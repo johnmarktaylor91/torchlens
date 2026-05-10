@@ -445,7 +445,7 @@ call to an uncovered function.  Subsequent calls reuse the cached spec."""
 # ---------------------------------------------------------------------------
 
 _tagged_buffer_ids: set[int] = set()
-"""ids of tensors tagged with tl_buffer_address during prepare_buffer_tensors.
+"""ids of tensors tagged with _tl.buffer_address during prepare_buffer_tensors.
 Used by _undecorate_model_tensors for O(n) cleanup instead of re-scanning
 all module attributes."""
 

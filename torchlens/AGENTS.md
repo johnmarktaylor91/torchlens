@@ -17,9 +17,10 @@
 | `user_funcs.py` | Main capture, summary, visualization, validation, and bundle graph entry points |
 
 ## Attribute Conventions
-- `tl_` prefix on tensor/module attributes during logging.
-- Permanent attrs: `tl_address`, `tl_module_type`, forward wrapper markers.
-- Session attrs: `tl_source_trace`, `tl_module_call_index`, buffer labels, temporary counters.
+- TorchLens metadata attached to user/model objects lives under `obj._tl`.
+- Permanent module metadata uses `_tl.address` and `_tl.module_type`.
+- Session tensor/parameter metadata is cleaned per capture; callable wrapper markers also live
+  under `_tl`.
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state.
 
 ## Public Surface

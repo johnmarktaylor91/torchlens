@@ -50,6 +50,13 @@ import torch
 
 from .. import _state
 from ..constants import ORIG_TORCH_FUNCS
+from .._tl import (
+    get_buffer_address,
+    get_tensor_label,
+    is_decorated_function,
+    mark_decorated_function,
+    set_tensor_label,
+)
 from ..data_classes.internal_types import FuncExecutionContext
 from ..utils.introspection import get_vars_of_type_from_obj, nested_getattr
 from ..utils.display import identity
@@ -426,11 +433,14 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         arg_tensorlike = _collect_tensor_args(args, kwargs)
 
         # Register buffer tensors on first encounter. Buffers are tagged with
-        # tl_buffer_address during model prep but don't get a tl__label_raw
+        # _tl.buffer_address during model prep but don't get _tl.label_raw
         # until the first function actually uses them.
         for t in arg_tensorlike:
-            if hasattr(t, "tl_buffer_address") and not hasattr(t, "tl__label_raw"):
-                log_source_tensor(trace, t, "buffer", getattr(t, "tl_buffer_address"))
+            if isinstance(t, torch.nn.Parameter):
+                continue
+            buffer_address = get_buffer_address(t)
+            if buffer_address is not None and get_tensor_label(t) is None:
+                log_source_tensor(trace, t, "buffer", buffer_address)
 
         # Intercept print functions to show TorchLens label info in repr.
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):
@@ -489,7 +499,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         )
         if same_object_returned:
             # Create a distinct tensor object for logging — otherwise attaching
-            # tl__label_raw to the output would clobber the input's label.
+            # _tl.label_raw on the output would clobber the input's label.
             out_orig = safe_copy(out_orig)
 
         out_orig = apply_live_hooks_to_outputs(
@@ -528,9 +538,10 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
 
             # For true in-place ops, propagate the newly assigned label back
             # to the original tensor so subsequent operations see it.
-            if was_inplace:
-                if hasattr(out_orig, "tl__label_raw"):
-                    args[0].tl__label_raw = out_orig.tl__label_raw
+            if was_inplace and not isinstance(args[0], torch.nn.Parameter):
+                out_label = get_tensor_label(out_orig)
+                if out_label is not None:
+                    set_tensor_label(args[0], out_label)
 
         return out_orig
 
@@ -680,7 +691,7 @@ def decorate_all_once() -> None:
         orig_func = getattr(local_func_namespace, func_name)
 
         # Guard against double-decoration (ORIG_TORCH_FUNCS may list duplicates).
-        if getattr(orig_func, "tl_is_decorated_function", False):
+        if is_decorated_function(orig_func):
             continue
 
         if type(orig_func) in [function_class, builtin_class, method_class, wrapper_class]:
@@ -704,7 +715,7 @@ def decorate_all_once() -> None:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     setattr(local_func_namespace, func_name, new_func)
-                setattr(new_func, "tl_is_decorated_function", True)
+                mark_decorated_function(new_func)
                 # Bidirectional id-keyed mappings for fast lookup.
                 _state._orig_to_decorated[id(orig_func)] = new_func
                 _state._decorated_to_orig[id(new_func)] = orig_func
@@ -727,9 +738,9 @@ def decorate_all_once() -> None:
             getter_dec = torch_func_decorator(getter_orig, func_name)
             setter_dec = torch_func_decorator(setter_orig, func_name)
             deleter_dec = torch_func_decorator(deleter_orig, func_name)
-            setattr(getter_dec, "tl_is_decorated_function", True)
-            setattr(setter_dec, "tl_is_decorated_function", True)
-            setattr(deleter_dec, "tl_is_decorated_function", True)
+            mark_decorated_function(getter_dec)
+            mark_decorated_function(setter_dec)
+            mark_decorated_function(deleter_dec)
             new_property = property(getter_dec, setter_dec, deleter_dec, doc=func_name)
             try:
                 with warnings.catch_warnings():
