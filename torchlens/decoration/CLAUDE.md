@@ -20,6 +20,18 @@ The wrapper hot path calls `capture/output_tensors.py` for forward records and f
 record contexts. Module forward wrappers in `model_prep.py` track module entry/exit and
 source/buffer nodes. `_state.py` holds all mutable decoration maps and the logging toggle.
 
+## Module Containment
+
+Module containment is captured with the wrap-forward stack helper in
+`_module_stack.py`. Wrapped module forwards call `_module_stack.push_frame(...)` before
+running module-local capture work and `_module_stack.pop_frame(...)` in `finally` so each
+captured op snapshots the active stack at creation time. TorchLens does not use
+`register_forward_pre_hook` or `register_forward_hook` for containment; user pre-hooks run
+before the wrap-forward push by PyTorch design, and user post-hooks run after module exit
+metadata has been recorded. The metadata recorders are
+`_record_module_entry_metadata` and `_record_module_exit_metadata`, down-scoped names for
+the old `_handle_module_entry` / `_handle_module_exit` responsibilities.
+
 ## torch_funcs.py - Key Design
 
 ### `wrap_torch()`

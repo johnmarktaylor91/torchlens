@@ -72,6 +72,14 @@ detaching or disk-only out storage.
   internal TorchLens tensor ops from recursive capture.
 - `patch_detached_references()` patches `from torch import cos` style references in loaded modules.
 
+### Module Containment
+Module containment is captured via a wrap-forward stack helper at
+`decoration/_module_stack.py`. Both fastlog and exhaustive modes share the helper. Each
+captured op snapshots the stack at op-creation time; downstream postprocess only appends
+the canonical module-path suffix to `equivalence_class` for loop detection. This replaces
+the older tensor-entry/exit thread-replay system removed in v2.18 (sprint
+module-containment-refactor).
+
 ### Data Flow
 1. Decoration intercepts torch function calls.
 2. Barcode nesting detection identifies bottom-level operations.

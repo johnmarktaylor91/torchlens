@@ -28,7 +28,7 @@ eviction. Step order is load-bearing.
 | 3 | `_remove_orphan_nodes` | Drop unconnected raw nodes |
 | 4 | `_mark_layer_depths` | Optional input/output distance metadata |
 | 5 | `_mark_conditional_branches` | AST/bool/event/edge conditional attribution |
-| 6 | `_fix_modules_for_internal_tensors` | Infer module containment for internal tensors |
+| 6 | `_fix_modules_for_internal_tensors` | Append module-path suffixes to equivalence classes |
 | 7 | `_fix_buffer_layers` | Deduplicate and reconnect buffers |
 | 8 | `_detect_and_label_loops` or `_group_by_shared_params` | Recurrent grouping |
 | 9 | `_map_raw_labels_to_final_labels` | Build raw-to-final label map |
@@ -54,6 +54,12 @@ then derives legacy THEN/ELIF/ELSE views. Canonical structures are:
 - `Trace.conditional_arm_entry_edges`
 - `Trace.conditional_edge_call_indices`
 - `conditional_arm_children` on `OpLog` and `LayerLog`
+
+## Step 6: equivalence_class suffix
+The historical thread-replay parent/child propagation is gone. Module containment now
+comes from op-creation stack snapshots, so Step 6 is suffix-only: it appends the canonical
+module path to `equivalence_class` after conditional attribution and does not infer or
+propagate `modules`.
 
 ## Loop Detection
 Loop detection groups repeated operations by operation equivalence, expands isomorphic
