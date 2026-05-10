@@ -2986,9 +2986,9 @@ def _make_param_label(node: Union["OpLog", "LayerLog"]) -> str:
         for pl in param_logs:
             shape_str = _format_shape_str(pl.shape)
             if pl.trainable:
-                parts.append(f"{pl.name} ({shape_str})")
+                parts.append(f"{pl.name}: ({shape_str})")
             else:
-                parts.append(f"{pl.name} [{shape_str}]")
+                parts.append(f"{pl.name}: [{shape_str}]")
         param_label = "<br/>params: " + ", ".join(parts)
     else:
         each_param_shape = [_format_shape_str(s) for s in node.param_shapes]
@@ -3019,7 +3019,7 @@ def _make_param_line(node: GraphNode) -> str:
         for param_log in param_logs:
             shape_str = _format_shape_str(param_log.shape)
             wrapper = ("(", ")") if param_log.trainable else ("[", "]")
-            parts.append(f"{param_log.name} {wrapper[0]}{shape_str}{wrapper[1]}")
+            parts.append(f"{param_log.name}: {wrapper[0]}{shape_str}{wrapper[1]}")
         return "params: " + ", ".join(parts)
 
     each_param_shape = [_format_shape_str(shape) for shape in node.param_shapes]
