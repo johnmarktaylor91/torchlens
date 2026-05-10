@@ -41,7 +41,7 @@ from ..fastlog._record_context import _build_record_context
 from ..fastlog._state import get_active_recording_state
 from ..fastlog.types import ActivationRecord
 
-from .tensor_tracking import _add_backward_hook, _update_tensor_modules
+from .tensor_tracking import _add_backward_hook
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -58,12 +58,9 @@ def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
     Returns
     -------
     list[tuple[str, int]]
-        Raw ``(module_address, pass_index)`` stack snapshot, or an empty list
-        when the diagnostic engine is disabled.
+        Raw ``(module_address, pass_index)`` stack snapshot.
     """
 
-    if getattr(self, "_module_containment_engine", "thread_replay") == "thread_replay":
-        return []
     return [
         (frame.address, frame.pass_index)
         for frame in _mstack.snapshot(self._exhaustive_module_stack)
@@ -239,6 +236,7 @@ def log_source_tensor_exhaustive(
         raise ValueError("source must be either 'input' or 'buffer'")
 
     memory = get_memory_amount(t)
+    modules = _snapshot_exhaustive_module_stack(self)
 
     fields_dict: dict[str, Any] = {
         # General info:
@@ -395,9 +393,8 @@ def log_source_tensor_exhaustive(
         "conditional_else_children": [],
         "conditional_arm_children": {},
         # Module info:
-        "module": None,
-        "modules": [],
-        "_modules_via_stack": _snapshot_exhaustive_module_stack(self),
+        "module": modules[-1] if modules else None,
+        "modules": modules,
         "modules_entered": [],
         "module_entry_argnames": defaultdict(list),
         "module_ops_entered": [],
@@ -406,8 +403,6 @@ def log_source_tensor_exhaustive(
         "is_submodule_output": False,
         "is_atomic_module_op": False,
         "atomic_module_call": None,
-        "_module_boundary_threads_inputs": [],
-        "_module_boundary_thread_output": [],
         # Function config
         "func_config": {},
     }
@@ -485,32 +480,3 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
     orig_layer_entry.dtype = t.dtype
     memory = get_memory_amount(t)
     orig_layer_entry.memory = memory
-
-
-def _get_input_module_info(self: "Trace", arg_tensors: list[torch.Tensor]) -> list[str]:
-    """Determine the module nesting context for a new tensor from its parents.
-
-    Finds the most deeply nested parent tensor and returns its current
-    containing-module stack (after applying any module entry/exit transitions
-    recorded in its ``_module_boundary_thread_output``).  This determines
-    which module the new operation is "inside" for module-level metadata.
-
-    Args:
-        arg_tensors: List of parent tensors (input arguments to the function).
-
-    Returns:
-        List of module pass strings (e.g. ``["encoder:1", "encoder.layer1:1"]``)
-        representing the nesting stack of the most deeply nested parent.
-    """
-    max_input_module_nesting = 0
-    most_nested_modules = []
-    for t in arg_tensors:
-        tensor_label = getattr(t, "tl__label_raw", -1)
-        if tensor_label == -1:
-            continue
-        layer_entry = self[tensor_label]
-        modules = _update_tensor_modules(layer_entry)
-        if len(modules) > max_input_module_nesting:
-            max_input_module_nesting = len(modules)
-            most_nested_modules = modules[:]
-    return most_nested_modules

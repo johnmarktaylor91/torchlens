@@ -17,6 +17,7 @@ from ..decoration.model_prep import (
     _ensure_model_prepared,
     _prepare_model_session,
 )
+from ..decoration import _module_stack as _mstack
 from ..utils.introspection import get_vars_of_type_from_obj
 from ..utils.rng import set_random_seed
 from ._predicate import _evaluate_keep_module
@@ -162,7 +163,7 @@ def _run_predicate_pass(
         with active_recording_state(state), _state.active_logging(trace):
             for index, tensor in enumerate(input_tensors):
                 log_source_tensor(trace, tensor, "input", f"input.{index}")
-            state.module_stack.append(root_frame)
+            _mstack.push_existing_frame(state.module_stack, root_frame)
             _emit_root_module_event(
                 trace=trace,
                 state=state,
@@ -180,7 +181,7 @@ def _run_predicate_pass(
                     kind="exit",
                     frame=root_frame,
                 )
-                state.module_stack.pop()
+                _mstack.pop_frame(state.module_stack, root_frame)
     except Exception as exc:
         pass_failed = True
         state.abort_storage(str(exc))

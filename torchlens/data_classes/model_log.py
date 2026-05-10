@@ -982,7 +982,7 @@ class Trace:
         self._defer_streaming_bundle_finalization: bool = False
         self._out_sink: Optional[Callable[[str, torch.Tensor], None]] = None
         self._in_exhaustive_pass: bool = True
-        self._module_containment_engine: str = "thread_replay"
+        self._module_containment_engine: str = "hook_stack"
         self._exhaustive_module_stack: list["ModuleStackFrame"] = []
 
         # Model structure info (computed @properties: is_recurrent,
@@ -2294,7 +2294,7 @@ class Trace:
                 "_defer_streaming_bundle_finalization": False,
                 "_out_sink": None,
                 "_in_exhaustive_pass": False,
-                "_module_containment_engine": "thread_replay",
+                "_module_containment_engine": "hook_stack",
                 "_exhaustive_module_stack": [],
                 "_source_code_blob": {},
                 "_source_model_ref": None,

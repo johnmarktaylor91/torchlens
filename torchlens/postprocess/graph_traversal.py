@@ -115,8 +115,6 @@ def _add_output_layers(
         new_output_node.output_of_module_calls = output_node.modules
         new_output_node.is_submodule_output = False
         new_output_node.is_atomic_module_op = False
-        new_output_node._module_boundary_threads_inputs = {}
-        new_output_node._module_boundary_thread_output = []
 
         # Fix ancestry information:
 

@@ -361,8 +361,6 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "is_submodule_output",
     "is_atomic_module_op",
     "atomic_module_call",
-    "_module_boundary_threads_inputs",
-    "_module_boundary_thread_output",
     # Function config
     "func_config",
 ]

@@ -92,7 +92,6 @@ from .tensor_tracking import (
     _make_raw_param_group_barcode,
     _get_equivalence_class,
     _get_hash_from_args,
-    _update_tensor_modules,
 )
 from .._errors import TorchLensPostfuncError
 from .._training_validation import TrainingModeConfigError
@@ -102,7 +101,6 @@ from ..fastlog._record_context import _build_record_context
 from ..fastlog._state import get_active_recording_state
 from ..fastlog.types import ActivationRecord, CaptureSpec
 from .salient_args import extract_salient_args
-from .source_tensors import _get_input_module_info
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -112,7 +110,7 @@ _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
 
 
 def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
-    """Return the raw hook-stack module context for diagnostic comparison.
+    """Return the raw hook-stack module context.
 
     Parameters
     ----------
@@ -122,12 +120,9 @@ def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
     Returns
     -------
     list[tuple[str, int]]
-        Raw ``(module_address, pass_index)`` stack snapshot, or an empty list
-        when the diagnostic engine is disabled.
+        Raw ``(module_address, pass_index)`` stack snapshot.
     """
 
-    if getattr(self, "_module_containment_engine", "thread_replay") == "thread_replay":
-        return []
     return [
         (frame.address, frame.pass_index)
         for frame in _mstack.snapshot(self._exhaustive_module_stack)
@@ -1151,7 +1146,7 @@ def _build_module_context_fields(
     parent_layer_entries: list[OpLog],
 ) -> None:
     """Populate module nesting, address, and input/output status fields."""
-    modules = _get_input_module_info(self, arg_tensors)
+    modules = _snapshot_exhaustive_module_stack(self)
     module = modules[-1] if modules else None
 
     fields_dict["module"] = module
@@ -1164,10 +1159,6 @@ def _build_module_context_fields(
     fields_dict["is_submodule_output"] = False
     fields_dict["is_atomic_module_op"] = False
     fields_dict["atomic_module_call"] = None
-    fields_dict["_module_boundary_threads_inputs"] = {
-        p._label_raw: p._module_boundary_thread_output[:] for p in parent_layer_entries
-    }
-    fields_dict["_module_boundary_thread_output"] = []
 
 
 def _build_shared_fields_dict(
@@ -1262,7 +1253,6 @@ def _build_shared_fields_dict(
     )
     parent_param_ops = _build_param_fields(self, fields_dict, arg_parameters)
     _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
-    fields_dict["_modules_via_stack"] = _snapshot_exhaustive_module_stack(self)
 
     # Function config — lightweight hyperparameter extraction, always on.
     param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))

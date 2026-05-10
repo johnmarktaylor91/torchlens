@@ -36,7 +36,7 @@
       "trace_index": 0
     },
     {
-      "in_submodule": false,
+      "in_submodule": true,
       "label": "randn_1_1",
       "lookup_keys": [
         "-4",
@@ -46,9 +46,11 @@
         "randn_1_1",
         "randn_1_1:1"
       ],
-      "module": null,
-      "module_call_depth": 0,
-      "modules": [],
+      "module": "child:1",
+      "module_call_depth": 1,
+      "modules": [
+        "child:1"
+      ],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "trace_index": 1
@@ -157,8 +159,11 @@
       "call_label": "child:1",
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32), Tensor(shape=(4,), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "randn_1_1"
+      ],
       "layers": [
+        "randn_1_1",
         "add_1_2",
         "linear_1_3"
       ],
@@ -219,9 +224,12 @@
       "call_labels": [
         "child:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "randn_1_1"
+      ],
       "is_train_mode": true,
       "layers": [
+        "randn_1_1",
         "add_1_2",
         "linear_1_3"
       ],
@@ -298,7 +306,7 @@
       "atomic_module_call": null,
       "func_name": "randn",
       "fx_call_index": 0,
-      "fx_qualpath": null,
+      "fx_qualpath": "child.randn",
       "intervention_replaced": false,
       "is_atomic_module_op": false,
       "is_internal_sink": false,
@@ -314,7 +322,7 @@
         "randn_1_1",
         "randn_1_1:1"
       ],
-      "module": null,
+      "module": "child:1",
       "module_entry_argnames": {
         "child:1": [
           1
@@ -323,7 +331,9 @@
       "module_ops_entered": [
         "child:1"
       ],
-      "modules": [],
+      "modules": [
+        "child:1"
+      ],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "trace_index": 1

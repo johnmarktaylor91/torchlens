@@ -31,7 +31,7 @@ Key concepts:
 
 import itertools as it
 import weakref
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -388,31 +388,3 @@ def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int
             _append_arg_hash(elem, f"{prefix}_i{i}", args_to_hash, _depth + 1)
     else:
         args_to_hash.append(f"{prefix}_{arg}")
-
-
-def _update_tensor_modules(layer_entry: OpLog) -> list[str]:
-    """Compute a tensor's current module nesting by replaying entry/exit transitions.
-
-    Each tensor records:
-      - ``modules``: the module stack at creation time.
-      - ``_module_boundary_thread_output``: a sequence of transitions like
-        ``"+encoder.layer1:1"`` (entered) or ``"-encoder.layer1:1"`` (exited).
-
-    This function starts from the origin stack and applies each transition to
-    produce the current containing-module list.  Used by ``_get_input_module_info``
-    to determine which module a new operation is inside.
-
-    Args:
-        layer_entry: Log entry whose module context to compute.
-
-    Returns:
-        Current containing-module stack as a list of module pass strings.
-    """
-    modules = layer_entry.modules[:]
-    thread_modules = layer_entry._module_boundary_thread_output[:]
-    for thread_module in thread_modules:
-        if thread_module[0] == "+":
-            modules.append(thread_module[1:])
-        elif (thread_module[0] == "-") and (thread_module[1:] in modules):
-            modules.remove(thread_module[1:])
-    return cast(list[str], modules)

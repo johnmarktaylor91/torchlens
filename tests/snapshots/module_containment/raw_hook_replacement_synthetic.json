@@ -117,19 +117,15 @@
         "output_1",
         "output_1:1",
         "proj",
-        "proj:1",
-        "relu",
-        "relu:1"
+        "proj:1"
       ],
       "module": null,
       "module_call_depth": 0,
       "modules": [],
       "output_of_module_calls": [
-        "relu:1",
         "proj:1"
       ],
       "output_of_modules": [
-        "relu",
         "proj"
       ],
       "trace_index": 4
@@ -426,20 +422,16 @@
         "output_1:1",
         "output_1:1",
         "proj",
-        "proj:1",
-        "relu",
-        "relu:1"
+        "proj:1"
       ],
       "module": null,
       "module_entry_argnames": {},
       "module_ops_entered": [],
       "modules": [],
       "output_of_module_calls": [
-        "relu:1",
         "proj:1"
       ],
       "output_of_modules": [
-        "relu",
         "proj"
       ],
       "trace_index": 4

@@ -51,6 +51,20 @@ def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> 
     return frame
 
 
+def push_existing_frame(stack: list[ModuleStackFrame], frame: ModuleStackFrame) -> None:
+    """Append an already-created frame to the module stack.
+
+    Parameters
+    ----------
+    stack:
+        The module stack list to append the frame to.
+    frame:
+        Existing frame to push. Used for synthetic frames whose pass index is
+        assigned by the caller.
+    """
+    stack.append(frame)
+
+
 def pop_frame(stack: list[ModuleStackFrame], frame: ModuleStackFrame) -> None:
     """Pop the top frame; assert it matches ``frame`` by identity.
 

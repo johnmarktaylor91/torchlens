@@ -56,7 +56,7 @@ shims expose these through `torchlens.decoration`, not top-level `__all__`.
 ### Module Forward Decorator
 - Pre-forward: input tracking, pass counters, buffer tagging, module entry.
 - Post-forward: output tagging, module exit, bottom-level submodule detection.
-- Fast path skips `_handle_module_entry` and must replicate only state needed for counter
+- Fast path skips `_record_module_entry_metadata` and must replicate only state needed for counter
   alignment and identity injection.
 
 ## DeviceContext and CPython Details

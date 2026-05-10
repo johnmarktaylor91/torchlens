@@ -649,7 +649,7 @@ class CaptureOptions:
     stop_after: Any | None = None
     emit_nvtx: bool = False
     raise_on_nan: bool = False
-    _module_containment_engine: Literal["thread_replay", "hook_stack", "both"] = "thread_replay"
+    _module_containment_engine: Literal["thread_replay", "hook_stack", "both"] = "hook_stack"
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -800,7 +800,7 @@ class CaptureOptions:
             "_module_containment_engine": _resolve_option_value(
                 "_module_containment_engine",
                 _module_containment_engine,
-                "thread_replay",
+                "hook_stack",
                 specified_fields,
             ),
         }

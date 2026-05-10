@@ -435,7 +435,13 @@ def _extract_and_mark_outputs(
 
     for t in output_tensors:
         # Only record output_layers during exhaustive pass; fast pass reuses the list.
-        _label_raw = getattr(t, "tl__label_raw")
+        # Defensive: user-injected output tensors (raw register_forward_hook
+        # returning a fresh tensor, intervention API replacements that don't
+        # propagate metadata, etc.) lack tl__label_raw. Skip them rather than
+        # crashing — they aren't in our graph but the experiment can continue.
+        _label_raw = getattr(t, "tl__label_raw", None)
+        if _label_raw is None:
+            continue
         if self.capture_mode == "exhaustive":
             self.output_layers.append(_label_raw)
         self._raw_layer_dict[_label_raw].is_output_parent = True

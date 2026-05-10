@@ -17,8 +17,8 @@ This module implements the model preparation pipeline, which has two phases:
 
 The ``module_forward_decorator`` wraps each submodule's ``forward`` with a
 toggle-gated wrapper that reads ``trace`` from ``_state._active_trace``
-(not closed-over). In exhaustive mode, it calls ``_handle_module_entry`` /
-``_handle_module_exit`` to track which tensors enter and exit each module. In
+(not closed-over). In exhaustive mode, it calls ``_record_module_entry_metadata`` /
+``_record_module_exit_metadata`` to track which tensors enter and exit each module. In
 fast mode, it skips entry/exit tracking entirely but still handles
 ``nn.Identity`` and pass-through detection via ``torch.identity``.
 """
@@ -109,9 +109,9 @@ def _traverse_model_modules(
         visitor_fn: Called as ``visitor_fn(module, address, named_children, is_root)``
             for every module. ``named_children`` is ``list(module.named_children())``.
     """
-    module_stack: deque[tuple[nn.Module, str]] = deque([(model, "")])
-    while module_stack:
-        module, address = module_stack.popleft()
+    traversal_queue: deque[tuple[nn.Module, str]] = deque([(model, "")])
+    while traversal_queue:
+        module, address = traversal_queue.popleft()
         named_children = list(module.named_children())
         child_entries = []
         for child_name, child_module in named_children:
@@ -120,7 +120,7 @@ def _traverse_model_modules(
         # Prepend children to front of deque for DFS pre-order traversal.
         # extendleft reverses, so we reverse child_entries first to maintain order.
         for entry in reversed(child_entries):
-            module_stack.appendleft(entry)
+            traversal_queue.appendleft(entry)
         visitor_fn(module, address, named_children, module is model)
 
 
@@ -627,7 +627,7 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
 def _tag_untagged_buffers(module: nn.Module) -> None:
     """Tag any buffers that lack a ``tl_buffer_address`` attribute.
 
-    Called during ``_handle_module_entry`` to catch buffers that were created
+    Called during ``_record_module_entry_metadata`` to catch buffers that were created
     dynamically (e.g. in ``forward()``) after the initial ``prepare_buffer_tensors``
     scan. If a buffer already has a ``tl__label_raw`` from being logged as
     an intermediate tensor, that label is moved to ``tl_buffer_parent`` and cleared
@@ -648,29 +648,18 @@ def _tag_untagged_buffers(module: nn.Module) -> None:
             delattr(buffer_tensor, "tl__label_raw")
 
 
-def _handle_module_entry(
+def _record_module_entry_metadata(
     trace: "Trace",
     module: nn.Module,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> tuple[set[str], list[str]]:
-    """Pre-forward bookkeeping for exhaustive mode.
+    """Record pre-forward module metadata for exhaustive mode.
 
     Called immediately before ``orig_forward(*args, **kwargs)`` in the
-    ``module_forward_decorator``. Performs:
-
-    1. Reads the module's pass counter (incremented by ``_module_stack.push_frame``).
-    2. Pushes a ``(address, call_index)`` label onto the module's pass stack
-       (popped by ``_handle_module_exit``).
-    3. Finds all input tensors and annotates their layer entries with module
-       entry metadata (``modules_entered``, ``is_submodule_input``, etc.).
-    4. Records which argument position each tensor occupies (for arg-name
-       reconstruction in ``_build_module_logs``).
-    5. Appends a ``("+", address, call_index)`` marker to each input tensor's
-       ``_module_boundary_thread_output`` (a chronological log of module
-       boundaries that tensors cross).
-    6. Tags any dynamically-created buffers that weren't caught during
-       ``prepare_buffer_tensors``.
+    ``module_forward_decorator``. Reads the module's pass counter, records
+    input-tensor/module-entry annotations, stores raw forward args for module-log
+    construction, and tags dynamically-created buffers.
 
     Args:
         trace: The active Trace.
@@ -680,7 +669,8 @@ def _handle_module_entry(
 
     Returns:
         Tuple of ``(input_tensor_labels, input_tensor_labels_at_entry)`` —
-        needed by ``_handle_module_exit`` to trim the entry thread.
+        needed by ``_record_module_exit_metadata`` for pass-through detection and
+        replacement-output recovery.
     """
     address = cast(str, module.tl_address)
     mod_id = id(module)
@@ -688,7 +678,7 @@ def _handle_module_entry(
     module_call_index = trace._mod_call_index[mod_id]
     assert module_call_index > 0, "_module_stack.push_frame must increment before entry"
     module_call_label = (address, module_call_index)
-    # Push onto stack — popped by _handle_module_exit (or exception handler).
+    # Push onto stack — popped by _record_module_exit_metadata (or exception handler).
     trace._mod_call_labels[mod_id].append(module_call_label)
 
     # Stash forward args for later use by _build_module_logs.
@@ -729,10 +719,6 @@ def _handle_module_entry(
                 trace._module_build_data["module_layer_argnames"][
                     (f"{module_call_label[0]}:{module_call_label[1]}")
                 ].append((t.tl__label_raw, arg_key))
-        # Record module entry in chronological thread (matched by "-" on exit).
-        layer_entry._module_boundary_thread_output.append(
-            ("+", module_call_label[0], module_call_label[1])
-        )
         input_tensor_labels_at_entry.append(t.tl__label_raw)
 
     # Catch buffers created dynamically (e.g. in forward()) after initial scan.
@@ -972,7 +958,6 @@ def _ensure_module_output_tensor_logged(
             "module": (address, module_call_index),
             "_address_normalized": None,
             "modules": [(address, module_call_index)] if address else [],
-            "_modules_via_stack": [(address, module_call_index)] if address else [],
             "modules_entered": [],
             "module_entry_argnames": defaultdict(list),
             "module_ops_entered": [],
@@ -981,11 +966,6 @@ def _ensure_module_output_tensor_logged(
             "is_submodule_output": False,
             "is_atomic_module_op": False,
             "atomic_module_call": None,
-            "_module_boundary_threads_inputs": {
-                parent._label_raw: parent._module_boundary_thread_output[:]
-                for parent in parent_entries
-            },
-            "_module_boundary_thread_output": [],
             "func_config": {},
         }
     )
@@ -1069,35 +1049,24 @@ def _make_user_forward_hook_wrapper(
     return wrapped_hook
 
 
-def _handle_module_exit(
+def _record_module_exit_metadata(
     trace: "Trace",
     module: nn.Module,
     out: Any,
     input_tensor_labels: set[str],
     input_tensor_labels_at_entry: list[str],
 ) -> None:
-    """Post-forward bookkeeping for exhaustive mode.
+    """Record post-forward module metadata for exhaustive mode.
 
     Called immediately after ``orig_forward()`` returns in the
-    ``module_forward_decorator``. Performs:
-
-    1. Pops the module pass label from the stack (pushed by ``_handle_module_entry``).
-    2. For each output tensor:
-       - If it's an ``nn.Identity`` pass-through or the same tensor that entered,
-         wraps it with ``torch.identity()`` to create a distinct log entry at the
-         module boundary.
-       - Marks the tensor's layer entry as a submodule output.
-       - Checks if this is a bottom-level (leaf) submodule exit.
-       - Appends ``("-", address, call_index)`` to the chronological thread.
-    3. Trims the ``_module_boundary_thread_output`` of input tensors — removes
-       the ``"+"`` entry marker and everything after it, since the module boundary
-       is now closed. This prevents stale entry markers from confusing downstream
-       module-nesting analysis.
+    ``module_forward_decorator``. Pops the module call-label stack, creates
+    boundary identity ops for pass-through outputs, recovers replacement outputs,
+    and annotates output tensors with module-exit metadata.
     """
     address = cast(str, module.tl_address)
     mod_id = id(module)
     module_call_index = trace._mod_call_index[mod_id]
-    module_entry_label = trace._mod_call_labels[mod_id].pop()
+    trace._mod_call_labels[mod_id].pop()
     output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
     for t in output_tensors:
         # nn.Identity modules and pass-through tensors (output is same object
@@ -1117,29 +1086,7 @@ def _handle_module_exit(
         layer_entry.is_atomic_module_op = _is_bottom_level_submodule_exit(trace, t, module)
         layer_entry.output_of_modules.append(address)
         layer_entry.output_of_module_calls.append((address, module_call_index))
-        # Record module exit in chronological thread (matches "+" from entry).
-        layer_entry._module_boundary_thread_output.append(
-            ("-", module_entry_label[0], module_entry_label[1])
-        )
         trace._mod_exited[mod_id].append(t.tl__label_raw)
-
-    # Trim entry threads on input tensors: remove the "+" marker and
-    # everything after it. The module boundary is now closed, so input
-    # tensors' threads should not carry forward this module's context.
-    for entry_label in input_tensor_labels_at_entry:
-        layer_entry = trace._raw_layer_dict[entry_label]
-        input_module_thread = layer_entry._module_boundary_thread_output[:]
-        if (
-            "+",
-            module_entry_label[0],
-            module_entry_label[1],
-        ) in input_module_thread:
-            module_entry_ix = input_module_thread.index(
-                ("+", module_entry_label[0], module_entry_label[1])
-            )
-            layer_entry._module_boundary_thread_output = layer_entry._module_boundary_thread_output[
-                :module_entry_ix
-            ]
 
 
 def module_forward_decorator(
@@ -1160,14 +1107,15 @@ def module_forward_decorator(
 
     2. **Fast mode** (``trace.capture_mode == "fast"``): Runs ``orig_forward``
        first, then handles ``nn.Identity`` and pass-through detection ONLY.
-       Skips ``_handle_module_entry``/``_handle_module_exit`` entirely — the fast
+       Skips ``_record_module_entry_metadata``/``_record_module_exit_metadata`` entirely — the fast
        path doesn't track module nesting metadata. The ``torch.identity()`` call
        for nn.Identity/pass-through is still needed to keep tensor counters
        aligned with the exhaustive pass (which already ran and established the
        counter sequence).
 
-    3. **Exhaustive mode**: Full entry/exit bookkeeping via ``_handle_module_entry``
-       and ``_handle_module_exit``. Wrapped in try/except for **exception safety**:
+    3. **Exhaustive mode**: Full entry/exit bookkeeping via
+       ``_record_module_entry_metadata`` and ``_record_module_exit_metadata``.
+       Wrapped in try/except for **exception safety**:
        if ``orig_forward`` raises, the module pass label is popped from the stack
        to prevent state corruption in subsequent calls (#122).
 
@@ -1278,7 +1226,7 @@ def module_forward_decorator(
         # ---- Exhaustive mode: full entry -> forward -> exit ----
         frame = _mstack.push_frame(trace, trace._exhaustive_module_stack, module)
         try:
-            input_tensor_labels, input_tensor_labels_at_entry = _handle_module_entry(
+            input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs
             )
             try:
@@ -1291,7 +1239,7 @@ def module_forward_decorator(
                 if call_labels:
                     call_labels.pop()
                 raise
-            _handle_module_exit(
+            _record_module_exit_metadata(
                 trace, module, out, input_tensor_labels, input_tensor_labels_at_entry
             )
             return out

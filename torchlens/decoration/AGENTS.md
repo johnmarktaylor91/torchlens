@@ -18,7 +18,7 @@
 - `DeviceContext` injection must work in both logging and non-logging paths.
 - Tensor `__getitem__` replacement can corrupt CPython `sq_item`; keep
   `_fix_tensor_sequence_slot()` after wrap/unwrap.
-- Fast-path module decorator skips `_handle_module_entry`; alignment state must be
+- Fast-path module decorator skips `_record_module_entry_metadata`; alignment state must be
   duplicated intentionally.
 - `_module_class_metadata_cache` is per-session and should not leak stale source metadata.
 

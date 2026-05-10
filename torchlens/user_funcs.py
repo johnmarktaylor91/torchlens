@@ -716,7 +716,7 @@ def _run_model_and_save_specified_outs(
     module_filter: Callable[[Any], bool] | None = None,
     emit_nvtx: bool = False,
     raise_on_nan: bool = False,
-    module_containment_engine: str = "thread_replay",
+    module_containment_engine: str = "hook_stack",
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",

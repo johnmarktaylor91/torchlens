@@ -4386,10 +4386,10 @@ def _get_max_call_depth(
         Max nesting depth.
     """
     max_call_depth = 1
-    module_stack = [(graph, 1) for graph in top_modules]
+    module_depth_stack = [(graph, 1) for graph in top_modules]
 
-    while len(module_stack) > 0:
-        module, module_depth = module_stack.pop()
+    while len(module_depth_stack) > 0:
+        module, module_depth = module_depth_stack.pop()
         module_edges = module_edge_dict[module]["edges"]
         module_submodules = module_submodule_dict[module]
 
@@ -4400,12 +4400,12 @@ def _get_max_call_depth(
         elif (len(module_edges) > 0) and (len(module_submodules) == 0):
             max_call_depth = max([module_depth, max_call_depth])
         elif (len(module_edges) == 0) and (len(module_submodules) > 0):
-            module_stack.extend(
+            module_depth_stack.extend(
                 [(module_child, module_depth + 1) for module_child in module_submodules]
             )
         else:
             max_call_depth = max([module_depth, max_call_depth])
-            module_stack.extend(
+            module_depth_stack.extend(
                 [(module_child, module_depth + 1) for module_child in module_submodules]
             )
     return max_call_depth

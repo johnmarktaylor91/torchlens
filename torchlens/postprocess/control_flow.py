@@ -715,11 +715,8 @@ def _fix_modules_for_single_internal_tensor(
     """Fix the containing modules for a single internally-generated tensor.
 
     Copies the module containment from ``starting_node`` (which has known module
-    info) to ``node_to_fix``, then adjusts by replaying the module entry/exit
-    thread in reverse. For a parent, module entries (+) on the child mean we
-    should REMOVE that module from the parent's containment (going backward
-    undoes the entry); module exits (-) mean we should ADD it. For a child,
-    the logic is direct (entries add, exits remove).
+    info) to ``node_to_fix``. Module boundary thread replay was removed when
+    hook-stack capture became the primary containment engine.
 
     Args:
         starting_node: Source node with correct module containment.
@@ -729,29 +726,9 @@ def _fix_modules_for_single_internal_tensor(
         nodes_seen: Set of already-processed nodes.
     """
     node_to_fix_label = node_to_fix._label_raw
-    node_to_fix.modules = starting_node.modules.copy()
-    if node_type_to_fix == "parent":
-        thread_modules = starting_node._module_boundary_threads_inputs[node_to_fix._label_raw]
-        step_val = -1
-    elif node_type_to_fix == "child":
-        thread_modules = node_to_fix._module_boundary_threads_inputs[starting_node._label_raw]
-        step_val = 1
-    else:
+    if node_type_to_fix not in {"parent", "child"}:
         raise ValueError("node_type_to_fix must be 'parent' or 'child'")
-
-    for enter_or_exit, address, module_pass in thread_modules[::step_val]:
-        module_call_label = (address, module_pass)
-        if node_type_to_fix == "parent":
-            if (enter_or_exit == "+") and (module_call_label in node_to_fix.modules):
-                node_to_fix.modules.remove(module_call_label)
-            elif enter_or_exit == "-":
-                node_to_fix.modules.append(module_call_label)
-        elif node_type_to_fix == "child":
-            if enter_or_exit == "+":
-                node_to_fix.modules.append(module_call_label)
-            elif enter_or_exit == "-":
-                if module_call_label in node_to_fix.modules:
-                    node_to_fix.modules.remove(module_call_label)
+    node_to_fix.modules = starting_node.modules.copy()
     node_stack.append(node_to_fix_label)
     nodes_seen.add(node_to_fix_label)
 

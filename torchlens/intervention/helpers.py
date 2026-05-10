@@ -165,12 +165,14 @@ def resample_ablate(
                 _enqueue_nondeterminism_note(hook, "resample_ablate")
                 indices = torch.randint(flat_source.numel(), out.shape, device=out.device)
             else:
+                # Generator is CPU-bound; sample on CPU then move to target device
+                # to avoid the cross-device generator/device mismatch raised by
+                # torch.randint when generator and device disagree.
                 indices = torch.randint(
                     flat_source.numel(),
                     out.shape,
                     generator=generator,
-                    device=out.device,
-                )
+                ).to(out.device)
             return flat_source[indices]
 
         return _hook
@@ -383,12 +385,14 @@ def noise(
                 _enqueue_nondeterminism_note(hook, "noise")
                 sample = torch.randn(out.shape, device=out.device, dtype=out.dtype)
             else:
+                # Generator is CPU-bound; sample on CPU then move to target device
+                # to avoid the cross-device generator/device mismatch raised by
+                # torch.randn when generator and device disagree.
                 sample = torch.randn(
                     out.shape,
                     generator=generator,
-                    device=out.device,
                     dtype=out.dtype,
-                )
+                ).to(out.device)
             return out + sample * std
 
         return _hook

@@ -109,7 +109,6 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "edge_uses": [],
     "is_orphan": False,
     "_address_normalized": None,
-    "_modules_via_stack": [],
     "_construction_done": True,
 }
 _LAYER_PASS_LOG_DEFAULT_FILL = {
@@ -351,7 +350,6 @@ class OpLog:
         "module": FieldPolicy.KEEP,
         "_address_normalized": FieldPolicy.KEEP,
         "modules": FieldPolicy.KEEP,
-        "_modules_via_stack": FieldPolicy.DROP,
         "fx_qualpath": FieldPolicy.KEEP,
         "fx_call_index": FieldPolicy.KEEP,
         "modules_entered": FieldPolicy.KEEP,
@@ -362,8 +360,6 @@ class OpLog:
         "is_submodule_output": FieldPolicy.KEEP,
         "is_atomic_module_op": FieldPolicy.KEEP,
         "atomic_module_call": FieldPolicy.KEEP,
-        "_module_boundary_threads_inputs": FieldPolicy.KEEP,
-        "_module_boundary_thread_output": FieldPolicy.KEEP,
         "func_config": FieldPolicy.BLOB_RECURSIVE,
         "out_ref": FieldPolicy.DROP,
         "grad_ref": FieldPolicy.DROP,
@@ -463,7 +459,6 @@ class OpLog:
             fields_dict["fx_qualpath"] = None
         if "fx_call_index" not in fields_dict:
             fields_dict["fx_call_index"] = 0
-        modules_via_stack = fields_dict.pop("_modules_via_stack", [])
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
             error_str = "Error initializing OpLog:"
@@ -647,7 +642,6 @@ class OpLog:
         self.module = fields_dict["module"]
         self._address_normalized = fields_dict["_address_normalized"]
         self.modules = fields_dict["modules"]
-        self._modules_via_stack: list[tuple[str, int]] = modules_via_stack
         self.fx_qualpath: Optional[str] = fields_dict["fx_qualpath"]
         self.fx_call_index: int = fields_dict["fx_call_index"]
         self.modules_entered = fields_dict["modules_entered"]
@@ -658,8 +652,6 @@ class OpLog:
         self.is_submodule_output = fields_dict["is_submodule_output"]
         self.is_atomic_module_op = fields_dict["is_atomic_module_op"]
         self.atomic_module_call = fields_dict["atomic_module_call"]
-        self._module_boundary_threads_inputs = fields_dict["_module_boundary_threads_inputs"]
-        self._module_boundary_thread_output = fields_dict["_module_boundary_thread_output"]
 
         # Function config - lightweight hyperparameters always captured.
         self.func_config = fields_dict["func_config"]
@@ -1167,8 +1159,6 @@ class OpLog:
             "module_passes_exited": "output_of_module_calls",
             "is_leaf_module_output": "is_atomic_module_op",
             "leaf_module_pass": "atomic_module_call",
-            "module_entry_exit_threads_inputs": "_module_boundary_thread_inputs",
-            "module_entry_exit_thread_output": "_module_boundary_thread_output",
             "activation_ref": "out_ref",
             "gradient_ref": "grad_ref",
         }
