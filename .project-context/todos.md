@@ -2,67 +2,10 @@
 
 ## Active Tasks
 
-### Trace.draw() ergonomics for headless / programmatic use (raised 2026-05-09)
+### Intervention API naming sprint leftovers (raised cycle 2 round 7, 2026-04-29)
 
-While verifying the DemoModel IF/THEN fix in the 10-minute notebook, hit two
-friction points worth revisiting:
-
-1. **`Trace.render_graph()` no longer exists** — was apparently renamed/removed
-   during the naming sprint. The replacement is `trace.draw()`, but the rename
-   isn't obvious and there's no deprecation shim. Audit external callers
-   (notebooks, docs, tests, downstream users) for stale `render_graph` references
-   and either add a deprecation alias or update all call sites.
-
-2. **`trace.draw()` auto-opens the rendered PDF via xdg-open**, which fails
-   noisily on headless boxes (`Error: no "view" rule for type "application/pdf"`)
-   and is generally unwanted in scripts/notebooks. Consider:
-   - Default `view=False` (or `auto_open=False`) on programmatic invocation
-   - A separate method like `trace.dot_source()` returning the DOT text without
-     side-effecting the filesystem or launching a viewer
-   - Detect non-interactive contexts (no DISPLAY, no Jupyter) and suppress
-     auto-open
-
-
-
-### Intervention API v1 implementation-spec maintenance items (raised cycle 2 round 7, 2026-04-29)
-
-PLAN.md v5.2 is the final architecture/UI plan (6/6 SHIP-IT in round 7). These
-10 minor items were captured by reviewers during round 7 as deferred to v1
-implementation spec. None block implementation kickoff; address during PR
-review at the relevant patch.
-
-1. **§4.2 hook signature backward-arg-name doc clarification.** Forward
-   signature `def hook(activation, *, hook)` reads as forward-only. §12.16
-   attribution-patching example uses `lambda g, *, hook: ...`. The first
-   positional arg is by-position not by-name; this is doc-precision only.
-   Add a one-line note to §4.2 that `g` (or any name) is fine for backward
-   hooks; convention only.
-
-2. **§12.16 attribution-patching example formula choice.** v5.2 uses
-   `(corrupt - clean) * patched` form; the more canonical TransformerLens
-   form is `grad * (clean - corrupt)`. Both are valid; document choice in
-   docs.
-
-3. **`FrozenTargetSpec` sketch type definition.** v5.2 mentions the type but
-   doesn't fully define it. PR-time concrete dataclass needed.
-
-4. **`cached_property` invalidation testing.** Add explicit test that the
-   `intervention_spec` frozen view is invalidated correctly after every
-   mutator (`set`, `attach_hooks`, `detach_hooks`, `clear_hooks`, `do`).
-
-5. **`object.__setattr__` for `_construction_done` flag.** Implementation
-   pattern for the `LayerPassLog.__setattr__` guard. After
-   `LayerPassLog.__init__` completes, flip `_construction_done=True` so
-   guard activates only for user-code paths. Engine-internal writes use
-   `object.__setattr__` directly.
-
-6. **Atomic state-swap fault tolerance.** What happens if `rerun()`'s atomic
-   swap is interrupted (kill -9, OOM)? Defensive pattern: build all new
-   containers off-side, then bind into self in a single Python statement.
-
-7. **`tl.list_logs()` defensive snapshot.** Avoid iterator-during-mutation
-   issues if user calls `tl.list_logs()` during a `log_forward_pass` from a
-   different thread. Return tuple snapshot.
+Naming sprint 2026-05-11. Items 1-7 and 10 from the original v1
+implementation-spec maintenance list were resolved in `da15b5f`.
 
 8. **`confirm_mutation` vs `suppress_mutate_warnings` naming consistency.**
    Per-call kwarg uses "confirm"; session config uses "suppress." Naming
@@ -76,13 +19,61 @@ review at the relevant patch.
    ```
    Naming pass.
 
-10. **§20.1 cohort migration attribution-patching row.** Add row mapping
-    TransformerLens `act_patch` → TorchLens `tl.bwd_hook + rerun` pattern.
-    Documentation only.
-
 ## Bugs
 
 ## Improvements (Nice-to-Have)
+
+### Tensor-id-keyed metadata (move tl_* attrs off tensors) (raised 2026-05-10)
+
+**SUPERSEDED 2026-05-10:** superseded by the `_tl` namespace refactor
+(`0e4509d`). That refactor moved TorchLens host-object metadata under
+`obj._tl` and removed the motivating `tl_*` attribute pollution without
+requiring a tensor-id side table. Original note retained below for history.
+
+**Status:** superseded; do not schedule as active work.
+
+**Hypothesis:** replace per-tensor `tl_*` attribute decoration with a
+`state.tensor_metadata: dict[int, TensorMetadata]` keyed on `id(tensor)`,
+using `weakref.finalize(tensor, callback)` to clean up entries when tensors
+are GC'd. The module-containment refactor proves the "metadata in side
+state, not on tensors" pattern at module scope; this generalizes it to all
+tensor-attached metadata (`tl__label_raw`, `tl_module_address`,
+`tl_module_type`, `tl_buffer_address`, `tl_buffer_parent`, the whole
+`tl_*` family).
+
+**Wins:**
+- Tensors stay clean -- `tensor.__dict__` and `print(tensor)` no longer
+  surface TorchLens internals. Captum / fvcore / debugging tools stop
+  seeing TorchLens noise.
+- In-place semantics fall out for free. `id()` is stable across in-place
+  mutation, so the ~80 lines of safe-copy + back-propagation in
+  `decoration/torch_funcs.py:480-533` becomes a no-op.
+- Cross-capture pollution genuinely solved -- each Trace owns its
+  `state.tensor_metadata`; tensors that survive across captures don't
+  carry stale metadata.
+- Save/load gets simpler -- saved tensors don't need `tl_*` attribute
+  scrubbing.
+- Less surface area for "did I forget to strip an attr in cleanup?".
+
+**Complications:**
+- Tensor cloning paths (`.clone()`, `.detach()`, `.to()`, `.contiguous()`)
+  produce new tensors with new ids. Need explicit "inherit metadata" rules
+  at each captured op. Today's attribute approach inherits implicitly.
+- `id()` reuse after GC: solved by `weakref.finalize(tensor, lambda: ...)`
+  registered at write time.
+- Tensor subclasses without `__slots__ = ()` need to support `__weakref__`.
+  `torch.Tensor` does; verify for `DTensor` etc.
+- Storage-shared views: same as today, new tensor = new metadata at
+  op-capture time. No difference.
+- Performance: C-level `getattr` slightly faster than dict lookup, but
+  both are tens of nanoseconds. Net likely faster because in-place
+  propagation logic disappears.
+
+**Order:** AFTER module-containment-refactor. The module work proves the
+pattern at module scope; tensor-id-keyed extends it. Doing simultaneously
+would make both reviews harder.
+
+**Estimated effort:** 3-5 days. Net code reduction.
 
 ### Capture-path unification: log_forward_pass internally as Recording (raised 2026-04-29)
 
@@ -465,6 +456,13 @@ but are natural follow-ons. Pick up after MVP ships.
 
 - Replace input-tensor-derived module attribution with thread-local
   call-stack snapshot (raised 2026-05-09). Vast simplification.
+
+  **Status 2026-05-10:** Step 6 elimination is DONE in `8dd33a6`.
+  `_fix_modules_for_internal_tensors` was deleted; the module-stack suffix
+  is appended to `equivalence_class` at op creation, with a six-model
+  equivalence-class parity check against the pre-refactor pipeline. The
+  numbered postprocess pipeline was updated accordingly. Historical design
+  notes below are retained for context.
 
   TODAY (three mechanisms, one concept):
   1. `_get_input_module_info` (capture/source_tensors.py) walks an
@@ -1443,6 +1441,36 @@ but are natural follow-ons. Pick up after MVP ships.
   Finding #6.
 
 ## Completed (recent)
+
+### 2026-05-10 draw + postprocess + intervention cleanup sprint
+
+- `1c31b6b` **Trace.draw() ergonomics.** Deleted the
+  `Trace.render_graph` shim and updated stale code/test/doc references to
+  `draw`. Kept `view=True` behavior for interactive use, but headless Linux
+  / non-forwarded SSH now renders the file and skips viewer launch with one
+  concise stderr line.
+- `8dd33a6` **Postprocess Step 6 elimination.** Deleted
+  `_fix_modules_for_internal_tensors`; module-stack suffixes are appended to
+  `equivalence_class` at op creation. Verified six-model
+  equivalence-class parity against the old postprocess suffix path.
+- `da15b5f` **Intervention API v1 maintenance sweep.** Resolved original
+  items 1-7 and 10:
+  1. §4.2 hook positional-arg-name clarification was already present.
+  2. §12.16 attribution-patching formula sign convention documented.
+  3. `FrozenTargetSpec` concrete frozen dataclass was already present.
+  4. `intervention_spec` cached-property invalidation test was already
+     present; smoke marker added.
+  5. `_construction_done` / `object.__setattr__` guard pattern and tests
+     were already present.
+  6. Rerun state replacement was already a single `__dict__.update(...)`;
+     added an explicit KeyboardInterrupt-before-swap regression test.
+  7. `tl.list_logs()` / `_state.list_logs()` already returned tuple
+     snapshots; concurrent smoke coverage marker added.
+  10. TransformerLens `act_patch` -> TorchLens `tl.bwd_hook + rerun`
+      migration row added.
+  Items 8 and 9 remain active for the naming sprint on 2026-05-11.
+- Tensor-id-keyed metadata was marked SUPERSEDED by `_tl` namespace refactor
+  commit `0e4509d`; original text retained for history.
 
 ### 2026-04-27 multi-trace sprint (Phase 1 + Phase 2)
 
