@@ -55,7 +55,7 @@ pytest tests/ -m "not slow" -x --tb=short
    `activation_postfunc`, `get_tensor_memory_amount`).
 3. Wrappers are persistent after lazy installation; `_logging_enabled` gates behavior.
 4. FIELD_ORDER constants and class definitions must stay in sync.
-5. Step 6 module suffix mutation makes `_rebuild_pass_assignments` in Step 8 necessary.
+5. Module suffixes are appended to `equivalence_class` at op creation before loop detection.
 6. RNG state capture/restore must happen before `active_logging()` context.
 7. `_build_module_logs` must not run in `postprocess_fast`; `_module_build_data` is not
    populated in fast mode.

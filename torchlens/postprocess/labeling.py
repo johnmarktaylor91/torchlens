@@ -1,22 +1,22 @@
-"""Steps 9-12: Label mapping, final info logging, renaming, cleanup, and lookup keys.
+"""Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys.
 
-Step 9 (_map_raw_labels_to_final_labels): Assigns human-readable labels to each
+Step 8 (_map_raw_labels_to_final_labels): Assigns human-readable labels to each
     tensor. Label format: ``{layer_type}_{type_num}_{total_num}:{call_index}`` for
     regular layers, or ``{layer_type}_{type_num}:{call_index}`` for input/output/buffer.
     The ``:call_index`` suffix is omitted when num_calls == 1. For multi-pass
     layers (pass > 1), layer_type and type_index are INHERITED from the first
     pass to guarantee label consistency within recurrent_ops groups.
 
-Step 10 (_log_final_info_for_layers): Logs operation numbers, module hierarchy,
+Step 9 (_log_final_info_for_layers): Logs operation numbers, module hierarchy,
     param/size tallies, and structural flags. Populates _module_build_data dicts
-    that Step 12 and Step 17 depend on. MUST run before Step 12 because
+    that Step 11 and Step 16 depend on. MUST run before Step 11 because
     _add_lookup_keys_for_layer_entry needs module_num_calls data.
 
-Step 11 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fields):
+Step 10 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fields):
     Renames all raw labels (e.g., "cos_3_raw") to final labels in both Trace-level
     fields and OpLog fields, then reorders Trace fields into canonical order.
 
-Step 12 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (unless
+Step 11 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (unless
     keep_unsaved_layers=True), builds lookup key mappings (integer index, label,
     module path, buffer/input/output address), and logs remaining layer metadata.
 """
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 
 def _map_raw_labels_to_final_labels(self: "Trace") -> None:
-    """Step 9: Build the raw-to-final label mapping for all tensors.
+    """Step 8: Build the raw-to-final label mapping for all tensors.
 
     Iterates through all tensors in order and assigns each a human-readable label.
     Label format conventions:
@@ -110,9 +110,9 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
 
 
 def _log_final_info_for_layers(self: "Trace") -> None:
-    """Step 10: Log final metadata for all layers and build module hierarchy.
+    """Step 9: Log final metadata for all layers and build module hierarchy.
 
-    Iterates through all layers (before unsaved ones are discarded in Step 12)
+    Iterates through all layers (before unsaved ones are discarded in Step 11)
     and computes:
     - Operation numbers (sequential, excluding input/buffer/output).
     - Replaces raw labels with final labels in each OpLog's fields.
@@ -120,8 +120,8 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     - Cumulative tallies: tensor sizes, param counts, elapsed time.
     - Structural flags: branching, recurrence, conditional branching.
 
-    MUST run before Step 12 because ``_add_lookup_keys_for_layer_entry``
-    (called in Step 12) needs module_num_calls data populated here.
+    MUST run before Step 11 because ``_add_lookup_keys_for_layer_entry``
+    (called in Step 11) needs module_num_calls data populated here.
 
     Uses shadow sets for O(1) membership checks to avoid expensive linear
     ``in`` checks on lists for large models.
@@ -518,7 +518,7 @@ def _log_module_hierarchy_info_for_layer(
 
 
 def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
-    """Step 12: Remove unsaved layers, build lookup keys, finalize layer lists.
+    """Step 11: Remove unsaved layers, build lookup keys, finalize layer lists.
 
     Unless ``keep_unsaved_layers=True``, removes OpLog entries that don't
     have saved outs. For each retained entry:
@@ -813,7 +813,7 @@ def _trim_and_reorder_layer_entry_fields(layer_entry: OpLog) -> None:
 
 
 def _rename_model_history_layer_names(self: "Trace") -> None:
-    """Step 11: Rename raw labels to final labels in all Trace-level fields.
+    """Step 10: Rename raw labels to final labels in all Trace-level fields.
 
     Updates list fields (input_layers, output_layers, etc.), dict fields
     (layers_with_params, equivalent_ops), conditional branch

@@ -60,6 +60,7 @@ from ..data_classes.module_log import HookInfo
 from ..utils.tensor_utils import get_memory_amount
 from ..utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
 from ..utils.hashing import make_random_barcode
+from ..capture.tensor_tracking import _append_module_suffix_to_equivalence_class
 from ..capture.source_tensors import log_source_tensor
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from . import _module_stack as _mstack
@@ -855,6 +856,8 @@ def _ensure_module_output_tensor_logged(
     }
     address = _module_address(module)
     module_call_index = trace._mod_call_index[id(module)]
+    modules = [(address, module_call_index)] if address else []
+    equivalence_class = _append_module_suffix_to_equivalence_class(raw_label, modules)
     root_ancestors: set[str] = set()
     input_ancestors: set[str] = set()
     internal_source_ancestors: set[str] = set()
@@ -955,7 +958,7 @@ def _ensure_module_output_tensor_logged(
             "num_params_trainable": 0,
             "num_params_frozen": 0,
             "param_memory": 0,
-            "equivalence_class": raw_label,
+            "equivalence_class": equivalence_class,
             "equivalent_ops": trace.equivalent_ops[raw_label],
             "recurrent_ops": [],
             "parents": parent_labels,
@@ -1007,7 +1010,7 @@ def _ensure_module_output_tensor_logged(
             "conditional_arm_children": {},
             "module": (address, module_call_index),
             "_address_normalized": None,
-            "modules": [(address, module_call_index)] if address else [],
+            "modules": modules,
             "modules_entered": [],
             "module_entry_argnames": defaultdict(list),
             "module_ops_entered": [],

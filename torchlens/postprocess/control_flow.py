@@ -1,4 +1,4 @@
-"""Steps 5-7: Conditional branches, module annotation fixes, buffer layer fixes.
+"""Steps 5-6: Conditional branches and buffer layer fixes.
 
 Step 5 (_mark_conditional_branches) now runs a six-phase conditional pipeline:
     5a. Build AST file indexes for files referenced by terminal scalar bools.
@@ -7,10 +7,7 @@ Step 5 (_mark_conditional_branches) now runs a six-phase conditional pipeline:
     5d. Backward-flood IF edges from branch-participating bools only.
     5e. Attribute executed ops to THEN/ELIF/ELSE arms across every forward edge.
     5f. Materialize derived compatibility views from the new primary structures.
-Step 6 (_fix_modules_for_internal_tensors): Append module path suffixes to
-    equivalence_class. This is INTENTIONAL and affects loop detection (Step 8),
-    ensuring operations in different modules are never grouped as the same layer.
-Step 7 (_fix_buffer_layers): Connects buffer parents, deduplicates identical
+Step 6 (_fix_buffer_layers): Connects buffer parents, deduplicates identical
     buffers (same module, same value, same parent), and assigns buffer pass numbers.
 """
 
@@ -635,31 +632,8 @@ def _get_gained_branch_entries(
     return child_stack[shared_prefix_len:]
 
 
-def _fix_modules_for_internal_tensors(self: "Trace") -> None:
-    """Step 6: Append module-path suffix to equivalence_class.
-
-    Module containment for every captured op is set at op-creation time by
-    the wrap-forward stack helper (see torchlens.decoration._module_stack).
-    This step's only remaining job is appending the canonical module-path
-    suffix to ``equivalence_class`` so loop detection (Step 8) treats
-    same-function ops in different modules as distinct equivalence types.
-
-    It is legitimate for an op to have empty ``modules`` here (input,
-    output, buffer, root-module, post-hook ops, orphan nodes). Such ops
-    receive an empty suffix.
-    """
-    module_str_cache: dict[tuple, str] = {}
-    for layer in self:
-        if getattr(layer, "is_orphan", False):
-            continue
-        cm_key = tuple(layer.modules)
-        if cm_key not in module_str_cache:
-            module_str_cache[cm_key] = "_".join(module_pass[0] for module_pass in layer.modules)
-        layer.equivalence_class += module_str_cache[cm_key]
-
-
 def _fix_buffer_layers(self: "Trace") -> None:
-    """Step 7: Connect buffer parents, merge duplicates, and assign pass numbers.
+    """Step 6: Connect buffer parents, merge duplicates, and assign pass numbers.
 
     Buffer tensors (nn.Module registered buffers) are logged as source tensors
     during the forward pass but may lack proper parent connections. This function:

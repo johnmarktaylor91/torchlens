@@ -42,7 +42,7 @@ from ..utils.introspection import _get_code_context
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import get_memory_amount
 
-from .tensor_tracking import _add_backward_hook
+from .tensor_tracking import _add_backward_hook, _append_module_suffix_to_equivalence_class
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -234,8 +234,10 @@ def log_source_tensor_exhaustive(
     else:
         raise ValueError("source must be either 'input' or 'buffer'")
 
-    memory = get_memory_amount(t)
     modules = _snapshot_exhaustive_module_stack(self)
+    base_equivalence_class = equivalence_class
+    equivalence_class = _append_module_suffix_to_equivalence_class(equivalence_class, modules)
+    memory = get_memory_amount(t)
 
     fields_dict: dict[str, Any] = {
         # General info:
@@ -341,7 +343,7 @@ def log_source_tensor_exhaustive(
         "param_memory": 0,
         # Corresponding layer info:
         "equivalence_class": equivalence_class,
-        "equivalent_ops": self.equivalent_ops[equivalence_class],
+        "equivalent_ops": self.equivalent_ops[base_equivalence_class],
         "recurrent_ops": [],
         # Graph info:
         "parents": [],
@@ -417,7 +419,7 @@ def log_source_tensor_exhaustive(
     set_tensor_label(t, tensor_label)
 
     # Register in Trace-level tracking structures.
-    self.equivalent_ops[equivalence_class].add(tensor_label)
+    self.equivalent_ops[base_equivalence_class].add(tensor_label)
     if source == "input":
         self.input_layers.append(tensor_label)
     if source == "buffer":

@@ -40,7 +40,7 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
    torch namespace mutation.
 3. RNG state capture/restore must happen before `active_logging()`.
 4. Internal torch ops during capture must be wrapped in `pause_logging()`.
-5. Step 6 module suffix mutation makes loop pass rebuilding necessary.
+5. Module suffixes are appended to `equivalence_class` at op creation before loop detection.
 6. `postprocess_fast()` must not call `_build_module_logs()`.
 7. `train_mode=True` must preserve user `requires_grad` and reject detach/disk conflicts.
 8. Portable I/O must reject unsafe paths/symlinks and unsupported tensor variants.

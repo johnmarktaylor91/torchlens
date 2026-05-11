@@ -34,14 +34,14 @@ Real-time tensor operation logging during forward pass.
 - `flops.py` — Per-operation FLOPs computation (~290 ops)
 
 ### `torchlens/postprocess/` (6 files, ~3,179 lines)
-18-step pipeline. Order is critical — many steps depend on prior output.
+19-step pipeline. Order is critical — many steps depend on prior output.
 - `graph_traversal.py` — Steps 1-4: output layers, ancestor marking, orphan removal, distance flood
-- `control_flow.py` — Steps 5-7: six-phase conditional attribution (AST indexing, bool
+- `control_flow.py` — Steps 5-6: six-phase conditional attribution (AST indexing, bool
   classification, event materialization, backward flood, forward arm attribution, derived
-  views), module fixing, buffer cleanup
-- `loop_detection.py` — Step 8: isomorphic subgraph expansion, layer assignment
-- `labeling.py` — Steps 9-12: label generation, rename, trim/reorder, lookup keys
-- `finalization.py` — Steps 13-18: undecorate, ParamLog, ModuleLog, LayerLog, mark complete
+  views), buffer cleanup
+- `loop_detection.py` — Step 7: isomorphic subgraph expansion, layer assignment
+- `labeling.py` — Steps 8-11: label generation, rename, trim/reorder, lookup keys
+- `finalization.py` — Steps 12-19: undecorate, ParamLog, ModuleLog, LayerLog, mark complete
 
 ### `torchlens/data_classes/` (10 files, ~3,821 lines)
 - `model_log.py` — ModelLog: top-level container, 70+ attrs
@@ -84,12 +84,12 @@ log_forward_pass(model, input)
   →     torch_func_decorator     # barcode nesting → bottom-level ops logged
   →       log_function_output_tensors_exhaustive()  # builds LayerPassLog entry
   →       OR log_function_output_tensors_fast()     # reuses prior graph structure
-  → postprocess(model_log)       # 18-step pipeline
+  → postprocess(model_log)       # 19-step pipeline
   →   Steps 1-4: graph cleanup (outputs, ancestors, orphans, distances)
-  →   Steps 5-7: control flow (Step 5a-5f conditional attribution, module fixing, buffer dedup)
-  →   Step 8: loop detection (isomorphic subgraph expansion)
-  →   Steps 9-12: labeling (raw→final labels, rename, reorder, lookup keys)
-  →   Steps 13-18: finalization (undecorate, ParamLog, ModuleLog, LayerLog)
+  →   Steps 5-6: control flow (Step 5a-5f conditional attribution, buffer dedup)
+  →   Step 7: loop detection (isomorphic subgraph expansion)
+  →   Steps 8-11: labeling (raw→final labels, rename, reorder, lookup keys)
+  →   Steps 12-19: finalization (undecorate, ParamLog, ModuleLog, LayerLog)
   → return ModelLog
 ```
 
@@ -139,8 +139,9 @@ call; if unchanged after → no nested torch calls → log it. If changed → ne
 logged it.
 
 ### Operation Equivalence Types
-Structural fingerprint: `{func_name}_{arg_hash}[_outindex{i}][_module{origin}]`. Used by
-loop detection (Step 8) to group operations into layers.
+Structural fingerprint: `{func_name}_{arg_hash}[_outindex{i}][_module{origin}]`, plus the
+module-stack suffix appended at op creation. Used by loop detection (Step 7) to group
+operations into layers.
 
 ### LayerLog Delegation
 Single-pass layers: `__getattr__` delegates to `passes[1]`. Multi-pass per-pass fields:
@@ -167,8 +168,9 @@ user_funcs.py      → orchestrates decoration/, capture/, postprocess/, validat
 
 ### Loop Detection (postprocess/loop_detection.py)
 Most complex single module. BFS expansion of isomorphic subgraphs, iso group refinement with
-direction-aware neighbor connectivity, adjacency union-find for layer assignment. Step 6's
-module suffix mutation makes `_rebuild_pass_assignments` necessary (not defensive). ~826 lines.
+direction-aware neighbor connectivity, adjacency union-find for layer assignment. Module
+suffixes are present before loop detection, and `_rebuild_pass_assignments` clears stale
+assignments after repeated expansion rounds. ~826 lines.
 
 ### Exhaustive/Fast-Path Split (capture/output_tensors.py)
 Two parallel code paths that must maintain counter alignment. Fast path skips most metadata

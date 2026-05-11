@@ -1,34 +1,32 @@
 """Postprocessing pipeline for cleaning up the model log after the forward pass.
 
 After the forward pass captures raw tensor metadata into a Trace, this pipeline
-transforms the raw graph into its user-facing form. The full pipeline has 20 steps,
+transforms the raw graph into its user-facing form. The full pipeline has 19 steps,
 split into thematic submodules:
 
 - graph_traversal (Steps 1-4): Add output nodes, trace ancestry, remove orphans,
   compute input/output distances.
-- control_flow (Steps 5-7): Mark conditional branches, fix module containment for
-  internally-generated tensors, deduplicate/merge buffer layers.
-- loop_detection (Step 8): Identify repeated operations (loops/recurrence), assign
+- control_flow (Steps 5-6): Mark conditional branches and deduplicate/merge buffer layers.
+- loop_detection (Step 7): Identify repeated operations (loops/recurrence), assign
   same-layer groupings via BFS isomorphic subgraph expansion.
-- labeling (Steps 9-12): Generate final human-readable labels, rename all internal
+- labeling (Steps 8-11): Generate final human-readable labels, rename all internal
   references, trim/reorder fields, build lookup keys.
-- finalization (Steps 13-20): Undecorate saved tensors, log timing, finalize
+- finalization (Steps 12-19): Undecorate saved tensors, log timing, finalize
   ParamLogs, build LayerLog/ModuleLog aggregates, mark pass as finished, then
   finalize any streamed bundle and optionally evict in-memory outs.
 
 Step ordering invariants:
 - Steps 1-3 MUST precede Step 5 (conditional branch detection needs orphan-free graph).
-- Step 6 (module suffix appending) MUST precede Step 8 (loop detection uses
-  equivalence_class which includes module suffixes).
-- Step 8 MUST precede Step 9 (label generation needs recurrent_ops).
-- Step 9 MUST precede Step 10 (final info logging uses finalized labels).
-- Step 10 MUST precede Step 12 (lookup key generation needs module hierarchy data
-  populated in Step 10).
-- Step 11 (rename) MUST precede Step 12 (cleanup uses renamed labels).
-- Step 16.5 (_build_layer_logs) MUST precede Step 17 (_build_module_logs) because
+- Module suffixes must be present on equivalence_class before Step 7 loop detection.
+- Step 7 MUST precede Step 8 (label generation needs recurrent_ops).
+- Step 8 MUST precede Step 9 (final info logging uses finalized labels).
+- Step 9 MUST precede Step 11 (lookup key generation needs module hierarchy data
+  populated in Step 9).
+- Step 10 (rename) MUST precede Step 11 (cleanup uses renamed labels).
+- Step 15.5 (_build_layer_logs) MUST precede Step 16 (_build_module_logs) because
   ModuleLog.layers references LayerLog keys.
 
-Fast mode skips Steps 1-10 and Step 17, reusing the exhaustive pass's metadata.
+Fast mode skips Steps 1-9 and Step 16, reusing the exhaustive pass's metadata.
 It only copies outs from parent to output nodes, trims, renames, builds
 LayerLogs, and marks the pass as finished. See postprocess_fast() below.
 """
@@ -43,7 +41,6 @@ from ..utils.hashing import compute_graph_shape_hash
 
 from .control_flow import (
     _fix_buffer_layers,
-    _fix_modules_for_internal_tensors,
     _mark_conditional_branches,
 )
 from .finalization import (
@@ -133,19 +130,15 @@ def postprocess(
     with _vtimed(self, "  Step 5: Mark conditional branches"):
         _mark_conditional_branches(self)
 
-    # Step 6: Annotate the containing modules for all internally-generated tensors.
-    with _vtimed(self, "  Step 6: Fix module containment"):
-        _fix_modules_for_internal_tensors(self)
-
-    # Step 7: Fix the buffer ops and parent information.
-    with _vtimed(self, "  Step 7: Fix buffer layers"):
+    # Step 6: Fix the buffer ops and parent information.
+    with _vtimed(self, "  Step 6: Fix buffer layers"):
         _fix_buffer_layers(self)
 
-    # Step 8: Identify all loops, mark repeated layers.
+    # Step 7: Identify all loops, mark repeated layers.
     loop_desc = (
-        "  Step 8: Loop detection (full)"
+        "  Step 7: Loop detection (full)"
         if self.recurrence_detection
-        else "  Step 8: Loop detection (params only)"
+        else "  Step 7: Loop detection (params only)"
     )
     with _vtimed(self, loop_desc):
         if self.recurrence_detection:
@@ -153,66 +146,66 @@ def postprocess(
         else:
             _group_by_shared_params(self)
 
-    # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
-    with _vtimed(self, "  Step 9: Map labels"):
+    # Step 8: Go down tensor list, get the mapping from raw tensor names to final tensor names.
+    with _vtimed(self, "  Step 8: Map labels"):
         _map_raw_labels_to_final_labels(self)
 
-    # Step 10: Log final info for all layers
-    with _vtimed(self, "  Step 10: Log final info"):
+    # Step 9: Log final info for all layers
+    with _vtimed(self, "  Step 9: Log final info"):
         _log_final_info_for_layers(self)
 
-    # Step 11: Rename all raw labels to final labels
-    with _vtimed(self, "  Step 11: Rename labels"):
+    # Step 10: Rename all raw labels to final labels
+    with _vtimed(self, "  Step 10: Rename labels"):
         _rename_model_history_layer_names(self)
         _trim_and_reorder_model_history_fields(self)
 
-    # Step 12: Remove unsaved layers, build lookup key mappings
-    with _vtimed(self, "  Step 12: Build lookup keys"):
+    # Step 11: Remove unsaved layers, build lookup key mappings
+    with _vtimed(self, "  Step 11: Build lookup keys"):
         _remove_unwanted_entries_and_log_remaining(self)
 
-    # Step 13: Undecorate all saved tensors and remove saved grad_fns.
-    with _vtimed(self, "  Step 13: Undecorate tensors"):
+    # Step 12: Undecorate all saved tensors and remove saved grad_fns.
+    with _vtimed(self, "  Step 12: Undecorate tensors"):
         _undecorate_all_saved_tensors(self)
 
-    # Step 14: Clear the cache after any tensor deletions for garbage collection purposes.
+    # Step 13: Clear the cache after any tensor deletions for garbage collection purposes.
     # Gated behind cached cuda.is_available() so CPU-only runs don't pay the
     # CUDA driver / NVML probe cost (per profiling audit 2026-04-27 finding #4).
     if _is_cuda_available():
         torch.cuda.empty_cache()
 
-    # Step 15: Log time elapsed.
-    with _vtimed(self, "  Step 15: Log timing"):
+    # Step 14: Log time elapsed.
+    with _vtimed(self, "  Step 14: Log timing"):
         _log_time_elapsed(self)
 
-    # Step 16: Populate ParamLog reverse mappings, linked params, num_calls, and grad metadata.
-    with _vtimed(self, "  Step 16: Finalize params"):
+    # Step 15: Populate ParamLog reverse mappings, linked params, num_calls, and grad metadata.
+    with _vtimed(self, "  Step 15: Finalize params"):
         _finalize_param_logs(self)
 
-    # Step 16.5: Build aggregate LayerLog objects from per-pass OpLog entries.
-    with _vtimed(self, "  Step 16.5: Build layer logs"):
+    # Step 15.5: Build aggregate LayerLog objects from per-pass OpLog entries.
+    with _vtimed(self, "  Step 15.5: Build layer logs"):
         _build_layer_logs(self)
 
-    # Step 17: Build structured ModuleLog objects from raw module_* dicts.
-    with _vtimed(self, "  Step 17: Build module logs"):
+    # Step 16: Build structured ModuleLog objects from raw module_* dicts.
+    with _vtimed(self, "  Step 16: Build module logs"):
         _build_module_logs(self)
 
-    # Step 17.5: Compute graph shape hash before _set_tracing_finished changes access behavior.
-    with _vtimed(self, "  Step 17.5: Graph shape hash"):
+    # Step 16.5: Compute graph shape hash before _set_tracing_finished changes access behavior.
+    with _vtimed(self, "  Step 16.5: Graph shape hash"):
         self.graph_shape_hash = compute_graph_shape_hash(self)
 
-    # Step 18: log the pass as finished, changing the Trace behavior to its user-facing version.
-    with _vtimed(self, "  Step 18: Mark pass finished"):
+    # Step 17: log the pass as finished, changing the Trace behavior to its user-facing version.
+    with _vtimed(self, "  Step 17: Mark pass finished"):
         _set_tracing_finished(self)
 
     should_finalize_streaming = self._out_writer is not None and not getattr(
         self, "_defer_streaming_bundle_finalization", False
     )
     if should_finalize_streaming:
-        with _vtimed(self, "  Step 19: Finalize streamed bundle"):
+        with _vtimed(self, "  Step 18: Finalize streamed bundle"):
             _finalize_streamed_bundle(self)
 
     if should_finalize_streaming and not self._keep_outs_in_memory:
-        with _vtimed(self, "  Step 20: Evict streamed outs"):
+        with _vtimed(self, "  Step 19: Evict streamed outs"):
             _evict_streamed_outs(self)
 
     if getattr(self, "verbose", False):
@@ -233,10 +226,10 @@ def postprocess_fast(self: "Trace") -> None:
 
     Skipped steps (already computed by the exhaustive pass):
     - Steps 1-4: Graph structure (output nodes, ancestry, orphans, distances)
-    - Steps 5-7: Conditional branches, module fixing, buffer fixing
-    - Step 8: Loop detection
-    - Steps 9-10: Label mapping and final info logging
-    - Step 17: _build_module_logs — module structure doesn't change between
+    - Steps 5-6: Conditional branches and buffer fixing
+    - Step 7: Loop detection
+    - Steps 8-9: Label mapping and final info logging
+    - Step 16: _build_module_logs — module structure doesn't change between
       ops and _module_build_data isn't repopulated in fast mode (#108).
     """
     _vprint(self, "Fast-pass postprocessing...")
@@ -285,7 +278,7 @@ def postprocess_fast(self: "Trace") -> None:
     _build_layer_logs(self)
     # Note: _build_module_logs is NOT called here because module structure
     # doesn't change between ops and _module_build_data isn't repopulated
-    # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
+    # in fast mode (Step 9 is skipped). Existing module logs remain valid. (#108)
     if self.intervention_ready and not getattr(self, "capture_args_template", False):
         self.intervention_ready = False
     self.graph_shape_hash = compute_graph_shape_hash(self)

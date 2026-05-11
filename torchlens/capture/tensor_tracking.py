@@ -298,6 +298,30 @@ def _make_raw_param_group_barcode(indiv_param_barcodes: list[str], layer_type: s
     return param_group_barcode
 
 
+def _append_module_suffix_to_equivalence_class(
+    equivalence_class: str,
+    modules: list[tuple[str, int]] | tuple[tuple[str, int], ...],
+) -> str:
+    """Append the canonical module-stack suffix used by loop detection.
+
+    Parameters
+    ----------
+    equivalence_class:
+        Base operation equivalence string.
+    modules:
+        Module stack snapshot for the captured op, as ``(address, pass)``
+        pairs ordered outer-to-inner.
+
+    Returns
+    -------
+    str
+        ``equivalence_class`` plus the historical module-path suffix. Empty
+        module stacks append an empty suffix.
+    """
+
+    return equivalence_class + "_".join(module_pass[0] for module_pass in modules)
+
+
 def _get_equivalence_class(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],

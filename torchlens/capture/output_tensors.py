@@ -84,14 +84,15 @@ from .arg_positions import (
 )
 
 from .tensor_tracking import (
-    _update_tensor_family_links,
-    _locate_parent_tensors_in_args,
-    _get_ancestors_from_parents,
     _add_backward_hook,
-    _process_parent_param_ops,
-    _make_raw_param_group_barcode,
+    _append_module_suffix_to_equivalence_class,
+    _get_ancestors_from_parents,
     _get_equivalence_class,
     _get_hash_from_args,
+    _locate_parent_tensors_in_args,
+    _make_raw_param_group_barcode,
+    _process_parent_param_ops,
+    _update_tensor_family_links,
 )
 from .._errors import TorchLensPostfuncError
 from .._training_validation import TrainingModeConfigError
@@ -1914,14 +1915,22 @@ def _log_output_tensor_info(
         # used, combined with the operation type.  E.g., two conv2d calls using the
         # same weight+bias tensors are the same layer on different ops.
         equivalence_class = _make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
-        fields_dict["equivalence_class"] = equivalence_class
+        base_equivalence_class = equivalence_class
         self.layers_with_params[equivalence_class].append(_label_raw)
         fields_dict["call_index"] = len(self.layers_with_params[equivalence_class])
+        equivalence_class = _append_module_suffix_to_equivalence_class(
+            equivalence_class, fields_dict["modules"]
+        )
+        fields_dict["equivalence_class"] = equivalence_class
     else:
         # Non-parameterized ops: equivalence is a hash of the operation type,
         # non-tensor args, output index, and containing module.  Each unique
         # non-param operation is seen only once (call_index=1).
         equivalence_class = _get_equivalence_class(args, kwargs, i, layer_type, fields_dict)
+        base_equivalence_class = equivalence_class
+        equivalence_class = _append_module_suffix_to_equivalence_class(
+            equivalence_class, fields_dict["modules"]
+        )
         fields_dict["equivalence_class"] = equivalence_class
         fields_dict["call_index"] = 1
 
@@ -1930,10 +1939,10 @@ def _log_output_tensor_info(
     # Defensive: if equivalence_class isn't yet registered (e.g. user-injected
     # tensor through intervention/raw-hook with a fresh hash), create the
     # set on demand rather than crashing with KeyError.
-    if equivalence_class not in self.equivalent_ops:
-        self.equivalent_ops[equivalence_class] = set()
-    self.equivalent_ops[equivalence_class].add(_label_raw)
-    fields_dict["equivalent_ops"] = self.equivalent_ops[equivalence_class]
+    if base_equivalence_class not in self.equivalent_ops:
+        self.equivalent_ops[base_equivalence_class] = set()
+    self.equivalent_ops[base_equivalence_class].add(_label_raw)
+    fields_dict["equivalent_ops"] = self.equivalent_ops[base_equivalence_class]
 
     # In-place ops return the same tensor object, which already has a raw label.
     fields_dict["is_inplace"] = get_tensor_label(t) is not None

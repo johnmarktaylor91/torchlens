@@ -1,21 +1,23 @@
-"""Steps 13-18: Tensor undecoration, timing, param logs, layer logs, module logs, pass finish.
+"""Steps 12-19: Tensor undecoration, timing, param logs, layer/module logs, streaming.
 
-Step 13 (_undecorate_all_saved_tensors): Removes TorchLens tensor metadata from
+Step 12 (_undecorate_all_saved_tensors): Removes TorchLens tensor metadata from
     all saved tensors and their creation args/kwargs.
-Step 14: torch.cuda.empty_cache() — handled inline in __init__.py.
-Step 15 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
-Step 16 (_finalize_param_logs): Populates ParamLog reverse mappings (used_by_layers,
+Step 13: torch.cuda.empty_cache() — handled inline in __init__.py.
+Step 14 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
+Step 15 (_finalize_param_logs): Populates ParamLog reverse mappings (used_by_layers,
     co_parent_params), num_calls, and clears Parameter tensor references.
-Step 16.5 (_build_layer_logs): Groups OpLog entries by layer_label_no_pass to
+Step 15.5 (_build_layer_logs): Groups OpLog entries by layer_label_no_pass to
     create aggregate LayerLog objects. Static identity fields still use first-pass
     values, while aggregate fields merge across ops, including conditional
     branch signatures, pass maps, and pass-stripped child views.
-Step 17 (_build_module_logs): Builds structured ModuleLog/ModuleCallLog objects from
+Step 16 (_build_module_logs): Builds structured ModuleLog/ModuleCallLog objects from
     _module_build_data and _module_metadata. MUST NOT run in fast mode — _module_build_data
-    isn't repopulated in fast mode (Step 10 is skipped). Existing module logs from the
+    isn't repopulated in fast mode (Step 9 is skipped). Existing module logs from the
     exhaustive pass remain valid.
-Step 18 (_set_tracing_finished): Marks Trace and all OpLogs as finished, switching
+Step 17 (_set_tracing_finished): Marks Trace and all OpLogs as finished, switching
     to user-facing mode for display and access custom_methods.
+Step 18 (_finalize_streamed_bundle): Finalizes any streamed out bundle.
+Step 19 (_evict_streamed_outs): Optionally drops in-memory outs after streaming refs attach.
 """
 
 import time
@@ -42,7 +44,7 @@ if TYPE_CHECKING:
 
 
 def _undecorate_all_saved_tensors(self: "Trace") -> None:
-    """Step 13: Remove TorchLens metadata from all saved tensors.
+    """Step 12: Remove TorchLens metadata from all saved tensors.
 
     During logging, tensors are tagged with private ``_tl`` metadata for
     tracking. This function strips that metadata from saved outs and any
@@ -70,7 +72,7 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
 
 
 def _log_time_elapsed(self: "Trace") -> None:
-    """Step 15: Record wall-clock timing for the cleanup phase and overall pass.
+    """Step 14: Record wall-clock timing for the cleanup phase and overall pass.
 
     Computes cleanup time as the residual after subtracting setup and forward
     pass times from total elapsed time. Also computes torchlens_logging overhead
@@ -83,7 +85,7 @@ def _log_time_elapsed(self: "Trace") -> None:
 
 
 def _finalize_param_logs(self: "Trace") -> None:
-    """Step 16: Populate ParamLog reverse mappings, linked params, and num_calls.
+    """Step 15: Populate ParamLog reverse mappings, linked params, and num_calls.
 
     For each OpLog with _param_logs:
     - Adds the layer's label to each ParamLog's used_by_layers list.
@@ -544,16 +546,16 @@ def _build_module_param_info(
 
 
 def _build_module_logs(self: "Trace") -> None:
-    """Step 17: Build structured ModuleLog/ModuleCallLog objects.
+    """Step 16: Build structured ModuleLog/ModuleCallLog objects.
 
-    Constructs the module hierarchy from _module_build_data (populated in Step 10)
+    Constructs the module hierarchy from _module_build_data (populated in Step 9)
     and _module_metadata (captured during model preparation). Creates:
     - A root ModuleLog for "self" (the model itself).
     - ModuleLogs for each submodule with ModuleCallLogs for each pass.
     - ModuleAccessor and BufferAccessor for user-facing access.
 
     MUST NOT be called in fast mode (postprocess_fast) because _module_build_data
-    is not repopulated when Step 10 is skipped. Existing module logs from the
+    is not repopulated when Step 9 is skipped. Existing module logs from the
     exhaustive pass remain valid (#108).
 
     Handles shared modules (same nn.Module registered under multiple addresses)
@@ -725,7 +727,7 @@ def _build_module_logs(self: "Trace") -> None:
 
 
 def _build_layer_logs(self: "Trace") -> None:
-    """Step 16.5: Build aggregate LayerLog objects from per-pass OpLog entries.
+    """Step 15.5: Build aggregate LayerLog objects from per-pass OpLog entries.
 
     Groups layer_list entries by layer_label_no_pass and creates a LayerLog for
     each unique layer. For single-pass layers, the LayerLog is a thin wrapper
@@ -925,7 +927,7 @@ def _build_conditional_records(self: "Trace") -> None:
 
 
 def _set_tracing_finished(self: "Trace") -> None:
-    """Step 18: Mark the Trace and all OpLogs as pass-finished.
+    """Step 17: Mark the Trace and all OpLogs as pass-finished.
 
     Sets ``_tracing_finished = True`` on the Trace and every retained
     OpLog entry. This flag switches various custom_methods (e.g., __str__,
@@ -943,7 +945,7 @@ def _set_tracing_finished(self: "Trace") -> None:
 
 
 def _finalize_streamed_bundle(self: "Trace") -> None:
-    """Step 19: Finalize any in-progress streamed tensor bundle.
+    """Step 18: Finalize any in-progress streamed tensor bundle.
 
     Parameters
     ----------
@@ -992,7 +994,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
 
 
 def _evict_streamed_outs(self: "Trace") -> None:
-    """Step 20: Drop in-memory outs once streaming refs have been attached.
+    """Step 19: Drop in-memory outs once streaming refs have been attached.
 
     Parameters
     ----------

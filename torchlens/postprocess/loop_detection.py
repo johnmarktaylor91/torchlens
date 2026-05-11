@@ -1,4 +1,4 @@
-"""Step 8: Loop detection, isomorphic subgraph expansion, and layer assignment.
+"""Step 7: Loop detection, isomorphic subgraph expansion, and layer assignment.
 
 This module identifies repeated operations (loops, recurrence) in the computational
 graph and assigns them to the same "layer" with multiple ops. For example, if a
@@ -45,9 +45,8 @@ Phase 5 — Cleanup (``_rebuild_pass_assignments``):
     stale recurrent_ops in old group members. This function groups all
     tensors by their authoritative ``_layer_label_raw`` and rebuilds consistent
     pass assignments. This is NOT just defensive cleanup — it is a NECESSARY
-    correctness step because Step 6's module suffix mutation causes the same
-    equivalence group to be processed multiple times, and conflicting assignments
-    from different rounds must be reconciled.
+    correctness step because repeated expansion rounds can leave conflicting
+    assignments that must be reconciled.
 
 CORE INVARIANT:
     Two operations may only be assigned to the same layer if their subgraphs either:
@@ -175,11 +174,8 @@ def _detect_and_label_loops(self: "Trace") -> None:
        are topologically adjacent.
 
     The ``equivalence_classs_seen`` set ensures each equivalence type is
-    processed exactly once, which guarantees convergence. However, Step 6's module
-    suffix mutation can cause the same underlying equivalence group to appear under
-    different suffixed types — this means the same group may be processed multiple
-    times (once per module-path variant). ``_rebuild_pass_assignments`` (Phase 5)
-    reconciles any resulting conflicts.
+    processed exactly once, which guarantees convergence. ``_rebuild_pass_assignments``
+    (Phase 5) still reconciles conflicts left by repeated expansion rounds.
     """
     # Pre-compute sort keys to avoid repeated attribute lookups in the heap.
     _sort_keys = {label: self[label].capture_index for label in self._raw_layer_labels_list}
@@ -243,10 +239,6 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
     references in the old group's ``recurrent_ops``. Without this cleanup,
     duplicate layer:pass labels would cause dict overwrites during renaming, leading
     to validation failures (e.g., wrong tensor looked up for output_versions_per_child).
-
-    Additionally, Step 6's module suffix mutation means the same equivalence group
-    can be processed multiple times (once per module-path variant), creating
-    conflicting assignments that must be reconciled.
 
     HOW IT WORKS: Groups all tensors by their current ``_layer_label_raw`` (the
     authoritative group key set by ``_finalize_layer_assignments``), sorts each
