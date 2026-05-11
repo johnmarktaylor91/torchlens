@@ -35,9 +35,9 @@ class FuncExecutionContext:
 
 @dataclass(slots=True)
 class VisualizationOverrides:
-    """User-supplied graphviz attribute overrides for ``render_graph``.
+    """User-supplied graphviz attribute overrides for ``draw``.
 
-    Bundles the graph/edge/module override dicts accepted by the public ``render_graph``
+    Bundles the graph/edge/module override dicts accepted by the public ``draw``
     method and threads them to internal helpers (``_add_node_to_graphviz``,
     ``_add_edges_for_node``, etc.) as a single object.
 

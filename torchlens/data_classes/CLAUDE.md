@@ -45,7 +45,7 @@ Single-pass layers delegate unknown attrs to `ops[1]`. Multi-pass per-pass field
 `ValueError`, not `AttributeError`, to avoid Python falling through to `__getattr__`.
 
 ### Trace Surface
-`Trace` owns more than storage: lookup, `render_graph`, `show_graph`, `save`,
+`Trace` owns more than storage: lookup, `draw`, `show_graph`, `save`,
 `load`, `find_sites`, `resolve_sites`, `fork`, `rerun`, `replay`, `summary`,
 `preview_fastlog`, and validation convenience custom_methods all live here or are attached via
 helper modules.

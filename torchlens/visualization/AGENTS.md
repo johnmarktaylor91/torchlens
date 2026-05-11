@@ -2,7 +2,7 @@
 
 ## Key Internal Functions
 
-### `render_graph()` in `rendering.py`
+### `draw()` in `rendering.py`
 Main forward graph entry point. It normalizes buffer visibility, applies module focus, skip
 and collapse decisions, builds Graphviz nodes/edges, styles modules, optionally adds legends
 and code panels, and writes/renders output.

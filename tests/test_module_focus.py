@@ -219,7 +219,7 @@ def test_module_focus_with_skip_and_collapse_fn(tmp_path: Path) -> None:
 
 
 def test_modulelog_show_graph_method(tmp_path: Path) -> None:
-    """ModuleLog.show_graph should match Trace.render_graph with module=self."""
+    """ModuleLog.show_graph should match Trace.draw with module=self."""
 
     log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     module_log = log.modules["block1"]

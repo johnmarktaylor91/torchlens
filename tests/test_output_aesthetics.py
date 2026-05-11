@@ -1375,7 +1375,7 @@ def _vis(
 def _vis_grad(model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup"):
     """Generate a visualization PDF with grad backward arrows.
 
-    Uses trace_fn(save_grads=True) + backward() + render_graph()
+    Uses trace_fn(save_grads=True) + backward() + draw()
     since show_model_graph() hardcodes save_grads=False.
     """
     log = trace_fn(model, x, save_grads=True, random_seed=42)
@@ -1518,9 +1518,9 @@ class TestVisualizationBugfixes:
         model = _SimpleLinear()
         log = trace_fn(model, torch.randn(2, 10))
         try:
-            from torchlens.visualization.rendering import render_graph
+            from torchlens.visualization.rendering import draw
 
-            render_graph(
+            draw(
                 log,
                 vis_call_depth=0,
                 vis_save_only=True,
@@ -1569,11 +1569,9 @@ class TestVisualizationBugfixes:
         model = _SimpleLinear()
         log = trace_fn(model, torch.randn(2, 10), layers_to_save="all", keep_unsaved_layers=False)
         try:
-            from torchlens.visualization.rendering import render_graph
+            from torchlens.visualization.rendering import draw
 
-            render_graph(
-                log, vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_keep_unsaved_false")
-            )
+            draw(log, vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_keep_unsaved_false"))
         except ImportError:
             pytest.skip("graphviz not available")
 

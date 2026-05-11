@@ -938,7 +938,7 @@ class ModuleLog:
         Parameters
         ----------
         **kwargs:
-            Keyword arguments forwarded to ``Trace.render_graph``.
+            Keyword arguments forwarded to ``Trace.draw``.
 
         Returns
         -------

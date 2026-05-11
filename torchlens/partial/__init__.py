@@ -143,7 +143,7 @@ class PartialTrace:
             ``"graph"`` returns DOT, ``"repr"`` returns ``repr(self)``, and
             ``"html"`` returns a compact HTML fragment.
         **kwargs:
-            Forwarded to ``render_graph`` for graph mode.
+            Forwarded to ``draw`` for graph mode.
 
         Returns
         -------

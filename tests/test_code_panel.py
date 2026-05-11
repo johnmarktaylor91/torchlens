@@ -26,7 +26,7 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     Returns
     -------
     str
-        DOT source returned by ``Trace.render_graph``.
+        DOT source returned by ``Trace.draw``.
     """
 
     tmp_path.mkdir(parents=True, exist_ok=True)

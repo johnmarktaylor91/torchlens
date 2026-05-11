@@ -85,6 +85,7 @@ from .node_spec import (
     render_lines_to_html,
 )
 from .overlays import OverlayScores, overlay_border_attrs, overlay_line
+from ._render_utils import _open_file_quietly
 from .themes import (
     VisualizationTheme,
     apply_theme_to_spec,
@@ -221,20 +222,6 @@ _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tra
 COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
 
 
-def _is_headless_linux() -> bool:
-    """Return whether the current process is a Linux shell without a display.
-
-    Returns
-    -------
-    bool
-        ``True`` when running on Linux with no ``DISPLAY`` environment
-        variable, which means Graphviz viewer dispatch would usually fall
-        through to a failing ``xdg-open`` call.
-    """
-
-    return sys.platform.startswith("linux") and not os.environ.get("DISPLAY")
-
-
 def _view_rendered_file(filepath: str) -> None:
     """Open a rendered visualization file when a local viewer is available.
 
@@ -244,14 +231,7 @@ def _view_rendered_file(filepath: str) -> None:
         Rendered artifact path.
     """
 
-    if _is_headless_linux():
-        print(f"[headless detected; saved to {filepath}; pass vis_save_only=False to force open]")
-        return
-
-    try:
-        graphviz.backend.viewing.view(filepath)
-    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
-        print(f"[viewer open failed; saved to {filepath}: {exc}]")
+    _open_file_quietly(filepath, announce_headless=True)
 
 
 def _normalize_buffer_visibility(

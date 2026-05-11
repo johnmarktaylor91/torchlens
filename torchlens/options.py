@@ -1698,7 +1698,7 @@ def merge_streaming_options(
 
 
 def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[str, Any]:
-    """Translate grouped visualization options into ``Trace.render_graph`` kwargs.
+    """Translate grouped visualization options into ``Trace.draw`` kwargs.
 
     Parameters
     ----------
@@ -1708,7 +1708,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     Returns
     -------
     dict[str, Any]
-        Keyword arguments expected by ``Trace.render_graph``.
+        Keyword arguments expected by ``Trace.draw``.
     """
 
     kwargs: dict[str, Any] = {

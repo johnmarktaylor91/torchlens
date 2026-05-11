@@ -214,7 +214,7 @@ def _make_node_spec_fn(
     show_predicate_inputs: bool,
     show_module_events: bool,
 ) -> Callable[[Any, NodeSpec], NodeSpec | None]:
-    """Build the runtime ``node_spec_fn`` used by ``render_graph``."""
+    """Build the runtime ``node_spec_fn`` used by ``draw``."""
 
     colors = {
         Decision.KEPT: color_kept,
@@ -272,7 +272,7 @@ def preview_fastlog(
     show_module_events:
         Whether to append module entry/exit fields already present on layer logs.
     **render_kwargs:
-        Forwarded to ``Trace.render_graph``.
+        Forwarded to ``Trace.draw``.
 
     Returns
     -------

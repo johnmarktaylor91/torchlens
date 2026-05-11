@@ -453,7 +453,7 @@ class TestLargeGraphRendering:
         )
 
     def test_vis_node_placement_forwarded(self):
-        """vis_node_placement parameter reaches render_graph."""
+        """vis_node_placement parameter reaches draw."""
         model = RandomGraphModel(target_nodes=200, seed=42)
         ml = trace_fn(model, torch.randn(2, 64))
         ml.draw(

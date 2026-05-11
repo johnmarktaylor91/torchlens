@@ -8,7 +8,7 @@ translation, module cluster styling, and HTML label escaping.
 Keep this module narrow on purpose -- only primitives that take no
 Trace/Bundle context and can be reasoned about as pure utilities.
 The orchestration that knows WHICH nodes / edges / module paths to use
-lives in the per-input-shape callers, such as ``rendering.render_graph`` for
+lives in the per-input-shape callers, such as ``rendering.draw`` for
 Trace.
 """
 
@@ -24,7 +24,25 @@ from typing import TYPE_CHECKING, Any, Iterable, cast
 import graphviz
 
 
-def _open_file_quietly(filepath: str) -> None:
+def _is_interactive_display_context() -> bool:
+    """Return whether launching a GUI viewer is reasonable in this process.
+
+    Returns
+    -------
+    bool
+        ``False`` on Linux shells with no display variables or SSH sessions
+        without X/Wayland forwarding; otherwise ``True``.
+    """
+
+    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    if sys.platform.startswith("linux") and not has_display:
+        return False
+    if os.environ.get("SSH_CONNECTION") and not has_display:
+        return False
+    return True
+
+
+def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> bool:
     """Open ``filepath`` in the platform default viewer, suppressing viewer noise.
 
     Replaces ``graphviz.backend.viewing.view`` to (a) silence ``xdg-open``
@@ -35,10 +53,24 @@ def _open_file_quietly(filepath: str) -> None:
     ----------
     filepath:
         Rendered artifact path to open.
+    announce_headless:
+        If ``True``, emit one stderr line when the viewer is skipped because
+        the current process appears headless.
+
+    Returns
+    -------
+    bool
+        ``True`` if a viewer launch was attempted, otherwise ``False``.
     """
 
-    if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
-        return  # headless: no viewer, skip silently
+    if not _is_interactive_display_context():
+        if announce_headless:
+            print(
+                "torchlens.draw: headless context detected; "
+                f"rendered file at {filepath}, skipping auto-open.",
+                file=sys.stderr,
+            )
+        return False
     try:
         if sys.platform == "win32":
             os.startfile(filepath)  # type: ignore[attr-defined]
@@ -54,8 +86,9 @@ def _open_file_quietly(filepath: str) -> None:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+        return True
     except (FileNotFoundError, OSError):
-        pass  # no viewer available; silently skip
+        return False  # no viewer available; silently skip
 
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
@@ -63,12 +96,12 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only
 
 
 # Recognised file extensions that callers may include on ``vis_outpath``.
-# Mirrors the legacy list in ``rendering.render_graph`` (kept as a tuple
+# Mirrors the legacy list in ``rendering.draw`` (kept as a tuple
 # so it stays cheap and immutable).
 _KNOWN_EXTS = ("pdf", "png", "jpg", "svg", "jpeg", "bmp", "pic", "tif", "tiff")
 
 # Default subprocess timeout for the dot/sfdp render call. Mirrors the
-# legacy literal that lived inside ``rendering.render_graph``.
+# legacy literal that lived inside ``rendering.draw``.
 RENDER_TIMEOUT_SECONDS = 120
 
 # -- Module subgraph border widths (shared between Trace and bundle paths)
@@ -315,7 +348,7 @@ def render_dot_to_file(
     """Render ``dot`` to ``outpath.<file_format>``, optionally previewing it.
 
     Mirrors the dot/save/subprocess/view flow used internally by
-    ``rendering.render_graph`` and ``rendering.render_backward_graph``,
+    ``rendering.draw`` and ``rendering.render_backward_graph``,
     factored out so the multi-trace renderer can share the same plumbing.
 
     Returns the DOT source string (``dot.source``) regardless of whether

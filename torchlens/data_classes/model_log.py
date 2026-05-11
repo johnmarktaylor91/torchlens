@@ -3029,7 +3029,7 @@ class Trace:
         vis_grad_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
         show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, \
         vis_intervention_mode, vis_show_cone, code_panel:
-            Forwarded unchanged to :func:`torchlens.visualization.rendering.render_graph`.
+            Forwarded unchanged to :func:`torchlens.visualization.rendering.draw`.
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
             Graphviz renderer.
@@ -3076,29 +3076,6 @@ class Trace:
             return_graph=return_graph,
         )
 
-    def render_graph(self, *args: Any, **kwargs: Any) -> Any:
-        """Render the computational graph using the deprecated legacy name.
-
-        Parameters
-        ----------
-        *args:
-            Positional arguments forwarded to :meth:`draw`.
-        **kwargs:
-            Keyword arguments forwarded to :meth:`draw`.
-
-        Returns
-        -------
-        Any
-            The value returned by :meth:`draw`.
-        """
-
-        warnings.warn(
-            "Trace.render_graph() is deprecated; use Trace.draw() instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.draw(*args, **kwargs)
-
     def add_node_overlay(
         self,
         scores: Mapping[str, Any],
@@ -3117,7 +3094,7 @@ class Trace:
         Returns
         -------
         Trace
-            This log, allowing chained calls before ``render_graph``.
+            This log, allowing chained calls before ``draw``.
         """
 
         self._node_overlay_scores = dict(scores)

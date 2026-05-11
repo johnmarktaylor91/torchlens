@@ -236,7 +236,7 @@ def build_elk_graph_hierarchical(
 
     Args:
         entries_to_plot: Dict of node_barcode -> OpLog/LayerLog
-            (same as used by render_graph).
+            (same as used by draw).
         show_buffer_layers: Whether to include buffer layers.
         edge_map: Optional skip-filtered outgoing edge map.
         skipped_labels: Labels elided by ``skip_fn``.
