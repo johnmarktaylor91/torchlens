@@ -257,7 +257,8 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
     # primary key for ``grad_fn_logs`` and ``next_grad_fn_ids``; if leaf nodes
     # like AccumulateGrad were gc'd, their ids could be reused by later-created
     # grad_fns (e.g. the output clone wrapper), creating phantom cycles.
-    trace._grad_fn_strong_refs.append(loss.grad_fn)
+    strong_refs = trace.__dict__.setdefault("_backward_gradfn_refs", [])
+    strong_refs.append(loss.grad_fn)
     if trace.backward_root_grad_fn_id is None:
         trace.backward_root_grad_fn_id = id(loss.grad_fn)
     trace.has_backward_pass = True
@@ -269,7 +270,7 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             continue
         seen.add(grad_fn_id)
         next_grad_fns = list(_iter_next_grad_fns(grad_fn))
-        trace._grad_fn_strong_refs.extend(next_grad_fns)
+        strong_refs.extend(next_grad_fns)
         queue.extend(next_grad_fns)
         layer_label = layer_lookup.get(grad_fn_id)
         grad_fn_log = trace.grad_fn_logs.get(grad_fn_id)
@@ -433,6 +434,14 @@ def _finalize_grad_streaming(trace: Any) -> None:
         _evict_streamed_outs(trace)
     if not getattr(trace, "_keep_grads_in_memory", True):
         _evict_streamed_grads(trace)
+    for field_name in (
+        "_out_writer",
+        "_out_sink",
+        "_keep_outs_in_memory",
+        "_keep_grads_in_memory",
+        "_defer_streaming_bundle_finalization",
+    ):
+        trace.__dict__.pop(field_name, None)
 
 
 def log_backward(

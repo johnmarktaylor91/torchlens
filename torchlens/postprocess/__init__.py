@@ -60,6 +60,8 @@ from .graph_traversal import (
     _remove_orphan_nodes,
 )
 from .labeling import (
+    _add_lookup_keys_for_layer_entry,
+    _labels_in_replay_ready_call_groups_to_retain,
     _log_final_info_for_layers,
     _map_raw_labels_to_final_labels,
     _remove_unwanted_entries_and_log_remaining,
@@ -73,6 +75,119 @@ if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
 
 from ..utils.display import _vprint, _vtimed
+
+
+def _drop_transient_capture_state(self: "Trace") -> None:
+    """Remove capture/session scratch that must not survive on final traces.
+
+    Args:
+        self: Trace whose postprocess-local state should be discarded.
+
+    Returns:
+        None. Mutates ``self.__dict__``.
+    """
+
+    keep_deferred_streaming = bool(
+        self.__dict__.get("_defer_streaming_bundle_finalization", False)
+        and self.__dict__.get("_out_writer") is not None
+    )
+    keep_selective_sink = bool(
+        self.__dict__.get("_out_sink") is not None and getattr(self, "num_saved_ops", 0) == 0
+    )
+    field_names = [
+        "_build_state",
+        "capture_events",
+        "_output_container_specs_by_raw_label",
+    ]
+    if not keep_deferred_streaming and not keep_selective_sink:
+        field_names.extend(
+            [
+                "_out_writer",
+                "_out_sink",
+                "_keep_outs_in_memory",
+                "_keep_grads_in_memory",
+                "_defer_streaming_bundle_finalization",
+            ]
+        )
+    elif not keep_deferred_streaming:
+        field_names.extend(
+            [
+                "_out_writer",
+                "_keep_outs_in_memory",
+                "_keep_grads_in_memory",
+                "_defer_streaming_bundle_finalization",
+            ]
+        )
+    for field_name in field_names:
+        self.__dict__.pop(field_name, None)
+
+
+def _prune_final_unsaved_layers(self: "Trace") -> None:
+    """Prune unsaved final layer entries during fast two-pass postprocessing.
+
+    Args:
+        self: Trace whose final containers should be filtered.
+
+    Returns:
+        None. Mutates final layer containers in place.
+    """
+
+    if self.keep_unsaved_layers:
+        return
+    retained_call_group_labels = _labels_in_replay_ready_call_groups_to_retain(self)
+    layers_to_remove = [
+        layer_entry
+        for layer_entry in self.layer_list
+        if not getattr(layer_entry, "is_orphan", False)
+        and not getattr(layer_entry, "has_saved_outs", False)
+        and layer_entry.layer_label not in retained_call_group_labels
+    ]
+    if not layers_to_remove:
+        return
+
+    self.unlogged_ops.extend(layer_entry.layer_label for layer_entry in layers_to_remove)
+    self._batch_remove_log_entries(layers_to_remove, remove_references=True)
+    retained_layers = [
+        layer_entry for layer_entry in self.layer_list if layer_entry not in layers_to_remove
+    ]
+    self.layer_list = []
+    self.layer_dict_main_keys = {}
+    self.layer_dict_all_keys = {}
+    self.layer_labels = []
+    self.op_labels = []
+    self.layer_num_calls = {}
+    num_logged_tensors = len(retained_layers)
+    for layer_index, layer_entry in enumerate(retained_layers):
+        _add_lookup_keys_for_layer_entry(self, layer_entry, layer_index, num_logged_tensors)
+        self.layer_list.append(layer_entry)
+        self.layer_dict_main_keys[layer_entry.layer_label] = layer_entry
+        self.layer_labels.append(layer_entry.layer_label)
+        self.layer_labels.append(layer_entry.layer_label_no_pass)
+        self.op_labels.append(layer_entry.layer_label_w_pass)
+        self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_calls
+    self._layers_logged = self.num_saved_ops == len(self.layer_list)
+    self._layers_saved = self.num_saved_ops == len(self.layer_list)
+
+
+def _refresh_fast_saved_summary(self: "Trace") -> None:
+    """Refresh saved-output counters after a fast replay pass.
+
+    Args:
+        self: Trace whose final layer entries were updated in fast mode.
+
+    Returns:
+        None. Mutates aggregate saved-output fields on ``self``.
+    """
+
+    saved_layers = [
+        layer_entry
+        for layer_entry in self.layer_list
+        if getattr(layer_entry, "has_saved_outs", False)
+        and not getattr(layer_entry, "is_orphan", False)
+    ]
+    self.num_saved_ops = len(saved_layers)
+    self.saved_out_memory = sum(getattr(layer_entry, "memory", 0) for layer_entry in saved_layers)
+    self.ops_with_saved_outs = [layer_entry.layer_label for layer_entry in saved_layers]
 
 
 def postprocess(
@@ -106,6 +221,7 @@ def postprocess(
 
         warnings.warn("No layers were logged during the forward pass; skipping postprocessing.")
         _set_tracing_finished(self)
+        _drop_transient_capture_state(self)
         return
 
     _vprint(
@@ -204,7 +320,10 @@ def postprocess(
     with _vtimed(self, "  Step 17: Mark pass finished"):
         _set_tracing_finished(self)
 
-    should_finalize_streaming = self._out_writer is not None and not getattr(
+    for field_name in ("_build_state", "capture_events", "_output_container_specs_by_raw_label"):
+        self.__dict__.pop(field_name, None)
+
+    should_finalize_streaming = getattr(self, "_out_writer", None) is not None and not getattr(
         self, "_defer_streaming_bundle_finalization", False
     )
     if should_finalize_streaming:
@@ -217,6 +336,7 @@ def postprocess(
 
     if getattr(self, "verbose", False):
         print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")
+    _drop_transient_capture_state(self)
 
 
 def postprocess_fast(self: "Trace") -> None:
@@ -273,8 +393,9 @@ def postprocess_fast(self: "Trace") -> None:
         output_layer.transformed_grad_memory = parent_layer.transformed_grad_memory
         if output_layer.has_saved_outs:
             self.ops_with_saved_outs.append(output_layer_label)
+    _refresh_fast_saved_summary(self)
     _trim_and_reorder_model_history_fields(self)
-    _remove_unwanted_entries_and_log_remaining(self)
+    _prune_final_unsaved_layers(self)
     _undecorate_all_saved_tensors(self)
 
     # Gated behind cached cuda.is_available() so CPU-only fast-pass runs don't
@@ -291,10 +412,11 @@ def postprocess_fast(self: "Trace") -> None:
     self.graph_shape_hash = compute_graph_shape_hash(self)
     _set_tracing_finished(self)
 
-    should_finalize_streaming = self._out_writer is not None and not getattr(
+    should_finalize_streaming = getattr(self, "_out_writer", None) is not None and not getattr(
         self, "_defer_streaming_bundle_finalization", False
     )
     if should_finalize_streaming:
         _finalize_streamed_bundle(self)
     if should_finalize_streaming and not self._keep_outs_in_memory:
         _evict_streamed_outs(self)
+    _drop_transient_capture_state(self)

@@ -178,24 +178,20 @@ class TestTraceGC:
         trace.cleanup()
 
     def test_transient_data_cleared(self):
-        """Verify _module_build_data/metadata/forward_args are cleared after postprocess."""
+        """Verify module build scratch is removed after postprocess."""
         model = _TwoLayerNet()
         trace = tl.trace(model, torch.randn(1, 5))
-        # _module_build_data should be empty after postprocessing
-        assert len(trace._module_build_data) == 0 or all(
-            (len(v) == 0 if hasattr(v, "__len__") else True)
-            for v in trace._module_build_data.values()
-        )
-        # _module_metadata and _module_forward_args consumed by _build_module_logs
-        assert len(trace._module_metadata) == 0
-        assert len(trace._module_forward_args) == 0
+        assert "_build_state" not in trace.__dict__
+        assert not hasattr(trace, "_module_build_data")
+        assert not hasattr(trace, "_module_metadata")
+        assert not hasattr(trace, "_module_forward_args")
         trace.cleanup()
 
     def test_raw_layer_dict_cleared_after_cleanup(self):
-        """Verify _raw_layer_dict is cleared after cleanup()."""
+        """Verify raw layer scratch is absent after postprocess and cleanup."""
         model = _TwoLayerNet()
         trace = tl.trace(model, torch.randn(1, 5))
-        # _raw_layer_dict is populated during capture; still present after trace
-        assert len(trace._raw_layer_dict) > 0
+        assert "_build_state" not in trace.__dict__
+        assert not hasattr(trace, "_raw_layer_dict")
         trace.cleanup()
         assert not hasattr(trace, "_raw_layer_dict")

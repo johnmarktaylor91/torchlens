@@ -169,18 +169,6 @@ def save_new_outs(
     if hasattr(self, "_unsaved_layers_lookup_keys"):
         self._unsaved_layers_lookup_keys.clear()
 
-    # Remove zombie entries: raw labels that weren't mapped to final labels (#75).
-    # These arise from operations that were later pruned from the graph (e.g.,
-    # orphan removal).  If left, the fast pass would try to look them up and crash.
-    zombie_labels = [
-        lbl
-        for lbl in list(self._raw_layer_labels_list)
-        if lbl not in self._raw_to_final_layer_labels
-    ]
-    for label in zombie_labels:
-        self._raw_layer_labels_list.remove(label)
-        self._raw_layer_dict.pop(label, None)
-
     # Now run and log the new inputs.
     _vprint(self, "Running fast pass (saving requested outs)")
     self._run_and_log_inputs_through_model(
@@ -444,7 +432,7 @@ def _extract_and_mark_outputs(
             continue
         if self.capture_mode == "exhaustive":
             self.output_layers.append(_label_raw)
-        self._raw_layer_dict[_label_raw].is_output_parent = True
+            self._raw_layer_dict[_label_raw].is_output_parent = True
 
     return output_tensors, output_tensor_addresses
 

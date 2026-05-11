@@ -22,7 +22,7 @@ class ManyOps(nn.Module):
 
 
 def test_fastlog_nonmatching_ops_do_not_materialize_oplogs() -> None:
-    """Non-matching fastlog events stay lightweight and carry no OpLog bridge."""
+    """Non-matching fastlog events stay lightweight and have no OpLog bridge."""
 
     recording = tl.fastlog.record(ManyOps(), torch.ones(1), keep_op=lambda ctx: False)
     events = recording.recording_trace.events
@@ -30,5 +30,5 @@ def test_fastlog_nonmatching_ops_do_not_materialize_oplogs() -> None:
 
     assert len(recording) == 0
     assert len(events) >= 500
-    assert all(event.materialized_log is None for event in op_events)
+    assert all(not hasattr(event, "materialized_log") for event in op_events)
     assert sys.getsizeof(events) / len(events) < 128

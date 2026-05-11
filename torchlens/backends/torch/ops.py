@@ -260,7 +260,6 @@ def _parent_edges_from_fields(fields_dict: dict[str, Any]) -> tuple[ParentEdge, 
 def _op_event_from_log(
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
-    op_log: OpLog,
     fire_results: tuple[FireResult, ...] = (),
 ) -> OpEvent:
     """Build an ``OpEvent`` that mirrors a just-constructed ``OpLog``.
@@ -271,8 +270,6 @@ def _op_event_from_log(
         Raw field mapping used to construct ``op_log``.
     tensor
         Live output tensor for backend metadata.
-    op_log
-        Temporary M3 materialized log bridge.
     fire_results
         Live intervention fire results associated with this output.
 
@@ -300,7 +297,6 @@ def _op_event_from_log(
     )
     return OpEvent(
         kind="source" if fields_dict["is_input"] or fields_dict["is_buffer"] else "op",
-        materialized_log=op_log,
         label_raw=fields_dict["_label_raw"],
         layer_label_raw=fields_dict["_layer_label_raw"],
         layer_type=fields_dict["type"],
@@ -2319,8 +2315,8 @@ def _make_layer_log_entry(
             out_postfunc,
         )
         self.ops_with_saved_outs.append(new_entry._label_raw)
-    op_event = _op_event_from_log(fields_dict, t, new_entry, fire_results)
-    register_materialized_event(self, op_event)
+    op_event = _op_event_from_log(fields_dict, t, fire_results)
+    register_materialized_event(self, op_event, new_entry)
     _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry

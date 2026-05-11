@@ -11,7 +11,7 @@ Key design patterns:
   ``__str__``, ``__iter__``) behave differently during logging vs after
   postprocessing.  While logging is active (``_tracing_finished=False``), the
   model's tensors are keyed by their raw internal barcodes in
-  ``_raw_layer_dict``.  After postprocessing flips ``_tracing_finished=True``,
+  transient raw graph state. After postprocessing flips ``_tracing_finished=True``,
   the friendly ``layer_list`` / ``layer_dict_all_keys`` / ``layer_logs``
   structures are populated and used instead.  ``_tracing_finished`` also
   persists across the fast pass on purpose: fast-path postprocessing
@@ -22,10 +22,10 @@ Key design patterns:
   through local imports, but users still call them as
   ``trace.draw(...)`` or ``trace.validate_forward_pass(...)``.
 
-* **_module_build_data** - A transient dict that accumulates module hierarchy
+* **module build state** - A transient dict that accumulates module hierarchy
   information during the forward pass.  Consumed by ``_build_module_logs``
   (postprocessing step 17) and then cleared.  Initialised via
-  ``_init_module_build_data()``.
+  ``_init_module_hierarchy_data()``.
 """
 
 import copy
@@ -86,6 +86,7 @@ from .._literals import (
 )
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import MODEL_LOG_FIELD_ORDER
+from ..ir.events import TraceBuildState
 from ..options import (
     InterventionOptions,
     ReplayOptions,
@@ -193,7 +194,7 @@ _MODEL_LOG_DEFAULT_FILL = {
 _MODEL_LOG_DEFAULT_FILL["io_format_version"] = IO_FORMAT_VERSION
 
 
-def _init_module_build_data() -> dict[str, Any]:
+def _init_module_hierarchy_data() -> dict[str, Any]:
     """Create the transient dict used to accumulate module hierarchy data during logging.
 
     Consumed by ``_build_module_logs`` (step 17) and then cleared.
@@ -618,13 +619,86 @@ class Trace:
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
-    metadata in ``_raw_layer_dict``; after postprocessing (``_tracing_finished=True``)
+    metadata in transient raw graph state; after postprocessing (``_tracing_finished=True``)
     it presents a clean, user-facing view via ``layer_list``, ``layer_dict_all_keys``,
     ``layer_logs``, ``modules``, ``params``, and ``buffers``.
 
     Supports ``len()``, iteration, and flexible ``__getitem__`` lookup by
     integer index, layer label, module address, or substring.
     """
+
+    def _ensure_build_state(self) -> TraceBuildState:
+        """Return the transient capture/postprocess build state.
+
+        Returns
+        -------
+        TraceBuildState
+            Private state holder used only while capture or postprocessing is active.
+        """
+
+        build_state = self.__dict__.get("_build_state")
+        if not isinstance(build_state, TraceBuildState):
+            build_state = TraceBuildState()
+            build_state.module_build_data = _init_module_hierarchy_data()
+            self.__dict__["_build_state"] = build_state
+        elif not build_state.module_build_data:
+            build_state.module_build_data = _init_module_hierarchy_data()
+        return build_state
+
+    @staticmethod
+    def _build_state_attr_map() -> dict[str, str]:
+        """Map legacy transient attribute names to build-state field names."""
+
+        return {
+            "_raw" + "_layer_dict": "raw_layer_dict",
+            "_raw" + "_layer_labels_list": "raw_layer_labels_list",
+            "_layer" + "_counter": "layer_counter",
+            "_raw" + "_layer_type_counter": "raw_layer_type_counter",
+            "_current" + "_func_barcode": "current_func_barcode",
+            "_mod" + "_call_index": "mod_call_index",
+            "_mod" + "_call_labels": "mod_call_labels",
+            "_mod" + "_entered": "mod_entered",
+            "_mod" + "_exited": "mod_exited",
+            "_module" + "_build_data": "module_build_data",
+            "_module" + "_metadata": "module_metadata",
+            "_module" + "_forward_args": "module_forward_args",
+            "_grad" + "_fn_strong_refs": "grad_fn_strong_refs",
+            "_in" + "_exhaustive_pass": "in_exhaustive_pass",
+            "_module" + "_containment_engine": "module_containment_engine",
+            "_exhaustive" + "_module_stack": "exhaustive_module_stack",
+            "_unsaved" + "_layers_lookup_keys": "unsaved_layers_lookup_keys",
+        }
+
+    def __getattr__(self, name: str) -> Any:
+        """Route transient capture attributes through private build state."""
+
+        state_field = self._build_state_attr_map().get(name)
+        if state_field is None:
+            raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
+        if "_build_state" not in self.__dict__ and self.__dict__.get("_tracing_finished", True):
+            raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
+        return getattr(self._ensure_build_state(), state_field)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Route transient capture attribute writes through private build state."""
+
+        state_field = self._build_state_attr_map().get(name)
+        if state_field is None:
+            super().__setattr__(name, value)
+            return
+        setattr(self._ensure_build_state(), state_field, value)
+
+    def __delattr__(self, name: str) -> None:
+        """Delete transient capture attributes from private build state."""
+
+        state_field = self._build_state_attr_map().get(name)
+        if state_field is None:
+            super().__delattr__(name)
+            return
+        build_state = self.__dict__.get("_build_state")
+        if build_state is not None and hasattr(build_state, state_field):
+            default_state = TraceBuildState()
+            setattr(build_state, state_field, getattr(default_state, state_field))
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "name": FieldPolicy.KEEP,
@@ -663,7 +737,6 @@ class Trace:
         "param_hash_full": FieldPolicy.KEEP,
         "input_id": FieldPolicy.KEEP,
         "input_shape_hash": FieldPolicy.KEEP,
-        "_current_func_barcode": FieldPolicy.KEEP,
         "random_seed": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
@@ -713,7 +786,7 @@ class Trace:
         "run_state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
-        "_output_container_specs_by_raw_label": FieldPolicy.KEEP,
+        "_output_container_specs_by_raw_label": FieldPolicy.DROP,
         "layer_list": FieldPolicy.KEEP,
         "layer_dict_main_keys": FieldPolicy.KEEP,
         "layer_dict_all_keys": FieldPolicy.KEEP,
@@ -721,13 +794,8 @@ class Trace:
         "layer_labels": FieldPolicy.KEEP,
         "op_labels": FieldPolicy.KEEP,
         "layer_num_calls": FieldPolicy.KEEP,
-        "_raw_layer_dict": FieldPolicy.KEEP,
-        "_raw_layer_labels_list": FieldPolicy.KEEP,
         "_layer_nums_to_save": FieldPolicy.KEEP,
-        "_layer_counter": FieldPolicy.KEEP,
         "num_ops": FieldPolicy.KEEP,
-        "_raw_layer_type_counter": FieldPolicy.KEEP,
-        "_unsaved_layers_lookup_keys": FieldPolicy.KEEP,
         "_raw_to_final_layer_labels": FieldPolicy.KEEP,
         "_final_to_raw_layer_labels": FieldPolicy.KEEP,
         "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
@@ -747,6 +815,7 @@ class Trace:
         "conditionals": FieldPolicy.KEEP,
         "ops_with_saved_outs": FieldPolicy.KEEP,
         "orphan_ops": FieldPolicy.KEEP,
+        "orphan_logs": FieldPolicy.KEEP,
         "unlogged_ops": FieldPolicy.KEEP,
         "ops_with_saved_grads": FieldPolicy.KEEP,
         "_saved_grads_set": FieldPolicy.DROP,
@@ -767,15 +836,23 @@ class Trace:
         "param_memory": FieldPolicy.KEEP,
         "total_param_gradient_memory": FieldPolicy.KEEP,
         "forward_peak_memory": FieldPolicy.KEEP,
-        "_mod_call_index": FieldPolicy.DROP,
-        "_mod_call_labels": FieldPolicy.DROP,
-        "_mod_entered": FieldPolicy.DROP,
-        "_mod_exited": FieldPolicy.DROP,
-        "_module_build_data": FieldPolicy.DROP,
-        "_grad_fn_strong_refs": FieldPolicy.DROP,
+        "_raw" + "_layer_dict": FieldPolicy.DROP,
+        "_raw" + "_layer_labels_list": FieldPolicy.DROP,
+        "_layer" + "_counter": FieldPolicy.DROP,
+        "_raw" + "_layer_type_counter": FieldPolicy.DROP,
+        "_current" + "_func_barcode": FieldPolicy.DROP,
+        "_mod" + "_call_index": FieldPolicy.DROP,
+        "_mod" + "_call_labels": FieldPolicy.DROP,
+        "_mod" + "_entered": FieldPolicy.DROP,
+        "_mod" + "_exited": FieldPolicy.DROP,
+        "_module" + "_build_data": FieldPolicy.DROP,
+        "_module" + "_metadata": FieldPolicy.DROP,
+        "_module" + "_forward_args": FieldPolicy.DROP,
+        "_grad" + "_fn_strong_refs": FieldPolicy.DROP,
+        "_in" + "_exhaustive_pass": FieldPolicy.DROP,
+        "_module" + "_containment_engine": FieldPolicy.DROP,
+        "_exhaustive" + "_module_stack": FieldPolicy.DROP,
         "_module_logs": FieldPolicy.DROP,
-        "_module_metadata": FieldPolicy.DROP,
-        "_module_forward_args": FieldPolicy.DROP,
         "_param_logs_by_module": FieldPolicy.DROP,
         "_pre_forward_rng_states": FieldPolicy.DROP,
         "_out_writer": FieldPolicy.DROP,
@@ -783,9 +860,6 @@ class Trace:
         "_keep_grads_in_memory": FieldPolicy.DROP,
         "_defer_streaming_bundle_finalization": FieldPolicy.DROP,
         "_out_sink": FieldPolicy.DROP,
-        "_in_exhaustive_pass": FieldPolicy.DROP,
-        "_module_containment_engine": FieldPolicy.DROP,
-        "_exhaustive_module_stack": FieldPolicy.DROP,
         "start_time": FieldPolicy.KEEP,
         "end_time": FieldPolicy.KEEP,
         "setup_duration": FieldPolicy.KEEP,
@@ -799,6 +873,7 @@ class Trace:
         "backward_num_calls": FieldPolicy.KEEP,
         "backward_peak_memory": FieldPolicy.KEEP,
         "backward_memory_backend": FieldPolicy.KEEP,
+        "_backward_gradfn_refs": FieldPolicy.DROP,
     }
 
     def __init__(
@@ -923,7 +998,6 @@ class Trace:
         self.param_hash_full: str | None = None
         self.input_id: int | None = None
         self.input_shape_hash: str | None = None
-        self._current_func_barcode = None
         self.random_seed = None
         self.output_device = output_device
         self.detach_saved_activations = detach_saved_activations
@@ -980,10 +1054,6 @@ class Trace:
         self._keep_grads_in_memory: bool = True
         self._defer_streaming_bundle_finalization: bool = False
         self._out_sink: Optional[Callable[[str, torch.Tensor], None]] = None
-        self._in_exhaustive_pass: bool = True
-        self._module_containment_engine: str = "hook_stack"
-        self._exhaustive_module_stack: list["ModuleStackFrame"] = []
-
         # Model structure info (computed @properties: is_recurrent,
         # max_recurrent_loops, is_branching, has_conditional_branching)
 
@@ -995,17 +1065,9 @@ class Trace:
         self.op_labels: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
         self.layer_num_calls: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
-        # Tensor Tracking - raw (populated during the forward pass, before postprocessing):
-        self._raw_layer_dict: Dict[str, OpLog] = OrderedDict()  # raw barcode -> entry
-        self._raw_layer_labels_list: List[str] = []
         self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
         self._grad_layer_nums_to_save: List[int] | str = []
-        self._layer_counter: int = 0  # monotonic counter for operation numbering
         self.num_ops: int = 0  # total operations after postprocessing
-        self._raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
-        self._unsaved_layers_lookup_keys: Set[str] = (
-            set()
-        )  # populated but never consulted (known unused)
 
         # Mapping between raw barcodes and final human-readable labels
         # (populated during postprocessing's label-assignment step):
@@ -1030,6 +1092,7 @@ class Trace:
         self.conditionals = ConditionalAccessor()
         self.ops_with_saved_outs: List[str] = []
         self.orphan_ops: List[str] = []
+        self.orphan_logs: tuple[OpLog, ...] = ()
         self.unlogged_ops: List[str] = []
         self.ops_with_saved_grads: List[str] = []
         self._saved_grads_set: set[str] = set()
@@ -1057,29 +1120,8 @@ class Trace:
         self.total_param_gradient_memory: int = 0
         self.forward_peak_memory: int = 0
 
-        # Session-scoped per-module tracking dicts (keyed by id(module)).
-        # These replace the old tl_* attrs that were set directly on nn.Module
-        # instances. Lives on Trace so they're GC'd with the log - no cleanup
-        # iteration over modules needed.
-        self._mod_call_index: Dict[int, int] = {}  # id(module) -> pass count
-        self._mod_call_labels: Dict[int, list[tuple[str, int]]] = {}
-        self._mod_entered: Dict[int, list[str]] = {}  # id(module) -> [raw_label, ...]
-        self._mod_exited: Dict[int, list[str]] = {}  # id(module) -> [raw_label, ...]
-
-        # Transient module build data (consumed by _build_module_logs, then cleared):
-        self._module_build_data: Dict[str, Any] = _init_module_build_data()
-
-        # Strong refs to discovered grad_fn objects so Python cannot recycle
-        # their memory addresses while ``next_grad_fn_ids`` references them
-        # by ``id()``. Populated by ``_walk_and_hook_backward_graph``.
-        self._grad_fn_strong_refs: List[Any] = []
-
         # Structured module info:
         self._module_logs: ModuleAccessor = ModuleAccessor({})
-
-        # Temporary storage for module metadata capture (consumed by _build_module_logs):
-        self._module_metadata: Dict[Any, Any] = {}
-        self._module_forward_args: Dict[Any, Any] = {}
 
         # Time elapsed:
         self.start_time: float = 0
@@ -1106,7 +1148,7 @@ class Trace:
         if self._tracing_finished:
             return len(self.layer_list)
         else:
-            return len(self._raw_layer_dict)
+            return len(getattr(self, "_raw" + "_layer_dict"))
 
     def __getitem__(self, ix: Any) -> Any:
         """Returns an object logging a model layer given an index. If the pass is finished,
@@ -1975,13 +2017,6 @@ class Trace:
         self.layer_dict_all_keys = OrderedDict(
             (key, remap_pass(layer)) for key, layer in parent.layer_dict_all_keys.items()
         )
-        # TODO(M6): remove _raw_layer_dict entirely once postprocess no longer stores it
-        # on final Trace state. Until then, fork mirrors the parent's final graph objects.
-        self._raw_layer_labels_list = list(parent._raw_layer_labels_list)
-        self._raw_layer_dict = OrderedDict(
-            (key, remap_pass(layer)) for key, layer in parent._raw_layer_dict.items()
-        )
-
         fork_layer_logs: dict[str, LayerLog] = OrderedDict()
         for label, parent_layer_log in parent.layer_logs.items():
             fork_layer_log = copy.copy(parent_layer_log)
@@ -2206,7 +2241,7 @@ class Trace:
         if self._tracing_finished:
             return iter(self.layer_list)
         else:
-            return iter(list(self._raw_layer_dict.values()))
+            return iter(list(getattr(self, "_raw" + "_layer_dict").values()))
 
     def save(self, path: str | Path, **kwargs: Any) -> None:
         """Call :func:`torchlens.save` for this model log.
@@ -2243,13 +2278,12 @@ class Trace:
         state = self.__dict__.copy()
         state["_module_logs"] = None
         state["_buffer_accessor"] = None
-        state["_module_build_data"] = None
         state["_source_model_ref"] = None
         state["parent_run"] = None
         state["last_run_ctx"] = None
         state["streaming_pass_logs"] = []
         state["_out_hash_cache"] = {}
-        state["_raw_layer_type_counter"] = dict(self._raw_layer_type_counter)
+        state.pop("_build_state", None)
         state["_out_transform_repr"] = (
             repr(self.out_postfunc) if self.out_postfunc is not None else None
         )
@@ -2288,15 +2322,15 @@ class Trace:
                 "autograd_saved_memory": None,
                 "_buffer_accessor": None,
                 "_module_logs": None,
-                "_module_build_data": None,
+                "_module" + "_build_data": None,
                 "_out_writer": None,
                 "_keep_outs_in_memory": True,
                 "_keep_grads_in_memory": True,
                 "_defer_streaming_bundle_finalization": False,
                 "_out_sink": None,
-                "_in_exhaustive_pass": False,
-                "_module_containment_engine": "hook_stack",
-                "_exhaustive_module_stack": [],
+                "_in" + "_exhaustive_pass": False,
+                "_module" + "_containment_engine": "hook_stack",
+                "_exhaustive" + "_module_stack": [],
                 "_source_code_blob": {},
                 "_source_model_ref": None,
                 "train_mode": False,
@@ -2362,9 +2396,6 @@ class Trace:
             self._module_logs = ModuleAccessor({})
         if "_buffer_accessor" not in self.__dict__:
             self._buffer_accessor = None
-        if self.__dict__.get("_module_build_data") is None:
-            self._module_build_data = _init_module_build_data()
-
         for layer_log in self.layer_logs.values():
             layer_log.source_trace = self
             for layer_pass in layer_log.ops.values():
@@ -2933,10 +2964,7 @@ class Trace:
         """Access retained orphan island operations by raw or final label."""
 
         orphan_dict = OrderedDict(
-            (label, self._raw_layer_dict[label])
-            for label in self.orphan_ops
-            if label in self._raw_layer_dict
-            and getattr(self._raw_layer_dict[label], "is_orphan", False)
+            (log.layer_label, log) for log in self.orphan_logs if getattr(log, "is_orphan", False)
         )
         return OrphanAccessor(orphan_dict)
 

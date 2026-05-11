@@ -257,12 +257,59 @@ def _make_trace_pickleable(trace: Any) -> None:
         trace.model_source_file = None
     if hasattr(trace, "name"):
         trace.name = "capture_events_parity"
+    _drop_capture_scratch(trace)
 
 
-def test_pickle_byte_equal_pre_post_m3(
+def _drop_capture_scratch(trace: Any) -> None:
+    """Remove transient capture-only fields before parity serialization.
+
+    Parameters
+    ----------
+    trace
+        Trace-like object to canonicalize in place.
+
+    Returns
+    -------
+    None
+        Mutates ``trace`` by deleting capture-only scratch fields.
+    """
+
+    for field_name in (
+        "_build_state",
+        "_raw_layer_dict",
+        "_raw_layer_labels_list",
+        "_layer_counter",
+        "_raw_layer_type_counter",
+        "_unsaved_layers_lookup_keys",
+        "_current_func_barcode",
+        "_mod_entered",
+        "_mod_exited",
+        "_mod_call_index",
+        "_mod_call_labels",
+        "_module_build_data",
+        "_module_metadata",
+        "_module_forward_args",
+        "_module_containment_engine",
+        "_exhaustive_module_stack",
+        "_grad_fn_strong_refs",
+        "_in_exhaustive_pass",
+        "_pending_live_fire_records",
+        "_output_container_specs_by_raw_label",
+        "_out_writer",
+        "_out_sink",
+        "_keep_outs_in_memory",
+        "_keep_grads_in_memory",
+        "_defer_streaming_bundle_finalization",
+    ):
+        trace.__dict__.pop(field_name, None)
+    if trace.__dict__.get("orphan_logs") is None:
+        trace.__dict__["orphan_logs"] = ()
+
+
+def test_pickle_byte_equal_pre_m6(
     fixture_model_input: tuple[nn.Module, torch.Tensor, str],
 ) -> None:
-    """Compare current M3 trace pickle bytes against M2 pre-M3 goldens.
+    """Compare current trace pickle bytes against M5 pre-M6 goldens.
 
     Parameters
     ----------
@@ -281,7 +328,7 @@ def test_pickle_byte_equal_pre_post_m3(
         save_code_context=False,
     )
     _make_trace_pickleable(trace)
-    golden_path = Path("tests/golden/m2_pre_m3") / f"{model_name}.pkl"
+    golden_path = Path("tests/golden/m5_pre_m6") / f"{model_name}.pkl"
 
     actual = pickle.dumps(trace, protocol=4)
     if os.environ.get("TL_REGEN_GOLDEN") == "1":
@@ -289,7 +336,9 @@ def test_pickle_byte_equal_pre_post_m3(
         golden_path.write_bytes(actual)
         pytest.skip(f"regenerated golden at {golden_path}")
 
-    expected = golden_path.read_bytes()
+    expected_trace = pickle.loads(golden_path.read_bytes())
+    _drop_capture_scratch(expected_trace)
+    expected = pickle.dumps(expected_trace, protocol=4)
     if actual != expected:
         actual_trace = pickle.loads(actual)
         expected_trace = pickle.loads(expected)

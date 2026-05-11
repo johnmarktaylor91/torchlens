@@ -713,9 +713,9 @@ def _build_module_logs(self: "Trace") -> None:
     # needed during construction and are not part of the user-facing API.
     self._module_metadata = {}
     self._module_forward_args = {}
-    from ..data_classes.model_log import _init_module_build_data
+    from ..data_classes.model_log import _init_module_hierarchy_data
 
-    self._module_build_data = _init_module_build_data()
+    self._module_build_data = _init_module_hierarchy_data()
 
     # GC-11: Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.

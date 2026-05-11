@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from collections import OrderedDict, defaultdict
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from .intervention import FireResult, InterventionTemplateRef
@@ -176,7 +177,6 @@ class OpEvent:
     intervention_replaced: bool
     fire_results: tuple[FireResult, ...]
     intervention_template_ref: InterventionTemplateRef | None
-    materialized_log: object | None = None
     record_context: object | None = None
     capture_spec: object | None = None
 
@@ -206,11 +206,26 @@ class InterventionState:
 
 @dataclass(slots=True)
 class TraceBuildState:
-    """Postprocess-local materialization state built from capture events."""
+    """Transient capture/postprocess state discarded before returning a Trace."""
 
-    raw_op_logs: dict[str, object]
-    raw_label_order: list[str]
-    output_container_specs_by_raw_label: dict[str, ContainerSpec]
-    output_container_specs: tuple[ContainerSpec, ...]
-    module_events: list[ModuleEvent]
-    conditional_events: list[ConditionalEvent]
+    raw_layer_dict: dict[str, object] = field(default_factory=OrderedDict)
+    raw_layer_labels_list: list[str] = field(default_factory=list)
+    mod_entered: dict[int, list[str]] = field(default_factory=dict)
+    mod_exited: dict[int, list[str]] = field(default_factory=dict)
+    mod_call_index: dict[int, int] = field(default_factory=dict)
+    mod_call_labels: dict[int, list[tuple[str, int]]] = field(default_factory=dict)
+    exhaustive_module_stack: list[object] = field(default_factory=list)
+    module_build_data: dict[str, Any] = field(default_factory=dict)
+    module_metadata: dict[Any, Any] = field(default_factory=dict)
+    module_forward_args: dict[Any, Any] = field(default_factory=dict)
+    module_containment_engine: str = "hook_stack"
+    current_func_barcode: object | None = None
+    grad_fn_strong_refs: list[Any] = field(default_factory=list)
+    in_exhaustive_pass: bool = True
+    layer_counter: int = 0
+    raw_layer_type_counter: dict[str, int] = field(default_factory=lambda: defaultdict(lambda: 0))
+    unsaved_layers_lookup_keys: set[str] = field(default_factory=set)
+    output_container_specs_by_raw_label: dict[str, ContainerSpec] = field(default_factory=dict)
+    output_container_specs: tuple[ContainerSpec, ...] = ()
+    module_events: list[ModuleEvent] = field(default_factory=list)
+    conditional_events: list[ConditionalEvent] = field(default_factory=list)

@@ -245,6 +245,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen)
     orphan_nodes = orig_nodes - nodes_seen
     self.orphan_ops = [label for label in self._raw_layer_labels_list if label in orphan_nodes]
+    self.orphan_logs = tuple(self._raw_layer_dict[label] for label in self.orphan_ops)
     if getattr(self, "keep_orphans", False):
         for orphan_label in orphan_nodes:
             self._raw_layer_dict[orphan_label].is_orphan = True

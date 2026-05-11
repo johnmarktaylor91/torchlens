@@ -549,7 +549,6 @@ def _event_from_record(
         intervention_replaced=False,
         fire_results=(),
         intervention_template_ref=None,
-        materialized_log=None,
         record_context=ctx,
         capture_spec=spec,
     )

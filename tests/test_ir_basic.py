@@ -311,8 +311,8 @@ def _build_ir_instances() -> dict[str, object]:
         last_run_ctx=None,
     )
     trace_build_state = TraceBuildState(
-        raw_op_logs={"linear_1_1_raw": object()},
-        raw_label_order=["linear_1_1_raw"],
+        raw_layer_dict={"linear_1_1_raw": object()},
+        raw_layer_labels_list=["linear_1_1_raw"],
         output_container_specs_by_raw_label={"linear_1_1_raw": container_spec},
         output_container_specs=(container_spec,),
         module_events=[module_event],
@@ -430,7 +430,7 @@ def test_mutable_slotted_state_dataclasses_reject_undeclared_fields() -> None:
     assert is_dataclass(intervention_state)
     assert is_dataclass(trace_build_state)
     setattr(intervention_state, "has_direct_writes", True)
-    setattr(trace_build_state, "raw_label_order", [])
+    setattr(trace_build_state, "raw_layer_labels_list", [])
     with pytest.raises(AttributeError):
         setattr(intervention_state, "undeclared_slot", True)
     with pytest.raises(AttributeError):
