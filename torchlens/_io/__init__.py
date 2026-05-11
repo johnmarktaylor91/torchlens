@@ -22,7 +22,9 @@ import torch
 
 from ..errors._base import CompatibilityError
 
-IO_FORMAT_VERSION = 3
+# v4 drops capture-only scratch fields from portable Trace state after the
+# capture-pipeline-unification sprint (2026-05-11).
+IO_FORMAT_VERSION = 4
 _LEGACY_THREAD_WARNING_EMITTED: dict[str, bool] = {"flag": False}
 
 

@@ -35,10 +35,10 @@ def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
     return model, torch.randn(2, 8)
 
 
-def test_io_format_version_is_three() -> None:
-    """Phase 4 bumps ``IO_FORMAT_VERSION`` from 2 to 3."""
+def test_io_format_version_is_four() -> None:
+    """M8 bumps ``IO_FORMAT_VERSION`` from 3 to 4."""
 
-    assert IO_FORMAT_VERSION == 3
+    assert IO_FORMAT_VERSION == 4
 
 
 def test_round_trip_save_load_preserves_module_containment(tmp_path: Path) -> None:
