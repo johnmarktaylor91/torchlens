@@ -35,8 +35,8 @@ from typing import Any, TYPE_CHECKING, cast
 import torch
 from torch import nn
 
-from .. import _state
-from .._tl import (
+from ... import _state
+from ._tl import (
     clear_meta,
     get_buffer_address,
     get_label_list,
@@ -54,16 +54,16 @@ from .._tl import (
     set_param_meta,
     set_tensor_label,
 )
-from ..data_classes.param_log import ParamAccessor, ParamLog
-from ..data_classes.func_call_location import FuncCallLocation
-from ..data_classes.module_log import HookInfo
-from ..utils.tensor_utils import get_memory_amount
-from ..utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
-from ..utils.hashing import make_random_barcode
-from ..capture.tensor_tracking import _append_module_suffix_to_equivalence_class
-from ..capture.source_tensors import log_source_tensor
-from ..constants import LAYER_PASS_LOG_FIELD_ORDER
-from . import _module_stack as _mstack
+from ...data_classes.param_log import ParamAccessor, ParamLog
+from ...data_classes.func_call_location import FuncCallLocation
+from ...data_classes.module_log import HookInfo
+from ...utils.tensor_utils import get_memory_amount
+from ...utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
+from ...utils.hashing import make_random_barcode
+from .tensor_tracking import _append_module_suffix_to_equivalence_class
+from .sources import log_source_tensor
+from ...constants import LAYER_PASS_LOG_FIELD_ORDER
+from . import module_stack as _mstack
 
 # Cache class-level module metadata (inspect.getsourcelines, inspect.signature, etc.)
 # shared across instances of the same class type. Cleared at the start of each
@@ -98,7 +98,7 @@ _PYTORCH_INTERNAL = frozenset(
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ...data_classes.model_log import Trace
 
 
 # ---------------------------------------------------------------------------
@@ -845,7 +845,7 @@ def _ensure_module_output_tensor_logged(
         graph so downstream module-exit and op logging can continue.
     """
 
-    from ..capture.output_tensors import _make_layer_log_entry
+    from .ops import _make_layer_log_entry
 
     parent_entries = [trace._raw_layer_dict[label] for label in parent_labels]
     template_entry = parent_entries[0] if parent_entries else None
@@ -1029,7 +1029,7 @@ def _ensure_module_output_tensor_logged(
         parent_entry.has_children = True
     set_tensor_label(tensor, new_entry._label_raw)
     if trace.save_grads:
-        from ..capture.output_tensors import _add_backward_hook
+        from .ops import _add_backward_hook
 
         _add_backward_hook(trace, tensor, new_entry._label_raw)
 
@@ -1215,10 +1215,10 @@ def module_forward_decorator(
             return out
 
         if trace.capture_mode == "predicate":
-            from ..fastlog._predicate import _evaluate_keep_module
-            from ..fastlog._record_context import _build_record_context
-            from ..fastlog._state import get_active_recording_state
-            from ..fastlog.types import ActivationRecord
+            from ...fastlog._predicate import _evaluate_keep_module
+            from ...fastlog._record_context import _build_record_context
+            from ...fastlog._state import get_active_recording_state
+            from ...fastlog.types import ActivationRecord
 
             state = get_active_recording_state()
             frame = _mstack.push_frame(trace, state.module_stack, module)
@@ -1464,7 +1464,7 @@ def _ensure_model_prepared(model: nn.Module) -> None:
        (incremental: only scans newly-imported modules).
     4. ``patch_model_instance(model)`` — Level 4 crawl on model instance attrs.
     """
-    from .torch_funcs import wrap_torch, patch_detached_references, patch_model_instance
+    from .wrappers import wrap_torch, patch_detached_references, patch_model_instance
 
     wrap_torch()  # idempotent — no-op if already wrapped; auto-rewraps after unwrap
     already_prepared = model in _state._prepared_models

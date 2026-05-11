@@ -43,21 +43,21 @@ from typing import TYPE_CHECKING, Any, Iterator, cast
 
 import torch
 
-from .. import _state as _st
-from .._state import pause_logging
-from .._tl import get_label_list, get_param_meta, get_tensor_label, set_tensor_label
-from ..decoration import _module_stack as _mstack
-from ..errors import CaptureError
-from ..utils.introspection import (
+from ... import _state as _st
+from ..._state import pause_logging
+from ._tl import get_label_list, get_param_meta, get_tensor_label, set_tensor_label
+from . import module_stack as _mstack
+from ...errors import CaptureError
+from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
 )
-from ..utils.tensor_utils import get_memory_amount, safe_copy, tensor_nanequal
-from ..utils.collections import index_nested, ensure_iterable
-from .flops import compute_backward_flops, compute_forward_flops
-from ..data_classes.buffer_log import BufferLog
-from ..data_classes.op_log import OpLog
-from ..intervention.types import (
+from ...utils.tensor_utils import get_memory_amount, safe_copy, tensor_nanequal
+from ...utils.collections import index_nested, ensure_iterable
+from ...capture.flops import compute_backward_flops, compute_forward_flops
+from ...data_classes.buffer_log import BufferLog
+from ...data_classes.op_log import OpLog
+from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
     ContainerSpec,
@@ -74,8 +74,8 @@ from ..intervention.types import (
     TupleIndex,
     Unsupported,
 )
-from ..intervention.hooks import make_live_site_proxy
-from .arg_positions import (
+from ...intervention.hooks import make_live_site_proxy
+from ...capture.arg_positions import (
     FUNC_ARG_SPECS,
     ArgSpec,
     extract_tensors_and_params,
@@ -94,17 +94,17 @@ from .tensor_tracking import (
     _process_parent_param_ops,
     _update_tensor_family_links,
 )
-from .._errors import TorchLensPostfuncError
-from .._training_validation import TrainingModeConfigError
-from ..data_classes.internal_types import FuncExecutionContext
-from ..fastlog._predicate import _evaluate_keep_op
-from ..fastlog._record_context import _build_record_context
-from ..fastlog._state import get_active_recording_state
-from ..fastlog.types import ActivationRecord, CaptureSpec
-from .salient_args import extract_salient_args
+from ..._errors import TorchLensPostfuncError
+from ..._training_validation import TrainingModeConfigError
+from ...data_classes.internal_types import FuncExecutionContext
+from ...fastlog._predicate import _evaluate_keep_op
+from ...fastlog._record_context import _build_record_context
+from ...fastlog._state import get_active_recording_state
+from ...fastlog.types import ActivationRecord, CaptureSpec
+from ...capture.salient_args import extract_salient_args
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ...data_classes.model_log import Trace
 
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
@@ -722,7 +722,7 @@ def apply_live_hooks_to_outputs(
     if not _st._active_hook_plan or self.capture_mode != "exhaustive":
         return out_orig
 
-    from ..intervention.runtime import _apply_live_hooks
+    from ...intervention.runtime import _apply_live_hooks
 
     shared_fields, _parent_layer_entries, _arg_tensors, _parent_param_ops = (
         _build_shared_fields_dict(

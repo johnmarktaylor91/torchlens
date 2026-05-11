@@ -11,9 +11,9 @@ def _python_files() -> list[Path]:
 
     return [
         *Path("torchlens/fastlog").glob("*.py"),
-        Path("torchlens/capture/output_tensors.py"),
-        Path("torchlens/capture/source_tensors.py"),
-        Path("torchlens/decoration/model_prep.py"),
+        Path("torchlens/backends/torch/ops.py"),
+        Path("torchlens/backends/torch/sources.py"),
+        Path("torchlens/backends/torch/model_prep.py"),
     ]
 
 

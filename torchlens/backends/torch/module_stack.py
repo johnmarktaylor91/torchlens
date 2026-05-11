@@ -14,8 +14,8 @@ from typing import Any, cast
 
 import torch.nn as nn
 
-from .._tl import get_module_meta
-from ..fastlog.types import ModuleStackFrame
+from ._tl import get_module_meta
+from ...fastlog.types import ModuleStackFrame
 
 
 def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> ModuleStackFrame:

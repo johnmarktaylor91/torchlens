@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 from torchlens import trace as trace_fn
-from torchlens._tl import get_tensor_label, set_tensor_label
+from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
 from torchlens.utils.tensor_utils import (
     get_memory_amount,
     print_override,

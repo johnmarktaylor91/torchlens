@@ -10,9 +10,9 @@ from typing import Any, Callable, Iterator
 
 import torch
 
-from .._io.streaming import BundleStreamWriter
-from .._state import pause_logging
-from ..data_classes.grad_fn_log import GradFnLog
+from ..._io.streaming import BundleStreamWriter
+from ..._state import pause_logging
+from ...data_classes.grad_fn_log import GradFnLog
 from .tensor_tracking import _add_backward_hook
 
 
@@ -422,7 +422,7 @@ def _finalize_grad_streaming(trace: Any) -> None:
     if writer is None or not getattr(trace, "_defer_streaming_bundle_finalization", False):
         return
 
-    from ..postprocess.finalization import (
+    from ...postprocess.finalization import (
         _evict_streamed_outs,
         _evict_streamed_grads,
         _finalize_streamed_bundle,

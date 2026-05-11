@@ -35,12 +35,12 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
-from ..data_classes.op_log import OpLog
-from ..utils.hashing import make_random_barcode, make_short_barcode_from_input
+from ._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
+from ...data_classes.op_log import OpLog
+from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ...data_classes.model_log import Trace
 
 
 def _add_backward_hook(self: "Trace", t: torch.Tensor, tensor_label: str) -> None:

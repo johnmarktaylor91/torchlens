@@ -10,14 +10,14 @@ import torch
 from torch import nn
 
 from .. import _state
-from ..capture.source_tensors import log_source_tensor
+from ..backends.torch.sources import log_source_tensor
 from ..data_classes.model_log import Trace
-from ..decoration.model_prep import (
+from ..backends.torch.model_prep import (
     _cleanup_model_session,
     _ensure_model_prepared,
     _prepare_model_session,
 )
-from ..decoration import _module_stack as _mstack
+from ..backends.torch import module_stack as _mstack
 from ..utils.introspection import get_vars_of_type_from_obj
 from ..utils.rng import set_random_seed
 from ._predicate import _evaluate_keep_module

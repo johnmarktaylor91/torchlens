@@ -10,7 +10,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.capture.output_tensors import _walk_output_tensors_with_paths
+from torchlens.backends.torch.ops import _walk_output_tensors_with_paths
 from torchlens.intervention.types import (
     ContainerSpec,
     DataclassField,

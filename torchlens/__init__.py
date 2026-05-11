@@ -134,13 +134,13 @@ _MOVED_OBJECTS = {
     "resolve_sites": ("torchlens.validation", "resolve_sites"),
     "save_intervention": ("torchlens.io", "save_intervention"),
     "suppress_mutate_warnings": ("torchlens.io", "suppress_mutate_warnings"),
-    "unwrap_torch": ("torchlens.decoration", "unwrap_torch"),
+    "unwrap_torch": ("torchlens.backends.torch.wrappers", "unwrap_torch"),
     "validate_batch_of_models_and_inputs": (
         "torchlens.validation",
         "validate_batch_of_models_and_inputs",
     ),
-    "wrap_torch": ("torchlens.decoration", "wrap_torch"),
-    "wrapped": ("torchlens.decoration", "wrapped"),
+    "wrap_torch": ("torchlens.backends.torch.wrappers", "wrap_torch"),
+    "wrapped": ("torchlens.backends.torch.wrappers", "wrapped"),
 }
 
 
@@ -762,6 +762,7 @@ def load_intervention_spec(*args: Any, **kwargs: Any) -> Any:
 
 
 trace = _trace
+log_forward_pass = _trace
 
 
 __all__ = [

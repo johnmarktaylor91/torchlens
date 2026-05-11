@@ -17,8 +17,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-import torchlens.capture.output_tensors as output_tensors
-import torchlens.capture.source_tensors as source_tensors
+import torchlens.backends.torch.ops as output_tensors
+import torchlens.backends.torch.sources as source_tensors
 import torchlens.postprocess.ast_branches as ast_branches
 import torchlens.postprocess.graph_traversal as graph_traversal
 import torchlens.utils.introspection as introspection

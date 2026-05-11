@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Literal, NamedTuple, Optional, TYPE_CHECKING
 
 import torch
 
-from .._tl import clear_meta
+from ..backends.torch._tl import clear_meta
 from .._io import BlobRef, TorchLensIOError
 from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef

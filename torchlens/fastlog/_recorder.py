@@ -11,7 +11,7 @@ from torch import nn
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
-from ..decoration.model_prep import _ensure_model_prepared
+from ..backends.torch.model_prep import _ensure_model_prepared
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc
 from ._orchestrator import _empty_recording, _run_predicate_pass

@@ -10,7 +10,7 @@ import pytest
 import torchlens as tl
 
 from _module_containment_snapshot import build_snapshot
-from torchlens._tl import get_module_meta
+from torchlens.backends.torch._tl import get_module_meta
 from fixtures.module_containment_models import ALL_FIXTURES, FixtureBuilder
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots" / "module_containment"

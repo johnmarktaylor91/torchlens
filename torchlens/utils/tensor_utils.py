@@ -20,7 +20,7 @@ from typing import Any, Optional, cast
 import numpy as np
 import torch
 
-from .._tl import get_tensor_label, set_tensor_label
+from ..backends.torch._tl import get_tensor_label, set_tensor_label
 
 # Maximum absolute tolerance for floating-point comparison in tensor_nanequal.
 # Used by validation replay to allow tiny numerical differences caused by

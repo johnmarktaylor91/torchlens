@@ -28,24 +28,24 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from torch import nn
 
-from .._errors import TorchLensPostfuncError
-from .._tl import get_tensor_meta, set_tensor_label
-from .._training_validation import TrainingModeConfigError
-from ..data_classes.buffer_log import BufferLog
-from ..data_classes.op_log import OpLog
-from ..decoration import _module_stack as _mstack
-from ..fastlog._predicate import _evaluate_keep_op
-from ..fastlog._record_context import _build_record_context
-from ..fastlog._state import get_active_recording_state
-from ..fastlog.types import ActivationRecord
-from ..utils.introspection import _get_code_context
-from ..utils.rng import log_current_rng_states
-from ..utils.tensor_utils import get_memory_amount
+from ..._errors import TorchLensPostfuncError
+from ._tl import get_tensor_meta, set_tensor_label
+from ..._training_validation import TrainingModeConfigError
+from ...data_classes.buffer_log import BufferLog
+from ...data_classes.op_log import OpLog
+from . import module_stack as _mstack
+from ...fastlog._predicate import _evaluate_keep_op
+from ...fastlog._record_context import _build_record_context
+from ...fastlog._state import get_active_recording_state
+from ...fastlog.types import ActivationRecord
+from ...utils.introspection import _get_code_context
+from ...utils.rng import log_current_rng_states
+from ...utils.tensor_utils import get_memory_amount
 
 from .tensor_tracking import _add_backward_hook, _append_module_suffix_to_equivalence_class
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ...data_classes.model_log import Trace
 
 
 def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
@@ -410,7 +410,7 @@ def log_source_tensor_exhaustive(
 
     # Reuse the shared entry-creation logic from output_tensors.
     # Imported here (not at module level) to avoid circular imports.
-    from .output_tensors import _make_layer_log_entry
+    from .ops import _make_layer_log_entry
 
     # Creates a BufferLog if is_buffer=True, else OpLog.
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.out_postfunc)

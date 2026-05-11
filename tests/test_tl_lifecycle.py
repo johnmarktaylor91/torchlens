@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._tl import (
+from torchlens.backends.torch._tl import (
     TensorMeta,
     get_buffer_address,
     get_module_meta,
@@ -17,7 +17,7 @@ from torchlens._tl import (
     set_module_meta,
     set_tensor_label,
 )
-from torchlens.decoration.model_prep import _tag_untagged_buffers
+from torchlens.backends.torch.model_prep import _tag_untagged_buffers
 from torchlens.intervention.runtime import _copy_tl_replacement_attrs
 from torchlens.partial import PartialTrace
 from torchlens.utils.introspection import get_vars_of_type_from_obj

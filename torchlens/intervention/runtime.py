@@ -11,7 +11,7 @@ import torch
 
 from .. import _state
 from .._state import pause_logging
-from .._tl import copy_replacement_meta
+from ..backends.torch._tl import copy_replacement_meta
 from .errors import HookSignatureError, HookValueError
 from .hooks import HookContext, NormalizedHookEntry, make_hook_context, live_selector_matches_site
 from .types import FireRecord

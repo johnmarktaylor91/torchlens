@@ -8,9 +8,9 @@ import torch
 from torch import nn
 
 from torchlens import _state
-from torchlens.capture.source_tensors import log_source_tensor
+from torchlens.backends.torch.sources import log_source_tensor
 from torchlens.data_classes.model_log import Trace
-from torchlens.decoration.model_prep import (
+from torchlens.backends.torch.model_prep import (
     _cleanup_model_session,
     _ensure_model_prepared,
     _prepare_model_session,

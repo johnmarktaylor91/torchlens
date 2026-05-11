@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.capture.output_tensors import _get_autograd_saved_stats_for_tensor
+from torchlens.backends.torch.ops import _get_autograd_saved_stats_for_tensor
 from torchlens.data_classes.layer_log import LayerLog
 from torchlens.data_classes.op_log import OpLog
 from torchlens.data_classes.model_log import Trace

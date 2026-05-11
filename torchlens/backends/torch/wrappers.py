@@ -48,30 +48,30 @@ from typing import Any, TYPE_CHECKING, cast
 
 import torch
 
-from .. import _state
-from ..constants import ORIG_TORCH_FUNCS
-from .._tl import (
+from ... import _state
+from ...constants import ORIG_TORCH_FUNCS
+from ._tl import (
     get_buffer_address,
     get_tensor_label,
     is_decorated_function,
     mark_decorated_function,
     set_tensor_label,
 )
-from ..data_classes.internal_types import FuncExecutionContext
-from ..utils.introspection import get_vars_of_type_from_obj, nested_getattr
-from ..utils.display import identity
-from ..utils.rng import log_current_autocast_state, log_current_rng_states
-from ..utils.hashing import make_random_barcode
-from ..utils.tensor_utils import print_override, safe_copy
-from ..capture.output_tensors import (
+from ...data_classes.internal_types import FuncExecutionContext
+from ...utils.introspection import get_vars_of_type_from_obj, nested_getattr
+from ...utils.display import identity
+from ...utils.rng import log_current_autocast_state, log_current_rng_states
+from ...utils.hashing import make_random_barcode
+from ...utils.tensor_utils import print_override, safe_copy
+from .ops import (
     _walk_output_tensors_with_paths,
     apply_live_hooks_to_outputs,
     log_function_output_tensors,
 )
-from ..capture.source_tensors import log_source_tensor
+from .sources import log_source_tensor
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ...data_classes.model_log import Trace
 
 
 # ---------------------------------------------------------------------------

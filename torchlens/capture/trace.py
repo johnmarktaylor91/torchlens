@@ -36,12 +36,9 @@ import torch
 from torch import nn
 
 from .. import _state
-from .._tl import clear_meta, get_tensor_label
-from ..decoration.model_prep import (
-    _ensure_model_prepared,
-    _prepare_model_session,
-    _cleanup_model_session,
-)
+from ..backends import CaptureBackend
+from ..backends.torch._tl import clear_meta, get_tensor_label
+from ..backends.torch.backend import TorchBackend
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -49,10 +46,12 @@ from ..utils.introspection import get_vars_of_type_from_obj, nested_assign
 from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_saved_states
 from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
 from ..utils.tensor_utils import _is_cuda_available
-from .source_tensors import log_source_tensor
-from .output_tensors import _walk_output_tensors_with_paths
+from ..backends.torch.sources import log_source_tensor
+from ..backends.torch.ops import _walk_output_tensors_with_paths
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _vprint, _vtimed
+
+_TORCH_BACKEND: CaptureBackend = TorchBackend()
 
 
 def save_new_outs(
@@ -552,11 +551,13 @@ def run_and_log_inputs_through_model(
         elif self.capture_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
             set_rng_from_saved_states(self._pre_forward_rng_states)
 
+        backend = _TORCH_BACKEND
+
         # One-time model preparation + incremental sys.modules crawl
-        _ensure_model_prepared(model)
+        backend.prepare_model_once(model)
 
         # Per-session model preparation
-        _prepare_model_session(self, model, self._optimizer)
+        backend.prepare_model_session(self, model)
         self.setup_duration = time.time() - self.start_time
         _vprint(self, f"Model prepared ({self.setup_duration:.2f}s)")
 
@@ -575,7 +576,7 @@ def run_and_log_inputs_through_model(
         # before invoking the model; all subsequent operations are captured
         # automatically by the decorated wrappers.
         _vprint(self, f"Running {self.capture_mode} forward pass...")
-        with _state.active_logging(self):
+        with backend.active_logging(self):
             for i, t in enumerate(input_tensors):
                 log_source_tensor(self, t, "input", input_tensor_addresses[i])
 
@@ -593,7 +594,7 @@ def run_and_log_inputs_through_model(
 
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs)
 
-        _cleanup_model_session(model, input_tensors)
+        backend.cleanup_model_session(self, (model, input_tensors))
         _vprint(self, f"Postprocessing {len(self._raw_layer_dict)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
 
@@ -607,7 +608,7 @@ def run_and_log_inputs_through_model(
             e.partial_log = PartialTrace.from_trace(self, e)  # type: ignore[attr-defined]
         except Exception:
             pass
-        _cleanup_model_session(model, input_tensors)
+        _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
         for label in list(self._raw_layer_dict.keys()):
             entry = self._raw_layer_dict.get(label)
             if entry is not None and hasattr(entry, "out") and entry.out is not None:

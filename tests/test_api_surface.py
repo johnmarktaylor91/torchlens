@@ -55,7 +55,6 @@ CANONICAL_SUBMODULES = [
     "torchlens.bridge",
     "torchlens.callbacks",
     "torchlens.compat",
-    "torchlens.decoration",
     "torchlens.errors",
     "torchlens.examples",
     "torchlens.experimental",

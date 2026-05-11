@@ -11,7 +11,7 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens._tl import (
+from torchlens.backends.torch._tl import (
     DecorationTag,
     ModuleMeta,
     ParamMeta,

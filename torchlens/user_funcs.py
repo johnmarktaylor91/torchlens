@@ -50,7 +50,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ._tl import get_tensor_label
+from .backends.torch._tl import get_tensor_label
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
 from .types import ActivationPostfunc, GradientPostfunc
@@ -1649,7 +1649,7 @@ def trace(
         trace.draw(**visualization_to_render_kwargs(visualization_options))
 
     if unwrap_when_done:
-        from .decoration import unwrap_torch
+        from .backends.torch.wrappers import unwrap_torch
 
         unwrap_torch()
 

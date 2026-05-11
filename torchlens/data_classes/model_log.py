@@ -4071,7 +4071,7 @@ class Trace:
         Trace
             This model log, for chaining.
         """
-        from ..capture.backward import log_backward as _impl
+        from ..backends.torch.backward import log_backward as _impl
 
         return cast("Trace", _impl(self, loss, **backward_kwargs))
 
@@ -4083,7 +4083,7 @@ class Trace:
         Any
             Backward recording context manager.
         """
-        from ..capture.backward import recording_backward as _impl
+        from ..backends.torch.backward import recording_backward as _impl
 
         return _impl(self)
 
