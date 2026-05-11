@@ -67,6 +67,7 @@ from .labeling import (
     _trim_and_reorder_model_history_fields,
 )
 from .loop_detection import _detect_and_label_loops, _group_by_shared_params
+from ._materialize import materialize_from_events
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -92,6 +93,12 @@ def postprocess(
     if self.capture_mode == "fast":
         postprocess_fast(self)
         return
+
+    capture_events = getattr(self, "capture_events", None)
+    if capture_events is not None:
+        with _vtimed(self, "  Step 0: Materialize capture events"):
+            materialize_from_events(self, capture_events)
+        delattr(self, "capture_events")
 
     # Guard: if the model produced no logged layers, skip postprocessing (#153)
     if len(self._raw_layer_labels_list) == 0:

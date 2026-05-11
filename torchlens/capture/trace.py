@@ -552,6 +552,9 @@ def run_and_log_inputs_through_model(
             set_rng_from_saved_states(self._pre_forward_rng_states)
 
         backend = _TORCH_BACKEND
+        from ..ir import CaptureEvents
+
+        self.capture_events = CaptureEvents()
 
         # One-time model preparation + incremental sys.modules crawl
         backend.prepare_model_once(model)

@@ -57,6 +57,16 @@ from ...utils.collections import index_nested, ensure_iterable
 from ...capture.flops import compute_backward_flops, compute_forward_flops
 from ...data_classes.buffer_log import BufferLog
 from ...data_classes.op_log import OpLog
+from ...ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    ModuleFrame,
+    OpEvent,
+    OutputRef,
+    ParentEdge,
+)
+from ...ir.refs import ParamRef, TensorRef
+from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -102,6 +112,7 @@ from ...fastlog._record_context import _build_record_context
 from ...fastlog._state import get_active_recording_state
 from ...fastlog.types import ActivationRecord, CaptureSpec
 from ...capture.salient_args import extract_salient_args
+from ...postprocess._materialize import register_materialized_event
 
 if TYPE_CHECKING:
     from ...data_classes.model_log import Trace
@@ -179,6 +190,242 @@ def _memory_or_none(tensor: torch.Tensor | None) -> int | None:
     """
 
     return get_memory_amount(tensor) if isinstance(tensor, torch.Tensor) else None
+
+
+def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -> TensorRef:
+    """Build an IR tensor reference from one raw fields dictionary.
+
+    Parameters
+    ----------
+    tensor
+        Tensor represented by the operation event.
+    fields_dict
+        Raw field mapping used to construct the corresponding ``OpLog``.
+
+    Returns
+    -------
+    TensorRef
+        Backend-neutral tensor metadata and optional payload reference.
+    """
+
+    return TensorRef(
+        label_raw=fields_dict["_label_raw"],
+        shape=fields_dict["shape"],
+        dtype=str(fields_dict["dtype"]),
+        device=str(tensor.device),
+        requires_grad=tensor.requires_grad,
+        memory=fields_dict["memory"],
+        payload=fields_dict["out"],
+        blob_ref=None,
+        backend_handle_id=str(id(tensor)),
+    )
+
+
+def _module_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[ModuleFrame, ...]:
+    """Convert raw module stack tuples to IR module frames.
+
+    Parameters
+    ----------
+    fields_dict
+        Raw field mapping used to construct the corresponding ``OpLog``.
+
+    Returns
+    -------
+    tuple[ModuleFrame, ...]
+        Module stack snapshot for the operation event.
+    """
+
+    return tuple(
+        ModuleFrame(
+            address=address,
+            address_normalized=None,
+            module_type="",
+            call_index=call_index,
+            fx_qualpath=None,
+            entry_argnames=(),
+        )
+        for address, call_index in fields_dict["modules"]
+    )
+
+
+def _param_refs_from_fields(fields_dict: dict[str, Any]) -> tuple[ParamRef, ...]:
+    """Convert raw parameter metadata to IR parameter references.
+
+    Parameters
+    ----------
+    fields_dict
+        Raw field mapping used to construct the corresponding ``OpLog``.
+
+    Returns
+    -------
+    tuple[ParamRef, ...]
+        Parameter references for the operation event.
+    """
+
+    refs: list[ParamRef] = []
+    for barcode, param in zip(fields_dict["_param_barcodes"], fields_dict["parent_params"]):
+        param_meta = get_param_meta(param)
+        param_address = (
+            ""
+            if param_meta is None or param_meta.param_address is None
+            else param_meta.param_address
+        )
+        refs.append(
+            ParamRef(
+                barcode=barcode,
+                address=param_address,
+                shape=tuple(param.shape),
+                dtype=str(param.dtype),
+                trainable=bool(param.requires_grad),
+                module_address=None,
+            )
+        )
+    return tuple(refs)
+
+
+def _parent_edges_from_fields(fields_dict: dict[str, Any]) -> tuple[ParentEdge, ...]:
+    """Convert raw parent labels to IR parent edges.
+
+    Parameters
+    ----------
+    fields_dict
+        Raw field mapping used to construct the corresponding ``OpLog``.
+
+    Returns
+    -------
+    tuple[ParentEdge, ...]
+        Parent edges for the operation event.
+    """
+
+    return tuple(
+        ParentEdge(parent_label_raw=label, arg_position=None, edge_use="arg")
+        for label in fields_dict["parents"]
+    )
+
+
+def _op_event_from_log(
+    fields_dict: dict[str, Any],
+    tensor: torch.Tensor,
+    op_log: OpLog,
+) -> OpEvent:
+    """Build an ``OpEvent`` that mirrors a just-constructed ``OpLog``.
+
+    Parameters
+    ----------
+    fields_dict
+        Raw field mapping used to construct ``op_log``.
+    tensor
+        Live output tensor for backend metadata.
+    op_log
+        Temporary M3 materialized log bridge.
+
+    Returns
+    -------
+    OpEvent
+        Frozen operation event appended to ``CaptureEvents``.
+    """
+
+    tensor_ref = _tensor_ref_from_fields(tensor, fields_dict)
+    transformed_ref = (
+        None
+        if fields_dict["transformed_out"] is None
+        else TensorRef(
+            label_raw=fields_dict["_label_raw"],
+            shape=fields_dict["transformed_out_shape"],
+            dtype=str(fields_dict["transformed_out_dtype"]),
+            device=fields_dict["output_device"],
+            requires_grad=None,
+            memory=fields_dict["transformed_out_memory"],
+            payload=fields_dict["transformed_out"],
+            blob_ref=None,
+            backend_handle_id=None,
+        )
+    )
+    return OpEvent(
+        kind="source" if fields_dict["is_input"] or fields_dict["is_buffer"] else "op",
+        materialized_log=op_log,
+        label_raw=fields_dict["_label_raw"],
+        layer_label_raw=fields_dict["_layer_label_raw"],
+        layer_type=fields_dict["type"],
+        capture_index=fields_dict["capture_index"],
+        type_index=fields_dict["type_index"],
+        compute_index=fields_dict["compute_index"] or 0,
+        source_trace_id=None,
+        tracing_finished=fields_dict["_tracing_finished"],
+        construction_done=fields_dict["_construction_done"],
+        function=FunctionCallRef(
+            func=fields_dict["func"],
+            func_name=fields_dict["func_name"],
+            func_qualname=None,
+            func_call_id=fields_dict["func_call_id"],
+            code_context=tuple(fields_dict["code_context"]),
+            func_duration=fields_dict["func_duration"],
+            flops_forward=fields_dict["flops_forward"],
+            flops_backward=fields_dict["flops_backward"],
+            func_rng_states=fields_dict["func_rng_states"],
+            func_autocast_state=fields_dict["func_autocast_state"],
+            arg_names=tuple(fields_dict["arg_names"]),
+            num_args_total=fields_dict["num_args_total"],
+            num_pos_args=fields_dict["num_pos_args"],
+            num_kwargs=fields_dict["num_kwargs"],
+            non_tensor_pos_args=tuple(fields_dict["non_tensor_pos_args"]),
+            non_tensor_kwargs=tuple(fields_dict["non_tensor_kwargs"].items()),
+            func_non_tensor_args=tuple(fields_dict["func_non_tensor_args"]),
+            is_inplace=fields_dict["is_inplace"],
+            func_config=tuple(fields_dict["func_config"].items()),
+        ),
+        output=OutputRef(
+            tensor=tensor_ref,
+            transformed_tensor=transformed_ref,
+            has_saved_outs=fields_dict["has_saved_outs"],
+            output_device=fields_dict["output_device"],
+            out_postfunc=fields_dict["out_postfunc"],
+            detach_saved_activations=fields_dict["detach_saved_activations"],
+            visualizer_path=fields_dict["visualizer_path"],
+            multi_output_index=fields_dict["multi_output_index"],
+            is_part_of_iterable_output=fields_dict["is_part_of_iterable_output"],
+            container_path=tuple(fields_dict["container_path"]),
+            container_spec=fields_dict["container_spec"],
+            child_versions=tuple(fields_dict["output_versions_per_child"].items()),
+        ),
+        templates=ArgTemplateRef(
+            saved_args=fields_dict["saved_args"],
+            saved_kwargs=fields_dict["saved_kwargs"],
+            args_template=fields_dict["args_template"],
+            kwargs_template=fields_dict["kwargs_template"],
+            has_saved_args=fields_dict["has_saved_args"],
+        ),
+        parents=_parent_edges_from_fields(fields_dict),
+        params=_param_refs_from_fields(fields_dict),
+        module_stack=_module_frames_from_fields(fields_dict),
+        backend_semantics=BackendSemantics(
+            grad_fn_id=fields_dict["grad_fn_id"],
+            grad_fn_name=fields_dict["grad_fn_name"],
+            autograd_saved_memory=fields_dict["autograd_saved_memory"],
+            num_autograd_saved_tensors=fields_dict["num_autograd_saved_tensors"],
+            mutates_inputs=(0,) if fields_dict["is_inplace"] else (),
+            bytes_delta_at_call=fields_dict["bytes_delta_at_call"],
+            bytes_peak_at_call=fields_dict["bytes_peak_at_call"],
+        ),
+        policy=CapturePolicy(
+            must_keep_topology=True,
+            save_payload=fields_dict["has_saved_outs"],
+            requires_isolation=fields_dict["is_inplace"],
+            save_args=fields_dict["has_saved_args"],
+            save_code=bool(fields_dict["code_context"]),
+            save_rng=bool(fields_dict["func_rng_states"]),
+            save_grad=fields_dict["save_grads"],
+            stream=False,
+        ),
+        predicate_matched=True,
+        is_bottom_level=True,
+        is_scalar_bool=fields_dict["is_scalar_bool"],
+        bool_value=fields_dict["bool_value"],
+        intervention_fired=bool(fields_dict["interventions"]),
+        intervention_replaced=fields_dict["intervention_replaced"],
+        fire_results=(),
+        intervention_template_ref=None,
+    )
 
 
 def _is_namedtuple_instance(value: Any) -> bool:
@@ -2089,8 +2336,8 @@ def _make_layer_log_entry(
         )
         self.ops_with_saved_outs.append(new_entry._label_raw)
     _apply_live_fire_records_to_entry(new_entry)
-    self._raw_layer_dict[new_entry._label_raw] = new_entry
-    self._raw_layer_labels_list.append(new_entry._label_raw)
+    op_event = _op_event_from_log(fields_dict, t, new_entry)
+    register_materialized_event(self, op_event)
     _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry

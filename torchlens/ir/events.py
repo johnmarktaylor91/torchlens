@@ -176,6 +176,7 @@ class OpEvent:
     intervention_replaced: bool
     fire_results: tuple[FireResult, ...]
     intervention_template_ref: InterventionTemplateRef | None
+    materialized_log: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
