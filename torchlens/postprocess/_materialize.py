@@ -12,6 +12,28 @@ if TYPE_CHECKING:
     from torchlens.data_classes.op_log import OpLog
 
 
+def materialize_log_from_fields(fields_dict: dict[str, object]) -> "OpLog":
+    """Construct the live log object for one captured operation.
+
+    Parameters
+    ----------
+    fields_dict
+        Raw field mapping populated by the backend hot path.
+
+    Returns
+    -------
+    OpLog
+        Materialized operation or buffer log.
+    """
+
+    from torchlens.data_classes.buffer_log import BufferLog
+    from torchlens.data_classes.op_log import OpLog
+
+    if fields_dict.get("is_buffer"):
+        return BufferLog(fields_dict)  # type: ignore[return-value]
+    return OpLog(fields_dict)  # type: ignore[arg-type]
+
+
 def register_materialized_event(trace: "Trace", event: OpEvent, op_log: "OpLog") -> None:
     """Append an event and expose its live log to in-flight hooks.
 

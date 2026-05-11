@@ -55,7 +55,6 @@ from ...utils.introspection import (
 from ...utils.tensor_utils import get_memory_amount, safe_copy, tensor_nanequal
 from ...utils.collections import index_nested, ensure_iterable
 from ...capture.flops import compute_backward_flops, compute_forward_flops
-from ...data_classes.buffer_log import BufferLog
 from ...data_classes.op_log import OpLog
 from ...ir.events import (
     ArgTemplateRef,
@@ -116,7 +115,7 @@ from ...capture.projections import (
 )
 from ...fastlog.types import ActivationRecord, CaptureSpec
 from ...capture.salient_args import extract_salient_args
-from ...postprocess._materialize import register_materialized_event
+from ...postprocess._materialize import materialize_log_from_fields, register_materialized_event
 
 if TYPE_CHECKING:
     from ...data_classes.model_log import Trace
@@ -2295,10 +2294,7 @@ def _make_layer_log_entry(
         t_kwargs = {}
 
     fire_results = tuple(fields_dict.pop("fire_results", ()))
-    if fields_dict.get("is_buffer"):
-        new_entry = BufferLog(fields_dict)
-    else:
-        new_entry = OpLog(fields_dict)  # type: ignore[assignment]
+    new_entry = materialize_log_from_fields(fields_dict)
     keep_by_predicate = True
     module_filter = getattr(self, "module_filter", None)
     if module_filter is not None:
