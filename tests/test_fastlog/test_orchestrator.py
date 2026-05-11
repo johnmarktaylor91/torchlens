@@ -6,9 +6,9 @@ import pytest
 import torch
 from torch import nn
 
+import torchlens as tl
 import torchlens._state as torchlens_state
-import torchlens.fastlog._state as fastlog_state
-from torchlens.fastlog._orchestrator import _run_predicate_pass
+import torchlens.capture.projections as fastlog_state
 from torchlens.fastlog.exceptions import PredicateError
 from torchlens.fastlog.options import RecordingOptions
 
@@ -76,7 +76,14 @@ def _options() -> RecordingOptions:
 def test_root_only_model_emits_root_events() -> None:
     """Root-only models still get synthetic root enter and exit events."""
 
-    output, recording = _run_predicate_pass(RootOnly(), torch.ones(1), None, _options())
+    output, recording = tl.fastlog.record(
+        RootOnly(),
+        torch.ones(1),
+        keep_op=_options().keep_op,
+        keep_module=_options().keep_module,
+        include_source_events=True,
+        return_output=True,
+    )
     kinds = [record.ctx.kind for record in recording]
 
     assert torch.equal(output, torch.tensor([2.0]))
@@ -89,11 +96,17 @@ def test_root_only_model_emits_root_events() -> None:
 def test_shared_module_called_twice_has_balanced_events() -> None:
     """A shared child module called twice emits balanced enter/exit events."""
 
-    _, recording = _run_predicate_pass(SharedModule(), torch.ones(1, 3), None, _options())
+    recording = tl.fastlog.record(
+        SharedModule(),
+        torch.ones(1, 3),
+        keep_op=_options().keep_op,
+        keep_module=_options().keep_module,
+        include_source_events=True,
+    )
     child_events = [
         record.ctx
         for record in recording
-        if record.ctx.module_address == "shared" and record.ctx.kind.startswith("module")
+        if record.ctx.address == "shared" and record.ctx.kind.startswith("module")
     ]
 
     assert [ctx.kind for ctx in child_events] == [
@@ -106,10 +119,17 @@ def test_shared_module_called_twice_has_balanced_events() -> None:
 
 
 def test_identity_passthrough_has_module_events() -> None:
-    """Identity modules are represented even when their tensor passes through."""
+    """Identity modules are represented even when their tensor ops through."""
 
-    output, recording = _run_predicate_pass(IdentityModel(), torch.ones(1), None, _options())
-    labels = [record.ctx.module_address for record in recording]
+    output, recording = tl.fastlog.record(
+        IdentityModel(),
+        torch.ones(1),
+        keep_op=_options().keep_op,
+        keep_module=_options().keep_module,
+        include_source_events=True,
+        return_output=True,
+    )
+    labels = [record.ctx.address for record in recording]
 
     assert torch.equal(output, torch.ones(1))
     assert "identity" in labels
@@ -119,10 +139,16 @@ def test_forward_exception_cleans_logging_state() -> None:
     """Forward exceptions leave global logging and recording state inactive."""
 
     with pytest.raises(RuntimeError, match="forward failed"):
-        _run_predicate_pass(RaisingModel(), torch.ones(1), None, _options())
+        tl.fastlog.record(
+            RaisingModel(),
+            torch.ones(1),
+            keep_op=_options().keep_op,
+            keep_module=_options().keep_module,
+            include_source_events=True,
+        )
 
     assert torchlens_state._logging_enabled is False
-    assert torchlens_state._active_model_log is None
+    assert torchlens_state._active_trace is None
     assert fastlog_state._active_recording_state is None
 
 
@@ -135,13 +161,13 @@ def test_predicate_exception_cleans_logging_state() -> None:
         raise RuntimeError(f"bad predicate for {ctx.kind}")
 
     with pytest.raises(PredicateError, match="fastlog predicate failed"):
-        _run_predicate_pass(
+        tl.fastlog.record(
             RootOnly(),
             torch.ones(1),
-            None,
-            RecordingOptions(keep_module=bad_keep_module, default_op=False),
+            keep_module=bad_keep_module,
+            default_op=False,
         )
 
     assert torchlens_state._logging_enabled is False
-    assert torchlens_state._active_model_log is None
+    assert torchlens_state._active_trace is None
     assert fastlog_state._active_recording_state is None

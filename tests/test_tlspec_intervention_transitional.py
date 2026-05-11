@@ -36,18 +36,18 @@ class _ReluModel(nn.Module):
         return torch.relu(x) + 1
 
 
-def _intervention_log() -> tl.ModelLog:
+def _interventions() -> tl.Trace:
     """Create a deterministic intervention-ready log.
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Model log with a zero-ablation recipe attached.
     """
 
     torch.manual_seed(1700)
     x = torch.randn(2, 3)
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _ReluModel(),
         x,
         capture=CaptureOptions(intervention_ready=True, random_seed=0),
@@ -111,7 +111,7 @@ def test_intervention_writer_adds_unified_marker_without_removing_legacy_fields(
     """The writer should emit unified fields while preserving 2.16.0 fields."""
 
     path = tmp_path / "unified.tlspec"
-    _intervention_log().save_intervention(path, level="portable")
+    _interventions().save_intervention(path, level="portable")
 
     manifest = _read_json(path / "manifest.json")
     assert manifest["tlspec_version"] == 1
@@ -126,7 +126,7 @@ def test_new_loader_reads_transitional_intervention_spec(tmp_path: Path) -> None
     """The polymorphic loader should read transitional intervention specs."""
 
     path = tmp_path / "transitional.tlspec"
-    _intervention_log().save_intervention(path, level="portable")
+    _interventions().save_intervention(path, level="portable")
     _remove_unified_marker(path)
 
     loaded = tl.load(path)
@@ -140,7 +140,7 @@ def test_legacy_intervention_reader_ignores_transitional_kind(tmp_path: Path) ->
     """The direct 2.16.0 intervention reader should ignore ``manifest.kind``."""
 
     path = tmp_path / "transitional.tlspec"
-    _intervention_log().save_intervention(path, level="executable_with_callables")
+    _interventions().save_intervention(path, level="executable_with_callables")
     _remove_unified_marker(path)
 
     loaded = legacy_load_intervention_spec(path)
@@ -154,7 +154,7 @@ def test_new_loader_reads_intervention_with_unified_manifest_marker(tmp_path: Pa
     """The Phase 11.0 loader should dispatch unified intervention manifests by kind."""
 
     unified_path = tmp_path / "unified.tlspec"
-    _intervention_log().save_intervention(unified_path, level="portable")
+    _interventions().save_intervention(unified_path, level="portable")
 
     assert tl.io.detect_tlspec_format(unified_path) == "v2.0_unified"
     loaded = tl.load(unified_path)

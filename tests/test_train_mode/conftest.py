@@ -66,7 +66,7 @@ class TeacherStudentPair(nn.Module):
 
 
 class MultiTapModel(nn.Module):
-    """Model returning intermediate and final activations."""
+    """Model returning intermediate and final outs."""
 
     def __init__(self) -> None:
         """Initialize the tap layers."""
@@ -76,7 +76,7 @@ class MultiTapModel(nn.Module):
         self.fc2 = nn.Linear(4, 2)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return a hidden activation and final output."""
+        """Return a hidden out and final output."""
 
         hidden = torch.relu(self.fc1(x))
         return hidden, self.fc2(hidden)

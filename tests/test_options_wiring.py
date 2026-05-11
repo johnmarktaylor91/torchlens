@@ -46,13 +46,13 @@ def _input() -> torch.Tensor:
 def _capture_summary(log: Any) -> tuple[list[str], int]:
     """Return stable fields for comparing captures."""
 
-    return (list(log.layer_logs.keys()), int(log.num_tensors_saved))
+    return (list(log.layer_logs.keys()), int(log.num_saved_ops))
 
 
-def test_log_forward_pass_capture_options_equivalent_to_individual_kwargs() -> None:
+def test_trace_capture_options_equivalent_to_individual_kwargs() -> None:
     """Grouped capture options should preserve individual-kwarg behavior."""
 
-    grouped = tl.log_forward_pass(
+    grouped = tl.trace(
         _TinyModel(),
         _input(),
         capture=CaptureOptions(layers_to_save="all"),
@@ -60,7 +60,7 @@ def test_log_forward_pass_capture_options_equivalent_to_individual_kwargs() -> N
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            individual = tl.log_forward_pass(_TinyModel(), _input(), layers_to_save="all")
+            individual = tl.trace(_TinyModel(), _input(), layers_to_save="all")
         try:
             assert _capture_summary(grouped) == _capture_summary(individual)
         finally:
@@ -69,11 +69,11 @@ def test_log_forward_pass_capture_options_equivalent_to_individual_kwargs() -> N
         grouped.cleanup()
 
 
-def test_log_forward_pass_capture_conflict_raises() -> None:
+def test_trace_capture_conflict_raises() -> None:
     """Same capture field supplied both ways should fail early."""
 
     with pytest.raises(ValueError, match="conflicting capture options"):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _input(),
             capture=CaptureOptions(layers_to_save="all"),
@@ -81,24 +81,24 @@ def test_log_forward_pass_capture_conflict_raises() -> None:
         )
 
 
-def test_log_forward_pass_save_conflict_raises() -> None:
+def test_trace_save_conflict_raises() -> None:
     """Same save field supplied both ways should fail early."""
 
     with pytest.raises(ValueError, match="conflicting save options"):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyModel(),
             _input(),
-            save=SaveOptions(save_raw_activation=True),
-            save_raw_activation=False,
+            save=SaveOptions(save_raw_outs=True),
+            save_raw_outs=False,
         )
 
 
-def test_log_forward_pass_individual_capture_kwarg_warns() -> None:
+def test_trace_individual_capture_kwarg_warns() -> None:
     """Individual capture kwargs should warn during the migration window."""
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        log = tl.log_forward_pass(_TinyModel(), _input(), layers_to_save="all")
+        log = tl.trace(_TinyModel(), _input(), layers_to_save="all")
     try:
         messages = [str(record.message) for record in records]
         assert any(

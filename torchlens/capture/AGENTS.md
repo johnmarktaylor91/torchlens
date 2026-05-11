@@ -4,7 +4,7 @@
 - Source tensors: `{type}_{num}_raw`, for example `input_0_raw` or `buffer_1_raw`.
 - Function outputs: `{type}_{num}_{counter}_raw`, for example `conv2d_1_5_raw`.
 - Labels are raw during capture and become final labels in `postprocess/labeling.py`.
-- Pass-qualified final labels use `{label}:{pass_num}`.
+- Pass-qualified final labels use `{label}:{call_index}`.
 
 ## arg_positions.py
 - Main entry point: `extract_tensors_and_params(args, kwargs, func_name)`.
@@ -25,10 +25,10 @@
 - MAC convention is 2 FLOPs.
 
 ## output_tensors.py Gotchas
-- In-place ops rely on `safe_copy()` stripping `tl_tensor_label_raw` from clones so the
+- In-place ops rely on `safe_copy()` preserving the raw `_tl.label_raw` on clones so the
   mutation is logged as a new operation.
 - Barcode nesting detection distinguishes bottom-level ops from wrapper-level composites.
-- `activation_postfunc` must run under `pause_logging()`.
+- `out_postfunc` must run under `pause_logging()`.
 - Live intervention hooks run in this layer; hook output validation lives under
   `intervention/runtime.py`.
 - Fast-path validation must check tensor existence, execution order, and parent alignment.
@@ -46,5 +46,5 @@
 - Dynamic `arg_positions` cache is process-local and is not automatically invalidated across
   torch version changes.
 - Keyword tensor coverage should be checked whenever adding static specs.
-- Fast capture assumes deterministic graph shape between passes; random/control-flow drift is
+- Fast capture assumes deterministic graph shape between ops; random/control-flow drift is
   a hard error.

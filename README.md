@@ -120,6 +120,9 @@ Key intervention entry points:
   `log.attach_hooks(...)`, `log.do(...)`, or top-level `tl.do(log, ...)`.
 - Use `log.replay()` for graph-stable post-hoc edits and `log.rerun(model, x)`
   when the model should execute again.
+- Raw PyTorch `nn.Module.register_forward_hook` replacements are also tolerated
+  during active captures; replacement layer passes are marked with
+  `intervention_replaced=True`.
 - Compare related logs with `tl.bundle(...)`.
 - Publish recipes with `log.save_intervention(path, level="portable")`; the
   saved `.tlspec/` directory contains JSON metadata plus tensor sidecars.

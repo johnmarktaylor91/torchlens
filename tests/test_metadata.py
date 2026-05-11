@@ -1,4 +1,4 @@
-"""Comprehensive metadata field testing for ModelLog and LayerPassLog.
+"""Comprehensive metadata field testing for Trace and OpLog.
 
 Uses small/fast models from example_models.py to verify that all key metadata
 fields are populated correctly across different model types.
@@ -14,7 +14,7 @@ import torch.nn as nn
 
 import example_models
 import torchlens
-from torchlens import log_forward_pass
+from torchlens import trace as trace_fn
 from torchlens.data_classes import FuncCallLocation
 from torchlens.capture.flops import (
     BACKWARD_MULTIPLIERS,
@@ -27,51 +27,51 @@ from torchlens.capture.flops import (
 
 
 # =============================================================================
-# ModelLog fields
+# Trace fields
 # =============================================================================
 
 
 @pytest.mark.smoke
 def test_general_info_fields(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     assert isinstance(mh.model_name, str)
     assert len(mh.model_name) > 0
-    assert mh._pass_finished is True
-    assert isinstance(mh.num_operations, int)
-    assert mh.num_operations > 0
+    assert mh._tracing_finished is True
+    assert isinstance(mh.num_ops, int)
+    assert mh.num_ops > 0
 
 
 @pytest.mark.smoke
 def test_model_structure_non_recurrent(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     assert mh.is_recurrent is False
     assert mh.is_branching is False
 
 
 def test_model_structure_branching(small_input):
     model = example_models.SimpleBranching()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     assert mh.is_branching is True
 
 
 def test_model_structure_recurrent(input_2d):
     model = example_models.RecurrentParamsSimple()
-    mh = log_forward_pass(model, input_2d)
+    mh = trace_fn(model, input_2d)
     assert mh.is_recurrent is True
 
 
 def test_model_structure_conditional():
     model = example_models.ConditionalBranching()
     model_input = -torch.ones(6, 3, 224, 224)
-    mh = log_forward_pass(model, model_input)
+    mh = trace_fn(model, model_input)
     assert mh.has_conditional_branching is True
 
 
 def test_layer_tracking_fields(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     assert isinstance(mh.layer_list, list)
     assert len(mh.layer_list) > 0
     assert isinstance(mh.layer_labels, list)
@@ -83,7 +83,7 @@ def test_layer_tracking_fields(small_input):
 @pytest.mark.smoke
 def test_input_output_layers(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     assert isinstance(mh.input_layers, list)
     assert len(mh.input_layers) >= 1
     assert isinstance(mh.output_layers, list)
@@ -93,54 +93,54 @@ def test_input_output_layers(small_input):
 def test_buffer_layers():
     model = example_models.BufferModel()
     model_input = torch.rand(12, 12)
-    mh = log_forward_pass(model, model_input)
+    mh = trace_fn(model, model_input)
     assert isinstance(mh.buffer_layers, list)
     assert len(mh.buffer_layers) > 0
 
 
 def test_tensor_info_fields(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
-    assert isinstance(mh.num_tensors_total, int)
-    assert mh.num_tensors_total > 0
-    assert isinstance(mh.total_activation_memory, (int, float))
-    assert mh.total_activation_memory > 0
-    assert isinstance(mh.total_activation_memory_str, str)
-    assert len(mh.total_activation_memory_str) > 0
+    mh = trace_fn(model, small_input)
+    assert isinstance(mh.num_tensors, int)
+    assert mh.num_tensors > 0
+    assert isinstance(mh.total_out_memory, (int, float))
+    assert mh.total_out_memory > 0
+    assert isinstance(mh.total_out_memory_str, str)
+    assert len(mh.total_out_memory_str) > 0
 
 
 def test_param_info_fields(small_input):
     model = example_models.BatchNormModel()
-    mh = log_forward_pass(model, small_input)
-    assert isinstance(mh.total_param_tensors, int)
-    assert isinstance(mh.total_params, int)
-    assert mh.total_params > 0
+    mh = trace_fn(model, small_input)
+    assert isinstance(mh.num_param_tensors, int)
+    assert isinstance(mh.num_params, int)
+    assert mh.num_params > 0
 
 
 def test_module_info_fields(small_input):
     model = example_models.NestedModules()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     # Module info is now accessed via structured ModuleLog objects
     assert len(mh.modules) > 1
     root = mh.modules["self"]
     assert root.address == "self"
-    assert len(root.all_layers) > 0
+    assert len(root.layers) > 0
     # Submodules should have valid addresses and class names
     for ml in mh.modules:
         if ml.address != "self":
-            assert isinstance(ml.module_class_name, str)
+            assert isinstance(ml.class_name, str)
             assert ml.address_parent in mh.modules
 
 
 def test_time_fields(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
-    assert isinstance(mh.time_total, float)
-    assert mh.time_total > 0
-    assert isinstance(mh.time_setup, float)
-    assert isinstance(mh.time_forward_pass, float)
-    assert isinstance(mh.time_cleanup, float)
-    assert isinstance(mh.time_logging, float)
+    mh = trace_fn(model, small_input)
+    assert isinstance(mh.duration, float)
+    assert mh.duration > 0
+    assert isinstance(mh.setup_duration, float)
+    assert isinstance(mh.forward_duration, float)
+    assert isinstance(mh.cleanup_duration, float)
+    assert isinstance(mh.overhead_duration, float)
 
 
 def test_multi_input_layers():
@@ -150,122 +150,122 @@ def test_multi_input_layers():
         torch.rand(6, 3, 224, 224),
         torch.rand(6, 3, 224, 224),
     ]
-    mh = log_forward_pass(model, inputs)
+    mh = trace_fn(model, inputs)
     assert len(mh.input_layers) == 3
 
 
 def test_multi_output_layers(small_input):
     model = example_models.MultiOutputs()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     assert len(mh.output_layers) >= 2
 
 
-def test_internally_initialized_layers(small_input):
+def test_internal_source_ops(small_input):
     model = example_models.SimpleInternallyGenerated()
-    mh = log_forward_pass(model, small_input)
-    assert isinstance(mh.internally_initialized_layers, list)
-    assert len(mh.internally_initialized_layers) > 0
+    mh = trace_fn(model, small_input)
+    assert isinstance(mh.internal_source_ops, list)
+    assert len(mh.internal_source_ops) > 0
 
 
-def test_equivalent_operations(input_2d):
+def test_equivalent_ops(input_2d):
     model = example_models.RecurrentParamsSimple()
-    mh = log_forward_pass(model, input_2d)
-    assert isinstance(mh.equivalent_operations, dict)
-    assert len(mh.equivalent_operations) > 0
+    mh = trace_fn(model, input_2d)
+    assert isinstance(mh.equivalent_ops, dict)
+    assert len(mh.equivalent_ops) > 0
 
 
 # =============================================================================
-# LayerPassLog fields
+# OpLog fields
 # =============================================================================
 
 
 def test_label_fields(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     entry = mh[0]
     assert isinstance(entry.layer_label, str)
     assert isinstance(entry.layer_type, str)
-    assert isinstance(entry.pass_num, int)
+    assert isinstance(entry.call_index, int)
     assert isinstance(entry.lookup_keys, list)
     assert len(entry.lookup_keys) > 0
 
 
 def test_input_layer_properties(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     input_entry = None
     for label in mh.layer_labels:
         e = mh[label]
-        if e.is_input_layer:
+        if e.is_input:
             input_entry = e
             break
     assert input_entry is not None
-    assert input_entry.is_input_layer is True
-    assert input_entry.is_output_layer is False
+    assert input_entry.is_input is True
+    assert input_entry.is_output is False
     assert input_entry.has_parents is False
     assert input_entry.has_children is True
 
 
 def test_output_layer_properties(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     output_entry = None
     for label in mh.layer_labels:
         e = mh[label]
-        if e.is_output_layer:
+        if e.is_output:
             output_entry = e
             break
     assert output_entry is not None
-    assert output_entry.is_output_layer is True
+    assert output_entry.is_output is True
     assert output_entry.has_children is False
 
 
 def test_entry_tensor_info_fields(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     entry = mh[0]
-    assert isinstance(entry.tensor_shape, (tuple, torch.Size))
-    assert isinstance(entry.tensor_dtype, torch.dtype)
-    assert isinstance(entry.tensor_memory, (int, float))
-    assert entry.activation is not None
+    assert isinstance(entry.shape, (tuple, torch.Size))
+    assert isinstance(entry.dtype, torch.dtype)
+    assert isinstance(entry.memory, (int, float))
+    assert entry.out is not None
 
 
 def test_function_call_fields(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     non_input = None
     for label in mh.layer_labels:
         e = mh[label]
-        if not e.is_input_layer:
+        if not e.is_input:
             non_input = e
             break
     assert non_input is not None
     assert isinstance(non_input.func_name, str)
     assert len(non_input.func_name) > 0
-    assert isinstance(non_input.func_time, float)
+    assert isinstance(non_input.func_duration, float)
 
 
 def test_graph_relationships(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     for label in mh.layer_labels:
         entry = mh[label]
-        assert isinstance(entry.parent_layers, list)
-        assert isinstance(entry.child_layers, list)
-        for parent_label in entry.parent_layers:
+        assert isinstance(entry.parents, list)
+        assert isinstance(entry.children, list)
+        for parent_label in entry.parents:
             parent = mh[parent_label]
-            assert label in parent.child_layers
-        for child_label in entry.child_layers:
+            assert label in parent.children
+        for child_label in entry.children:
             child = mh[child_label]
-            assert label in child.parent_layers
+            assert label in child.parents
 
 
 def test_inplace_function_flag(small_input):
     model = example_models.InPlaceFuncs()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     for label in mh.layer_labels:
         entry = mh[label]
-        assert isinstance(entry.func_is_inplace, bool)
+        assert isinstance(entry.is_inplace, bool)
     found_relu_ = False
     for label in mh.layer_labels:
         entry = mh[label]
@@ -277,12 +277,12 @@ def test_inplace_function_flag(small_input):
 
 def test_param_fields_with_params(small_input):
     model = example_models.BatchNormModel()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.uses_params:
-            assert entry.num_params_total > 0
+            assert entry.num_params > 0
             found = True
             break
     assert found, "BatchNormModel should have layers computed with params"
@@ -290,7 +290,7 @@ def test_param_fields_with_params(small_input):
 
 def test_param_fields_without_params(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     for label in mh.layer_labels:
         entry = mh[label]
         assert entry.uses_params is False
@@ -298,14 +298,14 @@ def test_param_fields_without_params(small_input):
 
 def test_module_fields(small_input):
     model = example_models.NestedModules()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.is_computed_inside_submodule:
-            assert isinstance(entry.containing_module, str)
-            assert isinstance(entry.module_nesting_depth, int)
-            assert entry.module_nesting_depth > 0
+        if entry.in_submodule:
+            assert isinstance(entry.module, str)
+            assert isinstance(entry.module_call_depth, int)
+            assert entry.module_call_depth > 0
             found = True
             break
     assert found, "NestedModules should have layers inside submodules"
@@ -314,11 +314,11 @@ def test_module_fields(small_input):
 def test_buffer_layer_fields():
     model = example_models.BufferModel()
     model_input = torch.rand(12, 12)
-    mh = log_forward_pass(model, model_input)
+    mh = trace_fn(model, model_input)
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.is_buffer_layer:
+        if entry.is_buffer:
             assert isinstance(entry.buffer_address, str)
             found = True
             break
@@ -327,11 +327,11 @@ def test_buffer_layer_fields():
 
 def test_internally_initialized_fields(small_input):
     model = example_models.SimpleInternallyGenerated()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.is_internally_initialized:
+        if entry.is_internal_source:
             found = True
             break
     assert found, "SimpleInternallyGenerated should have internally init layers"
@@ -339,21 +339,21 @@ def test_internally_initialized_fields(small_input):
 
 def test_sibling_spouse_fields(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     for label in mh.layer_labels:
         entry = mh[label]
-        assert isinstance(entry.sibling_layers, list)
-        assert isinstance(entry.co_parent_layers, list)
+        assert isinstance(entry.siblings, list)
+        assert isinstance(entry.co_parents, list)
 
 
 def test_conditional_fields():
     model = example_models.ConditionalBranching()
     model_input = -torch.ones(6, 3, 224, 224)
-    mh = log_forward_pass(model, model_input)
+    mh = trace_fn(model, model_input)
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.in_cond_branch:
+        if entry.is_in_conditional_body:
             found = True
             break
     assert found, "ConditionalBranching should have layers in cond branches"
@@ -361,7 +361,7 @@ def test_conditional_fields():
 
 def test_distances_with_flag(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input, mark_input_output_distances=True)
+    mh = trace_fn(model, small_input, mark_layer_depths=True)
     for label in mh.layer_labels:
         entry = mh[label]
         assert entry.min_distance_from_input is not None
@@ -376,98 +376,95 @@ def test_distances_with_flag(small_input):
 # =============================================================================
 
 
-def test_recurrent_pass_numbers(input_2d):
+def test_recurrent_call_indexbers(input_2d):
     model = example_models.RecurrentParamsSimple()
-    mh = log_forward_pass(model, input_2d)
-    found_multi_pass = False
-    for label in mh.layer_labels:
-        entry = mh[label]
-        if entry.pass_num > 1:
-            found_multi_pass = True
-            break
-    assert found_multi_pass, "Recurrent model should have layers with pass_num > 1"
+    mh = trace_fn(model, input_2d)
+    found_multi_pass = any(
+        op.call_index > 1 for layer in mh.layer_logs.values() for op in layer.ops.values()
+    )
+    assert found_multi_pass, "Recurrent model should have layers with call_index > 1"
 
 
-def test_recurrent_layer_passes_total(input_2d):
+def test_recurrent_layer_ops_total(input_2d):
     model = example_models.RecurrentParamsSimple()
-    mh = log_forward_pass(model, input_2d)
+    mh = trace_fn(model, input_2d)
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.num_passes > 1:
+        if entry.num_calls > 1:
             found = True
             break
-    assert found, "Recurrent model should have layers with passes_total > 1"
+    assert found, "Recurrent model should have layers with ops_total > 1"
 
 
 def test_recurrent_same_layer_operations(input_2d):
     model = example_models.RecurrentParamsSimple()
-    mh = log_forward_pass(model, input_2d)
+    mh = trace_fn(model, input_2d)
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.recurrent_group and len(entry.recurrent_group) > 0:
+        if entry.recurrent_ops and len(entry.recurrent_ops) > 0:
             found = True
             break
-    assert found, "Recurrent model should have recurrent_group"
+    assert found, "Recurrent model should have recurrent_ops"
 
 
 def test_layer_logs_fewer_than_layer_list(input_2d):
     model = example_models.RecurrentParamsSimple()
-    mh = log_forward_pass(model, input_2d)
+    mh = trace_fn(model, input_2d)
     assert isinstance(mh.layer_logs, dict)
     assert len(mh.layer_logs) < len(mh.layer_list)
 
 
 # =============================================================================
-# ModelLog access patterns
+# Trace access patterns
 # =============================================================================
 
 
-def test_model_log_len(small_input):
+def test_trace_len(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
-    assert len(mh) == len(mh.layer_labels)
+    mh = trace_fn(model, small_input)
+    assert len(mh) == len(mh.layer_list)
 
 
 def test_getitem_by_positive_index(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     entry = mh[0]
     assert entry.layer_label == mh.layer_labels[0]
 
 
 def test_getitem_by_negative_index(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     entry = mh[-1]
     assert entry.layer_label == mh.layer_labels[-1]
 
 
 def test_getitem_by_label(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     label = mh.layer_labels[0]
     entry = mh[label]
     assert entry.layer_label == label
 
 
-def test_model_log_iter(small_input):
+def test_trace_iter(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     items = list(mh)
-    assert len(items) == len(mh.layer_labels)
+    assert len(items) == len(mh.layer_list)
 
 
 def test_layer_labels_properties(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     assert isinstance(mh.layer_labels, list)
     assert all(isinstance(lbl, str) for lbl in mh.layer_labels)
-    assert isinstance(mh.layer_labels_no_pass, list)
-    assert all(isinstance(lbl, str) for lbl in mh.layer_labels_no_pass)
-    assert isinstance(mh.layer_labels_w_pass, list)
-    assert all(isinstance(lbl, str) for lbl in mh.layer_labels_w_pass)
+    assert isinstance(mh.layer_labels, list)
+    assert all(isinstance(lbl, str) for lbl in mh.layer_labels)
+    assert isinstance(mh.op_labels, list)
+    assert all(isinstance(lbl, str) for lbl in mh.op_labels)
 
 
 # =============================================================================
@@ -475,23 +472,23 @@ def test_layer_labels_properties(small_input):
 # =============================================================================
 
 
-def test_captured_args_populated(small_input):
+def test_saved_args_populated(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input, save_function_args=True)
-    assert mh.save_function_args is True
+    mh = trace_fn(model, small_input, save_arg_values=True)
+    assert mh.save_arg_values is True
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input_layer and entry.captured_args is not None:
+        if not entry.is_input and entry.saved_args is not None:
             found = True
             break
-    assert found, "save_function_args=True should populate captured_args"
+    assert found, "save_arg_values=True should populate saved_args"
 
 
-def test_captured_args_not_populated(small_input):
+def test_saved_args_not_populated(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input)
-    assert mh.save_function_args is False
+    mh = trace_fn(model, small_input)
+    assert mh.save_arg_values is False
 
 
 # =============================================================================
@@ -499,13 +496,13 @@ def test_captured_args_not_populated(small_input):
 # =============================================================================
 
 
-def test_postfunc_applied(small_input):
+def test_postfunc(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input, activation_postfunc=torch.mean)
+    mh = trace_fn(model, small_input, out_postfunc=torch.mean)
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.transformed_activation is not None:
-            assert entry.transformed_activation.dim() == 0, (
+        if entry.transformed_out is not None:
+            assert entry.transformed_out.dim() == 0, (
                 f"Layer {label} should be scalar after torch.mean postfunc"
             )
 
@@ -701,7 +698,7 @@ def test_flops_simple_linear_model():
     """FLOPs populated for a simple linear model."""
     model = nn.Sequential(nn.Linear(10, 20), nn.ReLU(), nn.Linear(20, 5))
     x = torch.randn(4, 10)
-    mh = log_forward_pass(model, x)
+    mh = trace_fn(model, x)
     flops_values = [entry.flops_forward for entry in mh.layer_list]
     non_none = [f for f in flops_values if f is not None]
     assert len(non_none) > 0, "No layers have FLOPs computed"
@@ -711,7 +708,7 @@ def test_flops_total_positive():
     """total_flops_forward should be positive for a model with compute."""
     model = nn.Sequential(nn.Linear(10, 20), nn.ReLU())
     x = torch.randn(4, 10)
-    mh = log_forward_pass(model, x)
+    mh = trace_fn(model, x)
     assert mh.total_flops_forward > 0
     assert mh.total_flops_backward > 0
     assert mh.total_flops == mh.total_flops_forward + mh.total_flops_backward
@@ -721,7 +718,7 @@ def test_flops_by_type():
     """flops_by_type returns a dict with expected keys."""
     model = nn.Sequential(nn.Linear(10, 20), nn.ReLU())
     x = torch.randn(4, 10)
-    mh = log_forward_pass(model, x)
+    mh = trace_fn(model, x)
     fbt = mh.flops_by_type()
     assert isinstance(fbt, dict)
     assert len(fbt) > 0
@@ -739,7 +736,7 @@ def test_flops_conv_model():
         nn.AdaptiveAvgPool2d(1),
     )
     x = torch.randn(1, 3, 32, 32)
-    mh = log_forward_pass(model, x)
+    mh = trace_fn(model, x)
     # Conv2d(3, 16, 3): 2 * (1*16*32*32) * 3 * 9 = 884736
     assert mh.total_flops_forward > 800000
 
@@ -753,7 +750,7 @@ def test_flops_coverage_on_model():
         nn.Sigmoid(),
     )
     x = torch.randn(4, 10)
-    mh = log_forward_pass(model, x)
+    mh = trace_fn(model, x)
     total = len(mh.layer_list)
     with_flops = sum(1 for e in mh.layer_list if e.flops_forward is not None)
     coverage = with_flops / total if total > 0 else 0
@@ -766,10 +763,10 @@ def test_flops_coverage_on_model():
 
 
 def test_module_training_modes_populated(small_input):
-    """ModuleLog.is_training should capture the training flag."""
+    """ModuleLog.is_train_mode should capture the training flag."""
     model = example_models.SimpleFF()
     model.train()
-    mh = log_forward_pass(model, small_input)
+    mh = trace_fn(model, small_input)
     # SimpleFF has no submodules beyond root
     assert isinstance(mh.modules, object)
 
@@ -780,16 +777,16 @@ def test_module_training_modes_train_vs_eval():
     x = torch.rand(2, 5)
 
     model.train()
-    mh_train = log_forward_pass(model, x)
+    mh_train = trace_fn(model, x)
     for ml in mh_train.modules:
         if ml.address != "self":
-            assert ml.is_training is True, f"Module {ml.address} should be training=True"
+            assert ml.is_train_mode is True, f"Module {ml.address} should be training=True"
 
     model.eval()
-    mh_eval = log_forward_pass(model, x)
+    mh_eval = trace_fn(model, x)
     for ml in mh_eval.modules:
         if ml.address != "self":
-            assert ml.is_training is False, f"Module {ml.address} should be training=False"
+            assert ml.is_train_mode is False, f"Module {ml.address} should be training=False"
 
 
 @pytest.mark.slow
@@ -799,7 +796,7 @@ def test_flops_resnet18_range():
     model = torchvision.models.resnet18(weights=None)
     model.eval()
     x = torch.randn(1, 3, 224, 224)
-    mh = log_forward_pass(model, x)
+    mh = trace_fn(model, x)
     gflops = mh.total_flops_forward / 1e9
     assert 1.0 < gflops < 5.0, f"ResNet-18 FLOPs = {gflops:.2f}G, expected ~1.8G"
 
@@ -865,27 +862,27 @@ def test_flops_sdpa():
 # =============================================================================
 
 
-def _get_func_call_stack_with_flag(small_input, save_source_context: bool):
-    """Helper: return a non-input layer's func_call_stack for either source-loading mode."""
+def _get_code_context_with_flag(small_input, save_code_context: bool):
+    """Helper: return a non-input layer's code_context for either source-loading mode."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input, save_source_context=save_source_context)
+    mh = trace_fn(model, small_input, save_code_context=save_code_context)
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input_layer:
-            return entry.func_call_stack, mh
+        if not entry.is_input:
+            return entry.code_context, mh
     raise RuntimeError("No non-input layer found")
 
 
-def _get_func_call_stack(small_input):
-    """Helper: run a model and return the func_call_stack from a non-input layer."""
-    return _get_func_call_stack_with_flag(small_input, save_source_context=True)
+def _get_code_context(small_input):
+    """Helper: run a model and return the code_context from a non-input layer."""
+    return _get_code_context_with_flag(small_input, save_code_context=True)
 
 
 # --- Class structure ---
 
 
-def test_func_call_stack_returns_list_of_func_call_locations(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+def test_code_context_returns_list_of_func_call_locations(small_input):
+    stack, _ = _get_code_context(small_input)
     assert isinstance(stack, list)
     assert len(stack) > 0
     for loc in stack:
@@ -893,7 +890,7 @@ def test_func_call_stack_returns_list_of_func_call_locations(small_input):
 
 
 def test_func_call_location_fields_populated(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     loc = stack[0]
     assert isinstance(loc.file, str)
     assert isinstance(loc.line_number, int)
@@ -906,7 +903,7 @@ def test_func_call_location_fields_populated(small_input):
 
 
 def test_optional_fields_are_str_or_none(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         assert loc.func_signature is None or isinstance(loc.func_signature, str)
         assert loc.func_docstring is None or isinstance(loc.func_docstring, str)
@@ -916,7 +913,7 @@ def test_optional_fields_are_str_or_none(small_input):
 
 
 def test_forward_frame_present(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     func_names = [loc.func_name for loc in stack]
     assert "forward" in func_names
 
@@ -925,7 +922,7 @@ def test_no_torchlens_internals_in_stack(small_input):
     import os
 
     torchlens_pkg_dir = os.path.dirname(os.path.abspath(torchlens.__file__))
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         assert not loc.file.startswith(torchlens_pkg_dir), (
             f"Internal file {loc.file} should not appear in stack"
@@ -933,7 +930,7 @@ def test_no_torchlens_internals_in_stack(small_input):
 
 
 def test_call_line_is_stripped(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.call_line:
             assert loc.call_line == loc.call_line.strip()
@@ -943,7 +940,7 @@ def test_call_line_is_stripped(small_input):
 
 
 def test_repr_contains_key_info(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     # Find a frame with code context
     loc = None
     for entry in stack:
@@ -975,16 +972,16 @@ def test_repr_source_unavailable():
     assert "source unavailable" in r
 
 
-def test_func_call_location_no_source_state_with_save_source_context_off(small_input, monkeypatch):
-    stack, mh = _get_func_call_stack_with_flag(small_input, save_source_context=False)
+def test_func_call_location_no_source_state_with_save_code_context_off(small_input, monkeypatch):
+    stack, mh = _get_code_context_with_flag(small_input, save_code_context=False)
     assert isinstance(stack, list)
     assert len(stack) > 0
     captured_entries = [
-        entry for entry in mh.layer_list if not entry.is_input_layer and entry.func_name != "none"
+        entry for entry in mh.layer_list if not entry.is_input and entry.func_name != "none"
     ]
-    assert all(len(entry.func_call_stack) > 0 for entry in captured_entries)
+    assert all(len(entry.code_context) > 0 for entry in captured_entries)
     for entry in captured_entries:
-        for frame in entry.func_call_stack:
+        for frame in entry.code_context:
             assert frame.file is not None
             assert frame.line_number is not None
             assert frame.code_firstlineno is not None
@@ -1023,7 +1020,7 @@ def test_func_call_location_no_source_state_with_save_source_context_off(small_i
 
     mh_roundtrip = pickle.loads(pickle.dumps(mh))
     roundtrip_stack = next(
-        entry.func_call_stack for entry in mh_roundtrip.layer_list if not entry.is_input_layer
+        entry.code_context for entry in mh_roundtrip.layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -1031,7 +1028,7 @@ def test_func_call_location_no_source_state_with_save_source_context_off(small_i
 
 
 def test_getitem_returns_context_line(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     loc = None
     for entry in stack:
         if entry.code_context is not None and len(entry.code_context) > 0:
@@ -1042,7 +1039,7 @@ def test_getitem_returns_context_line(small_input):
 
 
 def test_getitem_slice(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     loc = None
     for entry in stack:
         if entry.code_context is not None and len(entry.code_context) >= 3:
@@ -1056,7 +1053,7 @@ def test_getitem_slice(small_input):
 
 
 def test_len_matches_code_context(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.code_context is not None:
             assert len(loc) == len(loc.code_context) == loc.num_context_lines
@@ -1066,7 +1063,7 @@ def test_len_matches_code_context(small_input):
 
 
 def test_default_num_context_lines(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.code_context is not None:
             assert loc.num_context_lines == 15  # 7 + 1 + 7
@@ -1075,20 +1072,20 @@ def test_default_num_context_lines(small_input):
 
 def test_custom_num_context_lines(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input, num_context_lines=3, save_source_context=True)
+    mh = trace_fn(model, small_input, num_context_lines=3, save_code_context=True)
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input_layer and entry.func_call_stack:
-            for loc in entry.func_call_stack:
+        if not entry.is_input and entry.code_context:
+            for loc in entry.code_context:
                 if loc.code_context is not None:
                     assert loc.num_context_lines == 7  # 3 + 1 + 3
                     return
     pytest.skip("No non-input layer with code context found")
 
 
-def test_num_context_lines_stored_on_model_log(small_input):
+def test_num_context_lines_stored_on_trace(small_input):
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, small_input, num_context_lines=5)
+    mh = trace_fn(model, small_input, num_context_lines=5)
     assert mh.num_context_lines == 5
 
 
@@ -1096,7 +1093,7 @@ def test_num_context_lines_stored_on_model_log(small_input):
 
 
 def test_code_context_labeled_has_arrow(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.code_context is not None:
             assert loc.code_context_labeled.count("  --->  ") == 1
@@ -1104,7 +1101,7 @@ def test_code_context_labeled_has_arrow(small_input):
 
 
 def test_code_context_labeled_arrow_points_to_call_line(small_input):
-    stack, _ = _get_func_call_stack(small_input)
+    stack, _ = _get_code_context(small_input)
     for loc in stack:
         if loc.code_context is not None and loc.call_line:
             for line in loc.code_context_labeled.split("\n"):
@@ -1115,37 +1112,37 @@ def test_code_context_labeled_arrow_points_to_call_line(small_input):
 
 
 # =============================================================================
-# Meta-validation: corrupt activations and verify detection
+# Meta-validation: corrupt outs and verify detection
 # =============================================================================
 
 
 @pytest.fixture
 def valid_mh_and_ground_truth():
-    """Return a valid (ModelLog, ground_truth_tensors) pair for SimpleFF."""
+    """Return a valid (Trace, ground_truth_tensors) pair for SimpleFF."""
     model = example_models.SimpleFF()
     x = torch.rand(2, 3, 32, 32)
-    mh = log_forward_pass(model, x, layers_to_save="all", save_function_args=True)
-    ground_truth = [mh[label].activation.clone() for label in mh.output_layers]
+    mh = trace_fn(model, x, layers_to_save="all", save_arg_values=True)
+    ground_truth = [mh[label].out.clone() for label in mh.output_layers]
     return mh, ground_truth
 
 
-def test_uncorrupted_passes(valid_mh_and_ground_truth):
-    """Sanity check: validation passes when nothing is corrupted."""
+def test_uncorrupted_ops(valid_mh_and_ground_truth):
+    """Sanity check: validation ops when nothing is corrupted."""
     mh, ground_truth = valid_mh_and_ground_truth
     assert mh.validate_forward_pass(ground_truth) is True
 
 
-def test_corrupt_output_activations(valid_mh_and_ground_truth):
-    """Replacing the output layer's activation with random data should fail."""
+def test_corrupt_output_outs(valid_mh_and_ground_truth):
+    """Replacing the output layer's out with random data should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     output_label = mh.output_layers[0]
-    original = mh[output_label].activation
-    mh[output_label].activation = torch.randn_like(original)
+    original = mh[output_label].out
+    mh[output_label].out = torch.randn_like(original)
     assert mh.validate_forward_pass(ground_truth) is False
 
 
-def test_corrupt_intermediate_activations(valid_mh_and_ground_truth):
-    """Replacing a non-output, non-input layer's activation should fail."""
+def test_corrupt_intermediate_outs(valid_mh_and_ground_truth):
+    """Replacing a non-output, non-input layer's out should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     # Find an intermediate layer (not input, not output)
     intermediate = [
@@ -1155,83 +1152,83 @@ def test_corrupt_intermediate_activations(valid_mh_and_ground_truth):
     ]
     assert len(intermediate) > 0, "No intermediate layers found"
     target = intermediate[0]
-    original = mh[target].activation
-    mh[target].activation = torch.randn_like(original)
+    original = mh[target].out
+    mh[target].out = torch.randn_like(original)
     assert mh.validate_forward_pass(ground_truth) is False
 
 
-def test_swap_two_layers_activations(valid_mh_and_ground_truth):
-    """Swapping activation between two non-output layers should fail."""
+def test_swap_two_layers_outs(valid_mh_and_ground_truth):
+    """Swapping out between two non-output layers should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     non_output = [label for label in mh.layer_labels if label not in mh.output_layers]
     assert len(non_output) >= 2, "Need at least 2 non-output layers to swap"
     a, b = non_output[0], non_output[1]
-    ta = mh[a].activation.clone()
-    tb = mh[b].activation.clone()
+    ta = mh[a].out.clone()
+    tb = mh[b].out.clone()
     # Only swap if they're different shapes or values — otherwise the swap is a no-op
     if ta.shape == tb.shape and torch.equal(ta, tb):
         pytest.skip("Layers have identical tensors; swap is invisible")
-    mh[a].activation = tb
-    mh[b].activation = ta
+    mh[a].out = tb
+    mh[b].out = ta
     assert mh.validate_forward_pass(ground_truth) is False
 
 
-def test_zero_out_activations(valid_mh_and_ground_truth):
-    """Zeroing out a layer's activation should fail."""
+def test_zero_out_outs(valid_mh_and_ground_truth):
+    """Zeroing out a layer's out should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     non_output = [label for label in mh.layer_labels if label not in mh.output_layers]
     assert len(non_output) > 0
     target = non_output[0]
-    mh[target].activation = torch.zeros_like(mh[target].activation)
+    mh[target].out = torch.zeros_like(mh[target].out)
     assert mh.validate_forward_pass(ground_truth) is False
 
 
-def test_add_noise_to_activations(valid_mh_and_ground_truth):
-    """Adding gaussian noise to a layer's activation should fail."""
+def test_add_noise_to_outs(valid_mh_and_ground_truth):
+    """Adding gaussian noise to a layer's out should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     non_output = [label for label in mh.layer_labels if label not in mh.output_layers]
     assert len(non_output) > 0
     target = non_output[0]
-    original = mh[target].activation
-    mh[target].activation = original + torch.randn_like(original) * 0.1
+    original = mh[target].out
+    mh[target].out = original + torch.randn_like(original) * 0.1
     assert mh.validate_forward_pass(ground_truth) is False
 
 
-def test_scale_activations(valid_mh_and_ground_truth):
-    """Scaling a layer's activation by a large scalar should fail."""
+def test_scale_outs(valid_mh_and_ground_truth):
+    """Scaling a layer's out by a large scalar should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     non_output = [label for label in mh.layer_labels if label not in mh.output_layers]
     assert len(non_output) > 0
     target = non_output[0]
-    mh[target].activation = mh[target].activation * 100.0
+    mh[target].out = mh[target].out * 100.0
     assert mh.validate_forward_pass(ground_truth) is False
 
 
-def test_wrong_shape_activations(valid_mh_and_ground_truth):
-    """Replacing activation with a wrong-shaped tensor should fail."""
+def test_wrong_shape_outs(valid_mh_and_ground_truth):
+    """Replacing out with a wrong-shaped tensor should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
     output_label = mh.output_layers[0]
-    mh[output_label].activation = torch.randn(1, 1)
+    mh[output_label].out = torch.randn(1, 1)
     assert mh.validate_forward_pass(ground_truth) is False
 
 
-def test_corrupt_captured_args(valid_mh_and_ground_truth):
-    """Modifying saved function arguments (captured_args) should fail."""
+def test_corrupt_saved_args(valid_mh_and_ground_truth):
+    """Modifying saved function arguments (saved_args) should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
-    # Find a non-input layer that has captured_args with tensors
+    # Find a non-input layer that has saved_args with tensors
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.is_input_layer:
+        if entry.is_input:
             continue
-        if entry.captured_args and any(isinstance(a, torch.Tensor) for a in entry.captured_args):
-            for i, arg in enumerate(entry.captured_args):
+        if entry.saved_args and any(isinstance(a, torch.Tensor) for a in entry.saved_args):
+            for i, arg in enumerate(entry.saved_args):
                 if isinstance(arg, torch.Tensor):
-                    corrupted_args = list(entry.captured_args)
+                    corrupted_args = list(entry.saved_args)
                     corrupted_args[i] = torch.randn_like(arg)
-                    entry.captured_args = tuple(corrupted_args)
+                    entry.saved_args = tuple(corrupted_args)
                     assert mh.validate_forward_pass(ground_truth) is False
                     return
-    pytest.skip("No layer with tensor captured_args found")
+    pytest.skip("No layer with tensor saved_args found")
 
 
 # =============================================================================
@@ -1245,8 +1242,8 @@ class TestConditionalBranchDetection:
     # --- Shared helpers ---
 
     @staticmethod
-    def _log(model, x, save_source_context=False):
-        return log_forward_pass(model, x, save_source_context=save_source_context)
+    def _log(model, x, save_code_context=False):
+        return trace_fn(model, x, save_code_context=save_code_context)
 
     @staticmethod
     def _cond_input():
@@ -1261,59 +1258,59 @@ class TestConditionalBranchDetection:
     # --- Core detection tests ---
 
     def test_if_branch_detected(self):
-        """ConditionalBranching has in_cond_branch=True nodes."""
+        """ConditionalBranching has is_in_conditional_body=True nodes."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
-        found = any(mh[label].in_cond_branch for label in mh.layer_labels)
+        found = any(mh[label].is_in_conditional_body for label in mh.layer_labels)
         assert found, "Should detect conditional branch nodes"
 
     def test_then_branch_detected(self):
-        """ConditionalBranching with save_source_context has cond_branch_then_children.
+        """ConditionalBranching with save_code_context has conditional_then_children.
 
         Uses positive input so the if-body (THEN branch) actually executes.
         """
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_source_context=True)
-        found = any(len(mh[label].cond_branch_then_children) > 0 for label in mh.layer_labels)
-        assert found, "Should detect THEN branch children with save_source_context"
+        mh = self._log(model, self._pos_input(), save_code_context=True)
+        found = any(len(mh[label].conditional_then_children) > 0 for label in mh.layer_labels)
+        assert found, "Should detect THEN branch children with save_code_context"
 
     def test_branch_start_has_both_if_and_then(self):
         """Branch start has both IF and THEN children when if-body executes."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_source_context=True)
+        mh = self._log(model, self._pos_input(), save_code_context=True)
         for label in mh.layer_labels:
             entry = mh[label]
-            if entry.cond_branch_start_children:
-                assert len(entry.cond_branch_then_children) > 0, (
+            if entry.conditional_entry_children:
+                assert len(entry.conditional_then_children) > 0, (
                     f"Branch start {label} has IF children but no THEN children"
                 )
 
     def test_if_and_then_children_disjoint(self):
         """No overlap between IF and THEN children sets."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_source_context=True)
+        mh = self._log(model, self._pos_input(), save_code_context=True)
         for label in mh.layer_labels:
             entry = mh[label]
-            if_set = set(entry.cond_branch_start_children)
-            then_set = set(entry.cond_branch_then_children)
+            if_set = set(entry.conditional_entry_children)
+            then_set = set(entry.conditional_then_children)
             overlap = if_set & then_set
             assert len(overlap) == 0, f"IF and THEN overlap at {label}: {overlap}"
 
     def test_terminal_bool_exists(self):
-        """At least one is_terminal_bool_layer=True node."""
+        """At least one is_terminal_bool=True node."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
-        found = any(mh[label].is_terminal_bool_layer for label in mh.layer_labels)
+        found = any(mh[label].is_terminal_bool for label in mh.layer_labels)
         assert found, "Should have at least one terminal bool layer"
 
     # --- False positive tests (Bug #88) ---
 
     def test_no_false_cond_branch_without_condition(self):
-        """Model with no conditions has zero in_cond_branch nodes."""
+        """Model with no conditions has zero is_in_conditional_body nodes."""
         model = example_models.SimpleFF()
         x = torch.rand(2, 3, 32, 32)
         mh = self._log(model, x)
-        cond_nodes = [label for label in mh.layer_labels if mh[label].in_cond_branch]
+        cond_nodes = [label for label in mh.layer_labels if mh[label].is_in_conditional_body]
         assert len(cond_nodes) == 0, f"SimpleFF should have no cond nodes: {cond_nodes}"
 
     def test_non_conditional_layers_not_marked(self):
@@ -1322,9 +1319,9 @@ class TestConditionalBranchDetection:
         mh = self._log(model, self._cond_input())
         for label in mh.layer_labels:
             entry = mh[label]
-            if entry.is_output_ancestor and not entry.cond_branch_start_children:
-                assert entry.in_cond_branch is False, (
-                    f"Output ancestor {label} falsely marked in_cond_branch"
+            if entry.has_output_descendant and not entry.conditional_entry_children:
+                assert entry.is_in_conditional_body is False, (
+                    f"Output ancestor {label} falsely marked is_in_conditional_body"
                 )
 
     def test_condition_chain_no_spill(self):
@@ -1335,34 +1332,34 @@ class TestConditionalBranchDetection:
         for label in mh.layer_labels:
             entry = mh[label]
             # Output-ancestor nodes that are NOT branch-starts should not be marked
-            if entry.is_output_ancestor and not entry.cond_branch_start_children:
-                assert entry.in_cond_branch is False, (
-                    f"Node {label} falsely marked in_cond_branch (Bug #88)"
+            if entry.has_output_descendant and not entry.conditional_entry_children:
+                assert entry.is_in_conditional_body is False, (
+                    f"Node {label} falsely marked is_in_conditional_body (Bug #88)"
                 )
 
     # --- Edge/model log tests ---
 
     def test_conditional_branch_edges_populated(self):
-        """model_log.conditional_branch_edges is non-empty."""
+        """trace.conditional_branch_edges is non-empty."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
         assert len(mh.conditional_branch_edges) > 0
 
-    def test_conditional_then_edges_populated(self):
-        """model_log.conditional_then_edges non-empty with save_source_context."""
+    def test_conditional_then_entry_edges_populated(self):
+        """trace.conditional_then_entry_edges non-empty with save_code_context."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_source_context=True)
-        assert len(mh.conditional_then_edges) > 0
+        mh = self._log(model, self._pos_input(), save_code_context=True)
+        assert len(mh.conditional_then_entry_edges) > 0
 
     def test_edges_reference_valid_labels(self):
-        """All labels in edge tuples exist in model_log.layer_labels."""
+        """All labels in edge tuples exist in trace.layer_labels."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_source_context=True)
+        mh = self._log(model, self._pos_input(), save_code_context=True)
         all_labels = set(mh.layer_labels)
         for parent, child in mh.conditional_branch_edges:
             assert parent in all_labels, f"IF edge parent {parent} not in layer_labels"
             assert child in all_labels, f"IF edge child {child} not in layer_labels"
-        for parent, child in mh.conditional_then_edges:
+        for parent, child in mh.conditional_then_entry_edges:
             assert parent in all_labels, f"THEN edge parent {parent} not in layer_labels"
             assert child in all_labels, f"THEN edge child {child} not in layer_labels"
 
@@ -1372,10 +1369,10 @@ class TestConditionalBranchDetection:
         """ConditionalNoBranch: post-validation clears false IF markings."""
         model = example_models.ConditionalNoBranch()
         x = torch.rand(2, 3, 32, 32)
-        mh = self._log(model, x, save_source_context=True)
+        mh = self._log(model, x, save_code_context=True)
         # After post-validation, if no ast.If found, IF markings cleared
         branch_starts = [
-            label for label in mh.layer_labels if len(mh[label].cond_branch_start_children) > 0
+            label for label in mh.layer_labels if len(mh[label].conditional_entry_children) > 0
         ]
         assert len(branch_starts) == 0, (
             f"ConditionalNoBranch should have no branch starts after post-validation: {branch_starts}"
@@ -1385,8 +1382,8 @@ class TestConditionalBranchDetection:
         """ConditionalAlwaysTrue still detects THEN branch."""
         model = example_models.ConditionalAlwaysTrue()
         x = torch.rand(2, 3, 32, 32)
-        mh = self._log(model, x, save_source_context=True)
-        found = any(len(mh[label].cond_branch_then_children) > 0 for label in mh.layer_labels)
+        mh = self._log(model, x, save_code_context=True)
+        found = any(len(mh[label].conditional_then_children) > 0 for label in mh.layer_labels)
         assert found, "ConditionalAlwaysTrue should detect THEN branch"
 
     # --- Complex scenario tests ---
@@ -1404,7 +1401,7 @@ class TestConditionalBranchDetection:
         x = torch.ones(2, 3, 32, 32)
         mh = self._log(model, x)
         branch_starts = [
-            label for label in mh.layer_labels if len(mh[label].cond_branch_start_children) > 0
+            label for label in mh.layer_labels if len(mh[label].conditional_entry_children) > 0
         ]
         assert len(branch_starts) >= 2, (
             f"Expected >= 2 branch starts, got {len(branch_starts)}: {branch_starts}"
@@ -1444,16 +1441,16 @@ class TestConditionalBranchDetection:
                 assert "IF" in dot_content, "Graph should contain IF edge label"
 
     def test_then_label_in_visualization(self):
-        """Rendered graph contains 'THEN' edge label with save_source_context."""
+        """Rendered graph contains 'THEN' edge label with save_code_context."""
         import tempfile
         import os
 
         model = example_models.ConditionalBranching()
         x = self._pos_input()
-        mh = log_forward_pass(model, x, save_source_context=True)
+        mh = trace_fn(model, x, save_code_context=True)
         with tempfile.TemporaryDirectory() as tmpdir:
             outpath = os.path.join(tmpdir, "cond_then_test")
-            mh.render_graph(
+            mh.draw(
                 vis_mode="unrolled",
                 vis_outpath=outpath,
                 vis_save_only=True,
@@ -1492,30 +1489,30 @@ class TestConditionalBranchDetection:
                 assert "IF" in dot_content, "Rolled graph should contain IF edge label"
 
     def test_cond_fields_survive_deepcopy(self):
-        """Fields persist through ModelLog deepcopy cycle."""
+        """Fields persist through Trace deepcopy cycle."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._pos_input(), save_source_context=True)
+        mh = self._log(model, self._pos_input(), save_code_context=True)
         mh2 = copy.deepcopy(mh)
         assert mh2.conditional_branch_edges == mh.conditional_branch_edges
-        assert mh2.conditional_then_edges == mh.conditional_then_edges
+        assert mh2.conditional_then_entry_edges == mh.conditional_then_entry_edges
         for label in mh.layer_labels:
-            assert mh2[label].cond_branch_start_children == mh[label].cond_branch_start_children
-            assert mh2[label].cond_branch_then_children == mh[label].cond_branch_then_children
+            assert mh2[label].conditional_entry_children == mh[label].conditional_entry_children
+            assert mh2[label].conditional_then_children == mh[label].conditional_then_children
 
     # --- Fallback tests (without source context) ---
 
     def test_if_detection_works_without_source_context(self):
-        """Bug #88 fix works without save_source_context."""
+        """Bug #88 fix works without save_code_context."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._cond_input(), save_source_context=False)
-        found = any(mh[label].in_cond_branch for label in mh.layer_labels)
+        mh = self._log(model, self._cond_input(), save_code_context=False)
+        found = any(mh[label].is_in_conditional_body for label in mh.layer_labels)
         assert found, "IF detection should work without source context"
 
     def test_then_empty_without_source_context(self):
-        """cond_branch_then_children stays empty when save_source_context=False."""
+        """conditional_then_children stays empty when save_code_context=False."""
         model = example_models.ConditionalBranching()
-        mh = self._log(model, self._cond_input(), save_source_context=False)
+        mh = self._log(model, self._cond_input(), save_code_context=False)
         for label in mh.layer_labels:
-            assert len(mh[label].cond_branch_then_children) == 0, (
+            assert len(mh[label].conditional_then_children) == 0, (
                 f"THEN children should be empty without source context: {label}"
             )

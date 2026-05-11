@@ -17,9 +17,10 @@
 | `user_funcs.py` | Main capture, summary, visualization, validation, and bundle graph entry points |
 
 ## Attribute Conventions
-- `tl_` prefix on tensor/module attributes during logging.
-- Permanent attrs: `tl_module_address`, `tl_module_type`, forward wrapper markers.
-- Session attrs: `tl_source_model_log`, `tl_module_pass_num`, buffer labels, temporary counters.
+- TorchLens metadata attached to user/model objects lives under `obj._tl`.
+- Permanent module metadata uses `_tl.address` and `_tl.module_type`.
+- Session tensor/parameter metadata is cleaned per capture; callable wrapper markers also live
+  under `_tl`.
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state.
 
 ## Public Surface
@@ -39,13 +40,13 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
    torch namespace mutation.
 3. RNG state capture/restore must happen before `active_logging()`.
 4. Internal torch ops during capture must be wrapped in `pause_logging()`.
-5. Step 6 module suffix mutation makes loop pass rebuilding necessary.
+5. Module suffixes are appended to `equivalence_class` at op creation before loop detection.
 6. `postprocess_fast()` must not call `_build_module_logs()`.
 7. `train_mode=True` must preserve user `requires_grad` and reject detach/disk conflicts.
 8. Portable I/O must reject unsafe paths/symlinks and unsupported tensor variants.
 
 ## Newer 2.x Subsystems
-- `_io/` and `io/`: portable save/load, `.tlspec` manifests, lazy activation refs, rehydration.
+- `_io/` and `io/`: portable save/load, `.tlspec` manifests, lazy out refs, rehydration.
 - `intervention/`: Bundle, sites/selectors, hooks, helpers, replay/rerun/fork/save.
 - `fastlog/`: sparse `Recording` path, predicate normalization, RAM/disk storage.
 - `bridge/`: lazy optional adapters for external tools.
@@ -57,10 +58,10 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 
 ## Conditional Branch Attribution
 - Step 5 builds AST file indexes, classifies terminal bools, materializes dense
-  `conditional_events`, runs backward flood, attributes forward arm edges, then derives
+  `conditional_records`, runs backward flood, attributes forward arm edges, then derives
   legacy THEN/ELIF/ELSE views.
-- Primary structures are `ModelLog.conditional_events`, `conditional_arm_edges`,
-  `conditional_edge_passes`, and `cond_branch_children_by_cond`.
+- Primary structures are `Trace.conditional_records`, `conditional_arm_entry_edges`,
+  `conditional_edge_call_indices`, and `conditional_arm_children`.
 - Graphviz renders IF/THEN/ELIF/ELSE labels; ELK and dagua conditional support remains more
   limited than Graphviz.
 

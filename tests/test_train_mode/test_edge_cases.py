@@ -95,20 +95,20 @@ def test_autocast_wrapping_slow_keeps_grad() -> None:
 
     model = nn.Linear(4, 2)
     with torch.autocast("cpu", dtype=torch.bfloat16):
-        model_log = tl.log_forward_pass(
+        trace = tl.trace(
             model,
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             random_seed=0,
         )
-    saved = model_log[model_log.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     model.zero_grad(set_to_none=True)
     saved.float().sum().backward()
 
     assert saved.grad_fn is not None
     assert any(param.grad is not None for param in model.parameters())
-    model_log.cleanup()
+    trace.cleanup()
 
 
 def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
@@ -118,57 +118,57 @@ def test_ddp_wrapped_slow_keeps_local_module_grad(tmp_path: Path) -> None:
         pytest.skip("torch.distributed is unavailable")
     ddp_model = torch.nn.parallel.DistributedDataParallel(nn.Linear(4, 2))
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         ddp_model,
         torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
-    saved = model_log[model_log.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     ddp_model.module.zero_grad(set_to_none=True)
     saved.sum().backward()
 
     assert all(param.grad is not None for param in ddp_model.module.parameters())
-    model_log.cleanup()
+    trace.cleanup()
 
 
 def test_view_reshape_ops_keep_grad() -> None:
     """Saving a viewed tensor still allows backward through the view chain."""
 
     model = ViewModel()
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
-    saved = model_log[model_log.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     model.zero_grad(set_to_none=True)
     saved.square().mean().backward()
 
     assert model.linear.weight.grad is not None
-    model_log.cleanup()
+    trace.cleanup()
 
 
 def test_inplace_relu_keeps_grad_slow() -> None:
     """Saving after an in-place relu on a non-leaf tensor still backpropagates."""
 
     model = InplaceReluModel()
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
-    saved = model_log[model_log.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     model.zero_grad(set_to_none=True)
     saved.sum().backward()
 
     assert any(param.grad is not None for param in model.parameters())
-    model_log.cleanup()
+    trace.cleanup()
 
 
 def test_no_grad_wrapping_forward_severs_grad_slow() -> None:
@@ -177,45 +177,45 @@ def test_no_grad_wrapping_forward_severs_grad_slow() -> None:
     model = nn.Linear(4, 2)
     no_grad = getattr(torch, "no_grad")
     with no_grad():
-        model_log = tl.log_forward_pass(
+        trace = tl.trace(
             model,
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,
             random_seed=0,
         )
-    saved = model_log[model_log.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     assert saved.grad_fn is None
     with pytest.raises(RuntimeError, match="does not require grad"):
         saved.sum().backward()
-    model_log.cleanup()
+    trace.cleanup()
 
 
 def test_mixed_grad_model_slow() -> None:
-    """Only the trainable parameter subset receives gradients."""
+    """Only the trainable parameter subset receives grads."""
 
     model = MixedGradModel()
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
         train_mode=True,
         random_seed=0,
     )
-    saved = model_log[model_log.output_layers[0]].activation
+    saved = trace[trace.output_layers[0]].out
 
     model.zero_grad(set_to_none=True)
     saved.sum().backward()
 
     assert all(param.grad is None for param in model.frozen.parameters())
     assert all(param.grad is not None for param in model.trainable.parameters())
-    model_log.cleanup()
+    trace.cleanup()
 
 
 def test_compile_wrapped_model_rejected_cross_link() -> None:
     """Edge-case cross-link: compiled models are rejected for train-mode capture."""
 
     with pytest.raises(RuntimeError, match="torch.compile"):
-        tl.log_forward_pass(
+        tl.trace(
             _compile_model(nn.Linear(4, 2)),
             torch.randn(3, 4, requires_grad=True),
             train_mode=True,

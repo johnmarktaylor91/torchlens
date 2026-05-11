@@ -1,16 +1,16 @@
-"""ModelLog cleanup helpers and post-session teardown.
+"""Trace cleanup helpers and post-session teardown.
 
-This module provides the helper stack behind ModelLog cleanup operations:
+This module provides the helper stack behind Trace cleanup operations:
 
-1. **cleanup()** — full teardown: deletes all LayerPassLog attributes, then
-   deletes all ModelLog attributes (both FIELD_ORDER and internal containers).
-   Breaks circular references (ModelLog <-> LayerPassLog.source_model_log,
-   LayerLog <-> LayerPassLog.parent_layer_log, ModuleLog <-> _source_model_log).
+1. **cleanup()** — full teardown: deletes all OpLog attributes, then
+   deletes all Trace attributes (both FIELD_ORDER and internal containers).
+   Breaks circular references (Trace <-> OpLog.source_trace,
+   LayerLog <-> OpLog.parent_layer_log, ModuleLog <-> _source_trace).
    Also frees GPU memory via ``torch.cuda.empty_cache()`` when CUDA is
    available (gated to avoid CUDA driver probe cost on CPU-only runs).
 
 2. **_remove_log_entry_references()** — removes a single layer label from all
-   ModelLog list/dict fields that hold graph references.
+   Trace list/dict fields that hold graph references.
 
 3. **_scrub_conditional_fields_after_removal()** — repairs conditional metadata
    after one or more labels are removed.
@@ -28,17 +28,17 @@ from ..constants import MODEL_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef, Unsupported
 from ..utils.collections import remove_entry_from_list
 from ..utils.tensor_utils import _is_cuda_available
-from .layer_pass_log import LayerPassLog
+from .op_log import OpLog
 
 if TYPE_CHECKING:
-    from .model_log import ModelLog
+    from .model_log import Trace
 
 
-def cleanup(self: "ModelLog") -> None:
+def cleanup(self: "Trace") -> None:
     """Delete all log entries, break circular references, and free GPU memory.
 
     Called explicitly by the user or automatically at the end of a logging
-    session. After cleanup, the ModelLog is effectively empty and should
+    session. After cleanup, the Trace is effectively empty and should
     not be used further. No long-lived safetensors handles need to be
     closed here because lazy materialization opens and closes files per call.
     """
@@ -46,22 +46,22 @@ def cleanup(self: "ModelLog") -> None:
     if hasattr(self, "param_logs"):
         for pl in self.param_logs:
             pl.release_param_ref()
-    # First, clear all attributes from each LayerPassLog entry.
-    # This breaks the LayerPassLog -> ModelLog circular reference
-    # (via source_model_log) without needing per-entry reference removal.
+    # First, clear all attributes from each OpLog entry.
+    # This breaks the OpLog -> Trace circular reference
+    # (via source_trace) without needing per-entry reference removal.
     for tensor_log_entry in self:
         _clear_entry_attributes(tensor_log_entry)
-    # Then delete all ModelLog attributes listed in the canonical FIELD_ORDER.
+    # Then delete all Trace attributes listed in the canonical FIELD_ORDER.
     for attr in MODEL_LOG_FIELD_ORDER:
         if hasattr(self, attr):
             delattr(self, attr)
     # GC-5/GC-12: Also clear internal containers not in MODEL_LOG_FIELD_ORDER.
-    # These hold back-references (e.g. _module_logs -> ModuleLog -> _source_model_log)
+    # These hold back-references (e.g. _module_logs -> ModuleLog -> _source_trace)
     # and large data structures (layer_logs, layer_dict_all_keys).
     for attr in [
         "_raw_layer_dict",
         "_raw_layer_labels_list",
-        "_saved_gradients_set",
+        "_saved_grads_set",
         "_module_logs",
         "_buffer_accessor",
         "_module_metadata",
@@ -71,8 +71,8 @@ def cleanup(self: "ModelLog") -> None:
         "layer_logs",
         "layer_dict_all_keys",
         "layer_dict_main_keys",
-        "orphan_layers",
-        "unlogged_layers",
+        "orphan_ops",
+        "unlogged_ops",
         "_loaded_from_bundle",
         "_source_bundle_manifest_sha256",
         "_source_bundle_path",
@@ -85,18 +85,18 @@ def cleanup(self: "ModelLog") -> None:
         torch.cuda.empty_cache()
 
 
-def _clear_entry_attributes(log_entry: LayerPassLog) -> None:
-    """Clear all instance attributes from a LayerPassLog entry."""
-    if hasattr(log_entry, "activation_ref"):
-        log_entry.activation_ref = None
-    if hasattr(log_entry, "gradient_ref"):
-        log_entry.gradient_ref = None
+def _clear_entry_attributes(log_entry: OpLog) -> None:
+    """Clear all instance attributes from a OpLog entry."""
+    if hasattr(log_entry, "out_ref"):
+        log_entry.out_ref = None
+    if hasattr(log_entry, "grad_ref"):
+        log_entry.grad_ref = None
     for attr in list(log_entry.__dict__):
         delattr(log_entry, attr)
 
 
 def _strip_pass_suffix(layer_label: str) -> str:
-    """Remove any ``:pass_num`` suffix from a layer label.
+    """Remove any ``:call_index`` suffix from a layer label.
 
     Args:
         layer_label: Layer label, optionally pass-qualified.
@@ -107,7 +107,7 @@ def _strip_pass_suffix(layer_label: str) -> str:
     return layer_label.split(":", 1)[0]
 
 
-def _label_for_reference_removal(log_entry: LayerPassLog, pass_finished: bool) -> str:
+def _label_for_reference_removal(log_entry: OpLog, pass_finished: bool) -> str:
     """Return the label namespace currently used by graph-level references.
 
     Parameters
@@ -126,24 +126,24 @@ def _label_for_reference_removal(log_entry: LayerPassLog, pass_finished: bool) -
         return cast(str, log_entry.layer_label)
     if getattr(log_entry, "layer_label", None):
         return cast(str, log_entry.layer_label)
-    return cast(str, log_entry.tensor_label_raw)
+    return cast(str, log_entry._label_raw)
 
 
-def _filter_cond_branch_children_by_cond(
-    cond_branch_children_by_cond: Dict[int, Dict[str, List[str]]],
+def _filter_conditional_arm_children(
+    conditional_arm_children: Dict[int, Dict[str, List[str]]],
     labels_to_remove: Set[str],
 ) -> Dict[int, Dict[str, List[str]]]:
-    """Drop removed labels from ``cond_branch_children_by_cond``.
+    """Drop removed labels from ``conditional_arm_children``.
 
     Args:
-        cond_branch_children_by_cond: ``cond_id -> branch_kind -> child labels``.
+        conditional_arm_children: ``cond_id -> branch_kind -> child labels``.
         labels_to_remove: Labels that should be removed.
 
     Returns:
         A new nested dict with removed labels and empty containers pruned.
     """
     filtered_children_by_cond: Dict[int, Dict[str, List[str]]] = {}
-    for cond_id, branch_children in cond_branch_children_by_cond.items():
+    for cond_id, branch_children in conditional_arm_children.items():
         filtered_branch_children = {
             branch_kind: [
                 child_label for child_label in child_labels if child_label not in labels_to_remove
@@ -160,14 +160,14 @@ def _filter_cond_branch_children_by_cond(
     return filtered_children_by_cond
 
 
-def _filter_cond_branch_elif_children(
-    cond_branch_elif_children: Dict[int, List[str]],
+def _filter_conditional_elif_children(
+    conditional_elif_children: Dict[int, List[str]],
     labels_to_remove: Set[str],
 ) -> Dict[int, List[str]]:
-    """Drop removed labels from ``cond_branch_elif_children``.
+    """Drop removed labels from ``conditional_elif_children``.
 
     Args:
-        cond_branch_elif_children: ``elif_index -> child labels``.
+        conditional_elif_children: ``elif_index -> child labels``.
         labels_to_remove: Labels that should be removed.
 
     Returns:
@@ -177,26 +177,26 @@ def _filter_cond_branch_elif_children(
         elif_ix: [
             child_label for child_label in child_labels if child_label not in labels_to_remove
         ]
-        for elif_ix, child_labels in cond_branch_elif_children.items()
+        for elif_ix, child_labels in conditional_elif_children.items()
         if any(child_label not in labels_to_remove for child_label in child_labels)
     }
 
 
-def _filter_conditional_arm_edges(
-    conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]],
+def _filter_conditional_arm_entry_edges(
+    conditional_arm_entry_edges: Dict[Tuple[int, str], List[Tuple[str, str]]],
     labels_to_remove: Set[str],
 ) -> Dict[Tuple[int, str], List[Tuple[str, str]]]:
-    """Drop removed labels from ``conditional_arm_edges``.
+    """Drop removed labels from ``conditional_arm_entry_edges``.
 
     Args:
-        conditional_arm_edges: ``(cond_id, branch_kind) -> [(parent, child)]``.
+        conditional_arm_entry_edges: ``(cond_id, branch_kind) -> [(parent, child)]``.
         labels_to_remove: Labels that should be removed.
 
     Returns:
         A new dict with empty edge lists pruned.
     """
     filtered_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
-    for key, edge_list in conditional_arm_edges.items():
+    for key, edge_list in conditional_arm_entry_edges.items():
         filtered_edges = [
             (parent, child)
             for parent, child in edge_list
@@ -207,108 +207,106 @@ def _filter_conditional_arm_edges(
     return filtered_arm_edges
 
 
-def _filter_conditional_edge_passes(
-    conditional_edge_passes: Dict[Tuple[str, str, int, str], List[int]],
+def _filter_conditional_edge_call_indices(
+    conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]],
     labels_to_remove_no_pass: Set[str],
 ) -> Dict[Tuple[str, str, int, str], List[int]]:
-    """Drop removed labels from ``conditional_edge_passes`` keys.
+    """Drop removed labels from ``conditional_edge_call_indices`` keys.
 
     Args:
-        conditional_edge_passes: ``(parent_no_pass, child_no_pass, cond_id, branch_kind) -> pass list``.
+        conditional_edge_call_indices: ``(parent_no_pass, child_no_pass, cond_id, branch_kind) -> pass list``.
         labels_to_remove_no_pass: Pass-stripped labels that should be removed.
 
     Returns:
         A new dict with removed-key entries pruned.
     """
     return {
-        key: pass_nums
-        for key, pass_nums in conditional_edge_passes.items()
+        key: call_indexs
+        for key, call_indexs in conditional_edge_call_indices.items()
         if key[0] not in labels_to_remove_no_pass and key[1] not in labels_to_remove_no_pass
     }
 
 
 def _scrub_layer_entry_conditional_fields(
-    layer_entry: LayerPassLog,
+    layer_entry: OpLog,
     labels_to_remove: Set[str],
 ) -> None:
-    """Remove deleted labels from conditional fields on a surviving LayerPassLog.
+    """Remove deleted labels from conditional fields on a surviving OpLog.
 
     Args:
         layer_entry: Surviving layer entry to scrub.
         labels_to_remove: Labels that were removed elsewhere in the log.
     """
-    layer_entry.cond_branch_start_children = [
+    layer_entry.conditional_entry_children = [
         child_label
-        for child_label in layer_entry.cond_branch_start_children
+        for child_label in layer_entry.conditional_entry_children
         if child_label not in labels_to_remove
     ]
-    layer_entry.cond_branch_children_by_cond = _filter_cond_branch_children_by_cond(
-        layer_entry.cond_branch_children_by_cond,
+    layer_entry.conditional_arm_children = _filter_conditional_arm_children(
+        layer_entry.conditional_arm_children,
         labels_to_remove,
     )
-    layer_entry.cond_branch_then_children = [
+    layer_entry.conditional_then_children = [
         child_label
-        for child_label in layer_entry.cond_branch_then_children
+        for child_label in layer_entry.conditional_then_children
         if child_label not in labels_to_remove
     ]
-    layer_entry.cond_branch_elif_children = _filter_cond_branch_elif_children(
-        layer_entry.cond_branch_elif_children,
+    layer_entry.conditional_elif_children = _filter_conditional_elif_children(
+        layer_entry.conditional_elif_children,
         labels_to_remove,
     )
-    layer_entry.cond_branch_else_children = [
+    layer_entry.conditional_else_children = [
         child_label
-        for child_label in layer_entry.cond_branch_else_children
+        for child_label in layer_entry.conditional_else_children
         if child_label not in labels_to_remove
     ]
 
 
-def _scrub_layer_log_conditional_fields(
-    self: "ModelLog", labels_to_remove_no_pass: Set[str]
-) -> None:
+def _scrub_layer_log_conditional_fields(self: "Trace", labels_to_remove_no_pass: Set[str]) -> None:
     """Remove deleted labels from aggregate LayerLog conditional fields.
 
     Args:
-        self: ModelLog owning the LayerLogs.
+        self: Trace owning the LayerLogs.
         labels_to_remove_no_pass: Pass-stripped labels that were removed.
     """
     for layer_log in getattr(self, "layer_logs", {}).values():
-        layer_log.cond_branch_start_children = [
+        layer_log.conditional_entry_children = [
             child_label
-            for child_label in layer_log.cond_branch_start_children
+            for child_label in layer_log.conditional_entry_children
             if child_label not in labels_to_remove_no_pass
         ]
-        layer_log.cond_branch_children_by_cond = _filter_cond_branch_children_by_cond(
-            layer_log.cond_branch_children_by_cond,
+        layer_log.conditional_arm_children = _filter_conditional_arm_children(
+            layer_log.conditional_arm_children,
             labels_to_remove_no_pass,
         )
-        layer_log.cond_branch_then_children = [
+        layer_log.conditional_then_children = [
             child_label
-            for child_label in layer_log.cond_branch_then_children
+            for child_label in layer_log.conditional_then_children
             if child_label not in labels_to_remove_no_pass
         ]
-        layer_log.cond_branch_elif_children = _filter_cond_branch_elif_children(
-            layer_log.cond_branch_elif_children,
+        layer_log.conditional_elif_children = _filter_conditional_elif_children(
+            layer_log.conditional_elif_children,
             labels_to_remove_no_pass,
         )
-        layer_log.cond_branch_else_children = [
+        layer_log.conditional_else_children = [
             child_label
-            for child_label in layer_log.cond_branch_else_children
+            for child_label in layer_log.conditional_else_children
             if child_label not in labels_to_remove_no_pass
         ]
 
 
 def _scrub_conditional_fields_after_removal(
-    self: "ModelLog",
+    self: "Trace",
     labels_to_remove: Set[str],
-    surviving_entries: Iterable[LayerPassLog],
+    surviving_entries: Iterable[OpLog],
 ) -> None:
     """Scrub conditional references after one or more layer labels are removed.
 
     Args:
-        self: ModelLog being updated.
+        self: Trace being updated.
         labels_to_remove: Removed layer labels using the same qualification as the
             current removal pass.
-        surviving_entries: Surviving LayerPassLog entries to scrub in-place.
+        surviving_entries: Surviving OpLog entries to scrub in-place.
     """
     labels_to_remove_no_pass = {_strip_pass_suffix(layer_label) for layer_label in labels_to_remove}
 
@@ -317,15 +315,15 @@ def _scrub_conditional_fields_after_removal(
 
     _scrub_layer_log_conditional_fields(self, labels_to_remove_no_pass)
 
-    self.conditional_arm_edges = _filter_conditional_arm_edges(
-        self.conditional_arm_edges,
+    self.conditional_arm_entry_edges = _filter_conditional_arm_entry_edges(
+        self.conditional_arm_entry_edges,
         labels_to_remove,
     )
-    self.conditional_edge_passes = _filter_conditional_edge_passes(
-        self.conditional_edge_passes,
+    self.conditional_edge_call_indices = _filter_conditional_edge_call_indices(
+        self.conditional_edge_call_indices,
         labels_to_remove_no_pass,
     )
-    for conditional_event in self.conditional_events:
+    for conditional_event in self.conditional_records:
         conditional_event.bool_layers = [
             layer_label
             for layer_label in conditional_event.bool_layers
@@ -338,12 +336,12 @@ def _scrub_conditional_fields_after_removal(
 def _scrub_intervention_fields_after_removal(
     self: Any,
     labels_to_remove: Set[str],
-    surviving_entries: Iterable[LayerPassLog],
+    surviving_entries: Iterable[OpLog],
 ) -> None:
     """Scrub replay/intervention metadata that carries layer labels.
 
     Args:
-        self: ModelLog being updated.
+        self: Trace being updated.
         labels_to_remove: Removed labels in the active label namespace.
         surviving_entries: Surviving entries to scrub in-place.
     """
@@ -355,25 +353,25 @@ def _scrub_intervention_fields_after_removal(
             if edge.parent_label not in labels_to_remove
             and edge.child_label not in labels_to_remove
         ]
-        layer_entry.captured_arg_template = _replace_removed_parent_refs(
-            getattr(layer_entry, "captured_arg_template", None), labels_to_remove
+        layer_entry.args_template = _replace_removed_parent_refs(
+            getattr(layer_entry, "args_template", None), labels_to_remove
         )
-        layer_entry.captured_kwarg_template = _replace_removed_parent_refs(
-            getattr(layer_entry, "captured_kwarg_template", None), labels_to_remove
+        layer_entry.kwargs_template = _replace_removed_parent_refs(
+            getattr(layer_entry, "kwargs_template", None), labels_to_remove
         )
-        intervention_log = [
+        interventions = [
             record
-            for record in getattr(layer_entry, "intervention_log", [])
+            for record in getattr(layer_entry, "interventions", [])
             if not _record_mentions_removed_label(record, labels_to_remove)
         ]
         if hasattr(layer_entry, "_internal_set"):
-            layer_entry._internal_set("intervention_log", intervention_log)
+            layer_entry._internal_set("interventions", interventions)
         else:
-            layer_entry.intervention_log = intervention_log
+            layer_entry.interventions = interventions
 
-    self.operation_history = [
+    self.ledger = [
         record
-        for record in getattr(self, "operation_history", [])
+        for record in getattr(self, "ledger", [])
         if not _record_mentions_removed_label(record, labels_to_remove)
     ]
     intervention_spec = getattr(self, "_intervention_spec", None)
@@ -427,7 +425,7 @@ def _record_mentions_removed_label(record: Any, labels_to_remove: Set[str]) -> b
         Whether the record references a removed label.
     """
 
-    label_fields = {"parent_label", "child_label", "target_label", "pass_label", "site_label"}
+    label_fields = {"parent_label", "child_label", "target_label", "call_label", "site_label"}
     if isinstance(record, str):
         return record in labels_to_remove
     if isinstance(record, (list, tuple)):
@@ -452,25 +450,24 @@ def _record_mentions_removed_label(record: Any, labels_to_remove: Set[str]) -> b
     return False
 
 
-# List fields on ModelLog that hold tensor labels and need filtering during
+# List fields on Trace that hold tensor labels and need filtering during
 # entry removal.  Must stay in sync between _batch_remove_log_entries and
 # _remove_log_entry_references — if you add a new label-holding list field
-# to ModelLog, add it here AND to _remove_log_entry_references.
+# to Trace, add it here AND to _remove_log_entry_references.
 _LIST_FIELDS_TO_CLEAN = [
     "input_layers",
     "output_layers",
     "buffer_layers",
-    "internally_initialized_layers",
-    "internally_terminated_layers",
-    "internally_terminated_bool_layers",
-    "layers_with_saved_activations",
-    "layers_with_saved_gradients",
-    "_layers_where_internal_branches_merge_with_input",
+    "internal_source_ops",
+    "internal_sink_ops",
+    "internally_terminated_bool_ops",
+    "ops_with_saved_outs",
+    "ops_with_saved_grads",
 ]
 
 
-def _remove_log_entry_references(self: "ModelLog", layer_to_remove: str) -> None:
-    """Removes all references to a single LayerPassLog from the ModelLog's list/dict fields.
+def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
+    """Removes all references to a single OpLog from the Trace's list/dict fields.
 
     This is the single-entry counterpart to the reference-cleaning logic in
     ``_batch_remove_log_entries``. Both must clean the same set of fields —
@@ -479,17 +476,16 @@ def _remove_log_entry_references(self: "ModelLog", layer_to_remove: str) -> None
     Args:
         layer_to_remove: The label of the log entry to remove.
     """
-    # Clear any fields in ModelLog referring to the entry.
+    # Clear any fields in Trace referring to the entry.
 
     remove_entry_from_list(self.input_layers, layer_to_remove)
     remove_entry_from_list(self.output_layers, layer_to_remove)
     remove_entry_from_list(self.buffer_layers, layer_to_remove)
-    remove_entry_from_list(self.internally_initialized_layers, layer_to_remove)
-    remove_entry_from_list(self.internally_terminated_layers, layer_to_remove)
-    remove_entry_from_list(self.internally_terminated_bool_layers, layer_to_remove)
-    remove_entry_from_list(self.layers_with_saved_activations, layer_to_remove)
-    remove_entry_from_list(self.layers_with_saved_gradients, layer_to_remove)
-    remove_entry_from_list(self._layers_where_internal_branches_merge_with_input, layer_to_remove)
+    remove_entry_from_list(self.internal_source_ops, layer_to_remove)
+    remove_entry_from_list(self.internal_sink_ops, layer_to_remove)
+    remove_entry_from_list(self.internally_terminated_bool_ops, layer_to_remove)
+    remove_entry_from_list(self.ops_with_saved_outs, layer_to_remove)
+    remove_entry_from_list(self.ops_with_saved_grads, layer_to_remove)
 
     _scrub_conditional_fields_after_removal(self, {layer_to_remove}, self)
 
@@ -507,11 +503,11 @@ def _remove_log_entry_references(self: "ModelLog", layer_to_remove: str) -> None
         if len(tensor_labels) > 0
     }
 
-    for equiv_group, equiv_tensor_labels in self.equivalent_operations.items():
+    for equiv_group, equiv_tensor_labels in self.equivalent_ops.items():
         if layer_to_remove in equiv_tensor_labels:
             equiv_tensor_labels.remove(layer_to_remove)
-    self.equivalent_operations = {
+    self.equivalent_ops = {
         equiv_group: tensor_labels
-        for equiv_group, tensor_labels in self.equivalent_operations.items()
+        for equiv_group, tensor_labels in self.equivalent_ops.items()
         if len(tensor_labels) > 0
     }

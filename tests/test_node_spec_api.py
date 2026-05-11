@@ -12,11 +12,11 @@ from torchlens import NodeSpec
 from torchlens.data_classes.layer_log import LayerLog
 
 
-def _render_dot(log: tl.ModelLog, tmp_path: Any, **kwargs: Any) -> str:
-    """Render a ModelLog to DOT using a temporary SVG output path."""
+def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
+    """Render a Trace to DOT using a temporary SVG output path."""
 
     tmp_path.mkdir(parents=True, exist_ok=True)
-    return log.render_graph(
+    return log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / "graph"),
@@ -28,7 +28,7 @@ def test_default_nodespec_for_conv2d_includes_args(tmp_path: Any) -> None:
     """Conv2d default labels should include compact non-default args."""
 
     model = nn.Conv2d(3, 8, kernel_size=3, stride=2, padding=1)
-    log = tl.log_forward_pass(model, torch.randn(1, 3, 8, 8))
+    log = tl.trace(model, torch.randn(1, 3, 8, 8))
 
     dot = _render_dot(log, tmp_path)
 
@@ -41,7 +41,7 @@ def test_default_nodespec_for_linear_includes_in_out(tmp_path: Any) -> None:
     """Linear default labels should include in/out feature counts."""
 
     model = nn.Linear(in_features=16, out_features=32)
-    log = tl.log_forward_pass(model, torch.randn(1, 16))
+    log = tl.trace(model, torch.randn(1, 16))
 
     dot = _render_dot(log, tmp_path)
 
@@ -53,7 +53,7 @@ def test_node_spec_fn_receives_layer_log_and_default(tmp_path: Any) -> None:
     """node_spec_fn receives an aggregate LayerLog and default NodeSpec."""
 
     model = nn.Conv2d(3, 8, kernel_size=3)
-    log = tl.log_forward_pass(model, torch.randn(1, 3, 8, 8))
+    log = tl.trace(model, torch.randn(1, 3, 8, 8))
     captured: list[tuple[LayerLog, NodeSpec]] = []
 
     def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> NodeSpec | None:
@@ -75,7 +75,7 @@ def test_node_spec_fn_return_overrides_default(tmp_path: Any) -> None:
     """Returning a NodeSpec should replace defaults for matching nodes only."""
 
     model = nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU())
-    log = tl.log_forward_pass(model, torch.randn(1, 3, 8, 8))
+    log = tl.trace(model, torch.randn(1, 3, 8, 8))
 
     def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> NodeSpec | None:
         """Replace Conv2d nodes and leave other nodes unchanged."""
@@ -96,7 +96,7 @@ def test_node_spec_fn_returning_none_uses_default(tmp_path: Any) -> None:
     """A callback returning None should produce identical DOT."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    log = tl.log_forward_pass(model, torch.randn(1, 4))
+    log = tl.trace(model, torch.randn(1, 4))
 
     def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> None:
         """Keep all default node specs."""
@@ -114,7 +114,7 @@ def test_html_special_chars_escaped(tmp_path: Any) -> None:
     """NodeSpec lines should be HTML-escaped before DOT emission."""
 
     model = nn.Linear(4, 4)
-    log = tl.log_forward_pass(model, torch.randn(1, 4))
+    log = tl.trace(model, torch.randn(1, 4))
 
     def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> NodeSpec | None:
         """Return a label containing HTML-special characters."""
@@ -134,7 +134,7 @@ def test_collapsed_node_spec_fn_for_module(tmp_path: Any) -> None:
     """collapsed_node_spec_fn should customize collapsed module nodes."""
 
     model = nn.Sequential(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), nn.Linear(4, 2))
-    log = tl.log_forward_pass(model, torch.randn(1, 4))
+    log = tl.trace(model, torch.randn(1, 4))
 
     def collapse_fn(module_log: Any) -> bool:
         """Collapse only the first nested Sequential."""

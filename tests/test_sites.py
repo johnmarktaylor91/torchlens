@@ -22,18 +22,18 @@ def test_sites_builds_structured_sweep() -> None:
 def test_sites_can_expand_to_hook_pairs() -> None:
     """Site collections should be usable as hook attachment inputs."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         torch.nn.ReLU(),
         torch.randn(2, 3),
         intervention_ready=True,
     )
 
-    def hook_fn(activation: torch.Tensor, *, hook: object) -> torch.Tensor:
-        """Return the activation unchanged.
+    def hook_fn(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+        """Return the out unchanged.
 
         Parameters
         ----------
-        activation:
+        out:
             Activation at the site.
         hook:
             Hook context.
@@ -41,11 +41,11 @@ def test_sites_can_expand_to_hook_pairs() -> None:
         Returns
         -------
         torch.Tensor
-            Original activation.
+            Original out.
         """
 
         del hook
-        return activation
+        return out
 
     handle = log.attach_hooks(
         tl.sites("relu", ops=["relu"], modes=["observe"]),

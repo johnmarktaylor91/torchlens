@@ -2,7 +2,7 @@
 
 What this demonstrates
 ----------------------
-Pass ``hooks=...`` to ``log_forward_pass`` so the intervention fires live while
+Pass ``hooks=...`` to ``trace`` so the intervention fires live while
 the model is executing.
 
 How to run
@@ -33,8 +33,8 @@ def main() -> None:
     """Capture with a live zero-ablation hook."""
 
     x = torch.tensor([[-2.0, 3.0]])
-    clean = tl.log_forward_pass(ReluAdd(), x, vis_opt="none", intervention_ready=True)
-    live = tl.log_forward_pass(
+    clean = tl.trace(ReluAdd(), x, vis_opt="none", intervention_ready=True)
+    live = tl.trace(
         ReluAdd(),
         x,
         vis_opt="none",
@@ -42,8 +42,8 @@ def main() -> None:
         hooks={tl.func("relu"): tl.zero_ablate()},
     )
 
-    assert torch.allclose(live.layer_list[-1].activation, torch.ones_like(x))
-    assert not torch.allclose(clean.layer_list[-1].activation, live.layer_list[-1].activation)
+    assert torch.allclose(live.layer_list[-1].out, torch.ones_like(x))
+    assert not torch.allclose(clean.layer_list[-1].out, live.layer_list[-1].out)
     assert live.last_run_records()[-1].engine == "live"
 
 

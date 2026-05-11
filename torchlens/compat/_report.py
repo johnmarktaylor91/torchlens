@@ -508,7 +508,7 @@ def _bitsandbytes_row(model: nn.Module) -> CompatRow:
         "error" if detected else "ok",
         detected,
         details,
-        "Log an unquantized reference model when exact activation metadata is required."
+        "Log an unquantized reference model when exact out metadata is required."
         if detected
         else "",
     )
@@ -620,7 +620,7 @@ def _data_parallel_row(model: nn.Module) -> CompatRow:
         "error" if detected else "ok",
         detected,
         details,
-        "Call torchlens.log_forward_pass(model.module, x)." if detected else "",
+        "Call torchlens.trace(model.module, x)." if detected else "",
     )
 
 
@@ -806,23 +806,23 @@ def _lightning_row(model: nn.Module) -> CompatRow:
     """
 
     detected = callable(getattr(model, "training_step", None))
-    is_training = bool(getattr(model, "training", False))
-    status: Status = "known_broken" if detected and is_training else "pass"
+    is_train_mode = bool(getattr(model, "training", False))
+    status: Status = "known_broken" if detected and is_train_mode else "pass"
     details = (
         "LightningModule training_step detected while the module is in training mode; mid-loop "
         "trainer capture is not a supported TorchLens entry point."
-        if detected and is_training
+        if detected and is_train_mode
         else "Lightning training_step not detected in an active training-mode model."
     )
     return CompatRow(
         "lightning_training_step",
         "Lightning training_step mid-loop",
         status,
-        "error" if detected and is_training else "ok",
-        detected and is_training,
+        "error" if detected and is_train_mode else "ok",
+        detected and is_train_mode,
         details,
         "Use torchlens.callbacks.lightning.LayerProfilerCallback or log a plain forward."
-        if detected and is_training
+        if detected and is_train_mode
         else "",
     )
 
@@ -910,7 +910,7 @@ def _quantized_row(model: nn.Module, input_value: Any) -> CompatRow:
     status: Status = "known_broken" if detected else "pass"
     details = (
         "Quantized tensors/modules detected. tensor_nanequal no longer crashes on quantized "
-        "tensors, but full quantized-model activation metadata remains best-effort."
+        "tensors, but full quantized-model out metadata remains best-effort."
         if detected
         else "No quantized tensors or quantized nn modules detected."
     )
@@ -921,9 +921,7 @@ def _quantized_row(model: nn.Module, input_value: Any) -> CompatRow:
         "error" if detected else "ok",
         detected,
         details,
-        "Use a float reference model for bugs involving exact activation validation."
-        if detected
-        else "",
+        "Use a float reference model for bugs involving exact out validation." if detected else "",
     )
 
 

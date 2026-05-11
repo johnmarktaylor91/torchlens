@@ -48,7 +48,7 @@ def test_predicate_accepts_record_context_signature() -> None:
 
 @pytest.mark.parametrize(
     "result",
-    [True, False, None, CaptureSpec(save_activation=True, save_metadata=False)],
+    [True, False, None, CaptureSpec(save_out=True, save_metadata=False)],
 )
 def test_predicate_accepts_supported_return_types(result: bool | CaptureSpec | None) -> None:
     """Bool, CaptureSpec, and None predicate returns are accepted."""
@@ -65,7 +65,7 @@ def test_predicate_accepts_supported_return_types(result: bool | CaptureSpec | N
         default_op=True,
     )
 
-    assert recording.n_passes == 1
+    assert recording.n_ops == 1
 
 
 @pytest.mark.parametrize(

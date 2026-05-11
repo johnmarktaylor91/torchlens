@@ -22,7 +22,7 @@ def attribute(
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` from the model being attributed.
+        TorchLens ``Trace`` from the model being attributed.
     method:
         Captum attribution object exposing ``attribute``.
     target:
@@ -66,7 +66,7 @@ def layer(log: Any, site: Any) -> nn.Module:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` with a live source model reference.
+        TorchLens ``Trace`` with a live source model reference.
     site:
         Module address, module pass label, layer selector, or layer object.
 
@@ -100,10 +100,10 @@ def layer(log: Any, site: Any) -> nn.Module:
             return cast(nn.Module, modules[address])
 
     resolved = resolve_one_site(log, site)
-    candidates = list(getattr(resolved, "module_passes_exited", ()) or [])
-    containing_module = getattr(resolved, "containing_module", None)
-    if containing_module is not None:
-        candidates.append(str(containing_module))
+    candidates = list(getattr(resolved, "output_of_module_calls", ()) or [])
+    module = getattr(resolved, "module", None)
+    if module is not None:
+        candidates.append(str(module))
     for candidate in reversed(candidates):
         address = str(candidate).rsplit(":", maxsplit=1)[0]
         if address in modules:

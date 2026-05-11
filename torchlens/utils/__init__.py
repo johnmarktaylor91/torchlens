@@ -29,7 +29,7 @@ from .tensor_utils import (
     tensor_all_nan,
     tensor_nanequal,
     safe_to,
-    get_tensor_memory_amount,
+    get_memory_amount,
     safe_copy,
     print_override,
 )
@@ -48,7 +48,7 @@ from .introspection import (
     nested_assign,
     iter_accessible_attributes,
     remove_attributes_with_prefix,
-    _get_func_call_stack,
+    _get_code_context,
 )
 from .collections import (
     is_iterable,
@@ -299,13 +299,13 @@ def list_modules(model: nn.Module) -> list[tuple[str, type[nn.Module]]]:
     return [(address or "self", type(module)) for address, module in model.named_modules()]
 
 
-def _ops_from_log(model_log: Any) -> list[tuple[str, int]]:
-    """Summarize operator counts from a ModelLog.
+def _ops_from_log(trace: Any) -> list[tuple[str, int]]:
+    """Summarize operator counts from a Trace.
 
     Parameters
     ----------
-    model_log:
-        TorchLens log produced by ``log_forward_pass``.
+    trace:
+        TorchLens log produced by ``trace``.
 
     Returns
     -------
@@ -314,7 +314,7 @@ def _ops_from_log(model_log: Any) -> list[tuple[str, int]]:
     """
 
     counts: Counter[str] = Counter()
-    for layer in model_log.layer_list:
+    for layer in trace.layer_list:
         op_name = getattr(layer, "func_name", None) or getattr(layer, "layer_type", "unknown")
         counts[str(op_name)] += 1
     return sorted(counts.items())
@@ -332,7 +332,7 @@ def _log_ops_for_mode(
     model:
         PyTorch model to run.
     x:
-        Input passed to ``log_forward_pass``.
+        Input passed to ``trace``.
     mode:
         Module training mode to use for this one capture.
 
@@ -342,7 +342,7 @@ def _log_ops_for_mode(
         Operator names and counts.
     """
 
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
 
     original_mode = model.training
@@ -351,14 +351,14 @@ def _log_ops_for_mode(
     elif mode == "train":
         model.train()
     try:
-        model_log = log_forward_pass(
+        trace = trace_fn(
             model,
             x,
             capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
         )
     finally:
         model.train(original_mode)
-    return _ops_from_log(model_log)
+    return _ops_from_log(trace)
 
 
 def list_ops(
@@ -373,7 +373,7 @@ def list_ops(
     model:
         PyTorch model to run.
     x:
-        Input passed to ``log_forward_pass``.
+        Input passed to ``trace``.
     mode:
         ``"current"``, ``"eval"``, ``"train"``, or ``"both"``. ``"both"``
         returns separate eval/train summaries.
@@ -402,7 +402,7 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> i
     model:
         PyTorch model to run.
     x:
-        Input passed to ``log_forward_pass``.
+        Input passed to ``trace``.
     count_fma_as_two:
         FLOP/MAC convention marker. TorchLens stores counts using its capture-time
         convention; this argument records the requested display convention and is
@@ -416,22 +416,22 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> i
     """
 
     del count_fma_as_two
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
 
-    model_log = log_forward_pass(
+    trace = trace_fn(
         model,
         x,
         capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
     )
-    return int(sum(getattr(layer, "flops_forward", None) or 0 for layer in model_log.layer_list))
+    return int(sum(getattr(layer, "flops_forward", None) or 0 for layer in trace.layer_list))
 
 
 def peek_graph(
     model: nn.Module,
     x: Any,
     view: Literal["unrolled", "rolled", "none"] = "unrolled",
-    output_path: str | Path = "modelgraph",
+    container_path: str | Path = "modelgraph",
     file_format: str = "pdf",
 ) -> None:
     """Capture and render a model graph with quickstart defaults.
@@ -441,10 +441,10 @@ def peek_graph(
     model:
         PyTorch model to run.
     x:
-        Input passed to ``log_forward_pass``.
+        Input passed to ``trace``.
     view:
         Visualization view vocabulary passed as ``vis_mode``.
-    output_path:
+    container_path:
         Output path stem for the renderer.
     file_format:
         Renderer output format.
@@ -455,17 +455,17 @@ def peek_graph(
         The graph renderer writes its output as a side effect.
     """
 
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
     from torchlens.options import CaptureOptions
 
-    model_log = log_forward_pass(
+    trace = trace_fn(
         model,
         x,
         capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
     )
-    model_log.show(
+    trace.draw(
         vis_mode=view,
-        vis_outpath=str(output_path),
+        vis_outpath=str(container_path),
         vis_fileformat=file_format,
         vis_save_only=True,
     )
@@ -599,7 +599,7 @@ def _memory_budget_to_bytes(memory_budget: int | str) -> int:
 
 
 def find_executable_save_set(
-    model_log: Any,
+    trace: Any,
     layers: Iterable[str],
     memory_budget: int | str,
 ) -> list[str]:
@@ -607,8 +607,8 @@ def find_executable_save_set(
 
     Parameters
     ----------
-    model_log:
-        ModelLog containing layer memory metadata.
+    trace:
+        Trace containing layer memory metadata.
     layers:
         Candidate layer labels or lookup strings.
     memory_budget:
@@ -617,19 +617,17 @@ def find_executable_save_set(
     Returns
     -------
     list[str]
-        Selected layer labels. The heuristic sorts candidates by activation
+        Selected layer labels. The heuristic sorts candidates by out
         memory ascending to maximize count.
     """
 
     budget = _memory_budget_to_bytes(memory_budget)
     candidates: list[tuple[int, str]] = []
     for layer in layers:
-        entry = model_log[layer]
+        entry = trace[layer]
         label = str(getattr(entry, "layer_label_no_pass", getattr(entry, "layer_label", layer)))
         memory = int(
-            getattr(entry, "transformed_activation_memory", None)
-            or getattr(entry, "tensor_memory", None)
-            or 0
+            getattr(entry, "transformed_out_memory", None) or getattr(entry, "memory", None) or 0
         )
         candidates.append((memory, label))
 
@@ -642,7 +640,7 @@ def find_executable_save_set(
     return selected
 
 
-def log_forward_pass_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any) -> Any:
+def trace_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any) -> Any:
     """Capture an iterable of inputs as a stacked multi-pass log.
 
     Parameters
@@ -652,23 +650,23 @@ def log_forward_pass_streaming(model: nn.Module, inputs_iter: Iterable[Any], **k
     inputs_iter:
         Iterable producing model inputs.
     **kwargs:
-        Keyword arguments forwarded to ``torchlens.log_forward_pass``.
+        Keyword arguments forwarded to ``torchlens.trace``.
 
     Returns
     -------
     Any
-        First ``ModelLog`` with ``streaming_pass_logs`` and
-        ``num_streamed_passes`` attributes.
+        First ``Trace`` with ``streaming_pass_logs`` and
+        ``num_streamed_ops`` attributes.
     """
 
     import torchlens
 
-    logs = [torchlens.log_forward_pass(model, inputs, **kwargs) for inputs in inputs_iter]
+    logs = [torchlens.trace(model, inputs, **kwargs) for inputs in inputs_iter]
     if not logs:
         raise ValueError("inputs_iter must yield at least one input.")
     root = logs[0]
     root.streaming_pass_logs = logs
-    root.num_streamed_passes = len(logs)
+    root.num_streamed_ops = len(logs)
     return root
 
 
@@ -680,7 +678,7 @@ __all__ = [
     "_ATTR_SKIP_SET",
     "_AUTOCAST_DEVICES",
     "_cuda_available",
-    "_get_func_call_stack",
+    "_get_code_context",
     "_is_cuda_available",
     "_model_expects_single_arg",
     "_safe_copy_arg",
@@ -688,7 +686,7 @@ __all__ = [
     "doctor",
     "ensure_iterable",
     "get_attr_values_from_tensor_list",
-    "get_tensor_memory_amount",
+    "get_memory_amount",
     "get_vars_of_type_from_obj",
     "human_readable_size",
     "identity",
@@ -703,7 +701,7 @@ __all__ = [
     "format_size",
     "list_modules",
     "list_ops",
-    "log_forward_pass_streaming",
+    "trace_streaming",
     "log_current_autocast_state",
     "log_current_rng_states",
     "make_random_barcode",

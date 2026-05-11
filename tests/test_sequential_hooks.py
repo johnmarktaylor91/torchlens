@@ -32,12 +32,12 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
 
     order: list[str] = []
 
-    def add_one(activation: torch.Tensor, *, hook: object) -> torch.Tensor:
-        """Add one to the activation.
+    def add_one(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+        """Add one to the out.
 
         Parameters
         ----------
-        activation:
+        out:
             Activation at the site.
         hook:
             Hook context.
@@ -45,19 +45,19 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
         Returns
         -------
         torch.Tensor
-            Shifted activation.
+            Shifted out.
         """
 
         del hook
         order.append("add")
-        return activation + 1
+        return out + 1
 
-    def times_two(activation: torch.Tensor, *, hook: object) -> torch.Tensor:
-        """Double the activation.
+    def times_two(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+        """Double the out.
 
         Parameters
         ----------
-        activation:
+        out:
             Activation at the site.
         hook:
             Hook context.
@@ -65,35 +65,35 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
         Returns
         -------
         torch.Tensor
-            Scaled activation.
+            Scaled out.
         """
 
         del hook
         order.append("mul")
-        return activation * 2
+        return out * 2
 
     model = ReluModel()
     x = torch.tensor([[-1.0, 2.0]])
-    log = tl.log_forward_pass(model, x, intervention_ready=True)
+    log = tl.trace(model, x, intervention_ready=True)
     log.attach_hooks(tl.func("relu"), add_one, times_two, confirm_mutation=True)
 
     rerun_log = log.rerun(model, x)
 
     assert order == ["add", "mul"]
-    assert torch.equal(rerun_log[rerun_log.output_layers[0]].activation, (torch.relu(x) + 1) * 2)
+    assert torch.equal(rerun_log[rerun_log.output_layers[0]].out, (torch.relu(x) + 1) * 2)
 
 
 def test_hook_handle_remove_and_context_manager_cleanup() -> None:
     """Hook handles should remove specs explicitly and on context exit."""
 
-    log = tl.log_forward_pass(ReluModel(), torch.randn(1, 2), intervention_ready=True)
+    log = tl.trace(ReluModel(), torch.randn(1, 2), intervention_ready=True)
 
-    def identity(activation: torch.Tensor, *, hook: object) -> torch.Tensor:
-        """Return activation unchanged.
+    def identity(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+        """Return out unchanged.
 
         Parameters
         ----------
-        activation:
+        out:
             Activation at the site.
         hook:
             Hook context.
@@ -101,11 +101,11 @@ def test_hook_handle_remove_and_context_manager_cleanup() -> None:
         Returns
         -------
         torch.Tensor
-            Original activation.
+            Original out.
         """
 
         del hook
-        return activation
+        return out
 
     handle = log.attach_hooks(tl.func("relu"), identity, confirm_mutation=True)
     assert len(log._intervention_spec.hook_specs) == 1

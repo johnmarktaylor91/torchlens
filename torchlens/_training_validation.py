@@ -65,7 +65,7 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
         raise RuntimeError(
             f"{api_name} does not support torch.compile'd models in train_mode: "
             "dynamo replaces the Python forward with a compiled graph that "
-            "bypasses TorchLens' function wrappers. Call the API on the "
+            "byops TorchLens' function wrappers. Call the API on the "
             "original un-compiled model."
         )
 
@@ -74,8 +74,8 @@ def validate_training_compatibility(
     *,
     train_mode: bool,
     streaming: Any,
-    detach_saved_tensors: bool | None = None,
-    save_activations_to: str | Path | None = None,
+    detach_saved_activations: bool | None = None,
+    save_outs_to: str | Path | None = None,
     inference_mode_active: bool | None = None,
 ) -> None:
     """Validate user options for autograd-retaining training captures.
@@ -83,12 +83,12 @@ def validate_training_compatibility(
     Parameters
     ----------
     train_mode:
-        Whether the caller requested training-compatible activation retention.
+        Whether the caller requested training-compatible out retention.
     streaming:
         Streaming options object, or ``None``.
-    detach_saved_tensors:
+    detach_saved_activations:
         Whether saved tensors are explicitly detached.
-    save_activations_to:
+    save_outs_to:
         Legacy disk-save path, if supplied outside grouped streaming options.
     inference_mode_active:
         Whether PyTorch inference mode is active at validation time.
@@ -104,13 +104,13 @@ def validate_training_compatibility(
         return
 
     streaming_bundle_path = getattr(streaming, "bundle_path", None)
-    if save_activations_to is not None or streaming_bundle_path is not None:
+    if save_outs_to is not None or streaming_bundle_path is not None:
         raise TrainingModeConfigError(
-            "train_mode=True is not compatible with slow/replay activation disk saves"
+            "train_mode=True is not compatible with slow/replay out disk saves"
         )
-    if detach_saved_tensors is True:
+    if detach_saved_activations is True:
         raise TrainingModeConfigError(
-            "train_mode=True requires detach_saved_tensors=False so gradients can propagate"
+            "train_mode=True requires detach_saved_activations=False so grads can propagate"
         )
     if inference_mode_active is True:
         raise TrainingModeConfigError(

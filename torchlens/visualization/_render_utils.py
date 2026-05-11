@@ -6,36 +6,105 @@ we have one canonical implementation of file-format dispatch, direction
 translation, module cluster styling, and HTML label escaping.
 
 Keep this module narrow on purpose -- only primitives that take no
-ModelLog/Bundle context and can be reasoned about as pure utilities.
+Trace/Bundle context and can be reasoned about as pure utilities.
 The orchestration that knows WHICH nodes / edges / module paths to use
-lives in the per-input-shape callers, such as ``rendering.render_graph`` for
-ModelLog.
+lives in the per-input-shape callers, such as ``rendering.draw`` for
+Trace.
 """
 
 from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import warnings
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Iterable, cast
 
 import graphviz
 
+
+def _is_interactive_display_context() -> bool:
+    """Return whether launching a GUI viewer is reasonable in this process.
+
+    Returns
+    -------
+    bool
+        ``False`` on Linux shells with no display variables or SSH sessions
+        without X/Wayland forwarding; otherwise ``True``.
+    """
+
+    has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    if sys.platform.startswith("linux") and not has_display:
+        return False
+    if os.environ.get("SSH_CONNECTION") and not has_display:
+        return False
+    return True
+
+
+def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> bool:
+    """Open ``filepath`` in the platform default viewer, suppressing viewer noise.
+
+    Replaces ``graphviz.backend.viewing.view`` to (a) silence ``xdg-open``
+    stderr on headless Linux boxes that have no registered viewer and
+    (b) skip the attempt entirely when no display is detected.
+
+    Parameters
+    ----------
+    filepath:
+        Rendered artifact path to open.
+    announce_headless:
+        If ``True``, emit one stderr line when the viewer is skipped because
+        the current process appears headless.
+
+    Returns
+    -------
+    bool
+        ``True`` if a viewer launch was attempted, otherwise ``False``.
+    """
+
+    if not _is_interactive_display_context():
+        if announce_headless:
+            print(
+                "torchlens.draw: headless context detected; "
+                f"rendered file at {filepath}, skipping auto-open.",
+                file=sys.stderr,
+            )
+        return False
+    try:
+        if sys.platform == "win32":
+            os.startfile(filepath)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(
+                ["open", filepath],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            subprocess.Popen(
+                ["xdg-open", filepath],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        return True
+    except (FileNotFoundError, OSError):
+        return False  # no viewer available; silently skip
+
+
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     pass
 
 
 # Recognised file extensions that callers may include on ``vis_outpath``.
-# Mirrors the legacy list in ``rendering.render_graph`` (kept as a tuple
+# Mirrors the legacy list in ``rendering.draw`` (kept as a tuple
 # so it stays cheap and immutable).
 _KNOWN_EXTS = ("pdf", "png", "jpg", "svg", "jpeg", "bmp", "pic", "tif", "tiff")
 
 # Default subprocess timeout for the dot/sfdp render call. Mirrors the
-# legacy literal that lived inside ``rendering.render_graph``.
+# legacy literal that lived inside ``rendering.draw``.
 RENDER_TIMEOUT_SECONDS = 120
 
-# -- Module subgraph border widths (shared between ModelLog and bundle paths)
+# -- Module subgraph border widths (shared between Trace and bundle paths)
 # Outermost modules get the thickest border; deeper modules thin out by depth
 # fraction so visual hierarchy reads at a glance.  These constants are the
 # canonical source for both ``rendering.py`` and the bundle renderer.
@@ -78,19 +147,19 @@ def direction_to_rankdir(direction: str) -> str:
     )
 
 
-def compute_module_penwidth(nesting_depth: int, max_nesting_depth: int) -> float:
-    """Return the cluster border width for a module at ``nesting_depth``.
+def compute_module_penwidth(call_depth: int, max_call_depth: int) -> float:
+    """Return the cluster border width for a module at ``call_depth``.
 
-    ``nesting_depth`` is 0-based (outermost is depth 0).  Outermost modules
+    ``call_depth`` is 0-based (outermost is depth 0).  Outermost modules
     get the maximum penwidth; deepest modules get the minimum.  When the
-    overall hierarchy has only one level (``max_nesting_depth == 0`` or
+    overall hierarchy has only one level (``max_call_depth == 0`` or
     ``1``) we still return a sensible value so callers don't have to
     special-case shallow models.
     """
 
-    if max_nesting_depth <= 0:
+    if max_call_depth <= 0:
         return float(MIN_MODULE_PENWIDTH + PENWIDTH_RANGE)
-    nesting_fraction = (max_nesting_depth - nesting_depth) / max_nesting_depth
+    nesting_fraction = (max_call_depth - call_depth) / max_call_depth
     nesting_fraction = max(0.0, min(1.0, nesting_fraction))
     return MIN_MODULE_PENWIDTH + nesting_fraction * PENWIDTH_RANGE
 
@@ -132,7 +201,7 @@ def make_module_cluster_label(
     (which is the case for bundle clusters because the supergraph stores
     the module path string but not the underlying module class).
 
-    ``title_already_escaped`` lets the ModelLog path keep its existing
+    ``title_already_escaped`` lets the Trace path keep its existing
     raw-title behaviour (where the title may itself contain ``:`` and is
     fed verbatim) while the bundle path can opt-in to escaping arbitrary
     user-provided strings.
@@ -157,11 +226,11 @@ def make_module_cluster_attrs(
 ) -> dict[str, str]:
     """Return the standard cluster attribute dict used by both renderers.
 
-    Centralises the Graphviz attrs that ModelLog and bundle clusters share:
+    Centralises the Graphviz attrs that Trace and bundle clusters share:
     HTML label, bottom labelloc, ``filled,<line_style>`` style, fill colour,
     and depth-aware penwidth.  Module-type information is optional: bundle
     clusters omit it because the supergraph doesn't preserve the module
-    class, while ModelLog clusters always pass it through.
+    class, while Trace clusters always pass it through.
     """
 
     return {
@@ -279,7 +348,7 @@ def render_dot_to_file(
     """Render ``dot`` to ``outpath.<file_format>``, optionally previewing it.
 
     Mirrors the dot/save/subprocess/view flow used internally by
-    ``rendering.render_graph`` and ``rendering.render_backward_graph``,
+    ``rendering.draw`` and ``rendering.render_backward_graph``,
     factored out so the multi-trace renderer can share the same plumbing.
 
     Returns the DOT source string (``dot.source``) regardless of whether
@@ -302,7 +371,7 @@ def render_dot_to_file(
             capture_output=True,
         )
         if not save_only:
-            graphviz.backend.viewing.view(rendered_path)
+            _open_file_quietly(rendered_path)
     except subprocess.TimeoutExpired:
         warnings.warn(
             timeout_warning

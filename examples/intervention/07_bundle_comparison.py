@@ -1,9 +1,9 @@
-"""Compare multiple ModelLogs with Bundle.
+"""Compare multiple Traces with Bundle.
 
 What this demonstrates
 ----------------------
 Construct a ``Bundle``, access one node across members, compute per-member
-metrics, and compare activations at a shared site.
+metrics, and compare outs at a shared site.
 
 How to run
 ----------
@@ -42,16 +42,16 @@ def main() -> None:
     torch.manual_seed(7)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    clean = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True, name="clean")
+    clean = tl.trace(model, x, vis_opt="none", intervention_ready=True, name="clean")
     zero = clean.fork("zero")
     zero.attach_hooks(tl.func("relu"), tl.zero_ablate()).replay()
 
     bundle = tl.bundle({"clean": clean, "zero": zero}, baseline="clean")
     node = bundle.node(tl.func("relu"))
-    sizes = bundle.metric(lambda member: len(member.layer_list))
+    sizes = bundle.apply(lambda member: len(member.layer_list))
     comparison = bundle.compare_at(tl.func("relu"))
 
-    assert set(node.activations) == {"clean", "zero"}
+    assert set(node.outs) == {"clean", "zero"}
     assert sizes["clean"] == sizes["zero"]
     assert comparison.shape == (2, 2)
 

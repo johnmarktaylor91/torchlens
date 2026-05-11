@@ -27,8 +27,10 @@ def write_pass_index(path: str | Path, recording: Recording) -> None:
     """
 
     pass_index: dict[str, list[str | None]] = {}
-    for pass_num, indexes in recording.by_pass.items():
-        pass_index[str(pass_num)] = [_record_blob_id(recording.records[index]) for index in indexes]
+    for call_index, indexes in recording.by_pass.items():
+        pass_index[str(call_index)] = [
+            _record_blob_id(recording.records[index]) for index in indexes
+        ]
     _write_json(Path(path) / "pass_index.json", pass_index)
 
 

@@ -13,9 +13,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import log_forward_pass
-from torchlens.data_classes.layer_pass_log import LayerPassLog
-from torchlens.data_classes.model_log import ConditionalEvent, ModelLog
+from torchlens import trace as trace_fn
+from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.model_log import ConditionalEvent, Trace
 
 
 class SimpleIfElseModel(nn.Module):
@@ -93,7 +93,7 @@ class AssertNotBranchModel(nn.Module):
 
 
 class SaveSourceContextFalseModel(nn.Module):
-    """``if``/``else`` model used with ``save_source_context=False``."""
+    """``if``/``else`` model used with ``save_code_context=False``."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the model forward pass.
@@ -119,8 +119,8 @@ class SaveSourceContextFalseModel(nn.Module):
 def _log_model(
     model: nn.Module,
     x: torch.Tensor,
-    save_source_context: bool = True,
-) -> ModelLog:
+    save_code_context: bool = True,
+) -> Trace:
     """Log a forward pass for a small inline test model.
 
     Parameters
@@ -129,24 +129,24 @@ def _log_model(
         Model to execute.
     x:
         Input tensor.
-    save_source_context:
+    save_code_context:
         Whether rich source loading is enabled during capture.
 
     Returns
     -------
-    ModelLog
+    Trace
         Postprocessed model log.
     """
 
-    return log_forward_pass(model, x, save_source_context=save_source_context)
+    return trace_fn(model, x, save_code_context=save_code_context)
 
 
-def _get_only_event(model_log: ModelLog) -> ConditionalEvent:
+def _get_only_event(trace: Trace) -> ConditionalEvent:
     """Return the lone conditional event from a model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Postprocessed model log.
 
     Returns
@@ -155,95 +155,91 @@ def _get_only_event(model_log: ModelLog) -> ConditionalEvent:
         The only materialized conditional event.
     """
 
-    assert len(model_log.conditional_events) == 1
-    return model_log.conditional_events[0]
+    assert len(trace.conditional_records) == 1
+    return trace.conditional_records[0]
 
 
-def _get_terminal_bool_layers(model_log: ModelLog) -> List[LayerPassLog]:
+def _get_terminal_bool_layers(trace: Trace) -> List[OpLog]:
     """Return terminal scalar bool layers from a model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Postprocessed model log.
 
     Returns
     -------
-    List[LayerPassLog]
+    List[OpLog]
         Terminal scalar bool layers in execution order.
     """
 
-    return [
-        layer
-        for layer in model_log.layer_list
-        if layer.is_terminal_bool_layer and layer.is_scalar_bool
-    ]
+    return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
-def _find_single_layer(model_log: ModelLog, func_name: str) -> LayerPassLog:
+def _find_single_layer(trace: Trace, func_name: str) -> OpLog:
     """Find the unique layer with the given function name.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Postprocessed model log.
     func_name:
         Function name to match.
 
     Returns
     -------
-    LayerPassLog
+    OpLog
         Matching layer.
     """
 
-    matching_layers = [layer for layer in model_log.layer_list if layer.func_name == func_name]
+    matching_layers = [layer for layer in trace.layer_list if layer.func_name == func_name]
     assert len(matching_layers) == 1, (
         f"Expected one {func_name!r} layer, found {len(matching_layers)}"
     )
     return matching_layers[0]
 
 
-def _assert_derived_views_consistent(model_log: ModelLog) -> None:
+def _assert_derived_views_consistent(trace: Trace) -> None:
     """Assert derived conditional views match the primary data structures.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Postprocessed model log.
     """
 
     expected_then_edges = [
         (parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in model_log.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind == "then"
         for parent_label, child_label in edge_list
     ]
     expected_elif_edges = [
         (conditional_id, int(branch_kind.split("_")[1]), parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in model_log.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind.startswith("elif_")
         for parent_label, child_label in edge_list
     ]
     expected_else_edges = [
         (conditional_id, parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in model_log.conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
         if branch_kind == "else"
         for parent_label, child_label in edge_list
     ]
 
-    assert model_log.conditional_then_edges == expected_then_edges
-    assert model_log.conditional_elif_edges == expected_elif_edges
-    assert model_log.conditional_else_edges == expected_else_edges
+    assert trace.conditional_then_entry_edges == expected_then_edges
+    assert trace.conditional_elif_entry_edges == expected_elif_edges
+    assert trace.conditional_else_entry_edges == expected_else_edges
 
-    for pass_nums in model_log.conditional_edge_passes.values():
-        assert pass_nums == sorted(pass_nums)
+    for call_indexs in trace.conditional_edge_call_indices.values():
+        assert call_indexs == sorted(call_indexs)
 
-    for layer in model_log.layer_list:
+    for layer in trace.layer_list:
         expected_then_children = sorted(
             set(
                 chain.from_iterable(
                     branch_children.get("then", [])
-                    for branch_children in layer.cond_branch_children_by_cond.values()
+                    for branch_children in layer.conditional_arm_children.values()
                 )
             )
         )
@@ -251,13 +247,13 @@ def _assert_derived_views_consistent(model_log: ModelLog) -> None:
             set(
                 chain.from_iterable(
                     branch_children.get("else", [])
-                    for branch_children in layer.cond_branch_children_by_cond.values()
+                    for branch_children in layer.conditional_arm_children.values()
                 )
             )
         )
         expected_elif_children: Dict[int, List[str]] = {}
         grouped_elif_children: Dict[int, set[str]] = defaultdict(set)
-        for branch_children in layer.cond_branch_children_by_cond.values():
+        for branch_children in layer.conditional_arm_children.values():
             for branch_kind, child_labels in branch_children.items():
                 if not branch_kind.startswith("elif_"):
                     continue
@@ -266,9 +262,9 @@ def _assert_derived_views_consistent(model_log: ModelLog) -> None:
         for elif_index, child_labels in sorted(grouped_elif_children.items()):
             expected_elif_children[elif_index] = sorted(child_labels)
 
-        assert layer.cond_branch_then_children == expected_then_children
-        assert layer.cond_branch_elif_children == expected_elif_children
-        assert layer.cond_branch_else_children == expected_else_children
+        assert layer.conditional_then_children == expected_then_children
+        assert layer.conditional_elif_children == expected_elif_children
+        assert layer.conditional_else_children == expected_else_children
 
 
 @pytest.mark.smoke
@@ -290,25 +286,29 @@ def test_simple_if_else_model_step5_pipeline() -> None:
     negative_bool = _get_terminal_bool_layers(negative_log)
     assert len(positive_bool) == 1
     assert len(negative_bool) == 1
-    assert positive_bool[0].bool_context_kind == "if_test"
-    assert positive_bool[0].bool_is_branch is True
-    assert positive_bool[0].bool_conditional_id == 0
-    assert negative_bool[0].bool_context_kind == "if_test"
-    assert negative_bool[0].bool_is_branch is True
-    assert negative_bool[0].bool_conditional_id == 0
+    assert positive_bool[0].conditional_context_kind == "if_test"
+    assert positive_bool[0].is_terminal_conditional_bool is True
+    assert positive_bool[0].terminal_conditional_id == 0
+    assert negative_bool[0].conditional_context_kind == "if_test"
+    assert negative_bool[0].is_terminal_conditional_bool is True
+    assert negative_bool[0].terminal_conditional_id == 0
 
     assert positive_log.conditional_branch_edges
     assert negative_log.conditional_branch_edges
-    assert (0, "then") in positive_log.conditional_arm_edges
-    assert (0, "else") in negative_log.conditional_arm_edges
+    assert (0, "then") in positive_log.conditional_arm_entry_edges
+    assert (0, "else") in negative_log.conditional_arm_entry_edges
 
     relu_layer = _find_single_layer(positive_log, "relu")
     sigmoid_layer = _find_single_layer(negative_log, "sigmoid")
     assert relu_layer.conditional_branch_stack == [(0, "then")]
     assert sigmoid_layer.conditional_branch_stack == [(0, "else")]
 
-    assert all(pass_nums == [1] for pass_nums in positive_log.conditional_edge_passes.values())
-    assert all(pass_nums == [1] for pass_nums in negative_log.conditional_edge_passes.values())
+    assert all(
+        call_indexs == [1] for call_indexs in positive_log.conditional_edge_call_indices.values()
+    )
+    assert all(
+        call_indexs == [1] for call_indexs in negative_log.conditional_edge_call_indices.values()
+    )
 
     _assert_derived_views_consistent(positive_log)
     _assert_derived_views_consistent(negative_log)
@@ -327,19 +327,21 @@ def test_elif_ladder_model_step5_pipeline() -> None:
 
     observed_branch_kinds = set()
     for x, func_name, branch_kind in branch_cases:
-        model_log = _log_model(ElifLadderModel(), x)
-        event = _get_only_event(model_log)
+        trace = _log_model(ElifLadderModel(), x)
+        event = _get_only_event(trace)
 
         assert event.kind == "if_chain"
         assert set(event.branch_ranges) == {"then", "elif_1", "elif_2", "else"}
-        assert (0, branch_kind) in model_log.conditional_arm_edges
-        assert all(pass_nums == [1] for pass_nums in model_log.conditional_edge_passes.values())
+        assert (0, branch_kind) in trace.conditional_arm_entry_edges
+        assert all(
+            call_indexs == [1] for call_indexs in trace.conditional_edge_call_indices.values()
+        )
 
-        target_layer = _find_single_layer(model_log, func_name)
+        target_layer = _find_single_layer(trace, func_name)
         assert target_layer.conditional_branch_stack == [(0, branch_kind)]
         observed_branch_kinds.add(branch_kind)
 
-        _assert_derived_views_consistent(model_log)
+        _assert_derived_views_consistent(trace)
 
     assert observed_branch_kinds == {"then", "elif_1", "elif_2", "else"}
 
@@ -347,39 +349,39 @@ def test_elif_ladder_model_step5_pipeline() -> None:
 def test_assert_not_branch_model_step5_pipeline() -> None:
     """Assert consumers are classified but do not materialize branch metadata."""
 
-    model_log = _log_model(AssertNotBranchModel(), torch.ones(2, 2))
-    bool_layers = _get_terminal_bool_layers(model_log)
+    trace = _log_model(AssertNotBranchModel(), torch.ones(2, 2))
+    bool_layers = _get_terminal_bool_layers(trace)
 
     assert len(bool_layers) == 1
-    assert bool_layers[0].bool_context_kind == "assert"
-    assert bool_layers[0].bool_is_branch is False
-    assert bool_layers[0].bool_conditional_id is None
-    assert model_log.conditional_events == []
-    assert model_log.conditional_arm_edges == {}
-    assert model_log.conditional_branch_edges == []
+    assert bool_layers[0].conditional_context_kind == "assert"
+    assert bool_layers[0].is_terminal_conditional_bool is False
+    assert bool_layers[0].terminal_conditional_id is None
+    assert trace.conditional_records == []
+    assert trace.conditional_arm_entry_edges == {}
+    assert trace.conditional_branch_edges == []
 
-    _assert_derived_views_consistent(model_log)
+    _assert_derived_views_consistent(trace)
 
 
-def test_save_source_context_false_still_attributes_branches() -> None:
+def test_save_code_context_false_still_attributes_branches() -> None:
     """Conditional classification and attribution still run without source loading."""
 
-    model_log = _log_model(
+    trace = _log_model(
         SaveSourceContextFalseModel(),
         torch.ones(2, 2),
-        save_source_context=False,
+        save_code_context=False,
     )
-    event = _get_only_event(model_log)
-    bool_layers = _get_terminal_bool_layers(model_log)
-    relu_layer = _find_single_layer(model_log, "relu")
+    event = _get_only_event(trace)
+    bool_layers = _get_terminal_bool_layers(trace)
+    relu_layer = _find_single_layer(trace, "relu")
 
     assert event.kind == "if_chain"
     assert set(event.branch_ranges) == {"then", "else"}
     assert len(bool_layers) == 1
-    assert bool_layers[0].bool_context_kind == "if_test"
-    assert bool_layers[0].bool_is_branch is True
-    assert bool_layers[0].bool_conditional_id == 0
-    assert (0, "then") in model_log.conditional_arm_edges
+    assert bool_layers[0].conditional_context_kind == "if_test"
+    assert bool_layers[0].is_terminal_conditional_bool is True
+    assert bool_layers[0].terminal_conditional_id == 0
+    assert (0, "then") in trace.conditional_arm_entry_edges
     assert relu_layer.conditional_branch_stack == [(0, "then")]
 
-    _assert_derived_views_consistent(model_log)
+    _assert_derived_views_consistent(trace)

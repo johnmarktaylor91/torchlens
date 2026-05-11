@@ -55,7 +55,7 @@ class _TanhModel(nn.Module):
         return torch.tanh(x) + 1
 
 
-def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.ModelLog:
+def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Trace:
     """Capture an intervention-ready log.
 
     Parameters
@@ -67,13 +67,13 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Mo
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured model log.
     """
 
     model = model or _ReluModel()
     x = x if x is not None else torch.randn(2, 3)
-    return tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    return tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
 
 def test_bundle_construction_shapes_and_member_indexing() -> None:
@@ -103,7 +103,7 @@ def test_bundle_construction_shapes_and_member_indexing() -> None:
 
 
 def test_bundle_getitem_returns_modellog_and_nodeview_dicts() -> None:
-    """String indexing returns ModelLog; node access returns dict-keyed NodeView fields."""
+    """String indexing returns Trace; node access returns dict-keyed SuperOp fields."""
 
     log_a = _log()
     log_b = _log()
@@ -113,7 +113,7 @@ def test_bundle_getitem_returns_modellog_and_nodeview_dicts() -> None:
     assert bundle._supergraph is None
 
     node = bundle.node(tl.func("relu"))
-    assert set(node.activations) == {"a", "b"}
+    assert set(node.outs) == {"a", "b"}
     assert set(node.labels) == {"a", "b"}
     assert set(node.members) == {"a", "b"}
     assert bundle._supergraph is not None
@@ -124,7 +124,7 @@ def test_metric_and_joint_metric_contracts() -> None:
 
     bundle = tl.bundle({"a": _log(), "b": _log()})
 
-    assert bundle.metric(lambda member: len(member.layer_list)) == {
+    assert bundle.apply(lambda member: len(member.layer_list)) == {
         "a": len(bundle["a"].layer_list),
         "b": len(bundle["b"].layer_list),
     }
@@ -151,10 +151,10 @@ def test_relationship_matrix_gates_node_operations() -> None:
     good = _log(_ReluModel())
     different = _log(_TanhModel())
     for member in (good, different):
-        member.source_model_id = None
-        member.source_model_class = None
-        member.weight_fingerprint_at_capture = None
-        member.weight_fingerprint_full = None
+        member.model_id = None
+        member.model_class = None
+        member.param_hash_quick = None
+        member.param_hash_full = None
         member.graph_shape_hash = None
         member.input_shape_hash = None
     bundle = tl.bundle({"good": good, "different": different})
@@ -163,7 +163,7 @@ def test_relationship_matrix_gates_node_operations() -> None:
     with pytest.raises(BundleRelationshipError, match="node"):
         bundle.node(tl.func("relu"))
 
-    assert bundle.metric(lambda member: member.name) == {
+    assert bundle.apply(lambda member: member.name) == {
         "good": good.name,
         "different": different.name,
     }

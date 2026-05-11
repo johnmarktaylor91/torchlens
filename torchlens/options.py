@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Final, Mapping, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Final, Literal, Mapping, TypeVar, cast
 
 import torch
 
@@ -32,19 +32,27 @@ GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "layers_to_save",
+    "transform",
+    "save_raw_input",
+    "batch_render",
+    "output_transform",
+    "save_raw_output",
+    "layer_visualizers",
+    "save_visualizations",
     "keep_unsaved_layers",
+    "keep_orphans",
     "output_device",
-    "save_function_args",
-    "save_gradients",
-    "gradients_to_save",
-    "save_source_context",
+    "save_arg_values",
+    "save_grads",
+    "grads_to_save",
+    "save_code_context",
     "save_rng_states",
     "random_seed",
     "source_context_lines",
     "optimizer",
     "compute_input_output_distances",
-    "detach_saved_tensors",
-    "detect_recurrent_patterns",
+    "detach_saved_activations",
+    "recurrence_detection",
     "intervention_ready",
     "hooks",
     "unwrap_when_done",
@@ -53,24 +61,25 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "name",
     "cache",
     "cache_dir",
-    "module_filter_fn",
+    "module_filter",
     "stop_after",
     "emit_nvtx",
     "raise_on_nan",
+    "_module_containment_engine",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "output_dir",
-    "activation_transform",
-    "gradient_postfunc",
-    "save_raw_activation",
-    "save_raw_gradient",
+    "out_transform",
+    "grad_transform",
+    "save_raw_outs",
+    "save_raw_grads",
     "save_level",
     "bundle_format",
 )
 _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "view",
     "depth",
-    "output_path",
+    "container_path",
     "save_only",
     "file_format",
     "show_buffers",
@@ -82,7 +91,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "collapse_fn",
     "skip_fn",
     "edge_overrides",
-    "gradient_edge_overrides",
+    "grad_edge_overrides",
     "module_overrides",
     "layout",
     "renderer",
@@ -117,27 +126,34 @@ _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "bundle_path",
     "retain_in_memory",
-    "activation_callback",
+    "out_callback",
 )
 
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "layers_to_save": "layers_to_save",
+    "transform": "transform",
+    "save_raw_input": "save_raw_input",
+    "batch_render": "batch_render",
+    "output_transform": "output_transform",
+    "save_raw_output": "save_raw_output",
+    "layer_visualizers": "layer_visualizers",
+    "save_visualizations": "save_visualizations",
     "keep_unsaved_layers": "keep_unsaved_layers",
+    "keep_orphans": "keep_orphans",
     "output_device": "output_device",
-    "save_function_args": "save_function_args",
-    "save_gradients": "save_gradients",
-    "gradients_to_save": "gradients_to_save",
-    "save_source_context": "save_source_context",
+    "save_arg_values": "save_arg_values",
+    "save_grads": "save_grads",
+    "grads_to_save": "grads_to_save",
+    "save_code_context": "save_code_context",
     "save_rng_states": "save_rng_states",
     "random_seed": "random_seed",
     "source_context_lines": "source_context_lines",
     "num_context_lines": "source_context_lines",
     "optimizer": "optimizer",
     "compute_input_output_distances": "compute_input_output_distances",
-    "mark_input_output_distances": "compute_input_output_distances",
-    "detach_saved_tensors": "detach_saved_tensors",
-    "detect_recurrent_patterns": "detect_recurrent_patterns",
-    "detect_loops": "detect_recurrent_patterns",
+    "mark_layer_depths": "compute_input_output_distances",
+    "detach_saved_activations": "detach_saved_activations",
+    "recurrence_detection": "recurrence_detection",
     "intervention_ready": "intervention_ready",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
@@ -146,32 +162,32 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
-    "module_filter_fn": "module_filter_fn",
+    "module_filter": "module_filter",
     "stop_after": "stop_after",
     "raise_on_nan": "raise_on_nan",
 }
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "activation_postfunc": "activation_transform",
-    "activation_transform": "activation_transform",
-    "gradient_postfunc": "gradient_postfunc",
-    "save_raw_activation": "save_raw_activation",
-    "save_raw_gradient": "save_raw_gradient",
+    "out_postfunc": "out_transform",
+    "out_transform": "out_transform",
+    "grad_transform": "grad_transform",
+    "save_raw_outs": "save_raw_outs",
+    "save_raw_grads": "save_raw_grads",
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "view": "view",
     "vis_mode": "view",
     "depth": "depth",
-    "vis_nesting_depth": "depth",
-    "vis_outpath": "output_path",
+    "vis_call_depth": "depth",
+    "vis_outpath": "container_path",
     "vis_save_only": "save_only",
     "vis_fileformat": "file_format",
-    "vis_buffer_layers": "show_buffers",
+    "vis_buffers": "show_buffers",
     "vis_direction": "direction",
     "vis_graph_overrides": "graph_overrides",
     "node_style": "node_style",
     "vis_node_mode": "node_style",
     "vis_edge_overrides": "edge_overrides",
-    "vis_gradient_edge_overrides": "gradient_edge_overrides",
+    "vis_grad_edge_overrides": "grad_edge_overrides",
     "vis_module_overrides": "module_overrides",
     "layout": "layout",
     "vis_node_placement": "layout",
@@ -183,16 +199,16 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _VISUALIZATION_DEPRECATED_FLAT: Final[set[str]] = {
     "vis_mode",
-    "vis_nesting_depth",
+    "vis_call_depth",
     "vis_outpath",
     "vis_save_only",
     "vis_fileformat",
-    "vis_buffer_layers",
+    "vis_buffers",
     "vis_direction",
     "vis_graph_overrides",
     "vis_node_mode",
     "vis_edge_overrides",
-    "vis_gradient_edge_overrides",
+    "vis_grad_edge_overrides",
     "vis_module_overrides",
     "vis_node_placement",
     "vis_renderer",
@@ -212,11 +228,11 @@ _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "bundle_path": "bundle_path",
-    "save_activations_to": "bundle_path",
+    "save_outs_to": "bundle_path",
     "retain_in_memory": "retain_in_memory",
-    "keep_activations_in_memory": "retain_in_memory",
-    "activation_callback": "activation_callback",
-    "activation_sink": "activation_callback",
+    "keep_outs_in_memory": "retain_in_memory",
+    "out_callback": "out_callback",
+    "out_sink": "out_callback",
 }
 
 
@@ -511,23 +527,46 @@ def _merge_grouped_options(
 
 @dataclass(frozen=True, init=False)
 class CaptureOptions:
-    """Grouped capture options for ``log_forward_pass``.
+    """Grouped capture options for ``trace``.
 
     Parameters
     ----------
     layers_to_save:
         Activation layer selector to capture.
+    transform:
+        Optional callable applied once to the user input before ``model.forward``.
+    save_raw_input:
+        Raw user-input save policy for portable bundles. ``"small"`` stores a
+        bounded representation, ``True`` stores the full object, and ``False``
+        drops it when saving.
+    batch_render:
+        Raw-input batch rendering policy for visualization. Supported values are
+        ``"auto"``, ``"all"``, ``"first"``, ``"first_n:<N>"``, and
+        ``"shape_only"``.
+    output_transform:
+        Optional callable applied once to the model output after ``model.forward``.
+    save_raw_output:
+        Raw model-output save policy for portable bundles. ``"small"`` stores a
+        bounded representation, ``True`` stores the full object, and ``False``
+        drops it when saving.
+    layer_visualizers:
+        Optional mapping from site selectors to per-layer thumbnail callables.
+    save_visualizations:
+        Whether rendered visualizer image files should be copied into portable bundles.
     keep_unsaved_layers:
         Whether metadata-only layers remain in the returned log.
+    keep_orphans:
+        Whether island ops are retained in raw metadata and exposed via
+        ``trace.orphans``.
     output_device:
         Device placement for saved tensors.
-    save_function_args:
+    save_arg_values:
         Whether non-tensor function arguments are captured.
-    save_gradients:
-        Whether backward gradients are captured.
-    gradients_to_save:
-        Gradient layer selector; defaults to the activation selector when explicitly enabled.
-    save_source_context:
+    save_grads:
+        Whether backward grads are captured.
+    grads_to_save:
+        Gradient layer selector; defaults to the out selector when explicitly enabled.
+    save_code_context:
         Whether source-text context is captured in addition to source identity.
     save_rng_states:
         Whether operation-level RNG states are captured.
@@ -539,9 +578,9 @@ class CaptureOptions:
         Optional optimizer used to annotate optimized parameters.
     compute_input_output_distances:
         Whether input/output graph distances are computed.
-    detach_saved_tensors:
+    detach_saved_activations:
         Whether saved tensors are detached from autograd.
-    detect_recurrent_patterns:
+    recurrence_detection:
         Whether repeated graph patterns are detected during postprocess.
     intervention_ready:
         Whether replay-template metadata is captured for intervention APIs.
@@ -559,9 +598,9 @@ class CaptureOptions:
         Whether to use the content-hash capture cache.
     cache_dir:
         Optional directory for content-hash cache entries.
-    module_filter_fn:
-        Optional predicate receiving a ``LayerPassLog`` after construction.
-        Returning ``False`` keeps metadata but skips activation saving.
+    module_filter:
+        Optional predicate receiving a ``OpLog`` after construction.
+        Returning ``False`` keeps metadata but skips out saving.
     stop_after:
         Experimental stop-early site. Only supported by ``torchlens.peek``.
     emit_nvtx:
@@ -577,19 +616,27 @@ class CaptureOptions:
     """
 
     layers_to_save: str | list[Any] | None = "all"
+    transform: Callable[[Any], Any] | None = None
+    save_raw_input: str | bool = "small"
+    batch_render: str = "auto"
+    output_transform: Callable[[Any], Any] | None = None
+    save_raw_output: str | bool = "small"
+    layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
+    save_visualizations: bool = False
     keep_unsaved_layers: bool = True
+    keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
-    save_function_args: bool = False
-    save_gradients: bool = False
-    gradients_to_save: str | list[Any] | None = "all"
-    save_source_context: bool = False
+    save_arg_values: bool = False
+    save_grads: bool = False
+    grads_to_save: str | list[Any] | None = "all"
+    save_code_context: bool = False
     save_rng_states: bool = False
     random_seed: int | None = None
     source_context_lines: int = 7
     optimizer: Any = None
     compute_input_output_distances: bool = False
-    detach_saved_tensors: bool = False
-    detect_recurrent_patterns: bool = True
+    detach_saved_activations: bool = False
+    recurrence_detection: bool = True
     intervention_ready: bool = False
     hooks: Any | None = None
     unwrap_when_done: bool = False
@@ -598,28 +645,37 @@ class CaptureOptions:
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
-    module_filter_fn: Callable[[Any], bool] | None = None
+    module_filter: Callable[[Any], bool] | None = None
     stop_after: Any | None = None
     emit_nvtx: bool = False
     raise_on_nan: bool = False
+    _module_containment_engine: Literal["thread_replay", "hook_stack", "both"] = "hook_stack"
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
         layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        transform: Callable[[Any], Any] | None | MissingType = MISSING,
+        save_raw_input: str | bool | MissingType = MISSING,
+        batch_render: str | MissingType = MISSING,
+        output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
+        save_raw_output: str | bool | MissingType = MISSING,
+        layer_visualizers: Mapping[Any, Callable[..., Any]] | None | MissingType = MISSING,
+        save_visualizations: bool | MissingType = MISSING,
         keep_unsaved_layers: bool | MissingType = MISSING,
+        keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
-        save_function_args: bool | MissingType = MISSING,
-        save_gradients: bool | MissingType = MISSING,
-        gradients_to_save: str | list[Any] | None | MissingType = MISSING,
-        save_source_context: bool | MissingType = MISSING,
+        save_arg_values: bool | MissingType = MISSING,
+        save_grads: bool | MissingType = MISSING,
+        grads_to_save: str | list[Any] | None | MissingType = MISSING,
+        save_code_context: bool | MissingType = MISSING,
         save_rng_states: bool | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
         source_context_lines: int | MissingType = MISSING,
         optimizer: Any | MissingType = MISSING,
         compute_input_output_distances: bool | MissingType = MISSING,
-        detach_saved_tensors: bool | MissingType = MISSING,
-        detect_recurrent_patterns: bool | MissingType = MISSING,
+        detach_saved_activations: bool | MissingType = MISSING,
+        recurrence_detection: bool | MissingType = MISSING,
         intervention_ready: bool | MissingType = MISSING,
         hooks: Any | MissingType = MISSING,
         unwrap_when_done: bool | MissingType = MISSING,
@@ -628,27 +684,27 @@ class CaptureOptions:
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
-        module_filter_fn: Callable[[Any], bool] | None | MissingType = MISSING,
+        module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
         stop_after: Any | None | MissingType = MISSING,
         emit_nvtx: bool | MissingType = MISSING,
         raise_on_nan: bool | MissingType = MISSING,
+        _module_containment_engine: (
+            Literal["thread_replay", "hook_stack", "both"] | MissingType
+        ) = MISSING,
         *,
-        mark_input_output_distances: bool | MissingType = MISSING,
+        mark_layer_depths: bool | MissingType = MISSING,
         num_context_lines: int | MissingType = MISSING,
-        detect_loops: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
-        if mark_input_output_distances is not MISSING:
+        if mark_layer_depths is not MISSING:
             if compute_input_output_distances is not MISSING:
                 raise TypeError(
-                    "kwarg mark_input_output_distances deprecated, use "
+                    "kwarg mark_layer_depths deprecated, use "
                     "compute_input_output_distances; do not pass both"
                 )
-            warn_deprecated_alias(
-                "mark_input_output_distances", "capture.compute_input_output_distances"
-            )
-            compute_input_output_distances = mark_input_output_distances
+            warn_deprecated_alias("mark_layer_depths", "capture.compute_input_output_distances")
+            compute_input_output_distances = mark_layer_depths
         if num_context_lines is not MISSING:
             if source_context_lines is not MISSING:
                 raise TypeError(
@@ -656,36 +712,48 @@ class CaptureOptions:
                 )
             warn_deprecated_alias("num_context_lines", "capture.source_context_lines")
             source_context_lines = num_context_lines
-        if detect_loops is not MISSING:
-            if detect_recurrent_patterns is not MISSING:
-                raise TypeError(
-                    "kwarg detect_loops deprecated, use detect_recurrent_patterns; do not pass both"
-                )
-            warn_deprecated_alias("detect_loops", "capture.detect_recurrent_patterns")
-            detect_recurrent_patterns = detect_loops
-
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "layers_to_save": _resolve_option_value(
                 "layers_to_save", layers_to_save, "all", specified_fields
             ),
+            "transform": _resolve_option_value("transform", transform, None, specified_fields),
+            "save_raw_input": _resolve_option_value(
+                "save_raw_input", save_raw_input, "small", specified_fields
+            ),
+            "batch_render": _resolve_option_value(
+                "batch_render", batch_render, "auto", specified_fields
+            ),
+            "output_transform": _resolve_option_value(
+                "output_transform", output_transform, None, specified_fields
+            ),
+            "save_raw_output": _resolve_option_value(
+                "save_raw_output", save_raw_output, "small", specified_fields
+            ),
+            "layer_visualizers": _resolve_option_value(
+                "layer_visualizers", layer_visualizers, None, specified_fields
+            ),
+            "save_visualizations": _resolve_option_value(
+                "save_visualizations", save_visualizations, False, specified_fields
+            ),
             "keep_unsaved_layers": _resolve_option_value(
                 "keep_unsaved_layers", keep_unsaved_layers, True, specified_fields
+            ),
+            "keep_orphans": _resolve_option_value(
+                "keep_orphans", keep_orphans, False, specified_fields
             ),
             "output_device": _resolve_option_value(
                 "output_device", output_device, "same", specified_fields
             ),
-            "save_function_args": _resolve_option_value(
-                "save_function_args", save_function_args, False, specified_fields
+            "save_arg_values": _resolve_option_value(
+                "save_arg_values", save_arg_values, False, specified_fields
             ),
-            "save_gradients": _resolve_option_value(
-                "save_gradients", save_gradients, False, specified_fields
+            "save_grads": _resolve_option_value("save_grads", save_grads, False, specified_fields),
+            "grads_to_save": _resolve_option_value(
+                "grads_to_save", grads_to_save, "all", specified_fields
             ),
-            "gradients_to_save": _resolve_option_value(
-                "gradients_to_save", gradients_to_save, "all", specified_fields
-            ),
-            "save_source_context": _resolve_option_value(
-                "save_source_context", save_source_context, False, specified_fields
+            "save_code_context": _resolve_option_value(
+                "save_code_context", save_code_context, False, specified_fields
             ),
             "save_rng_states": _resolve_option_value(
                 "save_rng_states", save_rng_states, False, specified_fields
@@ -703,11 +771,11 @@ class CaptureOptions:
                 False,
                 specified_fields,
             ),
-            "detach_saved_tensors": _resolve_option_value(
-                "detach_saved_tensors", detach_saved_tensors, False, specified_fields
+            "detach_saved_activations": _resolve_option_value(
+                "detach_saved_activations", detach_saved_activations, False, specified_fields
             ),
-            "detect_recurrent_patterns": _resolve_option_value(
-                "detect_recurrent_patterns", detect_recurrent_patterns, True, specified_fields
+            "recurrence_detection": _resolve_option_value(
+                "recurrence_detection", recurrence_detection, True, specified_fields
             ),
             "intervention_ready": _resolve_option_value(
                 "intervention_ready", intervention_ready, False, specified_fields
@@ -721,15 +789,25 @@ class CaptureOptions:
             "name": _resolve_option_value("name", name, None, specified_fields),
             "cache": _resolve_option_value("cache", cache, False, specified_fields),
             "cache_dir": _resolve_option_value("cache_dir", cache_dir, None, specified_fields),
-            "module_filter_fn": _resolve_option_value(
-                "module_filter_fn", module_filter_fn, None, specified_fields
+            "module_filter": _resolve_option_value(
+                "module_filter", module_filter, None, specified_fields
             ),
             "stop_after": _resolve_option_value("stop_after", stop_after, None, specified_fields),
             "emit_nvtx": _resolve_option_value("emit_nvtx", emit_nvtx, False, specified_fields),
             "raise_on_nan": _resolve_option_value(
                 "raise_on_nan", raise_on_nan, False, specified_fields
             ),
+            "_module_containment_engine": _resolve_option_value(
+                "_module_containment_engine",
+                _module_containment_engine,
+                "hook_stack",
+                specified_fields,
+            ),
         }
+        if values["_module_containment_engine"] not in {"thread_replay", "hook_stack", "both"}:
+            raise ValueError(
+                "_module_containment_engine must be 'thread_replay', 'hook_stack', or 'both'"
+            )
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
@@ -757,20 +835,20 @@ class CaptureOptions:
 
 @dataclass(frozen=True, init=False)
 class SaveOptions:
-    """Grouped activation-save options for ``log_forward_pass``.
+    """Grouped out-save options for ``trace``.
 
     Parameters
     ----------
     output_dir:
         Future save target directory; currently inert during capture.
-    activation_transform:
-        Optional transform applied to each activation before storage.
-    gradient_postfunc:
-        Optional transform applied to each gradient before storage.
-    save_raw_activation:
-        Whether raw activations remain available when transformed.
-    save_raw_gradient:
-        Whether raw gradients remain available when transformed.
+    out_transform:
+        Optional transform applied to each out before storage.
+    grad_transform:
+        Optional transform applied to each grad before storage.
+    save_raw_outs:
+        Whether raw outs remain available when transformed.
+    save_raw_grads:
+        Whether raw grads remain available when transformed.
     save_level:
         Future portable-save level; currently inert during capture.
     bundle_format:
@@ -778,16 +856,16 @@ class SaveOptions:
 
     Examples
     --------
-    >>> opts = SaveOptions(activation_transform=lambda x: x.detach())
-    >>> opts.save_raw_activation
+    >>> opts = SaveOptions(out_transform=lambda x: x.detach())
+    >>> opts.save_raw_outs
     True
     """
 
     output_dir: str | Path | None = None
-    activation_transform: ActivationPostfunc | None = None
-    gradient_postfunc: GradientPostfunc | None = None
-    save_raw_activation: bool = True
-    save_raw_gradient: bool = True
+    out_transform: ActivationPostfunc | None = None
+    grad_transform: GradientPostfunc | None = None
+    save_raw_outs: bool = True
+    save_raw_grads: bool = True
     save_level: str | None = None
     bundle_format: str | None = None
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
@@ -795,39 +873,38 @@ class SaveOptions:
     def __init__(
         self,
         output_dir: str | Path | None | MissingType = MISSING,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-        gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
-        save_raw_activation: bool | MissingType = MISSING,
-        save_raw_gradient: bool | MissingType = MISSING,
+        out_transform: ActivationPostfunc | None | MissingType = MISSING,
+        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        save_raw_outs: bool | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
         save_level: str | None | MissingType = MISSING,
         bundle_format: str | None | MissingType = MISSING,
         *,
-        activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen save option bundle."""
 
-        if activation_postfunc is not MISSING:
-            if activation_transform is not MISSING:
+        if out_postfunc is not MISSING:
+            if out_transform is not MISSING:
                 raise TypeError(
-                    "kwarg activation_postfunc deprecated, use activation_transform; "
-                    "do not pass both"
+                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
                 )
-            warn_deprecated_alias("activation_postfunc", "save.activation_transform")
-            activation_transform = activation_postfunc
+            warn_deprecated_alias("out_postfunc", "save.out_transform")
+            out_transform = out_postfunc
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "output_dir": _resolve_option_value("output_dir", output_dir, None, specified_fields),
-            "activation_transform": _resolve_option_value(
-                "activation_transform", activation_transform, None, specified_fields
+            "out_transform": _resolve_option_value(
+                "out_transform", out_transform, None, specified_fields
             ),
-            "gradient_postfunc": _resolve_option_value(
-                "gradient_postfunc", gradient_postfunc, None, specified_fields
+            "grad_transform": _resolve_option_value(
+                "grad_transform", grad_transform, None, specified_fields
             ),
-            "save_raw_activation": _resolve_option_value(
-                "save_raw_activation", save_raw_activation, True, specified_fields
+            "save_raw_outs": _resolve_option_value(
+                "save_raw_outs", save_raw_outs, True, specified_fields
             ),
-            "save_raw_gradient": _resolve_option_value(
-                "save_raw_gradient", save_raw_gradient, True, specified_fields
+            "save_raw_grads": _resolve_option_value(
+                "save_raw_grads", save_raw_grads, True, specified_fields
             ),
             "save_level": _resolve_option_value("save_level", save_level, None, specified_fields),
             "bundle_format": _resolve_option_value(
@@ -838,10 +915,10 @@ class SaveOptions:
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
     @property
-    def activation_postfunc(self) -> ActivationPostfunc | None:
-        """Deprecated alias for ``activation_transform``."""
+    def out_postfunc(self) -> ActivationPostfunc | None:
+        """Deprecated alias for ``out_transform``."""
 
-        return self.activation_transform
+        return self.out_transform
 
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
@@ -875,7 +952,7 @@ class VisualizationOptions:
         Graph view: ``"none"``, ``"rolled"``, or ``"unrolled"``.
     depth:
         Maximum module nesting depth shown in the graph.
-    output_path:
+    container_path:
         Output path stem for rendered graph files.
     save_only:
         Whether rendering saves without opening a viewer.
@@ -899,7 +976,7 @@ class VisualizationOptions:
         Optional layer skip predicate.
     edge_overrides:
         Forward-edge style overrides.
-    gradient_edge_overrides:
+    grad_edge_overrides:
         Gradient-edge style overrides.
     module_overrides:
         Module cluster style overrides.
@@ -938,7 +1015,7 @@ class VisualizationOptions:
 
     view: VisModeLiteral = "none"
     depth: int = 1000
-    output_path: str = "graph.gv"
+    container_path: str = "graph.gv"
     save_only: bool = False
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
@@ -950,7 +1027,7 @@ class VisualizationOptions:
     collapse_fn: Callable[["ModuleLog"], bool] | None = None
     skip_fn: Callable[["LayerLog"], bool] | None = None
     edge_overrides: dict[str, Any] | None = None
-    gradient_edge_overrides: dict[str, Any] | None = None
+    grad_edge_overrides: dict[str, Any] | None = None
     module_overrides: dict[str, Any] | None = None
     layout: VisNodePlacementLiteral = "auto"
     renderer: VisRendererLiteral = "graphviz"
@@ -970,7 +1047,7 @@ class VisualizationOptions:
         self,
         view: VisModeLiteral | MissingType = MISSING,
         depth: int | MissingType = MISSING,
-        output_path: str | MissingType = MISSING,
+        container_path: str | MissingType = MISSING,
         save_only: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
@@ -986,7 +1063,7 @@ class VisualizationOptions:
         collapse_fn: Callable[["ModuleLog"], bool] | None | MissingType = MISSING,
         skip_fn: Callable[["LayerLog"], bool] | None | MissingType = MISSING,
         edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-        gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+        grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
         module_overrides: dict[str, Any] | None | MissingType = MISSING,
         layout: VisNodePlacementLiteral | MissingType = MISSING,
         renderer: VisRendererLiteral | MissingType = MISSING,
@@ -1033,8 +1110,8 @@ class VisualizationOptions:
         values: dict[str, Any] = {
             "view": _resolve_option_value("view", view, "none", specified_fields),
             "depth": _resolve_option_value("depth", depth, 1000, specified_fields),
-            "output_path": _resolve_option_value(
-                "output_path", output_path, "graph.gv", specified_fields
+            "container_path": _resolve_option_value(
+                "container_path", container_path, "graph.gv", specified_fields
             ),
             "save_only": _resolve_option_value("save_only", save_only, False, specified_fields),
             "file_format": _resolve_option_value(
@@ -1065,8 +1142,8 @@ class VisualizationOptions:
             "edge_overrides": _resolve_option_value(
                 "edge_overrides", edge_overrides, None, specified_fields
             ),
-            "gradient_edge_overrides": _resolve_option_value(
-                "gradient_edge_overrides", gradient_edge_overrides, None, specified_fields
+            "grad_edge_overrides": _resolve_option_value(
+                "grad_edge_overrides", grad_edge_overrides, None, specified_fields
             ),
             "module_overrides": _resolve_option_value(
                 "module_overrides", module_overrides, None, specified_fields
@@ -1153,7 +1230,7 @@ class VisualizationOptions:
 
 @dataclass(frozen=True, init=False)
 class ReplayOptions:
-    """Grouped replay/rerun options for ``ModelLog`` propagation APIs.
+    """Grouped replay/rerun options for ``Trace`` propagation APIs.
 
     Parameters
     ----------
@@ -1236,7 +1313,7 @@ class ReplayOptions:
 
 @dataclass(frozen=True, init=False)
 class InterventionOptions:
-    """Grouped intervention options for ``ModelLog.do``.
+    """Grouped intervention options for ``Trace.do``.
 
     Parameters
     ----------
@@ -1335,16 +1412,16 @@ class InterventionOptions:
 
 @dataclass(frozen=True, init=False)
 class StreamingOptions:
-    """Grouped streaming-save options for ``log_forward_pass``.
+    """Grouped streaming-save options for ``trace``.
 
     Parameters
     ----------
     bundle_path:
-        Portable bundle directory for streamed activation saves.
+        Portable bundle directory for streamed out saves.
     retain_in_memory:
-        Whether streamed activations remain in memory.
-    activation_callback:
-        Callback invoked with ``(label, tensor)`` for each saved activation.
+        Whether streamed outs remain in memory.
+    out_callback:
+        Callback invoked with ``(label, tensor)`` for each saved out.
 
     Examples
     --------
@@ -1355,43 +1432,38 @@ class StreamingOptions:
 
     bundle_path: str | Path | None = None
     retain_in_memory: bool = True
-    activation_callback: Callable[[str, torch.Tensor], None] | None = None
+    out_callback: Callable[[str, torch.Tensor], None] | None = None
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
         bundle_path: str | Path | None | MissingType = MISSING,
         retain_in_memory: bool | MissingType = MISSING,
-        activation_callback: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
+        out_callback: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
         *,
-        save_activations_to: str | Path | None | MissingType = MISSING,
-        keep_activations_in_memory: bool | MissingType = MISSING,
-        activation_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
+        save_outs_to: str | Path | None | MissingType = MISSING,
+        keep_outs_in_memory: bool | MissingType = MISSING,
+        out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen streaming option bundle."""
 
-        if save_activations_to is not MISSING:
+        if save_outs_to is not MISSING:
             if bundle_path is not MISSING:
-                raise TypeError(
-                    "kwarg save_activations_to deprecated, use bundle_path; do not pass both"
-                )
-            warn_deprecated_alias("save_activations_to", "streaming.bundle_path")
-            bundle_path = save_activations_to
-        if keep_activations_in_memory is not MISSING:
+                raise TypeError("kwarg save_outs_to deprecated, use bundle_path; do not pass both")
+            warn_deprecated_alias("save_outs_to", "streaming.bundle_path")
+            bundle_path = save_outs_to
+        if keep_outs_in_memory is not MISSING:
             if retain_in_memory is not MISSING:
                 raise TypeError(
-                    "kwarg keep_activations_in_memory deprecated, use retain_in_memory; "
-                    "do not pass both"
+                    "kwarg keep_outs_in_memory deprecated, use retain_in_memory; do not pass both"
                 )
-            warn_deprecated_alias("keep_activations_in_memory", "streaming.retain_in_memory")
-            retain_in_memory = keep_activations_in_memory
-        if activation_sink is not MISSING:
-            if activation_callback is not MISSING:
-                raise TypeError(
-                    "kwarg activation_sink deprecated, use activation_callback; do not pass both"
-                )
-            warn_deprecated_alias("activation_sink", "streaming.activation_callback")
-            activation_callback = activation_sink
+            warn_deprecated_alias("keep_outs_in_memory", "streaming.retain_in_memory")
+            retain_in_memory = keep_outs_in_memory
+        if out_sink is not MISSING:
+            if out_callback is not MISSING:
+                raise TypeError("kwarg out_sink deprecated, use out_callback; do not pass both")
+            warn_deprecated_alias("out_sink", "streaming.out_callback")
+            out_callback = out_sink
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
@@ -1401,8 +1473,8 @@ class StreamingOptions:
             "retain_in_memory": _resolve_option_value(
                 "retain_in_memory", retain_in_memory, True, specified_fields
             ),
-            "activation_callback": _resolve_option_value(
-                "activation_callback", activation_callback, None, specified_fields
+            "out_callback": _resolve_option_value(
+                "out_callback", out_callback, None, specified_fields
             ),
         }
         _set_frozen_fields(self, _STREAMING_FIELDS, values)
@@ -1441,8 +1513,7 @@ def merge_capture_options(
 
     for old_name, new_name in (
         ("num_context_lines", "source_context_lines"),
-        ("mark_input_output_distances", "compute_input_output_distances"),
-        ("detect_loops", "detect_recurrent_patterns"),
+        ("mark_layer_depths", "compute_input_output_distances"),
     ):
         if (
             flat_values.get(old_name, MISSING) is not MISSING
@@ -1495,16 +1566,16 @@ def merge_visualization_options(
     node_style: VisNodeModeLiteral | MissingType = MISSING,
     renderer: VisRendererLiteral | MissingType = MISSING,
     vis_mode: VisModeLiteral | MissingType = MISSING,
-    vis_nesting_depth: int | MissingType = MISSING,
+    vis_call_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
     vis_fileformat: str | MissingType = MISSING,
-    vis_buffer_layers: BufferVisibilityLiteral | bool | MissingType = MISSING,
+    vis_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
@@ -1529,16 +1600,16 @@ def merge_visualization_options(
         "node_style": node_style,
         "renderer": renderer,
         "vis_mode": vis_mode,
-        "vis_nesting_depth": vis_nesting_depth,
+        "vis_call_depth": vis_call_depth,
         "vis_outpath": vis_outpath,
         "vis_save_only": vis_save_only,
         "vis_fileformat": vis_fileformat,
-        "vis_buffer_layers": vis_buffer_layers,
+        "vis_buffers": vis_buffers,
         "vis_direction": vis_direction,
         "vis_graph_overrides": vis_graph_overrides,
         "vis_node_mode": vis_node_mode,
         "vis_edge_overrides": vis_edge_overrides,
-        "vis_gradient_edge_overrides": vis_gradient_edge_overrides,
+        "vis_grad_edge_overrides": vis_grad_edge_overrides,
         "vis_module_overrides": vis_module_overrides,
         "vis_node_placement": vis_node_placement,
         "vis_renderer": vis_renderer,
@@ -1627,7 +1698,7 @@ def merge_streaming_options(
 
 
 def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[str, Any]:
-    """Translate grouped visualization options into ``ModelLog.render_graph`` kwargs.
+    """Translate grouped visualization options into ``Trace.draw`` kwargs.
 
     Parameters
     ----------
@@ -1637,13 +1708,13 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     Returns
     -------
     dict[str, Any]
-        Keyword arguments expected by ``ModelLog.render_graph``.
+        Keyword arguments expected by ``Trace.draw``.
     """
 
     kwargs: dict[str, Any] = {
         "vis_mode": visualization.view,
-        "vis_nesting_depth": visualization.depth,
-        "vis_outpath": visualization.output_path,
+        "vis_call_depth": visualization.depth,
+        "vis_outpath": visualization.container_path,
         "vis_graph_overrides": visualization.graph_overrides,
         "node_mode": visualization.node_style,
         "node_spec_fn": visualization.node_spec_fn,
@@ -1651,7 +1722,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "collapse_fn": visualization.collapse_fn,
         "skip_fn": visualization.skip_fn,
         "vis_edge_overrides": visualization.edge_overrides,
-        "vis_gradient_edge_overrides": visualization.gradient_edge_overrides,
+        "vis_grad_edge_overrides": visualization.grad_edge_overrides,
         "vis_module_overrides": visualization.module_overrides,
         "vis_save_only": visualization.save_only,
         "vis_fileformat": visualization.file_format,

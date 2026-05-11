@@ -24,7 +24,7 @@ TLSPEC_VERSION = 1
 TLSPEC_SCHEMA_VERSION = 1
 TLSPEC_MANIFEST_FILENAME = "manifest.json"
 TLSPEC_VALID_SAVE_LEVELS = ("audit", "executable_with_callables", "portable")
-TlspecKind = Literal["intervention", "model_log", "bundle"]
+TlspecKind = Literal["intervention", "trace", "bundle"]
 TlspecSaveLevel = Literal["audit", "executable_with_callables", "portable"]
 
 _EMPTY_META_HASH = sha256(repr([]).encode("utf-8")).hexdigest()
@@ -34,21 +34,21 @@ class _TlSpecWriter:
     """Write Phase 11 unified ``.tlspec`` manifests and bundle payloads."""
 
     @classmethod
-    def write_model_log_manifest(
+    def write_trace_manifest(
         cls,
         *,
         path: Path,
-        model_log: Any,
+        trace: Any,
         legacy_manifest: Manifest,
         save_level: str,
     ) -> None:
-        """Write a unified manifest for a saved ``ModelLog`` payload.
+        """Write a unified manifest for a saved ``Trace`` payload.
 
         Parameters
         ----------
         path:
             Destination ``manifest.json`` path.
-        model_log:
+        trace:
             Source model log.
         legacy_manifest:
             Existing portable-I/O manifest fields required by the loader.
@@ -59,8 +59,8 @@ class _TlSpecWriter:
         manifest = legacy_manifest.to_dict()
         manifest.update(
             cls.build_manifest(
-                kind="model_log",
-                source=model_log,
+                kind="trace",
+                source=trace,
                 tensor_entries=legacy_manifest.tensors,
                 save_level=save_level,
                 spec_compat_info=None,
@@ -192,7 +192,7 @@ class _TlSpecWriter:
         tmp_path: Path,
         save_level: str,
     ) -> list[dict[str, str]]:
-        """Write bundle members as nested unified ModelLog specs.
+        """Write bundle members as nested unified Trace specs.
 
         Parameters
         ----------
@@ -215,9 +215,9 @@ class _TlSpecWriter:
         members_path = tmp_path / "members"
         members_path.mkdir()
         records: list[dict[str, str]] = []
-        for index, (name, model_log) in enumerate(members.items()):
+        for index, (name, trace) in enumerate(members.items()):
             relative_path = Path("members") / f"{index:04d}.tlspec"
-            model_log.save(tmp_path / relative_path, level=save_level)
+            trace.save(tmp_path / relative_path, level=save_level)
             records.append({"name": str(name), "path": relative_path.as_posix()})
         return records
 
@@ -311,9 +311,9 @@ class _TlSpecWriter:
 
         if kind == "bundle":
             return "torchlens.intervention.bundle.Bundle"
-        source_model_class = getattr(source, "source_model_class", None)
-        if isinstance(source_model_class, str) and source_model_class:
-            return source_model_class
+        model_class = getattr(source, "model_class", None)
+        if isinstance(model_class, str) and model_class:
+            return model_class
         model = _source_model(source)
         if model is not None:
             model_type = type(model)
@@ -354,7 +354,7 @@ class _TlSpecWriter:
             parameter_hash = _hash_named_tensor_meta(model.named_parameters())
             buffer_hash = _hash_named_tensor_meta(model.named_buffers())
         else:
-            raw_parameter_hash = getattr(source, "weight_fingerprint_at_capture", None)
+            raw_parameter_hash = getattr(source, "param_hash_quick", None)
             if isinstance(raw_parameter_hash, str) and len(raw_parameter_hash) == 64:
                 parameter_hash = raw_parameter_hash
             else:
@@ -388,9 +388,9 @@ class _TlSpecWriter:
         member_fingerprints = []
         if isinstance(members, dict):
             for name, member in members.items():
-                signature = cls._model_signature(member, kind="model_log")
+                signature = cls._model_signature(member, kind="trace")
                 member_fingerprints.append(
-                    (name, cls._model_fingerprint(member, signature, kind="model_log"))
+                    (name, cls._model_fingerprint(member, signature, kind="trace"))
                 )
         parameter_hash = sha256(repr(member_fingerprints).encode("utf-8")).hexdigest()
         return {
@@ -425,7 +425,7 @@ class _TlSpecWriter:
             members = getattr(source, "members", {})
             if isinstance(members, dict):
                 for member_name, member in members.items():
-                    for site in cls._sites(member, kind="model_log"):
+                    for site in cls._sites(member, kind="trace"):
                         site["bundle_member"] = member_name
                         sites.append(site)
             return sites
@@ -435,11 +435,11 @@ class _TlSpecWriter:
             sites.append(
                 {
                     "function_path": _json_str_or_none(getattr(layer, "func_name", None)),
-                    "module_path": _json_str_or_none(getattr(layer, "containing_module", None)),
+                    "module_path": _json_str_or_none(getattr(layer, "module", None)),
                     "layer_label": str(getattr(layer, "layer_label", "")),
-                    "pass_index": _json_int_or_none(getattr(layer, "pass_num", None)),
+                    "pass_index": _json_int_or_none(getattr(layer, "call_index", None)),
                     "op_kind": _json_str_or_none(
-                        getattr(layer, "operation_equivalence_type", None)
+                        getattr(layer, "equivalence_class", None)
                         or getattr(layer, "func_name", None)
                     ),
                 }
@@ -558,7 +558,7 @@ def _source_model(source: Any) -> torch.nn.Module | None:
     Parameters
     ----------
     source:
-        ModelLog-like source object.
+        Trace-like source object.
 
     Returns
     -------

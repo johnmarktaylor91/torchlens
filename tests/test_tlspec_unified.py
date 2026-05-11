@@ -42,7 +42,7 @@ class UnifiedTinyModel(nn.Module):
         return torch.relu(self.linear(x))
 
 
-def _captured_log(*, intervention_ready: bool = False) -> tl.ModelLog:
+def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
     """Create a deterministic captured model log.
 
     Parameters
@@ -52,12 +52,12 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured log.
     """
 
     torch.manual_seed(2100)
-    return tl.log_forward_pass(
+    return tl.trace(
         UnifiedTinyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
@@ -91,7 +91,7 @@ def _read_manifest(path: Path) -> dict[str, Any]:
 @pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
-    """ModelLog.save writes unified manifests that load polymorphically."""
+    """Trace.save writes unified manifests that load polymorphically."""
 
     log = _captured_log()
     path = tmp_path / f"model_{level}.tlspec"
@@ -101,8 +101,8 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
     loaded = tl.load(path)
     manifest = _read_manifest(path)
 
-    assert isinstance(loaded, tl.ModelLog)
-    assert manifest["kind"] == "model_log"
+    assert isinstance(loaded, tl.Trace)
+    assert manifest["kind"] == "trace"
     assert manifest["tlspec_version"] == 1
     assert manifest["save_level"] == level
     assert [layer.layer_label for layer in loaded.layer_list] == [
@@ -128,7 +128,7 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
     assert manifest["kind"] == "bundle"
     assert manifest["save_level"] == level
     assert loaded.names == ["baseline"]
-    assert isinstance(loaded["baseline"], tl.ModelLog)
+    assert isinstance(loaded["baseline"], tl.Trace)
 
 
 @pytest.mark.smoke
@@ -162,7 +162,7 @@ def test_inspect_tlspec_returns_unified_manifest(tmp_path: Path) -> None:
 
     manifest = tl.io.inspect_tlspec(path)
 
-    assert manifest["kind"] == "model_log"
+    assert manifest["kind"] == "trace"
     assert manifest["body_format"] == "safetensors"
     assert isinstance(manifest["sites"], list)
 

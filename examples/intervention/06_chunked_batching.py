@@ -45,14 +45,14 @@ def main() -> None:
     first = torch.randn(2, 8)
     second = torch.randn(3, 8)
 
-    log = tl.log_forward_pass(model, first, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, first, vis_opt="none", intervention_ready=True)
     log.attach_hooks(tl.func("relu"), tl.scale(1.0), confirm_mutation=True)
     log.rerun(model, first)
     log.rerun(model, second, append=True)
 
-    output = log.layer_list[-1].activation
+    output = log.layer_list[-1].out
     assert output.shape[0] == first.shape[0] + second.shape[0]
-    assert log.operation_history[-1]["op"] == "append"
+    assert log.ledger[-1]["op"] == "append"
     assert log.is_appended is True
 
 

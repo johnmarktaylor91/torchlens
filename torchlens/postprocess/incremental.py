@@ -16,7 +16,7 @@ _ALL_STEPS: set[str] = {"module_path_strings", "param_addresses"}
 def _copy_record_with_metadata(
     record: ActivationRecord, metadata: dict[str, object]
 ) -> ActivationRecord:
-    """Return a copy of an activation record with merged metadata."""
+    """Return a copy of an out record with merged metadata."""
 
     merged_metadata = dict(record.metadata)
     merged_metadata.update(metadata)
@@ -46,7 +46,7 @@ def add_module_path_strings(recording: Recording) -> Recording:
 
     records = []
     for record in recording.records:
-        module_path_strings = tuple(frame.module_address for frame in record.ctx.module_stack)
+        module_path_strings = tuple(frame.address for frame in record.ctx.module_stack)
         module_path = ".".join(address for address in module_path_strings if address)
         records.append(
             _copy_record_with_metadata(
@@ -60,7 +60,7 @@ def add_module_path_strings(recording: Recording) -> Recording:
     return _replace_recording_records(recording, records)
 
 
-def _activation_record_has_param_addresses() -> bool:
+def _out_record_has_param_addresses() -> bool:
     """Return whether capture-time param-address data exists on ActivationRecord."""
 
     return any(field.name == "parent_param_addresses" for field in fields(ActivationRecord))
@@ -85,7 +85,7 @@ def add_param_addresses(recording: Recording) -> Recording:
         If this build did not capture ``ActivationRecord.parent_param_addresses``.
     """
 
-    if not _activation_record_has_param_addresses():
+    if not _out_record_has_param_addresses():
         raise RecordingConfigError(
             "param_addresses enrichment requires capture-time "
             "ActivationRecord.parent_param_addresses data, which is not available"

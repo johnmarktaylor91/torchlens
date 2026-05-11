@@ -1,4 +1,4 @@
-"""Minimal tensor display helpers for ``LayerLog.show`` and ``LayerPassLog.show``."""
+"""Minimal tensor display helpers for ``LayerLog.show`` and ``OpLog.show``."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def _tensor_from_log(log_entry: Any) -> torch.Tensor | None:
     Parameters
     ----------
     log_entry:
-        ``LayerLog``, ``LayerPassLog``, or tensor-like object.
+        ``LayerLog``, ``OpLog``, or tensor-like object.
 
     Returns
     -------
@@ -26,15 +26,15 @@ def _tensor_from_log(log_entry: Any) -> torch.Tensor | None:
 
     if isinstance(log_entry, torch.Tensor):
         return log_entry
-    activation = getattr(log_entry, "transformed_activation", None)
-    if isinstance(activation, torch.Tensor):
-        return activation
-    activation = getattr(log_entry, "activation", None)
-    if isinstance(activation, torch.Tensor):
-        return activation
-    passes = getattr(log_entry, "passes", None)
-    if isinstance(passes, dict) and 1 in passes:
-        return _tensor_from_log(passes[1])
+    out = getattr(log_entry, "transformed_out", None)
+    if isinstance(out, torch.Tensor):
+        return out
+    out = getattr(log_entry, "out", None)
+    if isinstance(out, torch.Tensor):
+        return out
+    ops = getattr(log_entry, "ops", None)
+    if isinstance(ops, dict) and 1 in ops:
+        return _tensor_from_log(ops[1])
     return None
 
 
@@ -176,7 +176,7 @@ def show_tensor(
     Parameters
     ----------
     log_entry:
-        ``LayerLog``, ``LayerPassLog``, or tensor.
+        ``LayerLog``, ``OpLog``, or tensor.
     method:
         ``"auto"``, ``"heatmap"``, ``"channels"``, ``"rgb"``, or ``"hist"``.
     signs:
@@ -196,7 +196,7 @@ def show_tensor(
 
     tensor = _tensor_from_log(log_entry)
     if tensor is None:
-        return "No saved tensor activation is available to display."
+        return "No saved tensor out is available to display."
     resolved_method = _auto_method(tensor) if method == "auto" else method
     if resolved_method not in {"heatmap", "channels", "rgb", "hist"}:
         raise ValueError("method must be 'auto', 'heatmap', 'channels', 'rgb', or 'hist'.")

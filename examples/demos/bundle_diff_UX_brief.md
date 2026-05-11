@@ -8,7 +8,7 @@ demo contract.
 
 - Demo model: `torchvision.models.resnet18(weights=None)`, using random weights only.
 - Input: deterministic, via `torch.manual_seed(0); x = torch.randn(1, 3, 224, 224)`.
-- Intervention: `model_log.do(tl.module("layer1.0.relu"), tl.zero_ablate())`.
+- Intervention: `trace.do(tl.module("layer1.0.relu"), tl.zero_ablate())`.
 - Output: SVG, approximately 1200x800 px, with an approximately 50KB target size.
 
 ## Layout

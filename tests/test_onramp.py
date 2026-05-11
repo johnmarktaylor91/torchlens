@@ -96,18 +96,18 @@ def _first_saved_label(model: nn.Module, x: torch.Tensor) -> str:
     """Return a non-input, non-output layer label for a model."""
 
     log = _metadata_log(model, x)
-    for label in log.layer_labels_no_pass:
+    for label in log.layer_labels:
         if not label.startswith(("input", "output")):
-            if log.layer_num_passes.get(label, 1) > 1:
+            if log.layer_num_calls.get(label, 1) > 1:
                 return f"{label}:1"
             return label
     raise AssertionError("No internal layer found.")
 
 
-def _metadata_log(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
-    """Return a metadata-only ModelLog."""
+def _metadata_log(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+    """Return a metadata-only Trace."""
 
-    return tl.log_forward_pass(
+    return tl.trace(
         model,
         x,
         capture=tl.options.CaptureOptions(layers_to_save=None),
@@ -115,13 +115,13 @@ def _metadata_log(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
 
 
 def test_peek_on_three_architectures(architecture: tuple[nn.Module, torch.Tensor]) -> None:
-    """``tl.peek`` returns one activation across representative architectures."""
+    """``tl.peek`` returns one out across representative architectures."""
 
     model, x = architecture
     label = _first_saved_label(model, x)
-    activation = tl.peek(model, x, label)
-    assert isinstance(activation, torch.Tensor)
-    assert activation.shape[0] == x.shape[0]
+    out = tl.peek(model, x, label)
+    assert isinstance(out, torch.Tensor)
+    assert out.shape[0] == x.shape[0]
 
 
 def test_extract_list_and_dict_on_three_architectures(
@@ -150,7 +150,7 @@ def test_batched_extract_memory_and_disk_on_three_architectures(
     in_memory = tl.batched_extract(model, stimuli, [label], batch_size=x.shape[0], progress=False)
     assert in_memory[label].shape[0] == stimuli.shape[0]
 
-    output_paths = tl.batched_extract(
+    container_paths = tl.batched_extract(
         model,
         stimuli,
         [label],
@@ -158,9 +158,9 @@ def test_batched_extract_memory_and_disk_on_three_architectures(
         output_dir=tmp_path,
         progress=False,
     )
-    assert len(output_paths) == 2
-    assert all(path.exists() for path in output_paths)
-    assert label in torch.load(output_paths[0])
+    assert len(container_paths) == 2
+    assert all(path.exists() for path in container_paths)
+    assert label in torch.load(container_paths[0])
 
 
 def test_list_modules_on_three_architectures(architecture: tuple[nn.Module, torch.Tensor]) -> None:
@@ -186,7 +186,7 @@ def test_list_ops_on_three_architectures(architecture: tuple[nn.Module, torch.Te
 def test_find_layers_and_suggest_on_three_architectures(
     architecture: tuple[nn.Module, torch.Tensor],
 ) -> None:
-    """``ModelLog.find_layers`` and ``suggest`` return useful labels."""
+    """``Trace.find_layers`` and ``suggest`` return useful labels."""
 
     model, x = architecture
     log = _metadata_log(model, x)
@@ -194,7 +194,7 @@ def test_find_layers_and_suggest_on_three_architectures(
     base_label = label.split(":", 1)[0]
     prefix = base_label.split("_", 1)[0]
     assert base_label in log.find_layers(prefix)
-    assert log.suggest(prefix)
+    assert log.find_layers(prefix)
     with pytest.raises(ValueError, match="Did you mean"):
         tl.peek(model, x, "definitely_missing_layer")
 
@@ -218,8 +218,8 @@ def test_layer_accessor_queries_and_completion(
     assert isinstance(log.layers.by_module_and_operator(), dict)
 
 
-def test_model_log_site_reports(architecture: tuple[nn.Module, torch.Tensor]) -> None:
-    """ModelLog site reports return lists."""
+def test_trace_site_reports(architecture: tuple[nn.Module, torch.Tensor]) -> None:
+    """Trace site reports return lists."""
 
     model, x = architecture
     log = _metadata_log(model, x)
@@ -231,8 +231,8 @@ def test_peek_graph_writes_file(tmp_path: Path) -> None:
     """``utils.peek_graph`` renders to disk."""
 
     model = TinyMLP()
-    output_path = tmp_path / "quick_graph"
-    utils.peek_graph(model, torch.randn(1, 4), output_path=output_path, file_format="pdf")
+    container_path = tmp_path / "quick_graph"
+    utils.peek_graph(model, torch.randn(1, 4), container_path=container_path, file_format="pdf")
     assert list(tmp_path.iterdir())
 
 

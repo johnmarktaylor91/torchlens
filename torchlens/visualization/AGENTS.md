@@ -2,17 +2,17 @@
 
 ## Key Internal Functions
 
-### `render_graph()` in `rendering.py`
+### `draw()` in `rendering.py`
 Main forward graph entry point. It normalizes buffer visibility, applies module focus, skip
 and collapse decisions, builds Graphviz nodes/edges, styles modules, optionally adds legends
 and code panels, and writes/renders output.
 
 ### `render_backward_graph()` in `rendering.py`
-Renders `GradFnLog` nodes and gradient edges captured by `capture/backward.py`.
+Renders `GradFnLog` nodes and grad edges captured by `capture/backward.py`.
 
 ### Collapse and Focus
 - `_should_collapse_module()` is the central collapse decision.
-- `_is_collapsed_module()` protects indexing into `containing_modules`; keep its guard strict.
+- `_is_collapsed_module()` protects indexing into `modules`; keep its guard strict.
 - `_build_module_focus_entries()` inserts boundary nodes for module-scoped renders.
 - Focus runs before skip/collapse.
 

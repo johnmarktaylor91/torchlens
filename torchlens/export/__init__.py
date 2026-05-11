@@ -9,12 +9,12 @@ from typing import Any
 
 
 def svg(log: Any, path: str | Path, *, editable: bool = True) -> Path:
-    """Export a ModelLog graph as a lightweight SVG file.
+    """Export a Trace graph as a lightweight SVG file.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination SVG path.
     editable:
@@ -42,7 +42,7 @@ def html(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination HTML path.
 
@@ -66,7 +66,7 @@ def chrome_trace(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -123,7 +123,7 @@ def speedscope(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -169,7 +169,7 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination folded-stack text path.
 
@@ -185,7 +185,7 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     model_name = str(getattr(log, "model_name", "TorchLens"))
     for layer in _iter_layers(log):
         stack = [model_name]
-        stack.extend(str(module) for module in (getattr(layer, "containing_modules", None) or []))
+        stack.extend(str(module) for module in (getattr(layer, "modules", None) or []))
         stack.append(_layer_display_name(layer))
         folded_stack = ";".join(_sanitize_flamegraph_frame(frame) for frame in stack)
         lines.append(f"{folded_stack} {_duration_us(layer)}")
@@ -203,7 +203,7 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -218,11 +218,11 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
     live_bytes = 0
     events: list[dict[str, Any]] = []
     for layer in _iter_layers(log):
-        bytes_value = int(getattr(layer, "tensor_memory", 0) or 0)
+        bytes_value = int(getattr(layer, "memory", 0) or 0)
         live_bytes += bytes_value
         events.append(
             {
-                "operation": getattr(layer, "operation_num", None),
+                "operation": getattr(layer, "compute_index", None),
                 "layer": getattr(layer, "layer_label", None),
                 "tensor_bytes": bytes_value,
                 "cumulative_tensor_bytes": live_bytes,
@@ -239,12 +239,12 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
 
 
 def xarray(log: Any) -> Any:
-    """Return a NeuroidAssembly-shaped xarray DataArray of saved activations.
+    """Return a NeuroidAssembly-shaped xarray DataArray of saved outs.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` whose saved tensor activations should be flattened
+        TorchLens ``Trace`` whose saved tensor outs should be flattened
         into ``presentation`` by ``neuroid`` form.
 
     Returns
@@ -257,7 +257,7 @@ def xarray(log: Any) -> Any:
     ImportError
         If xarray is not installed.
     ValueError
-        If no saved tensor activations are available or presentation counts differ.
+        If no saved tensor outs are available or presentation counts differ.
     """
 
     try:
@@ -275,10 +275,10 @@ def xarray(log: Any) -> Any:
     index_coord: list[int] = []
     presentation_count: int | None = None
     for layer in _iter_layers(log):
-        activation = getattr(layer, "activation", None)
-        if not isinstance(activation, torch.Tensor):
+        out = getattr(layer, "out", None)
+        if not isinstance(out, torch.Tensor):
             continue
-        values = activation.detach().cpu().numpy()
+        values = out.detach().cpu().numpy()
         if values.ndim == 0:
             flat = values.reshape(1, 1)
         elif values.ndim == 1:
@@ -288,7 +288,7 @@ def xarray(log: Any) -> Any:
         if presentation_count is None:
             presentation_count = int(flat.shape[0])
         elif flat.shape[0] != presentation_count:
-            raise ValueError("All exported activations must share the same presentation count.")
+            raise ValueError("All exported outs must share the same presentation count.")
         arrays.append(flat)
         layer_name = str(getattr(layer, "layer_label_no_pass", getattr(layer, "layer_label", "")))
         label = str(getattr(layer, "layer_label", layer_name))
@@ -297,7 +297,7 @@ def xarray(log: Any) -> Any:
         index_coord.extend(range(flat.shape[1]))
 
     if not arrays or presentation_count is None:
-        raise ValueError("No saved tensor activations are available for xarray export.")
+        raise ValueError("No saved tensor outs are available for xarray export.")
 
     data = np.concatenate(arrays, axis=1)
     return xr.DataArray(
@@ -310,7 +310,7 @@ def xarray(log: Any) -> Any:
             "layer_label": ("neuroid", layer_label_coord),
             "neuroid_index": ("neuroid", index_coord),
         },
-        name="activation",
+        name="out",
         attrs={"assembly": "NeuroidAssembly", "source": "torchlens.export.xarray"},
     )
 
@@ -321,7 +321,7 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to summarize.
+        TorchLens ``Trace`` to summarize.
     writer:
         Existing writer object, for example ``SummaryWriter``.
     step:
@@ -337,8 +337,8 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
 
     writer.add_scalar(f"{prefix}/num_layers", len(getattr(log, "layer_list", [])), step)
     writer.add_scalar(
-        f"{prefix}/total_activation_memory",
-        int(getattr(log, "total_activation_memory", 0) or 0),
+        f"{prefix}/total_out_memory",
+        int(getattr(log, "total_out_memory", 0) or 0),
         step,
     )
     writer.add_text(f"{prefix}/model_name", str(getattr(log, "model_name", "")), step)
@@ -348,13 +348,13 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
     return writer
 
 
-def wandb(log: Any, run: Any | None = None, name: str = "torchlens_model_log") -> dict[str, Any]:
+def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> dict[str, Any]:
     """Create and optionally log a Weights & Biases table for a TorchLens log.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     run:
         Optional existing W&B run object. If omitted, ``wandb.run`` is used when
         present, but a new run is not created.
@@ -393,7 +393,7 @@ def mlflow(log: Any, client: Any | None = None, prefix: str = "torchlens") -> di
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to summarize.
+        TorchLens ``Trace`` to summarize.
     client:
         Optional object exposing ``log_metric``.
     prefix:
@@ -418,7 +418,7 @@ def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to summarize.
+        TorchLens ``Trace`` to summarize.
     run:
         Optional object exposing ``track``.
     prefix:
@@ -438,12 +438,12 @@ def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str
 
 
 def csv(log: Any, path: str | Path, **kwargs: Any) -> Path:
-    """Write ``ModelLog.to_pandas()`` to CSV.
+    """Write ``Trace.to_pandas()`` to CSV.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination CSV path.
     **kwargs:
@@ -462,12 +462,12 @@ def csv(log: Any, path: str | Path, **kwargs: Any) -> Path:
 
 
 def parquet(log: Any, path: str | Path, **kwargs: Any) -> Path:
-    """Write ``ModelLog.to_pandas()`` to Parquet.
+    """Write ``Trace.to_pandas()`` to Parquet.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination Parquet path.
     **kwargs:
@@ -503,12 +503,12 @@ def json(
     orient: str = "records",
     **kwargs: Any,
 ) -> Path:
-    """Write ``ModelLog.to_pandas()`` to JSON.
+    """Write ``Trace.to_pandas()`` to JSON.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
     orient:
@@ -534,7 +534,7 @@ def model_explorer(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -580,7 +580,7 @@ def netron(log: Any, path: str | Path) -> Path:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to export.
+        TorchLens ``Trace`` to export.
     path:
         Destination JSON path.
 
@@ -604,12 +604,12 @@ def netron(log: Any, path: str | Path) -> Path:
                 {
                     "name": str(getattr(layer, "layer_label", "")),
                     "op_type": str(getattr(layer, "func_name", getattr(layer, "layer_type", ""))),
-                    "input": list(getattr(layer, "parent_layers", []) or []),
+                    "input": list(getattr(layer, "parents", []) or []),
                     "output": [str(getattr(layer, "layer_label", ""))],
                     "attribute": [
                         {
-                            "name": "tensor_shape",
-                            "value": list(getattr(layer, "tensor_shape", ()) or ()),
+                            "name": "shape",
+                            "value": list(getattr(layer, "shape", ()) or ()),
                         }
                     ],
                 }
@@ -654,7 +654,7 @@ def _duration_us(layer: Any) -> int:
         Duration in microseconds.
     """
 
-    duration = float(getattr(layer, "func_time", 0.0) or 0.0)
+    duration = float(getattr(layer, "func_duration", 0.0) or 0.0)
     return max(1, int(duration * 1_000_000))
 
 
@@ -715,8 +715,8 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
                 "args": {
                     "layer_label": getattr(layer, "layer_label", None),
                     "op_type": getattr(layer, "func_name", None),
-                    "tensor_memory": getattr(layer, "tensor_memory", None),
-                    "module_path": getattr(layer, "containing_module", None),
+                    "memory": getattr(layer, "memory", None),
+                    "module_path": getattr(layer, "module", None),
                 },
             }
         )
@@ -769,7 +769,7 @@ def _chrome_trace_diff_events(bundle: Any) -> list[dict[str, Any]]:
                         "module_path": getattr(node, "module_path", None),
                         "module_type": getattr(node, "module_type", None),
                         "delta": deltas.get(node_name, {}).get(member_name),
-                        "tensor_memory": getattr(layer, "tensor_memory", None),
+                        "memory": getattr(layer, "memory", None),
                     },
                 }
             )
@@ -792,8 +792,8 @@ def _summary_metrics(log: Any) -> dict[str, int]:
 
     return {
         "num_layers": len(getattr(log, "layer_list", [])),
-        "num_tensors_saved": int(getattr(log, "num_tensors_saved", 0) or 0),
-        "total_activation_memory": int(getattr(log, "total_activation_memory", 0) or 0),
+        "num_saved_ops": int(getattr(log, "num_saved_ops", 0) or 0),
+        "total_out_memory": int(getattr(log, "total_out_memory", 0) or 0),
     }
 
 
@@ -910,12 +910,12 @@ def _sanitize_flamegraph_frame(frame: str) -> str:
 
 
 def _static_graph_data(log: Any) -> dict[str, Any]:
-    """Serialize a ModelLog into static graph data.
+    """Serialize a Trace into static graph data.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` to serialize.
+        TorchLens ``Trace`` to serialize.
 
     Returns
     -------
@@ -933,8 +933,8 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
                 "id": node_id,
                 "label": node_id,
                 "type": _node_type(entry),
-                "shape": "x".join(str(dim) for dim in getattr(entry, "tensor_shape", ()) or ()),
-                "memory": str(getattr(entry, "tensor_memory_str", "")),
+                "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
+                "memory": str(getattr(entry, "memory_str", "")),
                 "x": 80 + (index % 8) * 180,
                 "y": 80 + (index // 8) * 110,
             }
@@ -942,7 +942,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
     edges: list[dict[str, str]] = []
     for entry in entries:
         target = str(getattr(entry, "layer_label", ""))
-        for parent in getattr(entry, "parent_layers", None) or []:
+        for parent in getattr(entry, "parents", None) or []:
             if parent in node_ids:
                 edges.append({"source": str(parent), "target": target})
     width = max((int(node["x"]) for node in nodes), default=0) + 160
@@ -970,15 +970,15 @@ def _node_type(entry: Any) -> str:
         Semantic node type.
     """
 
-    if getattr(entry, "is_input_layer", False):
+    if getattr(entry, "is_input", False):
         return "input"
-    if getattr(entry, "is_output_layer", False):
+    if getattr(entry, "is_output", False):
         return "output"
-    if getattr(entry, "is_buffer_layer", False):
+    if getattr(entry, "is_buffer", False):
         return "buffer"
-    if getattr(entry, "is_terminal_bool_layer", False):
+    if getattr(entry, "is_terminal_bool", False):
         return "bool"
-    if int(getattr(entry, "num_params_total", 0) or 0) > 0:
+    if int(getattr(entry, "num_params", 0) or 0) > 0:
         return "parameterized"
     return "operation"
 

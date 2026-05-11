@@ -20,25 +20,25 @@ class _ReluAdd(nn.Module):
         return torch.relu(x) + 1
 
 
-def _intervention_log() -> tl.ModelLog:
+def _interventions() -> tl.Trace:
     """Build an intervention-ready log with a relu replacement recipe.
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Model log with one ``set`` intervention at the relu site.
     """
 
     x = torch.randn(2, 3)
-    log = tl.log_forward_pass(_ReluAdd(), x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(_ReluAdd(), x, vis_opt="none", intervention_ready=True)
     log.set(tl.func("relu"), torch.zeros(2, 3))
     return log
 
 
-def test_model_log_show_accepts_intervention_options() -> None:
-    """``ModelLog.show`` accepts Phase 11 intervention visualization kwargs."""
+def test_trace_show_accepts_intervention_options() -> None:
+    """``Trace.show`` accepts Phase 11 intervention visualization kwargs."""
 
-    log = _intervention_log()
+    log = _interventions()
     try:
         assert log.show(vis_opt="none", vis_intervention_mode="node_mark") is None
         assert (
@@ -55,9 +55,9 @@ def test_model_log_show_accepts_intervention_options() -> None:
 def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
     """``node_mark`` marks intervention sites and cone members in DOT output."""
 
-    log = _intervention_log()
+    log = _interventions()
     try:
-        dot = log.render_graph(
+        dot = log.draw(
             vis_save_only=True,
             vis_outpath=str(tmp_path / "node_mark"),
             vis_fileformat="dot",
@@ -67,7 +67,7 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
         assert "#FF00FF" in dot
         assert "#FFB3FF" in dot
 
-        without_cone = log.render_graph(
+        without_cone = log.draw(
             vis_save_only=True,
             vis_outpath=str(tmp_path / "node_mark_no_cone"),
             vis_fileformat="dot",
@@ -83,9 +83,9 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
 def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) -> None:
     """``as_node`` inserts a diamond hook node after an intervention site."""
 
-    log = _intervention_log()
+    log = _interventions()
     try:
-        dot = log.render_graph(
+        dot = log.draw(
             vis_save_only=True,
             vis_outpath=str(tmp_path / "as_node"),
             vis_fileformat="dot",
@@ -101,8 +101,8 @@ def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) ->
 def test_bundle_show_accepts_vis_opt_none() -> None:
     """``Bundle.show`` accepts render kwargs and skips on ``vis_opt='none'``."""
 
-    log = _intervention_log()
-    clean = tl.log_forward_pass(_ReluAdd(), torch.randn(2, 3), vis_opt="none")
+    log = _interventions()
+    clean = tl.trace(_ReluAdd(), torch.randn(2, 3), vis_opt="none")
     try:
         bundle = tl.bundle({"intervened": log, "clean": clean})
         assert bundle.show(vis_opt="none") == {"intervened": None, "clean": None}
@@ -114,14 +114,14 @@ def test_bundle_show_accepts_vis_opt_none() -> None:
 def test_dagua_bridge_exposes_intervention_metadata() -> None:
     """Dagua graph objects expose Phase 11 intervention metadata arrays."""
 
-    log = _intervention_log()
+    log = _interventions()
     try:
-        graph = dagua.model_log_to_dagua_graph(log, vis_mode="unrolled")
+        graph = dagua.trace_to_dagua_graph(log, vis_mode="unrolled")
         assert hasattr(graph, "is_intervention_site")
         assert hasattr(graph, "is_in_cone")
-        assert hasattr(graph, "intervention_log_summary")
+        assert hasattr(graph, "interventions_summary")
         assert any(graph.is_intervention_site)
         assert any(graph.is_in_cone)
-        assert len(graph.intervention_log_summary) == graph.num_nodes
+        assert len(graph.interventions_summary) == graph.num_nodes
     finally:
         log.cleanup()

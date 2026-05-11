@@ -25,8 +25,8 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "on_predicate_error",
     "streaming",
     "random_seed",
-    "activation_transform",
-    "save_raw_activation",
+    "out_transform",
+    "save_raw_outs",
 )
 
 
@@ -58,8 +58,8 @@ class RecordingOptions:
     on_predicate_error: PredicateErrorMode = "auto"
     streaming: StreamingOptions | None = None
     random_seed: int | None = None
-    activation_transform: ActivationPostfunc | None = None
-    save_raw_activation: bool = True
+    out_transform: ActivationPostfunc | None = None
+    save_raw_outs: bool = True
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -79,21 +79,20 @@ class RecordingOptions:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-        save_raw_activation: bool | MissingType = MISSING,
+        out_transform: ActivationPostfunc | None | MissingType = MISSING,
+        save_raw_outs: bool | MissingType = MISSING,
         *,
-        activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
-        if activation_postfunc is not MISSING:
-            if activation_transform is not MISSING:
+        if out_postfunc is not MISSING:
+            if out_transform is not MISSING:
                 raise TypeError(
-                    "kwarg activation_postfunc deprecated, use activation_transform; "
-                    "do not pass both"
+                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
                 )
-            warn_deprecated_alias("activation_postfunc", "activation_transform")
-            activation_transform = activation_postfunc
+            warn_deprecated_alias("out_postfunc", "out_transform")
+            out_transform = out_postfunc
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "keep_op": _resolve_recording_option("keep_op", keep_op, None, specified_fields),
@@ -122,11 +121,11 @@ class RecordingOptions:
             "random_seed": _resolve_recording_option(
                 "random_seed", random_seed, None, specified_fields
             ),
-            "activation_transform": _resolve_recording_option(
-                "activation_transform", activation_transform, None, specified_fields
+            "out_transform": _resolve_recording_option(
+                "out_transform", out_transform, None, specified_fields
             ),
-            "save_raw_activation": _resolve_recording_option(
-                "save_raw_activation", save_raw_activation, True, specified_fields
+            "save_raw_outs": _resolve_recording_option(
+                "save_raw_outs", save_raw_outs, True, specified_fields
             ),
         }
         _validate_recording_values(values)
@@ -140,11 +139,11 @@ class RecordingOptions:
         return {field_name: getattr(self, field_name) for field_name in _RECORDING_FIELDS}
 
     @property
-    def activation_postfunc(self) -> ActivationPostfunc | None:
-        """Deprecated alias for ``activation_transform``."""
+    def out_postfunc(self) -> ActivationPostfunc | None:
+        """Deprecated alias for ``out_transform``."""
 
-        warn_deprecated_alias("activation_postfunc", "activation_transform")
-        return self.activation_transform
+        warn_deprecated_alias("out_postfunc", "out_transform")
+        return self.out_transform
 
     def is_field_explicit(self, field_name: str) -> bool:
         """Return whether a field was explicitly supplied by the caller."""
@@ -173,18 +172,18 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     history_size = values["history_size"]
     max_predicate_failures = values["max_predicate_failures"]
     on_predicate_error = values["on_predicate_error"]
-    activation_transform = values["activation_transform"]
-    save_raw_activation = values["save_raw_activation"]
+    out_transform = values["out_transform"]
+    save_raw_outs = values["save_raw_outs"]
     if not isinstance(history_size, int) or not 0 <= history_size <= 1024:
         raise ValueError("history_size must be an integer in [0, 1024]")
     if not isinstance(max_predicate_failures, int) or max_predicate_failures < 0:
         raise ValueError("max_predicate_failures must be a non-negative integer")
     if on_predicate_error not in {"auto", "accumulate", "fail-fast"}:
         raise ValueError("on_predicate_error must be 'auto', 'accumulate', or 'fail-fast'")
-    if activation_transform is not None and not callable(activation_transform):
-        raise ValueError("activation_transform must be callable or None")
-    if not isinstance(save_raw_activation, bool):
-        raise ValueError("save_raw_activation must be a bool")
+    if out_transform is not None and not callable(out_transform):
+        raise ValueError("out_transform must be callable or None")
+    if not isinstance(save_raw_outs, bool):
+        raise ValueError("save_raw_outs must be a bool")
 
 
 def merge_recording_options(
@@ -200,19 +199,17 @@ def merge_recording_options(
     on_predicate_error: PredicateErrorMode | MissingType = MISSING,
     streaming: StreamingOptions | None | MissingType = MISSING,
     random_seed: int | None | MissingType = MISSING,
-    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-    save_raw_activation: bool | MissingType = MISSING,
-    activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+    out_transform: ActivationPostfunc | None | MissingType = MISSING,
+    save_raw_outs: bool | MissingType = MISSING,
+    out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
 ) -> RecordingOptions:
     """Merge flat recording kwargs into a grouped options object."""
 
-    if activation_postfunc is not MISSING:
-        if activation_transform is not MISSING:
-            raise TypeError(
-                "kwarg activation_postfunc deprecated, use activation_transform; do not pass both"
-            )
-        warn_deprecated_alias("activation_postfunc", "activation_transform")
-        activation_transform = activation_postfunc
+    if out_postfunc is not MISSING:
+        if out_transform is not MISSING:
+            raise TypeError("kwarg out_postfunc deprecated, use out_transform; do not pass both")
+        warn_deprecated_alias("out_postfunc", "out_transform")
+        out_transform = out_postfunc
     base_values = recording.as_dict() if recording is not None else RecordingOptions().as_dict()
     specified_fields = (
         set(recording._specified_fields) if recording is not None else set()  # noqa: SLF001
@@ -228,8 +225,8 @@ def merge_recording_options(
         "on_predicate_error": on_predicate_error,
         "streaming": streaming,
         "random_seed": random_seed,
-        "activation_transform": activation_transform,
-        "save_raw_activation": save_raw_activation,
+        "out_transform": out_transform,
+        "save_raw_outs": save_raw_outs,
     }
     for field_name, value in incoming.items():
         if value is MISSING:

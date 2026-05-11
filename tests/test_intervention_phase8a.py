@@ -26,18 +26,18 @@ class ReluAdd(torch.nn.Module):
         Returns
         -------
         torch.Tensor
-            ReLU activation plus one.
+            ReLU out plus one.
         """
 
         return torch.relu(x) + 1
 
 
-def _identity_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
-    """Return the activation unchanged.
+def _identity_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    """Return the out unchanged.
 
     Parameters
     ----------
-    activation:
+    out:
         Activation passed to the hook.
     hook:
         Hook context supplied by TorchLens.
@@ -45,11 +45,11 @@ def _identity_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Original activation.
+        Original out.
     """
 
     del hook
-    return activation
+    return out
 
 
 def _capture() -> Any:
@@ -61,7 +61,7 @@ def _capture() -> Any:
         Intervention-ready model log.
     """
 
-    return tl.log_forward_pass(
+    return tl.trace(
         ReluAdd(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -81,7 +81,7 @@ def test_set_tensor_marks_spec_stale_and_returns_self() -> None:
     assert result is log
     assert log._spec_revision == initial_revision + 1
     assert log.run_state is RunState.SPEC_STALE
-    assert log._activation_recipe_revision == initial_revision
+    assert log._out_recipe_revision == initial_revision
     assert len(log._intervention_spec.target_value_specs) == 1
     value_spec = log._intervention_spec.target_value_specs[0]
     assert value_spec.value is replacement
@@ -94,13 +94,13 @@ def test_set_callable_tags_one_shot_metadata() -> None:
 
     log = _capture()
 
-    def replacement_fn(activation: torch.Tensor) -> torch.Tensor:
-        """Return a zero activation matching the original.
+    def replacement_fn(out: torch.Tensor) -> torch.Tensor:
+        """Return a zero out matching the original.
 
         Parameters
         ----------
-        activation:
-            Matched activation.
+        out:
+            Matched out.
 
         Returns
         -------
@@ -108,7 +108,7 @@ def test_set_callable_tags_one_shot_metadata() -> None:
             Zero replacement.
         """
 
-        return activation * 0
+        return out * 0
 
     log.set(tl.func("relu"), replacement_fn)
 
@@ -141,6 +141,7 @@ def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
     assert log._intervention_spec.hook_specs == []
 
 
+@pytest.mark.smoke
 def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     """Frozen intervention-spec snapshots refresh after each public mutator."""
 
@@ -196,20 +197,20 @@ def test_detach_hooks_no_site_is_noop_unless_strict() -> None:
 
 
 @pytest.mark.smoke
-def test_rerun_advances_activation_recipe_revision_after_set() -> None:
-    """Successful rerun advances the activation recipe revision."""
+def test_rerun_advances_out_recipe_revision_after_set() -> None:
+    """Successful rerun advances the out recipe revision."""
 
     x = torch.randn(2, 3)
-    log = tl.log_forward_pass(ReluAdd(), x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(ReluAdd(), x, vis_opt="none", intervention_ready=True)
 
     log.set(tl.func("relu"), torch.zeros(2, 3))
-    assert log._activation_recipe_revision == 0
+    assert log._out_recipe_revision == 0
 
     result = log.rerun(ReluAdd(), x)
 
     assert result is log
     assert log.run_state is RunState.RERUN_PROPAGATED
-    assert log._activation_recipe_revision == log._spec_revision
+    assert log._out_recipe_revision == log._spec_revision
     assert log._recipe_is_clean()
 
 

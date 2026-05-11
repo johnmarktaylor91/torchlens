@@ -26,13 +26,13 @@ Current public inspectable members: 67. Target kept/new members: 35 (budget <= 4
 | `check_metadata_invariants` (method) | `torchlens.data_classes.model_log.ModelLog` | MOVE to namespace `tl.validation.check_metadata_invariants(log)` | Preserve method wrapper for one minor cycle if currently documented or used in tests. |
 | `cleanup` (method) | `torchlens.data_classes.model_log.ModelLog` | DROP from public surface; lifecycle cleanup helper. | No namespace alias proposed. |
 | `clear_hooks` (method) | `torchlens.data_classes.model_log.ModelLog` | KEEP |  |
-| `conditional_arm_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_arm_entry_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `conditional_branch_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `conditional_edge_passes` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `conditional_elif_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `conditional_else_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `conditional_events` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `conditional_then_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_elif_entry_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_else_entry_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_records` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_then_entry_edges` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `current_function_call_barcode` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `detach_hooks` (method) | `torchlens.data_classes.model_log.ModelLog` | KEEP |  |
 | `detach_saved_tensors` (attribute) | `torchlens.constants.MODELLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
@@ -190,13 +190,13 @@ Current public inspectable members: 49. Target kept/new members: 30 (budget <= 3
 | `child_layers_per_pass` (property) | `torchlens.data_classes.layer_log.LayerLog` | MOVE to namespace `tl.report.layer_details(layer)` | Detailed relationship/derived view; reduce object method budget. |
 | `child_passes_per_layer` (property) | `torchlens.data_classes.layer_log.LayerLog` | MOVE to namespace `tl.report.layer_details(layer)` | Detailed relationship/derived view; reduce object method budget. |
 | `co_parent_layers` (property) | `torchlens.data_classes.layer_log.LayerLog` | KEEP |  |
-| `cond_branch_children_by_cond` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `cond_branch_elif_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `cond_branch_else_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `cond_branch_start_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `cond_branch_then_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `conditional_branch_stack_passes` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `conditional_branch_stacks` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_arm_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_elif_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_else_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_entry_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_then_children` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_role_stack_passes` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_role_stacks` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `containing_module` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `containing_modules` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `corresponding_grad_fn` (attribute) | `torchlens.constants.LAYERLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
@@ -310,10 +310,10 @@ Current public inspectable members: 30. Target kept/new members: 23 (budget <= 2
 | `args_captured` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `autograd_saved_bytes` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `autograd_saved_tensor_count` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `bool_conditional_id` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `bool_context_kind` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `bool_is_branch` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `bool_wrapper_kind` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `terminal_conditional_id` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_context_kind` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `is_terminal_conditional_bool` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_wrapper_kind` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `buffer_address` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `buffer_parent` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `buffer_pass` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
@@ -324,11 +324,11 @@ Current public inspectable members: 30. Target kept/new members: 23 (budget <= 2
 | `child_layers` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `children_tensor_versions` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `co_parent_layers` (property) | `torchlens.data_classes.layer_pass_log.LayerPassLog` | KEEP |  |
-| `cond_branch_children_by_cond` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `cond_branch_elif_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `cond_branch_else_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `cond_branch_start_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
-| `cond_branch_then_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_arm_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_elif_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_else_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_entry_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `conditional_then_children` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `conditional_branch_depth` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `conditional_branch_stack` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `container_spec` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
@@ -376,7 +376,7 @@ Current public inspectable members: 30. Target kept/new members: 23 (budget <= 2
 | `has_parents` (property) | `torchlens.data_classes.layer_pass_log.LayerPassLog` | KEEP |  |
 | `has_saved_activations` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `has_siblings` (property) | `torchlens.data_classes.layer_pass_log.LayerPassLog` | KEEP |  |
-| `in_cond_branch` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
+| `is_in_conditional_body` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `input_ancestors` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `internally_initialized_ancestors` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |
 | `internally_initialized_parents` (attribute) | `torchlens.constants.LAYERPASSLOG FIELD_ORDER` | KEEP | Public data field from FIELD_ORDER; keep as data-object attribute unless Phase 1a narrows fields separately. |

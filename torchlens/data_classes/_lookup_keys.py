@@ -1,14 +1,14 @@
-"""Shared lookup-key validation helpers for ``ModelLog`` access paths."""
+"""Shared lookup-key validation helpers for ``Trace`` access paths."""
 
 import random
 from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
-    from .model_log import ModelLog
+    from .model_log import Trace
 
 
 def _give_user_feedback_about_lookup_key(
-    self: "ModelLog",
+    self: "Trace",
     key: Union[int, str],
     mode: str,
 ) -> None:
@@ -35,38 +35,38 @@ def _give_user_feedback_about_lookup_key(
         raise ValueError(_get_lookup_help_str(self, key, mode))
 
     if hasattr(self, "_module_logs") and key.rsplit(":", 1)[0] in self._module_logs:
-        module, pass_num = key.rsplit(":", 1)
+        module, call_index = key.rsplit(":", 1)
         module_log = self._module_logs[module]
-        module_num_passes = getattr(module_log, "num_passes")
+        module_num_calls = getattr(module_log, "num_calls")
         raise ValueError(
-            f"You specified module {module} pass {pass_num}, but {module} only has "
-            f"{module_num_passes} passes; specify a lower number."
+            f"You specified module {module} pass {call_index}, but {module} only has "
+            f"{module_num_calls} ops; specify a lower number."
         )
 
-    if key in self.layer_labels_no_pass:
-        layer_num_passes = self.layer_num_passes.get(key, 1)
-        if layer_num_passes > 1:
+    if key in self.layer_labels:
+        layer_num_calls = self.layer_num_calls.get(key, 1)
+        if layer_num_calls > 1:
             raise ValueError(
-                f"You specified output of layer {key}, but it has {layer_num_passes} passes; "
+                f"You specified output of layer {key}, but it has {layer_num_calls} ops; "
                 f"please specify e.g. {key}:2 for the second pass of {key}."
             )
 
-    if key.rsplit(":", 1)[0] in self.layer_labels_no_pass:
-        layer_label, pass_num = key.rsplit(":", 1)
-        layer_num_passes_for_label = self.layer_num_passes.get(layer_label)
-        layer_num_passes_msg: int | str = (
-            layer_num_passes_for_label if layer_num_passes_for_label is not None else "unknown"
+    if key.rsplit(":", 1)[0] in self.layer_labels:
+        layer_label, call_index = key.rsplit(":", 1)
+        layer_num_calls_for_label = self.layer_num_calls.get(layer_label)
+        layer_num_calls_msg: int | str = (
+            layer_num_calls_for_label if layer_num_calls_for_label is not None else "unknown"
         )
         raise ValueError(
-            f"You specified layer {layer_label} pass {pass_num}, but {layer_label} only has "
-            f"{layer_num_passes_msg} passes. Specify a lower number."
+            f"You specified layer {layer_label} pass {call_index}, but {layer_label} only has "
+            f"{layer_num_calls_msg} ops. Specify a lower number."
         )
 
     raise ValueError(_get_lookup_help_str(self, key, mode))
 
 
-def _get_lookup_help_str(self: "ModelLog", layer_label: Union[int, str], mode: str) -> str:
-    """Build the standard help text for failed ModelLog lookups.
+def _get_lookup_help_str(self: "Trace", layer_label: Union[int, str], mode: str) -> str:
+    """Build the standard help text for failed Trace lookups.
 
     Parameters
     ----------
@@ -82,24 +82,24 @@ def _get_lookup_help_str(self: "ModelLog", layer_label: Union[int, str], mode: s
     str
         Help text describing valid lookup forms.
     """
-    suggestions = self.suggest(str(layer_label)) if hasattr(self, "suggest") else []
+    suggestions = self.find_layers(str(layer_label)) if hasattr(self, "find_layers") else []
     if suggestions:
         suggestion_str = ", ".join(repr(item) for item in suggestions)
         return f"Layer {layer_label!r} not found. Did you mean {suggestion_str}?"
 
-    if not self.layer_labels_w_pass:
+    if not self.op_labels:
         sample_layer1 = "conv2d_1_1:1"
         sample_layer2 = "conv2d_1_1"
     else:
-        sample_layer1 = random.choice(self.layer_labels_w_pass)
-        sample_layer2 = random.choice(self.layer_labels_no_pass)
+        sample_layer1 = random.choice(self.op_labels)
+        sample_layer2 = random.choice(self.layer_labels)
     module_addrs = [ml.address for ml in self.modules if ml.address != "self"]
     if len(module_addrs) > 0:
         sample_module1 = random.choice(module_addrs)
-        all_pass_labels = [
-            pl for ml in self.modules for pl in ml.pass_labels if ml.address != "self"
+        all_call_labels = [
+            pl for ml in self.modules for pl in ml.call_labels if ml.address != "self"
         ]
-        sample_module2 = random.choice(all_pass_labels) if all_pass_labels else "features.4:2"
+        sample_module2 = random.choice(all_call_labels) if all_call_labels else "features.4:2"
     else:
         sample_module1 = "features.3"
         sample_module2 = "features.4:2"

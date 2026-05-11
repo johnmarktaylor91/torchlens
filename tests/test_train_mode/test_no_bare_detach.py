@@ -9,14 +9,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCANNED_PATHS = (
     REPO_ROOT / "torchlens" / "capture",
-    REPO_ROOT / "torchlens" / "decoration",
+    REPO_ROOT / "torchlens" / "backends" / "torch",
     REPO_ROOT / "torchlens" / "postprocess",
     REPO_ROOT / "torchlens" / "fastlog",
-    REPO_ROOT / "torchlens" / "data_classes" / "layer_pass_log.py",
+    REPO_ROOT / "torchlens" / "data_classes" / "op_log.py",
 )
 ALLOWLIST = {
-    "LayerPassLog._tensor_contents_str_helper",
-    "LayerPassLog.log_tensor_grad",
+    "OpLog._tensor_contents_str_helper",
+    "OpLog.log_tensor_grad",
     "log_tensor_grad",
 }
 MAX_NOQA_DETACH_EXEMPTIONS = 5

@@ -17,8 +17,8 @@ from torchlens.constants import (
     MODEL_LOG_FIELD_ORDER,
 )
 from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.layer_pass_log import LayerPassLog
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.model_log import Trace
 
 
 class TinyExtraDataModel(nn.Module):
@@ -34,95 +34,95 @@ class TinyExtraDataModel(nn.Module):
         return torch.relu(self.linear(x))
 
 
-def _fresh_log() -> ModelLog:
+def _fresh_log() -> Trace:
     """Create a small fresh model log."""
     torch.manual_seed(0)
     model = TinyExtraDataModel()
     inputs = torch.ones(1, 2)
-    return tl.log_forward_pass(model, inputs, layers_to_save="all", random_seed=0)
+    return tl.trace(model, inputs, layers_to_save="all", random_seed=0)
 
 
-def _first_logs(model_log: ModelLog) -> Tuple[LayerPassLog, LayerLog]:
+def _first_logs(trace: Trace) -> Tuple[OpLog, LayerLog]:
     """Return one layer-pass log and its aggregate layer log."""
-    layer_pass_log = model_log.layer_list[0]
-    layer_log = model_log.layer_logs[layer_pass_log.layer_label_no_pass]
-    return layer_pass_log, layer_log
+    op_log = trace.layer_list[0]
+    layer_log = trace.layer_logs[op_log.layer_label_no_pass]
+    return op_log, layer_log
 
 
 @pytest.mark.smoke
-def test_extra_data_fields_default_to_empty_dicts() -> None:
+def test_annotations_fields_default_to_empty_dicts() -> None:
     """New annotation fields should default to independent empty dictionaries."""
-    model_log = _fresh_log()
-    layer_pass_log, layer_log = _first_logs(model_log)
+    trace = _fresh_log()
+    op_log, layer_log = _first_logs(trace)
 
-    assert model_log.input_metadata == {}
-    assert isinstance(model_log.input_metadata, dict)
-    assert layer_pass_log.extra_data == {}
-    assert isinstance(layer_pass_log.extra_data, dict)
-    assert layer_log.extra_data == {}
-    assert isinstance(layer_log.extra_data, dict)
+    assert trace.input_annotations == {}
+    assert isinstance(trace.input_annotations, dict)
+    assert op_log.annotations == {}
+    assert isinstance(op_log.annotations, dict)
+    assert layer_log.annotations == {}
+    assert isinstance(layer_log.annotations, dict)
 
 
-def test_extra_data_fields_accept_arbitrary_python_objects() -> None:
+def test_annotations_fields_accept_arbitrary_python_objects() -> None:
     """Annotation dictionaries should accept user-owned Python objects without validation."""
-    model_log = _fresh_log()
-    layer_pass_log, layer_log = _first_logs(model_log)
+    trace = _fresh_log()
+    op_log, layer_log = _first_logs(trace)
     array = np.array([[1.0, 2.0], [3.0, 4.0]])
 
-    model_log.input_metadata["stimulus"] = {"text": "hello", "tokens": [1, 2, 3]}
-    layer_pass_log.extra_data.update({"scores": [0.1, 0.2], "array": array})
-    layer_log.extra_data["note"] = "layer-level annotation"
+    trace.input_annotations["stimulus"] = {"text": "hello", "tokens": [1, 2, 3]}
+    op_log.annotations.update({"scores": [0.1, 0.2], "array": array})
+    layer_log.annotations["note"] = "layer-level annotation"
 
-    assert model_log.input_metadata["stimulus"]["tokens"] == [1, 2, 3]
-    assert layer_pass_log.extra_data["scores"] == [0.1, 0.2]
-    np.testing.assert_array_equal(layer_pass_log.extra_data["array"], array)
-    assert layer_log.extra_data["note"] == "layer-level annotation"
+    assert trace.input_annotations["stimulus"]["tokens"] == [1, 2, 3]
+    assert op_log.annotations["scores"] == [0.1, 0.2]
+    np.testing.assert_array_equal(op_log.annotations["array"], array)
+    assert layer_log.annotations["note"] == "layer-level annotation"
 
 
-def test_extra_data_fields_do_not_share_dict_state_between_logs() -> None:
+def test_annotations_fields_do_not_share_dict_state_between_logs() -> None:
     """Mutating one log's annotation dictionaries should not affect another log."""
     first_log = _fresh_log()
     second_log = _fresh_log()
     first_layer_pass, first_layer_log = _first_logs(first_log)
     second_layer_pass, second_layer_log = _first_logs(second_log)
 
-    first_log.input_metadata["id"] = "first"
-    first_layer_pass.extra_data["pass"] = "first"
-    first_layer_log.extra_data["layer"] = "first"
+    first_log.input_annotations["id"] = "first"
+    first_layer_pass.annotations["pass"] = "first"
+    first_layer_log.annotations["layer"] = "first"
 
-    assert second_log.input_metadata == {}
-    assert second_layer_pass.extra_data == {}
-    assert second_layer_log.extra_data == {}
+    assert second_log.input_annotations == {}
+    assert second_layer_pass.annotations == {}
+    assert second_layer_log.annotations == {}
 
 
-def test_extra_data_fields_are_in_field_order_constants() -> None:
+def test_annotations_fields_are_in_field_order_constants() -> None:
     """New fields should be present in each class's canonical FIELD_ORDER."""
-    assert "input_metadata" in MODEL_LOG_FIELD_ORDER
-    assert "extra_data" in LAYER_PASS_LOG_FIELD_ORDER
-    assert "extra_data" in LAYER_LOG_FIELD_ORDER
+    assert "input_annotations" in MODEL_LOG_FIELD_ORDER
+    assert "annotations" in LAYER_PASS_LOG_FIELD_ORDER
+    assert "annotations" in LAYER_LOG_FIELD_ORDER
 
 
-def test_extra_data_fields_roundtrip_through_bundle_save_load(tmp_path: Path) -> None:
+def test_annotations_fields_roundtrip_through_bundle_save_load(tmp_path: Path) -> None:
     """User annotations should survive portable bundle save/load."""
-    model_log = _fresh_log()
-    layer_pass_log, layer_log = _first_logs(model_log)
+    trace = _fresh_log()
+    op_log, layer_log = _first_logs(trace)
     array = np.array([1, 2, 3])
 
-    model_log.input_metadata["stimulus"] = {"word": "torchlens", "index": 7}
-    layer_pass_log.extra_data["custom_metric"] = {"values": [1.0, 2.0], "label": "pass"}
-    layer_pass_log.extra_data["array"] = array
-    layer_log.extra_data["rdm"] = {"shape": [2, 2], "label": "layer"}
+    trace.input_annotations["stimulus"] = {"word": "torchlens", "index": 7}
+    op_log.annotations["custom_metric"] = {"values": [1.0, 2.0], "label": "pass"}
+    op_log.annotations["array"] = array
+    layer_log.annotations["rdm"] = {"shape": [2, 2], "label": "layer"}
 
-    bundle_path = tmp_path / "extra_data.tl"
-    tl.save(model_log, bundle_path)
+    bundle_path = tmp_path / "annotations.tl"
+    tl.save(trace, bundle_path)
     loaded = tl.load(bundle_path)
     loaded_layer_pass = loaded.layer_list[0]
     loaded_layer_log = loaded.layer_logs[loaded_layer_pass.layer_label_no_pass]
 
-    assert loaded.input_metadata == {"stimulus": {"word": "torchlens", "index": 7}}
-    assert loaded_layer_pass.extra_data["custom_metric"] == {
+    assert loaded.input_annotations == {"stimulus": {"word": "torchlens", "index": 7}}
+    assert loaded_layer_pass.annotations["custom_metric"] == {
         "values": [1.0, 2.0],
         "label": "pass",
     }
-    np.testing.assert_array_equal(loaded_layer_pass.extra_data["array"], array)
-    assert loaded_layer_log.extra_data == {"rdm": {"shape": [2, 2], "label": "layer"}}
+    np.testing.assert_array_equal(loaded_layer_pass.annotations["array"], array)
+    assert loaded_layer_log.annotations == {"rdm": {"shape": [2, 2], "label": "layer"}}

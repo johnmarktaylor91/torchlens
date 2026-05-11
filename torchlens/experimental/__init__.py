@@ -118,13 +118,13 @@ class Session:
         Returns
         -------
         Any
-            Captured ``ModelLog`` for this invocation.
+            Captured ``Trace`` for this invocation.
         """
 
         import torchlens
 
         index = len(self.logs)
-        log = torchlens.log_forward_pass(
+        log = torchlens.trace(
             self.model,
             input_args,
             input_kwargs=input_kwargs,
@@ -167,7 +167,7 @@ def session(model: nn.Module) -> Session:
     Returns
     -------
     Session
-        Session with ``invoke`` and ``bundle`` methods.
+        Session with ``invoke`` and ``bundle`` custom_methods.
     """
 
     return Session(model=model)
@@ -247,7 +247,7 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
             model.forward = original_forward
             try:
                 capture_input = list(args)
-                log = torchlens.log_forward_pass(model, capture_input, kwargs or None)
+                log = torchlens.trace(model, capture_input, kwargs or None)
                 session.logs.append(log)
             finally:
                 model.forward = wrapped_forward

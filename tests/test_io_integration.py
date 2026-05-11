@@ -13,9 +13,9 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import load, log_forward_pass, rehydrate_nested, save
+from torchlens import load, trace as trace_fn, rehydrate_nested, save
 from torchlens._io import BlobRef
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.model_log import Trace
 
 PYARROW_AVAILABLE = importlib.util.find_spec("pyarrow") is not None
 
@@ -68,12 +68,12 @@ def _build_conv_inputs(seed: int = 0) -> tuple[_IntegrationConvModel, torch.Tens
     return _IntegrationConvModel(), torch.randn(1, 3, 8, 8)
 
 
-def _saved_layers(model_log: ModelLog) -> list[Any]:
+def _saved_layers(trace: Trace) -> list[Any]:
     """Return the saved layer-pass entries from one model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log under test.
 
     Returns
@@ -82,15 +82,15 @@ def _saved_layers(model_log: ModelLog) -> list[Any]:
         Saved layer-pass entries in log order.
     """
 
-    return [layer for layer in model_log.layer_list if layer.has_saved_activations]
+    return [layer for layer in trace.layer_list if layer.has_saved_outs]
 
 
-def _first_saved_layer(model_log: ModelLog) -> Any:
+def _first_saved_layer(trace: Trace) -> Any:
     """Return the first saved layer from one model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log under test.
 
     Returns
@@ -99,7 +99,7 @@ def _first_saved_layer(model_log: ModelLog) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in model_log.layer_list if layer.has_saved_activations)
+    return next(layer for layer in trace.layer_list if layer.has_saved_outs)
 
 
 def _contains_blob_ref(value: Any) -> bool:
@@ -138,11 +138,11 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     bundle_path = tmp_path / "streamed_bundle.tl"
     model, inputs = _build_conv_inputs()
 
-    streamed_log = log_forward_pass(
+    streamed_log = trace_fn(
         model,
         inputs,
         layers_to_save="all",
-        save_activations_to=bundle_path,
+        save_outs_to=bundle_path,
         random_seed=0,
     )
     assert (bundle_path / "manifest.json").exists()
@@ -154,9 +154,9 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     assert saved_layers
 
     for layer in saved_layers[:3]:
-        tensor = layer.materialize_activation()
+        tensor = layer.materialize_out()
         assert isinstance(tensor, torch.Tensor)
-        assert layer.activation_ref is not None
+        assert layer.out_ref is not None
 
     parquet_path = tmp_path / "streamed_layers.parquet"
     lazy_log.to_parquet(parquet_path)
@@ -167,7 +167,7 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     assert len(parquet_df) == len(exported_df)
     assert parquet_df["layer_label"].tolist() == exported_df["layer_label"].tolist()
     assert parquet_df["layer_type"].tolist() == exported_df["layer_type"].tolist()
-    assert parquet_df["pass_num"].tolist() == exported_df["pass_num"].tolist()
+    assert parquet_df["call_index"].tolist() == exported_df["call_index"].tolist()
 
 
 def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
@@ -176,58 +176,58 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     source_path = tmp_path / "post_hoc_bundle.tl"
     resaved_path = tmp_path / "resaved_bundle.tl"
     model, inputs = _build_conv_inputs()
-    live_log = log_forward_pass(
+    live_log = trace_fn(
         model,
         inputs,
         layers_to_save="all",
-        save_function_args=True,
+        save_arg_values=True,
         random_seed=0,
     )
 
-    save(live_log, source_path, include_captured_args=True)
+    save(live_log, source_path, include_saved_args=True)
     lazy_log = load(source_path, lazy=True, materialize_nested=False)
 
     nested_blob_layer = next(
         layer
         for layer in lazy_log.layer_list
-        if layer.captured_args is not None and _contains_blob_ref(layer.captured_args)
+        if layer.saved_args is not None and _contains_blob_ref(layer.saved_args)
     )
-    assert nested_blob_layer.activation_ref is not None
-    assert _contains_blob_ref(nested_blob_layer.captured_args)
+    assert nested_blob_layer.out_ref is not None
+    assert _contains_blob_ref(nested_blob_layer.saved_args)
 
     rehydrate_nested(lazy_log)
 
-    assert not _contains_blob_ref(nested_blob_layer.captured_args)
-    save(lazy_log, resaved_path, include_captured_args=True)
+    assert not _contains_blob_ref(nested_blob_layer.saved_args)
+    save(lazy_log, resaved_path, include_saved_args=True)
     restored = load(resaved_path, lazy=False)
 
     live_layer = _first_saved_layer(live_log)
     restored_layer = _first_saved_layer(restored)
-    assert isinstance(live_layer.activation, torch.Tensor)
-    assert isinstance(restored_layer.activation, torch.Tensor)
-    assert torch.equal(restored_layer.activation, live_layer.activation)
+    assert isinstance(live_layer.out, torch.Tensor)
+    assert isinstance(restored_layer.out, torch.Tensor)
+    assert torch.equal(restored_layer.out, live_layer.out)
     assert restored.model_name == live_log.model_name
     assert len(restored.layer_list) == len(live_log.layer_list)
     assert any(
-        layer.captured_args is not None
-        and any(isinstance(arg, torch.Tensor) for arg in layer.captured_args)
+        layer.saved_args is not None
+        and any(isinstance(arg, torch.Tensor) for arg in layer.saved_args)
         for layer in restored.layer_list
     )
 
 
-def test_streaming_keep_activations_in_memory_false_materializes_from_refs(
+def test_streaming_keep_outs_in_memory_false_materializes_from_refs(
     tmp_path: Path,
 ) -> None:
     """Streaming eviction mode should leave only refs until materialization."""
 
     bundle_path = tmp_path / "stream_evict.tl"
     model, inputs = _build_conv_inputs()
-    streamed_log = log_forward_pass(
+    streamed_log = trace_fn(
         model,
         inputs,
         layers_to_save="all",
-        save_activations_to=bundle_path,
-        keep_activations_in_memory=False,
+        save_outs_to=bundle_path,
+        keep_outs_in_memory=False,
         random_seed=0,
     )
     eager_log = load(bundle_path, lazy=False)
@@ -235,34 +235,34 @@ def test_streaming_keep_activations_in_memory_false_materializes_from_refs(
     streamed_layer = _first_saved_layer(streamed_log)
     eager_layer = _first_saved_layer(eager_log)
 
-    assert streamed_layer.activation is None
-    assert streamed_layer.activation_ref is not None
-    tensor = streamed_layer.materialize_activation()
+    assert streamed_layer.out is None
+    assert streamed_layer.out_ref is not None
+    tensor = streamed_layer.materialize_out()
 
     assert isinstance(tensor, torch.Tensor)
-    assert isinstance(eager_layer.activation, torch.Tensor)
-    assert torch.equal(tensor, eager_layer.activation)
+    assert isinstance(eager_layer.out, torch.Tensor)
+    assert torch.equal(tensor, eager_layer.out)
 
 
-def test_streaming_keep_activations_in_memory_true_keeps_tensor_and_ref(tmp_path: Path) -> None:
+def test_streaming_keep_outs_in_memory_true_keeps_tensor_and_ref(tmp_path: Path) -> None:
     """Streaming keep-in-memory mode should retain both tensors and lazy refs."""
 
     bundle_path = tmp_path / "stream_keep.tl"
     model, inputs = _build_conv_inputs()
-    streamed_log = log_forward_pass(
+    streamed_log = trace_fn(
         model,
         inputs,
         layers_to_save="all",
-        save_activations_to=bundle_path,
-        keep_activations_in_memory=True,
+        save_outs_to=bundle_path,
+        keep_outs_in_memory=True,
         random_seed=0,
     )
 
     saved_layers = _saved_layers(streamed_log)
     assert saved_layers
     for layer in saved_layers:
-        assert isinstance(layer.activation, torch.Tensor)
-        assert layer.activation_ref is not None
+        assert isinstance(layer.out, torch.Tensor)
+        assert layer.out_ref is not None
 
 
 def test_data_parallel_and_ddp_streaming_case_is_explicitly_skipped() -> None:

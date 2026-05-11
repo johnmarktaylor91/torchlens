@@ -86,7 +86,7 @@ def _model_expects_single_arg(model: nn.Module) -> Optional[bool]:
     try:
         spec = inspect.getfullargspec(model.forward)
     except (TypeError, ValueError):
-        # Introspection can fail on C-extension or dynamically-generated forward methods.
+        # Introspection can fail on C-extension or dynamically-generated forward custom_methods.
         return None
     named_args = [a for a in spec.args if a != "self"]
     if spec.varargs is not None:
@@ -98,7 +98,7 @@ def _model_expects_single_arg(model: nn.Module) -> Optional[bool]:
 def normalize_input_args(input_args: Any, model: nn.Module) -> list[Any]:
     """Normalize ``input_args`` into a list suitable for ``model(*input_args)``.
 
-    Handles the ambiguity when the user passes a tuple or list: it could be
+    Handles the ambiguity when the user ops a tuple or list: it could be
     multiple positional args, or a single arg that happens to be a
     tuple/list (issue #43).  Resolves the ambiguity by inspecting the
     model's ``forward`` signature via :func:`_model_expects_single_arg`:

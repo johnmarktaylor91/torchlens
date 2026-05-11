@@ -111,7 +111,7 @@ class _BatchNormModel(nn.Module):
         return self.bn(x)
 
 
-def _capture(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
+def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture an intervention-ready log.
 
     Parameters
@@ -123,15 +123,15 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured log.
     """
 
-    return tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    return tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
 
-def _first_batch_activation(log: tl.ModelLog) -> torch.Tensor:
-    """Return the first saved activation with a batch dimension.
+def _first_batch_out(log: tl.Trace) -> torch.Tensor:
+    """Return the first saved out with a batch dimension.
 
     Parameters
     ----------
@@ -141,24 +141,24 @@ def _first_batch_activation(log: tl.ModelLog) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        First activation with at least one dimension.
+        First out with at least one dimension.
     """
 
     for layer in log.layer_list:
-        if isinstance(layer.activation, torch.Tensor) and layer.activation.ndim > 0:
-            return layer.activation
-    raise AssertionError("no batch activation found")
+        if isinstance(layer.out, torch.Tensor) and layer.out.ndim > 0:
+            return layer.out
+    raise AssertionError("no batch out found")
 
 
 @pytest.mark.smoke
 def test_append_success_grows_batch_and_sets_state() -> None:
-    """Compatible append concatenates saved activations and records state."""
+    """Compatible append concatenates saved outs and records state."""
 
     torch.manual_seed(0)
     model = _LinearRelu()
     model.eval()
     log = _capture(model, torch.randn(2, 3))
-    original_history_len = len(log.operation_history)
+    original_history_len = len(log.ledger)
 
     result = log.rerun(model, torch.randn(3, 3), append=True)
 
@@ -167,9 +167,9 @@ def test_append_success_grows_batch_and_sets_state() -> None:
     assert log._append_sequence_id == 1
     assert log.run_state is RunState.APPENDED
     assert log.last_run_ctx["engine"] == "append"
-    assert log.operation_history[-1]["op"] == "append"
-    assert len(log.operation_history) == original_history_len + 1
-    assert _first_batch_activation(log).shape[0] == 5
+    assert log.ledger[-1]["op"] == "append"
+    assert len(log.ledger) == original_history_len + 1
+    assert _first_batch_out(log).shape[0] == 5
 
 
 def test_append_topology_mismatch_raises() -> None:
@@ -227,7 +227,7 @@ def test_append_batchnorm_train_mode_warns() -> None:
 
 
 def test_append_recipe_stale_rejected_before_capture() -> None:
-    """Append requires propagated activations to match the current recipe."""
+    """Append requires propagated outs to match the current recipe."""
 
     model = _LinearRelu()
     model.eval()
@@ -253,7 +253,7 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     loaded = tl.load(bundle_path)
     assert loaded.is_appended is True
     assert loaded._append_sequence_id == log._append_sequence_id
-    assert loaded.operation_history[-1]["op"] == "append"
+    assert loaded.ledger[-1]["op"] == "append"
 
     spec_path = tmp_path / "append.tlspec"
     log.save_intervention(spec_path, level="audit")
@@ -261,4 +261,4 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     append_state = spec.metadata["append_state"]
     assert append_state["is_appended"] is True
     assert append_state["append_sequence_id"] == log._append_sequence_id
-    assert append_state["operation_history"][-1]["op"] == "append"
+    assert append_state["ledger"][-1]["op"] == "append"

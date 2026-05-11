@@ -1,11 +1,11 @@
-"""Tests for ModuleLog, ModulePassLog, and ModuleAccessor."""
+"""Tests for ModuleLog, ModuleCallLog, and ModuleAccessor."""
 
 import pytest
 import torch
 import torch.nn as nn
 
 import example_models
-from torchlens import ModuleLog, ModulePassLog, log_forward_pass
+from torchlens import ModuleLog, ModuleCallLog, trace as trace_fn
 from torchlens.data_classes import ModuleAccessor, ParamAccessor
 
 
@@ -43,57 +43,57 @@ def _nested_input():
 class TestModuleLogBasic:
     @pytest.mark.smoke
     def test_modules_accessor_exists(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         assert isinstance(log.modules, ModuleAccessor)
 
     def test_root_module_exists(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         root = log.modules["self"]
         assert isinstance(root, ModuleLog)
         assert root.address == "self"
 
     def test_root_module_alias(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         assert log.modules[""] is log.modules["self"]
 
     def test_root_module_property(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         assert log.root_module is log.modules["self"]
 
     def test_module_count(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         # Sequential has 3 children: Linear, ReLU, Linear → 3 submodules + root = 4
         assert len(log.modules) >= 4
 
     @pytest.mark.smoke
     def test_access_by_address(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         assert isinstance(ml, ModuleLog)
         assert ml.address == "0"
 
     def test_access_by_index(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules[0]
         assert isinstance(ml, ModuleLog)
 
     def test_access_by_pass_notation(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         # All modules have 1 pass in a non-recurrent model
         addresses = [ml.address for ml in log.modules if ml.address != "self"]
         if addresses:
             addr = addresses[0]
             mpl = log.modules[f"{addr}:1"]
-            assert isinstance(mpl, ModulePassLog)
+            assert isinstance(mpl, ModuleCallLog)
 
     def test_contains(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         assert "0" in log.modules
         assert "self" in log.modules
         assert "nonexistent" not in log.modules
 
     def test_iter(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         modules_list = list(log.modules)
         assert len(modules_list) == len(log.modules)
         assert all(isinstance(ml, ModuleLog) for ml in modules_list)
@@ -101,7 +101,7 @@ class TestModuleLogBasic:
     def test_getitem_multi_pass_returns_module_log(self, input_2d):
         """log["fc1"] for a multi-pass module should return ModuleLog (instead of error)."""
         model = example_models.RecurrentParamsSimple()
-        log = log_forward_pass(model, input_2d)
+        log = trace_fn(model, input_2d)
         result = log["fc1"]
         assert isinstance(result, ModuleLog)
 
@@ -113,20 +113,20 @@ class TestModuleLogBasic:
 
 class TestModuleLogFields:
     def test_identity_fields(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         assert ml.address == "0"
         assert ml.name == "0"
-        assert ml.module_class_name == "Linear"
+        assert ml.class_name == "Linear"
 
     def test_source_info(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input(), save_source_context=True)
+        log = trace_fn(_make_simple_model(), _simple_input(), save_code_context=True)
         ml = log.modules["0"]
         assert ml.source_file is not None  # nn.Linear has inspectable source
         assert ml.forward_signature is not None
 
     def test_hierarchy_address(self):
-        log = log_forward_pass(_make_nested_model(), _nested_input())
+        log = trace_fn(_make_nested_model(), _nested_input())
         # "0.0" is Linear inside first Sequential
         ml = log.modules["0.0"]
         assert ml.address_parent == "0"
@@ -138,38 +138,38 @@ class TestModuleLogFields:
         assert "0.0" in parent.address_children
 
     def test_hierarchy_call(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         root = log.modules["self"]
         # Root's call_children should include top-level modules
         assert len(root.call_children) > 0
 
-    def test_nesting_depth(self):
-        log = log_forward_pass(_make_nested_model(), _nested_input())
+    def test_call_depth(self):
+        log = trace_fn(_make_nested_model(), _nested_input())
         root = log.modules["self"]
-        assert root.nesting_depth == 0
+        assert root.call_depth == 0
 
         # Top-level module should be depth 1
         top = log.modules["0"]
-        assert top.nesting_depth == 1
+        assert top.call_depth == 1
 
         # Nested inside "0" should be depth 2
         nested = log.modules["0.0"]
-        assert nested.nesting_depth == 2
+        assert nested.call_depth == 2
 
     def test_address_depth(self):
-        log = log_forward_pass(_make_nested_model(), _nested_input())
+        log = trace_fn(_make_nested_model(), _nested_input())
         assert log.modules["self"].address_depth == 0
         assert log.modules["0"].address_depth == 1
         assert log.modules["0.0"].address_depth == 2
 
     def test_layers_populated(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        assert len(ml.all_layers) > 0
-        assert ml.num_layers == len(ml.all_layers)
+        assert len(ml.layers) > 0
+        assert ml.num_layers == len(ml.layers)
 
     def test_params_accessor(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]  # Linear layer
         assert isinstance(ml.params, ParamAccessor)
         assert len(ml.params) == 2  # weight + bias
@@ -177,60 +177,60 @@ class TestModuleLogFields:
     def test_training_mode(self):
         model = _make_simple_model()
         model.eval()
-        log = log_forward_pass(model, _simple_input())
+        log = trace_fn(model, _simple_input())
         for ml in log.modules:
             if ml.address != "self":
-                assert ml.is_training is False
+                assert ml.is_train_mode is False
 
     def test_hooks_detected_false(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         for ml in log.modules:
             assert ml.has_forward_hooks is False
             assert ml.has_backward_hooks is False
 
     def test_repr(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         r = repr(ml)
         assert "ModuleLog" in r
         assert ml.address in r
-        assert ml.module_class_name in r
+        assert ml.class_name in r
 
 
 # ---------------------------------------------------------------------------
-# TestModulePassLog
+# TestModuleCallLog
 # ---------------------------------------------------------------------------
 
 
-class TestModulePassLog:
+class TestModuleCallLog:
     def test_pass_layers(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.passes[1]
-        assert isinstance(mpl, ModulePassLog)
-        # Pass layers should be a subset of parent all_layers
-        assert all(label in ml.all_layers for label in mpl.layers)
+        mpl = ml.ops[1]
+        assert isinstance(mpl, ModuleCallLog)
+        # Pass layers should be a subset of parent layers
+        assert all(label in ml.layers for label in mpl.layers)
 
     def test_input_output_layers(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.passes[1]
+        mpl = ml.ops[1]
         assert isinstance(mpl.input_layers, list)
         assert isinstance(mpl.output_layers, list)
 
     def test_call_children(self):
-        log = log_forward_pass(_make_nested_model(), _nested_input())
+        log = trace_fn(_make_nested_model(), _nested_input())
         # "0" contains "0.0" and "0.1" as submodules
         ml = log.modules["0"]
-        mpl = ml.passes[1]
+        mpl = ml.ops[1]
         assert isinstance(mpl.call_children, list)
 
     def test_repr(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.passes[1]
+        mpl = ml.ops[1]
         r = repr(mpl)
-        assert "ModulePassLog" in r
+        assert "ModuleCallLog" in r
         assert len(r) > 0
 
 
@@ -240,36 +240,37 @@ class TestModulePassLog:
 
 
 class TestMultiPassModules:
-    def test_num_passes_gt_1(self, input_2d):
+    def test_num_calls_gt_1(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        log = log_forward_pass(model, input_2d)
+        log = trace_fn(model, input_2d)
         # fc1 is used 4 times
         ml = log.modules["fc1"]
-        assert ml.num_passes >= 2
+        assert ml.num_calls >= 2
 
     def test_per_call_field_raises(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        log = log_forward_pass(model, input_2d)
+        log = trace_fn(model, input_2d)
         ml = log.modules["fc1"]
-        assert ml.num_passes > 1
-        with pytest.raises(AttributeError, match="passes"):
-            _ = ml.layers
+        assert ml.num_calls > 1
+        assert ml.layers
+        with pytest.raises(AttributeError, match="ops"):
+            _ = ml.forward_args
 
     def test_pass_access(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        log = log_forward_pass(model, input_2d)
+        log = trace_fn(model, input_2d)
         ml = log.modules["fc1"]
-        assert 1 in ml.passes
-        assert 2 in ml.passes
-        assert isinstance(ml.passes[1], ModulePassLog)
-        assert isinstance(ml.passes[2], ModulePassLog)
+        assert 1 in ml.ops
+        assert 2 in ml.ops
+        assert isinstance(ml.ops[1], ModuleCallLog)
+        assert isinstance(ml.ops[2], ModuleCallLog)
 
     def test_pass_notation_accessor(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        log = log_forward_pass(model, input_2d)
+        log = trace_fn(model, input_2d)
         mpl = log.modules["fc1:2"]
-        assert isinstance(mpl, ModulePassLog)
-        assert mpl.pass_num == 2
+        assert isinstance(mpl, ModuleCallLog)
+        assert mpl.call_index == 2
 
 
 # ---------------------------------------------------------------------------
@@ -279,14 +280,14 @@ class TestMultiPassModules:
 
 class TestSinglePassDelegation:
     def test_layers_delegates(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        assert ml.num_passes == 1
-        # Should delegate to passes[1].layers
-        assert ml.layers == ml.passes[1].layers
+        assert ml.num_calls == 1
+        # Should delegate to ops[1].layers
+        assert ml.layers == ml.ops[1].layers
 
     def test_forward_args_delegates(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         # forward_args should be accessible for single-pass
         _ = ml.forward_args  # should not raise
@@ -299,23 +300,23 @@ class TestSinglePassDelegation:
 
 class TestModuleAccessorSummary:
     def test_to_pandas(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         df = log.modules.to_pandas()
         assert len(df) == len(log.modules)
         assert "address" in df.columns
-        assert "module_class_name" in df.columns
-        assert "nesting_depth" in df.columns
+        assert "class_name" in df.columns
+        assert "call_depth" in df.columns
         assert "num_params" in df.columns
 
     def test_summary(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         s = log.modules.summary()
         assert isinstance(s, str)
         assert len(s) > 0
         assert "Address" in s
 
     def test_repr(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         r = repr(log.modules)
         assert "ModuleAccessor" in r
 
@@ -326,27 +327,27 @@ class TestModuleAccessorSummary:
 
 
 class TestModuleLogIntegration:
-    def test_root_all_layers_equals_model_layers(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+    def test_root_layers_equals_model_layers(self):
+        log = trace_fn(_make_simple_model(), _simple_input())
         root = log.root_module
-        assert root.all_layers == log.layer_labels
+        assert root.layers == [layer.layer_label for layer in log.layer_list]
 
     def test_root_params_count(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         root = log.root_module
-        assert root.num_params == log.total_params
+        assert root.num_params == log.num_params
 
-    def test_module_class_name_matches(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+    def test_class_name_matches(self):
+        log = trace_fn(_make_simple_model(), _simple_input())
         # Module "0" is Linear
-        assert log.modules["0"].module_class_name == "Linear"
+        assert log.modules["0"].class_name == "Linear"
         # Module "1" is ReLU
-        assert log.modules["1"].module_class_name == "ReLU"
+        assert log.modules["1"].class_name == "ReLU"
         # Module "2" is Linear
-        assert log.modules["2"].module_class_name == "Linear"
+        assert log.modules["2"].class_name == "Linear"
 
     def test_nested_model_hierarchy(self):
-        log = log_forward_pass(_make_nested_model(), _nested_input())
+        log = trace_fn(_make_nested_model(), _nested_input())
         # Check that nesting is consistent
         for ml in log.modules:
             if ml.address == "self":
@@ -355,33 +356,33 @@ class TestModuleLogIntegration:
             assert ml.address_parent in log.modules
 
     def test_module_log_to_pandas(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         df = ml.to_pandas()
         assert len(df) == ml.num_layers
 
     def test_module_log_iter(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         entries = list(ml)
         assert len(entries) == ml.num_layers
 
     def test_module_log_getitem(self):
-        log = log_forward_pass(_make_simple_model(), _simple_input())
+        log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         if ml.num_layers > 0:
             entry = ml[0]
-            assert entry.layer_label == ml.all_layers[0]
+            assert entry.layer_label == ml.layers[0]
 
     def test_nested_modules_model(self, input_2d):
         """Integration test with the NestedModules example model."""
         model = example_models.NestedModules()
-        log = log_forward_pass(model, input_2d)
+        log = trace_fn(model, input_2d)
         assert len(log.modules) > 1
         root = log.root_module
         assert root.address == "self"
         # Should have nested hierarchy
-        max_depth = max(ml.nesting_depth for ml in log.modules)
+        max_depth = max(ml.call_depth for ml in log.modules)
         assert max_depth >= 2  # At least 3 levels of nesting
 
 
@@ -404,7 +405,7 @@ class TestModuleLogStringIndexing:
 
     def test_module_string_lookup(self):
         model = _SimpleLinear()
-        log = log_forward_pass(model, torch.randn(2, 10))
+        log = trace_fn(model, torch.randn(2, 10))
         if hasattr(log, "_module_logs") and log._module_logs:
             first_key = list(log._module_logs._dict.keys())[0]
             mod = log._module_logs[first_key]
@@ -412,7 +413,7 @@ class TestModuleLogStringIndexing:
 
 
 class TestTupleStringNormalization:
-    """containing_modules should handle both tuple and string formats."""
+    """modules should handle both tuple and string formats."""
 
     def test_module_hierarchy_with_nested_model(self):
         class Inner(nn.Module):
@@ -432,6 +433,6 @@ class TestTupleStringNormalization:
                 return self.inner(x)
 
         model = Outer()
-        log = log_forward_pass(model, torch.randn(2, 10))
+        log = trace_fn(model, torch.randn(2, 10))
         assert len(log.modules) > 0
         assert "inner" in log.modules

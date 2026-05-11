@@ -1,4 +1,4 @@
-"""Tensor-variant detection and pre-flight guards for ``log_forward_pass``.
+"""Tensor-variant detection and pre-flight guards for ``trace``.
 
 TorchLens was designed around standard dense ``torch.Tensor`` /
 ``torch.nn.Parameter`` objects on real (CPU/CUDA/MPS) devices.  A number of
@@ -7,7 +7,7 @@ tensor variants break the logging pipeline in different ways:
 ================  =================================================  =================
 Variant           Why TorchLens cannot handle it today                Detection outcome
 ================  =================================================  =================
-Meta tensor       No storage, so activation saving returns garbage;  raise RuntimeError
+Meta tensor       No storage, so out saving returns garbage;  raise RuntimeError
                   ``.clone()`` yields another meta tensor, etc.
 Sparse tensor     ``safe_copy``/print-override paths assume dense    raise RuntimeError
                   layouts; postprocess indexing uses ``.numel()``
@@ -19,7 +19,7 @@ Quantized model   Partial support: logging works but FLOPs are        warn (keep
                   computed as zero/wrong for quantized ops.
 ================  =================================================  =================
 
-This module centralises detection.  Callers (``log_forward_pass``,
+This module centralises detection.  Callers (``trace``,
 ``log_model_metadata``, ``validate_forward_pass``) invoke
 :func:`check_model_and_input_variants` near entry, *before* decoration or
 session setup, so failures happen up front with a clear error message
@@ -148,7 +148,7 @@ def _iter_tensors(obj: Any, _seen: set[int] | None = None) -> Iterator[torch.Ten
 
 
 class UnsupportedTensorVariantError(CompatibilityError, RuntimeError):
-    """Raised when ``log_forward_pass`` is called on a model/input combination
+    """Raised when ``trace`` is called on a model/input combination
     that TorchLens cannot reliably log (see module docstring for the matrix).
     """
 
@@ -166,7 +166,7 @@ def check_model_and_input_variants(
     input_args: Any = None,
     input_kwargs: dict[str, Any] | None = None,
 ) -> None:
-    """Pre-flight check for ``log_forward_pass``.
+    """Pre-flight check for ``trace``.
 
     Raises :class:`UnsupportedTensorVariantError` when a fundamentally
     incompatible tensor variant is detected on the model or its inputs.
@@ -199,7 +199,7 @@ def check_model_and_input_variants(
             offenses.append(
                 (
                     "meta tensor in input",
-                    "Meta tensors have no backing storage, so activation saving "
+                    "Meta tensors have no backing storage, so out saving "
                     "cannot produce usable values.",
                 )
             )
@@ -253,7 +253,7 @@ def check_model_and_input_variants(
             unique.append((name, why))
         bullet_list = "\n".join(f"  - {name}" + (f": {why}" if why else "") for name, why in unique)
         raise UnsupportedTensorVariantError(
-            "torchlens.log_forward_pass cannot run on this model/input "
+            "torchlens.trace cannot run on this model/input "
             "combination. Detected unsupported tensor variant(s):\n"
             f"{bullet_list}\n"
             f"\n{_docs_pointer()}"
@@ -264,7 +264,7 @@ def check_model_and_input_variants(
         warnings.warn(
             "TorchLens detected quantized submodules. Activation capture "
             "generally works, but FLOPs counts are not computed correctly for "
-            "quantized ops and activation dtype handling is best-effort. "
+            "quantized ops and out dtype handling is best-effort. "
             f"{_docs_pointer()}",
             UserWarning,
             stacklevel=3,

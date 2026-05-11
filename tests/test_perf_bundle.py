@@ -189,7 +189,7 @@ class TestBranchFastSkip:
                 wraps=control_flow.ast_branches.classify_bool,
             ) as wrapped_classify,
         ):
-            log = torchlens.log_forward_pass(model, x)
+            log = torchlens.trace(model, x)
 
         assert wrapped_attr.call_count == 0, (
             "attribute_op was invoked for a model with no terminal scalar bools; "
@@ -200,14 +200,14 @@ class TestBranchFastSkip:
         )
 
         # And the conditional collections must remain at their empty defaults.
-        assert log.internally_terminated_bool_layers == []
-        assert log.conditional_events == []
+        assert log.internally_terminated_bool_ops == []
+        assert log.conditional_records == []
         assert log.conditional_branch_edges == []
-        assert log.conditional_then_edges == []
-        assert log.conditional_elif_edges == []
-        assert log.conditional_else_edges == []
-        assert log.conditional_arm_edges == {}
-        assert log.conditional_edge_passes == {}
+        assert log.conditional_then_entry_edges == []
+        assert log.conditional_elif_entry_edges == []
+        assert log.conditional_else_entry_edges == []
+        assert log.conditional_arm_entry_edges == {}
+        assert log.conditional_edge_call_indices == {}
 
     def test_slow_path_runs_when_conditional_present(self) -> None:
         """A model with an if-branch must still run the full slow path."""
@@ -221,7 +221,7 @@ class TestBranchFastSkip:
             "attribute_op",
             wraps=control_flow.ast_branches.attribute_op,
         ) as wrapped_attr:
-            log = torchlens.log_forward_pass(model, x)
+            log = torchlens.trace(model, x)
 
         # The slow path must touch attribute_op at least once, and the
         # ConditionalEvent table must be populated.
@@ -229,8 +229,8 @@ class TestBranchFastSkip:
             "Expected attribute_op to run for a model with a real conditional "
             "branch; the fast-skip is incorrectly engaging."
         )
-        assert len(log.conditional_events) >= 1
-        assert len(log.internally_terminated_bool_layers) >= 1
+        assert len(log.conditional_records) >= 1
+        assert len(log.internally_terminated_bool_ops) >= 1
 
     def test_empty_model_does_not_crash(self) -> None:
         """A model that produces zero ops must not crash inside Step 5."""
@@ -245,8 +245,8 @@ class TestBranchFastSkip:
         # not introduce a regression upstream of that guard.
         model = _EmptyForward()
         x = torch.zeros(2, 2)
-        log = torchlens.log_forward_pass(model, x)
-        assert log.conditional_events == []
+        log = torchlens.trace(model, x)
+        assert log.conditional_records == []
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +272,7 @@ class TestCudaProbeGating:
         ):
             model = _NoConditionalModel()
             x = torch.randn(2, 8)
-            torchlens.log_forward_pass(model, x)
+            torchlens.trace(model, x)
 
         # The cached helper consults torch.cuda.is_available at most once
         # for this process; subsequent tensor_utils._is_cuda_available()
@@ -321,7 +321,7 @@ class TestCudaProbeGating:
         ) as wrapped_empty:
             model = _NoConditionalModel()
             x = torch.randn(2, 8)
-            torchlens.log_forward_pass(model, x)
+            torchlens.trace(model, x)
 
         assert wrapped_empty.call_count >= 1
 
@@ -336,7 +336,7 @@ def test_perf_bundle_benchmark_probe() -> None:
     """End-to-end smoke benchmark to sanity-check the bundle locally.
 
     Not a regression gate -- timings vary with system load. Simply confirm
-    that the standard log_forward_pass still completes for a small model
+    that the standard trace still completes for a small model
     after the bundle is applied.
     """
 
@@ -346,11 +346,11 @@ def test_perf_bundle_benchmark_probe() -> None:
     x = torch.randn(2, 8)
 
     # Warm-up to absorb first-call decoration cost.
-    torchlens.log_forward_pass(model, x)
+    torchlens.trace(model, x)
 
     start = time.perf_counter()
     for _ in range(3):
-        torchlens.log_forward_pass(model, x)
+        torchlens.trace(model, x)
     elapsed = time.perf_counter() - start
 
     assert elapsed < 60.0, f"Bundle benchmark unexpectedly slow: {elapsed:.2f}s"

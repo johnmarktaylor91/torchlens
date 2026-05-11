@@ -172,7 +172,7 @@ class HelperSpec:
         Returns
         -------
         Callable[..., Any]
-            Hook callable with signature ``hook(activation, *, hook)``.
+            Hook callable with signature ``hook(out, *, hook)``.
 
         Raises
         ------
@@ -262,9 +262,9 @@ class FireRecord:
     """Runtime record for one intervention firing."""
 
     target_label: str = ""
-    pass_label: str | None = None
+    call_label: str | None = None
     func_call_id: int | None = None
-    output_path: tuple[OutputPathComponent, ...] = ()
+    container_path: tuple[OutputPathComponent, ...] = ()
     engine: str | None = None
     helper: HelperSpec | None = None
     site_label: str | None = None
@@ -569,7 +569,7 @@ class Relationship(str, Enum):
 
 
 class ForkFieldPolicy(str, Enum):
-    """Copy policy for fields when a ModelLog is forked."""
+    """Copy policy for fields when a Trace is forked."""
 
     FORK_SHARE = "fork_share"
     FORK_COPY = "fork_copy"
@@ -612,13 +612,13 @@ def _fork_policy_table(
     return table
 
 
-def _build_model_log_fork_policy() -> dict[str, ForkFieldPolicy]:
-    """Build the ModelLog fork policy table.
+def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
+    """Build the Trace fork policy table.
 
     Returns
     -------
     dict[str, ForkFieldPolicy]
-        Fork policies for ModelLog fields.
+        Fork policies for Trace fields.
     """
 
     from ..constants import MODEL_LOG_FIELD_ORDER
@@ -626,8 +626,9 @@ def _build_model_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     return _fork_policy_table(
         MODEL_LOG_FIELD_ORDER,
         share={
-            "activation_postfunc",
-            "gradient_postfunc",
+            "out_postfunc",
+            "grad_transform",
+            "_output_transform",
             "_source_code_blob",
             "_source_model_ref",
             "_optimizer",
@@ -636,13 +637,13 @@ def _build_model_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     )
 
 
-def _build_layer_pass_log_fork_policy() -> dict[str, ForkFieldPolicy]:
-    """Build the LayerPassLog fork policy table.
+def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
+    """Build the OpLog fork policy table.
 
     Returns
     -------
     dict[str, ForkFieldPolicy]
-        Fork policies for LayerPassLog fields.
+        Fork policies for OpLog fields.
     """
 
     from ..constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -650,21 +651,21 @@ def _build_layer_pass_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     return _fork_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,
         share={
-            "activation",
-            "transformed_activation",
-            "gradient",
-            "transformed_gradient",
-            "func_applied",
-            "grad_fn_object",
-            "corresponding_grad_fn",
-            "source_model_log",
+            "out",
+            "transformed_out",
+            "grad",
+            "transformed_grad",
+            "func",
+            "grad_fn",
+            "grad_fn_log",
+            "source_trace",
         },
-        reconstruct={"source_model_log", "_construction_done"},
+        reconstruct={"source_trace", "_construction_done"},
     )
 
 
-MODEL_LOG_FORK_POLICY = _build_model_log_fork_policy()
-LAYER_PASS_LOG_FORK_POLICY = _build_layer_pass_log_fork_policy()
+MODEL_LOG_FIELD_FORK_POLICY = _build_trace_fork_policy()
+LAYER_PASS_LOG_FIELD_FORK_POLICY = _build_op_log_fork_policy()
 
 __all__ = [
     "CapturedArgTemplate",
@@ -685,10 +686,10 @@ __all__ = [
     "HelperSpec",
     "HookSpec",
     "InterventionSpec",
-    "LAYER_PASS_LOG_FORK_POLICY",
+    "LAYER_PASS_LOG_FIELD_FORK_POLICY",
     "LiteralTensor",
     "LiteralValue",
-    "MODEL_LOG_FORK_POLICY",
+    "MODEL_LOG_FIELD_FORK_POLICY",
     "NamedField",
     "OutputPathComponent",
     "ParentRef",

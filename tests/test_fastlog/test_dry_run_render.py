@@ -42,11 +42,11 @@ def test_to_pandas_expected_columns() -> None:
     trace = tl.fastlog.dry_run(_mlp(), torch.randn(1, 4), keep_op=_keep_linear)
     frame = trace.to_pandas()
     assert list(frame.columns) == [
-        "pass_num",
+        "call_index",
         "step_num",
         "kind",
         "op_type",
-        "module_address",
+        "address",
         "shape",
         "dtype",
     ]

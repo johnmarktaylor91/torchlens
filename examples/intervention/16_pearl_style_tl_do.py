@@ -33,14 +33,14 @@ def main() -> None:
     """Run a top-level ``tl.do`` replay intervention."""
 
     x = torch.tensor([[-1.0, 2.0]])
-    clean = tl.log_forward_pass(ReluAdd(), x, vis_opt="none", intervention_ready=True)
+    clean = tl.trace(ReluAdd(), x, vis_opt="none", intervention_ready=True)
     edited = clean.fork("top_level_do")
 
     result = tl.do(edited, tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
 
     assert result is edited
-    assert torch.allclose(edited.layer_list[-1].activation, torch.ones_like(x))
-    assert not torch.allclose(clean.layer_list[-1].activation, edited.layer_list[-1].activation)
+    assert torch.allclose(edited.layer_list[-1].out, torch.ones_like(x))
+    assert not torch.allclose(clean.layer_list[-1].out, edited.layer_list[-1].out)
 
 
 if __name__ == "__main__":

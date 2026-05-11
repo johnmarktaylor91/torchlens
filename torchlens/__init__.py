@@ -1,7 +1,7 @@
-"""TorchLens - extract activations and metadata from PyTorch models.
+"""TorchLens - extract outs and metadata from PyTorch models.
 
 Importing torchlens has **no side effects** on the torch namespace. Torch
-functions are wrapped lazily on the first call to ``log_forward_pass()`` and
+functions are wrapped lazily on the first call to ``trace()`` and
 stay wrapped afterward. TorchLens 2.0 keeps the top-level namespace intentionally
 small; legacy names remain available through deprecation shims for one minor
 cycle.
@@ -37,8 +37,8 @@ from . import (
 from ._io.bundle import load, save
 from .stats import aggregate
 from .data_classes.layer_log import LayerLog
-from .data_classes.layer_pass_log import LayerPassLog
-from .data_classes.model_log import ModelLog
+from .data_classes.op_log import OpLog
+from .data_classes.model_log import Trace
 from .intervention import (
     Bundle,
     bwd_hook,
@@ -46,8 +46,8 @@ from .intervention import (
     contains,
     do,
     func,
-    gradient_scale,
-    gradient_zero,
+    grad_scale,
+    grad_zero,
     in_module,
     label,
     mean_ablate,
@@ -68,10 +68,10 @@ from .intervention import (
 )
 from .user_funcs import (
     decide_recording_of_batch,
-    log_forward_pass,
+    trace as _trace,
     record_kpi_in_graph,
     register_tensor_connection,
-    show_backward_graph as _moved_show_backward_graph,
+    draw_backward as _moved_draw_backward,
     show_bundle_graph,
     show_model_graph as _moved_show_model_graph,
     summary as _moved_summary,
@@ -79,7 +79,7 @@ from .user_funcs import (
 from .validation import (
     validate_backward_pass as _moved_validate_backward_pass,
     validate_forward_pass as _moved_validate_forward_pass,
-    validate_saved_activations as _moved_validate_saved_activations,
+    validate_saved_outs as _moved_validate_saved_outs,
 )
 from .io import load_intervention_spec as _moved_load_intervention_spec
 from .observers import record_span, tap
@@ -96,12 +96,12 @@ _MOVED_OBJECTS = {
     "GradientPostfunc": ("torchlens.types", "GradientPostfunc"),
     "GradFnAccessor": ("torchlens.accessors", "GradFnAccessor"),
     "GradFnLog": ("torchlens.types", "GradFnLog"),
-    "GradFnPassLog": ("torchlens.types", "GradFnPassLog"),
+    "GradFnCallLog": ("torchlens.types", "GradFnCallLog"),
     "LayerAccessor": ("torchlens.accessors", "LayerAccessor"),
     "MetadataInvariantError": ("torchlens.errors", "MetadataInvariantError"),
     "ModuleAccessor": ("torchlens.accessors", "ModuleAccessor"),
     "ModuleLog": ("torchlens.types", "ModuleLog"),
-    "ModulePassLog": ("torchlens.types", "ModulePassLog"),
+    "ModuleCallLog": ("torchlens.types", "ModuleCallLog"),
     "NodeSpec": ("torchlens.experimental.dagua", "NodeSpec"),
     "ParamLog": ("torchlens.types", "ParamLog"),
     "RunState": ("torchlens.io", "RunState"),
@@ -122,25 +122,25 @@ _MOVED_OBJECTS = {
     "get_model_metadata": ("torchlens.io", "get_model_metadata"),
     "list_logs": ("torchlens.io", "list_logs"),
     "log_model_metadata": ("torchlens.io", "log_model_metadata"),
-    "model_log_to_dagua_graph": ("torchlens.experimental.dagua", "model_log_to_dagua_graph"),
+    "trace_to_dagua_graph": ("torchlens.experimental.dagua", "trace_to_dagua_graph"),
     "preview_fastlog": ("torchlens.fastlog", "preview"),
     "rehydrate_nested": ("torchlens.io", "rehydrate_nested"),
     "render_lines_to_html": ("torchlens.experimental.dagua", "render_lines_to_html"),
-    "render_model_log_with_dagua": (
+    "render_trace_with_dagua": (
         "torchlens.experimental.dagua",
-        "render_model_log_with_dagua",
+        "render_trace_with_dagua",
     ),
     "reset_naming_counter": ("torchlens.io", "reset_naming_counter"),
     "resolve_sites": ("torchlens.validation", "resolve_sites"),
     "save_intervention": ("torchlens.io", "save_intervention"),
     "suppress_mutate_warnings": ("torchlens.io", "suppress_mutate_warnings"),
-    "unwrap_torch": ("torchlens.decoration", "unwrap_torch"),
+    "unwrap_torch": ("torchlens.backends.torch.wrappers", "unwrap_torch"),
     "validate_batch_of_models_and_inputs": (
         "torchlens.validation",
         "validate_batch_of_models_and_inputs",
     ),
-    "wrap_torch": ("torchlens.decoration", "wrap_torch"),
-    "wrapped": ("torchlens.decoration", "wrapped"),
+    "wrap_torch": ("torchlens.backends.torch.wrappers", "wrap_torch"),
+    "wrapped": ("torchlens.backends.torch.wrappers", "wrapped"),
 }
 
 
@@ -233,39 +233,39 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     return f"Layer {name!r} not found."
 
 
-def _activation_from_log(model_log: ModelLog, layer: str) -> _torch.Tensor:
-    """Return a saved activation from a layer lookup.
+def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
+    """Return a saved out from a layer lookup.
 
     Parameters
     ----------
-    model_log:
-        Log containing saved activations.
+    trace:
+        Log containing saved outs.
     layer:
         Layer label, module path, pass-qualified label, or unique substring.
 
     Returns
     -------
     torch.Tensor
-        Saved layer activation.
+        Saved layer out.
 
     Raises
     ------
     ValueError
-        If the layer cannot be resolved or has no saved activation.
+        If the layer cannot be resolved or has no saved out.
     """
 
     try:
-        layer_log = model_log[layer]
+        layer_log = trace[layer]
     except (KeyError, ValueError) as exc:
-        suggestions = model_log.suggest(layer) if hasattr(model_log, "suggest") else []
+        suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
         raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
 
-    activation = getattr(layer_log, "activation", None)
-    if activation is None:
-        raise ValueError(f"Layer {layer!r} resolved but has no saved activation.")
-    if not isinstance(activation, _torch.Tensor):
-        raise TypeError(f"Layer {layer!r} activation is not a torch.Tensor.")
-    return activation
+    out = getattr(layer_log, "out", None)
+    if out is None:
+        raise ValueError(f"Layer {layer!r} resolved but has no saved out.")
+    if not isinstance(out, _torch.Tensor):
+        raise TypeError(f"Layer {layer!r} out is not a torch.Tensor.")
+    return out
 
 
 def _normalize_extract_layers(layers: _Iterable[str] | _Mapping[str, str]) -> dict[str, str]:
@@ -287,12 +287,12 @@ def _normalize_extract_layers(layers: _Iterable[str] | _Mapping[str, str]) -> di
     return {str(layer): str(layer) for layer in layers}
 
 
-def _matching_saved_layer_labels(model_log: ModelLog, pattern: str) -> list[str]:
+def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     """Return saved layer labels matching an extraction pattern.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log containing candidate layer labels.
     pattern:
         Exact label or substring pattern.
@@ -303,20 +303,20 @@ def _matching_saved_layer_labels(model_log: ModelLog, pattern: str) -> list[str]
         Matching no-pass layer labels in execution order.
     """
 
-    if pattern in model_log.layer_dict_all_keys:
+    if pattern in trace.layer_dict_all_keys:
         return [pattern]
-    if pattern in model_log.layer_logs:
+    if pattern in trace.layer_logs:
         return [pattern]
     lower_pattern = pattern.lower()
     matches = [
         label
-        for label in model_log.layer_labels_no_pass
-        if lower_pattern in label.lower() and label in model_log.layers_with_saved_activations
+        for label in trace.layer_labels
+        if lower_pattern in label.lower() and label in trace.ops_with_saved_outs
     ]
     if matches:
         return matches
     try:
-        resolved = model_log[pattern]
+        resolved = trace[pattern]
     except (KeyError, ValueError):
         return []
     label = getattr(resolved, "layer_label_no_pass", getattr(resolved, "layer_label", pattern))
@@ -324,7 +324,7 @@ def _matching_saved_layer_labels(model_log: ModelLog, pattern: str) -> list[str]
 
 
 def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -> _torch.Tensor:
-    """Return the saved activation for one layer.
+    """Return the saved out for one layer.
 
     Parameters
     ----------
@@ -341,7 +341,7 @@ def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -
     Returns
     -------
     torch.Tensor
-        Saved activation for the requested layer.
+        Saved out for the requested layer.
 
     Raises
     ------
@@ -352,12 +352,12 @@ def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -
     from .experimental import _active_stop_after_site
 
     _ = stop_after if stop_after is not None else _active_stop_after_site()
-    model_log = log_forward_pass(
+    trace = _trace(
         model,
         x,
         capture=_CaptureOptions(layers_to_save=[layer], keep_unsaved_layers=True),
     )
-    return _activation_from_log(model_log, layer)
+    return _out_from_log(trace, layer)
 
 
 def extract(
@@ -365,7 +365,7 @@ def extract(
     x: Any,
     layers: _Iterable[str] | _Mapping[str, str],
 ) -> dict[str, _torch.Tensor]:
-    """Return saved activations for many layers.
+    """Return saved outs for many layers.
 
     Parameters
     ----------
@@ -379,12 +379,12 @@ def extract(
     Returns
     -------
     dict[str, torch.Tensor]
-        Mapping from user labels to activations for mapping inputs, or from
-        resolved layer labels to activations for list inputs.
+        Mapping from user labels to outs for mapping inputs, or from
+        resolved layer labels to outs for list inputs.
     """
 
     layer_plan = _normalize_extract_layers(layers)
-    model_log = log_forward_pass(
+    trace = _trace(
         model,
         x,
         capture=_CaptureOptions(
@@ -393,18 +393,16 @@ def extract(
         ),
     )
     if isinstance(layers, _Mapping):
-        return {
-            label: _activation_from_log(model_log, pattern) for label, pattern in layer_plan.items()
-        }
+        return {label: _out_from_log(trace, pattern) for label, pattern in layer_plan.items()}
 
     outputs: dict[str, _torch.Tensor] = {}
     for pattern in layer_plan.values():
-        matches = _matching_saved_layer_labels(model_log, pattern)
+        matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
-            suggestions = model_log.suggest(pattern)
+            suggestions = trace.find_layers(pattern)
             raise ValueError(_did_you_mean_message(pattern, suggestions))
         for match in matches:
-            outputs[match] = _activation_from_log(model_log, match)
+            outputs[match] = _out_from_log(trace, match)
     return outputs
 
 
@@ -501,7 +499,7 @@ def _merge_batch_outputs(
     batch_outputs: dict[str, _torch.Tensor],
     postfunc: _Callable[[_torch.Tensor], _torch.Tensor] | None,
 ) -> None:
-    """Append one batch of extracted activations to an accumulator.
+    """Append one batch of extracted outs to an accumulator.
 
     Parameters
     ----------
@@ -510,7 +508,7 @@ def _merge_batch_outputs(
     batch_outputs:
         Extraction output from one batch.
     postfunc:
-        Optional transform applied to each activation before storage.
+        Optional transform applied to each out before storage.
     """
 
     for layer_name, tensor in batch_outputs.items():
@@ -528,7 +526,7 @@ def batched_extract(
     postfunc: _Callable[[_torch.Tensor], _torch.Tensor] | None = None,
     progress: bool = True,
 ) -> dict[str, _torch.Tensor] | list[_Path]:
-    """Extract activations from an iterable stimulus set in batches.
+    """Extract outs from an iterable stimulus set in batches.
 
     Parameters
     ----------
@@ -546,14 +544,14 @@ def batched_extract(
         Optional directory. When supplied, each batch output is written as
         ``batch_XXXXX.pt`` and paths are returned.
     postfunc:
-        Optional tensor transform applied to each activation before storage.
+        Optional tensor transform applied to each out before storage.
     progress:
         Whether to wrap batch iteration with ``tqdm``.
 
     Returns
     -------
     dict[str, torch.Tensor] | list[pathlib.Path]
-        In-memory concatenated activations, or written batch paths.
+        In-memory concatenated outs, or written batch paths.
     """
 
     if batch_size <= 0:
@@ -575,28 +573,28 @@ def batched_extract(
             enabled=progress,
         )
 
-    output_paths: list[_Path] = []
+    container_paths: list[_Path] = []
     in_memory: dict[str, list[_torch.Tensor]] = {}
-    output_path = _Path(output_dir) if output_dir is not None else None
-    if output_path is not None:
-        output_path.mkdir(parents=True, exist_ok=True)
+    container_path = _Path(output_dir) if output_dir is not None else None
+    if container_path is not None:
+        container_path.mkdir(parents=True, exist_ok=True)
 
     for batch_index, batch in enumerate(batch_iterable):
         batch = _move_nested_to_device(batch, device)
         batch_outputs = extract(model, batch, layers)
-        if output_path is not None:
+        if container_path is not None:
             processed = {
                 label: (postfunc(tensor) if postfunc is not None else tensor).detach().cpu()
                 for label, tensor in batch_outputs.items()
             }
-            batch_path = output_path / f"batch_{batch_index:05d}.pt"
+            batch_path = container_path / f"batch_{batch_index:05d}.pt"
             _torch.save(processed, batch_path)
-            output_paths.append(batch_path)
+            container_paths.append(batch_path)
         else:
             _merge_batch_outputs(in_memory, batch_outputs, postfunc)
 
-    if output_path is not None:
-        return output_paths
+    if container_path is not None:
+        return container_paths
     return {label: _torch.cat(tensors, dim=0) for label, tensors in in_memory.items()}
 
 
@@ -636,7 +634,7 @@ def validate_backward_pass(
     input_kwargs: dict[Any, Any] | None = None,
     loss_fn: _Callable[[Any], _torch.Tensor] | None = None,
     *,
-    perturb_saved_gradients: bool = False,
+    perturb_saved_grads: bool = False,
     atol: float = 1e-5,
     rtol: float = 1e-4,
 ) -> bool:
@@ -644,7 +642,7 @@ def validate_backward_pass(
 
     Parameters
     ----------
-    model, input_args, input_kwargs, loss_fn, perturb_saved_gradients, atol, rtol:
+    model, input_args, input_kwargs, loss_fn, perturb_saved_grads, atol, rtol:
         Legacy backward validation arguments.
     """
 
@@ -655,14 +653,14 @@ def validate_backward_pass(
         input_kwargs,
         scope="backward",
         loss_fn=loss_fn,
-        perturb_saved_gradients=perturb_saved_gradients,
+        perturb_saved_grads=perturb_saved_grads,
         atol=atol,
         rtol=rtol,
     )
 
 
-@_functools.wraps(_moved_validate_saved_activations)
-def validate_saved_activations(
+@_functools.wraps(_moved_validate_saved_outs)
+def validate_saved_outs(
     model: _nn.Module,
     input_args: Any,
     input_kwargs: dict[Any, Any] | None = None,
@@ -670,17 +668,15 @@ def validate_saved_activations(
     verbose: bool = False,
     validate_metadata: bool = True,
 ) -> bool:
-    """Deprecated top-level wrapper for ``torchlens.validation.validate_saved_activations``.
+    """Deprecated top-level wrapper for ``torchlens.validation.validate_saved_outs``.
 
     Parameters
     ----------
     model, input_args, input_kwargs, random_seed, verbose, validate_metadata:
-        Legacy saved-activation validation arguments.
+        Legacy saved-out validation arguments.
     """
 
-    _warn_moved_name(
-        "validate_saved_activations", "torchlens.validation", "validate_saved_activations"
-    )
+    _warn_moved_name("validate_saved_outs", "torchlens.validation", "validate_saved_outs")
     return validate(
         model,
         input_args,
@@ -720,9 +716,9 @@ def show_model_graph(*args: Any, **kwargs: Any) -> Any:
     return _moved_show_model_graph(*args, **kwargs)
 
 
-@_functools.wraps(_moved_show_backward_graph)
-def show_backward_graph(*args: Any, **kwargs: Any) -> Any:
-    """Deprecated top-level wrapper for ``torchlens.visualization.show_backward_graph``.
+@_functools.wraps(_moved_draw_backward)
+def draw_backward(*args: Any, **kwargs: Any) -> Any:
+    """Deprecated top-level wrapper for ``torchlens.visualization.draw_backward``.
 
     Parameters
     ----------
@@ -730,8 +726,8 @@ def show_backward_graph(*args: Any, **kwargs: Any) -> Any:
         Legacy arguments forwarded unchanged.
     """
 
-    _warn_moved_name("show_backward_graph", "torchlens.visualization", "show_backward_graph")
-    return _moved_show_backward_graph(*args, **kwargs)
+    _warn_moved_name("draw_backward", "torchlens.visualization", "draw_backward")
+    return _moved_draw_backward(*args, **kwargs)
 
 
 def bundle(*args: Any, **kwargs: Any) -> Bundle:
@@ -765,8 +761,12 @@ def load_intervention_spec(*args: Any, **kwargs: Any) -> Any:
     return _moved_load_intervention_spec(*args, **kwargs)
 
 
+trace = _trace
+log_forward_pass = _trace
+
+
 __all__ = [
-    "log_forward_pass",
+    "trace",
     "fastlog",
     "load",
     "save",
@@ -779,9 +779,9 @@ __all__ = [
     "extract",
     "batched_extract",
     "validate",
-    "ModelLog",
+    "Trace",
     "LayerLog",
-    "LayerPassLog",
+    "OpLog",
     "Bundle",
     "label",
     "func",
@@ -801,8 +801,8 @@ __all__ = [
     "swap_with",
     "zero_ablate",
     "bwd_hook",
-    "gradient_scale",
-    "gradient_zero",
+    "grad_scale",
+    "grad_zero",
     "tap",
     "record_span",
     "sites",

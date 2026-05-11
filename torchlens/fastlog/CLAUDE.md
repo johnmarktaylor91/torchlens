@@ -2,7 +2,7 @@
 
 ## What This Does
 `torchlens.fastlog` records a predicate-selected subset of forward-pass events. It is a
-sibling path to `log_forward_pass()`: the same decorated wrappers fire, but fastlog builds
+sibling path to `trace()`: the same decorated wrappers fire, but fastlog builds
 lightweight `RecordContext` values and stores only records selected by `keep_op` or
 `keep_module` predicates.
 
@@ -49,7 +49,7 @@ Storage is resolved from streaming/recording options:
 - Disk-only when `retain_in_memory=False`, rejecting `keep_grad=True`.
 
 ## Training Semantics
-`train_mode=True` promotes omitted defaults to graph-connected activation capture. Explicit
+`train_mode=True` promotes omitted defaults to graph-connected out capture. Explicit
 defaults still win, but incompatible `keep_grad=False` or disk-only settings raise
 configuration errors. Disk mirrors are detached inspection copies; trainable payloads are RAM
 copies.
@@ -65,4 +65,4 @@ copies.
 ## Future Work
 - Async disk drain once benchmarks support it.
 - True distributed capture semantics.
-- Narrow sparse-to-ModelLog conversion only if it can preserve `ModelLog` invariants.
+- Narrow sparse-to-Trace conversion only if it can preserve `Trace` invariants.

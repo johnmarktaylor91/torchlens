@@ -9,7 +9,7 @@ def attribute(
     model_or_id: Any,
     inputs: Any,
     *,
-    method: str = "integrated_gradients",
+    method: str = "integrated_grads",
     target_texts: Any | None = None,
     attribution_model: Any | None = None,
     **kwargs: Any,

@@ -86,7 +86,7 @@ def _bridge_log() -> tuple[_TinyBridgeModel, torch.Tensor, Any]:
     torch.manual_seed(120)
     model = _TinyBridgeModel().eval()
     x = torch.randn(2, 1, 8, 8)
-    log = tl.log_forward_pass(model, x, layers_to_save="all")
+    log = tl.trace(model, x, layers_to_save="all")
     return model, x, log
 
 
@@ -211,7 +211,7 @@ def test_inseq_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_steering_vectors_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """steering-vectors bridge trains from saved activation tensors."""
+    """steering-vectors bridge trains from saved out tensors."""
 
     def train_steering_vector(
         positive: torch.Tensor, negative: torch.Tensor | None, *, normalize: bool
@@ -239,7 +239,7 @@ def test_steering_vectors_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_repeng_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """repeng bridge builds a control vector from saved activations."""
+    """repeng bridge builds a control vector from saved outs."""
 
     class FakeControlVector:
         """repeng ControlVector fixture."""
@@ -271,12 +271,12 @@ def test_repeng_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_dialz_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """dialz bridge sends labels and activation lists to the downstream analyzer."""
+    """dialz bridge sends labels and out lists to the downstream analyzer."""
 
-    def analyze(activations: list[torch.Tensor], *, labels: list[str]) -> dict[str, Any]:
+    def analyze(outs: list[torch.Tensor], *, labels: list[str]) -> dict[str, Any]:
         """Return a deterministic dialz analysis payload."""
 
-        return {"labels": labels, "count": len(activations)}
+        return {"labels": labels, "count": len(outs)}
 
     _model, _x, log = _bridge_log()
     monkeypatch.setitem(sys.modules, "dialz", _module("dialz", analyze=analyze))
@@ -289,7 +289,7 @@ def test_dialz_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_lit_bridge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """LIT bridge returns a model wrapper with LIT-shaped methods."""
+    """LIT bridge returns a model wrapper with LIT-shaped custom_methods."""
 
     class FakeLitModel:
         """LIT base model fixture."""
@@ -359,7 +359,7 @@ def test_viz_compat_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
     class LayerFixture:
         """Layer-like object fixture."""
 
-        activation = torch.ones(1, 2)
+        out = torch.ones(1, 2)
 
     def show(tensor: torch.Tensor, *, title: str) -> dict[str, Any]:
         """Return a deterministic torchshow payload."""

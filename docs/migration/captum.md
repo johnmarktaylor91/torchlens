@@ -2,7 +2,7 @@
 
 | Captum operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
-| Forward activation capture | `tl.log_forward_pass(model, x, intervention_ready=True)` | TorchLens captures graph metadata and activations. |
+| Forward activation capture | `tl.trace(model, x, intervention_ready=True)` | TorchLens captures graph metadata and activations. |
 | Layer attribution target | Discover with `tl.module`, `tl.in_module`, or `tl.func`, then use exact labels | Similar target-selection step. |
 | Feature ablation | `tl.zero_ablate`, `tl.mean_ablate`, `tl.resample_ablate` plus metrics | Equivalent building blocks, not identical attribution API. |
 | Occlusion-style perturbation | Use `set`/helpers over chosen sites and compare outputs | Manual loop required. |

@@ -30,11 +30,11 @@ _FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::\d+)?$|:\d+$)")
 _LAYER_LOG_CONTEXT_FIELDS = (
     "layer_label",
     "layer_type",
-    "tensor_shape",
-    "tensor_dtype",
+    "shape",
+    "dtype",
     "tensor_device",
-    "module_address",
-    "pass_num",
+    "address",
+    "call_index",
 )
 
 
@@ -49,9 +49,9 @@ class HookContext:
     timing:
         Hook timing. Phase 3 stores both pre and post; MVP execution uses post.
     direction:
-        ``"forward"`` for activations or ``"backward"`` for gradients.
+        ``"forward"`` for outs or ``"backward"`` for grads.
     layer_log:
-        Mapping proxy over selected layer metadata, never a live LayerPassLog.
+        Mapping proxy over selected layer metadata, never a live OpLog.
     ctx:
         Per resolved ``(site, hook instance)`` scratch dictionary.
     run_ctx:
@@ -112,7 +112,7 @@ def make_hook_context(
     direction:
         Hook direction.
     layer_log:
-        Optional LayerPassLog-like object or mapping to snapshot.
+        Optional OpLog-like object or mapping to snapshot.
     ctx:
         Per-hook scratch dictionary. A new dictionary is created when omitted.
     run_ctx:
@@ -228,7 +228,7 @@ def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedH
     Parameters
     ----------
     spec:
-        Mutable intervention spec attached to a ``ModelLog``. ``None`` or an
+        Mutable intervention spec attached to a ``Trace``. ``None`` or an
         empty spec produces no hook entries.
 
     Returns
@@ -263,7 +263,7 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
     Returns
     -------
     list[NormalizedHookEntry]
-        Hook-plan entries that replace matching activations.
+        Hook-plan entries that replace matching outs.
     """
 
     entries: list[NormalizedHookEntry] = []
@@ -271,7 +271,7 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
         value = value_spec.value
 
         def _set_value_hook(
-            activation: torch.Tensor,
+            out: torch.Tensor,
             *,
             hook: HookContext,
             replacement: Any = value,
@@ -280,7 +280,7 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
 
             Parameters
             ----------
-            activation:
+            out:
                 Activation at the matched site.
             hook:
                 Hook context supplied by TorchLens.
@@ -290,12 +290,12 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
             Returns
             -------
             torch.Tensor
-                Replacement activation.
+                Replacement out.
             """
 
             del hook
             if callable(replacement):
-                return cast(torch.Tensor, replacement(activation))
+                return cast(torch.Tensor, replacement(out))
             return cast(torch.Tensor, replacement)
 
         metadata = {
@@ -369,12 +369,12 @@ def _hook_like_from_spec(spec: InterventionSpec) -> HookInput | None:
     if spec.value is not None:
         value = spec.value
 
-        def _value_hook(activation: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _value_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Return a fixed replacement value from an intervention spec.
 
             Parameters
             ----------
-            activation:
+            out:
                 Activation being replaced.
             hook:
                 Hook context supplied by TorchLens.
@@ -385,7 +385,7 @@ def _hook_like_from_spec(spec: InterventionSpec) -> HookInput | None:
                 Replacement tensor.
             """
 
-            del activation, hook
+            del out, hook
             if callable(value):
                 return cast(torch.Tensor, value())
             return cast(torch.Tensor, value)
@@ -531,7 +531,7 @@ def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
     if kind == "module":
         return _live_module_matches(site, str(value))
     if kind == "contains":
-        return str(value).lower() in str(getattr(site, "layer_label_raw", "")).lower()
+        return str(value).lower() in str(getattr(site, "_layer_label_raw", "")).lower()
     if kind == "in_module":
         return _live_module_matches(site, str(value))
     if kind == "predicate":
@@ -542,7 +542,7 @@ def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
             return bool(predicate(site))
         except Exception as exc:
             raise SiteResolutionError(
-                f"live predicate selector failed at {getattr(site, 'layer_label_raw', '<unknown>')}"
+                f"live predicate selector failed at {getattr(site, '_layer_label_raw', '<unknown>')}"
             ) from exc
     raise SiteResolutionError(f"Unsupported live hook selector kind {kind!r}.")
 
@@ -564,8 +564,8 @@ def _live_label_matches(site: Any, label_value: str) -> bool:
     """
 
     candidates = (
-        getattr(site, "layer_label_raw", None),
-        getattr(site, "tensor_label_raw", None),
+        getattr(site, "_layer_label_raw", None),
+        getattr(site, "_label_raw", None),
         getattr(site, "layer_label", None),
     )
     return label_value in candidates
@@ -587,8 +587,8 @@ def _live_module_matches(site: Any, address: str) -> bool:
         Whether the site is currently inside or exiting the module.
     """
 
-    candidates = tuple(getattr(site, "module_passes_exited", ()) or ()) + tuple(
-        getattr(site, "containing_modules", ()) or ()
+    candidates = tuple(getattr(site, "output_of_module_calls", ()) or ()) + tuple(
+        getattr(site, "modules", ()) or ()
     )
     return any(_module_label_matches(str(candidate), address) for candidate in candidates)
 
@@ -599,7 +599,7 @@ def _module_label_matches(module_pass: str, address: str) -> bool:
     Parameters
     ----------
     module_pass:
-        Module pass label or ``(address, pass_num)`` tuple string.
+        Module pass label or ``(address, call_index)`` tuple string.
     address:
         Requested module address.
 
@@ -611,8 +611,8 @@ def _module_label_matches(module_pass: str, address: str) -> bool:
 
     if module_pass.startswith("("):
         return address in module_pass
-    module_address = module_pass.rsplit(":", 1)[0]
-    return module_pass == address or module_address == address
+    address = module_pass.rsplit(":", 1)[0]
+    return module_pass == address or address == address
 
 
 def _looks_like_finalized_label(label_value: str) -> bool:
@@ -656,19 +656,19 @@ def _live_label_error_message(label_value: str) -> str:
 
 def make_live_site_proxy(
     *,
-    layer_label_raw: str,
+    _layer_label_raw: str,
     func_name: str,
     layer_type: str,
     tensor: torch.Tensor,
     func_call_id: int,
-    output_path: tuple[Any, ...],
+    container_path: tuple[Any, ...],
     fields: Mapping[str, Any],
 ) -> Any:
-    """Build a minimal LayerPassLog-like object for live hook matching.
+    """Build a minimal OpLog-like object for live hook matching.
 
     Parameters
     ----------
-    layer_label_raw:
+    _layer_label_raw:
         Predicted raw label for the output tensor.
     func_name:
         Decorated function name.
@@ -678,7 +678,7 @@ def make_live_site_proxy(
         Output tensor at the hook site.
     func_call_id:
         Function-call id allocated by the wrapper.
-    output_path:
+    container_path:
         Stable output path for multi-output containers.
     fields:
         Shared capture metadata from output logging.
@@ -690,22 +690,23 @@ def make_live_site_proxy(
     """
 
     return SimpleNamespace(
-        layer_label=layer_label_raw,
-        layer_label_raw=layer_label_raw,
-        tensor_label_raw=layer_label_raw,
+        layer_label=_layer_label_raw,
+        _layer_label_raw=_layer_label_raw,
+        _label_raw=_layer_label_raw,
+        capture_index=fields.get("capture_index"),
         layer_type=layer_type,
         func_name=func_name,
         func_call_id=func_call_id,
-        output_path=output_path,
-        tensor_shape=tuple(tensor.shape),
-        tensor_dtype=tensor.dtype,
+        container_path=container_path,
+        shape=tuple(tensor.shape),
+        dtype=tensor.dtype,
         tensor_device=tensor.device,
-        tensor_memory=tensor.nelement() * tensor.element_size(),
-        containing_module=fields.get("containing_module"),
-        containing_modules=fields.get("containing_modules", []),
-        module_passes_exited=fields.get("module_passes_exited", []),
-        modules_exited=fields.get("modules_exited", []),
-        pass_num=1,
+        memory=tensor.nelement() * tensor.element_size(),
+        module=fields.get("module"),
+        modules=fields.get("modules", []),
+        output_of_module_calls=fields.get("output_of_module_calls", []),
+        output_of_modules=fields.get("output_of_modules", []),
+        call_index=1,
         lookup_keys=[],
     )
 
@@ -839,8 +840,8 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
     Raises
     ------
     HookSignatureError
-        If the callable cannot be called as ``fn(activation, *, hook=ctx)``.
-        Backward hooks receive a gradient as the first positional argument; the
+        If the callable cannot be called as ``fn(out, *, hook=ctx)``.
+        Backward hooks receive a grad as the first positional argument; the
         parameter name is conventional only, so ``g`` or any other name is
         accepted.
     """
@@ -864,7 +865,7 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
         parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters
     )
     if not has_positional and not has_var_positional:
-        noun = "gradient" if direction == "backward" else "activation"
+        noun = "grad" if direction == "backward" else "out"
         raise HookSignatureError(f"hook must accept a first positional {noun} argument")
     if hook_param is None and not has_var_keyword:
         raise HookSignatureError("hook must accept required keyword-only argument 'hook'")
@@ -873,12 +874,12 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
 
 
 def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
-    """Snapshot selected LayerPassLog metadata.
+    """Snapshot selected OpLog metadata.
 
     Parameters
     ----------
     layer_log:
-        LayerPassLog-like object or mapping.
+        OpLog-like object or mapping.
 
     Returns
     -------

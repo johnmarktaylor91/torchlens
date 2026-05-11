@@ -1,0 +1,669 @@
+{
+  "equivalence_partition": [
+    [
+      "gt_1_2"
+    ],
+    [
+      "input_1"
+    ],
+    [
+      "linear_1_3"
+    ],
+    [
+      "linear_2_5"
+    ],
+    [
+      "mean_1_1"
+    ],
+    [
+      "output_1"
+    ],
+    [
+      "tanh_1_4"
+    ]
+  ],
+  "fixture_name": "conditional_module_negative",
+  "layers": [
+    {
+      "in_submodule": false,
+      "label": "input_1",
+      "lookup_keys": [
+        "-7",
+        "0",
+        "input.x",
+        "input_1",
+        "input_1:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 0
+    },
+    {
+      "in_submodule": false,
+      "label": "mean_1_1",
+      "lookup_keys": [
+        "-6",
+        "1",
+        "mean_1",
+        "mean_1:1",
+        "mean_1_1",
+        "mean_1_1:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 1
+    },
+    {
+      "in_submodule": false,
+      "label": "gt_1_2",
+      "lookup_keys": [
+        "-5",
+        "2",
+        "gt_1",
+        "gt_1:1",
+        "gt_1_2",
+        "gt_1_2:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 2
+    },
+    {
+      "in_submodule": true,
+      "label": "linear_1_3",
+      "lookup_keys": [
+        "-4",
+        "3",
+        "linear_1",
+        "linear_1:1",
+        "linear_1_3",
+        "linear_1_3:1",
+        "negative.0",
+        "negative.0:1"
+      ],
+      "module": "negative.0:1",
+      "module_call_depth": 2,
+      "modules": [
+        "negative:1",
+        "negative.0:1"
+      ],
+      "output_of_module_calls": [
+        "negative.0:1"
+      ],
+      "output_of_modules": [
+        "negative.0"
+      ],
+      "trace_index": 3
+    },
+    {
+      "in_submodule": true,
+      "label": "tanh_1_4",
+      "lookup_keys": [
+        "-3",
+        "4",
+        "negative.1",
+        "negative.1:1",
+        "tanh_1",
+        "tanh_1:1",
+        "tanh_1_4",
+        "tanh_1_4:1"
+      ],
+      "module": "negative.1:1",
+      "module_call_depth": 2,
+      "modules": [
+        "negative:1",
+        "negative.1:1"
+      ],
+      "output_of_module_calls": [
+        "negative.1:1"
+      ],
+      "output_of_modules": [
+        "negative.1"
+      ],
+      "trace_index": 4
+    },
+    {
+      "in_submodule": true,
+      "label": "linear_2_5",
+      "lookup_keys": [
+        "-2",
+        "5",
+        "linear_2",
+        "linear_2:1",
+        "linear_2_5",
+        "linear_2_5:1",
+        "negative",
+        "negative.2",
+        "negative.2:1",
+        "negative:1"
+      ],
+      "module": "negative.2:1",
+      "module_call_depth": 2,
+      "modules": [
+        "negative:1",
+        "negative.2:1"
+      ],
+      "output_of_module_calls": [
+        "negative.2:1",
+        "negative:1"
+      ],
+      "output_of_modules": [
+        "negative.2",
+        "negative"
+      ],
+      "trace_index": 5
+    },
+    {
+      "in_submodule": false,
+      "label": "output_1",
+      "lookup_keys": [
+        "-1",
+        "6",
+        "negative",
+        "negative.2",
+        "negative.2:1",
+        "negative:1",
+        "output",
+        "output_1",
+        "output_1:1"
+      ],
+      "module": null,
+      "module_call_depth": 0,
+      "modules": [],
+      "output_of_module_calls": [
+        "negative:1",
+        "negative.2:1"
+      ],
+      "output_of_modules": [
+        "negative",
+        "negative.2"
+      ],
+      "trace_index": 6
+    }
+  ],
+  "module_calls": [
+    {
+      "address": "self",
+      "call_label": "self:1",
+      "forward_args_summary": "None",
+      "forward_kwargs_summary": "None",
+      "input_layers": [
+        "input_1"
+      ],
+      "layers": [
+        "input_1",
+        "mean_1_1",
+        "gt_1_2",
+        "linear_1_3",
+        "tanh_1_4",
+        "linear_2_5",
+        "output_1"
+      ],
+      "output_layers": [
+        "output_1"
+      ]
+    },
+    {
+      "address": "negative",
+      "call_label": "negative:1",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "linear_1_3",
+        "tanh_1_4",
+        "linear_2_5"
+      ],
+      "output_layers": [
+        "linear_2_5"
+      ]
+    },
+    {
+      "address": "negative.0",
+      "call_label": "negative.0:1",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "linear_1_3"
+      ],
+      "output_layers": [
+        "linear_1_3"
+      ]
+    },
+    {
+      "address": "negative.1",
+      "call_label": "negative.1:1",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "tanh_1_4"
+      ],
+      "output_layers": [
+        "tanh_1_4"
+      ]
+    },
+    {
+      "address": "negative.2",
+      "call_label": "negative.2:1",
+      "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
+      "forward_kwargs_summary": "{}",
+      "input_layers": [],
+      "layers": [
+        "linear_2_5"
+      ],
+      "output_layers": [
+        "linear_2_5"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "address": "self",
+      "all_addresses": [
+        "self"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "self:1"
+      ],
+      "input_layers": [
+        "input_1"
+      ],
+      "is_train_mode": true,
+      "layers": [
+        "input_1",
+        "mean_1_1",
+        "gt_1_2",
+        "linear_1_3",
+        "tanh_1_4",
+        "linear_2_5",
+        "output_1"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 8,
+      "num_params": 216,
+      "num_params_frozen": 0,
+      "num_params_trainable": 216,
+      "output_layers": [
+        "output_1"
+      ]
+    },
+    {
+      "address": "negative",
+      "all_addresses": [
+        "negative"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "negative:1"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "linear_1_3",
+        "tanh_1_4",
+        "linear_2_5"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 0,
+      "num_params": 108,
+      "num_params_frozen": 0,
+      "num_params_trainable": 108,
+      "output_layers": [
+        "linear_2_5"
+      ]
+    },
+    {
+      "address": "negative.0",
+      "all_addresses": [
+        "negative.0"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "negative.0:1"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "linear_1_3"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 2,
+      "num_params": 72,
+      "num_params_frozen": 0,
+      "num_params_trainable": 72,
+      "output_layers": [
+        "linear_1_3"
+      ]
+    },
+    {
+      "address": "negative.1",
+      "all_addresses": [
+        "negative.1"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "negative.1:1"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "tanh_1_4"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 0,
+      "num_params": 0,
+      "num_params_frozen": 0,
+      "num_params_trainable": 0,
+      "output_layers": [
+        "tanh_1_4"
+      ]
+    },
+    {
+      "address": "negative.2",
+      "all_addresses": [
+        "negative.2"
+      ],
+      "buffer_layers": [],
+      "call_labels": [
+        "negative.2:1"
+      ],
+      "input_layers": [],
+      "is_train_mode": true,
+      "layers": [
+        "linear_2_5"
+      ],
+      "num_calls": 1,
+      "num_param_tensors": 2,
+      "num_params": 36,
+      "num_params_frozen": 0,
+      "num_params_trainable": 36,
+      "output_layers": [
+        "linear_2_5"
+      ]
+    }
+  ],
+  "ops": [
+    {
+      "atomic_module_call": null,
+      "func_name": "none",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "input_1:1",
+      "lookup_keys": [
+        "-7",
+        "0",
+        "input.x",
+        "input_1",
+        "input_1",
+        "input_1:1",
+        "input_1:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {
+        "negative.0:1": [
+          0
+        ],
+        "negative:1": [
+          0
+        ]
+      },
+      "module_ops_entered": [
+        "negative:1",
+        "negative.0:1"
+      ],
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 0
+    },
+    {
+      "atomic_module_call": null,
+      "func_name": "mean",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "mean_1_1:1",
+      "lookup_keys": [
+        "-6",
+        "1",
+        "mean_1",
+        "mean_1:1",
+        "mean_1_1",
+        "mean_1_1:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 1
+    },
+    {
+      "atomic_module_call": null,
+      "func_name": "__gt__",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": true,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "gt_1_2:1",
+      "lookup_keys": [
+        "-5",
+        "2",
+        "gt_1",
+        "gt_1:1",
+        "gt_1_2",
+        "gt_1_2:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [],
+      "output_of_module_calls": [],
+      "output_of_modules": [],
+      "trace_index": 2
+    },
+    {
+      "atomic_module_call": "negative.0:1",
+      "func_name": "linear",
+      "fx_call_index": 0,
+      "fx_qualpath": "negative.0.linear",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "linear_1_3:1",
+      "lookup_keys": [
+        "-4",
+        "3",
+        "linear_1",
+        "linear_1:1",
+        "linear_1_3",
+        "linear_1_3:1",
+        "negative.0",
+        "negative.0:1"
+      ],
+      "module": "negative.0:1",
+      "module_entry_argnames": {
+        "negative.1:1": [
+          0
+        ]
+      },
+      "module_ops_entered": [
+        "negative.1:1"
+      ],
+      "modules": [
+        "negative:1",
+        "negative.0:1"
+      ],
+      "output_of_module_calls": [
+        "negative.0:1"
+      ],
+      "output_of_modules": [
+        "negative.0"
+      ],
+      "trace_index": 3
+    },
+    {
+      "atomic_module_call": "negative.1:1",
+      "func_name": "tanh",
+      "fx_call_index": 0,
+      "fx_qualpath": "negative.1.tanh",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "tanh_1_4:1",
+      "lookup_keys": [
+        "-3",
+        "4",
+        "negative.1",
+        "negative.1:1",
+        "tanh_1",
+        "tanh_1:1",
+        "tanh_1_4",
+        "tanh_1_4:1"
+      ],
+      "module": "negative.1:1",
+      "module_entry_argnames": {
+        "negative.2:1": [
+          0
+        ]
+      },
+      "module_ops_entered": [
+        "negative.2:1"
+      ],
+      "modules": [
+        "negative:1",
+        "negative.1:1"
+      ],
+      "output_of_module_calls": [
+        "negative.1:1"
+      ],
+      "output_of_modules": [
+        "negative.1"
+      ],
+      "trace_index": 4
+    },
+    {
+      "atomic_module_call": "negative.2:1",
+      "func_name": "linear",
+      "fx_call_index": 0,
+      "fx_qualpath": "negative.2.linear",
+      "intervention_replaced": false,
+      "is_atomic_module_op": true,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": true,
+      "label": "linear_2_5:1",
+      "lookup_keys": [
+        "-2",
+        "5",
+        "linear_2",
+        "linear_2:1",
+        "linear_2_5",
+        "linear_2_5:1",
+        "negative",
+        "negative.2",
+        "negative.2:1",
+        "negative:1"
+      ],
+      "module": "negative.2:1",
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [
+        "negative:1",
+        "negative.2:1"
+      ],
+      "output_of_module_calls": [
+        "negative.2:1",
+        "negative:1"
+      ],
+      "output_of_modules": [
+        "negative.2",
+        "negative"
+      ],
+      "trace_index": 5
+    },
+    {
+      "atomic_module_call": "negative.2:1",
+      "func_name": "none",
+      "fx_call_index": 0,
+      "fx_qualpath": null,
+      "intervention_replaced": false,
+      "is_atomic_module_op": false,
+      "is_internal_sink": false,
+      "is_internal_source": false,
+      "is_orphan": false,
+      "is_submodule_output": false,
+      "label": "output_1:1",
+      "lookup_keys": [
+        "-1",
+        "6",
+        "negative",
+        "negative.2",
+        "negative.2:1",
+        "negative:1",
+        "output",
+        "output_1",
+        "output_1",
+        "output_1:1",
+        "output_1:1"
+      ],
+      "module": null,
+      "module_entry_argnames": {},
+      "module_ops_entered": [],
+      "modules": [],
+      "output_of_module_calls": [
+        "negative:1",
+        "negative.2:1"
+      ],
+      "output_of_modules": [
+        "negative",
+        "negative.2"
+      ],
+      "trace_index": 6
+    }
+  ],
+  "trace_summary": {
+    "total_flops_forward": 657,
+    "uncalled_modules": [
+      "positive",
+      "positive.0",
+      "positive.1",
+      "positive.2"
+    ]
+  }
+}

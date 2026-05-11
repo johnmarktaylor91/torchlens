@@ -124,7 +124,7 @@
   "target_manifest": [
     {
       "graph_shape_hash": "e44fe77987b6d8791ef095c0e98e87b10d6988b9c063fe6ccde796bf1e60e1e7",
-      "module_address_normalized": null,
+      "_address_normalized": null,
       "resolved_labels": [
         "relu_1_2"
       ],

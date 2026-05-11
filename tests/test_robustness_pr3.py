@@ -106,8 +106,8 @@ def test_fsdp_raises_with_clear_message() -> None:
 
 
 @pytest.mark.skipif(not _fsdp_available(), reason="FSDP not available")
-def test_fsdp_error_from_log_forward_pass_entry() -> None:
-    """The entry-point (log_forward_pass) must surface the FSDP error."""
+def test_fsdp_error_from_trace_entry() -> None:
+    """The entry-point (trace) must surface the FSDP error."""
     from torch.distributed.fsdp import FullyShardedDataParallel
 
     inner = _Tiny()
@@ -117,7 +117,7 @@ def test_fsdp_error_from_log_forward_pass_entry() -> None:
     x = torch.randn(2, 4)
 
     with pytest.raises(RuntimeError, match="FullyShardedDataParallel"):
-        tl.log_forward_pass(wrapped, x, layers_to_save="none")
+        tl.trace(wrapped, x, layers_to_save="none")
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ class _BatchEncodingLike(UserDict):
     """Minimal stand-in for HuggingFace's ``BatchEncoding`` (UserDict subclass).
 
     BatchEncoding wraps a dict of tensor fields and adds attribute access
-    plus ``to()`` methods. We only need the dict interface for TorchLens'
+    plus ``to()`` custom_methods. We only need the dict interface for TorchLens'
     input-extraction path.
     """
 
@@ -151,7 +151,7 @@ def test_huggingface_batch_encoding_like_input_logs() -> None:
     model = _BatchEncodingAcceptingModel()
     batch = _BatchEncodingLike({"input_ids": torch.randn(2, 4)})
 
-    log = tl.log_forward_pass(model, [batch], layers_to_save="all")
+    log = tl.trace(model, [batch], layers_to_save="all")
     assert len(log.layer_logs) > 0
 
 
@@ -194,7 +194,7 @@ def test_dataclass_output_does_not_crash() -> None:
     model = _HFOutputModel()
     x = torch.randn(2, 4)
 
-    log = tl.log_forward_pass(model, x, layers_to_save="none")
+    log = tl.trace(model, x, layers_to_save="none")
     # At minimum the Linear projection should be logged.
     layer_types = [ll.layer_type for ll in log.layer_logs.values()]
     assert any("linear" in t.lower() or "addmm" in t.lower() for t in layer_types), (
@@ -212,5 +212,5 @@ def test_standard_model_still_logs_cleanly() -> None:
     """Nothing in PR 3 should regress the golden path."""
     model = _Tiny()
     x = torch.randn(2, 4)
-    log = tl.log_forward_pass(model, x, layers_to_save="all")
+    log = tl.trace(model, x, layers_to_save="all")
     assert len(log.layer_logs) > 0

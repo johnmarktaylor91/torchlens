@@ -11,6 +11,8 @@ import torch
 
 from .. import _state
 from .._state import pause_logging
+from ..backends.torch._tl import copy_replacement_meta
+from ..ir.intervention import FireResult
 from .errors import HookSignatureError, HookValueError
 from .hooks import HookContext, NormalizedHookEntry, make_hook_context, live_selector_matches_site
 from .types import FireRecord
@@ -52,7 +54,7 @@ class _HookReentrancyGuard:
     """Prevent recursive TorchLens tracing while hook code is active.
 
     Phase 3 defines the guard object only. Phase 4a will connect it to
-    ``active_logging()`` so ``log_forward_pass`` can fail before entering a
+    ``active_logging()`` so ``trace`` can fail before entering a
     nested logging context.
     """
 
@@ -111,7 +113,7 @@ HOOK_REENTRANCY_GUARD = _HookReentrancyGuard()
 
 def _execute_hook(
     hook_callable: Any,
-    activation: torch.Tensor,
+    out: torch.Tensor,
     hook_context: HookContext,
     *,
     force_shape_change: bool = False,
@@ -122,8 +124,8 @@ def _execute_hook(
     ----------
     hook_callable:
         User or helper hook callable.
-    activation:
-        Current activation tensor at the hook site.
+    out:
+        Current out tensor at the hook site.
     hook_context:
         Metadata snapshot passed as the keyword-only ``hook`` argument.
     force_shape_change:
@@ -132,7 +134,7 @@ def _execute_hook(
     Returns
     -------
     torch.Tensor
-        Replacement activation tensor.
+        Replacement out tensor.
 
     Raises
     ------
@@ -145,15 +147,15 @@ def _execute_hook(
     try:
         with HOOK_REENTRANCY_GUARD:
             with pause_logging():
-                result = hook_callable(activation, hook=hook_context)
+                result = hook_callable(out, hook=hook_context)
     except TypeError as exc:
         raise HookSignatureError(
             f"hook {hook_context.name!r} could not be called at "
-            f"{_site_name(hook_context)} with signature (activation, *, hook)"
+            f"{_site_name(hook_context)} with signature (out, *, hook)"
         ) from exc
     return validate_hook_output(
         result,
-        activation,
+        out,
         hook_context=hook_context,
         force_shape_change=force_shape_change,
     )
@@ -161,19 +163,19 @@ def _execute_hook(
 
 def validate_hook_output(
     result: Any,
-    activation: torch.Tensor,
+    out: torch.Tensor,
     *,
     hook_context: HookContext | None = None,
     force_shape_change: bool = False,
 ) -> torch.Tensor:
-    """Validate a hook return value against the input activation metadata.
+    """Validate a hook return value against the input out metadata.
 
     Parameters
     ----------
     result:
         Hook return value.
-    activation:
-        Original activation tensor.
+    out:
+        Original out tensor.
     hook_context:
         Optional context for error messages.
     force_shape_change:
@@ -200,53 +202,82 @@ def validate_hook_output(
             "expected torch.Tensor"
         )
     if force_shape_change:
+        _copy_tl_replacement_attrs(out, result)
         return result
-    if result.dtype != activation.dtype:
+    if result.dtype != out.dtype:
         raise HookValueError(
             f"hook returned dtype {result.dtype} at {_site_name(hook_context)}; "
-            f"expected {activation.dtype}"
+            f"expected {out.dtype}"
         )
-    if result.device != activation.device:
+    if result.device != out.device:
         raise HookValueError(
             f"hook returned device {result.device} at {_site_name(hook_context)}; "
-            f"expected {activation.device}"
+            f"expected {out.device}"
         )
-    if tuple(result.shape) != tuple(activation.shape):
+    if tuple(result.shape) != tuple(out.shape):
         raise HookValueError(
             f"hook returned shape {tuple(result.shape)} at {_site_name(hook_context)}; "
-            f"expected {tuple(activation.shape)}"
+            f"expected {tuple(out.shape)}"
         )
+    _copy_tl_replacement_attrs(out, result)
     return result
 
 
+def _copy_tl_replacement_attrs(source: torch.Tensor, replacement: torch.Tensor) -> None:
+    """Copy TorchLens tensor metadata from an original out to a replacement.
+
+    Parameters
+    ----------
+    source:
+        Original activation supplied to a user hook.
+    replacement:
+        Tensor returned by the hook.
+
+    Returns
+    -------
+    None
+        The replacement tensor is annotated in place when PyTorch permits
+        dynamic tensor attributes.
+    """
+
+    if replacement is source:
+        return
+    try:
+        copy_replacement_meta(source, replacement)
+    except Exception:
+        pass
+
+
 def _apply_live_hooks(
-    activation: torch.Tensor,
+    out: torch.Tensor,
     *,
     site: Any,
-    output_path: tuple[Any, ...] = (),
-) -> torch.Tensor:
+    container_path: tuple[Any, ...] = (),
+) -> tuple[torch.Tensor, tuple[FireResult, ...]]:
     """Apply active live post-hooks to one capture-time output tensor.
 
     Parameters
     ----------
-    activation:
+    out:
         Tensor returned by the decorated torch function after in-place safe-copy.
     site:
         Capture-time site proxy for selector matching and hook context.
-    output_path:
+    container_path:
         Stable path inside a multi-output container.
 
     Returns
     -------
-    torch.Tensor
-        Original or hook-replaced tensor to pass into output logging.
+    tuple[torch.Tensor, tuple[FireResult, ...]]
+        Original or hook-replaced tensor plus typed fire results for the
+        corresponding capture event.
     """
 
     hook_plan = _state._active_hook_plan
     if not hook_plan:
-        return activation
+        return out, ()
 
-    current_activation = activation
+    current_out = out
+    fire_results: list[FireResult] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
         if normalized_entry.metadata.get("direction", "forward") != "forward":
@@ -262,26 +293,47 @@ def _apply_live_hooks(
             direction="forward",
             layer_log=site,
             run_ctx=_live_run_ctx(),
-            args=(current_activation,),
+            args=(current_out,),
             kwargs={},
         )
-        previous_notes = tuple(hook_context.run_ctx.get("operation_history_notes", ()))
+        previous_notes = tuple(hook_context.run_ctx.get("ledger_notes", ()))
+        pre_hook_shape = tuple(current_out.shape)
+        pre_hook_dtype = str(current_out.dtype)
         result = _execute_hook(
             normalized_entry.normalized_callable,
-            current_activation,
+            current_out,
             hook_context,
             force_shape_change=bool(normalized_entry.metadata.get("force_shape_change", False)),
         )
         record = _build_live_fire_record(
             normalized_entry,
             site=site,
-            output_path=output_path,
+            container_path=container_path,
             previous_notes=previous_notes,
             run_ctx=hook_context.run_ctx,
         )
-        _state._pending_live_fire_records.setdefault(site.layer_label_raw, []).append(record)
-        current_activation = result
-    return current_activation
+        fire_results.append(
+            FireResult(
+                plan_id=str(
+                    normalized_entry.metadata.get(
+                        "plan_id",
+                        normalized_entry.metadata.get(
+                            "hook_id", _hook_display_name(normalized_entry)
+                        ),
+                    )
+                ),
+                site_label=site._layer_label_raw,
+                fired_at_capture_index=int(getattr(site, "capture_index", 0) or 0),
+                pre_hook_shape=pre_hook_shape,
+                post_hook_shape=tuple(result.shape),
+                pre_hook_dtype=pre_hook_dtype,
+                post_hook_dtype=str(result.dtype),
+                replaced=result is not current_out,
+                fire_record=record,
+            )
+        )
+        current_out = result
+    return current_out, tuple(fire_results)
 
 
 def _coerce_hook_entry(entry: Any) -> NormalizedHookEntry:
@@ -312,13 +364,13 @@ def _live_run_ctx() -> dict[str, Any]:
         Mutable context shared by hooks in this live run.
     """
 
-    model_log = _state._active_model_log
-    if model_log is None:
+    trace = _state._active_trace
+    if trace is None:
         return {}
-    run_ctx = getattr(model_log, "last_run_ctx", None)
+    run_ctx = getattr(trace, "last_run_ctx", None)
     if run_ctx is None:
         run_ctx = {"engine": "live", "timestamp": time.monotonic()}
-        model_log.last_run_ctx = run_ctx
+        trace.last_run_ctx = run_ctx
     else:
         run_ctx.setdefault("engine", "live")
         run_ctx.setdefault("timestamp", time.monotonic())
@@ -348,7 +400,7 @@ def _build_live_fire_record(
     entry: NormalizedHookEntry,
     *,
     site: Any,
-    output_path: tuple[Any, ...],
+    container_path: tuple[Any, ...],
     previous_notes: tuple[Any, ...],
     run_ctx: dict[str, Any],
 ) -> FireRecord:
@@ -360,7 +412,7 @@ def _build_live_fire_record(
         Hook entry that fired.
     site:
         Capture-time site proxy.
-    output_path:
+    container_path:
         Output path for the hooked tensor.
     previous_notes:
         Operation-history notes present before hook execution.
@@ -374,16 +426,16 @@ def _build_live_fire_record(
     """
 
     helper_name = _hook_display_name(entry)
-    new_notes = tuple(run_ctx.get("operation_history_notes", ()))[len(previous_notes) :]
+    new_notes = tuple(run_ctx.get("ledger_notes", ()))[len(previous_notes) :]
     helper_kwargs = dict(entry.helper_spec.kwargs) if entry.helper_spec is not None else {}
     return FireRecord(
-        target_label=site.layer_label_raw,
-        pass_label=site.layer_label_raw,
+        target_label=site._layer_label_raw,
+        call_label=site._layer_label_raw,
         func_call_id=site.func_call_id,
-        output_path=output_path,
+        container_path=container_path,
         engine="live",
         helper=entry.helper_spec,
-        site_label=site.layer_label_raw,
+        site_label=site._layer_label_raw,
         timing="post",
         direction="forward",
         helper_name=helper_name,
@@ -421,7 +473,7 @@ def do(log: Any, *args: Any, **kwargs: Any) -> Any:
     Parameters
     ----------
     log:
-        ModelLog-like object that will eventually receive the operation.
+        Trace-like object that will eventually receive the operation.
     *args:
         Positional arguments forwarded to ``log.do``.
     **kwargs:

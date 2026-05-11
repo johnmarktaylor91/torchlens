@@ -1,11 +1,11 @@
 """BufferLog and BufferAccessor: per-buffer metadata and dict-like accessor for model buffers.
 
-BufferLog extends LayerPassLog to represent a model buffer (e.g. BatchNorm's
+BufferLog extends OpLog to represent a model buffer (e.g. BatchNorm's
 ``running_mean``).  Buffers participate in the computation graph just like
 regular tensors but have additional identity: a ``buffer_address`` (e.g.
 ``"features.0.running_mean"``) and an owning module.
 
-**Why name/module_address live on BufferLog, not LayerLog**: These are
+**Why name/address live on BufferLog, not LayerLog**: These are
 buffer-specific identifiers that don't apply to general layers.  A LayerLog
 is too generic — it could be any operation.  Only BufferLog entries have a
 meaningful ``buffer_address``.  For single-pass buffers, the parent LayerLog
@@ -20,12 +20,13 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cas
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
-from .layer_pass_log import LayerPassLog
+from ._accessor_base import Accessor
+from .op_log import OpLog
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .model_log import ModelLog
+    from .model_log import Trace
 
 
 def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
@@ -44,20 +45,44 @@ def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
     return {field: getattr(buffer_log, field) for field in BUFFER_LOG_FIELD_ORDER}
 
 
-class BufferLog(LayerPassLog):
-    """A LayerPassLog entry representing a registered model buffer.
+class BufferLog(OpLog):
+    """A OpLog entry representing a registered model buffer.
 
-    Subclasses LayerPassLog and participates in the computation graph
+    Subclasses OpLog and participates in the computation graph
     identically to regular tensor operations.  Adds ``name`` and
-    ``module_address`` computed properties derived from the
-    ``buffer_address`` field (inherited from LayerPassLog).
+    ``address`` computed properties derived from the
+    ``buffer_address`` field (inherited from OpLog).
 
     No additional constructor arguments — the buffer identity comes
     from the ``buffer_address`` field in the fields_dict passed to
-    the parent ``LayerPassLog.__init__``.
+    the parent ``OpLog.__init__``.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(LayerPassLog.PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(OpLog.PORTABLE_STATE_SPEC)
+
+    @property
+    def all_buffer_addresses(self) -> list[str]:
+        """Return all addresses associated with this buffer.
+
+        Returns
+        -------
+        list[str]
+            Buffer addresses.
+        """
+
+        return [] if self.buffer_address is None else [self.buffer_address]
+
+    @property
+    def has_multiple_addresses(self) -> bool:
+        """Return whether this buffer is registered at multiple addresses.
+
+        Returns
+        -------
+        bool
+            Whether this buffer is shared.
+        """
+
+        return len(self.all_buffer_addresses) > 1
 
     @property
     def name(self) -> str:
@@ -68,7 +93,7 @@ class BufferLog(LayerPassLog):
         return cast(str, addr.rsplit(".", 1)[-1])
 
     @property
-    def module_address(self) -> str:
+    def address(self) -> str:
         """Module address (everything before last dot), e.g. 'features.0'."""
         addr = self.buffer_address
         if addr is None:
@@ -78,19 +103,19 @@ class BufferLog(LayerPassLog):
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, size, module, and pass number."""
         lines = [f"BufferLog: {self.buffer_address or self.layer_label}"]
-        if self.tensor_shape is not None:
-            lines.append(f"  shape: {list(self.tensor_shape)}")
-        if self.tensor_dtype is not None:
-            lines.append(f"  dtype: {self.tensor_dtype}")
-        if self.tensor_memory is not None:
-            lines.append(f"  size: {human_readable_size(self.tensor_memory)}")
-        if self.module_address:
-            lines.append(f"  module: {self.module_address}")
+        if self.shape is not None:
+            lines.append(f"  shape: {list(self.shape)}")
+        if self.dtype is not None:
+            lines.append(f"  dtype: {self.dtype}")
+        if self.memory is not None:
+            lines.append(f"  size: {human_readable_size(self.memory)}")
+        if self.address:
+            lines.append(f"  module: {self.address}")
         if self.buffer_pass is not None:
             lines.append(f"  pass: {self.buffer_pass}")
-        lines.append(f"  has_saved_activations: {self.has_saved_activations}")
-        if self.has_gradient:
-            lines.append("  has_gradient: True")
+        lines.append(f"  has_saved_outs: {self.has_saved_outs}")
+        if self.has_grad:
+            lines.append("  has_grad: True")
         if self.layer_label is not None:
             lines.append(f"  layer_label: {self.layer_label}")
         return "\n".join(lines)
@@ -104,7 +129,7 @@ class BufferLog(LayerPassLog):
         super().__setstate__(state)
 
 
-class BufferAccessor:
+class BufferAccessor(Accessor["BufferLog"]):
     """Dict-like accessor for BufferLog objects.
 
     Supports indexing by:
@@ -112,7 +137,7 @@ class BufferAccessor:
     * **short name** (str) -- e.g. ``"running_mean"`` (must be unambiguous).
     * **ordinal position** (int) -- index into insertion-order list.
 
-    Available as ``model_log.buffers`` and ``module_log.buffers``.
+    Available as ``trace.buffers`` and ``module_log.buffers``.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -124,41 +149,29 @@ class BufferAccessor:
     def __init__(
         self,
         buffer_dict: Dict[str, "BufferLog"],
-        source_model_log: "ModelLog | None" = None,
+        source_trace: "Trace | None" = None,
     ) -> None:
-        self._dict = buffer_dict  # address -> BufferLog
-        self._list = list(buffer_dict.values())  # insertion-order list
-        # Store as weakref to avoid preventing ModelLog GC.
-        self._source_ref = weakref.ref(source_model_log) if source_model_log is not None else None
+        source_ref = weakref.ref(source_trace) if source_trace is not None else None
+        super().__init__(buffer_dict, source_ref=source_ref)
+        # Store as weakref to avoid preventing Trace GC.
+        self._source_ref = source_ref
 
-    def __getitem__(self, key: Union[int, str]) -> "BufferLog":
-        """Retrieve a buffer by integer index, full address, or short name."""
-        if isinstance(key, int):
-            return self._list[key]
-        if key in self._dict:
-            return self._dict[key]
+    def _resolve_substring(self, key: str) -> "BufferLog | None":
+        """Resolve an unambiguous buffer short name."""
         # Fallback: match by short name (e.g. 'running_mean')
         matches = [bl for bl in self._list if bl.name == key]
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
             raise KeyError(f"Ambiguous short name '{key}' -- use full address")
-        raise KeyError(key)
+        return None
 
-    def __contains__(self, key: str) -> bool:
+    def __contains__(self, key: object) -> bool:
         """Check membership by full address or short name."""
-        if key in self._dict:
+        try:
+            return super().__contains__(key)
+        except KeyError:
             return True
-        # Also check short names
-        return any(bl.name == key for bl in self._list)
-
-    def __len__(self) -> int:
-        """Return the number of buffers."""
-        return len(self._dict)
-
-    def __iter__(self) -> Iterator["BufferLog"]:
-        """Iterate over BufferLog objects in insertion order."""
-        return iter(self._list)
 
     def __repr__(self) -> str:
         """Format as a dict-like string of buffer addresses with shapes and dtypes."""
@@ -166,8 +179,8 @@ class BufferAccessor:
             return "{}"
         items = []
         for bl in self._list:
-            shape_str = str(list(bl.tensor_shape)) if bl.tensor_shape is not None else "?"
-            dtype_str = str(bl.tensor_dtype) if bl.tensor_dtype is not None else "?"
+            shape_str = str(list(bl.shape)) if bl.shape is not None else "?"
+            dtype_str = str(bl.dtype) if bl.dtype is not None else "?"
             items.append(f"'{bl.buffer_address}': BufferLog {shape_str} {dtype_str}")
         inner = ",\n ".join(items)
         return "{" + inner + "}"

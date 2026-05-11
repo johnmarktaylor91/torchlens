@@ -24,7 +24,8 @@ Key entry points:
 ## Conventions
 - Conventional commits: prefer `docs(scope):`, `chore(scope):`, `test(scope):` for
   non-release changes; never use major-bump markers casually.
-- `tl_` prefix on tensor/module attributes during logging
+- TorchLens host-object metadata lives under `obj._tl`; sub-fields are snake_case and
+  new metadata should extend a `TorchLensMeta` subclass rather than adding `tl_*` attrs.
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state
 - FIELD_ORDER constants in `constants.py` define canonical field sets; update both class
   fields and constants when adding fields
@@ -54,7 +55,7 @@ pytest tests/ -m "not slow" -x --tb=short
    `activation_postfunc`, `get_tensor_memory_amount`).
 3. Wrappers are persistent after lazy installation; `_logging_enabled` gates behavior.
 4. FIELD_ORDER constants and class definitions must stay in sync.
-5. Step 6 module suffix mutation makes `_rebuild_pass_assignments` in Step 8 necessary.
+5. Module suffixes are appended to `equivalence_class` at op creation before loop detection.
 6. RNG state capture/restore must happen before `active_logging()` context.
 7. `_build_module_logs` must not run in `postprocess_fast`; `_module_build_data` is not
    populated in fast mode.

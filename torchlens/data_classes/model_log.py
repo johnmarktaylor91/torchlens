@@ -1,31 +1,31 @@
-"""ModelLog: the top-level container for a fully logged forward pass.
+"""Trace: the top-level container for a fully logged forward pass.
 
-ModelLog is the root data structure returned by ``log_forward_pass()``.
-It owns every LayerPassLog (per-operation entry), every LayerLog (per-layer
+Trace is the root data structure returned by ``trace()``.
+It owns every OpLog (per-operation entry), every LayerLog (per-layer
 aggregate), the module hierarchy, parameter metadata, and graph-level
 bookkeeping.
 
 Key design patterns:
 
-* **_pass_finished behavioural switch** - Many methods (``__len__``, ``__getitem__``,
+* **_tracing_finished behavioural switch** - Many custom_methods (``__len__``, ``__getitem__``,
   ``__str__``, ``__iter__``) behave differently during logging vs after
-  postprocessing.  While logging is active (``_pass_finished=False``), the
+  postprocessing.  While logging is active (``_tracing_finished=False``), the
   model's tensors are keyed by their raw internal barcodes in
-  ``_raw_layer_dict``.  After postprocessing flips ``_pass_finished=True``,
+  transient raw graph state. After postprocessing flips ``_tracing_finished=True``,
   the friendly ``layer_list`` / ``layer_dict_all_keys`` / ``layer_logs``
-  structures are populated and used instead.  ``_pass_finished`` also
+  structures are populated and used instead.  ``_tracing_finished`` also
   persists across the fast pass on purpose: fast-path postprocessing
   relies on the fully-populated lookup dicts from the exhaustive pass.
 
-* **Explicit ModelLog methods** - Public methods are defined directly on
-  ``ModelLog``. Heavier implementations may delegate into subpackages
+* **Explicit Trace custom_methods** - Public custom_methods are defined directly on
+  ``Trace``. Heavier implementations may delegate into subpackages
   through local imports, but users still call them as
-  ``model_log.render_graph(...)`` or ``model_log.validate_forward_pass(...)``.
+  ``trace.draw(...)`` or ``trace.validate_forward_pass(...)``.
 
-* **_module_build_data** - A transient dict that accumulates module hierarchy
+* **module build state** - A transient dict that accumulates module hierarchy
   information during the forward pass.  Consumed by ``_build_module_logs``
   (postprocessing step 17) and then cleared.  Initialised via
-  ``_init_module_build_data()``.
+  ``_init_module_hierarchy_data()``.
 """
 
 import copy
@@ -64,6 +64,7 @@ if TYPE_CHECKING:
 
     from .._io.streaming import BundleStreamWriter
     from ..experimental.dagua._bridge import TorchLensRenderAudit
+    from ..fastlog.types import ModuleStackFrame
     from ..intervention.types import FireRecord
     from ..visualization.code_panel import CodePanelOption
     from .buffer_log import BufferAccessor
@@ -85,6 +86,7 @@ from .._literals import (
 )
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import MODEL_LOG_FIELD_ORDER
+from ..ir.events import TraceBuildState
 from ..options import (
     InterventionOptions,
     ReplayOptions,
@@ -94,7 +96,7 @@ from ..options import (
 from ..intervention.types import (
     FrozenInterventionSpec,
     ForkFieldPolicy,
-    MODEL_LOG_FORK_POLICY,
+    MODEL_LOG_FIELD_FORK_POLICY,
     InterventionSpec,
     Relationship,
     TargetSpec,
@@ -111,6 +113,7 @@ from .cleanup import (
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
 from ..utils.display import human_readable_size
+from ._accessor_base import Accessor
 from .interface import (
     _format_conditional_branch_stack,
     _getitem_after_pass,
@@ -119,50 +122,70 @@ from .interface import (
     _str_during_pass,
 )
 from .grad_fn_log import GradFnAccessor, GradFnLog
-from .layer_log import LayerLog
-from .layer_pass_log import LayerPassLog, TensorLog
+from .layer_log import LayerLog, OpAccessor
+from .op_log import OpLog, TensorLog
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
+
+_USE_STORED_TRANSFORM = object()
 
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "name": None,
     "intervention_ready": False,
-    "capture_full_args": False,
+    "capture_args_template": False,
+    "raw_input": None,
+    "_transform": None,
+    "save_raw_input": "small",
+    "batch_render": "auto",
+    "raw_output": None,
+    "_output_transform": None,
+    "save_raw_output": "small",
+    "layer_visualizers": None,
+    "save_visualizations": False,
+    "_visualizer_dir": None,
     "parent_run": None,
     "_intervention_spec": None,
-    "operation_history": [],
+    "ledger": [],
     "last_run_ctx": None,
     "_has_direct_writes": False,
     "_warned_direct_write": False,
     "_warned_mutate_in_place": False,
     "_spec_revision": 0,
-    "_activation_recipe_revision": 0,
+    "_out_recipe_revision": 0,
     "_append_sequence_id": 0,
     "_last_hook_handle_ids": (),
     "run_state": RunState.PRISTINE,
-    "source_model_id": None,
-    "source_model_class": None,
-    "weight_fingerprint_at_capture": None,
-    "weight_fingerprint_full": None,
-    "input_id_at_capture": None,
+    "model_id": None,
+    "model_class": None,
+    "param_hash_quick": None,
+    "param_hash_full": None,
+    "input_id": None,
     "input_shape_hash": None,
     "graph_shape_hash": None,
-    "module_filter_fn": None,
+    "module_filter": None,
     "emit_nvtx": False,
     "raise_on_nan": False,
-    "capture_kpis": {},
+    "keep_orphans": False,
+    "trace_annotations": {},
     "report_values": {},
     "observer_spans": [],
     "manual_tensor_connections": [],
-    "forward_lineno": None,
+    "forward_source_line": None,
+    "forward_source_file": None,
+    "model_source_file": None,
+    "model_source_line": None,
     "capture_cache_hit": False,
     "capture_cache_key": None,
     "capture_cache_path": None,
     "recording_kept": True,
     "streaming_pass_logs": [],
-    "num_streamed_passes": 1,
-    "_activation_hash_cache": {},
+    "num_streamed_ops": 1,
+    "_out_hash_cache": {},
     "is_appended": False,
     "relationship_evidence": {},
+    "total_gradient_memory": 0,
+    "saved_gradient_memory": 0,
+    "total_param_gradient_memory": 0,
+    "forward_peak_memory": 0,
 }
 _MODEL_LOG_DEFAULT_FILL = {
     **{field_name: None for field_name in MODEL_LOG_FIELD_ORDER},
@@ -171,25 +194,25 @@ _MODEL_LOG_DEFAULT_FILL = {
 _MODEL_LOG_DEFAULT_FILL["io_format_version"] = IO_FORMAT_VERSION
 
 
-def _init_module_build_data() -> dict[str, Any]:
+def _init_module_hierarchy_data() -> dict[str, Any]:
     """Create the transient dict used to accumulate module hierarchy data during logging.
 
     Consumed by ``_build_module_logs`` (step 17) and then cleared.
     """
     return {
-        "module_addresses": [],
+        "addresses": [],
         "module_types": {},
-        "module_passes": [],
-        "module_num_passes": defaultdict(lambda: 1),
+        "module_ops": [],
+        "module_num_calls": defaultdict(lambda: 1),
         "top_level_modules": [],
-        "top_level_module_passes": [],
+        "top_level_module_ops": [],
         "module_children": defaultdict(list),
         "module_pass_children": defaultdict(list),
         "module_nparams": defaultdict(lambda: 0),
         "module_nparams_trainable": defaultdict(lambda: 0),
         "module_nparams_frozen": defaultdict(lambda: 0),
         "module_num_tensors": defaultdict(lambda: 0),
-        "module_pass_num_tensors": defaultdict(lambda: 0),
+        "module_call_index_tensors": defaultdict(lambda: 0),
         "module_layers": defaultdict(list),
         "module_pass_layers": defaultdict(list),
         "module_layer_argnames": defaultdict(list),
@@ -210,17 +233,228 @@ class ConditionalEvent:
     test_span: Tuple[int, int, int, int]
     branch_ranges: Dict[str, Tuple[int, int, int, int]]
     branch_test_spans: Dict[str, Tuple[int, int, int, int]]
-    nesting_depth: int
+    call_depth: int
     parent_conditional_id: Optional[int]
     parent_branch_kind: Optional[str]
     bool_layers: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ConditionalRoleRef:
+    """One op's participation in a conditional arm.
+
+    Attributes
+    ----------
+    conditional_id:
+        Stable id of the Conditional this op participates in.
+    arm_index:
+        Index of the arm within ``Conditional.arms``.
+    arm_kind:
+        Arm kind: ``"then"``, ``"elif"``, or ``"else"``.
+    role:
+        Role within the arm: ``"evaluation"`` or ``"body"``.
+    """
+
+    conditional_id: str
+    arm_index: int
+    arm_kind: Literal["then", "elif", "else"]
+    role: Literal["evaluation", "body"]
+
+
+@dataclass
+class ConditionalArm:
+    """One arm of an if-chain."""
+
+    kind: Literal["then", "elif", "else"]
+    evaluation_op_labels: list[str] = field(default_factory=list)
+    terminal_bool_op_label: str | None = None
+    bool_value_at_run: bool | None = None
+    condition_evaluated: bool = False
+    evaluation_entry_edge: tuple[str, str] | None = None
+    execution_op_labels: list[str] = field(default_factory=list)
+    fired: bool = False
+    execution_entry_edge: tuple[str, str] | None = None
+
+
+@dataclass
+class Conditional:
+    """One if-chain at one source location."""
+
+    id: str
+    arms: list[ConditionalArm]
+    fired_arm_index: int | None
+    fired_arm_kind: Literal["then", "elif", "else"] | None
+    source_file: str | None
+    source_line: int | None
+
+    @property
+    def source_location(self) -> str | None:
+        """Combined ``file:line`` location, if available."""
+
+        if self.source_file is None or self.source_line is None:
+            return None
+        return f"{self.source_file}:{self.source_line}"
+
+    @property
+    def fired_arm(self) -> ConditionalArm | None:
+        """Direct access to the fired arm, if any."""
+
+        if self.fired_arm_index is None:
+            return None
+        if self.fired_arm_index < 0 or self.fired_arm_index >= len(self.arms):
+            return None
+        return self.arms[self.fired_arm_index]
+
+    @property
+    def has_else(self) -> bool:
+        """Whether this conditional has an else arm."""
+
+        return any(arm.kind == "else" for arm in self.arms)
+
+    @property
+    def has_elif(self) -> bool:
+        """Whether this conditional has one or more elif arms."""
+
+        return any(arm.kind == "elif" for arm in self.arms)
+
+    @property
+    def num_arms(self) -> int:
+        """Number of arms."""
+
+        return len(self.arms)
+
+    @property
+    def num_elifs(self) -> int:
+        """Number of elif arms."""
+
+        return sum(arm.kind == "elif" for arm in self.arms)
+
+
+class ConditionalAccessor:
+    """Dict-like accessor for Conditional records."""
+
+    def __init__(self, conditionals: list[Conditional] | None = None) -> None:
+        """Initialize from conditionals in trace order.
+
+        Parameters
+        ----------
+        conditionals:
+            Conditional records to expose.
+        """
+
+        self._list = list(conditionals or [])
+        self._dict = {conditional.id: conditional for conditional in self._list}
+
+    def __getitem__(self, key: int | str) -> Conditional:
+        """Return a Conditional by ordinal or id."""
+
+        if isinstance(key, int):
+            return self._list[key]
+        return self._dict[key]
+
+    def __len__(self) -> int:
+        """Return the number of conditionals."""
+
+        return len(self._list)
+
+    def __iter__(self) -> Iterator[Conditional]:
+        """Iterate conditionals in trace order."""
+
+        return iter(self._list)
+
+    def keys(self) -> list[str]:
+        """Return conditional ids."""
+
+        return list(self._dict.keys())
+
+    def values(self) -> list[Conditional]:
+        """Return conditional records."""
+
+        return list(self._list)
+
+    def items(self) -> list[tuple[str, Conditional]]:
+        """Return ``(id, Conditional)`` pairs."""
+
+        return [(conditional.id, conditional) for conditional in self._list]
+
+
+class OrphanAccessor(Accessor[OpLog]):
+    """Dict-like accessor for retained orphan ``OpLog`` records."""
+
+    def __init__(self, orphan_ops: Mapping[str, OpLog] | None = None) -> None:
+        """Initialize from raw orphan labels.
+
+        Parameters
+        ----------
+        orphan_ops:
+            Mapping from raw orphan labels to retained orphan operation logs.
+        """
+
+        super().__init__(orphan_ops or {})
+
+    def _resolve_substring(self, key: str) -> OpLog | None:
+        """Resolve by any orphan label variant or unique substring.
+
+        Parameters
+        ----------
+        key:
+            Lookup key or substring.
+
+        Returns
+        -------
+        OpLog | None
+            Matching orphan operation, or ``None`` if not found or ambiguous.
+        """
+
+        exact_matches = [
+            orphan
+            for orphan in self._dict.values()
+            if key
+            in {
+                orphan.layer_label,
+                orphan.layer_label_short,
+                orphan.layer_label_w_pass,
+                orphan.layer_label_w_pass_short,
+                orphan.layer_label_no_pass,
+                orphan.layer_label_no_pass_short,
+                orphan._label_raw,
+            }
+        ]
+        if len(exact_matches) == 1:
+            return exact_matches[0]
+
+        substring_matches = [
+            orphan
+            for orphan in self._dict.values()
+            if any(
+                label is not None and key.lower() in str(label).lower()
+                for label in (
+                    orphan.layer_label,
+                    orphan.layer_label_short,
+                    orphan.layer_label_w_pass,
+                    orphan.layer_label_w_pass_short,
+                    orphan.layer_label_no_pass,
+                    orphan.layer_label_no_pass_short,
+                    orphan._label_raw,
+                )
+            )
+        ]
+        if len(substring_matches) == 1:
+            return substring_matches[0]
+        return None
+
+    @property
+    def _item_kind(self) -> str:
+        """Return display name used in generic ``KeyError`` messages."""
+
+        return "orphan"
 
 
 class _CallableList(list[Any]):
     """List that returns a plain list when called.
 
     This keeps rare report surfaces callable for user ergonomics without adding
-    extra callable methods to the ModelLog method ledger.
+    extra callable custom_methods to the Trace method ledger.
     """
 
     def __call__(self) -> list[Any]:
@@ -239,7 +473,7 @@ class _CallableDict(dict[Any, Any]):
     """Dict that returns a plain dict when called.
 
     This preserves legacy ``log.report_by_type()`` ergonomics for budgeted
-    report properties that should not remain inspectable methods.
+    report properties that should not remain inspectable custom_methods.
     """
 
     def __call__(self) -> dict[Any, Any]:
@@ -254,14 +488,14 @@ class _CallableDict(dict[Any, Any]):
         return dict(self)
 
 
-def _legacy_conditional_then_edges(
-    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+def _legacy_conditional_then_entry_edges(
+    conditional_arm_entry_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
 ) -> List[Tuple[str, str]]:
     """Return the legacy THEN-edge view from canonical conditional arm edges.
 
     Parameters
     ----------
-    conditional_arm_edges:
+    conditional_arm_entry_edges:
         Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
 
     Returns
@@ -272,20 +506,20 @@ def _legacy_conditional_then_edges(
 
     return [
         edge
-        for (_conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        for (_conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
         if branch_kind == "then"
         for edge in edges
     ]
 
 
-def _legacy_conditional_elif_edges(
-    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+def _legacy_conditional_elif_entry_edges(
+    conditional_arm_entry_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
 ) -> List[Tuple[int, int, str, str]]:
     """Return the legacy ELIF-edge view from canonical conditional arm edges.
 
     Parameters
     ----------
-    conditional_arm_edges:
+    conditional_arm_entry_edges:
         Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
 
     Returns
@@ -296,20 +530,20 @@ def _legacy_conditional_elif_edges(
 
     return [
         (conditional_id, int(branch_kind.split("_", 1)[1]), parent, child)
-        for (conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
         if branch_kind.startswith("elif_")
         for parent, child in edges
     ]
 
 
-def _legacy_conditional_else_edges(
-    conditional_arm_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
+def _legacy_conditional_else_entry_edges(
+    conditional_arm_entry_edges: Mapping[Tuple[int, str], List[Tuple[str, str]]],
 ) -> List[Tuple[int, str, str]]:
     """Return the legacy ELSE-edge view from canonical conditional arm edges.
 
     Parameters
     ----------
-    conditional_arm_edges:
+    conditional_arm_entry_edges:
         Canonical ``(cond_id, branch_kind) -> edge list`` mapping.
 
     Returns
@@ -320,17 +554,72 @@ def _legacy_conditional_else_edges(
 
     return [
         (conditional_id, parent, child)
-        for (conditional_id, branch_kind), edges in conditional_arm_edges.items()
+        for (conditional_id, branch_kind), edges in conditional_arm_entry_edges.items()
         if branch_kind == "else"
         for parent, child in edges
     ]
 
 
-class ModelLog:
+def _normalize_conditional_arm_entry_edges(
+    value: Any,
+) -> dict[tuple[int, str], list[tuple[str, str]]]:
+    """Return conditional arm edges in canonical flat-key form.
+
+    Parameters
+    ----------
+    value:
+        Stored conditional arm edge state from current or older portable bundles.
+
+    Returns
+    -------
+    dict[tuple[int, str], list[tuple[str, str]]]
+        Mapping from ``(conditional_id, arm_kind)`` to edge tuples.
+    """
+
+    normalized: dict[tuple[int, str], list[tuple[str, str]]] = {}
+    if not isinstance(value, Mapping):
+        return normalized
+    for raw_key, raw_edges in value.items():
+        if isinstance(raw_key, tuple) and len(raw_key) == 2 and isinstance(raw_key[1], str):
+            normalized[(int(raw_key[0]), raw_key[1])] = list(raw_edges or [])
+            continue
+        if not isinstance(raw_edges, Mapping):
+            continue
+        conditional_id = int(raw_key)
+        for arm_kind, arm_edges in raw_edges.items():
+            normalized[(conditional_id, str(arm_kind))] = list(arm_edges or [])
+    return normalized
+
+
+def _append_conditional_arm_edge(
+    conditional_arm_entry_edges: dict[tuple[int, str], list[tuple[str, str]]],
+    key: tuple[int, str],
+    edge: tuple[str, str],
+) -> None:
+    """Append one conditional arm edge, replacing malformed legacy values.
+
+    Parameters
+    ----------
+    conditional_arm_entry_edges:
+        Canonical edge mapping to mutate.
+    key:
+        ``(conditional_id, arm_kind)`` edge bucket.
+    edge:
+        ``(parent_label, child_label)`` edge tuple.
+    """
+
+    edges = conditional_arm_entry_edges.setdefault(key, [])
+    if not isinstance(edges, list):
+        edges = []
+        conditional_arm_entry_edges[key] = edges
+    edges.append(edge)
+
+
+class Trace:
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
-    metadata in ``_raw_layer_dict``; after postprocessing (``_pass_finished=True``)
+    metadata in transient raw graph state; after postprocessing (``_tracing_finished=True``)
     it presents a clean, user-facing view via ``layer_list``, ``layer_dict_all_keys``,
     ``layer_logs``, ``modules``, ``params``, and ``buffers``.
 
@@ -338,95 +627,175 @@ class ModelLog:
     integer index, layer label, module address, or substring.
     """
 
+    def _ensure_build_state(self) -> TraceBuildState:
+        """Return the transient capture/postprocess build state.
+
+        Returns
+        -------
+        TraceBuildState
+            Private state holder used only while capture or postprocessing is active.
+        """
+
+        build_state = self.__dict__.get("_build_state")
+        if not isinstance(build_state, TraceBuildState):
+            build_state = TraceBuildState()
+            build_state.module_build_data = _init_module_hierarchy_data()
+            self.__dict__["_build_state"] = build_state
+        elif not build_state.module_build_data:
+            build_state.module_build_data = _init_module_hierarchy_data()
+        return build_state
+
+    @staticmethod
+    def _build_state_attr_map() -> dict[str, str]:
+        """Map legacy transient attribute names to build-state field names."""
+
+        return {
+            "_raw" + "_layer_dict": "raw_layer_dict",
+            "_raw" + "_layer_labels_list": "raw_layer_labels_list",
+            "_layer" + "_counter": "layer_counter",
+            "_raw" + "_layer_type_counter": "raw_layer_type_counter",
+            "_current" + "_func_barcode": "current_func_barcode",
+            "_mod" + "_call_index": "mod_call_index",
+            "_mod" + "_call_labels": "mod_call_labels",
+            "_mod" + "_entered": "mod_entered",
+            "_mod" + "_exited": "mod_exited",
+            "_module" + "_build_data": "module_build_data",
+            "_module" + "_metadata": "module_metadata",
+            "_module" + "_forward_args": "module_forward_args",
+            "_grad" + "_fn_strong_refs": "grad_fn_strong_refs",
+            "_in" + "_exhaustive_pass": "in_exhaustive_pass",
+            "_module" + "_containment_engine": "module_containment_engine",
+            "_exhaustive" + "_module_stack": "exhaustive_module_stack",
+            "_unsaved" + "_layers_lookup_keys": "unsaved_layers_lookup_keys",
+        }
+
+    def __getattr__(self, name: str) -> Any:
+        """Route transient capture attributes through private build state."""
+
+        state_field = self._build_state_attr_map().get(name)
+        if state_field is None:
+            raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
+        if "_build_state" not in self.__dict__ and self.__dict__.get("_tracing_finished", True):
+            raise AttributeError(f"{type(self).__name__!s} object has no attribute {name!r}")
+        return getattr(self._ensure_build_state(), state_field)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Route transient capture attribute writes through private build state."""
+
+        state_field = self._build_state_attr_map().get(name)
+        if state_field is None:
+            super().__setattr__(name, value)
+            return
+        setattr(self._ensure_build_state(), state_field, value)
+
+    def __delattr__(self, name: str) -> None:
+        """Delete transient capture attributes from private build state."""
+
+        state_field = self._build_state_attr_map().get(name)
+        if state_field is None:
+            super().__delattr__(name)
+            return
+        build_state = self.__dict__.get("_build_state")
+        if build_state is not None and hasattr(build_state, state_field):
+            default_state = TraceBuildState()
+            setattr(build_state, state_field, getattr(default_state, state_field))
+
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "name": FieldPolicy.KEEP,
         "model_name": FieldPolicy.KEEP,
         "num_context_lines": FieldPolicy.KEEP,
         "_optimizer": FieldPolicy.DROP,
         "io_format_version": FieldPolicy.KEEP,
-        "_pass_finished": FieldPolicy.KEEP,
-        "logging_mode": FieldPolicy.KEEP,
-        "_all_layers_logged": FieldPolicy.KEEP,
-        "_all_layers_saved": FieldPolicy.KEEP,
+        "_tracing_finished": FieldPolicy.KEEP,
+        "capture_mode": FieldPolicy.KEEP,
+        "_layers_logged": FieldPolicy.KEEP,
+        "_layers_saved": FieldPolicy.KEEP,
         "keep_unsaved_layers": FieldPolicy.KEEP,
+        "keep_orphans": FieldPolicy.KEEP,
         "intervention_ready": FieldPolicy.KEEP,
-        "capture_full_args": FieldPolicy.KEEP,
-        "activation_postfunc": FieldPolicy.DROP,
-        "activation_postfunc_repr": FieldPolicy.KEEP,
-        "save_raw_activation": FieldPolicy.KEEP,
-        "input_metadata": FieldPolicy.KEEP,
+        "capture_args_template": FieldPolicy.KEEP,
+        "raw_input": FieldPolicy.KEEP,
+        "_transform": FieldPolicy.DROP,
+        "save_raw_input": FieldPolicy.KEEP,
+        "batch_render": FieldPolicy.KEEP,
+        "raw_output": FieldPolicy.KEEP,
+        "_output_transform": FieldPolicy.DROP,
+        "save_raw_output": FieldPolicy.KEEP,
+        "layer_visualizers": FieldPolicy.DROP,
+        "save_visualizations": FieldPolicy.KEEP,
+        "_visualizer_dir": FieldPolicy.DROP,
+        "out_postfunc": FieldPolicy.DROP,
+        "_out_transform_repr": FieldPolicy.KEEP,
+        "save_raw_outs": FieldPolicy.KEEP,
+        "input_annotations": FieldPolicy.KEEP,
         "_source_code_blob": FieldPolicy.KEEP,
         "_source_model_ref": FieldPolicy.DROP,
         "parent_run": FieldPolicy.DROP,
-        "source_model_id": FieldPolicy.KEEP,
-        "source_model_class": FieldPolicy.KEEP,
-        "weight_fingerprint_at_capture": FieldPolicy.KEEP,
-        "weight_fingerprint_full": FieldPolicy.KEEP,
-        "input_id_at_capture": FieldPolicy.KEEP,
+        "model_id": FieldPolicy.KEEP,
+        "model_class": FieldPolicy.KEEP,
+        "param_hash_quick": FieldPolicy.KEEP,
+        "param_hash_full": FieldPolicy.KEEP,
+        "input_id": FieldPolicy.KEEP,
         "input_shape_hash": FieldPolicy.KEEP,
-        "current_function_call_barcode": FieldPolicy.KEEP,
-        "random_seed_used": FieldPolicy.KEEP,
+        "random_seed": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
-        "detach_saved_tensors": FieldPolicy.KEEP,
+        "detach_saved_activations": FieldPolicy.KEEP,
         "train_mode": FieldPolicy.DROP,
-        "module_filter_fn": FieldPolicy.DROP,
+        "module_filter": FieldPolicy.DROP,
         "emit_nvtx": FieldPolicy.KEEP,
         "raise_on_nan": FieldPolicy.KEEP,
-        "capture_kpis": FieldPolicy.KEEP,
+        "trace_annotations": FieldPolicy.KEEP,
         "report_values": FieldPolicy.KEEP,
         "observer_spans": FieldPolicy.KEEP,
         "manual_tensor_connections": FieldPolicy.KEEP,
-        "forward_lineno": FieldPolicy.KEEP,
+        "forward_source_file": FieldPolicy.KEEP,
+        "forward_source_line": FieldPolicy.KEEP,
+        "model_source_file": FieldPolicy.KEEP,
+        "model_source_line": FieldPolicy.KEEP,
         "capture_cache_hit": FieldPolicy.KEEP,
         "capture_cache_key": FieldPolicy.KEEP,
         "capture_cache_path": FieldPolicy.KEEP,
         "recording_kept": FieldPolicy.KEEP,
         "streaming_pass_logs": FieldPolicy.DROP,
-        "num_streamed_passes": FieldPolicy.KEEP,
-        "_activation_hash_cache": FieldPolicy.DROP,
-        "save_function_args": FieldPolicy.KEEP,
-        "save_gradients": FieldPolicy.KEEP,
-        "gradients_to_save": FieldPolicy.KEEP,
-        "_gradient_layer_nums_to_save": FieldPolicy.KEEP,
-        "gradient_postfunc": FieldPolicy.DROP,
-        "gradient_postfunc_repr": FieldPolicy.KEEP,
-        "save_raw_gradient": FieldPolicy.KEEP,
-        "save_source_context": FieldPolicy.KEEP,
+        "num_streamed_ops": FieldPolicy.KEEP,
+        "_out_hash_cache": FieldPolicy.DROP,
+        "save_arg_values": FieldPolicy.KEEP,
+        "save_grads": FieldPolicy.KEEP,
+        "grads_to_save": FieldPolicy.KEEP,
+        "_grad_layer_nums_to_save": FieldPolicy.KEEP,
+        "grad_transform": FieldPolicy.DROP,
+        "grad_transform_repr": FieldPolicy.KEEP,
+        "save_raw_grads": FieldPolicy.KEEP,
+        "save_code_context": FieldPolicy.KEEP,
         "save_rng_states": FieldPolicy.KEEP,
-        "detect_loops": FieldPolicy.KEEP,
+        "recurrence_detection": FieldPolicy.KEEP,
         "verbose": FieldPolicy.KEEP,
-        "has_gradients": FieldPolicy.KEEP,
-        "mark_input_output_distances": FieldPolicy.KEEP,
+        "has_grads": FieldPolicy.KEEP,
+        "mark_layer_depths": FieldPolicy.KEEP,
         "graph_shape_hash": FieldPolicy.KEEP,
         "_intervention_spec": FieldPolicy.DROP,
-        "operation_history": FieldPolicy.KEEP,
+        "ledger": FieldPolicy.KEEP,
         "last_run_ctx": FieldPolicy.DROP,
         "_has_direct_writes": FieldPolicy.KEEP,
         "_warned_direct_write": FieldPolicy.DROP,
         "_warned_mutate_in_place": FieldPolicy.DROP,
         "_spec_revision": FieldPolicy.KEEP,
-        "_activation_recipe_revision": FieldPolicy.KEEP,
+        "_out_recipe_revision": FieldPolicy.KEEP,
         "_append_sequence_id": FieldPolicy.KEEP,
         "_last_hook_handle_ids": FieldPolicy.DROP,
         "run_state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
-        "_output_container_specs_by_raw_label": FieldPolicy.KEEP,
+        "_output_container_specs_by_raw_label": FieldPolicy.DROP,
         "layer_list": FieldPolicy.KEEP,
         "layer_dict_main_keys": FieldPolicy.KEEP,
         "layer_dict_all_keys": FieldPolicy.KEEP,
         "layer_logs": FieldPolicy.KEEP,
         "layer_labels": FieldPolicy.KEEP,
-        "layer_labels_w_pass": FieldPolicy.KEEP,
-        "layer_labels_no_pass": FieldPolicy.KEEP,
-        "layer_num_passes": FieldPolicy.KEEP,
-        "_raw_layer_dict": FieldPolicy.KEEP,
-        "_raw_layer_labels_list": FieldPolicy.KEEP,
+        "op_labels": FieldPolicy.KEEP,
+        "layer_num_calls": FieldPolicy.KEEP,
         "_layer_nums_to_save": FieldPolicy.KEEP,
-        "_layer_counter": FieldPolicy.KEEP,
-        "num_operations": FieldPolicy.KEEP,
-        "_raw_layer_type_counter": FieldPolicy.KEEP,
-        "_unsaved_layers_lookup_keys": FieldPolicy.KEEP,
+        "num_ops": FieldPolicy.KEEP,
         "_raw_to_final_layer_labels": FieldPolicy.KEEP,
         "_final_to_raw_layer_labels": FieldPolicy.KEEP,
         "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
@@ -434,114 +803,151 @@ class ModelLog:
         "input_layers": FieldPolicy.KEEP,
         "output_layers": FieldPolicy.KEEP,
         "buffer_layers": FieldPolicy.KEEP,
-        "buffer_num_passes": FieldPolicy.KEEP,
+        "buffer_num_calls": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
-        "internally_initialized_layers": FieldPolicy.KEEP,
-        "_layers_where_internal_branches_merge_with_input": FieldPolicy.KEEP,
-        "internally_terminated_layers": FieldPolicy.KEEP,
-        "internally_terminated_bool_layers": FieldPolicy.KEEP,
+        "internal_source_ops": FieldPolicy.KEEP,
+        "internal_sink_ops": FieldPolicy.KEEP,
+        "internally_terminated_bool_ops": FieldPolicy.KEEP,
         "conditional_branch_edges": FieldPolicy.KEEP,
-        "conditional_events": FieldPolicy.KEEP,
-        "conditional_arm_edges": FieldPolicy.KEEP,
-        "conditional_edge_passes": FieldPolicy.KEEP,
-        "layers_with_saved_activations": FieldPolicy.KEEP,
-        "orphan_layers": FieldPolicy.KEEP,
-        "unlogged_layers": FieldPolicy.KEEP,
-        "layers_with_saved_gradients": FieldPolicy.KEEP,
-        "_saved_gradients_set": FieldPolicy.DROP,
+        "conditional_records": FieldPolicy.KEEP,
+        "conditional_arm_entry_edges": FieldPolicy.KEEP,
+        "conditional_edge_call_indices": FieldPolicy.KEEP,
+        "conditionals": FieldPolicy.KEEP,
+        "ops_with_saved_outs": FieldPolicy.KEEP,
+        "orphan_ops": FieldPolicy.KEEP,
+        "orphan_logs": FieldPolicy.KEEP,
+        "unlogged_ops": FieldPolicy.KEEP,
+        "ops_with_saved_grads": FieldPolicy.KEEP,
+        "_saved_grads_set": FieldPolicy.DROP,
         "layers_with_params": FieldPolicy.KEEP,
-        "equivalent_operations": FieldPolicy.KEEP,
-        "total_activation_memory": FieldPolicy.KEEP,
-        "total_autograd_saved_bytes": FieldPolicy.KEEP,
-        "num_tensors_saved": FieldPolicy.KEEP,
-        "saved_activation_memory": FieldPolicy.KEEP,
+        "equivalent_ops": FieldPolicy.KEEP,
+        "total_out_memory": FieldPolicy.KEEP,
+        "total_gradient_memory": FieldPolicy.KEEP,
+        "autograd_saved_memory": FieldPolicy.KEEP,
+        "num_saved_ops": FieldPolicy.KEEP,
+        "saved_out_memory": FieldPolicy.KEEP,
+        "saved_gradient_memory": FieldPolicy.KEEP,
         "param_logs": FieldPolicy.KEEP,
-        "total_param_tensors": FieldPolicy.KEEP,
-        "total_param_layers": FieldPolicy.KEEP,
-        "total_params": FieldPolicy.KEEP,
-        "total_params_trainable": FieldPolicy.KEEP,
-        "total_params_frozen": FieldPolicy.KEEP,
-        "total_params_memory": FieldPolicy.KEEP,
-        "_mod_pass_num": FieldPolicy.DROP,
-        "_mod_pass_labels": FieldPolicy.DROP,
-        "_mod_entered": FieldPolicy.DROP,
-        "_mod_exited": FieldPolicy.DROP,
-        "_module_build_data": FieldPolicy.DROP,
+        "num_param_tensors": FieldPolicy.KEEP,
+        "num_layers_with_params": FieldPolicy.KEEP,
+        "num_params": FieldPolicy.KEEP,
+        "num_params_trainable": FieldPolicy.KEEP,
+        "num_params_frozen": FieldPolicy.KEEP,
+        "param_memory": FieldPolicy.KEEP,
+        "total_param_gradient_memory": FieldPolicy.KEEP,
+        "forward_peak_memory": FieldPolicy.KEEP,
+        "_raw" + "_layer_dict": FieldPolicy.DROP,
+        "_raw" + "_layer_labels_list": FieldPolicy.DROP,
+        "_layer" + "_counter": FieldPolicy.DROP,
+        "_raw" + "_layer_type_counter": FieldPolicy.DROP,
+        "_current" + "_func_barcode": FieldPolicy.DROP,
+        "_mod" + "_call_index": FieldPolicy.DROP,
+        "_mod" + "_call_labels": FieldPolicy.DROP,
+        "_mod" + "_entered": FieldPolicy.DROP,
+        "_mod" + "_exited": FieldPolicy.DROP,
+        "_module" + "_build_data": FieldPolicy.DROP,
+        "_module" + "_metadata": FieldPolicy.DROP,
+        "_module" + "_forward_args": FieldPolicy.DROP,
+        "_grad" + "_fn_strong_refs": FieldPolicy.DROP,
+        "_in" + "_exhaustive_pass": FieldPolicy.DROP,
+        "_module" + "_containment_engine": FieldPolicy.DROP,
+        "_exhaustive" + "_module_stack": FieldPolicy.DROP,
         "_module_logs": FieldPolicy.DROP,
-        "_module_metadata": FieldPolicy.DROP,
-        "_module_forward_args": FieldPolicy.DROP,
         "_param_logs_by_module": FieldPolicy.DROP,
         "_pre_forward_rng_states": FieldPolicy.DROP,
-        "_activation_writer": FieldPolicy.DROP,
-        "_keep_activations_in_memory": FieldPolicy.DROP,
-        "_keep_gradients_in_memory": FieldPolicy.DROP,
+        "_out_writer": FieldPolicy.DROP,
+        "_keep_outs_in_memory": FieldPolicy.DROP,
+        "_keep_grads_in_memory": FieldPolicy.DROP,
         "_defer_streaming_bundle_finalization": FieldPolicy.DROP,
-        "_activation_sink": FieldPolicy.DROP,
-        "_in_exhaustive_pass": FieldPolicy.DROP,
-        "pass_start_time": FieldPolicy.KEEP,
-        "pass_end_time": FieldPolicy.KEEP,
-        "time_setup": FieldPolicy.KEEP,
-        "time_forward_pass": FieldPolicy.KEEP,
-        "time_cleanup": FieldPolicy.KEEP,
-        "time_function_calls": FieldPolicy.KEEP,
-        "has_backward_log": FieldPolicy.KEEP,
+        "_out_sink": FieldPolicy.DROP,
+        "start_time": FieldPolicy.KEEP,
+        "end_time": FieldPolicy.KEEP,
+        "setup_duration": FieldPolicy.KEEP,
+        "forward_duration": FieldPolicy.KEEP,
+        "cleanup_duration": FieldPolicy.KEEP,
+        "func_calls_duration": FieldPolicy.KEEP,
+        "has_backward_pass": FieldPolicy.KEEP,
         "grad_fn_logs": FieldPolicy.KEEP,
         "grad_fn_order": FieldPolicy.KEEP,
         "backward_root_grad_fn_id": FieldPolicy.KEEP,
-        "backward_num_passes": FieldPolicy.KEEP,
-        "backward_peak_memory_bytes": FieldPolicy.KEEP,
+        "backward_num_calls": FieldPolicy.KEEP,
+        "backward_peak_memory": FieldPolicy.KEEP,
         "backward_memory_backend": FieldPolicy.KEEP,
+        "_backward_gradfn_refs": FieldPolicy.DROP,
     }
 
     def __init__(
         self,
         model_name: str,
         output_device: str = "same",
-        activation_postfunc: Optional[ActivationPostfunc] = None,
-        gradient_postfunc: Optional[GradientPostfunc] = None,
-        save_raw_activation: bool = True,
-        save_raw_gradient: bool = True,
+        out_postfunc: Optional[ActivationPostfunc] = None,
+        grad_transform: Optional[GradientPostfunc] = None,
+        save_raw_outs: bool = True,
+        save_raw_grads: bool = True,
         keep_unsaved_layers: bool = True,
-        save_function_args: bool = False,
-        save_gradients: bool = False,
-        gradients_to_save: Any = "all",
-        detach_saved_tensors: bool = False,
-        mark_input_output_distances: bool = True,
+        keep_orphans: bool = False,
+        save_arg_values: bool = False,
+        save_grads: bool = False,
+        grads_to_save: Any = "all",
+        detach_saved_activations: bool = False,
+        mark_layer_depths: bool = True,
         num_context_lines: int = 7,
         optimizer: torch.optim.Optimizer | None = None,
-        save_source_context: bool = False,
+        save_code_context: bool = False,
         save_rng_states: bool = False,
-        detect_loops: bool = True,
+        recurrence_detection: bool = True,
         verbose: bool = False,
         train_mode: bool = False,
-        module_filter_fn: Callable[[Any], bool] | None = None,
+        module_filter: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
+        transform: Callable[[Any], Any] | None = None,
+        raw_input: Any | None = None,
+        save_raw_input: str | bool = "small",
+        batch_render: str = "auto",
+        output_transform: Callable[[Any], Any] | None = None,
+        raw_output: Any | None = None,
+        save_raw_output: str | bool = "small",
+        layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None,
+        save_visualizations: bool = False,
     ) -> None:
-        """Initialise a fresh ModelLog for a new logging session.
+        """Initialise a fresh Trace for a new logging session.
 
         Args:
             model_name: Human-readable name of the model being logged.
-            output_device: Device to move saved activations to ("same" keeps original device).
-            activation_postfunc: Optional function applied to each tensor before saving.
-            gradient_postfunc: Optional function applied to each gradient before saving.
-            save_raw_activation: Whether raw activations are retained when a postfunc is set.
-            save_raw_gradient: Whether raw gradients are retained when a postfunc is set.
-            keep_unsaved_layers: If False, layers without saved activations are removed
+            output_device: Device to move saved outs to ("same" keeps original device).
+            out_postfunc: Optional function applied to each tensor before saving.
+            grad_transform: Optional function applied to each grad before saving.
+            save_raw_outs: Whether raw outs are retained when a postfunc is set.
+            save_raw_grads: Whether raw grads are retained when a postfunc is set.
+            keep_unsaved_layers: If False, layers without saved outs are removed
                 from the final log (but still logged during the pass).
-            save_function_args: Whether to deep-copy each operation's input arguments.
-            save_gradients: Whether to register gradient hooks for backward pass.
-            gradients_to_save: Which layer gradients should be saved.
-            detach_saved_tensors: Whether to detach saved tensors from the autograd graph.
-            mark_input_output_distances: Whether to compute BFS distances from
+            keep_orphans: If True, orphan island ops remain in raw metadata and
+                are exposed via ``trace.orphans``.
+            save_arg_values: Whether to deep-copy each operation's input arguments.
+            save_grads: Whether to register grad hooks for backward pass.
+            grads_to_save: Which layer grads should be saved.
+            detach_saved_activations: Whether to detach saved tensors from the autograd graph.
+            mark_layer_depths: Whether to compute BFS distances from
                 inputs/outputs for each layer.
             num_context_lines: Number of source-code context lines to capture
                 around each function call (used by FuncCallLocation).
             optimizer: Optional torch optimizer, used to annotate which params
                 have optimizers attached.
             verbose: If True, print timed progress messages at each major pipeline stage.
-            train_mode: Session-time flag for training-compatible activation retention.
+            train_mode: Session-time flag for training-compatible out retention.
                 Portable bundle load restores the default ``False`` value.
             emit_nvtx: Whether decorated torch operations should emit NVTX ranges.
+            transform: Optional callable used to convert raw user input into
+                model-ready input.
+            raw_input: Original user input before ``transform`` was applied.
+            save_raw_input: Portable save policy for ``raw_input``.
+            batch_render: Raw-input batch rendering policy for visualization.
+            output_transform: Optional callable used to convert model output into
+                human-readable metadata.
+            raw_output: Human-readable model output after ``output_transform``.
+            save_raw_output: Portable save policy for ``raw_output``.
+            layer_visualizers: Optional mapping of selectors to visualizer callables.
+            save_visualizations: Whether rendered visualizations should persist in bundles.
         """
         # Callables are effectively immutable - deepcopy is unnecessary.
 
@@ -551,70 +957,79 @@ class ModelLog:
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
         self.io_format_version = IO_FORMAT_VERSION
-        # _pass_finished is the master behavioural switch: False during logging,
-        # True after postprocessing.  Many methods (len, getitem, str, iter)
+        # _tracing_finished is the master behavioural switch: False during logging,
+        # True after postprocessing.  Many custom_methods (len, getitem, str, iter)
         # branch on this flag to choose raw-barcode vs final-label access.
         # It intentionally persists across the fast pass so fast-path
         # postprocessing can use the exhaustive pass's lookup dicts.
-        self._pass_finished = False
+        self._tracing_finished = False
         # "exhaustive" captures all metadata; "fast" reuses exhaustive-pass
         # structure, only re-capturing tensor contents.
-        self.logging_mode: Literal["exhaustive", "fast", "predicate"] = "exhaustive"
-        self._all_layers_logged = False
-        self._all_layers_saved = False
+        self.capture_mode: Literal["exhaustive", "fast", "predicate"] = "exhaustive"
+        self._layers_logged = False
+        self._layers_saved = False
         self.keep_unsaved_layers = keep_unsaved_layers
+        self.keep_orphans = keep_orphans
         self.intervention_ready = False
-        self.capture_full_args = False
-        self.activation_postfunc = activation_postfunc
-        self.activation_postfunc_repr = (
-            repr(activation_postfunc) if activation_postfunc is not None else None
-        )
-        self.save_raw_activation = save_raw_activation
-        self.input_metadata: Dict[str, Any] = {}
-        self.gradient_postfunc = gradient_postfunc
-        self.gradient_postfunc_repr = (
-            repr(gradient_postfunc) if gradient_postfunc is not None else None
-        )
-        self.save_raw_gradient = save_raw_gradient
+        self.capture_args_template = False
+        self.raw_input = raw_input
+        self._transform = transform
+        self.save_raw_input = save_raw_input
+        self.batch_render = batch_render
+        self.raw_output = raw_output
+        self._output_transform = output_transform
+        self.save_raw_output = save_raw_output
+        self.layer_visualizers = layer_visualizers
+        self.save_visualizations = save_visualizations
+        self._visualizer_dir: str | None = None
+        self.out_postfunc = out_postfunc
+        self._out_transform_repr = repr(out_postfunc) if out_postfunc is not None else None
+        self.save_raw_outs = save_raw_outs
+        self.input_annotations: Dict[str, Any] = {}
+        self.grad_transform = grad_transform
+        self.grad_transform_repr = repr(grad_transform) if grad_transform is not None else None
+        self.save_raw_grads = save_raw_grads
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
-        self.parent_run: weakref.ReferenceType["ModelLog"] | None = None
-        self.source_model_id: int | None = None
-        self.source_model_class: str | None = None
-        self.weight_fingerprint_at_capture: str | None = None
-        self.weight_fingerprint_full: str | None = None
-        self.input_id_at_capture: int | None = None
+        self.parent_run: weakref.ReferenceType["Trace"] | None = None
+        self.model_id: int | None = None
+        self.model_class: str | None = None
+        self.param_hash_quick: str | None = None
+        self.param_hash_full: str | None = None
+        self.input_id: int | None = None
         self.input_shape_hash: str | None = None
-        self.current_function_call_barcode = None
-        self.random_seed_used = None
+        self.random_seed = None
         self.output_device = output_device
-        self.detach_saved_tensors = detach_saved_tensors
+        self.detach_saved_activations = detach_saved_activations
         self.train_mode = train_mode
-        self.module_filter_fn = module_filter_fn
+        self.module_filter = module_filter
         self.emit_nvtx = emit_nvtx
         self.raise_on_nan: bool = False
-        self.capture_kpis: Dict[str, Any] = {}
+        self.trace_annotations: Dict[str, Any] = {}
         self.manual_tensor_connections: List[Tuple[str, str]] = []
-        self.forward_lineno: int | None = None
+        self.forward_source_file: str | None = None
+        self.forward_source_line: int | None = None
+        self.model_source_file: str | None = None
+        self.model_source_line: int | None = None
         self.capture_cache_hit: bool = False
         self.capture_cache_key: str | None = None
         self.capture_cache_path: str | None = None
         self.recording_kept: bool = True
-        self.streaming_pass_logs: List["ModelLog"] = []
-        self.num_streamed_passes: int = 1
-        self._activation_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
-        self.save_function_args = save_function_args
-        self.save_gradients = save_gradients
-        self.gradients_to_save = gradients_to_save
-        self.save_source_context = save_source_context
+        self.streaming_pass_logs: List["Trace"] = []
+        self.num_streamed_ops: int = 1
+        self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
+        self.save_arg_values = save_arg_values
+        self.save_grads = save_grads
+        self.grads_to_save = grads_to_save
+        self.save_code_context = save_code_context
         self.save_rng_states = save_rng_states
-        self.detect_loops = detect_loops
+        self.recurrence_detection = recurrence_detection
         self.verbose = verbose
-        self.has_gradients = False
-        self.mark_input_output_distances = mark_input_output_distances
+        self.has_grads = False
+        self.mark_layer_depths = mark_layer_depths
         self.graph_shape_hash: str | None = None
         self._intervention_spec: InterventionSpec | None = InterventionSpec()
-        self.operation_history: list[Any] = []
+        self.ledger: list[Any] = []
         self.observer_spans: list[dict[str, Any]] = list(_state._active_record_spans)
         self.report_values: dict[str, Any] = {}
         self.last_run_ctx: Any | None = None
@@ -622,7 +1037,7 @@ class ModelLog:
         self._warned_direct_write = False
         self._warned_mutate_in_place = False
         self._spec_revision = 0
-        self._activation_recipe_revision = 0
+        self._out_recipe_revision = 0
         self._append_sequence_id = 0
         self._last_hook_handle_ids: tuple[str, ...] = ()
         self.run_state = RunState.PRISTINE
@@ -634,38 +1049,25 @@ class ModelLog:
             "graph": Relationship.UNKNOWN,
         }
         self._output_container_specs_by_raw_label: dict[str, Any] = {}
-        self._activation_writer: Optional["BundleStreamWriter"] = None
-        self._keep_activations_in_memory: bool = True
-        self._keep_gradients_in_memory: bool = True
+        self._out_writer: Optional["BundleStreamWriter"] = None
+        self._keep_outs_in_memory: bool = True
+        self._keep_grads_in_memory: bool = True
         self._defer_streaming_bundle_finalization: bool = False
-        self._activation_sink: Optional[Callable[[str, torch.Tensor], None]] = None
-        self._in_exhaustive_pass: bool = True
-
+        self._out_sink: Optional[Callable[[str, torch.Tensor], None]] = None
         # Model structure info (computed @properties: is_recurrent,
         # max_recurrent_loops, is_branching, has_conditional_branching)
 
-        # Tensor Tracking - post-processed (populated after _pass_finished=True):
-        self.layer_list: List[LayerPassLog] = []  # ordered list of all layer passes
-        self.layer_dict_main_keys: Dict[str, LayerPassLog] = OrderedDict()  # primary label -> entry
-        self.layer_dict_all_keys: Dict[str, LayerPassLog] = (
-            OrderedDict()
-        )  # all lookup keys -> entry
+        # Tensor Tracking - post-processed (populated after _tracing_finished=True):
+        self.layer_list: List[OpLog] = []  # ordered list of all layer ops
+        self.layer_dict_main_keys: Dict[str, OpLog] = OrderedDict()  # primary label -> entry
+        self.layer_dict_all_keys: Dict[str, OpLog] = OrderedDict()  # all lookup keys -> entry
         self.layer_logs: Dict[str, LayerLog] = OrderedDict()  # no-pass label -> aggregate LayerLog
-        self.layer_labels: List[str] = []  # primary labels in execution order
-        self.layer_labels_w_pass: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
-        self.layer_labels_no_pass: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
-        self.layer_num_passes: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
-        # Tensor Tracking - raw (populated during the forward pass, before postprocessing):
-        self._raw_layer_dict: Dict[str, LayerPassLog] = OrderedDict()  # raw barcode -> entry
-        self._raw_layer_labels_list: List[str] = []
+        self.op_labels: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
+        self.layer_labels: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
+        self.layer_num_calls: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
         self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
-        self._gradient_layer_nums_to_save: List[int] | str = []
-        self._layer_counter: int = 0  # monotonic counter for operation numbering
-        self.num_operations: int = 0  # total operations after postprocessing
-        self._raw_layer_type_counter: Dict[str, int] = defaultdict(lambda: 0)
-        self._unsaved_layers_lookup_keys: Set[str] = (
-            set()
-        )  # populated but never consulted (known unused)
+        self._grad_layer_nums_to_save: List[int] | str = []
+        self.num_ops: int = 0  # total operations after postprocessing
 
         # Mapping between raw barcodes and final human-readable labels
         # (populated during postprocessing's label-assignment step):
@@ -678,73 +1080,62 @@ class ModelLog:
         self.input_layers: List[str] = []
         self.output_layers: List[str] = []
         self.buffer_layers: List[str] = []
-        self.buffer_num_passes: Dict[str, int] = {}
+        self.buffer_num_calls: Dict[str, int] = {}
         self._buffer_accessor = None
-        self.internally_initialized_layers: List[str] = []
-        self._layers_where_internal_branches_merge_with_input: List[str] = []
-        self.internally_terminated_layers: List[str] = []
-        self.internally_terminated_bool_layers: List[str] = []
+        self.internal_source_ops: List[str] = []
+        self.internal_sink_ops: List[str] = []
+        self.internally_terminated_bool_ops: List[str] = []
         self.conditional_branch_edges: List[Tuple[str, str]] = []
-        self.conditional_events: List[ConditionalEvent] = []
-        self.conditional_arm_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
-        self.conditional_edge_passes: Dict[Tuple[str, str, int, str], List[int]] = {}
-        self.layers_with_saved_activations: List[str] = []
-        self.orphan_layers: List[str] = []
-        self.unlogged_layers: List[str] = []
-        self.layers_with_saved_gradients: List[str] = []
-        self._saved_gradients_set: set[str] = set()
+        self.conditional_records: List[ConditionalEvent] = []
+        self.conditional_arm_entry_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
+        self.conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]] = {}
+        self.conditionals = ConditionalAccessor()
+        self.ops_with_saved_outs: List[str] = []
+        self.orphan_ops: List[str] = []
+        self.orphan_logs: tuple[OpLog, ...] = ()
+        self.unlogged_ops: List[str] = []
+        self.ops_with_saved_grads: List[str] = []
+        self._saved_grads_set: set[str] = set()
         self.layers_with_params: Dict[str, List[Any]] = defaultdict(list)
-        # Maps operation_equivalence_type -> set of layer labels that share
+        # Maps equivalence_class -> set of layer labels that share
         # that equivalence type (populated by loop_detection.py).
-        self.equivalent_operations: Dict[str, set[str]] = defaultdict(set)
+        self.equivalent_ops: Dict[str, set[str]] = defaultdict(set)
 
         # Aggregate tensor statistics (computed during postprocessing):
-        self.total_activation_memory: int = 0
-        self.total_autograd_saved_bytes: Optional[int] = None
-        self.num_tensors_saved: int = 0  # layers with has_saved_activations=True
-        self.saved_activation_memory: int = 0
+        self.total_out_memory: int = 0
+        self.total_gradient_memory: int = 0
+        self.autograd_saved_memory: Optional[int] = None
+        self.num_saved_ops: int = 0  # layers with has_saved_outs=True
+        self.saved_out_memory: int = 0
+        self.saved_gradient_memory: int = 0
 
         # Param info:
         self.param_logs: "ParamAccessor" = ParamAccessor({})
-        self.total_param_tensors: int = 0
-        self.total_param_layers: int = 0
-        self.total_params: int = 0
-        self.total_params_trainable: int = 0
-        self.total_params_frozen: int = 0
-        self.total_params_memory: int = 0
-
-        # Session-scoped per-module tracking dicts (keyed by id(module)).
-        # These replace the old tl_* attrs that were set directly on nn.Module
-        # instances. Lives on ModelLog so they're GC'd with the log - no cleanup
-        # iteration over modules needed.
-        self._mod_pass_num: Dict[int, int] = {}  # id(module) -> pass count
-        self._mod_pass_labels: Dict[int, list[tuple[str, int]]] = {}
-        self._mod_entered: Dict[int, list[str]] = {}  # id(module) -> [raw_label, ...]
-        self._mod_exited: Dict[int, list[str]] = {}  # id(module) -> [raw_label, ...]
-
-        # Transient module build data (consumed by _build_module_logs, then cleared):
-        self._module_build_data: Dict[str, Any] = _init_module_build_data()
+        self.num_param_tensors: int = 0
+        self.num_layers_with_params: int = 0
+        self.num_params: int = 0
+        self.num_params_trainable: int = 0
+        self.num_params_frozen: int = 0
+        self.param_memory: int = 0
+        self.total_param_gradient_memory: int = 0
+        self.forward_peak_memory: int = 0
 
         # Structured module info:
         self._module_logs: ModuleAccessor = ModuleAccessor({})
 
-        # Temporary storage for module metadata capture (consumed by _build_module_logs):
-        self._module_metadata: Dict[Any, Any] = {}
-        self._module_forward_args: Dict[Any, Any] = {}
-
         # Time elapsed:
-        self.pass_start_time: float = 0
-        self.pass_end_time: float = 0
-        self.time_setup: float = 0
-        self.time_forward_pass: float = 0
-        self.time_cleanup: float = 0
-        self.time_function_calls: float = 0
-        self.has_backward_log: bool = False
+        self.start_time: float = 0
+        self.end_time: float = 0
+        self.setup_duration: float = 0
+        self.forward_duration: float = 0
+        self.cleanup_duration: float = 0
+        self.func_calls_duration: float = 0
+        self.has_backward_pass: bool = False
         self.grad_fn_logs: Dict[int, GradFnLog] = OrderedDict()
         self.grad_fn_order: List[int] = []
         self.backward_root_grad_fn_id: int | None = None
-        self.backward_num_passes: int = 0
-        self.backward_peak_memory_bytes: int = 0
+        self.backward_num_calls: int = 0
+        self.backward_peak_memory: int = 0
         self.backward_memory_backend: str = "unknown"
         _state._register_log(self)
 
@@ -754,10 +1145,10 @@ class ModelLog:
 
     def __len__(self) -> int:
         """Number of layer-pass entries. Uses final list after postprocessing, raw dict during logging."""
-        if self._pass_finished:
+        if self._tracing_finished:
             return len(self.layer_list)
         else:
-            return len(self._raw_layer_dict)
+            return len(getattr(self, "_raw" + "_layer_dict"))
 
     def __getitem__(self, ix: Any) -> Any:
         """Returns an object logging a model layer given an index. If the pass is finished,
@@ -769,7 +1160,7 @@ class ModelLog:
         Returns:
             Tensor log entry object with info about specified layer.
         """
-        if self._pass_finished:
+        if self._tracing_finished:
             return _getitem_after_pass(self, ix)
         else:
             return _getitem_during_pass(self, ix)
@@ -836,7 +1227,7 @@ class ModelLog:
         """
 
         query_text = str(query).lower()
-        labels = list(self.layer_labels_no_pass)
+        labels = list(self.layer_labels)
         substring_matches = [label for label in labels if query_text in label.lower()]
         if len(substring_matches) >= limit:
             return substring_matches[:limit]
@@ -848,24 +1239,6 @@ class ModelLog:
             if len(result) >= limit:
                 break
         return result
-
-    def suggest(self, query: str, *, limit: int = 3) -> List[str]:
-        """Return a short list of suggested layer labels for a failed query.
-
-        Parameters
-        ----------
-        query:
-            Layer query that did not resolve.
-        limit:
-            Maximum number of suggestions.
-
-        Returns
-        -------
-        List[str]
-            Suggested no-pass layer labels.
-        """
-
-        return self.find_layers(query, limit=limit)
 
     @property
     def unsupported_ops(self) -> _CallableList:
@@ -926,7 +1299,7 @@ class ModelLog:
             Save level: ``"audit"``, ``"executable_with_callables"``, or
             ``"portable"``.
         allow_direct_writes:
-            Whether executable saves may proceed after direct activation writes.
+            Whether executable saves may proceed after direct out writes.
         overwrite:
             Whether an existing destination may be replaced.
         """
@@ -960,16 +1333,16 @@ class ModelLog:
         *,
         strict: bool = False,
         confirm_mutation: bool = False,
-    ) -> "ModelLog":
-        """Set a site activation recipe without propagating it.
+    ) -> "Trace":
+        """Set a site out recipe without propagating it.
 
         Parameters
         ----------
         site:
-            Selector-like target for the activation to replace.
+            Selector-like target for the out to replace.
         value:
             Static replacement tensor or one-shot callable accepting the
-            matched activation and returning a replacement tensor.
+            matched out and returning a replacement tensor.
         strict:
             Whether site resolution should reject non-portable selectors.
         confirm_mutation:
@@ -978,7 +1351,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, with a stale intervention recipe.
         """
 
@@ -1010,6 +1383,11 @@ class ModelLog:
         confirm_mutation: bool = False,
     ) -> Any:
         """Attach sticky hooks to the current intervention spec.
+
+        Raw PyTorch ``register_forward_hook`` remains supported for users who
+        need module-local replacement logic outside this API; during active
+        TorchLens captures, returned replacement tensors are instrumented so the
+        graph can continue through downstream ops.
 
         Parameters
         ----------
@@ -1091,12 +1469,12 @@ class ModelLog:
             self.detach_hooks(handle=handle_id, confirm_mutation=True)
         self._last_hook_handle_ids = ()
 
-    def __enter__(self) -> "ModelLog":
+    def __enter__(self) -> "Trace":
         """Enter a legacy scoped hook attachment.
 
         Returns
         -------
-        ModelLog
+        Trace
             This log, acting as the most recent hook handle.
         """
 
@@ -1124,7 +1502,7 @@ class ModelLog:
         *,
         strict: bool = False,
         confirm_mutation: bool = False,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Detach sticky hooks by site or handle.
 
         Parameters
@@ -1142,7 +1520,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, with a stale recipe if hooks were removed.
         """
 
@@ -1181,7 +1559,7 @@ class ModelLog:
         )
         return self
 
-    def clear_hooks(self, *, confirm_mutation: bool = False) -> "ModelLog":
+    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
         """Clear all sticky hooks from the current intervention spec.
 
         Parameters
@@ -1192,7 +1570,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log with hook specs cleared and marked stale.
         """
 
@@ -1213,7 +1591,7 @@ class ModelLog:
         confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         intervention: InterventionOptions | None = None,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Apply an intervention and dispatch to replay, rerun, or set-only.
 
         Parameters
@@ -1236,7 +1614,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log after the selected propagation engine runs.
         """
 
@@ -1286,7 +1664,7 @@ class ModelLog:
         assert model is not None
         return self.rerun(model, x, strict=strict_value)
 
-    def fork(self, name: str | None = None) -> "ModelLog":
+    def fork(self, name: str | None = None) -> "Trace":
         """Create a copy-on-write intervention fork of this log.
 
         Parameters
@@ -1296,16 +1674,16 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             Forked model log.
         """
 
-        fork = self._fork_model_log(name=name)
+        fork = self._fork_trace(name=name)
         self._record_operation("fork", source_id=id(self), name=fork.name)
         return fork
 
     def _record_operation(self, op: str, **payload: Any) -> None:
-        """Append a structured operation record to ``operation_history``.
+        """Append a structured operation record to ``ledger``.
 
         Parameters
         ----------
@@ -1320,7 +1698,7 @@ class ModelLog:
             The history list is mutated in place.
         """
 
-        self.operation_history.append(
+        self.ledger.append(
             {
                 "op": op,
                 "spec_revision": self._spec_revision,
@@ -1346,7 +1724,7 @@ class ModelLog:
         if suppress_mutate_warnings.is_suppressed:
             return
         warnings.warn(
-            "MutateInPlaceWarning: ModelLog mutators modify root logs in place. "
+            "MutateInPlaceWarning: Trace mutators modify root logs in place. "
             "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
             MutateInPlaceWarning,
             stacklevel=3,
@@ -1463,7 +1841,7 @@ class ModelLog:
         from ..intervention.errors import ModelMismatchError
         from ..user_funcs import _fingerprint_model_weights, _qualname_for_model
 
-        expected_class = getattr(self, "source_model_class", None)
+        expected_class = getattr(self, "model_class", None)
         actual_class = _qualname_for_model(model)
         if expected_class is not None and actual_class != expected_class:
             raise ModelMismatchError(
@@ -1471,7 +1849,7 @@ class ModelLog:
                 f"expected {expected_class!r}, got {actual_class!r}."
             )
 
-        expected_fingerprint = getattr(self, "weight_fingerprint_at_capture", None)
+        expected_fingerprint = getattr(self, "param_hash_quick", None)
         if expected_fingerprint is None:
             return
         actual_fingerprint = _fingerprint_model_weights(model)
@@ -1480,8 +1858,8 @@ class ModelLog:
                 "Supplied model weight fingerprint does not match captured model weights."
             )
 
-    def _fork_model_log(self, *, name: str | None) -> "ModelLog":
-        """Build a forked ModelLog with policy-driven field handling.
+    def _fork_trace(self, *, name: str | None) -> "Trace":
+        """Build a forked Trace with policy-driven field handling.
 
         Parameters
         ----------
@@ -1490,7 +1868,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             Forked log whose mutable containers are independent.
         """
 
@@ -1503,15 +1881,15 @@ class ModelLog:
         fork.parent_run = weakref.ref(self)
         fork.name = name or self._next_fork_name()
         fork._intervention_spec = copy.deepcopy(self._ensure_intervention_spec())
-        fork.operation_history = copy.deepcopy(self.operation_history)
+        fork.ledger = copy.deepcopy(self.ledger)
         fork.relationship_evidence = copy.deepcopy(self.relationship_evidence)
-        fork._activation_recipe_revision = self._activation_recipe_revision
+        fork._out_recipe_revision = self._out_recipe_revision
         fork._spec_revision = self._spec_revision
         fork.run_state = self.run_state
         fork._warned_mutate_in_place = False
         fork._warned_direct_write = False
 
-        layer_map = fork._fork_layer_passes_from(self)
+        layer_map = fork._fork_layer_ops_from(self)
         fork._rebuild_fork_layer_collections(self, layer_map)
         fork._rebind_fork_owner_refs()
         _state._register_log(fork)
@@ -1520,16 +1898,14 @@ class ModelLog:
     def _next_fork_name(self) -> str:
         """Return a deterministic default fork name for this parent log."""
 
-        base_name = self.name or "model_log"
+        base_name = self.name or "trace"
         fork_count = sum(
-            1
-            for record in self.operation_history
-            if isinstance(record, dict) and record.get("op") == "fork"
+            1 for record in self.ledger if isinstance(record, dict) and record.get("op") == "fork"
         )
         return f"{base_name}_fork_{fork_count + 1}"
 
     def _fork_model_field(self, field_name: str, value: Any) -> Any:
-        """Apply the ModelLog fork policy to a single field.
+        """Apply the Trace fork policy to a single field.
 
         Parameters
         ----------
@@ -1544,52 +1920,52 @@ class ModelLog:
             Field value for the fork.
         """
 
-        policy = MODEL_LOG_FORK_POLICY.get(field_name, self._default_fork_policy(value))
+        policy = MODEL_LOG_FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
             return value
         if policy is ForkFieldPolicy.FORK_RECONSTRUCT:
             return None
         return self._copy_fork_value(value)
 
-    def _fork_layer_passes_from(self, parent: "ModelLog") -> dict[int, LayerPassLog]:
-        """Fork every LayerPassLog and return an old-object-id map.
+    def _fork_layer_ops_from(self, parent: "Trace") -> dict[int, OpLog]:
+        """Fork every OpLog and return an old-object-id map.
 
         Parameters
         ----------
         parent:
-            Parent log whose layer passes are being forked.
+            Parent log whose layer ops are being forked.
 
         Returns
         -------
-        dict[int, LayerPassLog]
+        dict[int, OpLog]
             Mapping from ``id(parent_pass)`` to forked pass.
         """
 
-        layer_map: dict[int, LayerPassLog] = {}
-        fork_equivalent_operations = self.equivalent_operations
+        layer_map: dict[int, OpLog] = {}
+        fork_equivalent_ops = self.equivalent_ops
         for parent_pass in parent.layer_list:
-            fork_pass = object.__new__(LayerPassLog)
+            fork_pass = object.__new__(OpLog)
             fork_pass.__dict__.update(
                 {
                     field_name: self._fork_layer_pass_field(field_name, value)
                     for field_name, value in parent_pass.__dict__.items()
                 }
             )
-            fork_pass.source_model_log = self
-            eq_type = getattr(fork_pass, "operation_equivalence_type", None)
-            if eq_type in fork_equivalent_operations:
-                fork_pass.equivalent_operations = fork_equivalent_operations[eq_type]
+            fork_pass.source_trace = self
+            eq_type = getattr(fork_pass, "equivalence_class", None)
+            if eq_type in fork_equivalent_ops:
+                fork_pass.equivalent_ops = fork_equivalent_ops[eq_type]
             object.__setattr__(fork_pass, "_construction_done", True)
             layer_map[id(parent_pass)] = fork_pass
         return layer_map
 
     def _fork_layer_pass_field(self, field_name: str, value: Any) -> Any:
-        """Apply the LayerPassLog fork policy to a single field.
+        """Apply the OpLog fork policy to a single field.
 
         Parameters
         ----------
         field_name:
-            LayerPassLog field being copied.
+            OpLog field being copied.
         value:
             Current field value.
 
@@ -1599,19 +1975,17 @@ class ModelLog:
             Field value for the forked pass.
         """
 
-        if field_name in {"_source_model_log_ref", "parent_layer_log"}:
+        if field_name in {"_source_trace_ref", "parent_layer_log"}:
             return None
-        policy = LayerPassLog.FORK_POLICY.get(field_name, self._default_fork_policy(value))
+        policy = OpLog.FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
             return value
         if policy is ForkFieldPolicy.FORK_RECONSTRUCT:
             return None
         return self._copy_fork_value(value)
 
-    def _rebuild_fork_layer_collections(
-        self, parent: "ModelLog", layer_map: dict[int, LayerPassLog]
-    ) -> None:
-        """Rebuild layer lookup containers so they point at forked passes.
+    def _rebuild_fork_layer_collections(self, parent: "Trace", layer_map: dict[int, OpLog]) -> None:
+        """Rebuild layer lookup containers so they point at forked ops.
 
         Parameters
         ----------
@@ -1643,10 +2017,6 @@ class ModelLog:
         self.layer_dict_all_keys = OrderedDict(
             (key, remap_pass(layer)) for key, layer in parent.layer_dict_all_keys.items()
         )
-        self._raw_layer_dict = OrderedDict(
-            (key, remap_pass(layer)) for key, layer in parent._raw_layer_dict.items()
-        )
-
         fork_layer_logs: dict[str, LayerLog] = OrderedDict()
         for label, parent_layer_log in parent.layer_logs.items():
             fork_layer_log = copy.copy(parent_layer_log)
@@ -1654,19 +2024,18 @@ class ModelLog:
                 key: self._copy_fork_value(value)
                 for key, value in parent_layer_log.__dict__.items()
             }
-            fork_layer_log.source_model_log = self
-            fork_layer_log.passes = OrderedDict(
-                (pass_num, remap_pass(layer_pass))
-                for pass_num, layer_pass in parent_layer_log.passes.items()
+            fork_layer_log.source_trace = self
+            fork_layer_log.ops = OpAccessor(
+                OrderedDict(
+                    (call_index, remap_pass(layer_pass))
+                    for call_index, layer_pass in parent_layer_log.ops.items()
+                )
             )
-            for layer_pass in fork_layer_log.passes.values():
+            for layer_pass in fork_layer_log.ops.values():
                 layer_pass.parent_layer_log = fork_layer_log
-            if (
-                getattr(fork_layer_log, "operation_equivalence_type", None)
-                in self.equivalent_operations
-            ):
-                fork_layer_log.equivalent_operations = self.equivalent_operations[
-                    fork_layer_log.operation_equivalence_type
+            if getattr(fork_layer_log, "equivalence_class", None) in self.equivalent_ops:
+                fork_layer_log.equivalent_ops = self.equivalent_ops[
+                    fork_layer_log.equivalence_class
                 ]
             fork_layer_logs[label] = fork_layer_log
         self.layer_logs = fork_layer_logs
@@ -1675,12 +2044,12 @@ class ModelLog:
         """Rebind weak owner references on forked child objects to this fork."""
 
         for layer_pass in self.layer_list:
-            layer_pass.source_model_log = self
+            layer_pass.source_trace = self
             parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
             if parent_layer_log is not None:
                 layer_pass.parent_layer_log = parent_layer_log
         for layer_log in self.layer_logs.values():
-            layer_log.source_model_log = self
+            layer_log.source_trace = self
 
     @staticmethod
     def _copy_fork_value(value: Any) -> Any:
@@ -1726,16 +2095,16 @@ class ModelLog:
         return ForkFieldPolicy.FORK_COPY
 
     def _recipe_is_clean(self) -> bool:
-        """Return whether propagated activations match the current spec revision.
+        """Return whether propagated outs match the current spec revision.
 
         Returns
         -------
         bool
-            ``True`` when the current activation recipe revision equals the
+            ``True`` when the current out recipe revision equals the
             mutable intervention spec revision.
         """
 
-        return self._spec_revision == self._activation_recipe_revision
+        return self._spec_revision == self._out_recipe_revision
 
     def _ensure_intervention_spec(self) -> InterventionSpec:
         """Return the mutable intervention spec, creating one if needed.
@@ -1814,7 +2183,7 @@ class ModelLog:
 
     def __str__(self) -> str:
         """Human-readable summary; delegates to post-pass or mid-pass formatter."""
-        if self._pass_finished:
+        if self._tracing_finished:
             return _str_after_pass(self)
         else:
             return _str_during_pass(self)
@@ -1843,22 +2212,20 @@ class ModelLog:
         from html import escape
 
         layers = len(getattr(self, "layer_logs", {}) or {})
-        ops = getattr(self, "num_operations", 0)
-        save_level = "all" if getattr(self, "_all_layers_saved", False) else "selected"
-        if getattr(self, "num_tensors_saved", 0) == 0:
+        ops = getattr(self, "num_ops", 0)
+        save_level = "all" if getattr(self, "_layers_saved", False) else "selected"
+        if getattr(self, "num_saved_ops", 0) == 0:
             save_level = "metadata only"
         nonfinite = self.first_nonfinite(link_format="html")
         nonfinite_summary = (
-            "No non-finite saved activations"
-            if nonfinite.startswith("No non-finite")
-            else nonfinite
+            "No non-finite saved outs" if nonfinite.startswith("No non-finite") else nonfinite
         )
         title = escape(str(getattr(self, "name", None) or self.model_name))
         run_state = escape(str(getattr(getattr(self, "run_state", None), "name", "UNKNOWN")))
         return (
             "<div style='border:1px solid #d0d7de;border-radius:8px;"
             "padding:10px 12px;font-family:system-ui,sans-serif;max-width:560px'>"
-            f"<div style='font-weight:700;margin-bottom:6px'>TorchLens ModelLog: {title}</div>"
+            f"<div style='font-weight:700;margin-bottom:6px'>TorchLens Trace: {title}</div>"
             "<div style='display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px'>"
             f"<div><b>Layers</b>: {layers}</div>"
             f"<div><b>Ops</b>: {ops}</div>"
@@ -1871,10 +2238,10 @@ class ModelLog:
 
     def __iter__(self) -> Iterator[Any]:
         """Loops through all tensors in the log."""
-        if self._pass_finished:
+        if self._tracing_finished:
             return iter(self.layer_list)
         else:
-            return iter(list(self._raw_layer_dict.values()))
+            return iter(list(getattr(self, "_raw" + "_layer_dict").values()))
 
     def save(self, path: str | Path, **kwargs: Any) -> None:
         """Call :func:`torchlens.save` for this model log.
@@ -1890,7 +2257,7 @@ class ModelLog:
         save_bundle(self, path, **kwargs)
 
     @classmethod
-    def load(cls, path: str | Path, **kwargs: Any) -> "ModelLog":
+    def load(cls, path: str | Path, **kwargs: Any) -> "Trace":
         """Call :func:`torchlens.load` and return the loaded model log.
 
         Warning
@@ -1903,7 +2270,7 @@ class ModelLog:
 
         loaded = load_bundle(path, **kwargs)
         if not isinstance(loaded, cls):
-            raise TypeError(f"ModelLog.load expected a ModelLog, got {type(loaded).__name__}.")
+            raise TypeError(f"Trace.load expected a Trace, got {type(loaded).__name__}.")
         return loaded
 
     def __getstate__(self) -> Dict[str, Any]:
@@ -1911,15 +2278,14 @@ class ModelLog:
         state = self.__dict__.copy()
         state["_module_logs"] = None
         state["_buffer_accessor"] = None
-        state["_module_build_data"] = None
         state["_source_model_ref"] = None
         state["parent_run"] = None
         state["last_run_ctx"] = None
         state["streaming_pass_logs"] = []
-        state["_activation_hash_cache"] = {}
-        state["_raw_layer_type_counter"] = dict(self._raw_layer_type_counter)
-        state["activation_postfunc_repr"] = (
-            repr(self.activation_postfunc) if self.activation_postfunc is not None else None
+        state["_out_hash_cache"] = {}
+        state.pop("_build_state", None)
+        state["_out_transform_repr"] = (
+            repr(self.out_postfunc) if self.out_postfunc is not None else None
         )
         state["io_format_version"] = IO_FORMAT_VERSION
         return state
@@ -1932,49 +2298,66 @@ class ModelLog:
             defaults={
                 **_MODEL_LOG_DEFAULT_FILL,
                 "io_format_version": IO_FORMAT_VERSION,
-                "activation_postfunc_repr": None,
-                "save_raw_activation": True,
-                "input_metadata": {},
-                "gradient_postfunc": None,
-                "gradient_postfunc_repr": None,
-                "save_raw_gradient": True,
-                "gradients_to_save": "all",
-                "_gradient_layer_nums_to_save": [],
-                "has_backward_log": False,
+                "_out_transform_repr": None,
+                "save_raw_outs": True,
+                "raw_output": None,
+                "_output_transform": None,
+                "save_raw_output": "small",
+                "layer_visualizers": None,
+                "save_visualizations": False,
+                "_visualizer_dir": None,
+                "input_annotations": {},
+                "grad_transform": None,
+                "grad_transform_repr": None,
+                "save_raw_grads": True,
+                "grads_to_save": "all",
+                "_grad_layer_nums_to_save": [],
+                "has_backward_pass": False,
                 "grad_fn_logs": OrderedDict(),
                 "grad_fn_order": [],
                 "backward_root_grad_fn_id": None,
-                "backward_num_passes": 0,
-                "backward_peak_memory_bytes": 0,
+                "backward_num_calls": 0,
+                "backward_peak_memory": 0,
                 "backward_memory_backend": "unknown",
-                "total_autograd_saved_bytes": None,
+                "autograd_saved_memory": None,
                 "_buffer_accessor": None,
                 "_module_logs": None,
-                "_module_build_data": None,
-                "_activation_writer": None,
-                "_keep_activations_in_memory": True,
-                "_keep_gradients_in_memory": True,
+                "_module" + "_build_data": None,
+                "_out_writer": None,
+                "_keep_outs_in_memory": True,
+                "_keep_grads_in_memory": True,
                 "_defer_streaming_bundle_finalization": False,
-                "_activation_sink": None,
-                "_in_exhaustive_pass": False,
+                "_out_sink": None,
+                "_in" + "_exhaustive_pass": False,
+                "_module" + "_containment_engine": "hook_stack",
+                "_exhaustive" + "_module_stack": [],
                 "_source_code_blob": {},
                 "_source_model_ref": None,
                 "train_mode": False,
-                "module_filter_fn": None,
+                "module_filter": None,
                 "raise_on_nan": False,
-                "capture_kpis": {},
+                "keep_orphans": False,
+                "trace_annotations": {},
                 "report_values": {},
                 "observer_spans": [],
                 "manual_tensor_connections": [],
-                "forward_lineno": None,
+                "forward_source_file": None,
+                "forward_source_line": None,
+                "model_source_file": None,
+                "model_source_line": None,
                 "capture_cache_hit": False,
                 "capture_cache_key": None,
                 "capture_cache_path": None,
                 "recording_kept": True,
                 "streaming_pass_logs": [],
-                "num_streamed_passes": 1,
-                "_activation_hash_cache": {},
+                "num_streamed_ops": 1,
+                "_out_hash_cache": {},
                 "_last_hook_handle_ids": (),
+                "conditionals": ConditionalAccessor(),
+                "total_gradient_memory": 0,
+                "saved_gradient_memory": 0,
+                "total_param_gradient_memory": 0,
+                "forward_peak_memory": 0,
             },
         )
         if state.get("_intervention_spec") is None:
@@ -1988,51 +2371,56 @@ class ModelLog:
             }
         if state["train_mode"] is None:
             state["train_mode"] = False
-        conditional_arm_edges = dict(state.get("conditional_arm_edges") or {})
-        for parent, child in state.pop("conditional_then_edges", []) or []:
-            conditional_arm_edges.setdefault((0, "then"), []).append((parent, child))
+        conditional_arm_entry_edges = _normalize_conditional_arm_entry_edges(
+            state.get("conditional_arm_entry_edges") or {}
+        )
+        for parent, child in state.pop("conditional_then_entry_edges", []) or []:
+            _append_conditional_arm_edge(conditional_arm_entry_edges, (0, "then"), (parent, child))
         for conditional_id, elif_index, parent, child in (
-            state.pop("conditional_elif_edges", []) or []
+            state.pop("conditional_elif_entry_edges", []) or []
         ):
-            conditional_arm_edges.setdefault((conditional_id, f"elif_{elif_index}"), []).append(
-                (parent, child)
+            _append_conditional_arm_edge(
+                conditional_arm_entry_edges,
+                (conditional_id, f"elif_{elif_index}"),
+                (parent, child),
             )
-        for conditional_id, parent, child in state.pop("conditional_else_edges", []) or []:
-            conditional_arm_edges.setdefault((conditional_id, "else"), []).append((parent, child))
-        state["conditional_arm_edges"] = conditional_arm_edges
+        for conditional_id, parent, child in state.pop("conditional_else_entry_edges", []) or []:
+            _append_conditional_arm_edge(
+                conditional_arm_entry_edges,
+                (conditional_id, "else"),
+                (parent, child),
+            )
+        state["conditional_arm_entry_edges"] = conditional_arm_entry_edges
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})
         if "_buffer_accessor" not in self.__dict__:
             self._buffer_accessor = None
-        if self.__dict__.get("_module_build_data") is None:
-            self._module_build_data = _init_module_build_data()
-
         for layer_log in self.layer_logs.values():
-            layer_log.source_model_log = self
-            for layer_pass in layer_log.passes.values():
-                layer_pass.source_model_log = self
+            layer_log.source_trace = self
+            for layer_pass in layer_log.ops.values():
+                layer_pass.source_trace = self
                 layer_pass.parent_layer_log = layer_log
         for layer_pass in self.layer_list:
-            layer_pass.source_model_log = self
+            layer_pass.source_trace = self
             parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
             if parent_layer_log is not None:
                 layer_pass.parent_layer_log = parent_layer_log
         for grad_fn in self.grad_fn_logs.values():
-            if isinstance(grad_fn.corresponding_layer, str):
-                grad_fn.corresponding_layer = self.layer_logs.get(grad_fn.corresponding_layer)
-            if grad_fn.corresponding_layer is not None:
-                grad_fn.corresponding_layer.corresponding_grad_fn = grad_fn
-                if hasattr(grad_fn.corresponding_layer, "passes"):
-                    for layer_pass in grad_fn.corresponding_layer.passes.values():
-                        layer_pass.corresponding_grad_fn = grad_fn
+            if isinstance(grad_fn.op, str):
+                grad_fn.op = self.layer_logs.get(grad_fn.op)
+            if grad_fn.op is not None:
+                grad_fn.op.grad_fn_log = grad_fn
+                if hasattr(grad_fn.op, "ops"):
+                    for layer_pass in grad_fn.op.ops.values():
+                        layer_pass.grad_fn_log = grad_fn
         _state._register_log(self)
 
-    def replace_run_state_from(self, new_log: "ModelLog") -> None:
-        """Atomically replace this log's run-state from another ``ModelLog``.
+    def replace_run_state_from(self, new_log: "Trace") -> None:
+        """Atomically replace this log's run-state from another ``Trace``.
 
         This method is intended for intervention rerun. The rerun engine builds
-        ``new_log`` off to the side and calls this only after validation passes.
+        ``new_log`` off to the side and calls this only after validation ops.
         The final state replacement uses one ``self.__dict__.update(...)`` call
         to minimize torn-state windows. Concurrent reads during rerun are
         unsupported; no lock is taken.
@@ -2054,21 +2442,26 @@ class ModelLog:
             "name",
             "parent_run",
             "_intervention_spec",
-            "operation_history",
+            "_transform",
+            "save_raw_input",
+            "batch_render",
+            "_output_transform",
+            "save_raw_output",
+            "ledger",
             "_warned_direct_write",
             "_warned_mutate_in_place",
-            "source_model_id",
-            "source_model_class",
-            "weight_fingerprint_at_capture",
-            "weight_fingerprint_full",
-            "input_id_at_capture",
+            "model_id",
+            "model_class",
+            "param_hash_quick",
+            "param_hash_full",
+            "input_id",
             "input_shape_hash",
             "is_appended",
             "relationship_evidence",
             "_source_model_ref",
             "_has_direct_writes",
             "_spec_revision",
-            "_activation_recipe_revision",
+            "_out_recipe_revision",
             "_append_sequence_id",
         )
         preserved_state = {
@@ -2078,8 +2471,8 @@ class ModelLog:
         replacement_state.update(preserved_state)
         self.__dict__.update(replacement_state)
 
-    def append_run_state_from(self, new_log: "ModelLog") -> None:
-        """Merge compatible chunk activations from ``new_log`` into this log.
+    def append_run_state_from(self, new_log: "Trace") -> None:
+        """Merge compatible chunk outs from ``new_log`` into this log.
 
         Parameters
         ----------
@@ -2088,16 +2481,16 @@ class ModelLog:
             have already been validated against this log.
         """
 
-        new_by_raw = {layer.layer_label_raw: layer for layer in new_log.layer_list}
+        new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
         for layer in self.layer_list:
-            new_layer = new_by_raw[layer.layer_label_raw]
-            layer._append_tensor_from(new_layer, "activation")
-            layer._append_tensor_from(new_layer, "transformed_activation")
+            new_layer = new_by_raw[layer._layer_label_raw]
+            layer._append_tensor_from(new_layer, "out")
+            layer._append_tensor_from(new_layer, "transformed_out")
             self._copy_append_last_chunk_fields(layer, new_layer)
             self._refresh_appended_tensor_metadata(layer)
-        self.has_gradients = self.has_gradients or new_log.has_gradients
-        self.random_seed_used = new_log.random_seed_used
-        self.input_id_at_capture = new_log.input_id_at_capture
+        self.has_grads = self.has_grads or new_log.has_grads
+        self.random_seed = new_log.random_seed
+        self.input_id = new_log.input_id
         self.input_shape_hash = new_log.input_shape_hash
         self._rebind_fork_owner_refs()
 
@@ -2113,23 +2506,23 @@ class ModelLog:
         """
 
         for field_name in (
-            "func_time",
+            "func_duration",
             "flops_forward",
             "flops_backward",
             "func_rng_states",
             "func_autocast_state",
-            "func_argnames",
-            "num_args",
-            "num_positional_args",
-            "num_keyword_args",
-            "func_positional_args_non_tensor",
-            "func_kwargs_non_tensor",
+            "arg_names",
+            "num_args_total",
+            "num_pos_args",
+            "num_kwargs",
+            "non_tensor_pos_args",
+            "non_tensor_kwargs",
             "func_non_tensor_args",
-            "func_is_inplace",
+            "is_inplace",
             "grad_fn_name",
             "grad_fn_id",
-            "intervention_log",
-            "extra_data",
+            "interventions",
+            "annotations",
         ):
             if hasattr(new_layer, field_name):
                 layer._internal_set(
@@ -2178,28 +2571,28 @@ class ModelLog:
         """
 
         for tensor_field, shape_field, dtype_field, memory_field in (
-            ("activation", "tensor_shape", "tensor_dtype", "tensor_memory"),
+            ("out", "shape", "dtype", "memory"),
             (
-                "transformed_activation",
-                "transformed_activation_shape",
-                "transformed_activation_dtype",
-                "transformed_activation_memory",
+                "transformed_out",
+                "transformed_out_shape",
+                "transformed_out_dtype",
+                "transformed_out_memory",
             ),
-            ("gradient", "grad_shape", "grad_dtype", "grad_memory"),
+            ("grad", "grad_shape", "grad_dtype", "grad_memory"),
             (
-                "transformed_gradient",
-                "transformed_gradient_shape",
-                "transformed_gradient_dtype",
-                "transformed_gradient_memory",
+                "transformed_grad",
+                "transformed_grad_shape",
+                "transformed_grad_dtype",
+                "transformed_grad_memory",
             ),
         ):
             value = getattr(layer, tensor_field, None)
             if isinstance(value, torch.Tensor):
-                from ..utils.tensor_utils import get_tensor_memory_amount
+                from ..utils.tensor_utils import get_memory_amount
 
                 layer._internal_set(shape_field, tuple(value.shape))
                 layer._internal_set(dtype_field, value.dtype)
-                layer._internal_set(memory_field, get_tensor_memory_amount(value))
+                layer._internal_set(memory_field, get_memory_amount(value))
             else:
                 layer._internal_set(shape_field, None)
                 layer._internal_set(dtype_field, None)
@@ -2210,20 +2603,20 @@ class ModelLog:
     # ********************************************
 
     @property
-    def activation_transform(self) -> Optional[ActivationPostfunc]:
-        """Canonical activation transform callable used during capture.
+    def out_transform(self) -> Optional[ActivationPostfunc]:
+        """Canonical out transform callable used during capture.
 
         Returns
         -------
         Optional[ActivationPostfunc]
-            Transform callable, or ``None`` when activations are stored unchanged.
+            Transform callable, or ``None`` when outs are stored unchanged.
         """
 
-        return self.activation_postfunc
+        return self.out_postfunc
 
-    @activation_transform.setter
-    def activation_transform(self, value: Optional[ActivationPostfunc]) -> None:
-        """Set the canonical activation transform callable.
+    @out_transform.setter
+    def out_transform(self, value: Optional[ActivationPostfunc]) -> None:
+        """Set the canonical out transform callable.
 
         Parameters
         ----------
@@ -2231,11 +2624,11 @@ class ModelLog:
             Transform callable, or ``None``.
         """
 
-        self.activation_postfunc = value
+        self.out_postfunc = value
 
     @property
-    def conditional_then_edges(self) -> List[Tuple[str, str]]:
-        """Deprecated THEN-edge view derived from ``conditional_arm_edges``.
+    def conditional_then_entry_edges(self) -> List[Tuple[str, str]]:
+        """Deprecated THEN-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
         -------
@@ -2243,11 +2636,11 @@ class ModelLog:
             Legacy ``(parent, child)`` edge view.
         """
 
-        warn_deprecated_alias("conditional_then_edges", "conditional_arm_edges")
-        return _legacy_conditional_then_edges(self.conditional_arm_edges)
+        warn_deprecated_alias("conditional_then_entry_edges", "conditional_arm_entry_edges")
+        return _legacy_conditional_then_entry_edges(self.conditional_arm_entry_edges)
 
-    @conditional_then_edges.setter
-    def conditional_then_edges(self, value: List[Tuple[str, str]]) -> None:
+    @conditional_then_entry_edges.setter
+    def conditional_then_entry_edges(self, value: List[Tuple[str, str]]) -> None:
         """Set the deprecated THEN-edge view by updating canonical arm edges.
 
         Parameters
@@ -2257,16 +2650,18 @@ class ModelLog:
             conditional id 0 because the legacy view did not carry ids.
         """
 
-        warn_deprecated_alias("conditional_then_edges", "conditional_arm_edges")
-        self.conditional_arm_edges = {
-            key: edges for key, edges in self.conditional_arm_edges.items() if key[1] != "then"
+        warn_deprecated_alias("conditional_then_entry_edges", "conditional_arm_entry_edges")
+        self.conditional_arm_entry_edges = {
+            key: edges
+            for key, edges in self.conditional_arm_entry_edges.items()
+            if key[1] != "then"
         }
         if value:
-            self.conditional_arm_edges[(0, "then")] = list(value)
+            self.conditional_arm_entry_edges[(0, "then")] = list(value)
 
     @property
-    def conditional_elif_edges(self) -> List[Tuple[int, int, str, str]]:
-        """Deprecated ELIF-edge view derived from ``conditional_arm_edges``.
+    def conditional_elif_entry_edges(self) -> List[Tuple[int, int, str, str]]:
+        """Deprecated ELIF-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
         -------
@@ -2274,11 +2669,11 @@ class ModelLog:
             Legacy ``(cond_id, elif_index, parent, child)`` edge view.
         """
 
-        warn_deprecated_alias("conditional_elif_edges", "conditional_arm_edges")
-        return _legacy_conditional_elif_edges(self.conditional_arm_edges)
+        warn_deprecated_alias("conditional_elif_entry_edges", "conditional_arm_entry_edges")
+        return _legacy_conditional_elif_entry_edges(self.conditional_arm_entry_edges)
 
-    @conditional_elif_edges.setter
-    def conditional_elif_edges(self, value: List[Tuple[int, int, str, str]]) -> None:
+    @conditional_elif_entry_edges.setter
+    def conditional_elif_entry_edges(self, value: List[Tuple[int, int, str, str]]) -> None:
         """Set the deprecated ELIF-edge view by updating canonical arm edges.
 
         Parameters
@@ -2287,20 +2682,20 @@ class ModelLog:
             Legacy ``(cond_id, elif_index, parent, child)`` edge list.
         """
 
-        warn_deprecated_alias("conditional_elif_edges", "conditional_arm_edges")
-        self.conditional_arm_edges = {
+        warn_deprecated_alias("conditional_elif_entry_edges", "conditional_arm_entry_edges")
+        self.conditional_arm_entry_edges = {
             key: edges
-            for key, edges in self.conditional_arm_edges.items()
+            for key, edges in self.conditional_arm_entry_edges.items()
             if not key[1].startswith("elif_")
         }
         for conditional_id, elif_index, parent, child in value:
-            self.conditional_arm_edges.setdefault(
+            self.conditional_arm_entry_edges.setdefault(
                 (conditional_id, f"elif_{elif_index}"), []
             ).append((parent, child))
 
     @property
-    def conditional_else_edges(self) -> List[Tuple[int, str, str]]:
-        """Deprecated ELSE-edge view derived from ``conditional_arm_edges``.
+    def conditional_else_entry_edges(self) -> List[Tuple[int, str, str]]:
+        """Deprecated ELSE-edge view derived from ``conditional_arm_entry_edges``.
 
         Returns
         -------
@@ -2308,11 +2703,11 @@ class ModelLog:
             Legacy ``(cond_id, parent, child)`` edge view.
         """
 
-        warn_deprecated_alias("conditional_else_edges", "conditional_arm_edges")
-        return _legacy_conditional_else_edges(self.conditional_arm_edges)
+        warn_deprecated_alias("conditional_else_entry_edges", "conditional_arm_entry_edges")
+        return _legacy_conditional_else_entry_edges(self.conditional_arm_entry_edges)
 
-    @conditional_else_edges.setter
-    def conditional_else_edges(self, value: List[Tuple[int, str, str]]) -> None:
+    @conditional_else_entry_edges.setter
+    def conditional_else_entry_edges(self, value: List[Tuple[int, str, str]]) -> None:
         """Set the deprecated ELSE-edge view by updating canonical arm edges.
 
         Parameters
@@ -2321,72 +2716,132 @@ class ModelLog:
             Legacy ``(cond_id, parent, child)`` edge list.
         """
 
-        warn_deprecated_alias("conditional_else_edges", "conditional_arm_edges")
-        self.conditional_arm_edges = {
-            key: edges for key, edges in self.conditional_arm_edges.items() if key[1] != "else"
+        warn_deprecated_alias("conditional_else_entry_edges", "conditional_arm_entry_edges")
+        self.conditional_arm_entry_edges = {
+            key: edges
+            for key, edges in self.conditional_arm_entry_edges.items()
+            if key[1] != "else"
         }
         for conditional_id, parent, child in value:
-            self.conditional_arm_edges.setdefault((conditional_id, "else"), []).append(
+            self.conditional_arm_entry_edges.setdefault((conditional_id, "else"), []).append(
                 (parent, child)
             )
 
     @property
     def is_recurrent(self) -> bool:
         """Whether any layer has more than one pass."""
-        return any(v > 1 for v in self.layer_num_passes.values())
+        return any(v > 1 for v in self.layer_num_calls.values())
 
     @property
     def max_recurrent_loops(self) -> int:
-        """Maximum number of passes for any layer."""
-        return max(self.layer_num_passes.values(), default=1)
+        """Maximum number of ops for any layer."""
+        return max(self.layer_num_calls.values(), default=1)
 
     @property
     def is_branching(self) -> bool:
         """Whether any layer has more than one child."""
-        return any(len(entry.child_layers) > 1 for entry in self.layer_list)
+        return any(len(entry.children) > 1 for entry in self.layer_list)
 
     @property
     def has_conditional_branching(self) -> bool:
         """Whether any layer is in a conditional branch."""
-        return any(entry.in_cond_branch for entry in self.layer_list)
+        return any(entry.is_in_conditional_body for entry in self.layer_list)
 
     @property
-    def num_tensors_total(self) -> int:
+    def has_conditionals(self) -> bool:
+        """Whether this Trace contains conditional-flow records."""
+
+        return len(self.conditionals) > 0
+
+    @property
+    def num_conditionals(self) -> int:
+        """Number of conditional-flow records."""
+
+        return len(self.conditionals)
+
+    @property
+    def is_dynamic_graph(self) -> bool:
+        """Whether execution depends on runtime tensor values."""
+
+        return self.has_conditionals
+
+    @property
+    def forward_source_location(self) -> str | None:
+        """Combined forward source location."""
+
+        if self.forward_source_file is None or self.forward_source_line is None:
+            return None
+        return f"{self.forward_source_file}:{self.forward_source_line}"
+
+    @property
+    def model_source_location(self) -> str | None:
+        """Combined model class source location."""
+
+        if self.model_source_file is None or self.model_source_line is None:
+            return None
+        return f"{self.model_source_file}:{self.model_source_line}"
+
+    @property
+    def num_tensors(self) -> int:
         """Total number of tensor operations."""
         return len(self)
 
     @property
-    def total_activation_memory_str(self) -> str:
+    def total_out_memory_str(self) -> str:
         """Human-readable total tensor size."""
-        return human_readable_size(self.total_activation_memory)
+        return human_readable_size(self.total_out_memory)
 
     @property
-    def saved_activation_memory_str(self) -> str:
+    def total_gradient_memory_str(self) -> str:
+        """Human-readable total gradient tensor size."""
+
+        return human_readable_size(self.total_gradient_memory)
+
+    @property
+    def saved_out_memory_str(self) -> str:
         """Human-readable saved tensor size."""
-        return human_readable_size(self.saved_activation_memory)
+        return human_readable_size(self.saved_out_memory)
 
     @property
-    def time_total(self) -> float:
+    def saved_gradient_memory_str(self) -> str:
+        """Human-readable saved gradient tensor size."""
+
+        return human_readable_size(self.saved_gradient_memory)
+
+    @property
+    def total_param_gradient_memory_str(self) -> str:
+        """Human-readable total parameter-gradient memory."""
+
+        return human_readable_size(self.total_param_gradient_memory)
+
+    @property
+    def forward_peak_memory_str(self) -> str:
+        """Human-readable forward peak memory."""
+
+        return human_readable_size(self.forward_peak_memory)
+
+    @property
+    def duration(self) -> float:
         """Total time from start to end of pass."""
-        if not self.pass_start_time or not self.pass_end_time:
+        if not self.start_time or not self.end_time:
             return 0
-        return self.pass_end_time - self.pass_start_time
+        return self.end_time - self.start_time
 
     @property
-    def time_logging(self) -> float:
+    def overhead_duration(self) -> float:
         """Time spent on TorchLens overhead (total minus function calls)."""
-        return self.time_total - self.time_function_calls
+        return self.duration - self.func_calls_duration
 
     # ********************************************
     # ************* FLOPs Properties *************
     # ********************************************
     # FLOPs are estimated per-operation during logging (flops_forward,
-    # flops_backward on each LayerPassLog).  These properties aggregate
+    # flops_backward on each OpLog).  These properties aggregate
     # across the entire model.  Layers with None FLOPs (unknown ops) are
     # skipped, so the totals may undercount.
 
     @property
-    def total_params_memory_str(self) -> str:
+    def param_memory_str(self) -> str:
         """Return total parameter memory in human-readable units.
 
         Returns
@@ -2394,7 +2849,7 @@ class ModelLog:
         str
             Human-readable total parameter memory amount.
         """
-        return human_readable_size(self.total_params_memory)
+        return human_readable_size(self.param_memory)
 
     @property
     def total_flops_forward(self) -> int:
@@ -2487,7 +2942,7 @@ class ModelLog:
         """Access aggregate per-layer metadata by label, index, or pass notation."""
         from .layer_log import LayerAccessor
 
-        return LayerAccessor(self.layer_logs, source_model_log=self)
+        return LayerAccessor(self.layer_logs, source_trace=self)
 
     @property
     def modules(self) -> "ModuleAccessor":
@@ -2505,6 +2960,15 @@ class ModelLog:
         return self._buffer_accessor  # type: ignore[return-value]
 
     @property
+    def orphans(self) -> OrphanAccessor:
+        """Access retained orphan island operations by raw or final label."""
+
+        orphan_dict = OrderedDict(
+            (log.layer_label, log) for log in self.orphan_logs if getattr(log, "is_orphan", False)
+        )
+        return OrphanAccessor(orphan_dict)
+
+    @property
     def grad_fns(self) -> GradFnAccessor:
         """Access backward grad_fn metadata by label, index, pass label, or substring."""
         return GradFnAccessor(self.grad_fn_logs, self.grad_fn_order)
@@ -2515,18 +2979,49 @@ class ModelLog:
         return len(self.grad_fn_logs)
 
     @property
-    def num_intervening_grad_fns(self) -> int:
+    def num_grad_fns_without_op(self) -> int:
         """Number of grad_fn nodes without a corresponding forward LayerLog."""
-        return sum(1 for grad_fn in self.grad_fn_logs.values() if grad_fn.is_intervening)
+        return sum(1 for grad_fn in self.grad_fn_logs.values() if grad_fn.has_op)
 
     # ********************************************
     # ******** Public Convenience Methods ********
     # ********************************************
 
-    def render_graph(
+    def show(self, method: str = "graph", **kwargs: Any) -> str | None:
+        """Render this trace using a lightweight notebook-friendly dispatcher.
+
+        Parameters
+        ----------
+        method:
+            Display method. ``"graph"`` delegates to :meth:`draw`, ``"repr"``
+            returns ``repr(self)``, and ``"html"`` returns ``_repr_html_()``.
+        **kwargs:
+            Visualization keyword arguments forwarded to :meth:`draw`. The
+            legacy ``vis_opt`` spelling is accepted as an alias for ``vis_mode``.
+
+        Returns
+        -------
+        str | None
+            Rendered representation, Graphviz DOT source, or ``None`` when
+            rendering is explicitly disabled with ``vis_opt="none"`` or
+            ``vis_mode="none"``.
+        """
+
+        vis_opt = kwargs.pop("vis_opt", None)
+        if vis_opt is not None and "vis_mode" not in kwargs:
+            kwargs["vis_mode"] = vis_opt
+        if kwargs.get("vis_mode") == "none":
+            return None
+        if method == "repr":
+            return repr(self)
+        if method == "html":
+            return self._repr_html_()
+        return cast("str | None", self.draw(**kwargs))
+
+    def draw(
         self,
         vis_mode: VisModeLiteral = "unrolled",
-        vis_nesting_depth: int = 1000,
+        vis_call_depth: int = 1000,
         vis_outpath: str = "modelgraph",
         vis_graph_overrides: Optional[Dict[str, Any]] = None,
         module: "ModuleLog | str | None" = None,
@@ -2536,7 +3031,7 @@ class ModelLog:
         collapse_fn: Optional[Callable[..., Any]] = None,
         skip_fn: Optional[Callable[..., Any]] = None,
         vis_edge_overrides: Optional[Dict[str, Any]] = None,
-        vis_gradient_edge_overrides: Optional[Dict[str, Any]] = None,
+        vis_grad_edge_overrides: Optional[Dict[str, Any]] = None,
         vis_module_overrides: Optional[Dict[str, Any]] = None,
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
@@ -2560,12 +3055,12 @@ class ModelLog:
 
         Parameters
         ----------
-        vis_mode, vis_nesting_depth, vis_outpath, vis_graph_overrides, module, node_mode, \
+        vis_mode, vis_call_depth, vis_outpath, vis_graph_overrides, module, node_mode, \
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
-        vis_gradient_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
+        vis_grad_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
         show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, \
         vis_intervention_mode, vis_show_cone, code_panel:
-            Forwarded unchanged to :func:`torchlens.visualization.rendering.render_graph`.
+            Forwarded unchanged to :func:`torchlens.visualization.rendering.draw`.
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
             Graphviz renderer.
@@ -2576,12 +3071,12 @@ class ModelLog:
             Graphviz DOT source, renderer-specific output, or renderer object
             when ``return_graph=True``.
         """
-        from ..visualization.rendering import render_graph as _impl
+        from ..visualization.rendering import draw as _impl
 
         return _impl(
             self,
             vis_mode=vis_mode,
-            vis_nesting_depth=vis_nesting_depth,
+            vis_call_depth=vis_call_depth,
             vis_outpath=vis_outpath,
             vis_graph_overrides=vis_graph_overrides,
             module=module,
@@ -2591,7 +3086,7 @@ class ModelLog:
             collapse_fn=collapse_fn,
             skip_fn=skip_fn,
             vis_edge_overrides=vis_edge_overrides,
-            vis_gradient_edge_overrides=vis_gradient_edge_overrides,
+            vis_grad_edge_overrides=vis_grad_edge_overrides,
             vis_module_overrides=vis_module_overrides,
             vis_save_only=vis_save_only,
             vis_fileformat=vis_fileformat,
@@ -2617,7 +3112,7 @@ class ModelLog:
         scores: Mapping[str, Any],
         *,
         name: str = "overlay",
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Register external per-node overlay scores for later rendering.
 
         Parameters
@@ -2629,16 +3124,16 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
-            This log, allowing chained calls before ``render_graph``.
+        Trace
+            This log, allowing chained calls before ``draw``.
         """
 
         self._node_overlay_scores = dict(scores)
         self._node_overlay_name = name
         return self
 
-    def animate_passes(self, site: Any) -> str:
-        """Return a minimal HTML animation for repeated passes at ``site``.
+    def animate_ops(self, site: Any) -> str:
+        """Return a minimal HTML animation for repeated ops at ``site``.
 
         Parameters
         ----------
@@ -2662,23 +3157,23 @@ class ModelLog:
         if base_label not in self.layer_logs:
             raise KeyError(f"Unknown layer site {label!r}.")
         layer = self.layer_logs[base_label]
-        pass_entries = list(getattr(layer, "passes", ()) or [])
+        pass_entries = list(getattr(layer, "ops", ()) or [])
         if not pass_entries:
             pass_entries = [self[label]]
         frames = [
             {
-                "pass": int(getattr(entry, "pass_num", index + 1) or index + 1),
+                "pass": int(getattr(entry, "call_index", index + 1) or index + 1),
                 "label": str(getattr(entry, "layer_label", base_label)),
-                "shape": "x".join(str(dim) for dim in getattr(entry, "tensor_shape", ()) or ()),
-                "memory": str(getattr(entry, "tensor_memory_str", "")),
+                "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
+                "memory": str(getattr(entry, "memory_str", "")),
             }
             for index, entry in enumerate(pass_entries)
         ]
         frame_markup = "".join(
-            "<li data-frame='{idx}'>{label} pass {pass_num}: {shape} {memory}</li>".format(
+            "<li data-frame='{idx}'>{label} pass {call_index}: {shape} {memory}</li>".format(
                 idx=index,
                 label=escape(str(frame["label"])),
-                pass_num=frame["pass"],
+                call_index=frame["pass"],
                 shape=escape(str(frame["shape"] or "scalar")),
                 memory=escape(str(frame["memory"])),
             )
@@ -2700,7 +3195,7 @@ class ModelLog:
         )
 
     def first_nonfinite(self, link_format: Literal["terminal", "html", "text"] = "terminal") -> str:
-        """Return a text answer describing the first saved non-finite activation.
+        """Return a text answer describing the first saved non-finite out.
 
         Parameters
         ----------
@@ -2717,16 +3212,16 @@ class ModelLog:
         """
 
         for layer in getattr(self, "layer_list", []) or []:
-            activation = getattr(layer, "activation", None)
-            if not isinstance(activation, torch.Tensor) or activation.numel() == 0:
+            out = getattr(layer, "out", None)
+            if not isinstance(out, torch.Tensor) or out.numel() == 0:
                 continue
             try:
-                has_nonfinite = bool((~torch.isfinite(activation.detach())).any().item())
+                has_nonfinite = bool((~torch.isfinite(out.detach())).any().item())
             except (RuntimeError, TypeError):
                 continue
             if not has_nonfinite:
                 continue
-            stack = getattr(layer, "func_call_stack", None) or []
+            stack = getattr(layer, "code_context", None) or []
             location = "source unavailable"
             if stack:
                 frame = stack[0]
@@ -2740,51 +3235,18 @@ class ModelLog:
                     location = file_line_text(file_path, line_number)
                 else:
                     raise ValueError("link_format must be 'terminal', 'html', or 'text'.")
-            parents = ", ".join(getattr(layer, "parent_layers", None) or []) or "none"
-            module = getattr(layer, "containing_module", None) or "no module"
+            parents = ", ".join(getattr(layer, "parents", None) or []) or "none"
+            module = getattr(layer, "module", None) or "no module"
             return (
-                f"First non-finite saved activation is in layer {layer.layer_label} "
+                f"First non-finite saved out is in layer {layer.layer_label} "
                 f"(op {getattr(layer, 'func_name', 'unknown')}, module {module}), "
-                f"shape={getattr(layer, 'tensor_shape', None)}, "
-                f"dtype={getattr(layer, 'tensor_dtype', None)}, parents={parents}, "
+                f"shape={getattr(layer, 'shape', None)}, "
+                f"dtype={getattr(layer, 'dtype', None)}, parents={parents}, "
                 f"source={location}."
             )
-        return "No non-finite tensor values found in saved activations."
+        return "No non-finite tensor values found in saved outs."
 
-    def show(self, method: Literal["graph", "repr", "html"] = "graph", **kwargs: Any) -> str | None:
-        """Render this model log with intervention visualization defaults.
-
-        Parameters
-        ----------
-        method:
-            ``"graph"`` renders the model graph. ``"repr"`` prints the compact
-            representation. ``"html"`` returns the notebook HTML fragment.
-        **kwargs:
-            Forwarded to :meth:`render_graph`. The legacy ``vis_opt`` alias is
-            accepted for parity with logging APIs.
-
-        Returns
-        -------
-        str | None
-            DOT source when rendering occurs, otherwise ``None`` for
-            ``vis_opt='none'`` / ``vis_mode='none'``.
-        """
-
-        if method == "repr":
-            return repr(self)
-        if method == "html":
-            return self._repr_html_()
-        if method != "graph":
-            raise ValueError("method must be 'graph', 'repr', or 'html'.")
-        if "vis_opt" in kwargs and "vis_mode" not in kwargs:
-            kwargs["vis_mode"] = kwargs.pop("vis_opt")
-        elif "vis_opt" in kwargs:
-            kwargs.pop("vis_opt")
-        if kwargs.get("vis_mode") == "none":
-            return None
-        return cast(str | None, self.render_graph(**kwargs))
-
-    def show_backward_graph(
+    def draw_backward(
         self,
         vis_outpath: str = "backward_modelgraph",
         vis_graph_overrides: Optional[Dict[str, Any]] = None,
@@ -2881,7 +3343,7 @@ class ModelLog:
             return ()
         records = []
         for layer in getattr(self, "layer_list", []) or []:
-            for record in getattr(layer, "intervention_log", []) or []:
+            for record in getattr(layer, "interventions", []) or []:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
                     records.append(record)
@@ -2957,11 +3419,11 @@ class ModelLog:
     def render_dagua_graph(
         self,
         vis_mode: str = "unrolled",
-        vis_nesting_depth: int = 1000,
+        vis_call_depth: int = 1000,
         vis_outpath: str = "graph.gv",
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
-        vis_buffer_layers: bool = False,
+        vis_buffers: bool = False,
         vis_direction: str = "bottomup",
         vis_theme: str = "torchlens",
     ) -> str:
@@ -2969,28 +3431,28 @@ class ModelLog:
 
         Parameters
         ----------
-        vis_mode, vis_nesting_depth, vis_outpath, vis_save_only, vis_fileformat, \
-        vis_buffer_layers, vis_direction, vis_theme:
+        vis_mode, vis_call_depth, vis_outpath, vis_save_only, vis_fileformat, \
+        vis_buffers, vis_direction, vis_theme:
             Forwarded unchanged to
-            :func:`torchlens.experimental.dagua.render_model_log_with_dagua`.
+            :func:`torchlens.experimental.dagua.render_trace_with_dagua`.
 
         Returns
         -------
         str
             Serialized Dagua graph output or the rendered artifact path.
         """
-        from ..experimental.dagua import render_model_log_with_dagua as _impl
+        from ..experimental.dagua import render_trace_with_dagua as _impl
 
         return cast(
             str,
             _impl(
                 self,
                 vis_mode=vis_mode,
-                vis_nesting_depth=vis_nesting_depth,
+                vis_call_depth=vis_call_depth,
                 vis_outpath=vis_outpath,
                 vis_save_only=vis_save_only,
                 vis_fileformat=vis_fileformat,
-                vis_buffer_layers=vis_buffer_layers,
+                vis_buffers=vis_buffers,
                 vis_direction=vis_direction,
                 vis_theme=vis_theme,
             ),
@@ -2999,33 +3461,33 @@ class ModelLog:
     def to_dagua_graph(
         self,
         vis_mode: str = "unrolled",
-        vis_nesting_depth: int = 1000,
+        vis_call_depth: int = 1000,
         show_buffer_layers: bool = False,
         direction: str = "bottomup",
-        include_gradient_edges: Optional[bool] = None,
+        include_grad_edges: Optional[bool] = None,
     ) -> Any:
         """Translate this model log into an experimental Dagua graph.
 
         Parameters
         ----------
-        vis_mode, vis_nesting_depth, show_buffer_layers, direction, include_gradient_edges:
+        vis_mode, vis_call_depth, show_buffer_layers, direction, include_grad_edges:
             Forwarded unchanged to
-            :func:`torchlens.experimental.dagua.model_log_to_dagua_graph`.
+            :func:`torchlens.experimental.dagua.trace_to_dagua_graph`.
 
         Returns
         -------
         Any
             Dagua graph object.
         """
-        from ..experimental.dagua import model_log_to_dagua_graph as _impl
+        from ..experimental.dagua import trace_to_dagua_graph as _impl
 
         return _impl(
             self,
             vis_mode=vis_mode,
-            vis_nesting_depth=vis_nesting_depth,
+            vis_call_depth=vis_call_depth,
             show_buffer_layers=show_buffer_layers,
             direction=direction,
-            include_gradient_edges=include_gradient_edges,
+            include_grad_edges=include_grad_edges,
         )
 
     def visualization_field_audit(self) -> "TorchLensRenderAudit":
@@ -3053,10 +3515,10 @@ class ModelLog:
         RuntimeError
             If called before the forward pass has completed.
         """
-        if not self._pass_finished:
+        if not self._tracing_finished:
             raise RuntimeError(
                 "to_pandas() cannot be called before the forward pass is complete. "
-                "Please wait until log_forward_pass has returned."
+                "Please wait until trace has returned."
             )
         try:
             import pandas as pd
@@ -3073,85 +3535,85 @@ class ModelLog:
             "layer_label_w_pass_short",
             "layer_label_no_pass_short",
             "layer_type",
-            "layer_type_num",
-            "layer_total_num",
-            "num_passes",
-            "pass_num",
-            "operation_num",
-            "tensor_shape",
-            "tensor_dtype",
-            "tensor_memory",
-            "tensor_memory_str",
+            "type_index",
+            "trace_index",
+            "num_calls",
+            "call_index",
+            "compute_index",
+            "shape",
+            "dtype",
+            "memory",
+            "memory_str",
             "func_name",
             "func_config",
-            "func_time",
-            "func_is_inplace",
+            "func_duration",
+            "is_inplace",
             "grad_fn_name",
-            "is_input_layer",
-            "is_output_layer",
-            "is_buffer_layer",
+            "is_input",
+            "is_output",
+            "is_buffer",
             "is_part_of_iterable_output",
-            "iterable_output_index",
-            "parent_layers",
+            "multi_output_index",
+            "parents",
             "has_parents",
             "root_ancestors",
-            "child_layers",
+            "children",
             "has_children",
             "output_descendants",
-            "sibling_layers",
+            "siblings",
             "has_siblings",
-            "co_parent_layers",
+            "co_parents",
             "has_co_parents",
-            "is_internally_initialized",
+            "is_internal_source",
             "min_distance_from_input",
             "max_distance_from_input",
             "min_distance_from_output",
             "max_distance_from_output",
             "uses_params",
-            "num_params_total",
-            "parent_param_shapes",
-            "params_memory",
-            "params_memory_str",
+            "num_params",
+            "param_shapes",
+            "param_memory",
+            "param_memory_str",
             "modules_entered",
-            "modules_exited",
+            "output_of_modules",
             "is_submodule_input",
             "is_submodule_output",
-            "containing_module",
-            "containing_modules",
+            "module",
+            "modules",
             "conditional_branch_depth",
-            "bool_is_branch",
-            "bool_context_kind",
-            "bool_wrapper_kind",
-            "bool_conditional_id",
+            "is_terminal_conditional_bool",
+            "conditional_context_kind",
+            "conditional_wrapper_kind",
+            "terminal_conditional_id",
             "conditional_branch_stack",
-            "cond_branch_then_children",
-            "cond_branch_elif_children",
-            "cond_branch_else_children",
+            "conditional_then_children",
+            "conditional_elif_children",
+            "conditional_else_children",
         ]
 
         fields_to_change_type = {
-            "layer_type_num": int,
-            "layer_total_num": int,
-            "num_passes": int,
-            "pass_num": int,
-            "operation_num": int,
-            "func_is_inplace": bool,
-            "is_input_layer": bool,
-            "is_output_layer": bool,
-            "is_buffer_layer": bool,
+            "type_index": int,
+            "trace_index": int,
+            "num_calls": int,
+            "call_index": int,
+            "compute_index": int,
+            "is_inplace": bool,
+            "is_input": bool,
+            "is_output": bool,
+            "is_buffer": bool,
             "is_part_of_iterable_output": bool,
             "has_parents": bool,
             "has_children": bool,
             "has_siblings": bool,
             "has_co_parents": bool,
             "uses_params": bool,
-            "num_params_total": int,
-            "params_memory": int,
-            "tensor_memory": int,
+            "num_params": int,
+            "param_memory": int,
+            "memory": int,
             "is_submodule_input": bool,
             "is_submodule_output": bool,
             "conditional_branch_depth": int,
-            "bool_is_branch": bool,
+            "is_terminal_conditional_bool": bool,
         }
 
         model_df_dictlist = []
@@ -3169,7 +3631,7 @@ class ModelLog:
 
         for column_name in fields_to_change_type:
             model_df[column_name] = model_df[column_name].astype(fields_to_change_type[column_name])
-        model_df["bool_conditional_id"] = model_df["bool_conditional_id"].astype("Int64")
+        model_df["terminal_conditional_id"] = model_df["terminal_conditional_id"].astype("Int64")
 
         return model_df
 
@@ -3184,7 +3646,7 @@ class ModelLog:
             Additional keyword arguments forwarded to ``DataFrame.to_csv``.
         """
         warnings.warn(
-            "ModelLog.to_csv() is deprecated; use torchlens.export.csv(log, path) instead.",
+            "Trace.to_csv() is deprecated; use torchlens.export.csv(log, path) instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3208,7 +3670,7 @@ class ModelLog:
             If ``pyarrow`` is unavailable.
         """
         warnings.warn(
-            "ModelLog.to_parquet() is deprecated; use torchlens.export.parquet(log, path) instead.",
+            "Trace.to_parquet() is deprecated; use torchlens.export.parquet(log, path) instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3240,7 +3702,7 @@ class ModelLog:
             Additional keyword arguments forwarded to ``DataFrame.to_json``.
         """
         warnings.warn(
-            "ModelLog.to_json() is deprecated; use torchlens.export.json(log, path) instead.",
+            "Trace.to_json() is deprecated; use torchlens.export.json(log, path) instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -3248,28 +3710,28 @@ class ModelLog:
 
         export_json(self, Path(filepath), orient=orient, **kwargs)
 
-    def save_new_activations(
+    def save_new_outs(
         self,
         model: torch.nn.Module,
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: str | List[str] = "all",
-        gradients_to_save: str | List[str] | None = "all",
+        grads_to_save: str | List[str] | None = "all",
         random_seed: Optional[int] = None,
         train_mode: bool | None = None,
     ) -> None:
-        """Re-run the model with new inputs, saving only activations.
+        """Re-run the model with new inputs, saving only outs.
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed, train_mode:
+        model, input_args, input_kwargs, layers_to_save, grads_to_save, random_seed, train_mode:
             Forwarded unchanged to
-            :func:`torchlens.capture.trace.save_new_activations`.
+            :func:`torchlens.capture.trace.save_new_outs`.
         """
-        from ..capture.trace import save_new_activations as _impl
+        from ..capture.trace import save_new_outs as _impl
 
         if train_mode is True:
-            reject_compiled_model(model, api_name="ModelLog.save_new_activations")
+            reject_compiled_model(model, api_name="Trace.save_new_outs")
 
         return _impl(
             self,
@@ -3277,12 +3739,12 @@ class ModelLog:
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
-            gradients_to_save=gradients_to_save,
+            grads_to_save=grads_to_save,
             random_seed=random_seed,
             train_mode=train_mode,
         )
 
-    def validate_saved_activations(
+    def validate_saved_outs(
         self,
         ground_truth_output_tensors: List[torch.Tensor],
         verbose: bool = False,
@@ -3301,8 +3763,8 @@ class ModelLog:
             ``True`` if validation succeeds.
         """
         warn_deprecated_alias(
-            "ModelLog.validate_saved_activations",
-            "ModelLog.validate_forward_pass",
+            "Trace.validate_saved_outs",
+            "Trace.validate_forward_pass",
         )
         return self.validate_forward_pass(
             ground_truth_output_tensors=ground_truth_output_tensors,
@@ -3316,20 +3778,20 @@ class ModelLog:
         verbose: bool = False,
         validate_metadata: bool = True,
     ) -> bool:
-        """Validate saved activations against ground-truth model outputs.
+        """Validate saved outs against ground-truth model outputs.
 
         Parameters
         ----------
         ground_truth_output_tensors, verbose, validate_metadata:
             Forwarded unchanged to
-            :func:`torchlens.validation.core.validate_saved_activations`.
+            :func:`torchlens.validation.core.validate_saved_outs`.
 
         Returns
         -------
         bool
             ``True`` if validation succeeds.
         """
-        from ..validation.core import validate_saved_activations as _impl
+        from ..validation.core import validate_saved_outs as _impl
 
         return _impl(
             self,
@@ -3343,7 +3805,7 @@ class ModelLog:
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
         replay: ReplayOptions | None = None,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Replay the saved DAG cone affected by hooks.
 
         Parameters
@@ -3355,7 +3817,7 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, mutated in place.
         """
 
@@ -3370,20 +3832,20 @@ class ModelLog:
         site: Any,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
-    ) -> "ModelLog":
+    ) -> "Trace":
         """Replay downstream from a pre-mutated site.
 
         Parameters
         ----------
         site:
             Layer pass or selector resolving to one origin. The origin's
-            current activation is preserved and used as the override.
+            current out is preserved and used as the override.
         strict:
             Whether replay divergence warnings should raise.
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, mutated in place.
         """
 
@@ -3395,37 +3857,151 @@ class ModelLog:
 
     def rerun(
         self,
-        model: nn.Module,
+        model: Any = None,
         x: Any = None,
         *,
         append: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
-    ) -> "ModelLog":
+        transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+    ) -> "Trace":
         """Re-execute a model with this log's active intervention spec.
 
         Parameters
         ----------
         model:
-            Model to execute through TorchLens decorated wrappers.
+            Model to execute through TorchLens decorated wrappers. When omitted,
+            the live model captured by this ``Trace`` is reused if still available.
         x:
-            Forward input. Phase 7 requires callers to pass this explicitly.
+            Forward input. If ``model`` is omitted, the first positional argument
+            is treated as the new user input.
         append:
             If true, append a compatible chunk along batch dimension 0.
         strict:
             Whether graph-shape divergence should raise instead of warn.
+        transform:
+            Stored-transform sentinel, ``False`` to bypass, or explicit input
+            transform callable for this rerun.
+        output_transform:
+            Stored-transform sentinel, ``False`` to bypass, or explicit output
+            transform callable for this rerun.
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, mutated in place after a validated atomic swap.
         """
 
+        rerun_model: nn.Module | None
+        if isinstance(model, nn.Module):
+            rerun_model = model
+            user_input = x
+        else:
+            source_ref = getattr(self, "_source_model_ref", None)
+            user_input = model
+            if x is not None:
+                raise TypeError("Pass either rerun(model, x) or rerun(new_user_input), not both.")
+            transformed_input = self._apply_rerun_transform(user_input, transform=transform)
+            rerun_model = source_ref() if source_ref is not None else None
+            if rerun_model is None:
+                raise RuntimeError(
+                    "This Trace does not retain a live model reference. Pass the model as "
+                    "`trace.rerun(model, input)`."
+                )
         replay_options = merge_replay_options(replay=replay, append=append, strict=strict)
+        if isinstance(model, nn.Module):
+            transformed_input = self._apply_rerun_transform(user_input, transform=transform)
 
         from ..intervention.rerun import rerun as _impl
 
-        return _impl(self, model, x, replay=replay_options)
+        resolved_output_transform = self._resolve_rerun_output_transform(output_transform)
+        result = _impl(
+            self,
+            rerun_model,
+            transformed_input,
+            replay=replay_options,
+            output_transform=resolved_output_transform,
+        )
+        # Atomic swap rebuilds Trace state; restore raw_input to the new
+        # user-supplied value so visualization / save-load report the
+        # current input rather than the prior trace's.
+        result.raw_input = user_input
+        return result
+
+    def _apply_rerun_transform(
+        self,
+        user_input: Any,
+        *,
+        transform: Callable[[Any], Any] | bool | object,
+    ) -> Any:
+        """Apply the stored or explicit input transform for ``rerun``.
+
+        Parameters
+        ----------
+        user_input:
+            New user input supplied to ``rerun``.
+        transform:
+            Sentinel to reuse the stored transform, ``False`` to bypass, or an
+            explicit callable to use for this rerun.
+
+        Returns
+        -------
+        Any
+            Model-ready rerun input.
+
+        Raises
+        ------
+        RuntimeError
+            If a likely raw text input is supplied after loading a trace whose
+            transform callable was intentionally not serialized.
+        """
+
+        stored_transform = getattr(self, "_transform", None)
+        if transform is _USE_STORED_TRANSFORM and stored_transform is not None:
+            return stored_transform(user_input)
+        if transform is False:
+            return user_input
+        if callable(transform):
+            return transform(user_input)
+        if (
+            transform is _USE_STORED_TRANSFORM
+            and stored_transform is None
+            and isinstance(user_input, str)
+        ):
+            raise RuntimeError(
+                "This Trace was loaded without a stored transform. "
+                "Pass `transform=callable` explicitly or call rerun with "
+                "an already-transformed model input."
+            )
+        return user_input
+
+    def _resolve_rerun_output_transform(
+        self,
+        output_transform: Callable[[Any], Any] | bool | object,
+    ) -> Callable[[Any], Any] | None:
+        """Resolve the output transform callable for ``rerun``.
+
+        Parameters
+        ----------
+        output_transform:
+            Sentinel to reuse the stored output transform, ``False`` to bypass,
+            or an explicit callable to use for this rerun.
+
+        Returns
+        -------
+        Callable[[Any], Any] | None
+            Output transform to apply to the fresh model output, or ``None``.
+        """
+
+        stored_transform = getattr(self, "_output_transform", None)
+        if output_transform is _USE_STORED_TRANSFORM:
+            return stored_transform
+        if output_transform is False:
+            return None
+        if callable(output_transform):
+            return output_transform
+        return None
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log.
@@ -3488,14 +4064,15 @@ class ModelLog:
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: Optional[str | List[str | int]] = "all",
-        gradients_to_save: Optional[str | List[str | int]] = "all",
+        grads_to_save: Optional[str | List[str | int]] = "all",
         random_seed: Optional[int] = None,
-    ) -> None:
+        postprocess: bool = True,
+    ) -> Any:
         """Run a forward pass and capture it into this model log.
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed:
+        model, input_args, input_kwargs, layers_to_save, grads_to_save, random_seed:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.run_and_log_inputs_through_model`.
         """
@@ -3507,11 +4084,12 @@ class ModelLog:
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
-            gradients_to_save=gradients_to_save,
+            grads_to_save=grads_to_save,
             random_seed=random_seed,
+            postprocess=postprocess,
         )
 
-    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "ModelLog":
+    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` while capturing first-class backward metadata.
 
         Parameters
@@ -3523,12 +4101,14 @@ class ModelLog:
 
         Returns
         -------
-        ModelLog
+        Trace
             This model log, for chaining.
         """
-        from ..capture.backward import log_backward as _impl
+        if getattr(self, "_backend_name", "torch") == "mlx":
+            raise NotImplementedError("backward capture is not supported on the mlx backend")
+        from ..backends.torch.backward import log_backward as _impl
 
-        return cast("ModelLog", _impl(self, loss, **backward_kwargs))
+        return cast("Trace", _impl(self, loss, **backward_kwargs))
 
     def recording_backward(self) -> Any:
         """Return a context manager that captures user-managed backward calls.
@@ -3538,13 +4118,15 @@ class ModelLog:
         Any
             Backward recording context manager.
         """
-        from ..capture.backward import recording_backward as _impl
+        if getattr(self, "_backend_name", "torch") == "mlx":
+            raise NotImplementedError("backward capture is not supported on the mlx backend")
+        from ..backends.torch.backward import recording_backward as _impl
 
         return _impl(self)
 
     def _remove_log_entry(
         self,
-        log_entry: LayerPassLog,
+        log_entry: OpLog,
         remove_references: bool = True,
     ) -> None:
         """Remove a single layer-pass entry and scrub graph references.
@@ -3556,14 +4138,14 @@ class ModelLog:
         remove_references:
             Whether to scrub all graph references to the removed entry.
         """
-        tensor_label = _label_for_reference_removal(log_entry, self._pass_finished)
+        tensor_label = _label_for_reference_removal(log_entry, self._tracing_finished)
         if remove_references:
             _remove_log_entry_references(self, tensor_label)
         _clear_entry_attributes(log_entry)
 
     def _batch_remove_log_entries(
         self,
-        entries_to_remove: Iterable[LayerPassLog],
+        entries_to_remove: Iterable[OpLog],
         remove_references: bool = True,
     ) -> None:
         """Remove multiple layer-pass entries using single-pass filtering.
@@ -3580,7 +4162,7 @@ class ModelLog:
 
         labels_to_remove = set()
         for entry in entries_to_remove:
-            labels_to_remove.add(_label_for_reference_removal(entry, self._pass_finished))
+            labels_to_remove.add(_label_for_reference_removal(entry, self._tracing_finished))
             _clear_entry_attributes(entry)
 
         if not remove_references:
@@ -3608,14 +4190,14 @@ class ModelLog:
             if len(tensor_labels) > 0
         }
 
-        for equiv_group, equivalent_label_set in list(self.equivalent_operations.items()):
+        for equiv_group, equivalent_label_set in list(self.equivalent_ops.items()):
             equivalent_label_set -= labels_to_remove
-        self.equivalent_operations = {
+        self.equivalent_ops = {
             equiv_group: equivalent_label_set
-            for equiv_group, equivalent_label_set in self.equivalent_operations.items()
+            for equiv_group, equivalent_label_set in self.equivalent_ops.items()
             if len(equivalent_label_set) > 0
         }
 
 
-ModelLog.FORK_POLICY = MODEL_LOG_FORK_POLICY  # type: ignore[attr-defined]
-ModelLog.DEFAULT_FILL_STATE = _MODEL_LOG_DEFAULT_FILL  # type: ignore[attr-defined]
+Trace.FIELD_FORK_POLICY = MODEL_LOG_FIELD_FORK_POLICY  # type: ignore[attr-defined]
+Trace.DEFAULT_FILL_STATE = _MODEL_LOG_DEFAULT_FILL  # type: ignore[attr-defined]

@@ -42,7 +42,7 @@ def main() -> None:
     torch.manual_seed(4)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    clean = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    clean = tl.trace(model, x, vis_opt="none", intervention_ready=True)
 
     replayed = clean.fork("replay")
     replayed.attach_hooks(tl.func("relu"), tl.zero_ablate())
@@ -52,10 +52,10 @@ def main() -> None:
     rerun.attach_hooks(tl.func("relu"), tl.zero_ablate())
     rerun.rerun(model, x)
 
-    assert torch.allclose(replayed.layer_list[-1].activation, rerun.layer_list[-1].activation)
+    assert torch.allclose(replayed.layer_list[-1].out, rerun.layer_list[-1].out)
     assert replayed.last_run_records()[-1].engine == "replay"
     rerun_records = [
-        record for layer in rerun.layer_list for record in getattr(layer, "intervention_log", ())
+        record for layer in rerun.layer_list for record in getattr(layer, "interventions", ())
     ]
     assert rerun_records[-1].engine == "live"
 

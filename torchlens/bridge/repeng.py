@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._utils import activation_at
+from ._utils import out_at
 
 
 def control_vector(
@@ -15,16 +15,16 @@ def control_vector(
     vector_factory: Any | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Build a repeng control vector from saved TorchLens activations.
+    """Build a repeng control vector from saved TorchLens outs.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     positive_site:
-        Site containing positive activations.
+        Site containing positive outs.
     negative_site:
-        Optional site containing negative activations.
+        Optional site containing negative outs.
     vector_factory:
         Optional downstream factory or class.
     **kwargs:
@@ -50,8 +50,8 @@ def control_vector(
             "repeng bridge requires the `repeng` extra: install torchlens[repeng]."
         ) from exc
 
-    positive = activation_at(log, positive_site)
-    negative = None if negative_site is None else activation_at(log, negative_site)
+    positive = out_at(log, positive_site)
+    negative = None if negative_site is None else out_at(log, negative_site)
     factory = _resolve_factory(repeng_module, vector_factory)
     result = _call_factory(factory, positive=positive, negative=negative, **kwargs)
     return {
@@ -95,16 +95,16 @@ def _resolve_factory(module: Any, vector_factory: Any | None) -> Any:
 
 
 def _call_factory(factory: Any, *, positive: Any, negative: Any | None, **kwargs: Any) -> Any:
-    """Call a repeng vector factory with the normalized activation pair.
+    """Call a repeng vector factory with the normalized out pair.
 
     Parameters
     ----------
     factory:
         Factory callable.
     positive:
-        Positive activations.
+        Positive outs.
     negative:
-        Optional negative activations.
+        Optional negative outs.
     **kwargs:
         Additional factory keyword arguments.
 

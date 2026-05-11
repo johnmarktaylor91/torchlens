@@ -17,14 +17,34 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file
 
 from . import BlobRef, FieldPolicy, TorchLensIOError
-from .accessor_rebuild import rebuild_model_log_accessors
+from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .paths import resolve_bundle_blob_path
-from ..data_classes.model_log import ModelLog
+from ..data_classes.model_log import Trace
+
+_LEGACY_CAPTURE_TRACE_KEYS = {
+    "_raw_layer_dict",
+    "_raw_layer_labels_list",
+    "_layer_counter",
+    "_raw_layer_type_counter",
+    "_current_func_barcode",
+    "_mod_entered",
+    "_mod_exited",
+    "_mod_call_index",
+    "_mod_call_labels",
+    "_module_build_data",
+    "_module_metadata",
+    "_module_forward_args",
+    "_module_containment_engine",
+    "_exhaustive_module_stack",
+    "_grad_fn_strong_refs",
+    "_in_exhaustive_pass",
+    "_pending_live_fire_records",
+}
 
 
-def rehydrate_model_log(
+def rehydrate_trace(
     scrubbed_state: dict[str, Any],
     manifest: Manifest | dict[str, Any],
     bundle_path: str | Path,
@@ -32,8 +52,8 @@ def rehydrate_model_log(
     lazy: bool,
     map_location: str | torch.device,
     materialize_nested: bool,
-) -> ModelLog:
-    """Restore a scrubbed portable ``ModelLog`` state.
+) -> Trace:
+    """Restore a scrubbed portable ``Trace`` state.
 
     Parameters
     ----------
@@ -44,7 +64,7 @@ def rehydrate_model_log(
     bundle_path:
         Root bundle directory containing the ``blobs/`` subdirectory.
     lazy:
-        Whether direct activation/gradient blob refs should remain lazy.
+        Whether direct out/grad blob refs should remain lazy.
     map_location:
         Target device passed through to ``safetensors`` materialization.
     materialize_nested:
@@ -53,19 +73,22 @@ def rehydrate_model_log(
 
     Returns
     -------
-    ModelLog
+    Trace
         Rehydrated model log.
     """
 
     state_for_load = dict(scrubbed_state)
+    source_version = _source_io_format_version(state_for_load, manifest)
+    state_for_load = _normalize_legacy_trace_state(state_for_load, source_version)
     module_accessor_state = state_for_load.pop("_io_module_accessor_state", None)
 
-    model_log = ModelLog.__new__(ModelLog)
-    model_log.__setstate__(state_for_load)
+    trace = Trace.__new__(Trace)
+    trace.__setstate__(state_for_load)
+    _drop_capture_only_trace_fields(trace)
 
     if module_accessor_state is not None:
-        rebuild_model_log_accessors(
-            model_log,
+        rebuild_trace_accessors(
+            trace,
             module_accessor_state._dict,
             module_accessor_state._list,
             module_accessor_state._pass_dict,
@@ -73,7 +96,7 @@ def rehydrate_model_log(
 
     manifest_index = _build_manifest_index(manifest)
     _rehydrate_object(
-        model_log,
+        trace,
         manifest_index=manifest_index,
         bundle_path=Path(bundle_path),
         lazy=lazy,
@@ -81,7 +104,79 @@ def rehydrate_model_log(
         materialize_nested=materialize_nested,
         seen=set(),
     )
-    return model_log
+    return trace
+
+
+def _source_io_format_version(
+    state: dict[str, Any],
+    manifest: Manifest | dict[str, Any],
+) -> int:
+    """Return the serialized I/O version from manifest metadata.
+
+    Parameters
+    ----------
+    state:
+        Scrubbed metadata dict being loaded.
+    manifest:
+        Portable manifest describing the on-disk bundle.
+
+    Returns
+    -------
+    int
+        Source bundle ``io_format_version``. Falls back to state metadata for
+        plain test fixtures.
+    """
+
+    if isinstance(manifest, Manifest):
+        return manifest.io_format_version
+    version = manifest.get("io_format_version", state.get("io_format_version", 0))
+    return int(version) if isinstance(version, int) else 0
+
+
+def _normalize_legacy_trace_state(state: dict[str, Any], source_version: int) -> dict[str, Any]:
+    """Normalize a v3-and-earlier scrubbed Trace state dict into v4 shape.
+
+    v4 dropped these capture-only fields from ``Trace.__dict__``:
+    ``_raw_layer_dict``, ``_raw_layer_labels_list``, ``_layer_counter``,
+    ``_raw_layer_type_counter``, ``_current_func_barcode``, ``_mod_entered``,
+    ``_mod_exited``, ``_mod_call_index``, ``_mod_call_labels``,
+    ``_module_build_data``, ``_module_metadata``, ``_module_forward_args``,
+    ``_module_containment_engine``, ``_exhaustive_module_stack``,
+    ``_grad_fn_strong_refs``, ``_in_exhaustive_pass``, and
+    ``_pending_live_fire_records``.
+
+    For v3 artifacts being loaded into v4, strip these keys if present. The
+    dropped state was capture-time-only; user-facing data is preserved.
+
+    Parameters
+    ----------
+    state:
+        Scrubbed ``Trace`` state loaded from ``metadata.pkl``.
+    source_version:
+        Source bundle ``io_format_version``.
+
+    Returns
+    -------
+    dict[str, Any]
+        State suitable for ``Trace.__setstate__``.
+    """
+
+    if source_version >= 4:
+        return state
+    return {key: value for key, value in state.items() if key not in _LEGACY_CAPTURE_TRACE_KEYS}
+
+
+def _drop_capture_only_trace_fields(trace: Trace) -> None:
+    """Remove capture-only scratch fields that older load defaults may add.
+
+    Parameters
+    ----------
+    trace:
+        Rehydrated trace whose public state should match the v4 shape.
+    """
+
+    for field_name in _LEGACY_CAPTURE_TRACE_KEYS:
+        trace.__dict__.pop(field_name, None)
 
 
 def _build_manifest_index(
@@ -231,7 +326,7 @@ def _rehydrate_object(
                                 map_location,
                             ),
                         )
-                elif not lazy or field_name in {"transformed_activation", "transformed_gradient"}:
+                elif not lazy or field_name in {"transformed_out", "transformed_grad"}:
                     _assign_rehydrated_field(
                         value,
                         field_name,
@@ -427,7 +522,7 @@ def _build_lazy_tensor_ref(
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
     *,
-    kind: Literal["activation", "gradient"],
+    kind: Literal["out", "grad"],
 ) -> LazyActivationRef | None:
     """Build a ``LazyActivationRef`` from one manifest entry.
 
@@ -445,7 +540,7 @@ def _build_lazy_tensor_ref(
     Returns
     -------
     LazyActivationRef | None
-        Lazy activation placeholder, or ``None`` when the manifest entry uses the
+        Lazy out placeholder, or ``None`` when the manifest entry uses the
         older minimal schema that does not include enough metadata yet.
     """
 
@@ -478,14 +573,14 @@ def _lazy_ref_field_name(field_name: str) -> str | None:
         Matching lazy-ref field name, or ``None`` when not applicable.
     """
 
-    if field_name == "activation":
-        return "activation_ref"
-    if field_name == "gradient":
-        return "gradient_ref"
+    if field_name == "out":
+        return "out_ref"
+    if field_name == "grad":
+        return "grad_ref"
     return None
 
 
-def _lazy_ref_kind(blob_kind: str) -> Literal["activation", "gradient"]:
+def _lazy_ref_kind(blob_kind: str) -> Literal["out", "grad"]:
     """Normalize a blob kind into a lazy direct-tensor kind.
 
     Parameters
@@ -499,9 +594,9 @@ def _lazy_ref_kind(blob_kind: str) -> Literal["activation", "gradient"]:
         Direct tensor kind expected by ``LazyActivationRef``.
     """
 
-    if blob_kind == "gradient":
-        return "gradient"
-    return "activation"
+    if blob_kind == "grad":
+        return "grad"
+    return "out"
 
 
 def _manifest_entry_for_blob_ref(
@@ -618,13 +713,13 @@ def _load_safetensors_tensor(
 
 
 def rehydrate_nested(
-    model_log: ModelLog,
+    trace: Trace,
     *,
     map_location: str | torch.device = "cpu",
 ) -> None:
     """Replace any remaining nested ``BlobRef`` objects with materialized tensors.
 
-    This function is a no-op unless the ``ModelLog`` was loaded with
+    This function is a no-op unless the ``Trace`` was loaded with
     ``lazy=True, materialize_nested=False``. In the default load mode, nested
     tensors are already materialized.
 
@@ -636,7 +731,7 @@ def rehydrate_nested(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log loaded from a portable bundle.
     map_location:
         Target device for the materialized tensors.
@@ -647,12 +742,12 @@ def rehydrate_nested(
         If the source bundle is unavailable or has drifted since load.
     """
 
-    bundle_path = _source_bundle_path_for_model_log(model_log)
+    bundle_path = _source_bundle_path_for_trace(trace)
     manifest_path = bundle_path / "manifest.json"
     if not manifest_path.exists():
         raise TorchLensIOError(f"Source bundle manifest not found at {manifest_path}.")
 
-    expected_manifest_sha256 = getattr(model_log, "_source_bundle_manifest_sha256", None)
+    expected_manifest_sha256 = getattr(trace, "_source_bundle_manifest_sha256", None)
     if expected_manifest_sha256 is not None:
         observed_manifest_sha256 = sha256_of_file(manifest_path)
         if observed_manifest_sha256 != expected_manifest_sha256:
@@ -663,7 +758,7 @@ def rehydrate_nested(
     manifest = Manifest.read(manifest_path)
     manifest_index = _build_manifest_index(manifest)
     _rehydrate_nested_object(
-        model_log,
+        trace,
         manifest_index=manifest_index,
         bundle_path=bundle_path,
         map_location=map_location,
@@ -804,12 +899,12 @@ def _rehydrate_nested_object(
     return value
 
 
-def _source_bundle_path_for_model_log(model_log: ModelLog) -> Path:
-    """Resolve the source bundle path recorded on a portable-loaded ``ModelLog``.
+def _source_bundle_path_for_trace(trace: Trace) -> Path:
+    """Resolve the source bundle path recorded on a portable-loaded ``Trace``.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log whose source bundle should be resolved.
 
     Returns
@@ -823,18 +918,18 @@ def _source_bundle_path_for_model_log(model_log: ModelLog) -> Path:
         If the model log does not retain a source bundle reference.
     """
 
-    bundle_path = getattr(model_log, "_source_bundle_path", None)
+    bundle_path = getattr(trace, "_source_bundle_path", None)
     if isinstance(bundle_path, Path):
         return bundle_path
 
-    for layer in getattr(model_log, "layer_list", []):
-        activation_ref = getattr(layer, "activation_ref", None)
-        if isinstance(activation_ref, LazyActivationRef):
-            return activation_ref.source_bundle_path
-        gradient_ref = getattr(layer, "gradient_ref", None)
-        if isinstance(gradient_ref, LazyActivationRef):
-            return gradient_ref.source_bundle_path
+    for layer in getattr(trace, "layer_list", []):
+        out_ref = getattr(layer, "out_ref", None)
+        if isinstance(out_ref, LazyActivationRef):
+            return out_ref.source_bundle_path
+        grad_ref = getattr(layer, "grad_ref", None)
+        if isinstance(grad_ref, LazyActivationRef):
+            return grad_ref.source_bundle_path
 
     raise TorchLensIOError(
-        "ModelLog does not retain a source bundle path for nested blob rehydration."
+        "Trace does not retain a source bundle path for nested blob rehydration."
     )

@@ -13,11 +13,11 @@ import torchlens as tl
 from torchlens.data_classes.layer_log import LayerLog
 
 
-def _render_dot(log: tl.ModelLog, tmp_path: Path, **kwargs: Any) -> str:
-    """Render a ModelLog to DOT using a temporary SVG output path."""
+def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
+    """Render a Trace to DOT using a temporary SVG output path."""
 
     tmp_path.mkdir(parents=True, exist_ok=True)
-    return log.render_graph(
+    return log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / "graph"),
@@ -35,7 +35,7 @@ def _boundary_node_count(dot_source: str, kind: str) -> int:
     )
 
 
-def _layer_labels(log: tl.ModelLog, layer_type: str) -> list[str]:
+def _layer_labels(log: tl.Trace, layer_type: str) -> list[str]:
     """Return layer labels with the requested layer type."""
 
     return [
@@ -130,7 +130,7 @@ class _BranchingBoundaryModel(nn.Module):
 def test_module_focus_by_modulelog(tmp_path: Path) -> None:
     """Focusing by ModuleLog should show only that module plus boundaries."""
 
-    log = tl.log_forward_pass(_TwoBlockModel(), torch.randn(1, 4))
+    log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, module=log.modules["block1"])
 
     assert "@block1" in dot
@@ -145,7 +145,7 @@ def test_module_focus_by_modulelog(tmp_path: Path) -> None:
 def test_module_focus_by_address_string(tmp_path: Path) -> None:
     """Focusing by module address should resolve the same module."""
 
-    log = tl.log_forward_pass(_TwoBlockModel(), torch.randn(1, 4))
+    log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, module="block1")
 
     assert "@block1" in dot
@@ -156,7 +156,7 @@ def test_module_focus_by_address_string(tmp_path: Path) -> None:
 def test_module_focus_invalid_address_raises(tmp_path: Path) -> None:
     """Unknown module address strings should fail clearly."""
 
-    log = tl.log_forward_pass(_TwoBlockModel(), torch.randn(1, 4))
+    log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
 
     with pytest.raises(ValueError, match="nonexistent"):
         _render_dot(log, tmp_path, module="nonexistent")
@@ -165,7 +165,7 @@ def test_module_focus_invalid_address_raises(tmp_path: Path) -> None:
 def test_module_focus_with_collapse_fn(tmp_path: Path) -> None:
     """Module focus should compose with collapsing a child module."""
 
-    log = tl.log_forward_pass(_NestedBlock(), torch.randn(1, 4))
+    log = tl.trace(_NestedBlock(), torch.randn(1, 4))
 
     def collapse_fn(module_log: Any) -> bool:
         """Collapse the inner Sequential."""
@@ -183,7 +183,7 @@ def test_module_focus_with_collapse_fn(tmp_path: Path) -> None:
 def test_module_focus_with_skip_fn(tmp_path: Path) -> None:
     """Module focus should compose with skipping internal ReLU layers."""
 
-    log = tl.log_forward_pass(_TwoBlockModel(), torch.randn(1, 4))
+    log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     block_linear = _layer_labels(log, "linear")[1]
 
     def skip_fn(layer_log: LayerLog) -> bool:
@@ -200,7 +200,7 @@ def test_module_focus_with_skip_fn(tmp_path: Path) -> None:
 def test_module_focus_with_skip_and_collapse_fn(tmp_path: Path) -> None:
     """Module focus should compose with skip_fn and collapse_fn together."""
 
-    log = tl.log_forward_pass(_NestedBlock(), torch.randn(1, 4))
+    log = tl.trace(_NestedBlock(), torch.randn(1, 4))
 
     def skip_fn(layer_log: LayerLog) -> bool:
         """Skip ReLU layers."""
@@ -219,12 +219,12 @@ def test_module_focus_with_skip_and_collapse_fn(tmp_path: Path) -> None:
 
 
 def test_modulelog_show_graph_method(tmp_path: Path) -> None:
-    """ModuleLog.show_graph should match ModelLog.render_graph with module=self."""
+    """ModuleLog.show_graph should match Trace.draw with module=self."""
 
-    log = tl.log_forward_pass(_TwoBlockModel(), torch.randn(1, 4))
+    log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     module_log = log.modules["block1"]
     direct = _render_dot(log, tmp_path / "direct", module=module_log)
-    method = module_log.show_graph(
+    method = module_log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / "method" / "graph"),
@@ -236,7 +236,7 @@ def test_modulelog_show_graph_method(tmp_path: Path) -> None:
 def test_module_focus_branching_boundaries(tmp_path: Path) -> None:
     """Multiple external upstreams should render as distinct input boundaries."""
 
-    log = tl.log_forward_pass(_BranchingBoundaryModel(), torch.randn(1, 4))
+    log = tl.trace(_BranchingBoundaryModel(), torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, module="block")
 
     assert _boundary_node_count(dot, "input") == 2

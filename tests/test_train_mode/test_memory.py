@@ -25,22 +25,22 @@ def _rss_bytes() -> int:
 
 
 @pytest.mark.slow
-def test_train_mode_repeated_passes_rss_bounded(two_layer_mlp: TwoLayerMlp) -> None:
-    """Repeated train-mode passes do not grow RSS beyond a bounded steady-state ratio."""
+def test_train_mode_repeated_ops_rss_bounded(two_layer_mlp: TwoLayerMlp) -> None:
+    """Repeated train-mode ops do not grow RSS beyond a bounded steady-state ratio."""
 
     rss_samples: list[int] = []
     for step in range(20):
-        model_log = tl.log_forward_pass(
+        trace = tl.trace(
             two_layer_mlp,
             torch.randn(8, 4, requires_grad=True),
             train_mode=True,
             random_seed=step,
         )
-        saved = model_log[model_log.output_layers[0]].activation
+        saved = trace[trace.output_layers[0]].out
         two_layer_mlp.zero_grad(set_to_none=True)
         saved.sum().backward()
-        model_log.cleanup()
-        del model_log, saved
+        trace.cleanup()
+        del trace, saved
         gc.collect()
         rss_samples.append(_rss_bytes())
 

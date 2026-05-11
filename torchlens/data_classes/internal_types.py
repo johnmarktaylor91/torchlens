@@ -35,9 +35,9 @@ class FuncExecutionContext:
 
 @dataclass(slots=True)
 class VisualizationOverrides:
-    """User-supplied graphviz attribute overrides for ``render_graph``.
+    """User-supplied graphviz attribute overrides for ``draw``.
 
-    Bundles the graph/edge/module override dicts accepted by the public ``render_graph``
+    Bundles the graph/edge/module override dicts accepted by the public ``draw``
     method and threads them to internal helpers (``_add_node_to_graphviz``,
     ``_add_edges_for_node``, etc.) as a single object.
 
@@ -47,11 +47,11 @@ class VisualizationOverrides:
     Attributes:
         graph: Overrides for the top-level graph (e.g. rankdir, bgcolor).
         edge: Overrides for data-flow edges.
-        gradient_edge: Overrides for gradient-flow edges.
+        grad_edge: Overrides for grad-flow edges.
         module: Overrides for module subgraph clusters (e.g. label style).
     """
 
     graph: dict[str, Any] | None = None
     edge: dict[str, Any] | None = None
-    gradient_edge: dict[str, Any] | None = None
+    grad_edge: dict[str, Any] | None = None
     module: dict[str, Any] | None = None

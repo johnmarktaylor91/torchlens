@@ -24,6 +24,8 @@ import tempfile
 import warnings
 from typing import Any, Optional, cast
 
+from .._render_utils import _open_file_quietly
+
 # Set the soft stack limit to match the hard limit once at import time.
 # Child processes (Node.js) inherit this, removing the need for preexec_fn
 # which forces fork+exec and COW-doubles virtual memory of large parent processes.
@@ -233,8 +235,8 @@ def build_elk_graph_hierarchical(
     module grouping (analogous to Graphviz subgraph clusters).
 
     Args:
-        entries_to_plot: Dict of node_barcode -> LayerPassLog/LayerLog
-            (same as used by render_graph).
+        entries_to_plot: Dict of node_barcode -> OpLog/LayerLog
+            (same as used by draw).
         show_buffer_layers: Whether to include buffer layers.
         edge_map: Optional skip-filtered outgoing edge map.
         skipped_labels: Labels elided by ``skip_fn``.
@@ -245,7 +247,7 @@ def build_elk_graph_hierarchical(
     from collections import defaultdict
 
     # Step 1: Collect all nodes and their module paths.
-    # module_path is containing_modules with pass info stripped.
+    # module_path is modules with pass info stripped.
     node_module_map = {}  # node_label -> [module_addr, ...]
     node_labels = []
     edges = []
@@ -255,14 +257,14 @@ def build_elk_graph_hierarchical(
     for node_barcode, node in entries_to_plot.items():
         if node.layer_label in skipped_labels:
             continue
-        if node.is_buffer_layer and not show_buffer_layers:
+        if node.is_buffer and not show_buffer_layers:
             continue
         label = node.layer_label
         node_labels.append(label)
 
         # Strip pass numbers from module addresses for grouping.
         modules = []
-        for mod in node.containing_modules:
+        for mod in node.modules:
             addr = mod.split(":")[0]
             if addr not in modules:
                 modules.append(addr)
@@ -270,7 +272,7 @@ def build_elk_graph_hierarchical(
 
         if edge_map is None:
             # Collect edges from parent layers.
-            for parent_label in node.parent_layers:
+            for parent_label in node.parents:
                 edges.append((parent_label, label, f"e{edge_id}"))
                 edge_id += 1
 
@@ -527,7 +529,7 @@ def run_elk_layout(elk_graph: dict[str, Any], timeout: Optional[int] = None) -> 
                 f"Node.js exited with code {result.returncode} (no stderr). "
                 f"Likely OOM — JSON was {graph_kb} KB, heap was {heap_mb} MB"
                 f"{f', system had {avail_mb} MB available' if avail_mb > 0 else ''}. "
-                f"Try reducing vis_nesting_depth to collapse modules."
+                f"Try reducing vis_call_depth to collapse modules."
             )
         )
         raise RuntimeError(f"ELK layout failed: {detail}")
@@ -623,7 +625,7 @@ def render_with_sfdp(
     cmd = ["sfdp", f"-T{vis_fileformat}", "-Goverlap=prism", "-o", rendered_path, source_path]
     subprocess.run(cmd, timeout=timeout, check=True, capture_output=True)
     if not vis_save_only:
-        graphviz.backend.viewing.view(rendered_path)
+        _open_file_quietly(rendered_path)
 
 
 def render_with_elk(
@@ -674,7 +676,7 @@ def render_with_elk(
     try:
         subprocess.run(cmd, timeout=_SFDP_TIMEOUT, check=True, capture_output=True)
         if not vis_save_only:
-            graphviz.backend.viewing.view(rendered_path)
+            _open_file_quietly(rendered_path)
     finally:
         import os
 
@@ -979,10 +981,10 @@ def _dot_id(name: str) -> str:
 
 
 def render_elk_direct(
-    model_log: Any,
+    trace: Any,
     entries_to_plot: dict[str, Any],
     vis_mode: str,
-    vis_nesting_depth: int,
+    vis_call_depth: int,
     show_buffer_layers: bool,
     overrides: Any,
     node_mode: Any,
@@ -1000,7 +1002,7 @@ def render_elk_direct(
 ) -> str:
     """Fast ELK rendering with module cluster boxes.
 
-    Bypasses ``graphviz.Digraph`` construction entirely.  Generates DOT text
+    Byops ``graphviz.Digraph`` construction entirely.  Generates DOT text
     directly with:
 
     - Node styling matching the dot path (same labels, colors, shapes)
@@ -1011,10 +1013,10 @@ def render_elk_direct(
     Renders with ``neato -n`` (pre-positioned layout that respects clusters).
 
     Args:
-        model_log: The ModelLog instance.
-        entries_to_plot: Dict of node_barcode -> LayerPassLog/LayerLog.
+        trace: The Trace instance.
+        entries_to_plot: Dict of node_barcode -> OpLog/LayerLog.
         vis_mode: ``'unrolled'`` or ``'rolled'``.
-        vis_nesting_depth: Module nesting depth for collapsed modules.
+        vis_call_depth: Module nesting depth for collapsed modules.
         show_buffer_layers: Whether to include buffer layers.
         overrides: VisualizationOverrides instance.
         node_mode: Node-mode preset name.
@@ -1035,7 +1037,7 @@ def render_elk_direct(
 
     # Late imports to avoid circular dependency
     from ..rendering import (
-        _collapse_module_address_for_node,
+        _collapse_address_for_node,
         _get_node_address_shape_color,
         _get_node_bg_color,
         _apply_node_spec_fn,
@@ -1070,9 +1072,9 @@ def render_elk_direct(
     def _module_keys_for_node(node: Any, is_collapsed_mod: bool) -> list[str]:
         """Get module hierarchy keys for a node."""
         if is_collapsed_mod:
-            mods = list(node.containing_modules[: vis_nesting_depth - 1])
+            mods = list(node.modules[: vis_call_depth - 1])
         else:
-            mods = list(node.containing_modules)
+            mods = list(node.modules)
         if vis_mode == "rolled":
             return list(dict.fromkeys(m.split(":")[0] for m in mods))
         return mods
@@ -1093,14 +1095,14 @@ def render_elk_direct(
     for _barcode, node in entries_to_plot.items():
         if node.layer_label in skipped_labels:
             continue
-        if node.is_buffer_layer and not show_buffer_layers:
+        if node.is_buffer and not show_buffer_layers:
             continue
 
-        collapse_address = _collapse_module_address_for_node(
-            model_log,
+        collapse_address = _collapse_address_for_node(
+            trace,
             node,
             collapse_fn=collapse_fn,
-            max_module_depth=vis_nesting_depth,
+            max_module_depth=vis_call_depth,
         )
         is_collapsed = collapse_address is not None
 
@@ -1109,32 +1111,32 @@ def render_elk_direct(
             if mod_w_pass is None:
                 continue
             mod_parts = mod_w_pass.rsplit(":", 1)
-            mod_addr, pass_num = mod_parts
+            mod_addr, call_index = mod_parts
             node_name = "pass".join(mod_parts) if vis_mode == "unrolled" else mod_addr
             elk_id = node.layer_label
 
             if node_name not in collapsed_set:
                 collapsed_set.add(node_name)
-                ml = model_log.modules[mod_addr]
-                mod_out = model_log[mod_w_pass]
+                ml = trace.modules[mod_addr]
+                mod_out = trace[mod_w_pass]
 
                 if vis_mode == "unrolled":
-                    mpl = model_log.modules[mod_w_pass]
+                    mpl = trace.modules[mod_w_pass]
                     n_tensors = mpl.num_layers
-                    has_anc = any(model_log[la].has_input_ancestor for la in mpl.layers)
+                    has_anc = any(trace[la].has_input_ancestor for la in mpl.layers)
                 else:
                     n_tensors = ml.num_layers
-                    has_anc = any(model_log[la].has_input_ancestor for la in ml.all_layers)
+                    has_anc = any(trace[la].has_input_ancestor for la in ml.layers)
 
-                np_ = ml.num_passes
+                np_ = ml.num_calls
                 if np_ == 1:
                     title = f"<b>@{mod_addr}</b>"
                 elif vis_mode == "unrolled":
-                    title = f"<b>@{mod_addr}:{pass_num}</b>"
+                    title = f"<b>@{mod_addr}:{call_index}</b>"
                 else:
                     title = f"<b>@{mod_addr} (x{np_})</b>"
 
-                out_shape: tuple[Any, ...] = mod_out.tensor_shape or ()
+                out_shape: tuple[Any, ...] = mod_out.shape or ()
                 if len(out_shape) > 1:
                     ss = "x".join(str(s) for s in out_shape)
                 elif len(out_shape) == 1:
@@ -1169,8 +1171,8 @@ def render_elk_direct(
                 default_spec = NodeSpec(
                     lines=[
                         title.replace("<b>", "").replace("</b>", ""),
-                        ml.module_class_name,
-                        f"{ss} ({mod_out.tensor_memory_str})",
+                        ml.class_name,
+                        f"{ss} ({mod_out.memory_str})",
                         f"{n_tensors} layers total",
                         pd,
                     ],
@@ -1191,7 +1193,7 @@ def render_elk_direct(
                     spec = mode_spec
                 attrs = _node_spec_to_graphviz_args(spec)
                 if spec.fillcolor is not None and ":" in spec.fillcolor:
-                    attrs["gradientangle"] = "0"
+                    attrs["gradangle"] = "0"
 
                 node_data[node_name] = {"attrs": attrs, "elk_id": elk_id}
                 mod_keys = _module_keys_for_node(node, True)
@@ -1203,10 +1205,8 @@ def render_elk_direct(
             node_name = node.layer_label.replace(":", "pass")
             elk_id = node.layer_label
 
-            addr, shape, node_color = _get_node_address_shape_color(
-                model_log, node, show_buffer_layers
-            )
-            bg = _get_node_bg_color(model_log, node)
+            addr, shape, node_color = _get_node_address_shape_color(trace, node, show_buffer_layers)
+            bg = _get_node_bg_color(trace, node)
             ls = "solid" if node.has_input_ancestor else "dashed"
             default_spec = NodeSpec(
                 lines=compute_default_node_lines(node, addr, vis_mode),
@@ -1217,10 +1217,10 @@ def render_elk_direct(
                 style=f"filled,{ls}",
                 extra_attrs={"ordering": "out"},
             )
-            spec = _apply_node_spec_fn(model_log, node, default_spec, node_mode, node_spec_fn)
+            spec = _apply_node_spec_fn(trace, node, default_spec, node_mode, node_spec_fn)
             attrs = _node_spec_to_graphviz_args(spec)
             if spec.fillcolor is not None and ":" in spec.fillcolor:
-                attrs["gradientangle"] = "0"
+                attrs["gradangle"] = "0"
 
             node_data[node_name] = {"attrs": attrs, "elk_id": elk_id}
             mod_keys = _module_keys_for_node(node, False)
@@ -1230,7 +1230,7 @@ def render_elk_direct(
         for render_edge in (edge_map or {}).get(node.layer_label, []):
             child_node = render_edge.target
             metadata_child = render_edge.metadata_child
-            if child_node.is_buffer_layer and not show_buffer_layers:
+            if child_node.is_buffer and not show_buffer_layers:
                 continue
 
             # Resolve tail name
@@ -1240,11 +1240,11 @@ def render_elk_direct(
                 tail_name = node.layer_label.replace(":", "pass")
 
             # Resolve head name
-            child_collapse_address = _collapse_module_address_for_node(
-                model_log,
+            child_collapse_address = _collapse_address_for_node(
+                trace,
                 child_node,
                 collapse_fn=collapse_fn,
-                max_module_depth=vis_nesting_depth,
+                max_module_depth=vis_call_depth,
             )
             child_is_collapsed = child_collapse_address is not None
             if child_is_collapsed:
@@ -1258,13 +1258,13 @@ def render_elk_direct(
 
             # Intra-module skip for two collapsed nodes in the same module
             if is_collapsed and child_is_collapsed and tail_name != head_name:
-                p_mods = node.containing_modules[:]
-                c_mods = child_node.containing_modules[:]
-                if node.is_leaf_module_output:
+                p_mods = node.modules[:]
+                c_mods = child_node.modules[:]
+                if node.is_atomic_module_op:
                     p_mods = p_mods[:-1]
-                if child_node.is_leaf_module_output:
+                if child_node.is_atomic_module_op:
                     c_mods = c_mods[:-1]
-                if p_mods[:vis_nesting_depth] == c_mods[:vis_nesting_depth]:
+                if p_mods[:vis_call_depth] == c_mods[:vis_call_depth]:
                     continue
 
             if (tail_name, head_name) in edges_used:
@@ -1288,11 +1288,11 @@ def render_elk_direct(
                 and metadata_child is not None
                 and metadata_child.layer_type not in COMMUTE_FUNCS
             ):
-                _add_arg_label(node, metadata_child, edge, model_log, show_buffer_layers)
+                _add_arg_label(node, metadata_child, edge, trace, show_buffer_layers)
 
             for k, v in (overrides.edge or {}).items():
                 if callable(v):
-                    edge[k] = str(v(model_log, node, metadata_child or child_node))
+                    edge[k] = str(v(trace, node, metadata_child or child_node))
                 else:
                     edge[k] = str(v)
 
@@ -1428,11 +1428,11 @@ def render_elk_direct(
 
         mod_addr = mod_key.split(":")[0] if ":" in mod_key else mod_key
         try:
-            ml = model_log.modules[mod_addr]
+            ml = trace.modules[mod_addr]
         except (KeyError, IndexError):
             ml = None
-        mod_type = ml.module_class_name if ml else "Module"
-        np_ = ml.num_passes if ml else 1
+        mod_type = ml.class_name if ml else "Module"
+        np_ = ml.num_calls if ml else 1
 
         if vis_mode == "unrolled" and np_ > 1 and ":" in mod_key:
             title = mod_key
@@ -1455,7 +1455,7 @@ def render_elk_direct(
             "penwidth": f"{pw:.1f}",
         }
         for k, v in (overrides.module or {}).items():
-            mod_attrs[k] = str(v(model_log, mod_key)) if callable(v) else str(v)
+            mod_attrs[k] = str(v(trace, mod_key)) if callable(v) else str(v)
 
         # Inject bounding box from ELK compound node so neato uses exact size.
         elk_group_id = f"group_{mod_addr}"
@@ -1540,7 +1540,7 @@ def render_elk_direct(
         if not vis_save_only:
             import graphviz
 
-            graphviz.backend.viewing.view(rendered_path)
+            _open_file_quietly(rendered_path)
     finally:
         if os.path.exists(source_path):
             os.remove(source_path)
@@ -1552,7 +1552,7 @@ def _add_arg_label(
     parent_node: Any,
     child_node: Any,
     edge_dict: dict[str, Any],
-    model_log: Any,
+    trace: Any,
     show_buffer_layers: bool,
 ) -> None:
     """Add argument position labels to an edge when the child has multiple parents.
@@ -1561,24 +1561,24 @@ def _add_arg_label(
     fast ELK path.
     """
     from ...data_classes.layer_log import LayerLog
-    from ...data_classes.layer_pass_log import LayerPassLog
+    from ...data_classes.op_log import OpLog
 
     # Count visible parents
-    num_parents = len(child_node.parent_layers)
+    num_parents = len(child_node.parents)
     if not show_buffer_layers:
-        for pl in child_node.parent_layers:
-            if isinstance(child_node, LayerPassLog):
-                if model_log[pl].is_buffer_layer:
+        for pl in child_node.parents:
+            if isinstance(child_node, OpLog):
+                if trace[pl].is_buffer:
                     num_parents -= 1
             elif isinstance(child_node, LayerLog):
-                if model_log.layer_logs[pl].is_buffer_layer:
+                if trace.layer_logs[pl].is_buffer:
                     num_parents -= 1
     if num_parents <= 1:
         return
 
     arg_labels = []
     for arg_type in ["args", "kwargs"]:
-        for arg_loc, arg_label in child_node.parent_layer_arg_locs[arg_type].items():
+        for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
             if parent_node.layer_label == arg_label:
                 arg_labels.append(f"{arg_type[:-1]} {arg_loc}")
 

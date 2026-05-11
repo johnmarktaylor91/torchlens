@@ -103,17 +103,17 @@ def builtin_overlay_value(node: Any, overlay: str) -> Any:
     if name == "flops":
         return int(getattr(node, "flops_forward", 0) or 0)
     if name == "time":
-        return float(getattr(node, "func_time", 0.0) or 0.0)
+        return float(getattr(node, "func_duration", 0.0) or 0.0)
     if name == "bytes":
-        return int(getattr(node, "tensor_memory", 0) or 0)
+        return int(getattr(node, "memory", 0) or 0)
     if name == "magnitude":
-        return _tensor_magnitude(getattr(node, "activation", None))
+        return _tensor_magnitude(getattr(node, "out", None))
     if name == "grad_norm":
-        return _tensor_norm(getattr(node, "gradient", None))
+        return _tensor_norm(getattr(node, "grad", None))
     if name == "nan":
-        return _has_nonfinite(getattr(node, "activation", None))
+        return _has_nonfinite(getattr(node, "out", None))
     if name == "intervention":
-        return len(getattr(node, "intervention_log", ()) or ())
+        return len(getattr(node, "interventions", ()) or ())
     if name == "bundle_delta":
         return getattr(node, "bundle_delta", None)
     return None

@@ -1,7 +1,7 @@
-"""Lazy activation reference placeholders for portable TorchLens bundles.
+"""Lazy out reference placeholders for portable TorchLens bundles.
 
 This module defines the lightweight references attached to lazy-loaded
-activations and gradients. Each ref stores the bundle path, tensor metadata,
+outs and grads. Each ref stores the bundle path, tensor metadata,
 and expected checksum so materialization can open a blob file on demand,
 verify integrity, return a tensor, and close the file immediately.
 """
@@ -26,7 +26,7 @@ _INLINE_LOAD_MAX_BYTES = 500 * 1024 * 1024
 
 @dataclass(frozen=True)
 class LazyActivationRef:
-    """Reference to one activation or gradient blob stored in a bundle.
+    """Reference to one out or grad blob stored in a bundle.
 
     Parameters
     ----------
@@ -54,7 +54,7 @@ class LazyActivationRef:
     device_at_save: str
     source_bundle_path: Path
     relative_path: str
-    kind: Literal["activation", "gradient"]
+    kind: Literal["out", "grad"]
     expected_sha256: str
 
     def blob_path(self) -> Path:

@@ -10,7 +10,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.capture.output_tensors import _walk_output_tensors_with_paths
+from torchlens.backends.torch.ops import _walk_output_tensors_with_paths
 from torchlens.intervention.types import (
     ContainerSpec,
     DataclassField,
@@ -127,7 +127,7 @@ def test_path_walker_supports_required_output_containers() -> None:
 
 
 @pytest.mark.smoke
-def test_intervention_ready_records_unique_output_paths_for_multi_output_op() -> None:
+def test_intervention_ready_records_unique_container_paths_for_multi_output_op() -> None:
     """Multi-output torch calls share call id while preserving per-output paths."""
 
     class SplitModel(torch.nn.Module):
@@ -150,7 +150,7 @@ def test_intervention_ready_records_unique_output_paths_for_multi_output_op() ->
             left, right = torch.split(x, 1, dim=0)
             return left + right
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         SplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -160,8 +160,8 @@ def test_intervention_ready_records_unique_output_paths_for_multi_output_op() ->
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
     assert len({layer.func_call_id for layer in split_layers}) == 1
-    assert len({layer.output_path for layer in split_layers}) == 2
-    assert {type(layer.output_path[0]) for layer in split_layers} == {TupleIndex}
+    assert len({layer.container_path for layer in split_layers}) == 2
+    assert {type(layer.container_path[0]) for layer in split_layers} == {TupleIndex}
     assert all(layer.container_spec is not None for layer in split_layers)
 
 
@@ -194,18 +194,14 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
 
             return self.linear(x) + 1
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         LinearShift(),
         torch.randn(4, 3),
         vis_opt="none",
         intervention_ready=True,
     )
 
-    templates = [
-        layer.captured_arg_template
-        for layer in log.layer_list
-        if layer.captured_arg_template is not None
-    ]
+    templates = [layer.args_template for layer in log.layer_list if layer.args_template is not None]
     flattened = [component for template in templates for component in template.args]
 
     assert any(isinstance(component, ParentRef) for component in flattened)
@@ -236,7 +232,7 @@ def test_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
 
             return torch.relu(x) + torch.relu(x)
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         AddRelus(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -246,8 +242,8 @@ def test_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
     edge_layers = [layer for layer in log.layer_list if layer.edge_uses]
     assert edge_layers
     for layer in edge_layers:
-        loc_labels = set(layer.parent_layer_arg_locs["args"].values()) | set(
-            layer.parent_layer_arg_locs["kwargs"].values()
+        loc_labels = set(layer.parent_arg_positions["args"].values()) | set(
+            layer.parent_arg_positions["kwargs"].values()
         )
         edge_labels = {
             log._raw_to_final_layer_labels.get(edge.parent_label, edge.parent_label)
@@ -285,8 +281,8 @@ def test_non_intervention_ready_capture_leaves_templates_and_edges_empty() -> No
 
             return torch.relu(x) + 1
 
-    log = tl.log_forward_pass(TinyModel(), torch.randn(2, 3), vis_opt="none")
+    log = tl.trace(TinyModel(), torch.randn(2, 3), vis_opt="none")
 
-    assert all(layer.captured_arg_template is None for layer in log.layer_list)
-    assert all(layer.captured_kwarg_template is None for layer in log.layer_list)
+    assert all(layer.args_template is None for layer in log.layer_list)
+    assert all(layer.kwargs_template is None for layer in log.layer_list)
     assert all(layer.edge_uses == [] for layer in log.layer_list)

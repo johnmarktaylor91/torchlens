@@ -135,7 +135,7 @@ def test_legacy_validator_positionals(model_and_input: tuple[TinyModel, torch.Te
     with pytest.warns(DeprecationWarning):
         forward_result = tl.validate_forward_pass(model, x, None, 42)
     with pytest.warns(DeprecationWarning):
-        saved_result = tl.validate_saved_activations(model, x, None, 42)
+        saved_result = tl.validate_saved_outs(model, x, None, 42)
     with pytest.warns(DeprecationWarning):
         backward_result = tl.validate_backward_pass(model, x, None, loss_fn)
 

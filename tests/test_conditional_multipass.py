@@ -10,9 +10,9 @@ from typing import Dict, List, Tuple
 import torch
 import torch.nn as nn
 
-from torchlens import log_forward_pass
+from torchlens import trace as trace_fn
 from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.model_log import Trace
 
 
 class AlternatingBranchBlock(nn.Module):
@@ -23,14 +23,14 @@ class AlternatingBranchBlock(nn.Module):
         super().__init__()
         self.shared = nn.Linear(4, 4)
 
-    def forward(self, x: torch.Tensor, pass_num: int) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, call_index: int) -> torch.Tensor:
         """Run one alternating branch step.
 
         Parameters
         ----------
         x:
             Input tensor for this pass.
-        pass_num:
+        call_index:
             One-indexed loop pass number.
 
         Returns
@@ -38,7 +38,7 @@ class AlternatingBranchBlock(nn.Module):
         torch.Tensor
             Shared-module output from the selected branch.
         """
-        branch_offset = 1.0 if pass_num % 2 == 1 else -1.0
+        branch_offset = 1.0 if call_index % 2 == 1 else -1.0
         branch_marker = (x.mean() * 0) + branch_offset
         if branch_marker > 0:
             y = self.shared(x)
@@ -48,7 +48,7 @@ class AlternatingBranchBlock(nn.Module):
 
 
 class AlternatingRecurrentIfModel(nn.Module):
-    """Recurrent model whose branch choice alternates across passes."""
+    """Recurrent model whose branch choice alternates across ops."""
 
     def __init__(self) -> None:
         """Initialise the repeating block."""
@@ -68,8 +68,8 @@ class AlternatingRecurrentIfModel(nn.Module):
         torch.Tensor
             Final recurrent output.
         """
-        for pass_num in range(1, 5):
-            x = self.block(x, pass_num)
+        for call_index in range(1, 5):
+            x = self.block(x, call_index)
         return x
 
 
@@ -95,9 +95,9 @@ class RolledMixedArmModel(nn.Module):
         torch.Tensor
             Final recurrent output.
         """
-        for pass_num in range(1, 5):
+        for call_index in range(1, 5):
             x = self.parent(x)
-            branch_offset = 1.0 if pass_num % 2 == 1 else -1.0
+            branch_offset = 1.0 if call_index % 2 == 1 else -1.0
             branch_marker = (x.mean() * 0) + branch_offset
             if branch_marker > 0:
                 x = self.branch(x)
@@ -163,7 +163,7 @@ class RecurrentNoConditionModel(nn.Module):
         return x
 
 
-def _log_model(model: nn.Module) -> ModelLog:
+def _log_model(model: nn.Module) -> Trace:
     """Log a model forward pass with full layer capture.
 
     Parameters
@@ -173,19 +173,19 @@ def _log_model(model: nn.Module) -> ModelLog:
 
     Returns
     -------
-    ModelLog
+    Trace
         Fully postprocessed model log.
     """
     x = torch.ones(1, 4)
-    return log_forward_pass(model, x, layers_to_save="all")
+    return trace_fn(model, x, layers_to_save="all")
 
 
-def _get_only_event(model_log: ModelLog) -> int:
+def _get_only_event(trace: Trace) -> int:
     """Return the only conditional event id in a model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Postprocessed model log.
 
     Returns
@@ -193,16 +193,16 @@ def _get_only_event(model_log: ModelLog) -> int:
     int
         Dense conditional id.
     """
-    assert len(model_log.conditional_events) == 1
-    return model_log.conditional_events[0].id
+    assert len(trace.conditional_records) == 1
+    return trace.conditional_records[0].id
 
 
-def _find_multi_pass_linear_layer(model_log: ModelLog) -> LayerLog:
+def _find_multi_pass_linear_layer(trace: Trace) -> LayerLog:
     """Find the unique multi-pass linear LayerLog.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Postprocessed model log.
 
     Returns
@@ -212,8 +212,8 @@ def _find_multi_pass_linear_layer(model_log: ModelLog) -> LayerLog:
     """
     matching_layers = [
         layer
-        for layer in model_log.layer_logs.values()
-        if layer.func_name == "linear" and layer.num_passes > 1
+        for layer in trace.layer_logs.values()
+        if layer.func_name == "linear" and layer.num_calls > 1
     ]
     assert len(matching_layers) == 1
     return matching_layers[0]
@@ -222,102 +222,108 @@ def _find_multi_pass_linear_layer(model_log: ModelLog) -> LayerLog:
 def _assert_sorted_unique_pass_lists(
     pass_map: Dict[Tuple[str, str, int, str], List[int]],
 ) -> None:
-    """Assert every ``conditional_edge_passes`` value is sorted and unique.
+    """Assert every ``conditional_edge_call_indices`` value is sorted and unique.
 
     Parameters
     ----------
     pass_map:
         Rolled edge-pass mapping from the model log.
     """
-    for pass_nums in pass_map.values():
-        assert pass_nums == sorted(pass_nums)
-        assert len(pass_nums) == len(set(pass_nums))
+    for call_indexs in pass_map.values():
+        assert call_indexs == sorted(call_indexs)
+        assert len(call_indexs) == len(set(call_indexs))
 
 
 def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
     """Multi-pass LayerLog stores both branch signatures and pass unions."""
-    model_log = _log_model(AlternatingRecurrentIfModel())
-    conditional_id = _get_only_event(model_log)
-    linear_layer = _find_multi_pass_linear_layer(model_log)
+    trace = _log_model(AlternatingRecurrentIfModel())
+    conditional_id = _get_only_event(trace)
+    linear_layer = _find_multi_pass_linear_layer(trace)
 
-    assert linear_layer.in_cond_branch is True
-    assert linear_layer.conditional_branch_stacks == [
+    assert linear_layer.is_in_conditional_body is True
+    assert linear_layer.conditional_role_stacks == [
         [(conditional_id, "then")],
         [(conditional_id, "else")],
     ]
-    assert linear_layer.conditional_branch_stack_passes == {
+    assert linear_layer.conditional_branch_stack_ops == {
         ((conditional_id, "then"),): [1, 3],
         ((conditional_id, "else"),): [2, 4],
     }
-    assert len(linear_layer.conditional_branch_stacks) >= 2
+    assert len(linear_layer.conditional_role_stacks) >= 2
 
     parent_layer = next(
         layer
-        for layer in model_log.layer_logs.values()
-        if conditional_id in layer.cond_branch_children_by_cond
-        and "then" in layer.cond_branch_children_by_cond[conditional_id]
-        and "else" in layer.cond_branch_children_by_cond[conditional_id]
+        for layer in trace.layer_logs.values()
+        if conditional_id in layer.conditional_arm_children
+        and "then" in layer.conditional_arm_children[conditional_id]
+        and "else" in layer.conditional_arm_children[conditional_id]
     )
-    assert parent_layer.cond_branch_children_by_cond[conditional_id]["then"] == [
+    assert parent_layer.conditional_arm_children[conditional_id]["then"] == [
         linear_layer.layer_label
     ]
-    assert parent_layer.cond_branch_children_by_cond[conditional_id]["else"] == [
+    assert parent_layer.conditional_arm_children[conditional_id]["else"] == [
         linear_layer.layer_label
     ]
 
 
-def test_rolled_mixed_arm_model_records_per_arm_edge_passes() -> None:
+def test_rolled_mixed_arm_model_records_per_arm_edge_ops() -> None:
     """Rolled mixed-arm edges retain sorted pass lists for both branches."""
-    model_log = _log_model(RolledMixedArmModel())
-    conditional_id = _get_only_event(model_log)
+    trace = _log_model(RolledMixedArmModel())
+    conditional_id = _get_only_event(trace)
 
-    then_edges = model_log.conditional_arm_edges[(conditional_id, "then")]
-    else_edges = model_log.conditional_arm_edges[(conditional_id, "else")]
+    then_edges = trace.conditional_arm_entry_edges[(conditional_id, "then")]
+    else_edges = trace.conditional_arm_entry_edges[(conditional_id, "else")]
 
     assert len(then_edges) == 2
     assert len(else_edges) == 2
 
     parent_label, child_label = then_edges[0]
-    parent_no_pass = model_log[parent_label].layer_label_no_pass
-    child_no_pass = model_log[child_label].layer_label_no_pass
+    parent_no_pass = trace[parent_label].layer_label_no_pass
+    child_no_pass = trace[child_label].layer_label_no_pass
 
-    assert model_log.conditional_edge_passes[
+    assert trace.conditional_edge_call_indices[
         (parent_no_pass, child_no_pass, conditional_id, "then")
-    ] == [1, 3]
-    assert model_log.conditional_edge_passes[
+    ] == [
+        1,
+        3,
+    ]
+    assert trace.conditional_edge_call_indices[
         (parent_no_pass, child_no_pass, conditional_id, "else")
-    ] == [2, 4]
-    _assert_sorted_unique_pass_lists(model_log.conditional_edge_passes)
+    ] == [
+        2,
+        4,
+    ]
+    _assert_sorted_unique_pass_lists(trace.conditional_edge_call_indices)
 
 
 def test_looped_if_alternating_model_has_exactly_two_signatures() -> None:
     """Looped alternating condition aggregates to exactly two stack signatures."""
-    model_log = _log_model(LoopedIfAlternatingModel())
-    conditional_id = _get_only_event(model_log)
-    linear_layer = _find_multi_pass_linear_layer(model_log)
+    trace = _log_model(LoopedIfAlternatingModel())
+    conditional_id = _get_only_event(trace)
+    linear_layer = _find_multi_pass_linear_layer(trace)
 
-    assert linear_layer.conditional_branch_stacks == [
+    assert linear_layer.conditional_role_stacks == [
         [(conditional_id, "then")],
         [(conditional_id, "else")],
     ]
-    assert linear_layer.conditional_branch_stack_passes == {
+    assert linear_layer.conditional_branch_stack_ops == {
         ((conditional_id, "then"),): [1, 3],
         ((conditional_id, "else"),): [2, 4],
     }
-    assert len(linear_layer.conditional_branch_stacks) == 2
+    assert len(linear_layer.conditional_role_stacks) == 2
 
 
 def test_non_conditional_recurrent_model_keeps_empty_aggregate_views() -> None:
     """Non-conditional recurrent aggregation preserves empty conditional views."""
-    model_log = _log_model(RecurrentNoConditionModel())
-    linear_layer = _find_multi_pass_linear_layer(model_log)
+    trace = _log_model(RecurrentNoConditionModel())
+    linear_layer = _find_multi_pass_linear_layer(trace)
 
-    assert model_log.conditional_events == []
-    assert linear_layer.in_cond_branch is False
-    assert linear_layer.conditional_branch_stacks == [[]]
-    assert linear_layer.conditional_branch_stack_passes == {(): [1, 2, 3]}
-    assert linear_layer.cond_branch_children_by_cond == {}
-    assert linear_layer.cond_branch_start_children == []
-    assert linear_layer.cond_branch_then_children == []
-    assert linear_layer.cond_branch_elif_children == {}
-    assert linear_layer.cond_branch_else_children == []
+    assert trace.conditional_records == []
+    assert linear_layer.is_in_conditional_body is False
+    assert linear_layer.conditional_role_stacks == [[]]
+    assert linear_layer.conditional_branch_stack_ops == {(): [1, 2, 3]}
+    assert linear_layer.conditional_arm_children == {}
+    assert linear_layer.conditional_entry_children == []
+    assert linear_layer.conditional_then_children == []
+    assert linear_layer.conditional_elif_children == {}
+    assert linear_layer.conditional_else_children == []

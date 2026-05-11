@@ -19,11 +19,12 @@ import torch
 from torch import nn
 
 import torchlens
-from torchlens.decoration import torch_funcs as torch_funcs_module
-from torchlens import _state, log_forward_pass
-from torchlens.decoration.torch_funcs import (
+from torchlens.backends.torch._tl import get_module_meta, get_tensor_label, is_decorated_function
+import torchlens.backends.torch.wrappers as torch_funcs_module
+from torchlens import _state, trace as trace_fn
+from torchlens.backends.torch.wrappers import (
     decorate_all_once,
-    get_func_argnames,
+    get_arg_names,
     patch_detached_references,
     patch_model_instance,
     wrap_torch,
@@ -129,35 +130,35 @@ class TestLazyDecoration:
     def test_import_does_not_decorate(self):
         """After import torchlens (with unwrapped state), torch functions are originals."""
         assert _state._is_decorated is False
-        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+        assert not is_decorated_function(torch.cos)
 
     @pytest.mark.smoke
-    def test_log_forward_pass_triggers_wrapping(self):
-        """First log_forward_pass should auto-wrap torch functions."""
+    def test_trace_triggers_wrapping(self):
+        """First trace should auto-wrap torch functions."""
         assert _state._is_decorated is False
         model = SimpleModel()
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
         assert _state._is_decorated is True
-        assert getattr(torch.cos, "tl_is_decorated_function", False)
+        assert is_decorated_function(torch.cos)
 
-    def test_stays_wrapped_after_log_forward_pass(self):
-        """After log_forward_pass, torch stays wrapped for subsequent calls."""
+    def test_stays_wrapped_after_trace(self):
+        """After trace, torch stays wrapped for subsequent calls."""
         model = SimpleModel()
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
         assert _state._is_decorated is True
 
         # Second call should also work without issues
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
         assert _state._is_decorated is True
 
     def test_unwrap_when_done_parameter(self):
-        """log_forward_pass(unwrap_when_done=True) restores originals after."""
+        """trace_fn(unwrap_when_done=True) restores originals after."""
         model = SimpleModel()
-        result = log_forward_pass(model, torch.randn(5), unwrap_when_done=True)
+        result = trace_fn(model, torch.randn(5), unwrap_when_done=True)
         assert result is not None
         assert len(result.output_layers) > 0
         assert _state._is_decorated is False
-        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+        assert not is_decorated_function(torch.cos)
 
     def test_wrapped_context_manager(self):
         """wrapped() context manager wraps on entry, unwraps on exit."""
@@ -165,7 +166,7 @@ class TestLazyDecoration:
         with wrapped():
             assert _state._is_decorated is True
             model = SimpleModel()
-            result = log_forward_pass(model, torch.randn(5))
+            result = trace_fn(model, torch.randn(5))
             assert len(result.output_layers) > 0
         assert _state._is_decorated is False
 
@@ -183,19 +184,19 @@ class TestLazyDecoration:
         for _ in range(3):
             wrap_torch()
             assert _state._is_decorated is True
-            assert getattr(torch.cos, "tl_is_decorated_function", False)
+            assert is_decorated_function(torch.cos)
             unwrap_torch()
             assert _state._is_decorated is False
-            assert not getattr(torch.cos, "tl_is_decorated_function", False)
+            assert not is_decorated_function(torch.cos)
 
-    def test_log_forward_pass_after_unwrap(self):
-        """log_forward_pass after explicit unwrap should auto-rewrap and work."""
+    def test_trace_after_unwrap(self):
+        """trace after explicit unwrap should auto-rewrap and work."""
         wrap_torch()
         unwrap_torch()
         assert _state._is_decorated is False
 
         model = SimpleModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         assert _state._is_decorated is True
         assert len(result.output_layers) > 0
 
@@ -227,58 +228,58 @@ class TestToggleState:
     def test_toggle_off_by_default(self):
         """After import, logging toggle should be off."""
         assert _state._logging_enabled is False
-        assert _state._active_model_log is None
+        assert _state._active_trace is None
 
     @pytest.mark.smoke
     def test_toggle_on_during_logging(self):
-        """Inside log_forward_pass, toggle should be True."""
+        """Inside trace, toggle should be True."""
         observed = {}
 
         class ProbeModel(nn.Module):
             def forward(self, x):
                 observed["enabled"] = _state._logging_enabled
-                observed["model_log"] = _state._active_model_log
+                observed["trace"] = _state._active_trace
                 return x + 1
 
         model = ProbeModel()
-        log_forward_pass(model, torch.randn(3))
+        trace_fn(model, torch.randn(3))
         assert observed["enabled"] is True
-        assert observed["model_log"] is not None
+        assert observed["trace"] is not None
 
     @pytest.mark.smoke
     def test_toggle_off_after_logging(self):
-        """After log_forward_pass completes, toggle should be off."""
+        """After trace completes, toggle should be off."""
         model = SimpleModel()
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
         assert _state._logging_enabled is False
-        assert _state._active_model_log is None
+        assert _state._active_trace is None
 
     def test_toggle_off_after_exception(self):
         """After an exception in forward, toggle must be off."""
         model = ErrorModel()
         with pytest.raises(RuntimeError, match="intentional error"):
-            log_forward_pass(model, torch.randn(5))
+            trace_fn(model, torch.randn(5))
         assert _state._logging_enabled is False
-        assert _state._active_model_log is None
+        assert _state._active_trace is None
 
     def test_toggle_off_after_keyboard_interrupt(self):
         """After KeyboardInterrupt in forward, toggle must be off."""
         model = KeyboardInterruptModel()
         with pytest.raises(KeyboardInterrupt):
-            log_forward_pass(model, torch.randn(5))
+            trace_fn(model, torch.randn(5))
         assert _state._logging_enabled is False
-        assert _state._active_model_log is None
+        assert _state._active_trace is None
 
     def test_torch_works_after_keyboard_interrupt(self):
         """Torch functions must work normally after a KeyboardInterrupt."""
         model = KeyboardInterruptModel()
         with pytest.raises(KeyboardInterrupt):
-            log_forward_pass(model, torch.randn(5))
+            trace_fn(model, torch.randn(5))
         # These must not crash or produce tl_ attributes
         x = torch.randn(3)
         y = torch.cos(x)
         assert y.shape == (3,)
-        assert not hasattr(y, "tl_tensor_label_raw")
+        assert get_tensor_label(y) is None
 
     def test_requires_grad_restored_after_exception(self):
         """requires_grad must be restored even when forward raises."""
@@ -286,7 +287,7 @@ class TestToggleState:
         orig_grads = {n: p.requires_grad for n, p in model.named_parameters()}
         with pytest.raises(RuntimeError):
             # Force an error by passing wrong shape
-            log_forward_pass(model, torch.randn(0))
+            trace_fn(model, torch.randn(0))
         for name, param in model.named_parameters():
             assert param.requires_grad == orig_grads[name], f"{name} requires_grad changed"
 
@@ -301,21 +302,21 @@ class TestWrapUnwrap:
 
     def test_unwrap_restores_original_torch_function(self):
         """unwrap_torch strips TorchLens wrappers from torch callables."""
-        assert getattr(torch.cos, "tl_is_decorated_function", False)
+        assert is_decorated_function(torch.cos)
         unwrap_torch()
-        assert not getattr(torch.cos, "tl_is_decorated_function", False)
+        assert not is_decorated_function(torch.cos)
         x = torch.randn(4)
         y = torch.cos(x)
         assert y.shape == x.shape
-        assert not hasattr(y, "tl_tensor_label_raw")
+        assert get_tensor_label(y) is None
 
     def test_wrap_restores_logging_after_unwrap(self):
         """wrap_torch after unwrap_torch re-enables logging."""
         unwrap_torch()
-        assert not getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
+        assert not is_decorated_function(torch.nn.functional.relu)
         wrap_torch()
-        assert getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
-        result = log_forward_pass(SimpleModel(), torch.randn(5))
+        assert is_decorated_function(torch.nn.functional.relu)
+        result = trace_fn(SimpleModel(), torch.randn(5))
         relu_layers = [label for label in result.layer_labels if "relu" in label.lower()]
         assert relu_layers
 
@@ -375,13 +376,13 @@ class TestSequenceSlotFix:
     def test_tensor_from_0d_after_forward_pass(self):
         """torch.tensor([0-d, 0-d]) works after a real forward pass."""
         model = SimpleModel()
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
         self._check_tensor_from_0d("after forward pass")
 
     def test_tensor_from_0d_after_unwrap_when_done(self):
-        """torch.tensor([0-d, 0-d]) works after log_forward_pass(unwrap_when_done=True)."""
+        """torch.tensor([0-d, 0-d]) works after trace_fn(unwrap_when_done=True)."""
         model = SimpleModel()
-        log_forward_pass(model, torch.randn(5), unwrap_when_done=True)
+        trace_fn(model, torch.randn(5), unwrap_when_done=True)
         self._check_tensor_from_0d("after unwrap_when_done")
 
     def test_tensor_from_0d_nested_list(self):
@@ -436,19 +437,19 @@ class TestPassthroughWhenOff:
         """Results must not have tl_ attributes when toggle is off."""
         x = torch.randn(3, 4)
         y = torch.matmul(x, x.T)
-        assert not hasattr(y, "tl_tensor_label_raw")
-        assert not hasattr(y, "tl_source_model_log")
+        assert get_tensor_label(y) is None
+        assert not hasattr(y, "tl_source_trace")
 
     def test_ops_normal_after_logging(self):
         """Torch ops must be clean after a logging session completes."""
         model = SimpleModel()
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
 
         x = torch.randn(5)
         y = torch.relu(x)
         z = x.view(1, 5)
-        assert not hasattr(y, "tl_tensor_label_raw")
-        assert not hasattr(z, "tl_tensor_label_raw")
+        assert get_tensor_label(y) is None
+        assert get_tensor_label(z) is None
 
     def test_tensor_method_ops(self):
         """Tensor method operations like .view, .reshape must work."""
@@ -477,7 +478,7 @@ class TestDetachedImports:
         sys.modules["_test_detached_cos"] = mod
         try:
             # The function should be decorated
-            assert getattr(mod.cos, "tl_is_decorated_function", False)
+            assert is_decorated_function(mod.cos)
         finally:
             del sys.modules["_test_detached_cos"]
 
@@ -498,7 +499,7 @@ class TestDetachedImports:
         # patch_model_instance should fix it
         patch_model_instance(model)
         # After patching, the relu stored on the model should be decorated
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         # The relu should appear in the graph
         relu_layers = [label for label in result.layer_labels if "relu" in label.lower()]
         assert len(relu_layers) > 0, "relu from self.act not logged in graph"
@@ -519,7 +520,7 @@ class TestDetachedImports:
                 return x
 
         model = ListFuncModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         labels = " ".join(result.layer_labels).lower()
         assert "relu" in labels, "relu from list not logged"
         assert "sigmoid" in labels, "sigmoid from list not logged"
@@ -530,14 +531,14 @@ class TestDetachedImports:
         class DictFuncModel(nn.Module):
             def __init__(self):
                 super().__init__()
-                self.ops = {"activation": torch.relu}
+                self.ops = {"out": torch.relu}
                 self.linear = nn.Linear(5, 5)
 
             def forward(self, x):
-                return self.ops["activation"](self.linear(x))
+                return self.ops["out"](self.linear(x))
 
         model = DictFuncModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         relu_layers = [lbl for lbl in result.layer_labels if "relu" in lbl.lower()]
         assert len(relu_layers) > 0
 
@@ -545,8 +546,8 @@ class TestDetachedImports:
         """torch.nn.functional functions should be decorated."""
         import torch.nn.functional as F
 
-        assert getattr(F.relu, "tl_is_decorated_function", False)
-        assert getattr(F.linear, "tl_is_decorated_function", False)
+        assert is_decorated_function(F.relu)
+        assert is_decorated_function(F.linear)
 
     def test_late_import_patched_incrementally(self):
         """Modules imported after torchlens should be patched on next crawl."""
@@ -563,7 +564,7 @@ class TestDetachedImports:
         try:
             # Trigger incremental crawl
             patch_detached_references()
-            assert getattr(mod.my_cos, "tl_is_decorated_function", False)
+            assert is_decorated_function(mod.my_cos)
         finally:
             sys.modules.pop(mod_name, None)
 
@@ -573,7 +574,7 @@ class TestDetachedImports:
         tl_modules = [k for k in sys.modules if k.startswith("torchlens")]
         assert len(tl_modules) > 0
         # _state itself should not have been modified by the crawl
-        assert not hasattr(_state, "tl_is_decorated_function")
+        assert not is_decorated_function(_state)
 
     def test_crawl_only_processes_new_modules(self):
         """Calling patch_detached_references twice should not re-scan."""
@@ -598,32 +599,32 @@ class TestPermanentModelPrep:
     def test_model_prepared_once(self):
         """Same model instance should only be prepared once."""
         model = TwoLayerModel()
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
         assert model in _state._prepared_models
 
         # Run again — should reuse
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
         assert model in _state._prepared_models
 
     def test_permanent_attrs_survive_sessions(self):
-        """tl_module_address and tl_module_type should persist after logging."""
+        """Module address and type metadata should persist after logging."""
         model = NestedModuleModel()
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
 
-        # Permanent attributes should still be there
-        assert hasattr(model.block[0], "tl_module_address")
-        assert hasattr(model.block[0], "tl_module_type")
-        assert model.block[0].tl_module_address == "block.0"
-        assert model.block[0].tl_module_type == "Linear"
+        # Permanent metadata should still be there
+        module_meta = get_module_meta(model.block[0])
+        assert module_meta is not None
+        assert module_meta.address == "block.0"
+        assert module_meta.module_type == "Linear"
 
     def test_session_attrs_cleaned(self):
         """Session-scoped tl_ attrs should be removed after logging."""
         model = TwoLayerModel()
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
 
         for module in model.modules():
-            assert not hasattr(module, "tl_source_model_log")
-            assert not hasattr(module, "tl_module_pass_num")
+            assert not hasattr(module, "tl_source_trace")
+            assert not hasattr(module, "tl_module_call_index")
             assert not hasattr(module, "tl_tensors_entered_labels")
             assert not hasattr(module, "tl_tensors_exited_labels")
 
@@ -642,28 +643,28 @@ class TestPermanentModelPrep:
 
         model = FailAfterLinear()
         with pytest.raises(RuntimeError):
-            log_forward_pass(model, torch.randn(5))
+            trace_fn(model, torch.randn(5))
 
         for module in model.modules():
-            assert not hasattr(module, "tl_source_model_log")
+            assert not hasattr(module, "tl_source_trace")
 
     def test_different_models_prepared_independently(self):
         """Two different model instances should both be in _prepared_models."""
         model_a = SimpleModel()
         model_b = TwoLayerModel()
-        log_forward_pass(model_a, torch.randn(5))
-        log_forward_pass(model_b, torch.randn(5))
+        trace_fn(model_a, torch.randn(5))
+        trace_fn(model_b, torch.randn(5))
         assert model_a in _state._prepared_models
         assert model_b in _state._prepared_models
 
     def test_model_gc_after_deletion(self):
         """WeakSet should not prevent model garbage collection.
 
-        Note: log_forward_pass returns a ModelLog that holds refs to the model
+        Note: trace returns a Trace that holds refs to the model
         (known GC issues GC-1 through GC-5). We test that the WeakSet itself
         doesn't add a strong ref by preparing a model WITHOUT logging.
         """
-        from torchlens.decoration.model_prep import _prepare_model_once
+        from torchlens.backends.torch.model_prep import _prepare_model_once
 
         model = TwoLayerModel()
         ref = weakref.ref(model)
@@ -681,7 +682,7 @@ class TestPermanentModelPrep:
         model.linear.bias.requires_grad_(False)
         orig_grads = {n: p.requires_grad for n, p in model.named_parameters()}
 
-        log_forward_pass(model, torch.randn(5))
+        trace_fn(model, torch.randn(5))
 
         for name, param in model.named_parameters():
             assert param.requires_grad == orig_grads[name], (
@@ -746,17 +747,17 @@ class TestPauseLogging:
                 return y
 
         model = PauseInsideModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         labels = " ".join(result.layer_labels).lower()
         assert "relu" in labels
         # cos should not appear — it ran during pause
         cos_layers = [lbl for lbl in result.layer_labels if "cos" in lbl.lower()]
         assert len(cos_layers) == 0, f"cos appeared in graph during pause: {cos_layers}"
 
-    def test_activation_postfunc_not_logged(self):
-        """activation_postfunc runs inside pause_logging, ops should not appear."""
+    def test_out_postfunc_not_logged(self):
+        """out_postfunc runs inside pause_logging, ops should not appear."""
         model = SimpleModel()
-        result = log_forward_pass(model, torch.randn(5), activation_postfunc=torch.sigmoid)
+        result = trace_fn(model, torch.randn(5), out_postfunc=torch.sigmoid)
         # sigmoid from postfunc should NOT appear in graph
         sigmoid_layers = [lbl for lbl in result.layer_labels if "sigmoid" in lbl.lower()]
         assert len(sigmoid_layers) == 0, f"postfunc sigmoid leaked into graph: {sigmoid_layers}"
@@ -784,9 +785,9 @@ class TestWrapperTransparency:
         assert len(torch.cos.__doc__) > 0
 
     def test_is_decorated_flag(self):
-        """Decorated functions should have tl_is_decorated_function=True."""
-        assert getattr(torch.cos, "tl_is_decorated_function", False)
-        assert getattr(torch.nn.functional.relu, "tl_is_decorated_function", False)
+        """Decorated functions should be tagged."""
+        assert is_decorated_function(torch.cos)
+        assert is_decorated_function(torch.nn.functional.relu)
 
     def test_builtin_no_wrapped(self):
         """Built-in wrappers should NOT have __wrapped__ (JIT compat)."""
@@ -825,7 +826,7 @@ class TestDecoratedIdentity:
     def test_identity_in_graph(self):
         """nn.Identity modules should produce identity entries in the graph."""
         model = IdentityModuleModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         identity_layers = [lbl for lbl in result.layer_labels if "identity" in lbl.lower()]
         assert len(identity_layers) > 0
 
@@ -881,10 +882,8 @@ class TestJITCompat:
 
 
 class TestFuncArgnames:
-    def test_get_func_argnames_tolerates_bad_annotations(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """get_func_argnames should tolerate ``inspect.signature`` TypeErrors. #138"""
+    def test_get_arg_names_tolerates_bad_annotations(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """get_arg_names should tolerate ``inspect.signature`` TypeErrors. #138"""
 
         def fake_func(x: object, *, flag: bool = False) -> None:
             """fake_func(x, *, flag=False)"""
@@ -898,17 +897,17 @@ class TestFuncArgnames:
             return original_signature(target)
 
         monkeypatch.setattr(torch_funcs_module.inspect, "signature", failing_signature)
-        _state._func_argnames.pop("fake_func", None)
+        _state._arg_names.pop("fake_func", None)
 
-        get_func_argnames(fake_func, "fake_func")
+        get_arg_names(fake_func, "fake_func")
 
-        assert _state._func_argnames["fake_func"] == ("x", "flag")
+        assert _state._arg_names["fake_func"] == ("x", "flag")
 
     def test_argnames_collected_before_decoration(self) -> None:
         """Argnames must be collected before decoration mutates torch names. #138"""
         wrap_torch()
 
-        assert len(_state._func_argnames) > 500
+        assert len(_state._arg_names) > 500
         assert len(_state._orig_to_decorated) > 1000
 
 
@@ -994,9 +993,9 @@ class TestDecorationConsistency:
             assert d_id not in dec_ids, f"Duplicate wrapper found: {dec}"
             dec_ids.add(d_id)
 
-    def test_func_argnames_populated(self):
-        """_func_argnames should be pre-computed for many functions."""
-        assert len(_state._func_argnames) > 500
+    def test_arg_names_populated(self):
+        """_arg_names should be pre-computed for many functions."""
+        assert len(_state._arg_names) > 500
 
     def test_decorate_all_once_idempotent(self):
         """Calling decorate_all_once again should be a no-op."""
@@ -1019,7 +1018,7 @@ class TestInPlaceOps:
     def test_inplace_ops_logged(self):
         """In-place operations should appear in the logged graph."""
         model = InplaceModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         labels = " ".join(result.layer_labels).lower()
         assert "add" in labels
         assert "relu" in labels
@@ -1028,7 +1027,7 @@ class TestInPlaceOps:
         """In-place model should produce correct numerical output."""
         model = InplaceModel()
         x = torch.randn(5)
-        result = log_forward_pass(model, x)
+        result = trace_fn(model, x)
         output = result.output_layers
         assert len(output) > 0
 
@@ -1075,26 +1074,26 @@ class TestEdgeCases:
                 return x
 
         model = PassthroughModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         assert result is not None
 
     def test_model_with_internal_tensor_creation(self):
         """torch.zeros inside forward should be logged."""
         model = InternalCreationModel()
-        result = log_forward_pass(model, torch.randn(3))
+        result = trace_fn(model, torch.randn(3))
         labels = " ".join(result.layer_labels).lower()
         assert "zeros" in labels or "sum" in labels
 
     def test_multiple_inputs(self):
         """Models with multiple tensor inputs should work."""
         model = MultiInputModel()
-        result = log_forward_pass(model, [torch.randn(5), torch.randn(5)])
+        result = trace_fn(model, [torch.randn(5), torch.randn(5)])
         assert len(result.output_layers) > 0
 
     def test_nested_modules(self):
         """Nested module structure should be correctly logged."""
         model = NestedModuleModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         labels = " ".join(result.layer_labels).lower()
         assert "linear" in labels
         assert "relu" in labels
@@ -1102,20 +1101,20 @@ class TestEdgeCases:
     def test_fast_mode_with_toggle(self):
         """Fast mode (layers_to_save subset) should work with permanent decoration."""
         model = TwoLayerModel()
-        result = log_forward_pass(model, torch.randn(5))
+        result = trace_fn(model, torch.randn(5))
         # Get a specific layer to save
         all_labels = result.layer_labels
         if len(all_labels) > 2:
-            result2 = log_forward_pass(model, torch.randn(5), layers_to_save=[all_labels[1]])
+            result2 = trace_fn(model, torch.randn(5), layers_to_save=[all_labels[1]])
             assert result2 is not None
 
     def test_consecutive_logging_sessions(self):
-        """Multiple consecutive log_forward_pass calls should work cleanly."""
+        """Multiple consecutive trace calls should work cleanly."""
         model = SimpleModel()
         for _ in range(3):
-            result = log_forward_pass(model, torch.randn(5))
+            result = trace_fn(model, torch.randn(5))
             assert _state._logging_enabled is False
-            assert _state._active_model_log is None
+            assert _state._active_trace is None
             assert len(result.output_layers) > 0
 
 
@@ -1148,11 +1147,11 @@ class TestSignalSafety:
         try:
             model = AlarmModel()
             with pytest.raises(TimeoutError):
-                log_forward_pass(model, torch.randn(5))
+                trace_fn(model, torch.randn(5))
 
             # Toggle MUST be off
             assert _state._logging_enabled is False
-            assert _state._active_model_log is None
+            assert _state._active_trace is None
 
             # Torch must still work
             y = torch.cos(torch.tensor([1.0]))
@@ -1175,7 +1174,7 @@ class TestSignalSafety:
         except CustomError:
             pass
         assert _state._logging_enabled is False
-        assert _state._active_model_log is None
+        assert _state._active_trace is None
 
 
 # =========================================================================
@@ -1194,22 +1193,22 @@ class TestSessionIsolation:
         model = TwoLayerModel()
         x = torch.randn(5)
 
-        result1 = log_forward_pass(model, x)
+        result1 = trace_fn(model, x)
         # After first session, input tensor should be clean
-        assert not hasattr(x, "tl_tensor_label_raw")
+        assert get_tensor_label(x) is None
 
-        result2 = log_forward_pass(model, x)
-        assert not hasattr(x, "tl_tensor_label_raw")
+        result2 = trace_fn(model, x)
+        assert get_tensor_label(x) is None
 
         # Both sessions should have produced valid results
         assert len(result1.output_layers) > 0
         assert len(result2.output_layers) > 0
 
-    def test_model_log_not_retained_on_state(self):
-        """_active_model_log should be None between sessions."""
+    def test_trace_not_retained_on_state(self):
+        """_active_trace should be None between sessions."""
         model = SimpleModel()
-        log_forward_pass(model, torch.randn(5))
-        assert _state._active_model_log is None
+        trace_fn(model, torch.randn(5))
+        assert _state._active_trace is None
 
-        log_forward_pass(model, torch.randn(5))
-        assert _state._active_model_log is None
+        trace_fn(model, torch.randn(5))
+        assert _state._active_trace is None

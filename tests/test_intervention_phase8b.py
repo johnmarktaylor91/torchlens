@@ -70,24 +70,24 @@ class WrongModel(torch.nn.Module):
         return self.fc(x)
 
 
-def _zero_hook(activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
-    """Return zeros matching the incoming activation.
+def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    """Return zeros matching the incoming out.
 
     Parameters
     ----------
-    activation:
-        Matched activation.
+    out:
+        Matched out.
     hook:
         Hook context supplied by TorchLens.
 
     Returns
     -------
     torch.Tensor
-        Zero activation.
+        Zero out.
     """
 
     del hook
-    return activation * 0
+    return out * 0
 
 
 def _capture(
@@ -110,7 +110,7 @@ def _capture(
     """
 
     capture_x = torch.randn(2, 3) if x is None else x
-    log = tl.log_forward_pass(
+    log = tl.trace(
         ReluLinear() if model is None else model,
         capture_x,
         vis_opt="none",
@@ -160,48 +160,48 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
 
 
 @pytest.mark.smoke
-def test_fork_mutation_does_not_warn_or_mutate_parent_intervention_log() -> None:
+def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     """Forked logs have independent specs and per-pass intervention logs."""
 
     parent, _ = _capture()
     relu_pass = next(layer for layer in parent.layer_list if layer.func_name == "relu")
-    parent_initial_log = list(relu_pass.intervention_log)
+    parent_initial_log = list(relu_pass.interventions)
 
     fork = parent.fork("test")
     fork_relu_pass = next(layer for layer in fork.layer_list if layer.func_name == "relu")
     assert fork.parent_run() is parent
     assert fork.name == "test"
-    assert fork_relu_pass.activation is relu_pass.activation
-    assert fork_relu_pass.intervention_log is not relu_pass.intervention_log
-    assert fork_relu_pass.equivalent_operations is not relu_pass.equivalent_operations
+    assert fork_relu_pass.out is relu_pass.out
+    assert fork_relu_pass.interventions is not relu_pass.interventions
+    assert fork_relu_pass.equivalent_ops is not relu_pass.equivalent_ops
 
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        fork.set(tl.func("relu"), torch.zeros_like(fork_relu_pass.activation))
+        fork.set(tl.func("relu"), torch.zeros_like(fork_relu_pass.out))
     assert warnings_record == []
     fork.replay()
 
-    assert list(relu_pass.intervention_log) == parent_initial_log
-    assert len(fork_relu_pass.intervention_log) > len(parent_initial_log)
+    assert list(relu_pass.interventions) == parent_initial_log
+    assert len(fork_relu_pass.interventions) > len(parent_initial_log)
     assert len(fork._intervention_spec.target_value_specs) == 1
     assert len(parent._intervention_spec.target_value_specs) == 0
 
 
 @pytest.mark.smoke
-def test_direct_activation_write_warns_once_and_marks_dirty() -> None:
-    """Direct activation writes emit a warning and mark the owning log dirty."""
+def test_direct_out_write_warns_once_and_marks_dirty() -> None:
+    """Direct out writes emit a warning and mark the owning log dirty."""
 
     log, _ = _capture()
     relu_pass = next(layer for layer in log.layer_list if layer.func_name == "relu")
 
     with pytest.warns(DirectActivationWriteWarning):
-        relu_pass.activation = relu_pass.activation
+        relu_pass.out = relu_pass.out
     assert log._has_direct_writes is True
     assert log.run_state is RunState.DIRECT_WRITE_DIRTY
 
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        relu_pass.activation = relu_pass.activation
+        relu_pass.out = relu_pass.out
     assert warnings_record == []
 
 
@@ -213,8 +213,8 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     replay_result = tl.do(replay_log, {tl.func("relu"): _zero_hook}, confirm_mutation=True)
     assert replay_result is replay_log
     assert replay_log.run_state is RunState.REPLAY_PROPAGATED
-    assert replay_log.operation_history[-1]["op"] == "replay"
-    assert any(record["op"] == "do" for record in replay_log.operation_history)
+    assert replay_log.ledger[-1]["op"] == "replay"
+    assert any(record["op"] == "do" for record in replay_log.ledger)
 
     rerun_model = ReluLinear()
     rerun_log, x = _capture(rerun_model)
@@ -226,7 +226,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     )
     assert rerun_result is rerun_log
     assert rerun_log.run_state is RunState.RERUN_PROPAGATED
-    assert rerun_log.operation_history[-1]["op"] == "rerun"
+    assert rerun_log.ledger[-1]["op"] == "rerun"
 
     set_only_log, _ = _capture()
     set_only_log.do(
@@ -236,7 +236,7 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
         confirm_mutation=True,
     )
     assert set_only_log.run_state is RunState.SPEC_STALE
-    assert set_only_log.operation_history[-1]["op"] == "do"
+    assert set_only_log.ledger[-1]["op"] == "do"
 
 
 @pytest.mark.smoke
@@ -251,7 +251,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
     with pytest.raises(EngineDispatchError):
         log.do({tl.func("relu"): _zero_hook}, model=ReluLinear(), confirm_mutation=True)
 
-    history_len = len(log.operation_history)
+    history_len = len(log.ledger)
     spec_revision = log._spec_revision
     with pytest.raises(ModelMismatchError):
         log.do(
@@ -260,7 +260,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
             x=torch.randn(2, 99),
             confirm_mutation=True,
         )
-    assert len(log.operation_history) == history_len
+    assert len(log.ledger) == history_len
     assert log._spec_revision == spec_revision
 
 
@@ -271,14 +271,14 @@ def test_direct_write_propagation_warning_is_one_time() -> None:
     log, _ = _capture()
     relu_pass = next(layer for layer in log.layer_list if layer.func_name == "relu")
     with pytest.warns(DirectActivationWriteWarning):
-        relu_pass.activation = relu_pass.activation
+        relu_pass.out = relu_pass.out
 
-    log.set(tl.func("relu"), torch.zeros_like(relu_pass.activation), confirm_mutation=True)
+    log.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
     with pytest.warns(DirectActivationWriteWarning):
         log.replay()
 
-    relu_pass.activation = relu_pass.activation
-    log.set(tl.func("relu"), torch.ones_like(relu_pass.activation), confirm_mutation=True)
+    relu_pass.out = relu_pass.out
+    log.set(tl.func("relu"), torch.ones_like(relu_pass.out), confirm_mutation=True)
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
         log.replay()

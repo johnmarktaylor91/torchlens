@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from types import TracebackType
 from typing import Any, cast
 
@@ -11,11 +12,15 @@ from torch import nn
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
-from ..decoration.model_prep import _ensure_model_prepared
+from ..capture.projections import (
+    RecordingState,
+    _empty_recording,
+    active_recording_state,
+)
+from ..data_classes.model_log import Trace
+from ..ir import CaptureEvents
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc
-from ._orchestrator import _empty_recording, _run_predicate_pass
-from ._state import RecordingState
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import PredicateErrorMode, PredicateFn, RecordingOptions, merge_recording_options
@@ -48,7 +53,7 @@ def _rank_prefixed_streaming_options(
     return StreamingOptions(
         bundle_path=bundle_path.parent / f"rank_{rank:02d}" / bundle_path.name,
         retain_in_memory=streaming.retain_in_memory,
-        activation_callback=streaming.activation_callback,
+        out_callback=streaming.out_callback,
     )
 
 
@@ -105,7 +110,7 @@ def _resolve_train_mode_default(
     """Resolve one default capture option for train-mode sugar."""
 
     if train_mode and value is MISSING:
-        return CaptureSpec(keep_grad=True, save_activation=True, save_metadata=True)
+        return CaptureSpec(keep_grad=True, save_out=True, save_metadata=True)
     if not train_mode or value is MISSING or value is False:
         return value
     if value is True:
@@ -137,10 +142,10 @@ class Recorder:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-        save_raw_activation: bool | MissingType = MISSING,
+        out_transform: ActivationPostfunc | None | MissingType = MISSING,
+        save_raw_outs: bool | MissingType = MISSING,
         train_mode: bool = False,
-        activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -152,13 +157,13 @@ class Recorder:
         include_source_events, max_predicate_failures, on_predicate_error, streaming,
         random_seed:
             Fastlog recording options.
-        activation_transform:
-            Optional callable applied to each retained activation copy after
+        out_transform:
+            Optional callable applied to each retained out copy after
             dtype/device transforms. The callable runs under ``pause_logging``
             and must return a ``torch.Tensor``. Errors are wrapped in
             :class:`torchlens.TorchLensPostfuncError`.
-        save_raw_activation:
-            When ``False`` and ``activation_transform`` is set, only the
+        save_raw_outs:
+            When ``False`` and ``out_transform`` is set, only the
             transformed payload is retained on the record. Defaults to
             ``True`` to mirror the slow path.
         train_mode:
@@ -177,14 +182,13 @@ class Recorder:
             value=default_module,
             train_mode=train_mode,
         )
-        if activation_postfunc is not MISSING:
-            if activation_transform is not MISSING:
+        if out_postfunc is not MISSING:
+            if out_transform is not MISSING:
                 raise TypeError(
-                    "kwarg activation_postfunc deprecated, use activation_transform; "
-                    "do not pass both"
+                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
                 )
-            warn_deprecated_alias("activation_postfunc", "activation_transform")
-            activation_transform = activation_postfunc
+            warn_deprecated_alias("out_postfunc", "out_transform")
+            out_transform = out_postfunc
         self.model = unwrapped_model
         self.options = merge_recording_options(
             recording=None,
@@ -198,13 +202,13 @@ class Recorder:
             on_predicate_error=on_predicate_error,
             streaming=streaming,
             random_seed=random_seed,
-            activation_transform=activation_transform,
-            save_raw_activation=save_raw_activation,
+            out_transform=out_transform,
+            save_raw_outs=save_raw_outs,
         )
         validate_recording_options(self.options)
-        _ensure_model_prepared(self.model)
         self._state: RecordingState | None = None
         self._recording: Recording | None = None
+        self._capture_events: CaptureEvents | None = None
         self._entered = False
         self._exited = False
         self._next_pass_index = 1
@@ -216,6 +220,7 @@ class Recorder:
             raise RecorderStateError("Recorder cannot be re-entered")
         recording = _empty_recording(self.options)
         self._state = RecordingState(options=self.options, recording=recording)
+        self._capture_events = CaptureEvents()
         self._entered = True
         return self
 
@@ -232,8 +237,10 @@ class Recorder:
             raise RecorderStateError("Recorder is not active")
         if exc_value is None:
             self._state.finalize_storage()
-            object.__setattr__(self._state.recording, "n_records", len(self._state.recording))
-            self._recording = self._state.recording
+            session = type("_FastlogCaptureSession", (), {})()
+            session.capture_events = self._capture_events
+            session._fastlog_recording = self._state.recording
+            self._recording = Recording.from_capture_events(session)
         else:
             self._state.abort_storage(str(exc_value))
         self._entered = False
@@ -267,18 +274,68 @@ class Recorder:
 
         if not self._entered or self._exited or self._state is None:
             raise RecorderStateError("Recorder.log() requires an active with-block")
-        output, _ = _run_predicate_pass(
-            self.model,
-            input_args,
-            input_kwargs,
-            self.options,
-            state=self._state,
-            pass_index=self._next_pass_index,
-            sample_id=sample_id,
-            finalize_storage=False,
-        )
+        output = self._run_unified_capture(input_args, input_kwargs, sample_id=sample_id)
         self._next_pass_index += 1
         return output
+
+    def _run_unified_capture(
+        self,
+        input_args: Any,
+        input_kwargs: dict[str, Any] | None,
+        *,
+        sample_id: str | int | None,
+    ) -> Any:
+        """Run one unified predicate capture pass and retain CaptureEvents."""
+
+        if self._state is None or self._capture_events is None:
+            raise RecorderStateError("Recorder.log() requires an active with-block")
+        trace = Trace(
+            model_name=str(type(self.model).__name__),
+            out_postfunc=self.options.out_transform,
+            save_raw_outs=self.options.save_raw_outs,
+            detach_saved_activations=False,
+            train_mode=True,
+        )
+        trace.capture_mode = "predicate"
+        trace._fastlog_recording = self._state.recording
+        self._reset_state_for_pass(sample_id=sample_id)
+        self._state.recording.start_times.append(time.time())
+        try:
+            with active_recording_state(self._state):
+                output = trace._run_and_log_inputs_through_model(
+                    self.model,
+                    input_args,
+                    input_kwargs,
+                    layers_to_save=[],
+                    grads_to_save=[],
+                    random_seed=self.options.random_seed,
+                    postprocess=False,
+                )
+        except Exception as exc:
+            self._state.abort_storage(str(exc))
+            raise
+        finally:
+            self._state.recording.end_times.append(time.time())
+        self._capture_events.extend(trace.capture_events.op_events)
+        object.__setattr__(
+            self._state.recording,
+            "n_ops",
+            max(self._state.recording.n_ops, self._next_pass_index),
+        )
+        return output
+
+    def _reset_state_for_pass(self, *, sample_id: str | int | None) -> None:
+        """Reset per-pass predicate state while preserving accumulated events."""
+
+        if self._state is None:
+            raise RecorderStateError("Recorder.log() requires an active with-block")
+        self._state.history.clear()
+        self._state.op_counts.clear()
+        self._state.module_stack.clear()
+        self._state.sample_id = sample_id
+        self._state.pass_index = self._next_pass_index
+        self._state.event_index = 0
+        self._state.compute_index = 0
 
     @property
     def recording(self) -> Recording:

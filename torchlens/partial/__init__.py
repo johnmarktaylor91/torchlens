@@ -1,4 +1,4 @@
-"""Partial capture helpers for failed TorchLens forward passes."""
+"""Partial capture helpers for failed TorchLens forward ops."""
 
 from __future__ import annotations
 
@@ -9,56 +9,56 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.layer_pass_log import LayerPassLog
-    from torchlens.data_classes.model_log import ModelLog
+    from torchlens.data_classes.op_log import OpLog
+    from torchlens.data_classes.model_log import Trace
 
 
 @dataclass(frozen=True)
-class PartialModelLog:
+class PartialTrace:
     """Thin wrapper around raw capture state from a failed forward pass.
 
     Parameters
     ----------
-    model_log:
-        Partially populated ``ModelLog`` whose raw layer entries were captured
+    trace:
+        Partially populated ``Trace`` whose raw layer entries were captured
         before the exception.
     original_exception:
         Exception raised by the failed capture.
     """
 
-    model_log: ModelLog
+    trace: Trace
     original_exception: BaseException
 
     @classmethod
-    def from_model_log(cls, model_log: ModelLog, exception: BaseException) -> "PartialModelLog":
+    def from_trace(cls, trace: Trace, exception: BaseException) -> "PartialTrace":
         """Build a partial log wrapper from a failed capture's internal state.
 
         Parameters
         ----------
-        model_log:
-            ``ModelLog`` instance active when capture failed.
+        trace:
+            ``Trace`` instance active when capture failed.
         exception:
             Original exception raised during capture.
 
         Returns
         -------
-        PartialModelLog
+        PartialTrace
             Wrapper exposing minimal inspection and graph rendering helpers.
         """
 
-        return cls(model_log=model_log, original_exception=exception)
+        return cls(trace=trace, original_exception=exception)
 
     @property
-    def raw_layers(self) -> tuple[LayerPassLog, ...]:
+    def raw_layers(self) -> tuple[OpLog, ...]:
         """Return raw layer entries captured before failure.
 
         Returns
         -------
-        tuple[LayerPassLog, ...]
+        tuple[OpLog, ...]
             Raw layer pass logs in capture order.
         """
 
-        return tuple(getattr(self.model_log, "_raw_layer_dict", {}).values())
+        return tuple(getattr(self.trace, "_raw_layer_dict", {}).values())
 
     def first_nonfinite(self) -> str:
         """Return a text summary of the first raw non-finite tensor.
@@ -70,8 +70,8 @@ class PartialModelLog:
         """
 
         for layer in self.raw_layers:
-            activation = getattr(layer, "activation", None)
-            candidate = activation if isinstance(activation, torch.Tensor) else None
+            out = getattr(layer, "out", None)
+            candidate = out if isinstance(out, torch.Tensor) else None
             if candidate is None or candidate.numel() == 0:
                 continue
             try:
@@ -79,13 +79,13 @@ class PartialModelLog:
             except (RuntimeError, TypeError):
                 continue
             if has_nonfinite:
-                parents = ", ".join(getattr(layer, "parent_layers", None) or []) or "none"
+                parents = ", ".join(getattr(layer, "parents", None) or []) or "none"
                 return (
                     "First non-finite captured tensor is in "
-                    f"layer {getattr(layer, 'tensor_label_raw', 'unknown')} "
+                    f"layer {getattr(layer, '_label_raw', 'unknown')} "
                     f"(op {getattr(layer, 'func_name', 'unknown')}), "
-                    f"shape={getattr(layer, 'tensor_shape', None)}, "
-                    f"dtype={getattr(layer, 'tensor_dtype', None)}, parents={parents}."
+                    f"shape={getattr(layer, 'shape', None)}, "
+                    f"dtype={getattr(layer, 'dtype', None)}, parents={parents}."
                 )
         fields = getattr(self.original_exception, "fields", {})
         if "layer" in fields:
@@ -97,7 +97,7 @@ class PartialModelLog:
             )
         return "No non-finite tensor values found in partial capture."
 
-    def render_graph(self, vis_outpath: str | None = None, **_: Any) -> str:
+    def draw(self, vis_outpath: str | None = None, **_: Any) -> str:
         """Render the failed capture as minimal Graphviz DOT source.
 
         Parameters
@@ -120,12 +120,12 @@ class PartialModelLog:
         ]
         for layer in self.raw_layers:
             raw_label = _raw_label(layer)
-            shape = getattr(layer, "tensor_shape", None)
-            dtype = getattr(layer, "tensor_dtype", None)
+            shape = getattr(layer, "shape", None)
+            dtype = getattr(layer, "dtype", None)
             func_name = getattr(layer, "func_name", "unknown")
             label = f"{raw_label}\\nop={func_name}\\nshape={shape}\\ndtype={dtype}"
             lines.append(f'  "{_dot_escape(raw_label)}" [label="{_dot_escape(label)}"];')
-            for parent in getattr(layer, "parent_layers", []) or []:
+            for parent in getattr(layer, "parents", []) or []:
                 lines.append(f'  "{_dot_escape(str(parent))}" -> "{_dot_escape(raw_label)}";')
         failure_label = _failure_label(self.original_exception)
         lines.append(f'  "__failure__" [shape=note, label="{_dot_escape(failure_label)}"];')
@@ -143,7 +143,7 @@ class PartialModelLog:
             ``"graph"`` returns DOT, ``"repr"`` returns ``repr(self)``, and
             ``"html"`` returns a compact HTML fragment.
         **kwargs:
-            Forwarded to ``render_graph`` for graph mode.
+            Forwarded to ``draw`` for graph mode.
 
         Returns
         -------
@@ -152,7 +152,7 @@ class PartialModelLog:
         """
 
         if method == "graph":
-            return self.render_graph(**kwargs)
+            return self.draw(**kwargs)
         if method == "repr":
             return repr(self)
         if method == "html":
@@ -171,7 +171,7 @@ class PartialModelLog:
         summary = escape(self.first_nonfinite())
         error = escape(str(self.original_exception))
         return (
-            "<div><b>PartialModelLog</b>"
+            "<div><b>PartialTrace</b>"
             f"<div>raw_layers={len(self.raw_layers)}</div>"
             f"<div>{summary}</div>"
             f"<div>error={error}</div></div>"
@@ -187,22 +187,22 @@ class PartialModelLog:
         """
 
         return (
-            f"PartialModelLog(raw_layers={len(self.raw_layers)}, "
+            f"PartialTrace(raw_layers={len(self.raw_layers)}, "
             f"error={type(self.original_exception).__name__})"
         )
 
 
-def from_failed_capture(exception: BaseException) -> PartialModelLog:
+def from_failed_capture(exception: BaseException) -> PartialTrace:
     """Return the partial log attached to a failed TorchLens capture exception.
 
     Parameters
     ----------
     exception:
-        Exception raised by ``torchlens.log_forward_pass``.
+        Exception raised by ``torchlens.trace``.
 
     Returns
     -------
-    PartialModelLog
+    PartialTrace
         Partial capture wrapper attached as ``exception.partial_log``.
 
     Raises
@@ -212,12 +212,12 @@ def from_failed_capture(exception: BaseException) -> PartialModelLog:
     """
 
     partial_log = getattr(exception, "partial_log", None)
-    if isinstance(partial_log, PartialModelLog):
+    if isinstance(partial_log, PartialTrace):
         return partial_log
     raise ValueError("exception does not contain a TorchLens partial capture")
 
 
-def _raw_label(layer: LayerPassLog) -> str:
+def _raw_label(layer: OpLog) -> str:
     """Return the raw label for a captured layer entry.
 
     Parameters
@@ -231,7 +231,7 @@ def _raw_label(layer: LayerPassLog) -> str:
         Raw tensor label, falling back to the raw layer label.
     """
 
-    return str(getattr(layer, "tensor_label_raw", getattr(layer, "layer_label_raw", "unknown")))
+    return str(getattr(layer, "_label_raw", getattr(layer, "_layer_label_raw", "unknown")))
 
 
 def _dot_escape(value: str) -> str:
@@ -268,4 +268,4 @@ def _failure_label(exception: BaseException) -> str:
     return f"{type(exception).__name__}: {exception}"
 
 
-__all__ = ["PartialModelLog", "from_failed_capture"]
+__all__ = ["PartialTrace", "from_failed_capture"]

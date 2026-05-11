@@ -13,7 +13,7 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import ModelLog, cleanup_tmp, load, log_forward_pass, save
+from torchlens import Trace, cleanup_tmp, load, trace as trace_fn, save
 from torchlens._io import IO_FORMAT_VERSION, TorchLensIOError
 from torchlens._io.manifest import Manifest
 
@@ -36,7 +36,7 @@ class _ConvBundleModel(nn.Module):
 
 
 class _ActivationPostfuncModel(nn.Module):
-    """Small linear model for activation postfunc policy tests."""
+    """Small linear model for out postfunc policy tests."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -49,8 +49,8 @@ class _ActivationPostfuncModel(nn.Module):
         return self.linear2(torch.relu(self.linear1(x)))
 
 
-def _build_conv_log(seed: int = 0) -> ModelLog:
-    """Create a deterministic ``ModelLog`` for bundle tests.
+def _build_conv_log(seed: int = 0) -> Trace:
+    """Create a deterministic ``Trace`` for bundle tests.
 
     Parameters
     ----------
@@ -59,18 +59,18 @@ def _build_conv_log(seed: int = 0) -> ModelLog:
 
     Returns
     -------
-    ModelLog
-        Logged forward pass with all activations saved.
+    Trace
+        Logged forward pass with all outs saved.
     """
 
     torch.manual_seed(seed)
     model = _ConvBundleModel()
     x = torch.randn(1, 3, 8, 8)
-    return log_forward_pass(model, x, layers_to_save="all", random_seed=seed)
+    return trace_fn(model, x, layers_to_save="all", random_seed=seed)
 
 
-def _build_postfunc_log(postfunc: Callable[[torch.Tensor], Any]) -> ModelLog:
-    """Create a deterministic log using a custom activation postfunc.
+def _build_postfunc_log(postfunc: Callable[[torch.Tensor], Any]) -> Trace:
+    """Create a deterministic log using a custom out postfunc.
 
     Parameters
     ----------
@@ -79,57 +79,57 @@ def _build_postfunc_log(postfunc: Callable[[torch.Tensor], Any]) -> ModelLog:
 
     Returns
     -------
-    ModelLog
-        Logged forward pass with transformed activations.
+    Trace
+        Logged forward pass with transformed outs.
     """
 
     torch.manual_seed(0)
     model = _ActivationPostfuncModel()
     x = torch.randn(2, 4)
-    return log_forward_pass(
+    return trace_fn(
         model,
         x,
         layers_to_save="all",
-        activation_postfunc=postfunc,
+        out_postfunc=postfunc,
         random_seed=0,
     )
 
 
-def _build_sparse_activation_log() -> ModelLog:
-    """Create a live log whose first saved activation is converted to sparse post-hoc.
+def _build_sparse_out_log() -> Trace:
+    """Create a live log whose first saved out is converted to sparse post-hoc.
 
     Returns
     -------
-    ModelLog
-        Model log containing an unsupported sparse activation tensor.
+    Trace
+        Model log containing an unsupported sparse out tensor.
     """
 
-    model_log = _build_conv_log()
-    first_saved_layer = next(layer for layer in model_log.layer_list if layer.has_saved_activations)
-    assert isinstance(first_saved_layer.activation, torch.Tensor)
-    first_saved_layer.activation = first_saved_layer.activation.to_sparse()
-    return model_log
+    trace = _build_conv_log()
+    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_outs)
+    assert isinstance(first_saved_layer.out, torch.Tensor)
+    first_saved_layer.out = first_saved_layer.out.to_sparse()
+    return trace
 
 
-def _build_non_tensor_activation_log() -> ModelLog:
-    """Create a live log whose first transformed activation becomes a non-tensor post-hoc.
+def _build_non_tensor_out_log() -> Trace:
+    """Create a live log whose first transformed out becomes a non-tensor post-hoc.
 
     Returns
     -------
-    ModelLog
-        Model log containing a non-tensor transformed activation payload.
+    Trace
+        Model log containing a non-tensor transformed out payload.
     """
 
-    model_log = _build_conv_log()
-    first_saved_layer = next(layer for layer in model_log.layer_list if layer.has_saved_activations)
-    first_saved_layer.transformed_activation = 1.0
-    model_log.activation_postfunc = lambda tensor: float(tensor.mean().item())
-    return model_log
+    trace = _build_conv_log()
+    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_outs)
+    first_saved_layer.transformed_out = 1.0
+    trace.out_postfunc = lambda tensor: float(tensor.mean().item())
+    return trace
 
 
 def _save_bundle(
     tmp_path: Path, *, seed: int = 0, path_name: str = "bundle.tl"
-) -> tuple[Path, ModelLog]:
+) -> tuple[Path, Trace]:
     """Save a deterministic bundle and return both path and source log.
 
     Parameters
@@ -143,14 +143,14 @@ def _save_bundle(
 
     Returns
     -------
-    tuple[Path, ModelLog]
+    tuple[Path, Trace]
         Saved bundle path and the original live log.
     """
 
-    model_log = _build_conv_log(seed=seed)
+    trace = _build_conv_log(seed=seed)
     bundle_path = tmp_path / path_name
-    save(model_log, bundle_path)
-    return bundle_path, model_log
+    save(trace, bundle_path)
+    return bundle_path, trace
 
 
 def _read_manifest(bundle_path: Path) -> dict[str, Any]:
@@ -219,51 +219,51 @@ def _corrupt_blob_byte(blob_path: Path) -> None:
     blob_path.write_bytes(bytes(blob_bytes))
 
 
-def test_bundle_roundtrip_preserves_saved_activations_bit_exactly(tmp_path: Path) -> None:
-    """Eager bundle load should restore all saved activations exactly."""
+def test_bundle_roundtrip_preserves_saved_outs_bit_exactly(tmp_path: Path) -> None:
+    """Eager bundle load should restore all saved outs exactly."""
 
     bundle_path, live_log = _save_bundle(tmp_path)
 
     restored = load(bundle_path)
 
     live_by_label = {
-        layer.layer_label: layer.activation
+        layer.layer_label: layer.out
         for layer in live_log.layer_list
-        if layer.has_saved_activations and isinstance(layer.activation, torch.Tensor)
+        if layer.has_saved_outs and isinstance(layer.out, torch.Tensor)
     }
     restored_by_label = {
-        layer.layer_label: layer.activation
+        layer.layer_label: layer.out
         for layer in restored.layer_list
-        if layer.has_saved_activations and isinstance(layer.activation, torch.Tensor)
+        if layer.has_saved_outs and isinstance(layer.out, torch.Tensor)
     }
 
     assert restored._loaded_from_bundle is True
     assert isinstance(restored._source_bundle_manifest_sha256, str)
     assert live_by_label.keys() == restored_by_label.keys()
-    for layer_label, live_activation in live_by_label.items():
-        assert torch.equal(live_activation, restored_by_label[layer_label])
+    for layer_label, live_out in live_by_label.items():
+        assert torch.equal(live_out, restored_by_label[layer_label])
 
 
 def test_bundle_save_strict_default_raises_on_sparse_tensor(tmp_path: Path) -> None:
     """Strict bundle save should reject sparse tensors."""
 
-    model_log = _build_sparse_activation_log()
+    trace = _build_sparse_out_log()
 
     with pytest.raises(TorchLensIOError, match="sparse"):
-        save(model_log, tmp_path / "sparse_bundle.tl")
+        save(trace, tmp_path / "sparse_bundle.tl")
 
 
 def test_bundle_save_strict_false_records_unsupported_tensors(tmp_path: Path) -> None:
     """Best-effort save should skip unsupported tensors and record them in the manifest."""
 
-    model_log = _build_sparse_activation_log()
+    trace = _build_sparse_out_log()
     bundle_path = tmp_path / "sparse_bundle.tl"
 
-    save(model_log, bundle_path, strict=False)
+    save(trace, bundle_path, strict=False)
 
     manifest = Manifest.read(bundle_path / "manifest.json")
     assert manifest.unsupported_tensors
-    assert all(entry["kind"] == "activation" for entry in manifest.unsupported_tensors)
+    assert all(entry["kind"] == "out" for entry in manifest.unsupported_tensors)
     assert all("sparse" in entry["reason"] for entry in manifest.unsupported_tensors)
 
 
@@ -451,10 +451,10 @@ def test_bundle_load_raises_on_checksum_tamper(tmp_path: Path) -> None:
 def test_bundle_save_overwrite_false_wraps_file_exists_error(tmp_path: Path) -> None:
     """Existing target paths should fail unless ``overwrite=True``."""
 
-    bundle_path, model_log = _save_bundle(tmp_path)
+    bundle_path, trace = _save_bundle(tmp_path)
 
     with pytest.raises(TorchLensIOError) as excinfo:
-        save(model_log, bundle_path)
+        save(trace, bundle_path)
 
     assert isinstance(excinfo.value.__cause__, FileExistsError)
 
@@ -468,9 +468,9 @@ def test_bundle_save_overwrite_true_replaces_existing_bundle(tmp_path: Path) -> 
     save(second_log, bundle_path, overwrite=True)
     restored = load(bundle_path)
 
-    first_output = first_log.layer_list[-1].activation
-    second_output = second_log.layer_list[-1].activation
-    restored_output = restored.layer_list[-1].activation
+    first_output = first_log.layer_list[-1].out
+    second_output = second_log.layer_list[-1].out
+    restored_output = restored.layer_list[-1].out
 
     assert isinstance(first_output, torch.Tensor)
     assert isinstance(second_output, torch.Tensor)
@@ -482,14 +482,14 @@ def test_bundle_save_overwrite_true_replaces_existing_bundle(tmp_path: Path) -> 
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
     """Bundle save should refuse symlinked target paths."""
 
-    model_log = _build_conv_log()
+    trace = _build_conv_log()
     real_path = tmp_path / "real_bundle"
     real_path.mkdir()
     symlink_path = tmp_path / "bundle_link"
     symlink_path.symlink_to(real_path, target_is_directory=True)
 
     with pytest.raises(TorchLensIOError, match="symlinked save target"):
-        save(model_log, symlink_path)
+        save(trace, symlink_path)
 
 
 def test_bundle_loaded_log_validation_guard_raises(tmp_path: Path) -> None:
@@ -503,14 +503,14 @@ def test_bundle_loaded_log_validation_guard_raises(tmp_path: Path) -> None:
         restored.validate_forward_pass([])
 
 
-def test_bundle_save_rejects_non_tensor_activation_postfunc_output(tmp_path: Path) -> None:
-    """Save should fail before writing blobs when activation_postfunc returned a non-tensor."""
+def test_bundle_save_rejects_non_tensor_out_postfunc_output(tmp_path: Path) -> None:
+    """Save should fail before writing blobs when out_postfunc returned a non-tensor."""
 
-    model_log = _build_non_tensor_activation_log()
+    trace = _build_non_tensor_out_log()
     bundle_path = tmp_path / "non_tensor_bundle.tl"
 
-    with pytest.raises(TorchLensIOError, match="activation_postfunc outputs"):
-        save(model_log, bundle_path)
+    with pytest.raises(TorchLensIOError, match="out_postfunc outputs"):
+        save(trace, bundle_path)
 
     assert not bundle_path.exists()
 

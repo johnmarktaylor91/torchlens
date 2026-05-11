@@ -20,7 +20,7 @@ from torch import nn
 # These are all tensor properties that either:
 #   - trigger deprecation warnings (.T, .H, .mT on non-2D tensors), or
 #   - return views that would create duplicate tensor entries (.real, .imag).
-# "grad" is also excluded (via substring check) to avoid pulling in gradient
+# "grad" is also excluded (via substring check) to avoid pulling in grad
 # tensors, which are tracked separately.
 _ATTR_SKIP_SET = frozenset({"T", "mT", "real", "imag", "H"})
 
@@ -321,7 +321,7 @@ def _extend_search_stack_from_item(
         #   - Skip dunders (__*) — internal Python machinery
         #   - Skip _ATTR_SKIP_SET (.T, .mT, .H, .real, .imag) — trigger
         #     deprecation warnings or create duplicate tensor views
-        #   - Skip anything containing "grad" — gradient tensors tracked separately
+        #   - Skip anything containing "grad" — grad tensors tracked separately
         _state._dir_cache[obj_type] = [
             a
             for a in dir(item)
@@ -341,7 +341,7 @@ def _extend_search_stack_from_item(
         # Leaf primitives — can't contain tensors.
         if attr_cls in [str, int, float, bool, np.ndarray]:
             continue
-        # Skip callables (methods, functions) UNLESS they're nn.Modules,
+        # Skip callables (custom_methods, functions) UNLESS they're nn.Modules,
         # which are callable but may hold tensor attributes.
         if callable(attr) and not issubclass(attr_cls, nn.Module):
             continue
@@ -358,10 +358,10 @@ def _extend_search_stack_from_item(
 
 
 def get_attr_values_from_tensor_list(tensor_list: List[torch.Tensor], field_name: str) -> List[Any]:
-    """Collect a named ``tl_``-prefixed attribute from each tensor that has it.
+    """Collect a named attribute from each tensor that has it.
 
-    Used to extract logging metadata (e.g. ``tl_tensor_label_raw``) from a
-    list of tensors that may or may not have been tagged by the logging pipeline.
+    Used for generic tensor attribute scans where tensors may or may not carry
+    the requested attribute.
 
     Args:
         tensor_list: List of tensors to inspect.
@@ -482,20 +482,18 @@ def iter_accessible_attributes(
 def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
     """Remove all attributes from ``obj`` whose names start with ``prefix``.
 
-    Used during session cleanup to strip ``tl_``-prefixed logging metadata
-    from tensors and modules without needing an explicit list of every
-    possible attribute name.
+    This is a generic utility for caller-owned dynamic attributes.
 
     Args:
         obj: Object from which to remove attributes.
-        prefix: String prefix that marks fields to remove (e.g. ``"tl_"``).
+        prefix: String prefix that marks fields to remove.
     """
     for field in dir(obj):
         if field.startswith(prefix):
             delattr(obj, field)
 
 
-def _get_func_call_stack(
+def _get_code_context(
     num_context_lines: int = 7,
     source_loading_enabled: bool = True,
     disable_col_offset: bool = False,
@@ -503,7 +501,7 @@ def _get_func_call_stack(
     """Build a list of FuncCallLocation objects for the current call stack.
 
     Filters out torchlens internals and ``_call_impl`` frames, keeping only
-    user-visible frames starting from the ``log_forward_pass`` call site
+    user-visible frames starting from the ``trace`` call site
     through the model's ``forward`` method and any deeper user calls.
 
     Uses ``sys._getframe()`` instead of ``inspect.stack()`` to avoid
@@ -552,7 +550,7 @@ def _get_func_call_stack(
     # Walk bottom-up (deepest caller last → first in output) and collect
     # non-internal frames.  Start tracking once we hit a ``forward`` frame,
     # but also include the frame *before* the first ``forward`` (the user's
-    # script that called ``log_forward_pass``).
+    # script that called ``trace``).
     tracking = False
     pre_forward_frame_idx = None
     filtered_indices = []
@@ -568,7 +566,7 @@ def _get_func_call_stack(
 
         if func_name == "forward" and not tracking:
             tracking = True
-            # Look for the user-script frame that called log_forward_pass
+            # Look for the user-script frame that called trace
             for j in range(idx + 1, len(raw_frames)):
                 j_filename, j_func_name, _, _, _ = raw_frames[j]
                 if not _is_torchlens_internal(j_filename) and "_call_impl" not in j_func_name:
@@ -578,7 +576,7 @@ def _get_func_call_stack(
         if tracking:
             filtered_indices.append(idx)
 
-    # Prepend the log_forward_pass call-site frame if found and not already included
+    # Prepend the trace call-site frame if found and not already included
     if pre_forward_frame_idx is not None and pre_forward_frame_idx not in filtered_indices:
         filtered_indices.append(pre_forward_frame_idx)
 

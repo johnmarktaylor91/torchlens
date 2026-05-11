@@ -13,7 +13,7 @@ def _tensor_from(obj: Any) -> torch.Tensor:
     Parameters
     ----------
     obj:
-        Tensor, ``LayerLog``, or ``LayerPassLog``.
+        Tensor, ``LayerLog``, or ``OpLog``.
 
     Returns
     -------
@@ -23,13 +23,13 @@ def _tensor_from(obj: Any) -> torch.Tensor:
 
     if isinstance(obj, torch.Tensor):
         return obj
-    activation = getattr(obj, "transformed_activation", None)
-    if isinstance(activation, torch.Tensor):
-        return activation
-    activation = getattr(obj, "activation", None)
-    if isinstance(activation, torch.Tensor):
-        return activation
-    raise TypeError("Expected a torch.Tensor or TorchLens layer log with a saved activation.")
+    out = getattr(obj, "transformed_out", None)
+    if isinstance(out, torch.Tensor):
+        return out
+    out = getattr(obj, "out", None)
+    if isinstance(out, torch.Tensor):
+        return out
+    raise TypeError("Expected a torch.Tensor or TorchLens layer log with a saved out.")
 
 
 def show(obj: Any, *args: Any, **kwargs: Any) -> Any:

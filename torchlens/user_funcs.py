@@ -1,29 +1,34 @@
 """Public API entry points for TorchLens.
 
 This module contains every user-facing function:
-  - ``log_forward_pass``  - the main entry point (runs model, returns ModelLog)
+  - ``trace``  - the main entry point (runs model, returns Trace)
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
-  - ``show_backward_graph`` - backward grad_fn visualization wrapper
+  - ``draw_backward`` - backward grad_fn visualization wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
   - ``get_model_metadata`` - deprecated alias for ``log_model_metadata``
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
-**Two-pass strategy** (``log_forward_pass`` with selective layers):
+**Two-pass strategy** (``trace`` with selective layers):
 When the user requests specific layers (not "all" or "none"), TorchLens must
 first run an exhaustive pass to discover the full graph structure - only then can
 it resolve user-friendly layer names/indices to internal layer numbers.  A second
-fast pass replays the model, saving only the requested activations.  This is why
-``log_forward_pass`` has two branches: the simple path (save all/none) and the
+fast pass replays the model, saving only the requested outs.  This is why
+``trace`` has two branches: the simple path (save all/none) and the
 two-pass path (save specific layers).
 """
 
 import collections.abc
+import copy
 import hashlib
 import json
 import os
 import pickle
 import random
+import re
+import tempfile
+import warnings
+from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
 
@@ -45,11 +50,12 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from .backends.torch._tl import get_tensor_label
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
 from .types import ActivationPostfunc, GradientPostfunc
 from .data_classes.model_log import (
-    ModelLog,
+    Trace,
 )
 from .options import (
     CaptureOptions,
@@ -74,15 +80,16 @@ from .visualization.code_panel import (
 )
 from .intervention.errors import InterventionReadyConflictError
 from .intervention.hooks import normalize_hook_plan
+from .intervention.resolver import resolve_sites
 from ._run_state import RunState
 
 
-def list_logs() -> tuple[ModelLog, ...]:
-    """Return a snapshot of currently live ``ModelLog`` objects.
+def list_logs() -> tuple[Trace, ...]:
+    """Return a snapshot of currently live ``Trace`` objects.
 
     Returns
     -------
-    tuple[ModelLog, ...]
+    tuple[Trace, ...]
         Immutable snapshot from TorchLens' process-wide weak registry.
     """
 
@@ -90,7 +97,7 @@ def list_logs() -> tuple[ModelLog, ...]:
 
 
 def reset_naming_counter(class_name: str | None = None) -> None:
-    """Reset automatic ``ModelLog`` naming counters.
+    """Reset automatic ``Trace`` naming counters.
 
     Parameters
     ----------
@@ -106,6 +113,180 @@ def reset_naming_counter(class_name: str | None = None) -> None:
     _state.reset_naming_counter(class_name)
 
 
+def _is_mlx_module_instance(model: object) -> bool:
+    """Return whether ``model`` is an MLX module without requiring MLX otherwise.
+
+    Parameters
+    ----------
+    model:
+        Candidate model object.
+
+    Returns
+    -------
+    bool
+        ``True`` if MLX is installed and ``model`` is an ``mlx.nn.Module``.
+    """
+
+    if not type(model).__module__.startswith("mlx."):
+        return False
+    try:
+        import mlx.nn as mlx_nn
+    except ImportError:
+        return False
+    return isinstance(model, mlx_nn.Module)
+
+
+def _trace_mlx_model(
+    model: object,
+    input_args: object,
+    input_kwargs: dict[Any, Any] | None,
+    *,
+    layers_to_save: str | list[Any] | None | MissingType,
+    transform: Callable[[Any], Any] | None | MissingType,
+    save_raw_input: str | bool | MissingType,
+    batch_render: str | MissingType,
+    output_transform: Callable[[Any], Any] | None | MissingType,
+    save_raw_output: str | bool | MissingType,
+    layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType,
+    save_visualizations: bool | MissingType,
+    keep_unsaved_layers: bool | MissingType,
+    keep_orphans: bool | MissingType,
+    output_device: OutputDeviceLiteral | MissingType,
+    out_transform: ActivationPostfunc | None | MissingType,
+    grad_transform: GradientPostfunc | None | MissingType,
+    save_raw_outs: bool | MissingType,
+    save_raw_grads: bool | MissingType,
+    save_arg_values: bool | MissingType,
+    save_grads: bool | MissingType,
+    grads_to_save: str | list[Any] | None | MissingType,
+    save_code_context: bool | MissingType,
+    save_rng_states: bool | MissingType,
+    random_seed: int | None | MissingType,
+    num_context_lines: int | MissingType,
+    recurrence_detection: bool | MissingType,
+    capture: CaptureOptions | None,
+    save: SaveOptions | None,
+    visualization: VisualizationOptions | None,
+    train_mode: bool | MissingType,
+    name: str | None | MissingType,
+    module_filter: Callable[[Any], bool] | None | MissingType,
+    verbose: bool | MissingType,
+) -> Trace:
+    """Dispatch an MLX module capture through the optional MLX backend.
+
+    Parameters
+    ----------
+    model, input_args, input_kwargs:
+        MLX model and forward inputs.
+
+    Returns
+    -------
+    Trace
+        Captured technical-preview MLX trace.
+    """
+
+    if out_transform is MISSING:
+        resolved_out_transform = None
+    else:
+        resolved_out_transform = out_transform
+    capture_options = merge_capture_options(
+        capture=capture,
+        layers_to_save=layers_to_save,
+        transform=transform,
+        save_raw_input=save_raw_input,
+        batch_render=batch_render,
+        output_transform=output_transform,
+        save_raw_output=save_raw_output,
+        layer_visualizers=layer_visualizers,
+        save_visualizations=save_visualizations,
+        keep_unsaved_layers=keep_unsaved_layers,
+        keep_orphans=keep_orphans,
+        output_device=output_device,
+        save_arg_values=save_arg_values,
+        save_grads=save_grads,
+        grads_to_save=grads_to_save,
+        save_code_context=save_code_context,
+        save_rng_states=save_rng_states,
+        random_seed=random_seed,
+        source_context_lines=MISSING,
+        num_context_lines=num_context_lines,
+        compute_input_output_distances=MISSING,
+        mark_layer_depths=MISSING,
+        detach_saved_activations=MISSING,
+        recurrence_detection=recurrence_detection,
+        intervention_ready=MISSING,
+        hooks=MISSING,
+        unwrap_when_done=MISSING,
+        verbose=verbose,
+        train_mode=train_mode,
+        name=name,
+        cache=MISSING,
+        cache_dir=MISSING,
+        module_filter=module_filter,
+        stop_after=MISSING,
+        raise_on_nan=MISSING,
+    )
+    save_options = merge_save_options(
+        save=save,
+        out_transform=resolved_out_transform,
+        grad_transform=grad_transform,
+        save_raw_outs=save_raw_outs,
+        save_raw_grads=save_raw_grads,
+    )
+    if visualization is not None and visualization.mode not in ["none", "rolled", "unrolled"]:
+        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
+    if capture_options.save_grads:
+        raise NotImplementedError("backward capture is not supported on the mlx backend")
+    raw_input = None
+    model_input_args = input_args
+    model_input_kwargs = input_kwargs
+    if capture_options.transform is not None:
+        raw_input = input_args
+        transformed_input = capture_options.transform(input_args)
+        if isinstance(transformed_input, collections.abc.Mapping):
+            model_input_args = []
+            model_input_kwargs = dict(transformed_input)
+        else:
+            model_input_args = transformed_input
+            model_input_kwargs = None
+    from .backends.mlx import MLXBackend
+
+    backend = MLXBackend()
+    trace = backend.capture_trace(
+        model,
+        model_input_args,
+        model_input_kwargs,
+        layers_to_save=capture_options.layers_to_save,
+        keep_unsaved_layers=capture_options.keep_unsaved_layers,
+        keep_orphans=capture_options.keep_orphans,
+        output_device=capture_options.output_device,
+        out_transform=save_options.out_transform,
+        save_raw_outs=save_options.save_raw_outs,
+        detach_saved_activations=capture_options.detach_saved_activations,
+        save_grads=capture_options.save_grads,
+        grads_to_save=capture_options.grads_to_save,
+        random_seed=capture_options.random_seed,
+        num_context_lines=capture_options.source_context_lines,
+        save_arg_values=capture_options.save_arg_values,
+        save_code_context=capture_options.save_code_context,
+        save_rng_states=capture_options.save_rng_states,
+        recurrence_detection=capture_options.recurrence_detection,
+        verbose=capture_options.verbose,
+        train_mode=capture_options.train_mode,
+        name=capture_options.name,
+        module_filter=capture_options.module_filter,
+        transform=capture_options.transform,
+        raw_input=raw_input,
+        save_raw_input=capture_options.save_raw_input,
+        batch_render=capture_options.batch_render,
+        output_transform=capture_options.output_transform,
+        save_raw_output=capture_options.save_raw_output,
+        layer_visualizers=capture_options.layer_visualizers,
+        save_visualizations=capture_options.save_visualizations,
+    )
+    return trace
+
+
 def record_kpi_in_graph(name: str, value: Any) -> None:
     """Record a user KPI on the active capture graph.
 
@@ -114,7 +295,7 @@ def record_kpi_in_graph(name: str, value: Any) -> None:
     name:
         KPI name.
     value:
-        JSON-like value to attach to the current ``ModelLog``.
+        JSON-like value to attach to the current ``Trace``.
 
     Raises
     ------
@@ -122,10 +303,10 @@ def record_kpi_in_graph(name: str, value: Any) -> None:
         If no forward pass is being captured.
     """
 
-    model_log = _state._active_model_log
-    if model_log is None:
-        raise RuntimeError("record_kpi_in_graph() must be called during log_forward_pass.")
-    model_log.capture_kpis[str(name)] = value
+    trace = _state._active_trace
+    if trace is None:
+        raise RuntimeError("record_kpi_in_graph() must be called during trace.")
+    trace.trace_annotations[str(name)] = value
 
 
 def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> None:
@@ -146,30 +327,54 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
         If either tensor has not been tagged by TorchLens.
     """
 
-    model_log = _state._active_model_log
-    if model_log is None:
-        raise RuntimeError("register_tensor_connection() must be called during log_forward_pass.")
-    parent_label = getattr(parent, "tl_tensor_label_raw", None)
-    child_label = getattr(child, "tl_tensor_label_raw", None)
+    trace = _state._active_trace
+    if trace is None:
+        raise RuntimeError("register_tensor_connection() must be called during trace.")
+    parent_label = get_tensor_label(parent)
+    child_label = get_tensor_label(child)
     if parent_label is None or child_label is None:
         raise ValueError("Both tensors must have TorchLens labels before registering an edge.")
-    model_log.manual_tensor_connections.append((parent_label, child_label))
-    if parent_label in model_log._raw_layer_dict and child_label in model_log._raw_layer_dict:
-        parent_entry = model_log._raw_layer_dict[parent_label]
-        child_entry = model_log._raw_layer_dict[child_label]
-        if child_label not in parent_entry.child_layers:
-            parent_entry.child_layers.append(child_label)
+    trace.manual_tensor_connections.append((parent_label, child_label))
+    if parent_label in trace._raw_layer_dict and child_label in trace._raw_layer_dict:
+        parent_entry = trace._raw_layer_dict[parent_label]
+        child_entry = trace._raw_layer_dict[child_label]
+        if child_label not in parent_entry.children:
+            parent_entry.children.append(child_label)
             parent_entry.has_children = True
-        if parent_label not in child_entry.parent_layers:
-            child_entry.parent_layers.append(parent_label)
+        if parent_label not in child_entry.parents:
+            child_entry.parents.append(parent_label)
 
 
-def decide_recording_of_batch(model_log: ModelLog, predicate: Callable[[ModelLog], bool]) -> bool:
+def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.Tensor]:
+    """Clone a module ``state_dict`` while preserving PyTorch metadata.
+
+    Parameters
+    ----------
+    model:
+        Module whose state should be cloned.
+
+    Returns
+    -------
+    OrderedDict[str, torch.Tensor]
+        Detached tensor clones plus any private ``_metadata`` needed by module
+        implementations such as torchvision MNASNet during ``load_state_dict``.
+    """
+
+    original_state = model.state_dict()
+    cloned_state = OrderedDict(
+        (name, tensor.detach().clone()) for name, tensor in original_state.items()
+    )
+    if hasattr(original_state, "_metadata"):
+        cloned_state._metadata = copy.deepcopy(original_state._metadata)  # type: ignore[attr-defined]
+    return cloned_state
+
+
+def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:
     """Retroactively keep or discard a captured batch log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Captured log to decide on.
     predicate:
         Callable receiving the log and returning whether to keep it.
@@ -180,10 +385,10 @@ def decide_recording_of_batch(model_log: ModelLog, predicate: Callable[[ModelLog
         True when the log was kept.
     """
 
-    keep = bool(predicate(model_log))
+    keep = bool(predicate(trace))
     if not keep:
-        model_log.cleanup()
-    model_log.recording_kept = keep
+        trace.cleanup()
+    trace.recording_kept = keep
     return keep
 
 
@@ -193,7 +398,7 @@ def _layers_to_save_conflicts_with_intervention_ready(layers_to_save: Any) -> bo
     Parameters
     ----------
     layers_to_save:
-        User-provided activation selection.
+        User-provided out selection.
 
     Returns
     -------
@@ -435,36 +640,36 @@ def _capture_cache_key(
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _prepare_log_for_capture_cache(model_log: ModelLog) -> None:
+def _prepare_log_for_capture_cache(trace: Trace) -> None:
     """Detach non-leaf tensors and autograd objects before cache serialization.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log to make pickle-compatible in place.
     """
 
-    for layer in getattr(model_log, "layer_list", []):
+    for layer in getattr(trace, "layer_list", []):
         for field_name in (
-            "activation",
-            "transformed_activation",
-            "gradient",
-            "transformed_gradient",
+            "out",
+            "transformed_out",
+            "grad",
+            "transformed_grad",
         ):
             value = getattr(layer, field_name, None)
             if isinstance(value, torch.Tensor):
                 layer._internal_set(field_name, value.detach().cpu())
-        layer.grad_fn_object = None
-        layer.corresponding_grad_fn = None
-        layer._internal_set("captured_args", _detach_nested_for_cache(layer.captured_args))
-        layer._internal_set("captured_kwargs", _detach_nested_for_cache(layer.captured_kwargs))
-    for layer_log in getattr(model_log, "layer_logs", {}).values():
-        for field_name in ("transformed_activation", "transformed_gradient"):
+        layer.grad_fn = None
+        layer.grad_fn_log = None
+        layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
+        layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
+    for layer_log in getattr(trace, "layer_logs", {}).values():
+        for field_name in ("transformed_out", "transformed_grad"):
             value = getattr(layer_log, field_name, None)
             if isinstance(value, torch.Tensor):
                 setattr(layer_log, field_name, value.detach().cpu())
-        layer_log.grad_fn_object = None
-        layer_log.corresponding_grad_fn = None
+        layer_log.grad_fn = None
+        layer_log.grad_fn_log = None
 
 
 def _detach_nested_for_cache(value: Any) -> Any:
@@ -508,7 +713,7 @@ def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
 
     FSDP cannot be unwrapped the same way: its parameters are sharded across
     ranks, so there is no single unsharded module to log. Users who want to
-    log an FSDP-wrapped model should ``log_forward_pass`` a rank-local
+    log an FSDP-wrapped model should ``trace`` a rank-local
     *un-wrapped* copy of the underlying module instead.
 
     The function is kept under its original name to avoid churn at call sites;
@@ -523,10 +728,10 @@ def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
     else:
         if isinstance(model, FullyShardedDataParallel):
             raise RuntimeError(
-                "torchlens.log_forward_pass does not support "
+                "torchlens.trace does not support "
                 "FullyShardedDataParallel (FSDP): parameters are sharded "
                 "across ranks and there is no unsharded module to log. "
-                "Run log_forward_pass on a rank-local copy of the underlying "
+                "Run trace on a rank-local copy of the underlying "
                 "module (before FSDP wrapping) instead."
             )
 
@@ -552,7 +757,7 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     TorchLens logs a model by wrapping every torch callable and running an
     ordinary Python forward pass.  The following wrappers all replace that
     Python execution with a traced / scripted / exported graph — by design,
-    our wrappers don't see the original ops, so the ModelLog would be
+    our wrappers don't see the original ops, so the Trace would be
     empty or misleading:
 
     * ``torch._dynamo.eval_frame.OptimizedModule`` (``torch.compile(model)``)
@@ -567,7 +772,7 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
       parameter materialization and sharding around forward execution in ways
       TorchLens cannot currently validate.
 
-    In these cases the fix is the same: call ``log_forward_pass`` on the
+    In these cases the fix is the same: call ``trace`` on the
     *un-wrapped* model before compiling, scripting, exporting, or sharding.
     """
     # FullyShardedDataParallel
@@ -578,10 +783,10 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     else:
         if isinstance(model, FullyShardedDataParallel):
             raise RuntimeError(
-                "torchlens.log_forward_pass does not support "
+                "torchlens.trace does not support "
                 "FullyShardedDataParallel models: FSDP controls parameter "
                 "materialization and sharding around forward execution in ways "
-                "TorchLens cannot validate. Call log_forward_pass on the "
+                "TorchLens cannot validate. Call trace on the "
                 "underlying unwrapped nn.Module."
             )
 
@@ -593,19 +798,19 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     else:
         if isinstance(model, OptimizedModule):
             raise RuntimeError(
-                "torchlens.log_forward_pass does not support torch.compile'd "
+                "torchlens.trace does not support torch.compile'd "
                 "models: dynamo replaces the Python forward with a compiled "
-                "graph that bypasses TorchLens' function wrappers. "
-                "Call log_forward_pass on the original (un-compiled) model."
+                "graph that byops TorchLens' function wrappers. "
+                "Call trace on the original (un-compiled) model."
             )
 
     # torch.jit.script / torch.jit.trace -> ScriptModule
     if isinstance(model, torch.jit.ScriptModule):
         raise RuntimeError(
-            "torchlens.log_forward_pass does not support torch.jit ScriptModule "
+            "torchlens.trace does not support torch.jit ScriptModule "
             "or traced models: the forward runs on the TorchScript interpreter "
             "rather than Python, so TorchLens' function wrappers don't fire. "
-            "Call log_forward_pass on the original (un-scripted / un-traced) "
+            "Call trace on the original (un-scripted / un-traced) "
             "model."
         )
 
@@ -617,10 +822,10 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     else:
         if isinstance(model, ExportedProgram):
             raise RuntimeError(
-                "torchlens.log_forward_pass does not support "
+                "torchlens.trace does not support "
                 "torch.export.ExportedProgram: the exported IR is not a "
                 "callable nn.Module that can be re-executed in Python. "
-                "Call log_forward_pass on the original nn.Module before "
+                "Call trace on the original nn.Module before "
                 "export."
             )
 
@@ -648,33 +853,34 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
     return obj
 
 
-def _run_model_and_save_specified_activations(
+def _run_model_and_save_specified_outs(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None,
     layers_to_save: str | list[int | str] | None = "all",
     keep_unsaved_layers: bool = True,
+    keep_orphans: bool = False,
     output_device: OutputDeviceLiteral = "same",
-    activation_transform: ActivationPostfunc | None = None,
-    gradient_postfunc: GradientPostfunc | None = None,
-    save_raw_activation: bool = True,
-    save_raw_gradient: bool = True,
-    mark_input_output_distances: bool = False,
-    detach_saved_tensors: bool = False,
-    save_function_args: bool = False,
-    save_gradients: bool = False,
-    gradients_to_save: str | list[int | str] | None = "all",
+    out_transform: ActivationPostfunc | None = None,
+    grad_transform: GradientPostfunc | None = None,
+    save_raw_outs: bool = True,
+    save_raw_grads: bool = True,
+    mark_layer_depths: bool = False,
+    detach_saved_activations: bool = False,
+    save_arg_values: bool = False,
+    save_grads: bool = False,
+    grads_to_save: str | list[int | str] | None = "all",
     random_seed: int | None = None,
     num_context_lines: int = 7,
     optimizer: Any = None,
-    save_source_context: bool = False,
+    save_code_context: bool = False,
     save_rng_states: bool = False,
-    detect_loops: bool = True,
-    save_activations_to: str | Path | None = None,
-    keep_activations_in_memory: bool = True,
-    save_gradients_to: str | Path | None = None,
-    keep_gradients_in_memory: bool = True,
-    activation_sink: Callable[[str, torch.Tensor], None] | None = None,
+    recurrence_detection: bool = True,
+    save_outs_to: str | Path | None = None,
+    keep_outs_in_memory: bool = True,
+    save_grads_to: str | Path | None = None,
+    keep_grads_in_memory: bool = True,
+    out_sink: Callable[[str, torch.Tensor], None] | None = None,
     intervention_ready: bool = False,
     hooks: Any | None = None,
     intervention_spec: Any | None = None,
@@ -682,14 +888,23 @@ def _run_model_and_save_specified_activations(
     verbose: bool = False,
     train_mode: bool = False,
     name: str | None = None,
-    module_filter_fn: Callable[[Any], bool] | None = None,
+    module_filter: Callable[[Any], bool] | None = None,
     emit_nvtx: bool = False,
     raise_on_nan: bool = False,
-) -> ModelLog:
-    """Run a forward pass with logging enabled, returning a populated ModelLog.
+    module_containment_engine: str = "hook_stack",
+    transform: Callable[[Any], Any] | None = None,
+    raw_input: Any | None = None,
+    save_raw_input: str | bool = "small",
+    batch_render: str = "auto",
+    output_transform: Callable[[Any], Any] | None = None,
+    save_raw_output: str | bool = "small",
+    layer_visualizers: dict[Any, Callable[..., Any]] | None = None,
+    save_visualizations: bool = False,
+) -> Trace:
+    """Run a forward pass with logging enabled, returning a populated Trace.
 
-    This is the single internal entry point that creates a ModelLog, configures it,
-    and delegates to ``ModelLog._run_and_log_inputs_through_model`` which handles
+    This is the single internal entry point that creates a Trace, configures it,
+    and delegates to ``Trace._run_and_log_inputs_through_model`` which handles
     model preparation, the exhaustive (and optionally fast) forward pass, and all
     postprocessing.
 
@@ -697,64 +912,76 @@ def _run_model_and_save_specified_activations(
         model: PyTorch model.
         input_args: Positional arguments to model.forward(); a single tensor or list.
         input_kwargs: Keyword arguments to model.forward().
-        layers_to_save: Which layers to save activations for ('all', 'none'/None, or a list).
-        keep_unsaved_layers: If False, layers without saved activations are pruned from the
+        layers_to_save: Which layers to save outs for ('all', 'none'/None, or a list).
+        keep_unsaved_layers: If False, layers without saved outs are pruned from the
             final log. When ``layers_to_save`` is a specific subset, TorchLens still runs the
             initial exhaustive metadata pass with ``keep_unsaved_layers=True`` so it can resolve
             names before the fast replay. Example: use
             ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
-            requested saved activations in the returned log.
+            requested saved outs in the returned log.
+        keep_orphans: If True, island ops are retained in raw metadata and exposed via
+            ``trace.orphans`` while remaining hidden from the main graph.
         output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
-        activation_transform: Optional transform applied to each activation before storage
+        out_transform: Optional transform applied to each out before storage
             (e.g., channel-wise averaging to reduce memory).
-        gradient_postfunc: Optional transform applied to each gradient before storage.
-        save_raw_activation: Whether raw activations are retained when ``activation_transform``
-            is set. Metadata always describes the raw activation.
-        save_raw_gradient: Whether raw gradients are retained when ``gradient_postfunc`` is set.
-            Metadata always describes the raw gradient.
-        mark_input_output_distances: Compute BFS distances from input/output layers.
+        grad_transform: Optional transform applied to each grad before storage.
+        save_raw_outs: Whether raw outs are retained when ``out_transform``
+            is set. Metadata always describes the raw out.
+        save_raw_grads: Whether raw grads are retained when ``grad_transform`` is set.
+            Metadata always describes the raw grad.
+        mark_layer_depths: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
-        detach_saved_tensors: If True, saved tensors are detached from the autograd graph.
-        save_function_args: If True, store the non-tensor arguments to each function call.
-            Required for validation replay (``validate_saved_activations``).
-        save_gradients: If True, register backward hooks to capture gradients.
-        gradients_to_save: Which layer gradients to save.
+        detach_saved_activations: If True, saved tensors are detached from the autograd graph.
+        save_arg_values: If True, store the non-tensor arguments to each function call.
+            Required for validation replay (``validate_saved_outs``).
+        save_grads: If True, register backward hooks to capture grads.
+        grads_to_save: Which layer grads to save.
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
-        detect_loops: If True (default), run full isomorphic subgraph expansion to
+        recurrence_detection: If True (default), run full isomorphic subgraph expansion to
             detect repeated patterns (loops). Set this to False when the forward pass has
             more than about 1M operations and postprocessing speed matters; the False path
             skips the expensive expansion step and only groups operations that share the
             same parameters.
-        save_activations_to: Optional portable bundle directory for streaming activation save.
-        keep_activations_in_memory: Whether streamed activations should remain in memory
+        save_outs_to: Optional portable bundle directory for streaming out save.
+        keep_outs_in_memory: Whether streamed outs should remain in memory
             after finalization.
-        save_gradients_to: Optional portable bundle directory for streaming gradient save.
-        keep_gradients_in_memory: Whether streamed gradients should remain in memory after
+        save_grads_to: Optional portable bundle directory for streaming grad save.
+        keep_grads_in_memory: Whether streamed grads should remain in memory after
             backward finalization.
-        activation_sink: Optional callback invoked with ``(label, tensor)`` for each
-            saved activation.
+        out_sink: Optional callback invoked with ``(label, tensor)`` for each
+            saved out.
         intervention_ready: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
-            ``ModelLog.attach_hooks`` and executes during this capture when supplied.
+            ``Trace.attach_hooks`` and executes during this capture when supplied.
         intervention_spec: Active intervention spec to expose in runtime context.
         normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
         verbose: If True, print timed progress messages at each major pipeline stage.
-        train_mode: If True, keep saved activations attached to autograd for training.
+        train_mode: If True, keep saved outs attached to autograd for training.
         name: User-facing log name. If omitted, generated by the public wrapper.
         emit_nvtx: If True, emit NVTX ranges around decorated torch operations.
         raise_on_nan: If True, stop capture at the first NaN or Inf tensor and raise
             ``CaptureError`` with the offending operation metadata.
+        module_containment_engine: Internal module-containment diagnostic engine selector.
+        transform: Optional callable used to produce model-ready inputs from raw user input.
+        raw_input: Original user input before ``transform`` was applied.
+        save_raw_input: Portable save policy for the original raw input.
+        batch_render: Raw-input batch rendering policy for visualization.
+        output_transform: Optional callable used to produce human-readable
+            output metadata from model output.
+        save_raw_output: Portable save policy for the transformed raw output.
+        layer_visualizers: Optional mapping from selectors to thumbnail visualizer callables.
+        save_visualizations: Whether rendered thumbnails should persist in portable bundles.
 
     Returns:
-        Fully-populated ModelLog.
+        Fully-populated Trace.
     """
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
-    # the user passes CPU tensors (a common mistake).
+    # the user ops CPU tensors (a common mistake).
     model_device = next((p.device for p in model.parameters()), None)
     if model_device is not None:
         input_args = _move_tensors_to_device(input_args, model_device)
@@ -762,8 +989,8 @@ def _run_model_and_save_specified_activations(
             input_kwargs = _move_tensors_to_device(input_kwargs, model_device)
 
     model_name = str(type(model).__name__)
-    source_model_id = id(model)
-    source_model_class = _qualname_for_model(model)
+    model_id = id(model)
+    model_class = _qualname_for_model(model)
     weight_fingerprint = _fingerprint_model_weights(model)
     input_id = _input_id_for_relationship_evidence(input_args)
     input_shape_hash = _hash_input_shapes(input_args, input_kwargs)
@@ -775,97 +1002,205 @@ def _run_model_and_save_specified_activations(
         hook_plan=hook_plan,
         intervention_spec=intervention_spec,
         capture_replay_templates=intervention_ready,
-        source_model_id=source_model_id,
-        source_model_class=source_model_class,
+        model_id=model_id,
+        model_class=model_class,
         weight_fingerprint=weight_fingerprint,
         input_id=input_id,
         input_shape_hash=input_shape_hash,
     )
-    model_log = ModelLog(
+    trace = Trace(
         model_name=model_name,
         output_device=output_device,
-        activation_postfunc=activation_transform,
-        gradient_postfunc=gradient_postfunc,
-        save_raw_activation=save_raw_activation,
-        save_raw_gradient=save_raw_gradient,
+        out_postfunc=out_transform,
+        grad_transform=grad_transform,
+        save_raw_outs=save_raw_outs,
+        save_raw_grads=save_raw_grads,
         keep_unsaved_layers=keep_unsaved_layers,
-        save_function_args=save_function_args,
-        save_gradients=save_gradients,
-        gradients_to_save=gradients_to_save,
-        detach_saved_tensors=detach_saved_tensors,
-        mark_input_output_distances=mark_input_output_distances,
+        keep_orphans=keep_orphans,
+        save_arg_values=save_arg_values,
+        save_grads=save_grads,
+        grads_to_save=grads_to_save,
+        detach_saved_activations=detach_saved_activations,
+        mark_layer_depths=mark_layer_depths,
         num_context_lines=num_context_lines,
         optimizer=optimizer,
-        save_source_context=save_source_context,
+        save_code_context=save_code_context,
         save_rng_states=save_rng_states,
-        detect_loops=detect_loops,
+        recurrence_detection=recurrence_detection,
         verbose=verbose,
         train_mode=train_mode,
-        module_filter_fn=module_filter_fn,
+        module_filter=module_filter,
         emit_nvtx=emit_nvtx,
+        transform=transform,
+        raw_input=raw_input,
+        save_raw_input=save_raw_input,
+        batch_render=batch_render,
+        output_transform=output_transform,
+        save_raw_output=save_raw_output,
+        layer_visualizers=layer_visualizers,
+        save_visualizations=save_visualizations,
     )
-    model_log.name = name
+    trace.name = name
+    trace._module_containment_engine = module_containment_engine
     forward_code = getattr(model.forward, "__code__", None)
-    model_log.forward_lineno = getattr(forward_code, "co_firstlineno", None)
-    model_log.intervention_ready = intervention_ready
+    trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
+    trace.intervention_ready = intervention_ready
     if hook_plan:
-        model_log.run_state = RunState.LIVE_CAPTURED
-    model_log.source_model_id = source_model_id
-    model_log.source_model_class = source_model_class
-    model_log.weight_fingerprint_at_capture = weight_fingerprint
-    model_log.weight_fingerprint_full = weight_fingerprint
-    model_log.input_id_at_capture = input_id
-    model_log.input_shape_hash = input_shape_hash
-    model_log._source_code_blob = capture_model_source_code(model)
-    model_log._source_model_ref = make_weak_model_ref(model)
-    model_log._activation_sink = activation_sink
-    model_log._keep_activations_in_memory = keep_activations_in_memory
-    model_log._keep_gradients_in_memory = keep_gradients_in_memory
-    model_log._defer_streaming_bundle_finalization = save_gradients_to is not None
-    model_log._in_exhaustive_pass = True
-    model_log.raise_on_nan = raise_on_nan
-    bundle_path = save_gradients_to if save_gradients_to is not None else save_activations_to
+        trace.run_state = RunState.LIVE_CAPTURED
+    trace.model_id = model_id
+    trace.model_class = model_class
+    trace.param_hash_quick = weight_fingerprint
+    trace.param_hash_full = weight_fingerprint
+    trace.input_id = input_id
+    trace.input_shape_hash = input_shape_hash
+    trace._source_code_blob = capture_model_source_code(model)
+    trace._source_model_ref = make_weak_model_ref(model)
+    trace._out_sink = out_sink
+    trace._keep_outs_in_memory = keep_outs_in_memory
+    trace._keep_grads_in_memory = keep_grads_in_memory
+    trace._defer_streaming_bundle_finalization = save_grads_to is not None
+    trace._in_exhaustive_pass = True
+    trace.raise_on_nan = raise_on_nan
+    bundle_path = save_grads_to if save_grads_to is not None else save_outs_to
     if bundle_path is not None:
-        model_log._activation_writer = BundleStreamWriter(bundle_path)
+        trace._out_writer = BundleStreamWriter(bundle_path)
     try:
-        model_log._run_and_log_inputs_through_model(
+        trace._run_and_log_inputs_through_model(
             model,
             cast(torch.Tensor | list[Any], input_args),
             input_kwargs,
             layers_to_save,
-            gradients_to_save,
+            grads_to_save,
             random_seed,
         )
     except (TorchLensIOError, TorchLensPostfuncError):
         raise
     except Exception as exc:
-        if model_log._activation_writer is not None:
-            model_log._activation_writer.abort(str(exc))
-            raise TorchLensIOError("Streaming activation save failed during forward pass.") from exc
+        if trace._out_writer is not None:
+            trace._out_writer.abort(str(exc))
+            raise TorchLensIOError("Streaming out save failed during forward pass.") from exc
         raise
     finally:
         _state.reset_capture_runtime_context()
-    return model_log
+    return trace
 
 
-def log_forward_pass(
+def _render_layer_visualizers(
+    trace: Trace,
+    layer_visualizers: dict[Any, Callable[..., Any]],
+) -> None:
+    """Render configured per-layer visualizer thumbnails after capture.
+
+    Parameters
+    ----------
+    trace:
+        Completed trace whose layer outs may be rendered.
+    layer_visualizers:
+        Mapping from TorchLens site selectors to visualizer callables.
+    """
+
+    output_dir = Path(tempfile.mkdtemp(prefix="torchlens_visualizers_"))
+    trace._visualizer_dir = str(output_dir)
+    visualizer_dir = output_dir / "visualizers"
+    visualizer_dir.mkdir(parents=True, exist_ok=True)
+    max_fanout = max(1, len(trace.layer_list))
+
+    for selector, visualizer in layer_visualizers.items():
+        try:
+            selected_ops = tuple(resolve_sites(trace, selector, max_fanout=max_fanout))
+        except Exception as exc:
+            warnings.warn(
+                f"Skipping layer visualizer for selector {selector!r}: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
+        for op in selected_ops:
+            _render_one_layer_visualizer(visualizer_dir, op, visualizer)
+
+
+def _render_one_layer_visualizer(
+    visualizer_dir: Path,
+    op: Any,
+    visualizer: Callable[..., Any],
+) -> None:
+    """Render one op visualizer and store its output path on the op.
+
+    Parameters
+    ----------
+    visualizer_dir:
+        Directory that receives rendered files.
+    op:
+        Layer operation to render.
+    visualizer:
+        Callable accepting ``(tensor, *, layer_label=None)``.
+    """
+
+    if not bool(getattr(op, "has_saved_outs", False)) or getattr(op, "out", None) is None:
+        return
+    try:
+        rendered = visualizer(op.out, layer_label=getattr(op, "layer_label", None))
+        if rendered is None:
+            return
+        safe_label = _safe_visualizer_filename(str(op.layer_label))
+        if isinstance(rendered, str):
+            output_path = visualizer_dir / f"{safe_label}.html"
+            output_path.write_text(rendered, encoding="utf-8")
+        else:
+            output_path = visualizer_dir / f"{safe_label}.png"
+            rendered.save(output_path)
+        op.visualizer_path = str(output_path)
+    except Exception as exc:
+        warnings.warn(
+            f"Layer visualizer failed for {getattr(op, 'layer_label', '<unknown>')}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+def _safe_visualizer_filename(label: str) -> str:
+    """Return a filesystem-safe visualizer basename for a layer label.
+
+    Parameters
+    ----------
+    label:
+        Layer label to encode.
+
+    Returns
+    -------
+    str
+        Safe filename stem.
+    """
+
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", label.replace(":", "pass")).strip("_") or "layer"
+
+
+def trace(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] | None | MissingType = MISSING,
+    transform: Callable[[Any], Any] | None | MissingType = MISSING,
+    save_raw_input: str | bool | MissingType = MISSING,
+    batch_render: str | MissingType = MISSING,
+    output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
+    save_raw_output: str | bool | MissingType = MISSING,
+    layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType = MISSING,
+    save_visualizations: bool | MissingType = MISSING,
     keep_unsaved_layers: bool | MissingType = MISSING,
+    keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
-    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-    gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
-    save_raw_activation: bool | MissingType = MISSING,
-    save_raw_gradient: bool | MissingType = MISSING,
-    activation_postfunc: ActivationPostfunc | None | MissingType = MISSING,
-    mark_input_output_distances: bool | MissingType = MISSING,
-    detach_saved_tensors: bool | MissingType = MISSING,
-    save_function_args: bool | MissingType = MISSING,
-    save_gradients: bool | MissingType = MISSING,
-    gradients_to_save: str | list[Any] | None | MissingType = MISSING,
-    save_source_context: bool | MissingType = MISSING,
+    out_transform: ActivationPostfunc | None | MissingType = MISSING,
+    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    save_raw_outs: bool | MissingType = MISSING,
+    save_raw_grads: bool | MissingType = MISSING,
+    out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+    mark_layer_depths: bool | MissingType = MISSING,
+    detach_saved_activations: bool | MissingType = MISSING,
+    save_arg_values: bool | MissingType = MISSING,
+    save_grads: bool | MissingType = MISSING,
+    grads_to_save: str | list[Any] | None | MissingType = MISSING,
+    save_code_context: bool | MissingType = MISSING,
     save_rng_states: bool | MissingType = MISSING,
     vis_opt: Any | MissingType = MISSING,
     view: VisModeLiteral | MissingType = MISSING,
@@ -874,16 +1209,16 @@ def log_forward_pass(
     layout: VisNodePlacementLiteral | MissingType = MISSING,
     node_style: VisNodeModeLiteral | MissingType = MISSING,
     vis_mode: VisModeLiteral | MissingType = MISSING,
-    vis_nesting_depth: int | MissingType = MISSING,
+    vis_call_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
     vis_fileformat: str | MissingType = MISSING,
-    vis_buffer_layers: BufferVisibilityLiteral | bool | MissingType = MISSING,
+    vis_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
@@ -893,19 +1228,18 @@ def log_forward_pass(
     random_seed: int | None | MissingType = MISSING,
     num_context_lines: int | MissingType = MISSING,
     optimizer: Any | MissingType = MISSING,
-    detect_loops: bool | MissingType = MISSING,
-    save_activations_to: str | Path | None | MissingType = MISSING,
-    keep_activations_in_memory: bool | MissingType = MISSING,
-    save_gradients_to: str | Path | None | MissingType = MISSING,
-    keep_gradients_in_memory: bool | MissingType = MISSING,
-    activation_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
+    save_outs_to: str | Path | None | MissingType = MISSING,
+    keep_outs_in_memory: bool | MissingType = MISSING,
+    save_grads_to: str | Path | None | MissingType = MISSING,
+    keep_grads_in_memory: bool | MissingType = MISSING,
+    out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
     intervention_ready: bool | MissingType = MISSING,
     hooks: Any | None | MissingType = MISSING,
     unwrap_when_done: bool | MissingType = MISSING,
     verbose: bool | MissingType = MISSING,
     source_context_lines: int | MissingType = MISSING,
     compute_input_output_distances: bool | MissingType = MISSING,
-    detect_recurrent_patterns: bool | MissingType = MISSING,
+    recurrence_detection: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
     save: SaveOptions | None = None,
     visualization: VisualizationOptions | None = None,
@@ -914,15 +1248,15 @@ def log_forward_pass(
     name: str | None | MissingType = MISSING,
     cache: bool | MissingType = MISSING,
     cache_dir: str | Path | None | MissingType = MISSING,
-    module_filter_fn: Callable[[Any], bool] | None | MissingType = MISSING,
+    module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
     stop_after: Any | None | MissingType = MISSING,
     raise_on_nan: bool | MissingType = MISSING,
-) -> ModelLog:
-    """Run a forward pass through *model*, log every operation, and return a ModelLog.
+) -> Trace:
+    """Run a forward pass through *model*, log every operation, and return a Trace.
 
     This is the primary user-facing entry point for TorchLens.  It intercepts every
     tensor-producing operation during ``model.forward()``, records metadata and
-    (optionally) saves activations, then returns a ``ModelLog`` that provides
+    (optionally) saves outs, then returns a ``Trace`` that provides
     dict-like access to every layer's data.
 
     Torch functions are automatically wrapped on the first call and stay wrapped
@@ -931,10 +1265,10 @@ def log_forward_pass(
 
     **Layer selection** (``layers_to_save``):
 
-    - ``'all'`` (default) - save activations for every layer.
-    - ``'none'`` / ``None`` / ``[]`` - save no activations (metadata only).
+    - ``'all'`` (default) - save outs for every layer.
+    - ``'none'`` / ``None`` / ``[]`` - save no outs (metadata only).
     - A list containing any mix of:
-      1. Layer name, e.g. ``'conv2d_1_1'`` (all passes).
+      1. Layer name, e.g. ``'conv2d_1_1'`` (all ops).
       2. Pass-qualified label, e.g. ``'conv2d_1_1:2'`` (second pass only).
       3. Module address, e.g. ``'features.0'`` (output of that module).
       4. Integer index (ordinal position; negative indices work).
@@ -942,42 +1276,62 @@ def log_forward_pass(
 
     When specific layers are requested, a **two-pass strategy** is used: first an
     exhaustive pass discovers the full graph structure (needed to resolve names),
-    then ``save_new_activations`` replays the model in fast mode to save only the
+    then ``save_new_outs`` replays the model in fast mode to save only the
     requested layers.  For ``'all'`` or ``'none'``, a single pass suffices.
 
     Args:
         model: PyTorch model.
         input_args: Positional args for ``model.forward()``; a single tensor or list.
         input_kwargs: Keyword args for ``model.forward()``.
-        layers_to_save: Which layers to save activations for (see above).
-        keep_unsaved_layers: If False, layers without saved activations are removed from
-            the returned ModelLog (they still exist during processing). When
+        transform: Optional callable applied once to ``input_args`` before
+            ``model.forward``. If it returns a mapping, TorchLens calls the
+            model with ``**transformed``.
+        save_raw_input: Raw user-input save policy for portable bundles:
+            ``"small"`` (default), ``True``, or ``False``.
+        batch_render: Raw-input batch rendering policy for visualization:
+            ``"auto"`` (default), ``"all"``, ``"first"``, ``"first_n:<N>"``,
+            or ``"shape_only"``.
+        output_transform: Optional callable applied once to the model output
+            after ``model.forward``. The returned value is stored as
+            ``Trace.raw_output`` and does not affect the computational graph.
+        save_raw_output: Raw output save policy for portable bundles:
+            ``"small"`` (default), ``True``, or ``False``.
+        layer_visualizers: Optional mapping from site selectors to callables that render
+            saved layer outs as PIL images or HTML strings. Selector keys accept the same
+            vocabulary as ``find_sites``.
+        save_visualizations: If True, copy rendered visualizer PNG files into portable
+            bundles. Defaults to False.
+        layers_to_save: Which layers to save outs for (see above).
+        keep_unsaved_layers: If False, layers without saved outs are removed from
+            the returned Trace (they still exist during processing). When
             ``layers_to_save`` is a specific subset, TorchLens still does an initial
             exhaustive metadata pass with ``keep_unsaved_layers=True`` so it can resolve
             names before the fast replay. Example: use
             ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
-            requested saved activations in the final log.
+            requested saved outs in the final log.
+        keep_orphans: If True, retain island ops in raw metadata and expose them via
+            ``trace.orphans``. Default False preserves pruning behavior.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
-        activation_transform: Optional function applied to each activation before saving. The
-            raw activation remains in ``layer.tensor``/``layer.activation`` by default, and
-            the transform result is stored in ``layer.transformed_activation``.
-        gradient_postfunc: Optional function applied to each gradient before saving. The raw
-            gradient remains in ``layer.gradient`` by default, and the postfunc result is stored
-            in ``layer.transformed_gradient``.
-        activation_postfunc: Deprecated alias for ``activation_transform``.
-        save_raw_activation: When ``False`` and ``activation_transform`` is set, do not retain
-            raw activation tensors in memory; raw activation metadata is still populated.
-        save_raw_gradient: When ``False`` and ``gradient_postfunc`` is set, do not retain raw
-            gradient tensors in memory; raw gradient metadata is still populated.
-        mark_input_output_distances: Deprecated alias for
+        out_transform: Optional function applied to each out before saving. The
+            raw out remains in ``layer.tensor``/``layer.out`` by default, and
+            the transform result is stored in ``layer.transformed_out``.
+        grad_transform: Optional function applied to each grad before saving. The raw
+            grad remains in ``layer.grad`` by default, and the postfunc result is stored
+            in ``layer.transformed_grad``.
+        out_postfunc: Deprecated alias for ``out_transform``.
+        save_raw_outs: When ``False`` and ``out_transform`` is set, do not retain
+            raw out tensors in memory; raw out metadata is still populated.
+        save_raw_grads: When ``False`` and ``grad_transform`` is set, do not retain raw
+            grad tensors in memory; raw grad metadata is still populated.
+        mark_layer_depths: Deprecated alias for
             ``compute_input_output_distances``.
-        detach_saved_tensors: If True, detach saved tensors from the autograd graph.
-        save_function_args: Store non-tensor args for each function call (needed for
+        detach_saved_activations: If True, detach saved tensors from the autograd graph.
+        save_arg_values: Store non-tensor args for each function call (needed for
             ``validate_forward_pass``).
-        save_gradients: Capture gradients during a subsequent backward pass.
-        gradients_to_save: Which layer gradients to save. When omitted, explicit
+        save_grads: Capture grads during a subsequent backward pass.
+        grads_to_save: Which layer grads to save. When omitted, explicit
             backward capture uses the same selection as ``layers_to_save``.
-        save_source_context: Python call-stack identity is always recorded for each
+        save_code_context: Python call-stack identity is always recorded for each
             tensor operation. If False (default), identity fields such as ``file``,
             ``line_number``, ``func_name``, ``code_firstlineno``,
             ``code_qualname``, and ``col_offset`` are still captured, but the rich
@@ -985,19 +1339,19 @@ def log_forward_pass(
             If True, TorchLens also captures source text on each ``FuncCallLocation``
             (``source_context``, ``code_context``, etc.) plus module source metadata.
             Full ``if``/``elif``/``else`` and ternary branch attribution
-            (``conditional_events``, ``conditional_arm_edges``,
-            ``conditional_edge_passes``, etc.) works regardless of this flag because it
+            (``conditional_records``, ``conditional_arm_entry_edges``,
+            ``conditional_edge_call_indices``, etc.) works regardless of this flag because it
             relies only on the always-captured identity fields.
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
         vis_opt: Deprecated alias for ``vis_mode``.
         vis_mode: Deprecated alias for ``visualization.mode``.
-        vis_nesting_depth: Deprecated alias for ``visualization.max_module_depth``.
-        vis_outpath: Deprecated alias for ``visualization.output_path``.
+        vis_call_depth: Deprecated alias for ``visualization.max_module_depth``.
+        vis_outpath: Deprecated alias for ``visualization.container_path``.
         vis_save_only: Deprecated alias for ``visualization.save_only``.
         vis_fileformat: Deprecated alias for ``visualization.file_format``.
-        vis_buffer_layers: Deprecated alias for ``visualization.show_buffers``.
+        vis_buffers: Deprecated alias for ``visualization.show_buffers``.
             Accepts ``"never"``, ``"meaningful"``, or ``"always"``. Legacy
             bools are deprecated but supported: ``True`` maps to ``"always"``
             and ``False`` maps to ``"never"``.
@@ -1005,8 +1359,8 @@ def log_forward_pass(
         vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
         vis_node_mode: Deprecated alias for ``visualization.node_mode``.
         vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
-        vis_gradient_edge_overrides: Deprecated alias for
-            ``visualization.gradient_edge_overrides``.
+        vis_grad_edge_overrides: Deprecated alias for
+            ``visualization.grad_edge_overrides``.
         vis_module_overrides: Deprecated alias for ``visualization.module_overrides``.
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
             ``"elk"`` remains accepted as an internal backend escape hatch;
@@ -1018,99 +1372,148 @@ def log_forward_pass(
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Deprecated alias for ``source_context_lines``.
         optimizer: Optional optimizer to annotate which params are being optimized.
-        detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
-        save_activations_to: Deprecated alias for ``streaming.bundle_path``.
-        keep_activations_in_memory: Deprecated alias for
+        recurrence_detection: Deprecated alias for ``recurrence_detection``.
+        save_outs_to: Deprecated alias for ``streaming.bundle_path``.
+        keep_outs_in_memory: Deprecated alias for
             ``streaming.retain_in_memory``.
-        save_gradients_to: Optional portable bundle directory for streaming saved gradients.
-            If omitted while ``save_activations_to`` is set and gradient capture is enabled,
-            gradients are written into the same bundle path.
-        keep_gradients_in_memory: Whether streamed gradients should remain in memory after
+        save_grads_to: Optional portable bundle directory for streaming saved grads.
+            If omitted while ``save_outs_to`` is set and grad capture is enabled,
+            grads are written into the same bundle path.
+        keep_grads_in_memory: Whether streamed grads should remain in memory after
             ``log_backward`` or ``recording_backward`` finalizes the bundle.
-        activation_sink: Deprecated alias for ``streaming.activation_callback``.
+        out_sink: Deprecated alias for ``streaming.out_callback``.
         intervention_ready: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence. This does not imply
-            ``save_function_args=True``.
+            ``save_arg_values=True``.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
-            ``ModelLog.attach_hooks`` and executes during this capture when supplied.
+            ``Trace.attach_hooks`` and executes during this capture when supplied.
         unwrap_when_done: If True, restore original torch callables after logging.
             Default False - torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.
         source_context_lines: Lines of source context to capture per function call.
         compute_input_output_distances: Compute BFS distances from inputs/outputs
             (expensive).
-        detect_recurrent_patterns: If True (default), run full isomorphic
+        recurrence_detection: If True (default), run full isomorphic
             subgraph expansion. Set this to False when the forward pass has more than
             about 1M operations and postprocessing speed matters; the False path skips
             the expensive expansion step and only groups operations that share the same
             parameters.
         visualization: Grouped visualization options. When omitted,
-            ``log_forward_pass`` defaults to ``VisualizationOptions(mode="none")``.
+            ``trace`` defaults to ``VisualizationOptions(mode="none")``.
         streaming: Grouped streaming-save options.
         train_mode: If True, validate training-compatible settings and keep saved
-            activations attached to autograd.
-        name: Optional user-facing name for the returned ``ModelLog``. When omitted,
+            outs attached to autograd.
+        name: Optional user-facing name for the returned ``Trace``. When omitted,
             TorchLens uses a process-local counter based on the model class name after
             stripping common HuggingFace suffixes. The counter is not thread-safe; it
             relies on TorchLens' single active logging session guard.
         cache: Whether to use the content-hash capture cache.
         cache_dir: Optional cache directory.
-        module_filter_fn: Optional predicate receiving each op log. Returning ``False`` keeps
-            metadata but skips activation saving for that op.
-        stop_after: Experimental stop-early site. Unsupported for ``log_forward_pass``.
+        module_filter: Optional predicate receiving each op log. Returning ``False`` keeps
+            metadata but skips out saving for that op.
+        stop_after: Experimental stop-early site. Unsupported for ``trace``.
 
     Postfunc behavior:
-        ``activation_transform`` and ``gradient_postfunc`` both take a tensor, should return a
+        ``out_transform`` and ``grad_transform`` both take a tensor, should return a
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
         raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
 
         Activation postfuncs run during forward capture. Their result is stored alongside the raw
-        activation by default, and ``train_mode=True`` requires the transformed activation to stay
-        graph-connected and differentiable when the raw activation requires gradients.
+        out by default, and ``train_mode=True`` requires the transformed out to stay
+        graph-connected and differentiable when the raw out requires grads.
 
-        Gradient postfuncs run from the backward hook output, so they follow the gradient tensor's
-        shorter lifetime rather than forward activation retention. When the raw gradient itself
-        requires gradients in ``train_mode=True``, the same differentiability checks apply.
+        Gradient postfuncs run from the backward hook output, so they follow the grad tensor's
+        shorter lifetime rather than forward out retention. When the raw grad itself
+        requires grads in ``train_mode=True``, the same differentiability checks apply.
 
     Returns:
-        A ``ModelLog`` containing layer activations (if requested) and full metadata.
+        A ``Trace`` containing layer outs (if requested) and full metadata.
     """
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
+    if _is_mlx_module_instance(model):
+        if out_postfunc is not MISSING:
+            if out_transform is not MISSING:
+                raise TypeError(
+                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
+                )
+            warn_deprecated_alias("out_postfunc", "out_transform")
+            out_transform = out_postfunc
+        return _trace_mlx_model(
+            model,
+            input_args,
+            input_kwargs,
+            layers_to_save=layers_to_save,
+            transform=transform,
+            save_raw_input=save_raw_input,
+            batch_render=batch_render,
+            output_transform=output_transform,
+            save_raw_output=save_raw_output,
+            layer_visualizers=layer_visualizers,
+            save_visualizations=save_visualizations,
+            keep_unsaved_layers=keep_unsaved_layers,
+            keep_orphans=keep_orphans,
+            output_device=output_device,
+            out_transform=out_transform,
+            grad_transform=grad_transform,
+            save_raw_outs=save_raw_outs,
+            save_raw_grads=save_raw_grads,
+            save_arg_values=save_arg_values,
+            save_grads=save_grads,
+            grads_to_save=grads_to_save,
+            save_code_context=save_code_context,
+            save_rng_states=save_rng_states,
+            random_seed=random_seed,
+            num_context_lines=num_context_lines,
+            recurrence_detection=recurrence_detection,
+            capture=capture,
+            save=save,
+            visualization=visualization,
+            train_mode=train_mode,
+            name=name,
+            module_filter=module_filter,
+            verbose=verbose,
+        )
     # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
     _reject_opaque_wrappers(model)
+    if not isinstance(model, nn.Module):
+        raise ValueError("Unsupported model type for capture")
     model = _unwrap_data_parallel(model)
-    check_model_and_input_variants(model, input_args, input_kwargs)
 
-    if activation_postfunc is not MISSING:
-        if activation_transform is not MISSING:
-            raise TypeError(
-                "kwarg activation_postfunc deprecated, use activation_transform; do not pass both"
-            )
-        warn_deprecated_alias("activation_postfunc", "activation_transform")
-        activation_transform = activation_postfunc
+    if out_postfunc is not MISSING:
+        if out_transform is not MISSING:
+            raise TypeError("kwarg out_postfunc deprecated, use out_transform; do not pass both")
+        warn_deprecated_alias("out_postfunc", "out_transform")
+        out_transform = out_postfunc
 
     capture_options = merge_capture_options(
         capture=capture,
         layers_to_save=layers_to_save,
+        transform=transform,
+        save_raw_input=save_raw_input,
+        batch_render=batch_render,
+        output_transform=output_transform,
+        save_raw_output=save_raw_output,
+        layer_visualizers=layer_visualizers,
+        save_visualizations=save_visualizations,
         keep_unsaved_layers=keep_unsaved_layers,
+        keep_orphans=keep_orphans,
         output_device=output_device,
-        save_function_args=save_function_args,
-        save_gradients=save_gradients,
-        gradients_to_save=gradients_to_save,
-        save_source_context=save_source_context,
+        save_arg_values=save_arg_values,
+        save_grads=save_grads,
+        grads_to_save=grads_to_save,
+        save_code_context=save_code_context,
         save_rng_states=save_rng_states,
         random_seed=random_seed,
         source_context_lines=source_context_lines,
         num_context_lines=num_context_lines,
         optimizer=optimizer,
         compute_input_output_distances=compute_input_output_distances,
-        mark_input_output_distances=mark_input_output_distances,
-        detach_saved_tensors=detach_saved_tensors,
-        detect_recurrent_patterns=detect_recurrent_patterns,
-        detect_loops=detect_loops,
+        mark_layer_depths=mark_layer_depths,
+        detach_saved_activations=detach_saved_activations,
+        recurrence_detection=recurrence_detection,
         intervention_ready=intervention_ready,
         hooks=hooks,
         unwrap_when_done=unwrap_when_done,
@@ -1119,16 +1522,29 @@ def log_forward_pass(
         name=name,
         cache=cache,
         cache_dir=cache_dir,
-        module_filter_fn=module_filter_fn,
+        module_filter=module_filter,
         stop_after=stop_after,
         raise_on_nan=raise_on_nan,
     )
+    raw_input = None
+    input_transform = capture_options.transform
+    if input_transform is not None:
+        raw_input = input_args
+        transformed_input = input_transform(input_args)
+        if isinstance(transformed_input, collections.abc.Mapping):
+            input_args = []
+            input_kwargs = dict(transformed_input)
+        else:
+            input_args = transformed_input
+            input_kwargs = None
+
+    check_model_and_input_variants(model, input_args, input_kwargs)
     save_options = merge_save_options(
         save=save,
-        activation_transform=activation_transform,
-        gradient_postfunc=gradient_postfunc,
-        save_raw_activation=save_raw_activation,
-        save_raw_gradient=save_raw_gradient,
+        out_transform=out_transform,
+        grad_transform=grad_transform,
+        save_raw_outs=save_raw_outs,
+        save_raw_grads=save_raw_grads,
     )
     if vis_opt is not MISSING:
         vis_mode = vis_opt
@@ -1141,16 +1557,16 @@ def log_forward_pass(
         layout=layout,
         node_style=node_style,
         vis_mode=vis_mode,
-        vis_nesting_depth=vis_nesting_depth,
+        vis_call_depth=vis_call_depth,
         vis_outpath=vis_outpath,
         vis_save_only=vis_save_only,
         vis_fileformat=vis_fileformat,
-        vis_buffer_layers=vis_buffer_layers,
+        vis_buffers=vis_buffers,
         vis_direction=vis_direction,
         vis_graph_overrides=vis_graph_overrides,
         vis_node_mode=vis_node_mode,
         vis_edge_overrides=vis_edge_overrides,
-        vis_gradient_edge_overrides=vis_gradient_edge_overrides,
+        vis_grad_edge_overrides=vis_grad_edge_overrides,
         vis_module_overrides=vis_module_overrides,
         vis_node_placement=vis_node_placement,
         vis_renderer=vis_renderer,
@@ -1160,27 +1576,34 @@ def log_forward_pass(
     )
     streaming_options = merge_streaming_options(
         streaming=streaming,
-        save_activations_to=save_activations_to,
-        keep_activations_in_memory=keep_activations_in_memory,
-        activation_sink=activation_sink,
+        save_outs_to=save_outs_to,
+        keep_outs_in_memory=keep_outs_in_memory,
+        out_sink=out_sink,
     )
     layers_to_save = capture_options.layers_to_save
+    save_raw_input_policy = capture_options.save_raw_input
+    batch_render_policy = capture_options.batch_render
+    output_transform_value = capture_options.output_transform
+    save_raw_output_policy = capture_options.save_raw_output
+    layer_visualizers_value = capture_options.layer_visualizers
+    save_visualizations_value = capture_options.save_visualizations
     keep_unsaved_layers = capture_options.keep_unsaved_layers
+    keep_orphans = capture_options.keep_orphans
     output_device = capture_options.output_device
-    activation_transform = save_options.activation_transform
-    gradient_postfunc = save_options.gradient_postfunc
-    save_raw_activation = save_options.save_raw_activation
-    save_raw_gradient = save_options.save_raw_gradient
-    save_function_args = capture_options.save_function_args
-    save_gradients = capture_options.save_gradients
-    save_source_context = capture_options.save_source_context
+    out_transform = save_options.out_transform
+    grad_transform = save_options.grad_transform
+    save_raw_outs = save_options.save_raw_outs
+    save_raw_grads = save_options.save_raw_grads
+    save_arg_values = capture_options.save_arg_values
+    save_grads = capture_options.save_grads
+    save_code_context = capture_options.save_code_context
     save_rng_states = capture_options.save_rng_states
     random_seed = capture_options.random_seed
     source_context_lines = capture_options.source_context_lines
     optimizer = capture_options.optimizer
     compute_input_output_distances = capture_options.compute_input_output_distances
-    detach_saved_tensors = capture_options.detach_saved_tensors
-    detect_recurrent_patterns = capture_options.detect_recurrent_patterns
+    detach_saved_activations = capture_options.detach_saved_activations
+    recurrence_detection = capture_options.recurrence_detection
     intervention_ready = capture_options.intervention_ready
     hooks = capture_options.hooks
     unwrap_when_done = capture_options.unwrap_when_done
@@ -1188,15 +1611,14 @@ def log_forward_pass(
     name = capture_options.name
     cache_enabled = capture_options.cache
     cache_dir_value = capture_options.cache_dir
-    module_filter_fn_value = capture_options.module_filter_fn
+    module_filter_value = capture_options.module_filter
     raise_on_nan_value = capture_options.raise_on_nan
+    module_containment_engine = capture_options._module_containment_engine
     if capture_options.stop_after is not None:
         raise NotImplementedError("stop_after is only supported by torchlens.peek.")
-    save_gradients_to_value = (
-        None if isinstance(save_gradients_to, MissingType) else save_gradients_to
-    )
-    keep_gradients_in_memory_value = (
-        True if isinstance(keep_gradients_in_memory, MissingType) else keep_gradients_in_memory
+    save_grads_to_value = None if isinstance(save_grads_to, MissingType) else save_grads_to
+    keep_grads_in_memory_value = (
+        True if isinstance(keep_grads_in_memory, MissingType) else keep_grads_in_memory
     )
 
     if visualization_options.mode not in ["none", "rolled", "unrolled"]:
@@ -1204,56 +1626,47 @@ def log_forward_pass(
 
     if output_device not in ["same", "cpu", "cuda"]:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
-    if (
-        streaming_options.bundle_path is not None
-        and streaming_options.activation_callback is not None
-    ):
-        raise ValueError("save_activations_to and activation_sink are mutually exclusive.")
+    if streaming_options.bundle_path is not None and streaming_options.out_callback is not None:
+        raise ValueError("save_outs_to and out_sink are mutually exclusive.")
     train_mode_explicit = capture_options.is_field_explicit("train_mode")
     train_mode_value = capture_options.train_mode
-    backward_opted_in = capture_options.is_field_explicit("gradients_to_save")
-    gradient_streaming_requested = save_gradients_to_value is not None
-    if gradient_streaming_requested:
-        save_gradients = True
+    backward_opted_in = capture_options.is_field_explicit("grads_to_save")
+    grad_streaming_requested = save_grads_to_value is not None
+    if grad_streaming_requested:
+        save_grads = True
     if backward_opted_in:
         if train_mode_explicit and train_mode_value is False:
             raise ValueError(
-                "gradients_to_save opts into backward capture, which requires train_mode=True. "
+                "grads_to_save opts into backward capture, which requires train_mode=True. "
                 "Omit train_mode or set train_mode=True."
             )
         train_mode_value = True
-        save_gradients = True
-    gradients_to_save_resolved = (
-        capture_options.gradients_to_save if backward_opted_in else layers_to_save
-    )
+        save_grads = True
+    grads_to_save_resolved = capture_options.grads_to_save if backward_opted_in else layers_to_save
+    if save_grads and save_grads_to_value is None and streaming_options.bundle_path is not None:
+        save_grads_to_value = streaming_options.bundle_path
     if (
-        save_gradients
-        and save_gradients_to_value is None
+        save_grads_to_value is not None
         and streaming_options.bundle_path is not None
+        and Path(save_grads_to_value) != Path(streaming_options.bundle_path)
     ):
-        save_gradients_to_value = streaming_options.bundle_path
-    if (
-        save_gradients_to_value is not None
-        and streaming_options.bundle_path is not None
-        and Path(save_gradients_to_value) != Path(streaming_options.bundle_path)
-    ):
-        raise ValueError("save_activations_to and save_gradients_to must use the same bundle path.")
-    if train_mode_value and save_gradients_to_value is not None:
+        raise ValueError("save_outs_to and save_grads_to must use the same bundle path.")
+    if train_mode_value and save_grads_to_value is not None:
         raise TrainingModeConfigError(
-            "train_mode=True is not compatible with slow/replay gradient disk saves"
+            "train_mode=True is not compatible with slow/replay grad disk saves"
         )
 
     validate_training_compatibility(
         train_mode=train_mode_value,
         streaming=streaming_options,
-        detach_saved_tensors=detach_saved_tensors,
+        detach_saved_activations=detach_saved_activations,
         inference_mode_active=torch.is_inference_mode_enabled(),
     )
 
     if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
-    if type(gradients_to_save_resolved) is str:
-        gradients_to_save_resolved = gradients_to_save_resolved.lower()
+    if type(grads_to_save_resolved) is str:
+        grads_to_save_resolved = grads_to_save_resolved.lower()
     if intervention_ready and _layers_to_save_conflicts_with_intervention_ready(layers_to_save):
         raise InterventionReadyConflictError(
             "intervention_ready=True is not compatible with a non-empty list for "
@@ -1262,7 +1675,7 @@ def log_forward_pass(
         )
 
     uses_two_pass = (layers_to_save not in ["all", "none", None, []]) or (
-        gradients_to_save_resolved not in ["all", "none", None, []]
+        grads_to_save_resolved not in ["all", "none", None, []]
     )
     log_name = name if name is not None else _state._auto_name(model)
     cache_path: Path | None = None
@@ -1271,17 +1684,19 @@ def log_forward_pass(
         cache_config = {
             "layers_to_save": layers_to_save,
             "keep_unsaved_layers": keep_unsaved_layers,
+            "keep_orphans": keep_orphans,
             "output_device": output_device,
-            "save_function_args": save_function_args,
-            "save_gradients": save_gradients,
-            "gradients_to_save": gradients_to_save_resolved,
-            "save_source_context": save_source_context,
+            "save_arg_values": save_arg_values,
+            "save_grads": save_grads,
+            "grads_to_save": grads_to_save_resolved,
+            "save_code_context": save_code_context,
             "save_rng_states": save_rng_states,
             "source_context_lines": source_context_lines,
             "compute_input_output_distances": compute_input_output_distances,
-            "detach_saved_tensors": detach_saved_tensors,
-            "detect_recurrent_patterns": detect_recurrent_patterns,
+            "detach_saved_activations": detach_saved_activations,
+            "recurrence_detection": recurrence_detection,
             "train_mode": train_mode_value,
+            "output_transform": repr(output_transform_value),
         }
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
         cache_root = _capture_cache_dir(cache_dir_value) / "capture"
@@ -1289,54 +1704,56 @@ def log_forward_pass(
         cache_path = cache_root / f"{cache_key}.pkl"
         if cache_path.exists():
             with cache_path.open("rb") as file:
-                cached_log = cast(ModelLog, pickle.load(file))
+                cached_log = cast(Trace, pickle.load(file))
             cached_log.capture_cache_hit = True
             cached_log.capture_cache_key = cache_key
             cached_log.capture_cache_path = str(cache_path)
+            cached_log.batch_render = batch_render_policy
             return cached_log
     if streaming_options.bundle_path is not None and uses_two_pass:
         raise TorchLensIOError(
-            'save_activations_to is only supported with layers_to_save="all" in this '
-            "release. For selective streaming use activation_sink=callable, or capture "
+            'save_outs_to is only supported with layers_to_save="all" in this '
+            "release. For selective streaming use out_sink=callable, or capture "
             'with layers_to_save="all" and filter post-hoc with '
-            "torchlens.save(..., include_activations=True)."
+            "torchlens.save(..., include_outs=True)."
         )
-    if save_gradients_to_value is not None and uses_two_pass:
+    if save_grads_to_value is not None and uses_two_pass:
         raise TorchLensIOError(
-            'save_gradients_to is only supported with gradients_to_save="all" in this '
-            "release. Capture all gradients and filter post-hoc with torchlens.save(...)."
+            'save_grads_to is only supported with grads_to_save="all" in this '
+            "release. Capture all grads and filter post-hoc with torchlens.save(...)."
         )
 
     if not uses_two_pass:
         # --- SINGLE-PASS path ---
         # "all" or "none": no name resolution needed, so one pass suffices.
-        model_log = _run_model_and_save_specified_activations(
+        trace = _run_model_and_save_specified_outs(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             keep_unsaved_layers=keep_unsaved_layers,
+            keep_orphans=keep_orphans,
             output_device=output_device,
-            activation_transform=activation_transform,
-            gradient_postfunc=gradient_postfunc,
-            save_raw_activation=save_raw_activation,
-            save_raw_gradient=save_raw_gradient,
-            mark_input_output_distances=compute_input_output_distances,
-            detach_saved_tensors=detach_saved_tensors,
-            save_function_args=save_function_args,
-            save_gradients=save_gradients,
-            gradients_to_save=gradients_to_save_resolved,
+            out_transform=out_transform,
+            grad_transform=grad_transform,
+            save_raw_outs=save_raw_outs,
+            save_raw_grads=save_raw_grads,
+            mark_layer_depths=compute_input_output_distances,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
+            save_grads=save_grads,
+            grads_to_save=grads_to_save_resolved,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
-            save_source_context=save_source_context,
+            save_code_context=save_code_context,
             save_rng_states=save_rng_states,
-            detect_loops=detect_recurrent_patterns,
-            save_activations_to=streaming_options.bundle_path,
-            keep_activations_in_memory=streaming_options.retain_in_memory,
-            save_gradients_to=save_gradients_to_value,
-            keep_gradients_in_memory=keep_gradients_in_memory_value,
-            activation_sink=streaming_options.activation_callback,
+            recurrence_detection=recurrence_detection,
+            save_outs_to=streaming_options.bundle_path,
+            keep_outs_in_memory=streaming_options.retain_in_memory,
+            save_grads_to=save_grads_to_value,
+            keep_grads_in_memory=keep_grads_in_memory_value,
+            out_sink=streaming_options.out_callback,
             intervention_ready=intervention_ready,
             hooks=hooks,
             intervention_spec=None,
@@ -1344,15 +1761,24 @@ def log_forward_pass(
             verbose=verbose,
             train_mode=train_mode_value,
             name=log_name,
-            module_filter_fn=module_filter_fn_value,
+            module_filter=module_filter_value,
             emit_nvtx=capture_options.emit_nvtx,
             raise_on_nan=raise_on_nan_value,
+            module_containment_engine=module_containment_engine,
+            transform=input_transform,
+            raw_input=raw_input,
+            save_raw_input=save_raw_input_policy,
+            batch_render=batch_render_policy,
+            output_transform=output_transform_value,
+            save_raw_output=save_raw_output_policy,
+            layer_visualizers=layer_visualizers_value,
+            save_visualizations=save_visualizations_value,
         )
     else:
         # --- TWO-PASS path ---
         # Pass 1 (exhaustive): Run with layers_to_save=None and keep_unsaved_layers=True
         # so the full graph is discovered and all layer labels are assigned.  No
-        # activations are saved yet - this pass is purely for metadata/structure.
+        # outs are saved yet - this pass is purely for metadata/structure.
         from .utils.display import progress_bar
 
         capture_progress = iter(
@@ -1361,33 +1787,34 @@ def log_forward_pass(
         next(capture_progress, None)
         if verbose:
             print("[torchlens] Two-pass mode: Pass 1 (exhaustive, metadata only)")
-        model_log = _run_model_and_save_specified_activations(
+        trace = _run_model_and_save_specified_outs(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=None,
             keep_unsaved_layers=True,
+            keep_orphans=keep_orphans,
             output_device=output_device,
-            activation_transform=activation_transform,
-            gradient_postfunc=gradient_postfunc,
-            save_raw_activation=save_raw_activation,
-            save_raw_gradient=save_raw_gradient,
-            mark_input_output_distances=compute_input_output_distances,
-            detach_saved_tensors=detach_saved_tensors,
-            save_function_args=save_function_args,
-            save_gradients=False,
-            gradients_to_save=None,
+            out_transform=out_transform,
+            grad_transform=grad_transform,
+            save_raw_outs=save_raw_outs,
+            save_raw_grads=save_raw_grads,
+            mark_layer_depths=compute_input_output_distances,
+            detach_saved_activations=detach_saved_activations,
+            save_arg_values=save_arg_values,
+            save_grads=False,
+            grads_to_save=None,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
-            save_source_context=save_source_context,
+            save_code_context=save_code_context,
             save_rng_states=save_rng_states,
-            detect_loops=detect_recurrent_patterns,
-            save_activations_to=streaming_options.bundle_path,
-            keep_activations_in_memory=streaming_options.retain_in_memory,
-            save_gradients_to=save_gradients_to_value,
-            keep_gradients_in_memory=keep_gradients_in_memory_value,
-            activation_sink=streaming_options.activation_callback,
+            recurrence_detection=recurrence_detection,
+            save_outs_to=streaming_options.bundle_path,
+            keep_outs_in_memory=streaming_options.retain_in_memory,
+            save_grads_to=save_grads_to_value,
+            keep_grads_in_memory=keep_grads_in_memory_value,
+            out_sink=streaming_options.out_callback,
             intervention_ready=intervention_ready,
             hooks=hooks,
             intervention_spec=None,
@@ -1395,63 +1822,75 @@ def log_forward_pass(
             verbose=verbose,
             train_mode=train_mode_value,
             name=log_name,
-            module_filter_fn=module_filter_fn_value,
+            module_filter=module_filter_value,
             emit_nvtx=capture_options.emit_nvtx,
             raise_on_nan=raise_on_nan_value,
+            module_containment_engine=module_containment_engine,
+            transform=input_transform,
+            raw_input=raw_input,
+            save_raw_input=save_raw_input_policy,
+            batch_render=batch_render_policy,
+            output_transform=output_transform_value,
+            save_raw_output=save_raw_output_policy,
+            layer_visualizers=layer_visualizers_value,
+            save_visualizations=save_visualizations_value,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
-        # layers and replay the model, saving only the matching activations.
+        # layers and replay the model, saving only the matching outs.
         next(capture_progress, None)
-        _vprint(model_log, "Two-pass mode: Pass 2 (fast, saving requested layers)")
-        model_log.keep_unsaved_layers = keep_unsaved_layers
-        model_log.save_gradients = save_gradients
-        model_log.gradients_to_save = gradients_to_save_resolved
-        model_log.save_new_activations(
+        _vprint(trace, "Two-pass mode: Pass 2 (fast, saving requested layers)")
+        trace.keep_unsaved_layers = keep_unsaved_layers
+        trace.save_grads = save_grads
+        trace.grads_to_save = grads_to_save_resolved
+        trace.save_new_outs(
             model=model,
             input_args=cast(torch.Tensor | list[Any], input_args),
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,  # type: ignore[arg-type]
-            gradients_to_save=gradients_to_save_resolved,
+            grads_to_save=grads_to_save_resolved,
             random_seed=random_seed,
             train_mode=train_mode_value,
         )
 
     # Print final summary.
     _vprint(
-        model_log,
-        f"Done: {len(model_log.layer_logs)} layers, "
-        f"{model_log.num_tensors_saved} saved, "
-        f"{model_log.total_activation_memory_str}",
+        trace,
+        f"Done: {len(trace.layer_logs)} layers, "
+        f"{trace.num_saved_ops} saved, "
+        f"{trace.total_out_memory_str}",
     )
+
+    if layer_visualizers_value:
+        _render_layer_visualizers(trace, layer_visualizers_value)
 
     # Visualize if desired.
     if visualization_options.mode != "none":
-        model_log.render_graph(**visualization_to_render_kwargs(visualization_options))
+        trace.draw(**visualization_to_render_kwargs(visualization_options))
 
     if unwrap_when_done:
-        from .decoration import unwrap_torch
+        from .backends.torch.wrappers import unwrap_torch
 
         unwrap_torch()
 
     if cache_path is not None and cache_key is not None:
-        model_log.capture_cache_hit = False
-        model_log.capture_cache_key = cache_key
-        model_log.capture_cache_path = str(cache_path)
-        _prepare_log_for_capture_cache(model_log)
+        trace.capture_cache_hit = False
+        trace.capture_cache_key = cache_key
+        trace.capture_cache_path = str(cache_path)
+        _prepare_log_for_capture_cache(trace)
         with cache_path.open("wb") as file:
-            pickle.dump(model_log, file)
+            pickle.dump(trace, file)
 
-    return model_log
+    return trace
 
 
 def log_model_metadata(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-) -> ModelLog:
-    """Return model metadata without saving any activations.
+) -> Trace:
+    """Return model metadata without saving any outs.
 
-    Equivalent to ``log_forward_pass(model, input_args, input_kwargs, layers_to_save=None,
+    Equivalent to ``trace(model, input_args, input_kwargs, layers_to_save=None,
     compute_input_output_distances=True)``.
 
     Args:
@@ -1460,23 +1899,23 @@ def log_model_metadata(
         input_kwargs: Keyword args for ``model.forward()``.
 
     Returns:
-        ModelLog with full metadata but no saved activations.
+        Trace with full metadata but no saved outs.
     """
-    model_log = log_forward_pass(
+    model_trace = trace(
         model,
         input_args,
         input_kwargs,
         layers_to_save=None,
         compute_input_output_distances=True,
     )
-    return model_log
+    return model_trace
 
 
 def get_model_metadata(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-) -> ModelLog:
+) -> Trace:
     """Deprecated alias for :func:`log_model_metadata`."""
 
     warn_deprecated_alias("get_model_metadata", "log_model_metadata")
@@ -1500,7 +1939,7 @@ def summary(
     input_kwargs:
         Keyword args for ``model.forward()``.
     **summary_kwargs:
-        Forwarded to ``ModelLog.summary``.
+        Forwarded to ``Trace.summary``.
 
     Returns
     -------
@@ -1513,18 +1952,18 @@ def summary(
         input_kwargs = {}
     check_model_and_input_variants(model, input_args, input_kwargs)
 
-    model_log = _run_model_and_save_specified_activations(
+    trace = _run_model_and_save_specified_outs(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
         layers_to_save=None,
         keep_unsaved_layers=True,
-        detect_loops=True,
+        recurrence_detection=True,
     )
     try:
-        return model_log.summary(**summary_kwargs)
+        return trace.summary(**summary_kwargs)
     finally:
-        model_log.cleanup()
+        trace.cleanup()
 
 
 def show_model_graph(
@@ -1537,16 +1976,16 @@ def show_model_graph(
     layout: VisNodePlacementLiteral | MissingType = MISSING,
     node_style: VisNodeModeLiteral | MissingType = MISSING,
     vis_mode: VisModeLiteral | MissingType = MISSING,
-    vis_nesting_depth: int | MissingType = MISSING,
+    vis_call_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
     module: "ModuleLog | str | None" = None,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_gradient_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
     vis_fileformat: str | MissingType = MISSING,
-    vis_buffer_layers: BufferVisibilityLiteral | bool | MissingType = MISSING,
+    vis_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
     vis_direction: VisDirectionLiteral | MissingType = MISSING,
     vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
     vis_renderer: VisRendererLiteral | MissingType = MISSING,
@@ -1556,16 +1995,15 @@ def show_model_graph(
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: int | None = None,
-    detect_loops: bool | MissingType = MISSING,
     verbose: bool = False,
-    detect_recurrent_patterns: bool | MissingType = MISSING,
+    recurrence_detection: bool | MissingType = MISSING,
     visualization: VisualizationOptions | None = None,
 ) -> None:
-    """Convenience wrapper: visualize the computational graph without saving activations.
+    """Convenience wrapper: visualize the computational graph without saving outs.
 
-    Runs an exhaustive forward pass (no activations saved) to discover the graph
-    structure, renders the visualization, then cleans up the ModelLog.  For more
-    control, use ``log_forward_pass`` with ``vis_mode`` set and access the ModelLog
+    Runs an exhaustive forward pass (no outs saved) to discover the graph
+    structure, renders the visualization, then cleans up the Trace.  For more
+    control, use ``trace`` with ``vis_mode`` set and access the Trace
     directly.
 
     Args:
@@ -1573,18 +2011,18 @@ def show_model_graph(
         input_args: Positional args for ``model.forward()``.
         input_kwargs: Keyword args for ``model.forward()``.
         vis_mode: Deprecated alias for ``visualization.mode``.
-        vis_nesting_depth: Deprecated alias for ``visualization.max_module_depth``.
-        vis_outpath: Deprecated alias for ``visualization.output_path``.
+        vis_call_depth: Deprecated alias for ``visualization.max_module_depth``.
+        vis_outpath: Deprecated alias for ``visualization.container_path``.
         vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
         module: Optional module focus. Pass a ModuleLog or module address string
             to render only layers that ran inside that module.
         vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
-        vis_gradient_edge_overrides: Deprecated alias for
-            ``visualization.gradient_edge_overrides``.
+        vis_grad_edge_overrides: Deprecated alias for
+            ``visualization.grad_edge_overrides``.
         vis_module_overrides: Deprecated alias for ``visualization.module_overrides``.
         vis_save_only: Deprecated alias for ``visualization.save_only``.
         vis_fileformat: Deprecated alias for ``visualization.file_format``.
-        vis_buffer_layers: Deprecated alias for ``visualization.show_buffers``.
+        vis_buffers: Deprecated alias for ``visualization.show_buffers``.
             Accepts ``"never"``, ``"meaningful"``, or ``"always"``. Legacy
             bools are deprecated but supported: ``True`` maps to ``"always"``
             and ``False`` maps to ``"never"``.
@@ -1607,8 +2045,7 @@ def show_model_graph(
             while that object is still alive.
         vis_node_mode: Deprecated alias for ``visualization.node_mode``.
         random_seed: Fixed RNG seed for stochastic models.
-        detect_loops: Deprecated alias for ``detect_recurrent_patterns``.
-        detect_recurrent_patterns: If True (default), run full isomorphic
+        recurrence_detection: If True (default), run full isomorphic
             subgraph expansion. Set this to False when the forward pass has more than
             about 1M operations and postprocessing speed matters; the False path skips
             the expensive expansion step and only groups operations that share the same
@@ -1625,13 +2062,9 @@ def show_model_graph(
         input_kwargs = {}
     check_model_and_input_variants(model, input_args, input_kwargs)
 
-    detect_recurrent_patterns = resolve_renamed_kwarg(
-        old_name="detect_loops",
-        new_name="detect_recurrent_patterns",
-        old_value=detect_loops,
-        new_value=detect_recurrent_patterns,
-        default=True,
-    )
+    if recurrence_detection is MISSING:
+        recurrence_detection = True
+    recurrence_detection_enabled = bool(recurrence_detection)
     visualization_options = merge_visualization_options(
         function_default_mode="unrolled",
         visualization=visualization,
@@ -1641,16 +2074,16 @@ def show_model_graph(
         layout=layout,
         node_style=node_style,
         vis_mode=vis_mode,
-        vis_nesting_depth=vis_nesting_depth,
+        vis_call_depth=vis_call_depth,
         vis_outpath=vis_outpath,
         vis_save_only=vis_save_only,
         vis_fileformat=vis_fileformat,
-        vis_buffer_layers=vis_buffer_layers,
+        vis_buffers=vis_buffers,
         vis_direction=vis_direction,
         vis_graph_overrides=vis_graph_overrides,
         vis_node_mode=vis_node_mode,
         vis_edge_overrides=vis_edge_overrides,
-        vis_gradient_edge_overrides=vis_gradient_edge_overrides,
+        vis_grad_edge_overrides=vis_grad_edge_overrides,
         vis_module_overrides=vis_module_overrides,
         vis_node_placement=vis_node_placement,
         vis_renderer=vis_renderer,
@@ -1662,20 +2095,20 @@ def show_model_graph(
     if visualization_options.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
-    model_log = _run_model_and_save_specified_activations(
+    trace = _run_model_and_save_specified_outs(
         model=model,
         input_args=input_args,
         input_kwargs=input_kwargs,
         layers_to_save=None,
-        activation_transform=None,
-        mark_input_output_distances=False,
-        detach_saved_tensors=False,
-        save_gradients=False,
+        out_transform=None,
+        mark_layer_depths=False,
+        detach_saved_activations=False,
+        save_grads=False,
         random_seed=random_seed,
-        detect_loops=detect_recurrent_patterns,
+        recurrence_detection=recurrence_detection_enabled,
         verbose=verbose,
     )
-    # Render in a try/finally so temporary tl_ attributes on the model are
+    # Render in a try/finally so temporary TorchLens metadata on the model is
     # always cleaned up, even if Graphviz rendering raises.
     try:
         render_kwargs = visualization_to_render_kwargs(visualization_options)
@@ -1685,13 +2118,13 @@ def show_model_graph(
             render_kwargs["module"] = module.address if isinstance(module, ModuleLog) else module
         if code_panel is not False:
             render_kwargs["code_panel"] = code_panel
-        model_log.render_graph(**render_kwargs)
+        trace.draw(**render_kwargs)
     finally:
-        model_log.cleanup()
+        trace.cleanup()
 
 
-def show_backward_graph(
-    model_log: ModelLog,
+def draw_backward(
+    trace: Trace,
     vis_outpath: str | MissingType = MISSING,
     vis_save_only: bool | MissingType = MISSING,
     vis_fileformat: str | MissingType = MISSING,
@@ -1705,13 +2138,13 @@ def show_backward_graph(
     code_panel: CodePanelOption = False,
     visualization: VisualizationOptions | None = None,
 ) -> str:
-    """Render an existing ModelLog's captured backward grad_fn graph.
+    """Render an existing Trace's captured backward grad_fn graph.
 
     Parameters
     ----------
-    model_log:
-        ModelLog with backward metadata captured by ``model_log.log_backward(loss)``
-        or ``model_log.recording_backward()``.
+    trace:
+        Trace with backward metadata captured by ``trace.log_backward(loss)``
+        or ``trace.recording_backward()``.
     vis_outpath:
         Output path for the rendered graph.
     vis_save_only:
@@ -1745,7 +2178,7 @@ def show_backward_graph(
     """
 
     if visualization is None:
-        output_path = "backward_modelgraph"
+        container_path = "backward_modelgraph"
         save_only = False
         file_format = "pdf"
         direction: VisDirectionLiteral = "topdown"
@@ -1753,7 +2186,7 @@ def show_backward_graph(
         edge_overrides = None
         node_mode: VisNodeModeLiteral = "default"
     else:
-        output_path = visualization.output_path
+        container_path = visualization.container_path
         save_only = visualization.save_only
         file_format = visualization.file_format
         direction = visualization.direction
@@ -1762,7 +2195,7 @@ def show_backward_graph(
         node_mode = visualization.node_style
 
     if vis_outpath is not MISSING:
-        output_path = cast(str, vis_outpath)
+        container_path = cast(str, vis_outpath)
     if vis_save_only is not MISSING:
         save_only = cast(bool, vis_save_only)
     if vis_fileformat is not MISSING:
@@ -1779,8 +2212,8 @@ def show_backward_graph(
     if node_style is not MISSING:
         node_mode = cast(VisNodeModeLiteral, node_style)
 
-    return model_log.show_backward_graph(
-        vis_outpath=output_path,
+    return trace.draw_backward(
+        vis_outpath=container_path,
         vis_graph_overrides=graph_overrides,
         node_spec_fn=node_spec_fn,
         collapsed_node_spec_fn=collapsed_node_spec_fn,
@@ -2089,27 +2522,27 @@ def validate_forward_pass(
     verbose: bool = False,
     validate_metadata: bool = True,
 ) -> bool:
-    """Validate that saved activations faithfully reproduce the model's output.
+    """Validate that saved outs faithfully reproduce the model's output.
 
     **How it works:**
 
     1. Run model.forward() *without* TorchLens to get ground-truth output tensors.
-    2. Run ``log_forward_pass`` with ``save_function_args=True`` and ``layers_to_save='all'``
-       to capture every activation and its creating function's arguments.
-    3. Call ``ModelLog.validate_forward_pass`` which replays the forward pass
-       layer-by-layer from saved activations, checking that the output matches
-       ground truth.  It also injects random activations and verifies the output
-       changes (proving the saved activations are actually used, not just ignored).
+    2. Run ``trace`` with ``save_arg_values=True`` and ``layers_to_save='all'``
+       to capture every out and its creating function's arguments.
+    3. Call ``Trace.validate_forward_pass`` which replays the forward pass
+       layer-by-layer from saved outs, checking that the output matches
+       ground truth.  It also injects random outs and verifies the output
+       changes (proving the saved outs are actually used, not just ignored).
     4. If ``validate_metadata=True``, run comprehensive invariant checks on all
        metadata cross-references (graph edges, module containment, labels, etc.).
 
-    **Why save_function_args=True is required:**  The validation replay re-executes
+    **Why save_arg_values=True is required:**  The validation replay re-executes
     each function using its saved non-tensor arguments (e.g., stride, padding for
     conv2d).  Without them, replay cannot reconstruct the correct computation.
 
     Args:
         model: PyTorch model.
-        input_args: Input for which to validate the saved activations.
+        input_args: Input for which to validate the saved outs.
         input_kwargs: Keyword arguments for model forward pass.
         random_seed: Fixed RNG seed for reproducibility (auto-generated if None).
         verbose: If True, print detailed error messages on validation failure.
@@ -2143,9 +2576,9 @@ def validate_forward_pass(
     # Step 1: Get ground-truth outputs by running the model *outside* TorchLens.
     # Save state_dict first because requires_grad forcing during logging can
     # alter parameter metadata; we restore it afterward.
-    state_dict = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
-    model_log: ModelLog | None = None
-    activations_are_valid = False
+    state_dict = _clone_state_dict_with_metadata(model)
+    trace: Trace | None = None
+    outs_are_valid = False
     try:
         ground_truth_output_all = get_vars_of_type_from_obj(
             model(*input_args_copy, **input_kwargs_copy),
@@ -2165,32 +2598,32 @@ def validate_forward_pass(
             addresses_used.append(entry[1])
         model.load_state_dict(state_dict)
 
-        # Step 2: Run the model *through* TorchLens, saving all activations.
-        # save_function_args=True is essential - the replay needs each function's
-        # non-tensor arguments to re-execute the computation from saved activations.
-        model_log = _run_model_and_save_specified_activations(
+        # Step 2: Run the model *through* TorchLens, saving all outs.
+        # save_arg_values=True is essential - the replay needs each function's
+        # non-tensor arguments to re-execute the computation from saved outs.
+        trace = _run_model_and_save_specified_outs(
             model=model,
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save="all",
             keep_unsaved_layers=True,
-            activation_transform=None,
-            mark_input_output_distances=False,
-            detach_saved_tensors=False,
-            save_gradients=False,
-            save_function_args=True,
+            out_transform=None,
+            mark_layer_depths=False,
+            detach_saved_activations=False,
+            save_grads=False,
+            save_arg_values=True,
             random_seed=random_seed,
             save_rng_states=True,
         )
-        # Step 3: Validate by replaying the forward pass from saved activations.
-        activations_are_valid = model_log.validate_forward_pass(
+        # Step 3: Validate by replaying the forward pass from saved outs.
+        outs_are_valid = trace.validate_forward_pass(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
     finally:
         model.load_state_dict(state_dict)
-        if model_log is not None:
-            model_log.cleanup()
-    return activations_are_valid
+        if trace is not None:
+            trace.cleanup()
+    return outs_are_valid
 
 
 def validate_backward_pass(
@@ -2199,7 +2632,7 @@ def validate_backward_pass(
     input_kwargs: dict[Any, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
-    perturb_saved_gradients: bool = False,
+    perturb_saved_grads: bool = False,
     atol: float = 1e-5,
     rtol: float = 1e-4,
 ) -> bool:
@@ -2216,8 +2649,8 @@ def validate_backward_pass(
     loss_fn:
         Optional callable mapping model outputs to a scalar loss. Defaults to
         summing all returned tensors.
-    perturb_saved_gradients:
-        If True, perturb a saved gradient and require validation to fail.
+    perturb_saved_grads:
+        If True, perturb a saved grad and require validation to fail.
     atol:
         Absolute allclose tolerance.
     rtol:
@@ -2235,13 +2668,13 @@ def validate_backward_pass(
         input_args,
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
-        perturb_saved_gradients=perturb_saved_gradients,
+        perturb_saved_grads=perturb_saved_grads,
         atol=atol,
         rtol=rtol,
     )
 
 
-def validate_saved_activations(
+def validate_saved_outs(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
@@ -2251,7 +2684,7 @@ def validate_saved_activations(
 ) -> bool:
     """Deprecated alias for :func:`validate_forward_pass`."""
 
-    warn_deprecated_alias("validate_saved_activations", "validate_forward_pass")
+    warn_deprecated_alias("validate_saved_outs", "validate_forward_pass")
     return validate_forward_pass(
         model,
         input_args,

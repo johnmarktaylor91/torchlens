@@ -51,7 +51,7 @@ class BertForSequenceClassification(nn.Module):
         return x + 0
 
 
-def _capture(*, name: str | None = None) -> tl.ModelLog:
+def _capture(*, name: str | None = None) -> tl.Trace:
     """Capture an intervention-ready test log.
 
     Parameters
@@ -61,11 +61,11 @@ def _capture(*, name: str | None = None) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Captured log.
     """
 
-    return tl.log_forward_pass(
+    return tl.trace(
         M(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -95,7 +95,7 @@ def test_huggingface_suffix_is_stripped_for_auto_name() -> None:
     """Common HuggingFace suffixes are stripped before lowercasing."""
 
     tl.reset_naming_counter()
-    log = tl.log_forward_pass(
+    log = tl.trace(
         BertForSequenceClassification(),
         torch.randn(1, 2),
         vis_opt="none",
@@ -116,7 +116,7 @@ def test_list_logs_returns_tuple_snapshot() -> None:
 
 
 def test_summary_includes_phase13_sections() -> None:
-    """ModelLog.summary includes discoverability fields."""
+    """Trace.summary includes discoverability fields."""
 
     log = _capture(name="phase13_summary")
     summary = log.summary()

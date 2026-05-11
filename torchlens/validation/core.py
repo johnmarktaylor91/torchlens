@@ -1,10 +1,10 @@
-"""Core validation logic for verifying saved activations.
+"""Core validation logic for verifying saved outs.
 
 Orchestrates a three-phase verification pipeline for every layer in the graph:
 
 1. **Ground truth check** -- model outputs match a fresh forward pass.
 2. **Forward replay** (BFS from outputs toward inputs) -- re-executing each
-   layer's saved function on its saved parent activations reproduces the saved
+   layer's saved function on its saved parent outs reproduces the saved
    output tensor.
 3. **Perturbation check** -- for each parent of a layer, substituting random
    "wrong" values into that parent slot changes the output, proving each
@@ -19,10 +19,10 @@ from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 from ..utils.rng import execute_with_restored_rng_autocast
 from ..utils.collections import assign_to_sequence_or_dict
@@ -84,7 +84,7 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
     ------
     TorchLensIOError
         If the log was loaded from a portable bundle without resolved
-        ``func_applied`` callables on computational nodes.
+        ``func`` callables on computational nodes.
     """
 
     if not bool(getattr(self, "_loaded_from_bundle", False)):
@@ -92,14 +92,14 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
     unresolved = [
         getattr(layer, "layer_label", "<unknown>")
         for layer in getattr(self, "layer_list", [])
-        if getattr(layer, "func_applied", None) is None
+        if getattr(layer, "func", None) is None
         and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
     ]
     if unresolved:
         from .._io import TorchLensIOError
 
         raise TorchLensIOError(
-            "validate_forward_pass requires resolved func_applied callables; portable bundles "
+            "validate_forward_pass requires resolved func callables; portable bundles "
             "drop them when functions cannot be represented. This bundle has unresolved "
             f"computational functions, e.g. {unresolved[:3]!r}."
         )
@@ -156,13 +156,13 @@ def _ground_truth_output_matches_saved(
         )
 
 
-def validate_saved_activations(
-    self: "ModelLog",
+def validate_saved_outs(
+    self: "Trace",
     ground_truth_output_tensors: List[torch.Tensor],
     verbose: bool = False,
     validate_metadata: bool = True,
 ) -> bool:
-    """Run the full validation pipeline on a completed ModelLog.
+    """Run the full validation pipeline on a completed Trace.
 
     The BFS traversal starts from two kinds of seed layers:
     - **output layers** -- whose values are verified against ``ground_truth_output_tensors``.
@@ -173,9 +173,9 @@ def validate_saved_activations(
     validated (edge-counting completion), ensuring diamond-shaped subgraphs
     are handled correctly.
 
-    After activation validation passes, optional metadata invariant checks
+    After out validation ops, optional metadata invariant checks
     (checks A-R in ``invariants.py``) run to verify structural/semantic
-    consistency of the entire ModelLog.
+    consistency of the entire Trace.
 
     Args:
         ground_truth_output_tensors: Output tensors from a fresh forward pass,
@@ -191,12 +191,10 @@ def validate_saved_activations(
     # Phase 0: verify logged outputs match a fresh forward pass.
     for i, output_layer_label in enumerate(self.output_layers):
         output_layer = self[output_layer_label]
-        if output_layer.activation is None:
-            print(f"The {i}th output layer, {output_layer_label}, has no saved activation.")
+        if output_layer.out is None:
+            print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
             return False
-        if not _ground_truth_output_matches_saved(
-            output_layer.activation, ground_truth_output_tensors[i]
-        ):
+        if not _ground_truth_output_matches_saved(output_layer.out, ground_truth_output_tensors[i]):
             print(
                 f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor."
             )
@@ -204,14 +202,14 @@ def validate_saved_activations(
 
     # BFS backward from outputs + internally terminated layers.
     # Edge-counting approach: a parent is enqueued only after ALL its child
-    # edges are validated (validated_child_edges == set(child_layers)).
+    # edges are validated (validated_child_edges == set(children)).
     validated_child_edges_for_each_layer: Dict[str, Set[str]] = defaultdict(set)
-    validated_layers = set(self.output_layers + self.internally_terminated_layers)
+    validated_layers = set(self.output_layers + self.internal_sink_ops)
     layers_to_validate_parents_for = deque(validated_layers)
 
     while len(layers_to_validate_parents_for) > 0:
         layer_to_validate_parents_for = layers_to_validate_parents_for.popleft()
-        parent_layers_valid = validate_parents_of_saved_layer(
+        parents_valid = validate_parents_of_saved_layer(
             self,
             layer_to_validate_parents_for,
             validated_layers,
@@ -219,19 +217,20 @@ def validate_saved_activations(
             layers_to_validate_parents_for,  # type: ignore[arg-type]
             verbose,
         )
-        if not parent_layers_valid:
+        if not parents_valid:
             return False
 
     # Completeness check: BFS must visit every layer in the graph.
-    if len(validated_layers) < len(self.layer_labels):
-        unreached = set(self.layer_labels) - validated_layers
+    expected_layers = {layer.layer_label for layer in self.layer_list}
+    if len(validated_layers) < len(expected_layers):
+        unreached = expected_layers - validated_layers
         print(
-            f"All saved activations were accurate, but some layers were not reached (check that "
+            f"All saved outs were accurate, but some layers were not reached (check that "
             f"child args logged accurately): {unreached}"
         )
         return False
 
-    # Metadata invariant checks (after activation validation passes)
+    # Metadata invariant checks (after out validation ops)
     if validate_metadata:
         from .invariants import check_metadata_invariants
 
@@ -241,7 +240,7 @@ def validate_saved_activations(
 
 
 def validate_parents_of_saved_layer(
-    self: "ModelLog",
+    self: "Trace",
     layer_to_validate_parents_for_label: str,
     validated_layers: Set[str],
     validated_child_edges_for_each_layer: Dict[str, Set[str]],
@@ -254,11 +253,11 @@ def validate_parents_of_saved_layer(
     This is the inner loop of the BFS. For the layer identified by
     ``layer_to_validate_parents_for_label``, this function:
 
-    1. Checks that the parent layer activations are correctly logged in the
-       argument map (``parent_layer_arg_locs``).
+    1. Checks that the parent layer outs are correctly logged in the
+       argument map (``parent_arg_positions``).
     2. Re-executes the layer's function on saved parent values and confirms the
        output matches the saved tensor (forward replay, ``perturb=False``).
-    3. For each parent, re-executes with that parent's activation *perturbed*
+    3. For each parent, re-executes with that parent's out *perturbed*
        and confirms the output *changes* (perturbation check, ``perturb=True``).
        Ops in ``SKIP_PERTURBATION_ENTIRELY`` skip this step.
 
@@ -298,7 +297,7 @@ def validate_parents_of_saved_layer(
     # the output to change, proving that parent genuinely influences this layer.
 
     func_name = layer_to_validate_parents_for.func_name
-    for perturb_layer in layer_to_validate_parents_for.parent_layers:
+    for perturb_layer in layer_to_validate_parents_for.parents:
         if func_name in SKIP_PERTURBATION_ENTIRELY:
             continue
         if not _check_whether_func_on_saved_parents_yields_saved_tensor(
@@ -311,7 +310,7 @@ def validate_parents_of_saved_layer(
             return False
 
     # Record validated edges and enqueue parents whose ALL child edges are now validated.
-    for parent_layer_label in layer_to_validate_parents_for.parent_layers:
+    for parent_layer_label in layer_to_validate_parents_for.parents:
         parent_layer = self[parent_layer_label]
         validated_child_edges_for_each_layer[parent_layer_label].add(
             layer_to_validate_parents_for_label
@@ -319,22 +318,20 @@ def validate_parents_of_saved_layer(
         # Edge-counting completion: enqueue parent only when ALL its child
         # edges have been validated.  This correctly handles diamond graphs
         # where a parent feeds multiple children.
-        if validated_child_edges_for_each_layer[parent_layer_label] == set(
-            parent_layer.child_layers
-        ):
+        if validated_child_edges_for_each_layer[parent_layer_label] == set(parent_layer.children):
             validated_layers.add(parent_layer_label)
             # Don't enqueue terminal seeds (inputs, parentless buffers) --
             # they have no parents to validate further.
-            if (not parent_layer.is_input_layer) and not (
-                parent_layer.is_buffer_layer and (parent_layer.buffer_parent is None)
+            if (not parent_layer.is_input) and not (
+                parent_layer.is_buffer and (parent_layer.buffer_parent is None)
             ):
                 layers_to_validate_parents_for.append(parent_layer_label)
 
     return True
 
 
-def _check_layer_arguments_logged_correctly(self: "ModelLog", target_layer_label: str) -> bool:
-    """Check whether the activations of the parent layers match the saved arguments of
+def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: str) -> bool:
+    """Check whether the outs of the parent layers match the saved arguments of
     the target layer, and that the argument locations have been logged correctly.
 
     Args:
@@ -346,21 +343,21 @@ def _check_layer_arguments_logged_correctly(self: "ModelLog", target_layer_label
     target_layer = self[target_layer_label]
 
     # Make sure that all parent layers appear in at least one argument and that no extra layers appear:
-    parent_layers_in_args = set()
+    parents_in_args = set()
     for arg_type in ["args", "kwargs"]:
-        parent_layers_in_args.update(list(target_layer.parent_layer_arg_locs[arg_type].values()))
-    if parent_layers_in_args != set(target_layer.parent_layers):
+        parents_in_args.update(list(target_layer.parent_arg_positions[arg_type].values()))
+    if parents_in_args != set(target_layer.parents):
         return False
 
     argtype_dict = {
-        "args": (enumerate, "captured_args"),
-        "kwargs": (lambda x: x.items(), "captured_kwargs"),
+        "args": (enumerate, "saved_args"),
+        "kwargs": (lambda x: x.items(), "saved_kwargs"),
     }
 
     # Check for each parent layer that it is logged as a saved argument when it matches an argument, and
     # is not logged when it does not match a saved argument.
 
-    for parent_layer_label in target_layer.parent_layers:
+    for parent_layer_label in target_layer.parents:
         parent_layer = self[parent_layer_label]
         for arg_type in ["args", "kwargs"]:
             iterfunc, argtype_field = argtype_dict[arg_type]
@@ -374,9 +371,9 @@ def _check_layer_arguments_logged_correctly(self: "ModelLog", target_layer_label
 
 
 def _validate_layer_against_arg(
-    self: "ModelLog",
-    target_layer: LayerPassLog,
-    parent_layer: LayerPassLog,
+    self: "Trace",
+    target_layer: OpLog,
+    parent_layer: OpLog,
     arg_type: str,
     key: Any,
     val: Any,
@@ -425,7 +422,7 @@ def _validate_layer_against_arg(
     return True
 
 
-def _parent_logged_for_any_arg(target_layer: LayerPassLog, parent_layer_label: str) -> bool:
+def _parent_logged_for_any_arg(target_layer: OpLog, parent_layer_label: str) -> bool:
     """Return whether ``parent_layer_label`` is logged at any arg location.
 
     Parameters
@@ -442,15 +439,15 @@ def _parent_logged_for_any_arg(target_layer: LayerPassLog, parent_layer_label: s
     """
 
     return any(
-        parent_layer_label in target_layer.parent_layer_arg_locs[arg_type].values()
+        parent_layer_label in target_layer.parent_arg_positions[arg_type].values()
         for arg_type in ("args", "kwargs")
     )
 
 
 def _check_arglocs_correct_for_arg(
-    self: "ModelLog",
-    target_layer: LayerPassLog,
-    parent_layer: LayerPassLog,
+    self: "Trace",
+    target_layer: OpLog,
+    parent_layer: OpLog,
     arg_type: str,
     argloc_key: str | tuple[Any, ...],
     saved_arg_val: Any,
@@ -458,11 +455,11 @@ def _check_arglocs_correct_for_arg(
     """Check bidirectional consistency between a parent's tensor and a child's arg slot.
 
     Validates two directions:
-    - If the parent's activation matches the saved arg value AND the parent is
+    - If the parent's out matches the saved arg value AND the parent is
       not logged at that position, that is an error (unless the match is
       trivially coincidental -- e.g., empty tensor, bool tensor, all-NaN,
       all-zero, or all-abs-one, or another parent has identical values).
-    - If the parent is logged at that position BUT its activation does not
+    - If the parent is logged at that position BUT its out does not
       match the saved arg value, that is an error (with a special exemption
       for in-place RNG ops like ``bernoulli_`` and ``full`` that mutate after
       logging).
@@ -479,22 +476,22 @@ def _check_arglocs_correct_for_arg(
     """
     target_layer_label = target_layer.layer_label
     parent_layer_label = parent_layer.layer_label
-    # children_tensor_versions stores per-child snapshots when an in-place
-    # op modified the tensor between uses.  Fall back to activation
+    # output_versions_per_child stores per-child snapshots when an in-place
+    # op modified the tensor between uses.  Fall back to out
     # when no child-specific version exists.
-    if target_layer_label in parent_layer.children_tensor_versions:
-        parent_activations = parent_layer.children_tensor_versions[target_layer_label]
+    if target_layer_label in parent_layer.output_versions_per_child:
+        parent_outs = parent_layer.output_versions_per_child[target_layer_label]
     else:
-        parent_activations = parent_layer.activation
+        parent_outs = parent_layer.out
 
     if isinstance(saved_arg_val, torch.Tensor):
         parent_layer_matches_arg = tensor_nanequal(
-            saved_arg_val, parent_activations, allow_tolerance=False
+            saved_arg_val, parent_outs, allow_tolerance=False
         )
     else:
         parent_layer_matches_arg = False
-    parent_layer_logged_as_arg = (argloc_key in target_layer.parent_layer_arg_locs[arg_type]) and (
-        target_layer.parent_layer_arg_locs[arg_type][argloc_key] == parent_layer_label
+    parent_layer_logged_as_arg = (argloc_key in target_layer.parent_arg_positions[arg_type]) and (
+        target_layer.parent_arg_positions[arg_type][argloc_key] == parent_layer_label
     )
 
     # Case 1: parent matches the arg value but is NOT logged at this position.
@@ -508,29 +505,29 @@ def _check_arglocs_correct_for_arg(
         parent_layer_matches_arg
         and (not parent_layer_logged_as_arg)
         and (not _parent_logged_for_any_arg(target_layer, parent_layer_label))
-        and (parent_activations.numel() != 0)
-        and (parent_activations.dtype != torch.bool)
-        and (not tensor_all_nan(parent_activations))
-        and (not torch.all(parent_activations == 0))
-        and (not torch.all(torch.abs(parent_activations) == 1))
+        and (parent_outs.numel() != 0)
+        and (parent_outs.dtype != torch.bool)
+        and (not tensor_all_nan(parent_outs))
+        and (not torch.all(parent_outs == 0))
+        and (not torch.all(torch.abs(parent_outs) == 1))
         and not any(
             [
-                torch.equal(parent_activations, self[other_parent].activation)
-                for other_parent in target_layer.parent_layers
+                torch.equal(parent_outs, self[other_parent].out)
+                for other_parent in target_layer.parents
                 if other_parent != parent_layer_label
             ]
         )
     ):
         print(
-            f"Parent {parent_layer_label} of {target_layer_label} has activations that match "
+            f"Parent {parent_layer_label} of {target_layer_label} has outs that match "
             f"{arg_type} {argloc_key} for {target_layer_label}, but is not logged as "
-            f"such in parent_layer_arg_locs."
+            f"such in parent_arg_positions."
         )
         return False
 
     # Case 2 exemption: in-place RNG ops (bernoulli_, full) mutate the tensor
-    # AFTER it was logged as an arg, so the saved activation no longer matches
-    # the captured_args snapshot.  This is expected and not a real mismatch.
+    # AFTER it was logged as an arg, so the saved out no longer matches
+    # the saved_args snapshot.  This is expected and not a real mismatch.
     if (
         not parent_layer_matches_arg
         and parent_layer_logged_as_arg
@@ -542,7 +539,7 @@ def _check_arglocs_correct_for_arg(
     if (not parent_layer_matches_arg) and parent_layer_logged_as_arg:
         print(
             f"Parent {parent_layer_label} of {target_layer_label} is logged as {arg_type} {argloc_key} to "
-            f"{target_layer_label}, but its saved activations don't match the saved argument."
+            f"{target_layer_label}, but its saved outs don't match the saved argument."
         )
         return False
 
@@ -550,8 +547,8 @@ def _check_arglocs_correct_for_arg(
 
 
 def _check_perturbation_exemptions(
-    self: "ModelLog",
-    layer: LayerPassLog,
+    self: "Trace",
+    layer: OpLog,
     layers_to_perturb: List[str],
 ) -> bool:
     """Check whether a perturbation check should be skipped for registry-based reasons.
@@ -569,7 +566,7 @@ def _check_perturbation_exemptions(
     # Empty tensors cannot be meaningfully perturbed.
     for perturbed_label in layers_to_perturb:
         p_entry = self[perturbed_label]
-        if p_entry.activation is not None and p_entry.activation.numel() == 0:
+        if p_entry.out is not None and p_entry.out.numel() == 0:
             return True
 
     func_name = layer.func_name
@@ -590,7 +587,7 @@ def _check_perturbation_exemptions(
 
 
 def _execute_func_with_restored_state(
-    layer: LayerPassLog,
+    layer: OpLog,
     input_args: dict[str, Any],
     layers_to_perturb: List[str],
     layer_label: str,
@@ -612,7 +609,7 @@ def _execute_func_with_restored_state(
 
     Returns the recomputed output tensor, or None on exception.
     """
-    layer_func = layer.func_applied
+    layer_func = layer.func
 
     try:
         recomputed_output = execute_with_restored_rng_autocast(
@@ -641,13 +638,13 @@ def _execute_func_with_restored_state(
     # Multi-output functions (e.g., torch.max with dim) return a tuple;
     # select the specific output this layer represents.
     if isinstance(recomputed_output, (list, tuple)):
-        recomputed_output = recomputed_output[layer.iterable_output_index]
+        recomputed_output = recomputed_output[layer.multi_output_index]
 
     return recomputed_output
 
 
 def _deep_numeric_replay_matches_saved(
-    layer: LayerPassLog,
+    layer: OpLog,
     recomputed_output: torch.Tensor,
 ) -> bool:
     """Return whether a deep numeric replay matches within local relaxed tolerance.
@@ -661,22 +658,22 @@ def _deep_numeric_replay_matches_saved(
     Parameters
     ----------
     layer:
-        Layer whose saved activation is being replayed.
+        Layer whose saved out is being replayed.
     recomputed_output:
-        Output from re-executing ``layer.func_applied`` on saved parent values.
+        Output from re-executing ``layer.func`` on saved parent values.
 
     Returns
     -------
     bool
         True if this layer qualifies for the deep numeric replay tolerance and
-        the recomputed output is close enough to the saved activation.
+        the recomputed output is close enough to the saved out.
     """
-    saved_output = layer.activation
+    saved_output = layer.out
     if saved_output is None:
         return False
     if layer.func_name not in DEEP_NUMERIC_REPLAY_FUNCS:
         return False
-    if layer.operation_num < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
+    if layer.compute_index < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
         return False
     if recomputed_output.shape != saved_output.shape:
         return False
@@ -724,22 +721,22 @@ def _deep_numeric_replay_matches_saved(
 
 
 def _check_whether_func_on_saved_parents_yields_saved_tensor(
-    self: "ModelLog",
+    self: "Trace",
     layer_to_validate_parents_for_label: str,
     perturb: bool = False,
     layers_to_perturb: Optional[List[str]] = None,
     verbose: bool = False,
 ) -> bool:
     """Checks whether executing the saved function for a layer on the saved value of its parent layers
-    in fact yields the saved activations for that layer.
+    in fact yields the saved outs for that layer.
 
     Args:
-        layer_to_validate_parents_for_label: label of the layer to check the saved activations
-        perturb: whether to perturb the saved activations
-        layers_to_perturb: layers for which to perturb the saved activations
+        layer_to_validate_parents_for_label: label of the layer to check the saved outs
+        perturb: whether to perturb the saved outs
+        layers_to_perturb: layers for which to perturb the saved outs
 
     Returns:
-        True if the activations match, False otherwise
+        True if the outs match, False otherwise
     """
     if layers_to_perturb is None:
         layers_to_perturb = []
@@ -749,8 +746,8 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     # Early exits for layers that cannot or should not be replayed.
 
     # Input layers and buffer layers without parents have no function to replay
-    # (func_applied is None for model inputs and parentless buffers).
-    if layer.func_applied is None:
+    # (func is None for model inputs and parentless buffers).
+    if layer.func is None:
         return True
 
     # Registry 1: skip ALL validation for nondeterministic ops (e.g., empty_like).
@@ -784,87 +781,87 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         # input (e.g., wrong shape).  Treat as exempt.
         return True
 
-    matches_saved = tensor_nanequal(recomputed_output, layer.activation, allow_tolerance=True)
+    matches_saved = tensor_nanequal(recomputed_output, layer.out, allow_tolerance=True)
     if not matches_saved and not perturb and isinstance(recomputed_output, torch.Tensor):
         matches_saved = _deep_numeric_replay_matches_saved(layer, recomputed_output)
 
-    # Forward replay failure (non-perturbed): saved activations don't match.
+    # Forward replay failure (non-perturbed): saved outs don't match.
     if not matches_saved and not perturb:
         # Exemption: parent is an in-place RNG op that may have mutated its
         # tensor after the child logged it as an arg.
         parent_has_inplace_rng = any(
-            self[p].func_name in ["bernoulli_", "full"] for p in layer.parent_layers
+            self[p].func_name in ["bernoulli_", "full"] for p in layer.parents
         )
         if parent_has_inplace_rng:
             return True
         print(
-            f"Saved activations for layer {layer_to_validate_parents_for_label} do not match the "
-            f"values computed based on the parent layers {layer.parent_layers}."
+            f"Saved outs for layer {layer_to_validate_parents_for_label} do not match the "
+            f"values computed based on the parent layers {layer.parents}."
         )
         return False
 
     # Perturbation produced identical output -- run posthoc checks to see if
     # there's a valid excuse (bool output, special-value args, type cast, etc.).
     # Uses exact equality (no tolerance) since any change should be detectable.
-    if perturb and tensor_nanequal(recomputed_output, layer.activation, allow_tolerance=False):
+    if perturb and tensor_nanequal(recomputed_output, layer.out, allow_tolerance=False):
         return posthoc_perturb_check(self, layer, layers_to_perturb, verbose)
 
     return True
 
 
 def _prepare_input_args_for_validating_layer(
-    self: "ModelLog",
-    layer_to_validate_parents_for: LayerPassLog,
+    self: "Trace",
+    layer_to_validate_parents_for: OpLog,
     layers_to_perturb: List[str],
 ) -> dict[str, Any] | None:
     """Build the input argument dict for replaying a layer's function.
 
-    Starts from the layer's saved ``captured_args`` / ``captured_kwargs``,
+    Starts from the layer's saved ``saved_args`` / ``saved_kwargs``,
     deep-clones all tensors to prevent in-place mutation during replay, then
-    swaps in each parent's saved activation (or a perturbed version) at the
+    swaps in each parent's saved out (or a perturbed version) at the
     correct argument position.
 
     For nested argument positions (tuples, dicts nested inside args), the
-    ``parent_layer_arg_locs`` key is a tuple ``(outer_key, inner_key)`` and
+    ``parent_arg_positions`` key is a tuple ``(outer_key, inner_key)`` and
     ``assign_to_sequence_or_dict`` handles the nested assignment.
 
     Args:
         layer_to_validate_parents_for: Layer being checked.
-        layers_to_perturb: Layers for which to perturb the saved activations.
+        layers_to_perturb: Layers for which to perturb the saved outs.
 
     Returns:
-        Dict with ``"args"`` and ``"kwargs"`` keys, or None if captured_args
+        Dict with ``"args"`` and ``"kwargs"`` keys, or None if saved_args
         was not saved (can't validate without them).
     """
-    if layer_to_validate_parents_for.captured_args is None:
+    if layer_to_validate_parents_for.saved_args is None:
         return None  # Can't validate without saved args (#131)
     input_args = {
-        "args": list(layer_to_validate_parents_for.captured_args[:]),
-        "kwargs": layer_to_validate_parents_for.captured_kwargs.copy(),
+        "args": list(layer_to_validate_parents_for.saved_args[:]),
+        "kwargs": layer_to_validate_parents_for.saved_kwargs.copy(),
     }
     input_args = _copy_validation_args(input_args)
 
-    # Swap in saved parent activations:
+    # Swap in saved parent outs:
 
     for arg_type in ["args", "kwargs"]:
         for (
             key,
             parent_layer_arg,
-        ) in layer_to_validate_parents_for.parent_layer_arg_locs[arg_type].items():
+        ) in layer_to_validate_parents_for.parent_arg_positions[arg_type].items():
             parent_layer = self[parent_layer_arg]
-            if layer_to_validate_parents_for.layer_label in parent_layer.children_tensor_versions:
-                parent_values = parent_layer.children_tensor_versions[
+            if layer_to_validate_parents_for.layer_label in parent_layer.output_versions_per_child:
+                parent_values = parent_layer.output_versions_per_child[
                     layer_to_validate_parents_for.layer_label
                 ]
             else:
-                parent_values = parent_layer.activation
+                parent_values = parent_layer.out
             if parent_values is None:
                 continue  # Skip validation for unsaved parents (#150)
             parent_values = parent_values.detach().clone()
 
             if parent_layer_arg in layers_to_perturb:
-                parent_layer_func_values = _perturb_layer_activations(
-                    parent_values, layer_to_validate_parents_for.activation
+                parent_layer_func_values = _perturb_layer_outs(
+                    parent_values, layer_to_validate_parents_for.out
                 )
             else:
                 parent_layer_func_values = parent_values
@@ -915,9 +912,7 @@ def _copy_validation_args(input_args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _perturb_layer_activations(
-    parent_activations: torch.Tensor, output_activations: torch.Tensor
-) -> torch.Tensor:
+def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) -> torch.Tensor:
     """Generate a random perturbation of a saved tensor for validation.
 
     The perturbation strategy varies by dtype to produce meaningful
@@ -933,18 +928,18 @@ def _perturb_layer_activations(
       perturbations of comparable magnitude.
 
     Args:
-        parent_activations: The original parent tensor to perturb.
-        output_activations: The child layer's output tensor, used to calibrate
+        parent_outs: The original parent tensor to perturb.
+        output_outs: The child layer's output tensor, used to calibrate
             the perturbation scale for float types.
 
     Returns:
         A new tensor of the same shape/dtype with perturbed values.
     """
-    device = parent_activations.device
-    if parent_activations.numel() == 0:
-        return parent_activations.detach().clone()
+    device = parent_outs.device
+    if parent_outs.numel() == 0:
+        return parent_outs.detach().clone()
 
-    if parent_activations.dtype in [
+    if parent_outs.dtype in [
         torch.int,
         torch.long,
         torch.short,
@@ -954,43 +949,41 @@ def _perturb_layer_activations(
         torch.int32,
         torch.int64,
     ]:
-        tensor_unique_vals = torch.unique(parent_activations)
+        tensor_unique_vals = torch.unique(parent_outs)
         if len(tensor_unique_vals) > 1:
             # Multiple unique values: sample within the original range.
-            perturbed_activations = parent_activations.detach().clone()
+            perturbed_outs = parent_outs.detach().clone()
             for _ in range(MAX_PERTURB_ATTEMPTS):
-                perturbed_activations = torch.randint(
-                    parent_activations.min(),  # type: ignore[call-overload]
-                    parent_activations.max() + 1,
-                    size=parent_activations.shape,
+                perturbed_outs = torch.randint(
+                    parent_outs.min(),  # type: ignore[call-overload]
+                    parent_outs.max() + 1,
+                    size=parent_outs.shape,
                     device=device,
-                ).type(parent_activations.dtype)
-                if not torch.equal(perturbed_activations, parent_activations):
+                ).type(parent_outs.dtype)
+                if not torch.equal(perturbed_outs, parent_outs):
                     break
         else:
             # Single unique value: widen to a fixed range to guarantee a
             # different value can be produced.
-            perturbed_activations = parent_activations.detach().clone()
+            perturbed_outs = parent_outs.detach().clone()
             for _ in range(MAX_PERTURB_ATTEMPTS):
-                if torch.min(parent_activations) < 0:
-                    perturbed_activations = torch.randint(
-                        -10, 11, size=parent_activations.shape, device=device
-                    ).type(parent_activations.dtype)
+                if torch.min(parent_outs) < 0:
+                    perturbed_outs = torch.randint(
+                        -10, 11, size=parent_outs.shape, device=device
+                    ).type(parent_outs.dtype)
                 else:
-                    perturbed_activations = torch.randint(
-                        0, 11, size=parent_activations.shape, device=device
-                    ).type(parent_activations.dtype)
-                if not torch.equal(perturbed_activations, parent_activations):
+                    perturbed_outs = torch.randint(
+                        0, 11, size=parent_outs.shape, device=device
+                    ).type(parent_outs.dtype)
+                if not torch.equal(perturbed_outs, parent_outs):
                     break
 
-    elif parent_activations.dtype == torch.bool:
+    elif parent_outs.dtype == torch.bool:
         # Random bool, retried until different from original.
-        perturbed_activations = parent_activations.detach().clone()
+        perturbed_outs = parent_outs.detach().clone()
         for _ in range(MAX_PERTURB_ATTEMPTS):
-            perturbed_activations = torch.randint(
-                0, 2, size=parent_activations.shape, device=device
-            ).bool()
-            if not torch.equal(perturbed_activations, parent_activations):
+            perturbed_outs = torch.randint(0, 2, size=parent_outs.shape, device=device).bool()
+            if not torch.equal(perturbed_outs, parent_outs):
                 break
     else:
         # Float/complex: uniform random within the original value range.
@@ -998,22 +991,22 @@ def _perturb_layer_activations(
         # valid domain for range-restricted functions (e.g., bernoulli
         # requires probabilities in [0,1]).  For typical tensors with wide
         # range this produces meaningfully different values.
-        if parent_activations.is_complex():
-            real = parent_activations.real.float()
-            imag = parent_activations.imag.float()
+        if parent_outs.is_complex():
+            real = parent_outs.real.float()
+            imag = parent_outs.imag.float()
             r_lo, r_hi = real.min().item(), real.max().item()
             i_lo, i_hi = imag.min().item(), imag.max().item()
             if r_lo == r_hi:
                 r_lo, r_hi = r_lo - 1.0, r_hi + 1.0
             if i_lo == i_hi:
                 i_lo, i_hi = i_lo - 1.0, i_hi + 1.0
-            perturbed_activations = torch.complex(
-                torch.rand(parent_activations.shape, device=device) * (r_hi - r_lo) + r_lo,
-                torch.rand(parent_activations.shape, device=device) * (i_hi - i_lo) + i_lo,
-            ).type(parent_activations.dtype)
+            perturbed_outs = torch.complex(
+                torch.rand(parent_outs.shape, device=device) * (r_hi - r_lo) + r_lo,
+                torch.rand(parent_outs.shape, device=device) * (i_hi - i_lo) + i_lo,
+            ).type(parent_outs.dtype)
         else:
-            lo = parent_activations.float().min().item()
-            hi = parent_activations.float().max().item()
+            lo = parent_outs.float().min().item()
+            hi = parent_outs.float().max().item()
             if hi - lo < max(1e-6, abs(lo) * 1e-6):
                 # Near-constant tensor — range is too narrow for meaningful
                 # perturbation at float32 precision.  Expand by ±10% of
@@ -1021,9 +1014,7 @@ def _perturb_layer_activations(
                 # invalid values to C extensions (e.g. ROI align segfaults).
                 expansion = max(1.0, abs(lo) * 0.1)
                 lo, hi = lo - expansion, hi + expansion
-            perturbed_activations = (
-                torch.rand_like(parent_activations.float(), device=device) * (hi - lo) + lo
-            )
-            perturbed_activations = perturbed_activations.type(parent_activations.dtype)
+            perturbed_outs = torch.rand_like(parent_outs.float(), device=device) * (hi - lo) + lo
+            perturbed_outs = perturbed_outs.type(parent_outs.dtype)
 
-    return perturbed_activations
+    return perturbed_outs

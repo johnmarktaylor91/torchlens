@@ -24,30 +24,31 @@ from .hooks import normalize_hooks_from_spec
 from .runtime import active_intervention_context
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
     from .hooks import NormalizedHookEntry
 
 
 def rerun(
-    log: "ModelLog",
+    log: "Trace",
     model: nn.Module,
     x: Any = None,
     *,
     append: bool | MissingType = MISSING,
     strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
-) -> "ModelLog":
+    output_transform: Any | None = None,
+) -> "Trace":
     """Full-forward rerun with the active intervention spec from ``log``.
 
     Re-executes ``model`` through TorchLens decorated wrappers with the current
-    intervention spec installed in runtime context. A fresh ``ModelLog`` is
+    intervention spec installed in runtime context. A fresh ``Trace`` is
     built off to the side, validated, then atomically swapped into ``log``.
     Concurrent reads during rerun are unsupported; no lock is taken.
 
     Parameters
     ----------
     log:
-        ModelLog to update in place after the fresh run validates.
+        Trace to update in place after the fresh run validates.
     model:
         Model to execute through the rerun engine.
     x:
@@ -60,10 +61,13 @@ def rerun(
         If true, graph-shape divergence raises ``ControlFlowDivergenceError``.
         If false, divergence emits ``ControlFlowDivergenceWarning`` and the
         atomic swap proceeds.
+    output_transform:
+        Optional callable applied to the fresh model output for raw-output
+        metadata storage.
 
     Returns
     -------
-    ModelLog
+    Trace
         The same ``log`` object after atomic run-state replacement.
     """
 
@@ -85,12 +89,13 @@ def rerun(
             x,
             intervention_spec=spec,
             hook_plan=hook_plan,
+            output_transform=output_transform,
         )
 
     divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
     log.replace_run_state_from(new_log)
 
-    history_record = _build_operation_history_record(
+    history_record = _build_ledger_record(
         log,
         started_at=started_at,
         old_hash=old_hash,
@@ -115,17 +120,17 @@ def rerun(
     }
     log._record_operation(**history_record)
     log._has_direct_writes = False
-    log._activation_recipe_revision = getattr(log, "_spec_revision", 0)
+    log._out_recipe_revision = getattr(log, "_spec_revision", 0)
     return log
 
 
 def _append_rerun(
-    log: "ModelLog",
+    log: "Trace",
     model: nn.Module,
     x: Any,
     *,
     strict: bool,
-) -> "ModelLog":
+) -> "Trace":
     """Append a compatible fresh rerun chunk into ``log``.
 
     Parameters
@@ -141,7 +146,7 @@ def _append_rerun(
 
     Returns
     -------
-    ModelLog
+    Trace
         The same log after compatible tensors have been concatenated.
     """
 
@@ -164,6 +169,7 @@ def _append_rerun(
             x,
             intervention_spec=spec,
             hook_plan=hook_plan,
+            output_transform=getattr(log, "_output_transform", None),
         )
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
@@ -172,7 +178,7 @@ def _append_rerun(
     log._append_sequence_id = int(getattr(log, "_append_sequence_id", 0)) + 1
     log.run_state = RunState.APPENDED
     log._has_direct_writes = False
-    log._activation_recipe_revision = getattr(log, "_spec_revision", 0)
+    log._out_recipe_revision = getattr(log, "_spec_revision", 0)
 
     duration_s = time.monotonic() - started_at
     chunk_size = _batch_size_from_input(x)
@@ -207,7 +213,7 @@ def _append_rerun(
     return log
 
 
-def _preflight_append(log: "ModelLog", model: nn.Module) -> None:
+def _preflight_append(log: "Trace", model: nn.Module) -> None:
     """Validate append preconditions that do not require a fresh capture.
 
     Parameters
@@ -257,7 +263,7 @@ def _warn_if_batch_sensitive_train_modules(model: nn.Module) -> None:
 
 
 def _validate_append_hook_plan(
-    log: "ModelLog",
+    log: "Trace",
     hook_plan: list["NormalizedHookEntry"],
 ) -> None:
     """Reject append when active helpers are not explicitly batch-independent.
@@ -292,12 +298,11 @@ def _validate_append_hook_plan(
         )
         if force_shape_change and not bool(getattr(helper, "compatible_with_append", False)):
             raise AppendMismatchError(
-                f"helper {helper_name!r} may change activation shape and is not "
-                "compatible_with_append"
+                f"helper {helper_name!r} may change out shape and is not compatible_with_append"
             )
 
 
-def _warn_unknown_append_helper_once(log: "ModelLog", helper_name: str) -> None:
+def _warn_unknown_append_helper_once(log: "Trace", helper_name: str) -> None:
     """Emit a one-time warning for helpers without append-safety metadata.
 
     Parameters
@@ -322,8 +327,8 @@ def _warn_unknown_append_helper_once(log: "ModelLog", helper_name: str) -> None:
 
 
 def _validate_append_candidate(
-    old_log: "ModelLog",
-    new_log: "ModelLog",
+    old_log: "Trace",
+    new_log: "Trace",
     *,
     hook_plan: list["NormalizedHookEntry"],
 ) -> None:
@@ -336,7 +341,7 @@ def _validate_append_candidate(
     new_log:
         Fresh chunk log.
     hook_plan:
-        Active hook entries used to decide gradient support.
+        Active hook entries used to decide grad support.
     """
 
     old_hash = getattr(old_log, "graph_shape_hash", None)
@@ -344,22 +349,20 @@ def _validate_append_candidate(
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
-    old_labels = tuple(layer.layer_label_raw for layer in old_log.layer_list)
-    new_labels = tuple(layer.layer_label_raw for layer in new_log.layer_list)
+    old_labels = tuple(layer._layer_label_raw for layer in old_log.layer_list)
+    new_labels = tuple(layer._layer_label_raw for layer in new_log.layer_list)
     if old_labels != new_labels:
         raise AppendMismatchError("topology or site labels changed")
 
-    old_by_raw = {layer.layer_label_raw: layer for layer in old_log.layer_list}
-    new_by_raw = {layer.layer_label_raw: layer for layer in new_log.layer_list}
-    gradients_supported = _hook_plan_supports_append_gradients(hook_plan)
+    old_by_raw = {layer._layer_label_raw: layer for layer in old_log.layer_list}
+    new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
+    grads_supported = _hook_plan_supports_append_grads(hook_plan)
     for raw_label in old_labels:
         old_layer = old_by_raw[raw_label]
         new_layer = new_by_raw[raw_label]
-        _validate_append_tensor_pair(old_layer, new_layer, "activation")
-        _validate_append_tensor_pair(old_layer, new_layer, "transformed_activation")
-        _validate_append_gradient_pair(
-            old_layer, new_layer, gradients_supported=gradients_supported
-        )
+        _validate_append_tensor_pair(old_layer, new_layer, "out")
+        _validate_append_tensor_pair(old_layer, new_layer, "transformed_out")
+        _validate_append_grad_pair(old_layer, new_layer, grads_supported=grads_supported)
 
 
 def _validate_append_tensor_pair(old_layer: Any, new_layer: Any, field_name: str) -> None:
@@ -381,36 +384,36 @@ def _validate_append_tensor_pair(old_layer: Any, new_layer: Any, field_name: str
         return
     if not isinstance(old_value, torch.Tensor) or not isinstance(new_value, torch.Tensor):
         raise AppendMismatchError(
-            f"{old_layer.layer_label_raw} {field_name} presence changed across chunks"
+            f"{old_layer._layer_label_raw} {field_name} presence changed across chunks"
         )
     if old_value.ndim == 0 or new_value.ndim == 0:
         raise AppendMismatchError(
-            f"{old_layer.layer_label_raw} {field_name} has no batch dimension"
+            f"{old_layer._layer_label_raw} {field_name} has no batch dimension"
         )
     if tuple(old_value.shape[1:]) != tuple(new_value.shape[1:]):
         raise AppendMismatchError(
-            f"{old_layer.layer_label_raw} {field_name} shape changed outside batch "
+            f"{old_layer._layer_label_raw} {field_name} shape changed outside batch "
             f"(old={tuple(old_value.shape)}, new={tuple(new_value.shape)})"
         )
     if old_value.dtype != new_value.dtype:
         raise AppendMismatchError(
-            f"{old_layer.layer_label_raw} {field_name} dtype changed "
+            f"{old_layer._layer_label_raw} {field_name} dtype changed "
             f"(old={old_value.dtype}, new={new_value.dtype})"
         )
     if old_value.device != new_value.device:
         raise AppendMismatchError(
-            f"{old_layer.layer_label_raw} {field_name} device changed "
+            f"{old_layer._layer_label_raw} {field_name} device changed "
             f"(old={old_value.device}, new={new_value.device})"
         )
 
 
-def _validate_append_gradient_pair(
+def _validate_append_grad_pair(
     old_layer: Any,
     new_layer: Any,
     *,
-    gradients_supported: bool,
+    grads_supported: bool,
 ) -> None:
-    """Validate gradient fields for append.
+    """Validate grad fields for append.
 
     Parameters
     ----------
@@ -418,28 +421,28 @@ def _validate_append_gradient_pair(
         Existing pass.
     new_layer:
         New chunk pass.
-    gradients_supported:
-        Whether every active helper opted into gradient concatenation.
+    grads_supported:
+        Whether every active helper opted into grad concatenation.
     """
 
-    gradient_fields = ("gradient", "transformed_gradient")
-    has_any_gradient = any(
+    grad_fields = ("grad", "transformed_grad")
+    has_any_grad = any(
         isinstance(getattr(layer, field_name, None), torch.Tensor)
         for layer in (old_layer, new_layer)
-        for field_name in gradient_fields
+        for field_name in grad_fields
     )
-    if not has_any_gradient:
+    if not has_any_grad:
         return
-    if not gradients_supported:
+    if not grads_supported:
         raise AppendBatchDependenceError(
-            "append gradient concatenation requires helper-specific opt-in"
+            "append grad concatenation requires helper-specific opt-in"
         )
-    for field_name in gradient_fields:
+    for field_name in grad_fields:
         _validate_append_tensor_pair(old_layer, new_layer, field_name)
 
 
-def _hook_plan_supports_append_gradients(hook_plan: list["NormalizedHookEntry"]) -> bool:
-    """Return whether all active helpers opted into gradient append.
+def _hook_plan_supports_append_grads(hook_plan: list["NormalizedHookEntry"]) -> bool:
+    """Return whether all active helpers opted into grad append.
 
     Parameters
     ----------
@@ -456,7 +459,7 @@ def _hook_plan_supports_append_gradients(hook_plan: list["NormalizedHookEntry"])
         return False
     return all(
         entry.helper_spec is not None
-        and bool(getattr(entry.helper_spec, "supports_append_gradients", False))
+        and bool(getattr(entry.helper_spec, "supports_append_grads", False))
         for entry in hook_plan
     )
 
@@ -490,8 +493,8 @@ def _batch_size_from_input(x: Any) -> int | None:
     return None
 
 
-def _first_saved_batch_size(log: "ModelLog") -> int | None:
-    """Return the first saved activation's leading dimension.
+def _first_saved_batch_size(log: "Trace") -> int | None:
+    """Return the first saved out's leading dimension.
 
     Parameters
     ----------
@@ -501,17 +504,17 @@ def _first_saved_batch_size(log: "ModelLog") -> int | None:
     Returns
     -------
     int | None
-        Leading dimension from the first tensor activation, if any.
+        Leading dimension from the first tensor out, if any.
     """
 
     for layer in log.layer_list:
-        activation = getattr(layer, "activation", None)
-        if isinstance(activation, torch.Tensor) and activation.ndim > 0:
-            return int(activation.shape[0])
+        out = getattr(layer, "out", None)
+        if isinstance(out, torch.Tensor) and out.ndim > 0:
+            return int(out.shape[0])
     return None
 
 
-def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
+def _warn_if_direct_writes_will_be_overlaid(log: "Trace") -> None:
     """Warn once that rerun propagation overlays direct writes.
 
     Parameters
@@ -526,20 +529,20 @@ def _warn_if_direct_writes_will_be_overlaid(log: "ModelLog") -> None:
         return
     warnings.warn(
         "DirectActivationWriteWarning: replay/rerun propagation uses the intervention "
-        "recipe and may overlay direct LayerPassLog activation writes.",
+        "recipe and may overlay direct OpLog out writes.",
         DirectActivationWriteWarning,
         stacklevel=3,
     )
     setattr(log, "_warned_direct_write_propagation", True)
 
 
-def _preflight(log: "ModelLog", model: nn.Module, x: Any) -> None:
+def _preflight(log: "Trace", model: nn.Module, x: Any) -> None:
     """Validate rerun preconditions before any fresh capture starts.
 
     Parameters
     ----------
     log:
-        ModelLog that will be updated.
+        Trace that will be updated.
     model:
         Model to execute.
     x:
@@ -562,14 +565,15 @@ def _preflight(log: "ModelLog", model: nn.Module, x: Any) -> None:
 
 
 def _capture_with_active_spec(
-    log: "ModelLog",
+    log: "Trace",
     model: nn.Module,
     x: Any,
     *,
     intervention_spec: Any | None,
     hook_plan: list["NormalizedHookEntry"],
-) -> "ModelLog":
-    """Build a fresh rerun ``ModelLog`` with active hooks installed.
+    output_transform: Any | None,
+) -> "Trace":
+    """Build a fresh rerun ``Trace`` with active hooks installed.
 
     Parameters
     ----------
@@ -583,52 +587,57 @@ def _capture_with_active_spec(
         Active intervention spec exposed through runtime state.
     hook_plan:
         Normalized live hook plan derived from the spec.
+    output_transform:
+        Optional callable applied to the fresh model output for raw-output
+        metadata storage.
 
     Returns
     -------
-    ModelLog
+    Trace
         Fresh log built off to the side.
     """
 
     from ..user_funcs import (  # type: ignore[attr-defined]
-        _run_model_and_save_specified_activations,
+        _run_model_and_save_specified_outs,
         _unwrap_data_parallel,
         check_model_and_input_variants,
     )
 
     model = _unwrap_data_parallel(model)
     check_model_and_input_variants(model, x, {})
-    return _run_model_and_save_specified_activations(
+    return _run_model_and_save_specified_outs(
         model=model,
         input_args=x,
         input_kwargs={},
         layers_to_save="all",
         keep_unsaved_layers=True,
         output_device=getattr(log, "output_device", "same"),
-        activation_transform=getattr(log, "activation_transform", None),
-        gradient_postfunc=getattr(log, "gradient_postfunc", None),
-        save_raw_activation=getattr(log, "save_raw_activation", True),
-        save_raw_gradient=getattr(log, "save_raw_gradient", True),
-        mark_input_output_distances=getattr(log, "mark_input_output_distances", False),
-        detach_saved_tensors=getattr(log, "detach_saved_tensors", False),
-        save_function_args=getattr(log, "save_function_args", False),
-        save_gradients=getattr(log, "save_gradients", False),
-        gradients_to_save=getattr(log, "gradients_to_save", "all"),
-        random_seed=getattr(log, "random_seed_used", None),
+        out_transform=getattr(log, "out_transform", None),
+        grad_transform=getattr(log, "grad_transform", None),
+        save_raw_outs=getattr(log, "save_raw_outs", True),
+        save_raw_grads=getattr(log, "save_raw_grads", True),
+        mark_layer_depths=getattr(log, "mark_layer_depths", False),
+        detach_saved_activations=getattr(log, "detach_saved_activations", False),
+        save_arg_values=getattr(log, "save_arg_values", False),
+        save_grads=getattr(log, "save_grads", False),
+        grads_to_save=getattr(log, "grads_to_save", "all"),
+        random_seed=getattr(log, "random_seed", None),
         num_context_lines=getattr(log, "num_context_lines", 7),
         optimizer=getattr(log, "_optimizer", None),
-        save_source_context=getattr(log, "save_source_context", False),
+        save_code_context=getattr(log, "save_code_context", False),
         save_rng_states=getattr(log, "save_rng_states", False),
-        detect_loops=getattr(log, "detect_loops", True),
+        recurrence_detection=getattr(log, "recurrence_detection", True),
         intervention_ready=True,
         intervention_spec=intervention_spec,
         normalized_hook_plan=hook_plan,
         verbose=getattr(log, "verbose", False),
         train_mode=getattr(log, "train_mode", False),
+        output_transform=output_transform,
+        save_raw_output=getattr(log, "save_raw_output", "small"),
     )
 
 
-def _validate_rerun_result(new_log: "ModelLog", old_log: "ModelLog", *, strict: bool) -> int:
+def _validate_rerun_result(new_log: "Trace", old_log: "Trace", *, strict: bool) -> int:
     """Validate a fresh rerun log before atomic state replacement.
 
     Parameters
@@ -662,8 +671,8 @@ def _validate_rerun_result(new_log: "ModelLog", old_log: "ModelLog", *, strict: 
     return 1
 
 
-def _build_operation_history_record(
-    log: "ModelLog",
+def _build_ledger_record(
+    log: "Trace",
     *,
     started_at: float,
     old_hash: str | None,
@@ -677,7 +686,7 @@ def _build_operation_history_record(
     Parameters
     ----------
     log:
-        ModelLog after state replacement.
+        Trace after state replacement.
     started_at:
         Monotonic start time for the rerun.
     old_hash:

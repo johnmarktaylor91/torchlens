@@ -7,7 +7,7 @@
       },
       {
         "kind": "attribute",
-        "name": "FORK_POLICY"
+        "name": "FIELD_FORK_POLICY"
       },
       {
         "kind": "attribute",
@@ -15,7 +15,7 @@
       },
       {
         "kind": "property",
-        "name": "activation_transform"
+        "name": "out_transform"
       },
       {
         "kind": "field",
@@ -31,15 +31,15 @@
       },
       {
         "kind": "property",
-        "name": "co_parent_layers"
+        "name": "co_parents"
       },
       {
         "kind": "field",
-        "name": "containing_module"
+        "name": "module"
       },
       {
         "kind": "field",
-        "name": "containing_modules"
+        "name": "modules"
       },
       {
         "kind": "method",
@@ -47,11 +47,11 @@
       },
       {
         "kind": "method",
-        "name": "get_child_layers"
+        "name": "get_children"
       },
       {
         "kind": "method",
-        "name": "get_parent_layers"
+        "name": "get_parents"
       },
       {
         "kind": "field",
@@ -75,7 +75,7 @@
       },
       {
         "kind": "field",
-        "name": "has_gradient"
+        "name": "has_grad"
       },
       {
         "kind": "property",
@@ -83,7 +83,7 @@
       },
       {
         "kind": "field",
-        "name": "has_saved_activations"
+        "name": "has_saved_outs"
       },
       {
         "kind": "property",
@@ -91,7 +91,7 @@
       },
       {
         "kind": "property",
-        "name": "is_computed_inside_submodule"
+        "name": "in_submodule"
       },
       {
         "kind": "property",
@@ -115,19 +115,19 @@
       },
       {
         "kind": "method",
-        "name": "materialize_activation"
+        "name": "materialize_out"
       },
       {
         "kind": "method",
-        "name": "materialize_gradient"
+        "name": "materialize_grad"
       },
       {
         "kind": "property",
-        "name": "module_address"
+        "name": "address"
       },
       {
         "kind": "property",
-        "name": "module_nesting_depth"
+        "name": "module_call_depth"
       },
       {
         "kind": "property",
@@ -143,19 +143,19 @@
       },
       {
         "kind": "property",
-        "name": "params_memory_str"
+        "name": "param_memory_str"
       },
       {
         "kind": "field",
-        "name": "pass_num"
+        "name": "call_index"
       },
       {
         "kind": "property",
-        "name": "passes"
+        "name": "ops"
       },
       {
         "kind": "method",
-        "name": "save_tensor_data"
+        "name": "save_activation"
       },
       {
         "kind": "method",
@@ -163,11 +163,11 @@
       },
       {
         "kind": "property",
-        "name": "sibling_layers"
+        "name": "siblings"
       },
       {
         "kind": "property",
-        "name": "source_model_log"
+        "name": "source_trace"
       },
       {
         "kind": "property",
@@ -175,19 +175,19 @@
       },
       {
         "kind": "field",
-        "name": "tensor_dtype"
+        "name": "dtype"
       },
       {
         "kind": "field",
-        "name": "tensor_memory"
+        "name": "memory"
       },
       {
         "kind": "property",
-        "name": "tensor_memory_str"
+        "name": "memory_str"
       },
       {
         "kind": "field",
-        "name": "tensor_shape"
+        "name": "shape"
       },
       {
         "kind": "property",
@@ -229,7 +229,7 @@
       },
       {
         "kind": "method",
-        "name": "evict_all_but"
+        "name": "remove_except"
       },
       {
         "kind": "method",
@@ -241,7 +241,7 @@
       },
       {
         "kind": "method",
-        "name": "joint_metric"
+        "name": "apply"
       },
       {
         "kind": "property",
@@ -273,7 +273,7 @@
       },
       {
         "kind": "property",
-        "name": "relationship_matrix"
+        "name": "relationships"
       },
       {
         "kind": "method",
@@ -289,7 +289,7 @@
       },
       {
         "kind": "method",
-        "name": "set_capacity"
+        "name": "capacity"
       },
       {
         "kind": "method",
@@ -307,7 +307,7 @@
       },
       {
         "kind": "attribute",
-        "name": "corresponding_layer"
+        "name": "op"
       },
       {
         "kind": "field",
@@ -331,7 +331,7 @@
       },
       {
         "kind": "attribute",
-        "name": "is_intervening"
+        "name": "has_op"
       },
       {
         "kind": "field",
@@ -355,22 +355,22 @@
       },
       {
         "kind": "property",
-        "name": "num_passes"
+        "name": "num_calls"
       },
       {
         "kind": "property",
-        "name": "pass_labels"
+        "name": "call_labels"
       },
       {
         "kind": "field",
-        "name": "passes"
+        "name": "ops"
       },
       {
         "kind": "method",
         "name": "to_pandas"
       }
     ],
-    "GradFnPassLog": [
+    "GradFnCallLog": [
       {
         "kind": "attribute",
         "name": "PORTABLE_STATE_SPEC"
@@ -385,7 +385,7 @@
       },
       {
         "kind": "field",
-        "name": "pass_num"
+        "name": "call_index"
       },
       {
         "kind": "attribute",
@@ -407,23 +407,23 @@
       },
       {
         "kind": "property",
-        "name": "activation"
+        "name": "out"
       },
       {
         "kind": "field",
-        "name": "activation_postfunc"
+        "name": "out_postfunc"
       },
       {
         "kind": "property",
-        "name": "activation_transform"
+        "name": "out_transform"
       },
       {
         "kind": "field",
-        "name": "autograd_saved_bytes"
+        "name": "autograd_saved_memory"
       },
       {
         "kind": "field",
-        "name": "autograd_saved_tensor_count"
+        "name": "num_autograd_saved_tensors"
       },
       {
         "kind": "field",
@@ -435,87 +435,87 @@
       },
       {
         "kind": "property",
-        "name": "captured_args"
+        "name": "saved_args"
       },
       {
         "kind": "property",
-        "name": "captured_kwargs"
+        "name": "saved_kwargs"
       },
       {
         "kind": "property",
-        "name": "child_layers"
+        "name": "children"
       },
       {
         "kind": "property",
-        "name": "child_layers_per_pass"
+        "name": "children_per_pass"
       },
       {
         "kind": "property",
-        "name": "child_passes_per_layer"
+        "name": "child_ops_per_layer"
       },
       {
         "kind": "property",
-        "name": "co_parent_layers"
+        "name": "co_parents"
       },
       {
         "kind": "field",
-        "name": "cond_branch_children_by_cond"
+        "name": "conditional_arm_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_elif_children"
+        "name": "conditional_elif_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_else_children"
+        "name": "conditional_else_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_start_children"
+        "name": "conditional_entry_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_then_children"
+        "name": "conditional_then_children"
       },
       {
         "kind": "field",
-        "name": "conditional_branch_stack_passes"
+        "name": "conditional_branch_stack_ops"
       },
       {
         "kind": "field",
-        "name": "conditional_branch_stacks"
+        "name": "conditional_role_stacks"
       },
       {
         "kind": "field",
-        "name": "containing_module"
+        "name": "module"
       },
       {
         "kind": "field",
-        "name": "containing_modules"
+        "name": "modules"
       },
       {
         "kind": "field",
-        "name": "corresponding_grad_fn"
+        "name": "grad_fn_log"
       },
       {
         "kind": "property",
-        "name": "creation_order"
+        "name": "capture_index"
       },
       {
         "kind": "field",
-        "name": "detach_saved_tensor"
+        "name": "detach_saved_activations"
       },
       {
         "kind": "property",
-        "name": "edges_vary_across_passes"
+        "name": "edges_vary_across_ops"
       },
       {
         "kind": "field",
-        "name": "equivalent_operations"
+        "name": "equivalent_ops"
       },
       {
         "kind": "field",
-        "name": "extra_data"
+        "name": "annotations"
       },
       {
         "kind": "field",
@@ -527,15 +527,15 @@
       },
       {
         "kind": "field",
-        "name": "func_applied"
+        "name": "func"
       },
       {
         "kind": "field",
-        "name": "func_argnames"
+        "name": "arg_names"
       },
       {
         "kind": "property",
-        "name": "func_call_stack"
+        "name": "code_context"
       },
       {
         "kind": "field",
@@ -543,7 +543,7 @@
       },
       {
         "kind": "field",
-        "name": "func_is_inplace"
+        "name": "is_inplace"
       },
       {
         "kind": "field",
@@ -555,15 +555,15 @@
       },
       {
         "kind": "property",
-        "name": "func_time"
+        "name": "func_duration"
       },
       {
         "kind": "method",
-        "name": "get_child_layers"
+        "name": "get_children"
       },
       {
         "kind": "method",
-        "name": "get_parent_layers"
+        "name": "get_parents"
       },
       {
         "kind": "field",
@@ -575,11 +575,11 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn_object"
+        "name": "grad_fn"
       },
       {
         "kind": "property",
-        "name": "gradient"
+        "name": "grad"
       },
       {
         "kind": "property",
@@ -591,7 +591,7 @@
       },
       {
         "kind": "property",
-        "name": "has_gradient"
+        "name": "has_grad"
       },
       {
         "kind": "property",
@@ -599,7 +599,7 @@
       },
       {
         "kind": "property",
-        "name": "has_saved_activations"
+        "name": "has_saved_outs"
       },
       {
         "kind": "property",
@@ -607,11 +607,11 @@
       },
       {
         "kind": "field",
-        "name": "is_buffer_layer"
+        "name": "is_buffer"
       },
       {
         "kind": "property",
-        "name": "is_computed_inside_submodule"
+        "name": "in_submodule"
       },
       {
         "kind": "field",
@@ -619,19 +619,19 @@
       },
       {
         "kind": "field",
-        "name": "is_input_layer"
+        "name": "is_input"
       },
       {
         "kind": "field",
-        "name": "is_internally_initialized"
+        "name": "is_internal_source"
       },
       {
         "kind": "field",
-        "name": "is_internally_terminated"
+        "name": "is_internal_sink"
       },
       {
         "kind": "field",
-        "name": "is_output_layer"
+        "name": "is_output"
       },
       {
         "kind": "field",
@@ -643,11 +643,11 @@
       },
       {
         "kind": "field",
-        "name": "is_terminal_bool_layer"
+        "name": "is_terminal_bool"
       },
       {
         "kind": "field",
-        "name": "iterable_output_index"
+        "name": "multi_output_index"
       },
       {
         "kind": "field",
@@ -675,7 +675,7 @@
       },
       {
         "kind": "field",
-        "name": "layer_total_num"
+        "name": "trace_index"
       },
       {
         "kind": "field",
@@ -683,11 +683,11 @@
       },
       {
         "kind": "field",
-        "name": "layer_type_num"
+        "name": "type_index"
       },
       {
         "kind": "property",
-        "name": "leaf_module_passes"
+        "name": "leaf_module_ops"
       },
       {
         "kind": "property",
@@ -703,15 +703,15 @@
       },
       {
         "kind": "property",
-        "name": "module_nesting_depth"
+        "name": "module_call_depth"
       },
       {
         "kind": "field",
-        "name": "num_args"
+        "name": "num_args_total"
       },
       {
         "kind": "field",
-        "name": "num_keyword_args"
+        "name": "num_kwargs"
       },
       {
         "kind": "property",
@@ -723,7 +723,7 @@
       },
       {
         "kind": "field",
-        "name": "num_params_total"
+        "name": "num_params"
       },
       {
         "kind": "field",
@@ -731,19 +731,19 @@
       },
       {
         "kind": "field",
-        "name": "num_passes"
+        "name": "num_calls"
       },
       {
         "kind": "field",
-        "name": "num_positional_args"
+        "name": "num_pos_args"
       },
       {
         "kind": "field",
-        "name": "operation_equivalence_type"
+        "name": "equivalence_class"
       },
       {
         "kind": "property",
-        "name": "operation_num"
+        "name": "compute_index"
       },
       {
         "kind": "field",
@@ -755,59 +755,59 @@
       },
       {
         "kind": "field",
-        "name": "params_memory"
+        "name": "param_memory"
       },
       {
         "kind": "property",
-        "name": "params_memory_str"
+        "name": "param_memory_str"
       },
       {
         "kind": "property",
-        "name": "parent_layer_arg_locs"
+        "name": "parent_arg_positions"
       },
       {
         "kind": "property",
-        "name": "parent_layers"
+        "name": "parents"
       },
       {
         "kind": "property",
-        "name": "parent_layers_per_pass"
+        "name": "parents_per_pass"
       },
       {
         "kind": "field",
-        "name": "parent_param_barcodes"
+        "name": "_param_barcodes"
       },
       {
         "kind": "field",
-        "name": "parent_param_logs"
+        "name": "_param_logs"
       },
       {
         "kind": "field",
-        "name": "parent_param_shapes"
+        "name": "param_shapes"
       },
       {
         "kind": "property",
-        "name": "parent_passes_per_layer"
+        "name": "parent_ops_per_layer"
       },
       {
         "kind": "field",
-        "name": "pass_labels"
+        "name": "call_labels"
       },
       {
         "kind": "property",
-        "name": "pass_num"
+        "name": "call_index"
       },
       {
         "kind": "field",
-        "name": "passes"
+        "name": "ops"
       },
       {
         "kind": "field",
-        "name": "save_gradients"
+        "name": "save_grads"
       },
       {
         "kind": "field",
-        "name": "scalar_bool_value"
+        "name": "bool_value"
       },
       {
         "kind": "method",
@@ -815,11 +815,11 @@
       },
       {
         "kind": "property",
-        "name": "sibling_layers"
+        "name": "siblings"
       },
       {
         "kind": "property",
-        "name": "source_model_log"
+        "name": "source_trace"
       },
       {
         "kind": "property",
@@ -827,65 +827,65 @@
       },
       {
         "kind": "field",
-        "name": "tensor_dtype"
+        "name": "dtype"
       },
       {
         "kind": "field",
-        "name": "tensor_memory"
+        "name": "memory"
       },
       {
         "kind": "property",
-        "name": "tensor_memory_str"
+        "name": "memory_str"
       },
       {
         "kind": "field",
-        "name": "tensor_shape"
+        "name": "shape"
       },
       {
         "kind": "property",
-        "name": "transformed_activation"
+        "name": "transformed_out"
       },
       {
         "kind": "field",
-        "name": "transformed_activation_dtype"
+        "name": "transformed_out_dtype"
       },
       {
         "kind": "field",
-        "name": "transformed_activation_memory"
+        "name": "transformed_out_memory"
       },
       {
         "kind": "field",
-        "name": "transformed_activation_shape"
+        "name": "transformed_out_shape"
       },
       {
         "kind": "property",
-        "name": "transformed_gradient"
+        "name": "transformed_grad"
       },
       {
         "kind": "field",
-        "name": "transformed_gradient_dtype"
+        "name": "transformed_grad_dtype"
       },
       {
         "kind": "field",
-        "name": "transformed_gradient_memory"
+        "name": "transformed_grad_memory"
       },
       {
         "kind": "field",
-        "name": "transformed_gradient_shape"
+        "name": "transformed_grad_shape"
       },
       {
         "kind": "property",
         "name": "uses_params"
       }
     ],
-    "LayerPassLog": [
+    "OpLog": [
       {
         "kind": "attribute",
         "name": "DEFAULT_FILL_STATE"
       },
       {
         "kind": "attribute",
-        "name": "FORK_POLICY"
+        "name": "FIELD_FORK_POLICY"
       },
       {
         "kind": "attribute",
@@ -897,47 +897,47 @@
       },
       {
         "kind": "field",
-        "name": "_pass_finished"
+        "name": "_tracing_finished"
       },
       {
         "kind": "field",
-        "name": "activation"
+        "name": "out"
       },
       {
         "kind": "field",
-        "name": "activation_postfunc"
+        "name": "out_postfunc"
       },
       {
         "kind": "property",
-        "name": "activation_transform"
+        "name": "out_transform"
       },
       {
         "kind": "field",
-        "name": "args_captured"
+        "name": "has_saved_args"
       },
       {
         "kind": "field",
-        "name": "autograd_saved_bytes"
+        "name": "autograd_saved_memory"
       },
       {
         "kind": "field",
-        "name": "autograd_saved_tensor_count"
+        "name": "num_autograd_saved_tensors"
       },
       {
         "kind": "field",
-        "name": "bool_conditional_id"
+        "name": "terminal_conditional_id"
       },
       {
         "kind": "field",
-        "name": "bool_context_kind"
+        "name": "conditional_context_kind"
       },
       {
         "kind": "field",
-        "name": "bool_is_branch"
+        "name": "is_terminal_conditional_bool"
       },
       {
         "kind": "field",
-        "name": "bool_wrapper_kind"
+        "name": "conditional_wrapper_kind"
       },
       {
         "kind": "field",
@@ -961,51 +961,51 @@
       },
       {
         "kind": "field",
-        "name": "captured_arg_template"
+        "name": "args_template"
       },
       {
         "kind": "field",
-        "name": "captured_args"
+        "name": "saved_args"
       },
       {
         "kind": "field",
-        "name": "captured_kwarg_template"
+        "name": "kwargs_template"
       },
       {
         "kind": "field",
-        "name": "captured_kwargs"
+        "name": "saved_kwargs"
       },
       {
         "kind": "field",
-        "name": "child_layers"
+        "name": "children"
       },
       {
         "kind": "field",
-        "name": "children_tensor_versions"
+        "name": "output_versions_per_child"
       },
       {
         "kind": "property",
-        "name": "co_parent_layers"
+        "name": "co_parents"
       },
       {
         "kind": "field",
-        "name": "cond_branch_children_by_cond"
+        "name": "conditional_arm_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_elif_children"
+        "name": "conditional_elif_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_else_children"
+        "name": "conditional_else_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_start_children"
+        "name": "conditional_entry_children"
       },
       {
         "kind": "field",
-        "name": "cond_branch_then_children"
+        "name": "conditional_then_children"
       },
       {
         "kind": "field",
@@ -1021,11 +1021,11 @@
       },
       {
         "kind": "field",
-        "name": "containing_module"
+        "name": "module"
       },
       {
         "kind": "field",
-        "name": "containing_modules"
+        "name": "modules"
       },
       {
         "kind": "method",
@@ -1033,15 +1033,15 @@
       },
       {
         "kind": "field",
-        "name": "corresponding_grad_fn"
+        "name": "grad_fn_log"
       },
       {
         "kind": "field",
-        "name": "creation_order"
+        "name": "capture_index"
       },
       {
         "kind": "field",
-        "name": "detach_saved_tensor"
+        "name": "detach_saved_activations"
       },
       {
         "kind": "field",
@@ -1049,15 +1049,15 @@
       },
       {
         "kind": "field",
-        "name": "equivalent_operations"
+        "name": "equivalent_ops"
       },
       {
         "kind": "field",
-        "name": "extra_data"
+        "name": "annotations"
       },
       {
         "kind": "field",
-        "name": "feeds_output"
+        "name": "is_output_parent"
       },
       {
         "kind": "field",
@@ -1069,11 +1069,11 @@
       },
       {
         "kind": "field",
-        "name": "func_applied"
+        "name": "func"
       },
       {
         "kind": "field",
-        "name": "func_argnames"
+        "name": "arg_names"
       },
       {
         "kind": "field",
@@ -1085,7 +1085,7 @@
       },
       {
         "kind": "field",
-        "name": "func_call_stack"
+        "name": "code_context"
       },
       {
         "kind": "field",
@@ -1093,11 +1093,11 @@
       },
       {
         "kind": "field",
-        "name": "func_is_inplace"
+        "name": "is_inplace"
       },
       {
         "kind": "field",
-        "name": "func_kwargs_non_tensor"
+        "name": "non_tensor_kwargs"
       },
       {
         "kind": "field",
@@ -1109,7 +1109,7 @@
       },
       {
         "kind": "field",
-        "name": "func_positional_args_non_tensor"
+        "name": "non_tensor_pos_args"
       },
       {
         "kind": "field",
@@ -1117,15 +1117,15 @@
       },
       {
         "kind": "field",
-        "name": "func_time"
+        "name": "func_duration"
       },
       {
         "kind": "method",
-        "name": "get_child_layers"
+        "name": "get_children"
       },
       {
         "kind": "method",
-        "name": "get_parent_layers"
+        "name": "get_parents"
       },
       {
         "kind": "field",
@@ -1141,7 +1141,7 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn_object"
+        "name": "grad_fn"
       },
       {
         "kind": "field",
@@ -1157,11 +1157,11 @@
       },
       {
         "kind": "field",
-        "name": "gradient"
+        "name": "grad"
       },
       {
         "kind": "field",
-        "name": "has_child_tensor_variations"
+        "name": "has_output_variations"
       },
       {
         "kind": "field",
@@ -1173,7 +1173,7 @@
       },
       {
         "kind": "field",
-        "name": "has_gradient"
+        "name": "has_grad"
       },
       {
         "kind": "field",
@@ -1181,7 +1181,7 @@
       },
       {
         "kind": "field",
-        "name": "has_internally_initialized_ancestor"
+        "name": "has_internal_source_ancestor"
       },
       {
         "kind": "property",
@@ -1189,7 +1189,7 @@
       },
       {
         "kind": "field",
-        "name": "has_saved_activations"
+        "name": "has_saved_outs"
       },
       {
         "kind": "property",
@@ -1197,7 +1197,7 @@
       },
       {
         "kind": "field",
-        "name": "in_cond_branch"
+        "name": "is_in_conditional_body"
       },
       {
         "kind": "field",
@@ -1205,15 +1205,15 @@
       },
       {
         "kind": "field",
-        "name": "internally_initialized_ancestors"
+        "name": "internal_source_ancestors"
       },
       {
         "kind": "field",
-        "name": "internally_initialized_parents"
+        "name": "internal_source_parents"
       },
       {
         "kind": "field",
-        "name": "intervention_log"
+        "name": "interventions"
       },
       {
         "kind": "field",
@@ -1221,11 +1221,11 @@
       },
       {
         "kind": "field",
-        "name": "is_buffer_layer"
+        "name": "is_buffer"
       },
       {
         "kind": "property",
-        "name": "is_computed_inside_submodule"
+        "name": "in_submodule"
       },
       {
         "kind": "field",
@@ -1233,27 +1233,27 @@
       },
       {
         "kind": "field",
-        "name": "is_input_layer"
+        "name": "is_input"
       },
       {
         "kind": "field",
-        "name": "is_internally_initialized"
+        "name": "is_internal_source"
       },
       {
         "kind": "field",
-        "name": "is_internally_terminated"
+        "name": "is_internal_sink"
       },
       {
         "kind": "field",
-        "name": "is_leaf_module_output"
+        "name": "is_atomic_module_op"
       },
       {
         "kind": "field",
-        "name": "is_output_ancestor"
+        "name": "has_output_descendant"
       },
       {
         "kind": "field",
-        "name": "is_output_layer"
+        "name": "is_output"
       },
       {
         "kind": "field",
@@ -1273,11 +1273,11 @@
       },
       {
         "kind": "field",
-        "name": "is_terminal_bool_layer"
+        "name": "is_terminal_bool"
       },
       {
         "kind": "field",
-        "name": "iterable_output_index"
+        "name": "multi_output_index"
       },
       {
         "kind": "field",
@@ -1293,7 +1293,7 @@
       },
       {
         "kind": "field",
-        "name": "layer_label_raw"
+        "name": "_layer_label_raw"
       },
       {
         "kind": "field",
@@ -1309,7 +1309,7 @@
       },
       {
         "kind": "field",
-        "name": "layer_total_num"
+        "name": "trace_index"
       },
       {
         "kind": "field",
@@ -1317,11 +1317,11 @@
       },
       {
         "kind": "field",
-        "name": "layer_type_num"
+        "name": "type_index"
       },
       {
         "kind": "field",
-        "name": "leaf_module_pass"
+        "name": "atomic_module_call"
       },
       {
         "kind": "method",
@@ -1341,11 +1341,11 @@
       },
       {
         "kind": "method",
-        "name": "materialize_activation"
+        "name": "materialize_out"
       },
       {
         "kind": "method",
-        "name": "materialize_gradient"
+        "name": "materialize_grad"
       },
       {
         "kind": "field",
@@ -1365,27 +1365,27 @@
       },
       {
         "kind": "field",
-        "name": "module_address_normalized"
+        "name": "_address_normalized"
       },
       {
         "kind": "field",
-        "name": "module_entry_exit_thread_output"
+        "name": "_module_boundary_thread_output"
       },
       {
         "kind": "field",
-        "name": "module_entry_exit_threads_inputs"
+        "name": "_module_boundary_threads_inputs"
       },
       {
         "kind": "property",
-        "name": "module_nesting_depth"
+        "name": "module_call_depth"
       },
       {
         "kind": "field",
-        "name": "module_passes_entered"
+        "name": "module_ops_entered"
       },
       {
         "kind": "field",
-        "name": "module_passes_exited"
+        "name": "output_of_module_calls"
       },
       {
         "kind": "field",
@@ -1393,19 +1393,19 @@
       },
       {
         "kind": "field",
-        "name": "modules_entered_argnames"
+        "name": "module_entry_argnames"
       },
       {
         "kind": "field",
-        "name": "modules_exited"
+        "name": "output_of_modules"
       },
       {
         "kind": "field",
-        "name": "num_args"
+        "name": "num_args_total"
       },
       {
         "kind": "field",
-        "name": "num_keyword_args"
+        "name": "num_kwargs"
       },
       {
         "kind": "property",
@@ -1417,7 +1417,7 @@
       },
       {
         "kind": "field",
-        "name": "num_params_total"
+        "name": "num_params"
       },
       {
         "kind": "field",
@@ -1425,19 +1425,19 @@
       },
       {
         "kind": "field",
-        "name": "num_passes"
+        "name": "num_calls"
       },
       {
         "kind": "field",
-        "name": "num_positional_args"
+        "name": "num_pos_args"
       },
       {
         "kind": "field",
-        "name": "operation_equivalence_type"
+        "name": "equivalence_class"
       },
       {
         "kind": "field",
-        "name": "operation_num"
+        "name": "compute_index"
       },
       {
         "kind": "field",
@@ -1449,7 +1449,7 @@
       },
       {
         "kind": "field",
-        "name": "output_path"
+        "name": "container_path"
       },
       {
         "kind": "property",
@@ -1457,35 +1457,35 @@
       },
       {
         "kind": "field",
-        "name": "params_memory"
+        "name": "param_memory"
       },
       {
         "kind": "property",
-        "name": "params_memory_str"
+        "name": "param_memory_str"
       },
       {
         "kind": "field",
-        "name": "parent_layer_arg_locs"
+        "name": "parent_arg_positions"
       },
       {
         "kind": "field",
-        "name": "parent_layers"
+        "name": "parents"
       },
       {
         "kind": "field",
-        "name": "parent_param_barcodes"
+        "name": "_param_barcodes"
       },
       {
         "kind": "field",
-        "name": "parent_param_logs"
+        "name": "_param_logs"
       },
       {
         "kind": "field",
-        "name": "parent_param_passes"
+        "name": "parent_param_ops"
       },
       {
         "kind": "field",
-        "name": "parent_param_shapes"
+        "name": "param_shapes"
       },
       {
         "kind": "field",
@@ -1493,15 +1493,15 @@
       },
       {
         "kind": "field",
-        "name": "pass_num"
+        "name": "call_index"
       },
       {
         "kind": "property",
-        "name": "passes"
+        "name": "ops"
       },
       {
         "kind": "field",
-        "name": "recurrent_group"
+        "name": "recurrent_ops"
       },
       {
         "kind": "field",
@@ -1509,15 +1509,15 @@
       },
       {
         "kind": "field",
-        "name": "save_gradients"
+        "name": "save_grads"
       },
       {
         "kind": "method",
-        "name": "save_tensor_data"
+        "name": "save_activation"
       },
       {
         "kind": "field",
-        "name": "scalar_bool_value"
+        "name": "bool_value"
       },
       {
         "kind": "method",
@@ -1525,11 +1525,11 @@
       },
       {
         "kind": "property",
-        "name": "sibling_layers"
+        "name": "siblings"
       },
       {
         "kind": "property",
-        "name": "source_model_log"
+        "name": "source_trace"
       },
       {
         "kind": "property",
@@ -1537,69 +1537,69 @@
       },
       {
         "kind": "field",
-        "name": "tensor_dtype"
+        "name": "dtype"
       },
       {
         "kind": "field",
-        "name": "tensor_label_raw"
+        "name": "_label_raw"
       },
       {
         "kind": "field",
-        "name": "tensor_memory"
+        "name": "memory"
       },
       {
         "kind": "property",
-        "name": "tensor_memory_str"
+        "name": "memory_str"
       },
       {
         "kind": "field",
-        "name": "tensor_shape"
+        "name": "shape"
       },
       {
         "kind": "field",
-        "name": "transformed_activation"
+        "name": "transformed_out"
       },
       {
         "kind": "field",
-        "name": "transformed_activation_dtype"
+        "name": "transformed_out_dtype"
       },
       {
         "kind": "field",
-        "name": "transformed_activation_memory"
+        "name": "transformed_out_memory"
       },
       {
         "kind": "field",
-        "name": "transformed_activation_shape"
+        "name": "transformed_out_shape"
       },
       {
         "kind": "field",
-        "name": "transformed_gradient"
+        "name": "transformed_grad"
       },
       {
         "kind": "field",
-        "name": "transformed_gradient_dtype"
+        "name": "transformed_grad_dtype"
       },
       {
         "kind": "field",
-        "name": "transformed_gradient_memory"
+        "name": "transformed_grad_memory"
       },
       {
         "kind": "field",
-        "name": "transformed_gradient_shape"
+        "name": "transformed_grad_shape"
       },
       {
         "kind": "property",
         "name": "uses_params"
       }
     ],
-    "ModelLog": [
+    "Trace": [
       {
         "kind": "attribute",
         "name": "DEFAULT_FILL_STATE"
       },
       {
         "kind": "attribute",
-        "name": "FORK_POLICY"
+        "name": "FIELD_FORK_POLICY"
       },
       {
         "kind": "attribute",
@@ -1607,19 +1607,19 @@
       },
       {
         "kind": "field",
-        "name": "_activation_hash_cache"
+        "name": "_out_hash_cache"
       },
       {
         "kind": "field",
-        "name": "_activation_recipe_revision"
+        "name": "_out_recipe_revision"
       },
       {
         "kind": "field",
-        "name": "_all_layers_logged"
+        "name": "_layers_logged"
       },
       {
         "kind": "field",
-        "name": "_all_layers_saved"
+        "name": "_layers_saved"
       },
       {
         "kind": "field",
@@ -1631,7 +1631,7 @@
       },
       {
         "kind": "field",
-        "name": "_gradient_layer_nums_to_save"
+        "name": "_grad_layer_nums_to_save"
       },
       {
         "kind": "field",
@@ -1667,7 +1667,7 @@
       },
       {
         "kind": "field",
-        "name": "_pass_finished"
+        "name": "_tracing_finished"
       },
       {
         "kind": "field",
@@ -1711,15 +1711,15 @@
       },
       {
         "kind": "field",
-        "name": "activation_postfunc"
+        "name": "out_postfunc"
       },
       {
         "kind": "field",
-        "name": "activation_postfunc_repr"
+        "name": "_out_transform_repr"
       },
       {
         "kind": "property",
-        "name": "activation_transform"
+        "name": "out_transform"
       },
       {
         "kind": "method",
@@ -1727,7 +1727,7 @@
       },
       {
         "kind": "method",
-        "name": "animate_passes"
+        "name": "animate_ops"
       },
       {
         "kind": "method",
@@ -1743,11 +1743,11 @@
       },
       {
         "kind": "field",
-        "name": "backward_num_passes"
+        "name": "backward_num_calls"
       },
       {
         "kind": "field",
-        "name": "backward_peak_memory_bytes"
+        "name": "backward_peak_memory"
       },
       {
         "kind": "field",
@@ -1759,7 +1759,7 @@
       },
       {
         "kind": "field",
-        "name": "buffer_num_passes"
+        "name": "buffer_num_calls"
       },
       {
         "kind": "property",
@@ -1779,11 +1779,11 @@
       },
       {
         "kind": "field",
-        "name": "capture_full_args"
+        "name": "capture_args_template"
       },
       {
         "kind": "field",
-        "name": "capture_kpis"
+        "name": "trace_annotations"
       },
       {
         "kind": "method",
@@ -1799,7 +1799,7 @@
       },
       {
         "kind": "field",
-        "name": "conditional_arm_edges"
+        "name": "conditional_arm_entry_edges"
       },
       {
         "kind": "field",
@@ -1807,27 +1807,27 @@
       },
       {
         "kind": "field",
-        "name": "conditional_edge_passes"
+        "name": "conditional_edge_call_indices"
       },
       {
         "kind": "property",
-        "name": "conditional_elif_edges"
+        "name": "conditional_elif_entry_edges"
       },
       {
         "kind": "property",
-        "name": "conditional_else_edges"
+        "name": "conditional_else_entry_edges"
       },
       {
         "kind": "field",
-        "name": "conditional_events"
+        "name": "conditional_records"
       },
       {
         "kind": "property",
-        "name": "conditional_then_edges"
+        "name": "conditional_then_entry_edges"
       },
       {
         "kind": "field",
-        "name": "current_function_call_barcode"
+        "name": "_current_func_barcode"
       },
       {
         "kind": "method",
@@ -1835,11 +1835,11 @@
       },
       {
         "kind": "field",
-        "name": "detach_saved_tensors"
+        "name": "detach_saved_activations"
       },
       {
         "kind": "field",
-        "name": "detect_loops"
+        "name": "recurrence_detection"
       },
       {
         "kind": "method",
@@ -1851,7 +1851,7 @@
       },
       {
         "kind": "field",
-        "name": "equivalent_operations"
+        "name": "equivalent_ops"
       },
       {
         "kind": "method",
@@ -1875,7 +1875,7 @@
       },
       {
         "kind": "field",
-        "name": "forward_lineno"
+        "name": "forward_source_line"
       },
       {
         "kind": "field",
@@ -1891,15 +1891,15 @@
       },
       {
         "kind": "field",
-        "name": "gradient_postfunc"
+        "name": "grad_transform"
       },
       {
         "kind": "field",
-        "name": "gradient_postfunc_repr"
+        "name": "grad_transform_repr"
       },
       {
         "kind": "field",
-        "name": "gradients_to_save"
+        "name": "grads_to_save"
       },
       {
         "kind": "field",
@@ -1907,7 +1907,7 @@
       },
       {
         "kind": "field",
-        "name": "has_backward_log"
+        "name": "has_backward_pass"
       },
       {
         "kind": "property",
@@ -1915,11 +1915,11 @@
       },
       {
         "kind": "field",
-        "name": "has_gradients"
+        "name": "has_grads"
       },
       {
         "kind": "field",
-        "name": "input_id_at_capture"
+        "name": "input_id"
       },
       {
         "kind": "field",
@@ -1927,7 +1927,7 @@
       },
       {
         "kind": "field",
-        "name": "input_metadata"
+        "name": "input_annotations"
       },
       {
         "kind": "field",
@@ -1935,15 +1935,15 @@
       },
       {
         "kind": "field",
-        "name": "internally_initialized_layers"
+        "name": "internal_source_ops"
       },
       {
         "kind": "field",
-        "name": "internally_terminated_bool_layers"
+        "name": "internally_terminated_bool_ops"
       },
       {
         "kind": "field",
-        "name": "internally_terminated_layers"
+        "name": "internal_sink_ops"
       },
       {
         "kind": "field",
@@ -1995,11 +1995,11 @@
       },
       {
         "kind": "field",
-        "name": "layer_labels_no_pass"
+        "name": "layer_labels"
       },
       {
         "kind": "field",
-        "name": "layer_labels_w_pass"
+        "name": "op_labels"
       },
       {
         "kind": "field",
@@ -2011,7 +2011,7 @@
       },
       {
         "kind": "field",
-        "name": "layer_num_passes"
+        "name": "layer_num_calls"
       },
       {
         "kind": "property",
@@ -2023,11 +2023,11 @@
       },
       {
         "kind": "field",
-        "name": "layers_with_saved_activations"
+        "name": "ops_with_saved_outs"
       },
       {
         "kind": "field",
-        "name": "layers_with_saved_gradients"
+        "name": "ops_with_saved_grads"
       },
       {
         "kind": "classmethod",
@@ -2039,7 +2039,7 @@
       },
       {
         "kind": "field",
-        "name": "logging_mode"
+        "name": "capture_mode"
       },
       {
         "kind": "property",
@@ -2051,7 +2051,7 @@
       },
       {
         "kind": "field",
-        "name": "mark_input_output_distances"
+        "name": "mark_layer_depths"
       },
       {
         "kind": "property",
@@ -2063,7 +2063,7 @@
       },
       {
         "kind": "field",
-        "name": "module_filter_fn"
+        "name": "module_filter"
       },
       {
         "kind": "property",
@@ -2083,23 +2083,23 @@
       },
       {
         "kind": "property",
-        "name": "num_intervening_grad_fns"
+        "name": "num_grad_fns_without_op"
       },
       {
         "kind": "field",
-        "name": "num_operations"
+        "name": "num_ops"
       },
       {
         "kind": "field",
-        "name": "num_streamed_passes"
+        "name": "num_streamed_ops"
       },
       {
         "kind": "field",
-        "name": "num_tensors_saved"
+        "name": "num_saved_ops"
       },
       {
         "kind": "property",
-        "name": "num_tensors_total"
+        "name": "num_tensors"
       },
       {
         "kind": "field",
@@ -2107,11 +2107,11 @@
       },
       {
         "kind": "field",
-        "name": "operation_history"
+        "name": "ledger"
       },
       {
         "kind": "field",
-        "name": "orphan_layers"
+        "name": "orphan_ops"
       },
       {
         "kind": "field",
@@ -2135,11 +2135,11 @@
       },
       {
         "kind": "field",
-        "name": "pass_end_time"
+        "name": "end_time"
       },
       {
         "kind": "field",
-        "name": "pass_start_time"
+        "name": "start_time"
       },
       {
         "kind": "method",
@@ -2151,7 +2151,7 @@
       },
       {
         "kind": "field",
-        "name": "random_seed_used"
+        "name": "random_seed"
       },
       {
         "kind": "method",
@@ -2179,7 +2179,7 @@
       },
       {
         "kind": "method",
-        "name": "render_graph"
+        "name": "draw"
       },
       {
         "kind": "method",
@@ -2219,11 +2219,11 @@
       },
       {
         "kind": "field",
-        "name": "save_function_args"
+        "name": "save_arg_values"
       },
       {
         "kind": "field",
-        "name": "save_gradients"
+        "name": "save_grads"
       },
       {
         "kind": "method",
@@ -2231,15 +2231,15 @@
       },
       {
         "kind": "method",
-        "name": "save_new_activations"
+        "name": "save_new_outs"
       },
       {
         "kind": "field",
-        "name": "save_raw_activation"
+        "name": "save_raw_outs"
       },
       {
         "kind": "field",
-        "name": "save_raw_gradient"
+        "name": "save_raw_grads"
       },
       {
         "kind": "field",
@@ -2247,15 +2247,15 @@
       },
       {
         "kind": "field",
-        "name": "save_source_context"
+        "name": "save_code_context"
       },
       {
         "kind": "field",
-        "name": "saved_activation_memory"
+        "name": "saved_out_memory"
       },
       {
         "kind": "property",
-        "name": "saved_activation_memory_str"
+        "name": "saved_out_memory_str"
       },
       {
         "kind": "method",
@@ -2267,15 +2267,15 @@
       },
       {
         "kind": "method",
-        "name": "show_backward_graph"
+        "name": "draw_backward"
       },
       {
         "kind": "field",
-        "name": "source_model_class"
+        "name": "model_class"
       },
       {
         "kind": "field",
-        "name": "source_model_id"
+        "name": "model_id"
       },
       {
         "kind": "field",
@@ -2291,27 +2291,27 @@
       },
       {
         "kind": "field",
-        "name": "time_cleanup"
+        "name": "cleanup_duration"
       },
       {
         "kind": "field",
-        "name": "time_forward_pass"
+        "name": "forward_duration"
       },
       {
         "kind": "field",
-        "name": "time_function_calls"
+        "name": "func_calls_duration"
       },
       {
         "kind": "property",
-        "name": "time_logging"
+        "name": "overhead_duration"
       },
       {
         "kind": "field",
-        "name": "time_setup"
+        "name": "setup_duration"
       },
       {
         "kind": "property",
-        "name": "time_total"
+        "name": "duration"
       },
       {
         "kind": "method",
@@ -2335,15 +2335,15 @@
       },
       {
         "kind": "field",
-        "name": "total_activation_memory"
+        "name": "total_out_memory"
       },
       {
         "kind": "property",
-        "name": "total_activation_memory_str"
+        "name": "total_out_memory_str"
       },
       {
         "kind": "field",
-        "name": "total_autograd_saved_bytes"
+        "name": "autograd_saved_memory"
       },
       {
         "kind": "property",
@@ -2371,31 +2371,31 @@
       },
       {
         "kind": "field",
-        "name": "total_param_layers"
+        "name": "num_layers_with_params"
       },
       {
         "kind": "field",
-        "name": "total_param_tensors"
+        "name": "num_param_tensors"
       },
       {
         "kind": "field",
-        "name": "total_params"
+        "name": "num_params"
       },
       {
         "kind": "field",
-        "name": "total_params_frozen"
+        "name": "num_params_frozen"
       },
       {
         "kind": "field",
-        "name": "total_params_memory"
+        "name": "param_memory"
       },
       {
         "kind": "property",
-        "name": "total_params_memory_str"
+        "name": "param_memory_str"
       },
       {
         "kind": "field",
-        "name": "total_params_trainable"
+        "name": "num_params_trainable"
       },
       {
         "kind": "field",
@@ -2407,7 +2407,7 @@
       },
       {
         "kind": "field",
-        "name": "unlogged_layers"
+        "name": "unlogged_ops"
       },
       {
         "kind": "property",
@@ -2419,7 +2419,7 @@
       },
       {
         "kind": "method",
-        "name": "validate_saved_activations"
+        "name": "validate_saved_outs"
       },
       {
         "kind": "field",
@@ -2431,11 +2431,11 @@
       },
       {
         "kind": "field",
-        "name": "weight_fingerprint_at_capture"
+        "name": "param_hash_quick"
       },
       {
         "kind": "field",
-        "name": "weight_fingerprint_full"
+        "name": "param_hash_full"
       }
     ],
     "ModuleLog": [
@@ -2465,7 +2465,7 @@
       },
       {
         "kind": "field",
-        "name": "all_layers"
+        "name": "layers"
       },
       {
         "kind": "field",
@@ -2489,7 +2489,7 @@
       },
       {
         "kind": "field",
-        "name": "extra_attributes"
+        "name": "custom_attributes"
       },
       {
         "kind": "property",
@@ -2521,7 +2521,7 @@
       },
       {
         "kind": "property",
-        "name": "gradient"
+        "name": "grad"
       },
       {
         "kind": "field",
@@ -2549,11 +2549,11 @@
       },
       {
         "kind": "property",
-        "name": "is_shared"
+        "name": "has_multiple_addresses"
       },
       {
         "kind": "field",
-        "name": "is_training"
+        "name": "is_train_mode"
       },
       {
         "kind": "property",
@@ -2573,11 +2573,11 @@
       },
       {
         "kind": "field",
-        "name": "methods"
+        "name": "custom_methods"
       },
       {
         "kind": "field",
-        "name": "module_class_name"
+        "name": "class_name"
       },
       {
         "kind": "field",
@@ -2585,7 +2585,7 @@
       },
       {
         "kind": "field",
-        "name": "nesting_depth"
+        "name": "call_depth"
       },
       {
         "kind": "property",
@@ -2605,7 +2605,7 @@
       },
       {
         "kind": "field",
-        "name": "num_passes"
+        "name": "num_calls"
       },
       {
         "kind": "property",
@@ -2621,27 +2621,27 @@
       },
       {
         "kind": "field",
-        "name": "params_memory"
+        "name": "param_memory"
       },
       {
         "kind": "property",
-        "name": "params_memory_str"
+        "name": "param_memory_str"
       },
       {
         "kind": "field",
-        "name": "pass_labels"
+        "name": "call_labels"
       },
       {
         "kind": "field",
-        "name": "passes"
+        "name": "ops"
       },
       {
         "kind": "field",
-        "name": "requires_grad"
+        "name": "has_trainable_params"
       },
       {
         "kind": "method",
-        "name": "show_graph"
+        "name": "draw"
       },
       {
         "kind": "field",
@@ -2668,14 +2668,14 @@
         "name": "to_parquet"
       }
     ],
-    "ModulePassLog": [
+    "ModuleCallLog": [
       {
         "kind": "attribute",
         "name": "PORTABLE_STATE_SPEC"
       },
       {
         "kind": "field",
-        "name": "all_module_addresses"
+        "name": "all_addresses"
       },
       {
         "kind": "field",
@@ -2711,7 +2711,7 @@
       },
       {
         "kind": "property",
-        "name": "is_shared_module"
+        "name": "has_multiple_addresses"
       },
       {
         "kind": "field",
@@ -2719,7 +2719,7 @@
       },
       {
         "kind": "field",
-        "name": "module_address"
+        "name": "address"
       },
       {
         "kind": "property",
@@ -2735,11 +2735,11 @@
       },
       {
         "kind": "field",
-        "name": "pass_label"
+        "name": "call_label"
       },
       {
         "kind": "field",
-        "name": "pass_num"
+        "name": "call_index"
       },
       {
         "kind": "method",
@@ -2805,7 +2805,7 @@
       },
       {
         "kind": "field",
-        "name": "linked_params"
+        "name": "co_parent_params"
       },
       {
         "kind": "field",
@@ -2817,7 +2817,7 @@
       },
       {
         "kind": "field",
-        "name": "module_address"
+        "name": "address"
       },
       {
         "kind": "field",
@@ -2833,7 +2833,7 @@
       },
       {
         "kind": "field",
-        "name": "num_passes"
+        "name": "num_calls"
       },
       {
         "kind": "method",
@@ -2881,8 +2881,8 @@
     },
     {
       "kind": "object_alias",
-      "name": "GradFnPassLog",
-      "target": "torchlens.types.GradFnPassLog"
+      "name": "GradFnCallLog",
+      "target": "torchlens.types.GradFnCallLog"
     },
     {
       "kind": "object_alias",
@@ -2911,8 +2911,8 @@
     },
     {
       "kind": "object_alias",
-      "name": "ModulePassLog",
-      "target": "torchlens.types.ModulePassLog"
+      "name": "ModuleCallLog",
+      "target": "torchlens.types.ModuleCallLog"
     },
     {
       "kind": "object_alias",
@@ -3021,8 +3021,8 @@
     },
     {
       "kind": "object_alias",
-      "name": "model_log_to_dagua_graph",
-      "target": "torchlens.experimental.dagua.model_log_to_dagua_graph"
+      "name": "trace_to_dagua_graph",
+      "target": "torchlens.experimental.dagua.trace_to_dagua_graph"
     },
     {
       "kind": "object_alias",
@@ -3041,8 +3041,8 @@
     },
     {
       "kind": "object_alias",
-      "name": "render_model_log_with_dagua",
-      "target": "torchlens.experimental.dagua.render_model_log_with_dagua"
+      "name": "render_trace_with_dagua",
+      "target": "torchlens.experimental.dagua.render_trace_with_dagua"
     },
     {
       "kind": "object_alias",
@@ -3061,7 +3061,7 @@
     },
     {
       "kind": "wrapper_function",
-      "name": "show_backward_graph",
+      "name": "draw_backward",
       "target": "torchlens.user_funcs"
     },
     {
@@ -3101,7 +3101,7 @@
     },
     {
       "kind": "wrapper_function",
-      "name": "validate_saved_activations",
+      "name": "validate_saved_outs",
       "target": "torchlens.user_funcs"
     },
     {
@@ -3216,10 +3216,10 @@
         "FuncExecutionContext",
         "GradFnAccessor",
         "GradFnLog",
-        "GradFnPassLog",
+        "GradFnCallLog",
         "ModuleAccessor",
         "ModuleLog",
-        "ModulePassLog",
+        "ModuleCallLog",
         "ParamAccessor",
         "ParamLog",
         "VisualizationOverrides",
@@ -3227,12 +3227,12 @@
         "cleanup",
         "func_call_location",
         "grad_fn_log",
-        "grad_fn_pass_log",
+        "grad_fn_call_log",
         "interface",
         "internal_types",
         "layer_log",
-        "layer_pass_log",
-        "model_log",
+        "op_log",
+        "trace",
         "module_log",
         "param_log"
       ],
@@ -3379,7 +3379,7 @@
     },
     "grad": {
       "names": [
-        "autograd_saved_bytes",
+        "autograd_saved_memory",
         "grad_fn_memory_cost"
       ],
       "source": "__all__"
@@ -3461,8 +3461,8 @@
         "contains",
         "do",
         "func",
-        "gradient_scale",
-        "gradient_zero",
+        "grad_scale",
+        "grad_zero",
         "in_module",
         "label",
         "load_intervention_spec",
@@ -3516,7 +3516,7 @@
     "multi_trace": {
       "names": [
         "METRIC_REGISTRY",
-        "NodeView",
+        "SuperOp",
         "Supergraph",
         "SupergraphNode",
         "TopologyDiff",
@@ -3573,7 +3573,7 @@
     },
     "partial": {
       "names": [
-        "PartialModelLog",
+        "PartialTrace",
         "from_failed_capture"
       ],
       "source": "__all__"
@@ -3623,10 +3623,10 @@
         "BufferLog",
         "FuncCallLocation",
         "GradFnLog",
-        "GradFnPassLog",
+        "GradFnCallLog",
         "GradientPostfunc",
         "ModuleLog",
-        "ModulePassLog",
+        "ModuleCallLog",
         "ParamLog",
         "SaveLevel",
         "SiteTable",
@@ -3646,14 +3646,11 @@
         "Callable",
         "CaptureOptions",
         "CodePanelOption",
-        "Dict",
         "GradientPostfunc",
         "InterventionReadyConflictError",
-        "List",
         "MISSING",
         "MissingType",
-        "ModelLog",
-        "Optional",
+        "Trace",
         "OutputDeviceLiteral",
         "Path",
         "RunState",
@@ -3663,8 +3660,6 @@
         "TorchLensIOError",
         "TorchLensPostfuncError",
         "TrainingModeConfigError",
-        "Tuple",
-        "Union",
         "VisDirectionLiteral",
         "VisInterventionModeLiteral",
         "VisModeLiteral",
@@ -3682,7 +3677,7 @@
         "hashlib",
         "json",
         "list_logs",
-        "log_forward_pass",
+        "trace",
         "log_model_metadata",
         "make_weak_model_ref",
         "merge_capture_options",
@@ -3702,7 +3697,7 @@
         "safe_copy_args",
         "safe_copy_kwargs",
         "set_random_seed",
-        "show_backward_graph",
+        "draw_backward",
         "show_bundle_graph",
         "show_model_graph",
         "summary",
@@ -3711,7 +3706,7 @@
         "validate_backward_pass",
         "validate_batch_of_models_and_inputs",
         "validate_forward_pass",
-        "validate_saved_activations",
+        "validate_saved_outs",
         "validate_training_compatibility",
         "visualization_to_render_kwargs",
         "warn_deprecated_alias",
@@ -3728,7 +3723,7 @@
         "_ATTR_SKIP_SET",
         "_AUTOCAST_DEVICES",
         "_cuda_available",
-        "_get_func_call_stack",
+        "_get_code_context",
         "_is_cuda_available",
         "_model_expects_single_arg",
         "_safe_copy_arg",
@@ -3740,7 +3735,7 @@
         "format_flops",
         "format_size",
         "get_attr_values_from_tensor_list",
-        "get_tensor_memory_amount",
+        "get_memory_amount",
         "get_vars_of_type_from_obj",
         "human_readable_size",
         "identity",
@@ -3753,7 +3748,7 @@
         "list_ops",
         "log_current_autocast_state",
         "log_current_rng_states",
-        "log_forward_pass_streaming",
+        "trace_streaming",
         "make_random_barcode",
         "make_short_barcode_from_input",
         "nested_assign",
@@ -3790,8 +3785,8 @@
         "validate_backward_pass",
         "validate_batch_of_models_and_inputs",
         "validate_forward_pass",
-        "validate_model_log_saved_activations",
-        "validate_saved_activations",
+        "validate_trace_saved_outs",
+        "validate_saved_outs",
         "validate_tlspec"
       ],
       "source": "__all__"
@@ -3804,7 +3799,7 @@
       "names": [
         "NodeSpec",
         "render_lines_to_html",
-        "show_backward_graph",
+        "draw_backward",
         "show_bundle_graph",
         "show_model_graph",
         "summary"
@@ -3834,15 +3829,15 @@
     },
     {
       "kind": "class",
-      "module": "torchlens.data_classes.layer_pass_log",
-      "name": "LayerPassLog",
-      "qualname": "LayerPassLog"
+      "module": "torchlens.data_classes.op_log",
+      "name": "OpLog",
+      "qualname": "OpLog"
     },
     {
       "kind": "class",
-      "module": "torchlens.data_classes.model_log",
-      "name": "ModelLog",
-      "qualname": "ModelLog"
+      "module": "torchlens.data_classes.trace",
+      "name": "Trace",
+      "qualname": "Trace"
     },
     {
       "kind": "function",
@@ -3901,14 +3896,14 @@
     {
       "kind": "function",
       "module": "torchlens.intervention.helpers",
-      "name": "gradient_scale",
-      "qualname": "gradient_scale"
+      "name": "grad_scale",
+      "qualname": "grad_scale"
     },
     {
       "kind": "function",
       "module": "torchlens.intervention.helpers",
-      "name": "gradient_zero",
-      "qualname": "gradient_zero"
+      "name": "grad_zero",
+      "qualname": "grad_zero"
     },
     {
       "kind": "function",
@@ -3931,8 +3926,8 @@
     {
       "kind": "function",
       "module": "torchlens.user_funcs",
-      "name": "log_forward_pass",
-      "qualname": "log_forward_pass"
+      "name": "trace",
+      "qualname": "trace"
     },
     {
       "kind": "function",

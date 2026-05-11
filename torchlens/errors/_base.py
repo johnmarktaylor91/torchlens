@@ -119,7 +119,7 @@ class CompatibilityError(TorchLensError):
 
 
 class ValidationError(TorchLensError):
-    """Base for graph, metadata, append, saved-activation, and replay validation failures."""
+    """Base for graph, metadata, append, saved-out, and replay validation failures."""
 
 
 class TorchLensWarning(UserWarning):

@@ -26,7 +26,7 @@ def print_all_fields(obj: Any) -> None:
         "layer_dict_main_keys",
         "layer_list",
         "raw_layer_dict",
-        "source_model_log",
+        "source_trace",
     }
     for field_name in dir(obj):
         attr = getattr(obj, field_name)

@@ -13,7 +13,7 @@ def execution_trace(log: Any, trace_path: str | Path) -> dict[str, Any]:
     Parameters
     ----------
     log:
-        ``ModelLog`` to export.
+        ``Trace`` to export.
     trace_path:
         Destination JSON path.
 
@@ -27,11 +27,11 @@ def execution_trace(log: Any, trace_path: str | Path) -> dict[str, Any]:
     for layer in getattr(log, "layer_list", []):
         nodes.append(
             {
-                "id": getattr(layer, "creation_order", None),
+                "id": getattr(layer, "capture_index", None),
                 "name": getattr(layer, "layer_label", None),
                 "op": getattr(layer, "func_name", None),
-                "inputs": list(getattr(layer, "parent_layers", []) or []),
-                "bytes": getattr(layer, "tensor_memory", None),
+                "inputs": list(getattr(layer, "parents", []) or []),
+                "bytes": getattr(layer, "memory", None),
             }
         )
     payload = {"schema": "torchlens.execution_trace.v1", "nodes": nodes}
@@ -47,7 +47,7 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
     kineto_trace:
         Kineto/Chrome trace JSON path or already-loaded dictionary.
 
@@ -73,7 +73,7 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
             {
                 "layer_label": label,
                 "func_name": func_name,
-                "creation_order": getattr(layer, "creation_order", None),
+                "capture_index": getattr(layer, "capture_index", None),
                 "kineto_event_count": len(matched_events),
                 "kineto_duration_us": duration_us,
                 "kineto_events": matched_events,

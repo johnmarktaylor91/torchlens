@@ -47,7 +47,7 @@ class RecursiveStackModel(nn.Module):
             Filtered TorchLens function call stack.
         """
         if depth <= 0:
-            return introspection._get_func_call_stack()
+            return introspection._get_code_context()
         return self._recurse(x, depth - 1)
 
 
@@ -66,7 +66,7 @@ def test_stack_metadata_helpers_run_only_for_surviving_frames(
         """Record column-offset calls without walking bytecode.
 
         Args:
-            frame: Stack frame passed by ``_get_func_call_stack``.
+            frame: Stack frame passed by ``_get_code_context``.
 
         Returns:
             Dummy column offset.
@@ -78,7 +78,7 @@ def test_stack_metadata_helpers_run_only_for_surviving_frames(
         """Record qualname calls without inspecting code metadata.
 
         Args:
-            frame: Stack frame passed by ``_get_func_call_stack``.
+            frame: Stack frame passed by ``_get_code_context``.
 
         Returns:
             Code object name for the frame.
@@ -104,7 +104,7 @@ def test_stack_metadata_helpers_run_only_for_surviving_frames(
 
 
 def test_disable_col_offset_skips_col_offset_helper(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify ``disable_col_offset`` bypasses bytecode column-offset inspection.
+    """Verify ``disable_col_offset`` byops bytecode column-offset inspection.
 
     Args:
         monkeypatch: Pytest fixture for replacing helper functions.
@@ -116,7 +116,7 @@ def test_disable_col_offset_skips_col_offset_helper(monkeypatch: pytest.MonkeyPa
         """Record unexpected column-offset calls.
 
         Args:
-            frame: Stack frame passed by ``_get_func_call_stack``.
+            frame: Stack frame passed by ``_get_code_context``.
 
         Returns:
             Dummy column offset.
@@ -128,7 +128,7 @@ def test_disable_col_offset_skips_col_offset_helper(monkeypatch: pytest.MonkeyPa
         """Record qualname calls that should still occur.
 
         Args:
-            frame: Stack frame passed by ``_get_func_call_stack``.
+            frame: Stack frame passed by ``_get_code_context``.
 
         Returns:
             Code object name for the frame.
@@ -155,7 +155,7 @@ def test_disable_col_offset_skips_col_offset_helper(monkeypatch: pytest.MonkeyPa
                 Filtered TorchLens function call stack.
             """
             if depth <= 0:
-                return introspection._get_func_call_stack(disable_col_offset=True)
+                return introspection._get_code_context(disable_col_offset=True)
             return self._recurse(x, depth - 1)
 
     stack = DisableOffsetModel(model.depth)(torch.ones(1))

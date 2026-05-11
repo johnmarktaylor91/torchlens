@@ -133,19 +133,19 @@ def _parent_refs(value: object) -> list[ParentRef]:
 def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     """Graph hash matches same graph/shape and changes for a different graph."""
 
-    log1 = tl.log_forward_pass(
+    log1 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
     )
-    log2 = tl.log_forward_pass(
+    log2 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
     )
-    log3 = tl.log_forward_pass(
+    log3 = tl.trace(
         _DifferentGraphModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -161,7 +161,7 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
 def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
     """Step 11 rewrites replay templates and edge records to final labels."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -171,22 +171,22 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
     assert len({layer.func_call_id for layer in split_layers}) == 1
-    assert {type(layer.output_path[0]) for layer in split_layers} == {TupleIndex}
+    assert {type(layer.container_path[0]) for layer in split_layers} == {TupleIndex}
 
     final_labels = set(log.layer_labels)
     for layer in log.layer_list:
         for edge in layer.edge_uses:
             assert edge.parent_label in final_labels
             assert edge.child_label in final_labels
-        for template in (layer.captured_arg_template, layer.captured_kwarg_template):
+        for template in (layer.args_template, layer.kwargs_template):
             for parent_ref in _parent_refs(template):
                 assert parent_ref.parent_label in final_labels
 
 
 def test_keep_unsaved_layers_false_preserves_replay_call_group_siblings() -> None:
-    """Step 12 keeps multi-output call groups atomic when activations are pruned."""
+    """Step 12 keeps multi-output call groups atomic when outs are pruned."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -197,7 +197,7 @@ def test_keep_unsaved_layers_false_preserves_replay_call_group_siblings() -> Non
 
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
-    assert not all(layer.has_saved_activations for layer in split_layers)
+    assert not all(layer.has_saved_outs for layer in split_layers)
     assert len({layer.func_call_id for layer in split_layers}) == 1
     assert check_metadata_invariants(log) is True
 
@@ -205,7 +205,7 @@ def test_keep_unsaved_layers_false_preserves_replay_call_group_siblings() -> Non
 def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
     """Loop detection does not regenerate or merge per-wrapper-call ids."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _RecurrentReluModel(),
         torch.randn(2, 3),
         vis_opt="none",
@@ -218,40 +218,40 @@ def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
     assert check_metadata_invariants(log) is True
 
 
-def test_func_call_id_invariant_catches_duplicate_output_paths() -> None:
+def test_func_call_id_invariant_catches_duplicate_container_paths() -> None:
     """Invariant S fails when same-call outputs reuse an output path."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
     )
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
-    split_layers[1].output_path = split_layers[0].output_path
+    split_layers[1].container_path = split_layers[0].container_path
 
     try:
         check_func_call_id_invariant(log)
     except MetadataInvariantError as exc:
         assert exc.check_name == "func_call_id_consistency"
     else:
-        raise AssertionError("Invariant S did not catch duplicate output_path")
+        raise AssertionError("Invariant S did not catch duplicate container_path")
 
 
-def test_module_address_normalized_strips_pass_qualifiers() -> None:
+def test__address_normalized_strips_pass_qualifiers() -> None:
     """Hash preparation records pass-normalized module addresses on layers."""
 
-    log = tl.log_forward_pass(
+    log = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
         vis_opt="none",
         intervention_ready=True,
     )
-    linear_layers = [layer for layer in log.layer_list if layer.containing_module is not None]
+    linear_layers = [layer for layer in log.layer_list if layer.module is not None]
 
     assert linear_layers
-    assert any(layer.module_address_normalized == "linear" for layer in linear_layers)
+    assert any(layer._address_normalized == "linear" for layer in linear_layers)
     assert all(
-        layer.module_address_normalized is None or ":" not in layer.module_address_normalized
+        layer._address_normalized is None or ":" not in layer._address_normalized
         for layer in linear_layers
     )

@@ -1,17 +1,17 @@
-"""Forward-pass orchestration: runs the model, manages logging state, and saves activations.
+"""Forward-pass orchestration: runs the model, manages logging state, and saves outs.
 
 This module implements the two-pass architecture that TorchLens uses to extract
-model activations:
+model outs:
 
-1. **Exhaustive pass** (``logging_mode="exhaustive"``): Runs the model once,
+1. **Exhaustive pass** (``capture_mode="exhaustive"``): Runs the model once,
    capturing every tensor operation's full metadata (shapes, dtypes, FLOPs,
-   parent-child relationships, module context, etc.) into LayerPassLog entries.
+   parent-child relationships, module context, etc.) into OpLog entries.
    This builds the complete computational graph.
 
-2. **Fast pass** (``logging_mode="fast"``): Re-runs the model using the graph
-   structure from the exhaustive pass, only saving new activation values.
+2. **Fast pass** (``capture_mode="fast"``): Re-runs the model using the graph
+   structure from the exhaustive pass, only saving new out values.
    Much faster because it skips all metadata collection.  Used by
-   ``save_new_activations()`` to refresh activations for new inputs without
+   ``save_new_outs()`` to refresh outs for new inputs without
    rebuilding the entire graph.
 
 Key ordering constraint:
@@ -36,38 +36,38 @@ import torch
 from torch import nn
 
 from .. import _state
-from ..decoration.model_prep import (
-    _ensure_model_prepared,
-    _prepare_model_session,
-    _cleanup_model_session,
-)
+from ..backends import CaptureBackend
+from ..backends.torch._tl import clear_meta, get_tensor_label
+from ..backends.torch.backend import TorchBackend
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 from ..utils.introspection import get_vars_of_type_from_obj, nested_assign
 from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_saved_states
 from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
 from ..utils.tensor_utils import _is_cuda_available
-from .source_tensors import log_source_tensor
-from .output_tensors import _walk_output_tensors_with_paths
+from ..backends.torch.sources import log_source_tensor
+from ..backends.torch.ops import _walk_output_tensors_with_paths
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _vprint, _vtimed
 
+_TORCH_BACKEND: CaptureBackend = TorchBackend()
 
-def save_new_activations(
-    self: "ModelLog",
+
+def save_new_outs(
+    self: "Trace",
     model: nn.Module,
     input_args: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] = "all",
-    gradients_to_save: str | list[Any] | None = "all",
+    grads_to_save: str | list[Any] | None = "all",
     random_seed: int | None = None,
     train_mode: bool | None = None,
 ) -> None:
-    """Re-run the model with new inputs, saving only activations (fast pass).
+    """Re-run the model with new inputs, saving only outs (fast pass).
 
-    This is the public API for refreshing activations without rebuilding the
-    computational graph.  Much faster than ``log_forward_pass`` because all
+    This is the public API for refreshing outs without rebuilding the
+    computational graph.  Much faster than ``trace`` because all
     metadata (graph structure, labels, module context) was captured in the
     original exhaustive pass and is reused here.
 
@@ -77,82 +77,84 @@ def save_new_activations(
     detect the mismatch and raise ``ValueError``.
 
     Args:
-        model: Model for which to save activations.
+        model: Model for which to save outs.
         input_args: Either a single tensor input to the model, or list of input arguments.
         input_kwargs: Dict of keyword arguments to the model.
         layers_to_save: List of layers to save, using any valid lookup keys.
-        gradients_to_save: List of layers whose gradients should be saved.
+        grads_to_save: List of layers whose grads should be saved.
         random_seed: Which random seed to use for deterministic reproduction.
         train_mode: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
             tensor detachment for the whole replay.
 
     Returns:
-        Nothing; mutates ``self`` in place with new activation values.
+        Nothing; mutates ``self`` in place with new out values.
     """
     if train_mode is not None:
-        model_detach_saved_tensors = self.detach_saved_tensors
+        model_detach_saved_activations = self.detach_saved_activations
         model_train_mode = getattr(self, "train_mode", False)
-        layer_detach_saved_tensors = {
-            layer_log_entry: layer_log_entry.detach_saved_tensor for layer_log_entry in self
+        layer_detach_saved_activations = {
+            layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
         }
-        target_detach_saved_tensors = False if train_mode else self.detach_saved_tensors
+        target_detach_saved_activations = False if train_mode else self.detach_saved_activations
         try:
-            self.detach_saved_tensors = target_detach_saved_tensors
+            self.detach_saved_activations = target_detach_saved_activations
             self.train_mode = train_mode
-            for layer_log_entry in layer_detach_saved_tensors:
-                layer_log_entry.detach_saved_tensor = target_detach_saved_tensors
-            save_new_activations(
+            for layer_log_entry in layer_detach_saved_activations:
+                layer_log_entry.detach_saved_activations = target_detach_saved_activations
+            save_new_outs(
                 self,
                 model=model,
                 input_args=input_args,
                 input_kwargs=input_kwargs,
                 layers_to_save=layers_to_save,
-                gradients_to_save=gradients_to_save,
+                grads_to_save=grads_to_save,
                 random_seed=random_seed,
                 train_mode=None,
             )
         finally:
-            self.detach_saved_tensors = model_detach_saved_tensors
+            self.detach_saved_activations = model_detach_saved_activations
             self.train_mode = model_train_mode
-            for layer_log_entry, detach_saved_tensor in layer_detach_saved_tensors.items():
-                layer_log_entry.detach_saved_tensor = detach_saved_tensor
+            for layer_log_entry, detach_saved_activations in layer_detach_saved_activations.items():
+                layer_log_entry.detach_saved_activations = detach_saved_activations
         return
 
-    # Switch to fast mode: reuse graph structure, only capture new activations.
-    self.logging_mode = "fast"
+    # Switch to fast mode: reuse graph structure, only capture new outs.
+    self.capture_mode = "fast"
     self._in_exhaustive_pass = False
 
-    # Clear all existing activations from the previous pass.
+    # Clear all existing outs from the previous pass.
     for layer_log_entry in self:
-        layer_log_entry._internal_set("activation", None)
-        layer_log_entry._internal_set("transformed_activation", None)
-        layer_log_entry.transformed_activation_shape = None
-        layer_log_entry.transformed_activation_dtype = None
-        layer_log_entry.transformed_activation_memory = None
-        layer_log_entry.has_saved_activations = False
-        layer_log_entry.has_gradient = False
-        layer_log_entry._internal_set("gradient", None)
-        layer_log_entry._internal_set("transformed_gradient", None)
-        layer_log_entry.transformed_gradient_shape = None
-        layer_log_entry.transformed_gradient_dtype = None
-        layer_log_entry.transformed_gradient_memory = None
-        layer_log_entry.has_child_tensor_variations = False
-        # Note: children_tensor_versions is cleared and NOT rebuilt in fast pass.
+        layer_log_entry._internal_set("out", None)
+        layer_log_entry._internal_set("transformed_out", None)
+        layer_log_entry.transformed_out_shape = None
+        layer_log_entry.transformed_out_dtype = None
+        layer_log_entry.transformed_out_memory = None
+        layer_log_entry.has_saved_outs = False
+        layer_log_entry.has_grad = False
+        layer_log_entry._internal_set("grad", None)
+        layer_log_entry._internal_set("transformed_grad", None)
+        layer_log_entry.transformed_grad_shape = None
+        layer_log_entry.transformed_grad_dtype = None
+        layer_log_entry.transformed_grad_memory = None
+        layer_log_entry.has_output_variations = False
+        # Note: output_versions_per_child is cleared and NOT rebuilt in fast pass.
         # This is a known limitation (#93): validation should not be run after
-        # save_new_activations since child tensor variations aren't recaptured.
-        layer_log_entry.children_tensor_versions = {}
+        # save_new_outs since child tensor variations aren't recaptured.
+        layer_log_entry.output_versions_per_child = {}
 
-    # Reset per-pass bookkeeping fields.  Graph-level totals (total_activation_memory,
-    # num_tensors_total) are NOT reset — they describe the static graph structure.
-    self.layers_with_saved_activations = []
-    self.layers_with_saved_gradients = []
-    self._saved_gradients_set = set()
-    self.has_gradients = False
-    self.unlogged_layers = []
-    self.num_tensors_saved = 0
-    self.saved_activation_memory = 0
-    self.time_function_calls = 0  # #87: reset timing
+    # Reset per-pass bookkeeping fields.  Graph-level totals (total_out_memory,
+    # num_tensors) are NOT reset — they describe the static graph structure.
+    self.ops_with_saved_outs = []
+    self.ops_with_saved_grads = []
+    self._saved_grads_set = set()
+    self.has_grads = False
+    self.unlogged_ops = []
+    self.num_saved_ops = 0
+    self.saved_out_memory = 0
+    self.total_gradient_memory = 0
+    self.saved_gradient_memory = 0
+    self.func_calls_duration = 0  # #87: reset timing
     # Reset counters so fast-pass operations align 1:1 with exhaustive-pass labels.
     # Counter alignment is the mechanism that lets the fast pass verify the graph
     # hasn't changed: same counter value → same raw label → same operation.
@@ -167,22 +169,10 @@ def save_new_activations(
     if hasattr(self, "_unsaved_layers_lookup_keys"):
         self._unsaved_layers_lookup_keys.clear()
 
-    # Remove zombie entries: raw labels that weren't mapped to final labels (#75).
-    # These arise from operations that were later pruned from the graph (e.g.,
-    # orphan removal).  If left, the fast pass would try to look them up and crash.
-    zombie_labels = [
-        lbl
-        for lbl in list(self._raw_layer_labels_list)
-        if lbl not in self._raw_to_final_layer_labels
-    ]
-    for label in zombie_labels:
-        self._raw_layer_labels_list.remove(label)
-        self._raw_layer_dict.pop(label, None)
-
     # Now run and log the new inputs.
-    _vprint(self, "Running fast pass (saving requested activations)")
+    _vprint(self, "Running fast pass (saving requested outs)")
     self._run_and_log_inputs_through_model(
-        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed
+        model, input_args, input_kwargs, layers_to_save, grads_to_save, random_seed
     )
 
 
@@ -205,12 +195,12 @@ def _get_input_arg_names(model: nn.Module, input_args: list[Any]) -> list[str]:
 
 
 def _get_op_nums_from_user_labels(
-    self: "ModelLog", which_layers: str | list[str | int] | None
+    self: "Trace", which_layers: str | list[str | int] | None
 ) -> list[int] | str:
-    """Resolve user-provided layer identifiers to internal creation_order values.
+    """Resolve user-provided layer identifiers to internal capture_index values.
 
     Supports exact key match, substring match across all lookup keys, and the
-    special sentinel ``"all"`` (which passes through as-is).  Returns sorted
+    special sentinel ``"all"`` (which ops through as-is).  Returns sorted
     unique tensor numbers so the fast pass can check membership efficiently.
     """
     if which_layers == "all":
@@ -223,7 +213,7 @@ def _get_op_nums_from_user_labels(
     if isinstance(which_layers, BaseSelector):
         return sorted(
             {
-                site.creation_order
+                site.capture_index
                 for site in self.resolve_sites(
                     which_layers,
                     strict=False,
@@ -238,7 +228,7 @@ def _get_op_nums_from_user_labels(
     for layer_key in which_layers:
         if isinstance(layer_key, BaseSelector):
             raw_layer_nums_to_save.update(
-                site.creation_order
+                site.capture_index
                 for site in self.resolve_sites(
                     layer_key,
                     strict=False,
@@ -253,7 +243,7 @@ def _get_op_nums_from_user_labels(
         keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
-                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].creation_order)
+                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].capture_index)
             continue
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
@@ -382,14 +372,14 @@ def _setup_inputs_and_device(
 
 
 def _extract_and_mark_outputs(
-    self: "ModelLog",
+    self: "Trace",
     outputs: Any,
 ) -> tuple[list[torch.Tensor], list[str]]:
-    """Extract output tensors from model outputs, deduplicate, and mark in ModelLog.
+    """Extract output tensors from model outputs, deduplicate, and mark in Trace.
 
     Called AFTER the forward pass completes (outside ``active_logging``), so
     operations here don't trigger logging.  Marks each output tensor's graph
-    entry as ``feeds_output=True`` so postprocessing can identify them.
+    entry as ``is_output_parent=True`` so postprocessing can identify them.
 
     Deduplication is by address string (not tensor identity) to handle cases
     where the same tensor appears at multiple output positions.
@@ -399,14 +389,14 @@ def _extract_and_mark_outputs(
     """
     if getattr(self, "intervention_ready", False):
         output_tensors_w_addresses_all = [
-            (tensor, _output_path_to_address(path), None)
+            (tensor, _container_path_to_address(path), None)
             for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs)
         ]
         output_specs_by_raw_label = {}
         for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs):
-            tensor_label_raw = getattr(tensor, "tl_tensor_label_raw", None)
-            if tensor_label_raw is not None:
-                output_specs_by_raw_label[tensor_label_raw] = (
+            _label_raw = get_tensor_label(tensor)
+            if _label_raw is not None:
+                output_specs_by_raw_label[_label_raw] = (
                     path,
                     container_spec,
                 )
@@ -433,15 +423,21 @@ def _extract_and_mark_outputs(
 
     for t in output_tensors:
         # Only record output_layers during exhaustive pass; fast pass reuses the list.
-        tensor_label_raw = getattr(t, "tl_tensor_label_raw")
-        if self.logging_mode == "exhaustive":
-            self.output_layers.append(tensor_label_raw)
-        self._raw_layer_dict[tensor_label_raw].feeds_output = True
+        # Defensive: user-injected output tensors (raw register_forward_hook
+        # returning a fresh tensor, intervention API replacements that don't
+        # propagate metadata, etc.) lack _tl labels. Skip them rather than
+        # crashing — they aren't in our graph but the experiment can continue.
+        _label_raw = get_tensor_label(t)
+        if _label_raw is None:
+            continue
+        if self.capture_mode == "exhaustive":
+            self.output_layers.append(_label_raw)
+            self._raw_layer_dict[_label_raw].is_output_parent = True
 
     return output_tensors, output_tensor_addresses
 
 
-def _output_path_to_address(path: tuple[Any, ...]) -> str:
+def _container_path_to_address(path: tuple[Any, ...]) -> str:
     """Convert an output path tuple to TorchLens' display address string.
 
     Parameters
@@ -469,15 +465,16 @@ def _output_path_to_address(path: tuple[Any, ...]) -> str:
 
 
 def run_and_log_inputs_through_model(
-    self: "ModelLog",
+    self: "Trace",
     model: nn.Module,
     input_args: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[str | int] | None = "all",
-    gradients_to_save: str | list[str | int] | None = "all",
+    grads_to_save: str | list[str | int] | None = "all",
     random_seed: int | None = None,
-) -> None:
-    """Core orchestration: run a forward pass and log everything into ModelLog.
+    postprocess: bool = True,
+) -> Any:
+    """Core orchestration: run a forward pass and log everything into Trace.
 
     Execution order (ordering matters for correctness):
       1. Set RNG seed (MUST happen before active_logging — see below).
@@ -498,23 +495,27 @@ def run_and_log_inputs_through_model(
     """
     if random_seed is None:
         random_seed = random.randint(1, 4294967294)
-    self.random_seed_used = random_seed  # type: ignore[assignment]
+    self.random_seed = random_seed  # type: ignore[assignment]
     set_random_seed(random_seed)
 
-    self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
-    self._gradient_layer_nums_to_save = _get_op_nums_from_user_labels(self, gradients_to_save)
+    if self.capture_mode == "predicate":
+        self._layer_nums_to_save = []
+        self._grad_layer_nums_to_save = []
+    else:
+        self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
+        self._grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grads_to_save)
 
-    # In fast mode, output layers' activation are derived from their parents
+    # In fast mode, output layers' out are derived from their parents
     # (see postprocess_fast).  If the user requested a subset of layers, we must
-    # also include output-layer parents so their activations are available (#46).
+    # also include output-layer parents so their outs are available (#46).
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
-    if layer_nums_to_save != "all" and self._pass_finished:
+    if layer_nums_to_save != "all" and self._tracing_finished:
         output_parent_nums = set()
         for output_label in self.output_layers:
             output_entry = self[output_label]
-            for parent_label in output_entry.parent_layers:
+            for parent_label in output_entry.parents:
                 parent_entry = self[parent_label]
-                output_parent_nums.add(parent_entry.creation_order)
+                output_parent_nums.add(parent_entry.capture_index)
         if output_parent_nums:
             combined = set(layer_nums_to_save) | output_parent_nums
             self._layer_nums_to_save = sorted(combined)
@@ -525,7 +526,7 @@ def run_and_log_inputs_through_model(
         input_kwargs,
     )
 
-    self.pass_start_time = time.time()
+    self.start_time = time.time()
     input_tensors: list[torch.Tensor] = []
 
     try:
@@ -538,18 +539,23 @@ def run_and_log_inputs_through_model(
         # Exhaustive pass: snapshot state BEFORE forward so fast pass can replay.
         # Fast pass: restore the snapshot so dropout masks, etc. are identical,
         # ensuring the same computational graph (counter alignment depends on this).
-        if self.logging_mode == "exhaustive":
+        if self.capture_mode == "exhaustive":
             self._pre_forward_rng_states = log_current_rng_states()  # type: ignore[attr-defined]
-        elif self.logging_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
+        elif self.capture_mode == "fast" and hasattr(self, "_pre_forward_rng_states"):
             set_rng_from_saved_states(self._pre_forward_rng_states)
 
+        backend = _TORCH_BACKEND
+        from ..ir import CaptureEvents
+
+        self.capture_events = CaptureEvents()
+
         # One-time model preparation + incremental sys.modules crawl
-        _ensure_model_prepared(model)
+        backend.prepare_model_once(model)
 
         # Per-session model preparation
-        _prepare_model_session(self, model, self._optimizer)
-        self.time_setup = time.time() - self.pass_start_time
-        _vprint(self, f"Model prepared ({self.time_setup:.2f}s)")
+        backend.prepare_model_session(self, model)
+        self.setup_duration = time.time() - self.start_time
+        _vprint(self, f"Model prepared ({self.setup_duration:.2f}s)")
 
         # Print input summary
         if getattr(self, "verbose", False):
@@ -565,46 +571,148 @@ def run_and_log_inputs_through_model(
         # inputs/outputs.  Source tensors (model inputs) are logged explicitly
         # before invoking the model; all subsequent operations are captured
         # automatically by the decorated wrappers.
-        _vprint(self, f"Running {self.logging_mode} forward pass...")
-        with _state.active_logging(self):
+        _vprint(self, f"Running {self.capture_mode} forward pass...")
+        with backend.active_logging(self):
             for i, t in enumerate(input_tensors):
                 log_source_tensor(self, t, "input", input_tensor_addresses[i])
 
-            outputs = model(*input_args, **input_kwargs)
+            if self.capture_mode == "predicate":
+                from ..backends.torch import module_stack as _mstack
+                from ..capture.predicates import _evaluate_keep_module
+                from ..capture.projections import (
+                    _build_record_context,
+                    append_projected_event,
+                    get_active_recording_state,
+                )
+                from ..fastlog.types import CaptureSpec, ModuleStackFrame
 
-        self.time_forward_pass = time.time() - self.pass_start_time - self.time_setup
+                state = get_active_recording_state()
+                root_frame = ModuleStackFrame(
+                    address="",
+                    module_type=type(model).__name__,
+                    module_id=id(model),
+                    pass_index=1,
+                )
+                skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
+                _mstack.push_existing_frame(state.module_stack, root_frame)
+                state.event_index += 1
+                enter_ctx = _build_record_context(
+                    kind="module_enter",
+                    op_log_or_op_data={
+                        "label": "root:enter:1",
+                        "address": "",
+                        "module_type": type(model).__name__,
+                        "module_pass_index": root_frame.pass_index,
+                    },
+                    module_stack=state.module_stack,
+                    history=tuple(state.history),
+                    op_counts=state.op_counts,
+                    pass_index=state.pass_index,
+                    event_index=state.event_index,
+                    compute_index=None,
+                    time_since_pass_start=time.time() - self.start_time,
+                    include_source_events=state.options.include_source_events,
+                    sample_id=state.sample_id,
+                )
+                try:
+                    enter_spec = _evaluate_keep_module(enter_ctx, state.options)
+                    append_projected_event(
+                        self,
+                        enter_ctx,
+                        enter_spec,
+                        predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
+                    )
+                except Exception as exc:
+                    state.handle_predicate_exception(enter_ctx, exc)
+                    append_projected_event(
+                        self,
+                        enter_ctx,
+                        skipped_spec,
+                        predicate_matched=False,
+                    )
+                finally:
+                    state.append_context(enter_ctx)
+                try:
+                    outputs = model(*input_args, **input_kwargs)
+                finally:
+                    state.event_index += 1
+                    exit_ctx = _build_record_context(
+                        kind="module_exit",
+                        op_log_or_op_data={
+                            "label": "root:exit:1",
+                            "address": "",
+                            "module_type": type(model).__name__,
+                            "module_pass_index": root_frame.pass_index,
+                        },
+                        module_stack=state.module_stack,
+                        history=tuple(state.history),
+                        op_counts=state.op_counts,
+                        pass_index=state.pass_index,
+                        event_index=state.event_index,
+                        compute_index=None,
+                        time_since_pass_start=time.time() - self.start_time,
+                        include_source_events=state.options.include_source_events,
+                        sample_id=state.sample_id,
+                    )
+                    try:
+                        exit_spec = _evaluate_keep_module(exit_ctx, state.options)
+                        append_projected_event(
+                            self,
+                            exit_ctx,
+                            exit_spec,
+                            predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
+                        )
+                    except Exception as exc:
+                        state.handle_predicate_exception(exit_ctx, exc)
+                        append_projected_event(
+                            self,
+                            exit_ctx,
+                            skipped_spec,
+                            predicate_matched=False,
+                        )
+                    finally:
+                        state.append_context(exit_ctx)
+                        _mstack.pop_frame(state.module_stack, root_frame)
+            else:
+                outputs = model(*input_args, **input_kwargs)
+
+        output_transform = getattr(self, "_output_transform", None)
+        self.raw_output = output_transform(outputs) if output_transform is not None else None
+
+        self.forward_duration = time.time() - self.start_time - self.setup_duration
         _vprint(
             self,
-            f"Forward pass complete ({self.time_forward_pass:.2f}s, "
+            f"Forward pass complete ({self.forward_duration:.2f}s, "
             f"{len(self._raw_layer_dict)} raw operations)",
         )
 
+        if not postprocess:
+            backend.cleanup_model_session(self, (model, input_tensors))
+            self.end_time = time.time()
+            return outputs
+
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs)
 
-        _cleanup_model_session(model, input_tensors)
+        backend.cleanup_model_session(self, (model, input_tensors))
         _vprint(self, f"Postprocessing {len(self._raw_layer_dict)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
+        return outputs
 
     except Exception as e:
         # active_logging's __exit__ already turned off the toggle.
-        # Clean up model session state and strip tl_ attributes from any
+        # Clean up model session state and strip TorchLens metadata from any
         # partially-constructed tensor entries to avoid stale references (#110).
-        from ..partial import PartialModelLog
+        from ..partial import PartialTrace
 
         try:
-            e.partial_log = PartialModelLog.from_model_log(self, e)  # type: ignore[attr-defined]
+            e.partial_log = PartialTrace.from_trace(self, e)  # type: ignore[attr-defined]
         except Exception:
             pass
-        _cleanup_model_session(model, input_tensors)
+        _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
         for label in list(self._raw_layer_dict.keys()):
             entry = self._raw_layer_dict.get(label)
-            if entry is not None and hasattr(entry, "activation") and entry.activation is not None:
-                for attr in ("tl_tensor_label_raw",):
-                    if hasattr(entry.activation, attr):
-                        try:
-                            delattr(entry.activation, attr)
-                        except Exception:
-                            pass
+            if entry is not None and hasattr(entry, "out") and entry.out is not None:
+                clear_meta(entry.out)
         print(
             "************\nFeature extraction failed; returning model and environment to normal\n*************"
         )

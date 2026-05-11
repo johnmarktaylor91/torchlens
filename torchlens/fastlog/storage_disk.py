@@ -95,7 +95,7 @@ class DiskStorageBackend:
             entry = self.writer.write_blob(
                 blob_id,
                 record.disk_payload,
-                kind="activation",
+                kind="out",
                 label=record.ctx.label,
             )
             self._tensor_entries.append(entry)
@@ -103,11 +103,11 @@ class DiskStorageBackend:
             wrote_blob = True
         if record.transformed_disk_payload is not None:
             blob_id = self.writer.next_blob_id()
-            transformed_label = f"{record.ctx.label}::transformed_activation"
+            transformed_label = f"{record.ctx.label}::transformed_out"
             entry = self.writer.write_blob(
                 blob_id,
                 record.transformed_disk_payload,
-                kind="transformed_activation",
+                kind="transformed_out",
                 label=transformed_label,
             )
             self._tensor_entries.append(entry)
@@ -142,8 +142,8 @@ class DiskStorageBackend:
         intent:
             Storage intent resolved from streaming options.
         options:
-            Recording options carrying ``activation_postfunc`` /
-            ``save_raw_activation``.
+            Recording options carrying ``out_postfunc`` /
+            ``save_raw_outs``.
         ctx:
             Record context used to enrich postfunc error messages.
 
@@ -158,8 +158,8 @@ class DiskStorageBackend:
             tensor,
             spec,
             intent,
-            activation_postfunc=options.activation_transform,
-            save_raw_activation=options.save_raw_activation,
+            out_postfunc=options.out_transform,
+            save_raw_outs=options.save_raw_outs,
             ctx=ctx,
         )
 
@@ -217,7 +217,7 @@ class DiskStorageBackend:
             return
         if self.disk_only:
             raise PredicateError("keep_grad=True is not valid for disk-only fastlog storage")
-        dtype = record.ctx.tensor_dtype
+        dtype = record.ctx.dtype
         if dtype is not None and dtype not in _GRAD_DTYPES:
             raise PredicateError("keep_grad=True is not valid for integer or bool tensors")
         if (
@@ -247,7 +247,7 @@ class DiskStorageBackend:
 
 
 def record_to_json(record: ActivationRecord) -> dict[str, Any]:
-    """Convert one activation record into JSON-serializable metadata."""
+    """Convert one out record into JSON-serializable metadata."""
 
     return {
         "ctx": _ctx_to_json(record.ctx),
@@ -258,7 +258,7 @@ def record_to_json(record: ActivationRecord) -> dict[str, Any]:
 
 
 def record_from_json(data: dict[str, Any]) -> ActivationRecord:
-    """Build an activation record from JSON-decoded fastlog metadata."""
+    """Build an out record from JSON-decoded fastlog metadata."""
 
     ctx = _ctx_from_json(data["ctx"])
     spec = _spec_from_json(data["spec"])
@@ -274,12 +274,10 @@ def record_from_json(data: dict[str, Any]) -> ActivationRecord:
 
 
 def _entry_to_record_metadata(record: ActivationRecord, entry: TensorEntry) -> dict[str, Any]:
-    """Return persisted raw activation blob metadata for one record."""
+    """Return persisted raw out blob metadata for one record."""
 
     metadata = entry.to_dict()
-    metadata["shape"] = (
-        entry.shape if record.ctx.tensor_shape is None else list(record.ctx.tensor_shape)
-    )
+    metadata["shape"] = entry.shape if record.ctx.shape is None else list(record.ctx.shape)
     return metadata
 
 
@@ -287,23 +285,23 @@ def _transformed_entry_to_record_metadata(
     record: ActivationRecord,
     entry: TensorEntry,
 ) -> dict[str, Any]:
-    """Return persisted transformed activation blob metadata for one record.
+    """Return persisted transformed out blob metadata for one record.
 
-    Stored under a ``transformed_activation_*`` key namespace so it can be
-    rehydrated independently from the raw activation blob.
+    Stored under a ``transformed_out_*`` key namespace so it can be
+    rehydrated independently from the raw out blob.
     """
 
     return {
-        "transformed_activation_blob_id": entry.blob_id,
-        "transformed_activation_kind": entry.kind,
-        "transformed_activation_relative_path": entry.relative_path,
-        "transformed_activation_shape": list(entry.shape),
-        "transformed_activation_dtype": entry.dtype,
-        "transformed_activation_backend": entry.backend,
-        "transformed_activation_bytes": entry.bytes,
-        "transformed_activation_sha256": entry.sha256,
-        "transformed_activation_layout": entry.layout,
-        "transformed_activation_device_at_save": entry.device_at_save,
+        "transformed_out_blob_id": entry.blob_id,
+        "transformed_out_kind": entry.kind,
+        "transformed_out_relative_path": entry.relative_path,
+        "transformed_out_shape": list(entry.shape),
+        "transformed_out_dtype": entry.dtype,
+        "transformed_out_backend": entry.backend,
+        "transformed_out_bytes": entry.bytes,
+        "transformed_out_sha256": entry.sha256,
+        "transformed_out_layout": entry.layout,
+        "transformed_out_device_at_save": entry.device_at_save,
     }
 
 
@@ -314,7 +312,7 @@ def _ctx_to_json(ctx: Any) -> dict[str, Any]:
     data["module_stack"] = [asdict(frame) for frame in ctx.module_stack]
     data["recent_events"] = []
     data["recent_ops"] = []
-    data["tensor_dtype"] = _dtype_to_name(ctx.tensor_dtype)
+    data["dtype"] = _dtype_to_name(ctx.dtype)
     data["tensor_device"] = None if ctx.tensor_device is None else str(ctx.tensor_device)
     return data
 
@@ -329,10 +327,8 @@ def _ctx_from_json(data: dict[str, Any]) -> Any:
     values["recent_events"] = ()
     values["recent_ops"] = ()
     values["parent_labels"] = tuple(values.get("parent_labels", ()))
-    values["tensor_shape"] = (
-        None if values.get("tensor_shape") is None else tuple(values["tensor_shape"])
-    )
-    values["tensor_dtype"] = _dtype_from_name(values.get("tensor_dtype"))
+    values["shape"] = None if values.get("shape") is None else tuple(values["shape"])
+    values["dtype"] = _dtype_from_name(values.get("dtype"))
     values["tensor_device"] = (
         None if values.get("tensor_device") is None else torch.device(values["tensor_device"])
     )
@@ -343,7 +339,7 @@ def _spec_to_json(spec: CaptureSpec) -> dict[str, Any]:
     """Convert a CaptureSpec into JSON data."""
 
     return {
-        "save_activation": spec.save_activation,
+        "save_out": spec.save_out,
         "save_metadata": spec.save_metadata,
         "keep_grad": spec.keep_grad,
         "device": None if spec.device is None else str(spec.device),
@@ -355,7 +351,7 @@ def _spec_from_json(data: dict[str, Any]) -> CaptureSpec:
     """Build a CaptureSpec from JSON data."""
 
     return CaptureSpec(
-        save_activation=bool(data.get("save_activation", True)),
+        save_out=bool(data.get("save_out", True)),
         save_metadata=bool(data.get("save_metadata", True)),
         keep_grad=bool(data.get("keep_grad", False)),
         device=data.get("device"),
@@ -383,15 +379,15 @@ def _write_metadata(path: Path, recording: Recording, options: RecordingOptions)
     """Write fastlog JSON metadata."""
 
     metadata = {
-        "n_passes": recording.n_passes,
+        "n_ops": recording.n_ops,
         "n_records": len(recording.records),
-        "pass_start_times": recording.pass_start_times,
-        "pass_end_times": recording.pass_end_times,
+        "start_times": recording.start_times,
+        "end_times": recording.end_times,
         "predicate_failure_overflow_count": recording.predicate_failure_overflow_count,
         "keep_op_repr": recording.keep_op_repr,
         "keep_module_repr": recording.keep_module_repr,
-        "activation_postfunc_repr": recording.activation_postfunc_repr,
-        "save_raw_activation": options.save_raw_activation,
+        "_out_transform_repr": recording._out_transform_repr,
+        "save_raw_outs": options.save_raw_outs,
         "history_size": options.history_size,
     }
     with path.open("w", encoding="utf-8") as handle:
@@ -414,11 +410,9 @@ def _build_fastlog_manifest(tensor_entries: list[TensorEntry]) -> Manifest:
         .replace("+00:00", "Z"),
         bundle_format="fastlog-directory",
         n_layers=0,
-        n_activation_blobs=sum(1 for entry in tensor_entries if entry.kind == "activation"),
-        n_gradient_blobs=sum(1 for entry in tensor_entries if entry.kind == "gradient"),
-        n_auxiliary_blobs=sum(
-            1 for entry in tensor_entries if entry.kind not in {"activation", "gradient"}
-        ),
+        n_out_blobs=sum(1 for entry in tensor_entries if entry.kind == "out"),
+        n_grad_blobs=sum(1 for entry in tensor_entries if entry.kind == "grad"),
+        n_auxiliary_blobs=sum(1 for entry in tensor_entries if entry.kind not in {"out", "grad"}),
         tensors=tensor_entries,
         unsupported_tensors=[],
     )

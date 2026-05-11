@@ -19,12 +19,12 @@ OBJECT_ALIAS_CASES = [
     ("GradientPostfunc", "torchlens.types", "GradientPostfunc"),
     ("GradFnAccessor", "torchlens.accessors", "GradFnAccessor"),
     ("GradFnLog", "torchlens.types", "GradFnLog"),
-    ("GradFnPassLog", "torchlens.types", "GradFnPassLog"),
+    ("GradFnCallLog", "torchlens.types", "GradFnCallLog"),
     ("LayerAccessor", "torchlens.accessors", "LayerAccessor"),
     ("MetadataInvariantError", "torchlens.errors", "MetadataInvariantError"),
     ("ModuleAccessor", "torchlens.accessors", "ModuleAccessor"),
     ("ModuleLog", "torchlens.types", "ModuleLog"),
-    ("ModulePassLog", "torchlens.types", "ModulePassLog"),
+    ("ModuleCallLog", "torchlens.types", "ModuleCallLog"),
     ("NodeSpec", "torchlens.experimental.dagua", "NodeSpec"),
     ("ParamLog", "torchlens.types", "ParamLog"),
     ("RunState", "torchlens.io", "RunState"),
@@ -45,32 +45,32 @@ OBJECT_ALIAS_CASES = [
     ("get_model_metadata", "torchlens.io", "get_model_metadata"),
     ("list_logs", "torchlens.io", "list_logs"),
     ("log_model_metadata", "torchlens.io", "log_model_metadata"),
-    ("model_log_to_dagua_graph", "torchlens.experimental.dagua", "model_log_to_dagua_graph"),
+    ("trace_to_dagua_graph", "torchlens.experimental.dagua", "trace_to_dagua_graph"),
     ("preview_fastlog", "torchlens.fastlog", "preview"),
     ("rehydrate_nested", "torchlens.io", "rehydrate_nested"),
     ("render_lines_to_html", "torchlens.experimental.dagua", "render_lines_to_html"),
-    ("render_model_log_with_dagua", "torchlens.experimental.dagua", "render_model_log_with_dagua"),
+    ("render_trace_with_dagua", "torchlens.experimental.dagua", "render_trace_with_dagua"),
     ("reset_naming_counter", "torchlens.io", "reset_naming_counter"),
     ("resolve_sites", "torchlens.validation", "resolve_sites"),
     ("save_intervention", "torchlens.io", "save_intervention"),
     ("suppress_mutate_warnings", "torchlens.io", "suppress_mutate_warnings"),
-    ("unwrap_torch", "torchlens.decoration", "unwrap_torch"),
+    ("unwrap_torch", "torchlens.backends.torch.wrappers", "unwrap_torch"),
     (
         "validate_batch_of_models_and_inputs",
         "torchlens.validation",
         "validate_batch_of_models_and_inputs",
     ),
-    ("wrap_torch", "torchlens.decoration", "wrap_torch"),
-    ("wrapped", "torchlens.decoration", "wrapped"),
+    ("wrap_torch", "torchlens.backends.torch.wrappers", "wrap_torch"),
+    ("wrapped", "torchlens.backends.torch.wrappers", "wrapped"),
 ]
 
 WRAPPER_CASES = [
     ("validate_forward_pass", torchlens.validation.validate_forward_pass),
     ("validate_backward_pass", torchlens.validation.validate_backward_pass),
-    ("validate_saved_activations", torchlens.validation.validate_saved_activations),
+    ("validate_saved_outs", torchlens.validation.validate_saved_outs),
     ("summary", torchlens.visualization.summary),
     ("show_model_graph", torchlens.visualization.show_model_graph),
-    ("show_backward_graph", torchlens.visualization.show_backward_graph),
+    ("draw_backward", torchlens.visualization.draw_backward),
     ("load_intervention_spec", torchlens.io.load_intervention_spec),
 ]
 
@@ -151,13 +151,13 @@ def test_validate_backward_pass_positional_loss_fn(
     assert isinstance(result, bool)
 
 
-def test_validate_saved_activations_positional_random_seed(
+def test_validate_saved_outs_positional_random_seed(
     small_model: _TinyModel, small_input: torch.Tensor
 ) -> None:
-    """Legacy saved-activation validator args should still bind correctly."""
+    """Legacy saved-out validator args should still bind correctly."""
 
     with pytest.warns(DeprecationWarning):
-        result = torchlens.validate_saved_activations(small_model, small_input, None, 43)
+        result = torchlens.validate_saved_outs(small_model, small_input, None, 43)
     assert isinstance(result, bool)
 
 
@@ -189,13 +189,13 @@ def test_show_model_graph_legacy_kwargs(
     assert result is None
 
 
-def test_show_backward_graph_legacy_kwargs(
+def test_draw_backward_legacy_kwargs(
     tmp_path: Path, small_model: _TinyModel, small_input: torch.Tensor
 ) -> None:
     """Top-level backward graph helper should accept representative legacy kwargs."""
 
-    log = torchlens.log_forward_pass(small_model, small_input, layers_to_save="all")
-    loss = log[log.output_layers[0]].activation.sum()
+    log = torchlens.trace(small_model, small_input, layers_to_save="all")
+    loss = log[log.output_layers[0]].out.sum()
     log.log_backward(loss)
 
     def node_spec_fn(grad_fn_log: Any, default_spec: Any) -> Any:
@@ -205,7 +205,7 @@ def test_show_backward_graph_legacy_kwargs(
         return default_spec
 
     with pytest.warns(DeprecationWarning):
-        result = torchlens.show_backward_graph(
+        result = torchlens.draw_backward(
             log,
             vis_outpath=str(tmp_path / "backward_graph"),
             vis_save_only=True,

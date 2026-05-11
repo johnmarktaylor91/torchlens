@@ -1,26 +1,27 @@
 """ParamLog and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters.
 
 ParamLog stores static metadata (address, shape, dtype, trainability) plus
-lazy gradient information.  It does NOT store the parameter tensor itself --
-only a weak-ish reference (``_param_ref``) used solely for lazy gradient
+lazy grad information.  It does NOT store the parameter tensor itself --
+only a weak-ish reference (``_param_ref``) used solely for lazy grad
 access via ``_check_param_grad()``.
 
 **GC concern with _param_ref**: ``_param_ref`` holds a direct reference to
 the ``nn.Parameter`` object.  This prevents the parameter from being garbage
-collected as long as the ParamLog (and thus the ModelLog) is alive.  This
-is acceptable because the ModelLog's lifetime is typically shorter than or
-equal to the model's lifetime.  The ``cleanup()`` method on ModelLog
+collected as long as the ParamLog (and thus the Trace) is alive.  This
+is acceptable because the Trace's lifetime is typically shorter than or
+equal to the model's lifetime.  The ``cleanup()`` method on Trace
 deletes all ParamLog references.
 
 **Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
 grad_memory) is computed lazily on first access via ``_check_param_grad()``.
-This allows gradients computed after ``log_forward_pass()`` returns (e.g.
+This allows grads computed after ``trace()`` returns (e.g.
 after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
 
 from os import PathLike
 from collections.abc import Iterator
+import weakref
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
 
 import torch
@@ -28,6 +29,7 @@ import torch
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
+from ._accessor_base import Accessor
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -54,25 +56,30 @@ class ParamLog:
 
     Captures static parameter identity (address, shape, dtype, trainability)
     and links to the module that owns it.  Does NOT store the parameter tensor
-    itself -- only a ``_param_ref`` reference for lazy gradient access.
+    itself -- only a ``_param_ref`` reference for lazy grad access.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
-        "address": FieldPolicy.KEEP,
+        "module_address": FieldPolicy.KEEP,
         "name": FieldPolicy.KEEP,
         "shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "memory": FieldPolicy.KEEP,
         "trainable": FieldPolicy.KEEP,
-        "module_address": FieldPolicy.KEEP,
+        "address": FieldPolicy.KEEP,
+        "all_addresses": FieldPolicy.KEEP,
+        "all_module_addresses": FieldPolicy.KEEP,
+        "module_class_name": FieldPolicy.KEEP,
+        "module_class_qualname": FieldPolicy.KEEP,
         "module_type": FieldPolicy.KEEP,
         "barcode": FieldPolicy.KEEP,
         "has_optimizer": FieldPolicy.KEEP,
         "_param_ref": FieldPolicy.DROP,
-        "num_passes": FieldPolicy.KEEP,
+        "_source_trace_ref": FieldPolicy.DROP,
+        "num_calls": FieldPolicy.KEEP,
         "used_by_layers": FieldPolicy.KEEP,
-        "linked_params": FieldPolicy.KEEP,
+        "co_parent_params": FieldPolicy.KEEP,
         "_has_grad": FieldPolicy.KEEP,
         "_grad_shape": FieldPolicy.KEEP,
         "_grad_dtype": FieldPolicy.KEEP,
@@ -82,14 +89,14 @@ class ParamLog:
 
     def __init__(
         self,
-        address: str,
+        module_address: str,
         name: str,
         shape: Tuple[int, ...],
         dtype: torch.dtype,
         num_params: int,
         memory: int,
         trainable: bool,
-        module_address: str,
+        address: str,
         module_type: str,
         barcode: str,
         has_optimizer: Optional[bool] = None,
@@ -102,19 +109,24 @@ class ParamLog:
         self.memory = memory
         self.trainable = trainable
         self.module_address = module_address
+        self.all_addresses = [address]
+        self.all_module_addresses = [module_address]
+        self.module_class_name = module_type
+        self.module_class_qualname = module_type
         self.module_type = module_type
         self.barcode = barcode
         self.has_optimizer = has_optimizer
 
-        # Direct reference to the actual nn.Parameter for lazy gradient access.
+        # Direct reference to the actual nn.Parameter for lazy grad access.
         # Prevents GC of the parameter while this ParamLog is alive (acceptable
-        # because ModelLog lifetime <= model lifetime; cleanup() clears it).
+        # because Trace lifetime <= model lifetime; cleanup() clears it).
         self._param_ref: Optional[torch.nn.Parameter] = None
+        self._source_trace_ref: Any = None
 
         # Populated during postprocessing:
-        self.num_passes: int = 1  # how many forward passes used this param
+        self.num_calls: int = 1  # how many forward ops used this param
         self.used_by_layers: List[str] = []  # layer labels that used this param
-        self.linked_params: List[str] = []  # other param addresses sharing the same tensor
+        self.co_parent_params: List[str] = []  # other param addresses sharing the same tensor
         self._has_grad: bool = False  # one-shot flag: once True, no further checks
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
@@ -144,10 +156,65 @@ class ParamLog:
         }
         return self.dtype in _QUANTIZED_DTYPES
 
-    def _check_param_grad(self) -> None:
-        """Lazily check if the parameter has a gradient and cache the result.
+    @property
+    def has_multiple_addresses(self) -> bool:
+        """Return whether this parameter is registered at multiple addresses.
 
-        Called by each grad property on first access.  Once a gradient is
+        Returns
+        -------
+        bool
+            Whether multiple parameter addresses share this tensor.
+        """
+
+        return len(self.all_addresses) > 1 or bool(self.co_parent_params)
+
+    @property
+    def source_trace(self) -> Any:
+        """Owning Trace, if still alive."""
+
+        ref = self._source_trace_ref
+        return None if ref is None else ref()
+
+    @source_trace.setter
+    def source_trace(self, value: Any) -> None:
+        """Set the owning Trace weakref."""
+
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    @property
+    def module(self) -> Any:
+        """Primary owning ModuleLog."""
+
+        trace = self.source_trace
+        if trace is None:
+            return None
+        return trace.modules[self.module_address]
+
+    @property
+    def modules(self) -> list[Any]:
+        """All owning ModuleLogs."""
+
+        trace = self.source_trace
+        if trace is None:
+            return []
+        return [trace.modules[address] for address in self.all_module_addresses]
+
+    @property
+    def grad(self) -> torch.Tensor | None:
+        """Return the live gradient tensor for this parameter.
+
+        Returns
+        -------
+        torch.Tensor | None
+            Live ``nn.Parameter.grad`` value, if available.
+        """
+
+        return None if self._param_ref is None else self._param_ref.grad
+
+    def _check_param_grad(self) -> None:
+        """Lazily check if the parameter has a grad and cache the result.
+
+        Called by each grad property on first access.  Once a grad is
         found, all grad metadata is cached and no further checks are made
         (``_has_grad`` acts as a one-shot flag).
         """
@@ -161,116 +228,116 @@ class ParamLog:
 
     @property
     def has_grad(self) -> bool:
-        """Return whether this parameter currently has a gradient stored.
+        """Return whether this parameter currently has a grad stored.
 
         Returns
         -------
         bool
-            ``True`` when the referenced parameter has a gradient.
+            ``True`` when the referenced parameter has a grad.
         """
         self._check_param_grad()
         return self._has_grad
 
     @has_grad.setter
     def has_grad(self, value: bool) -> None:
-        """Set cached gradient-presence status.
+        """Set cached grad-presence status.
 
         Parameters
         ----------
         value:
-            Cached gradient-presence status.
+            Cached grad-presence status.
         """
         self._has_grad = value
 
     @property
     def grad_shape(self) -> Optional[Tuple[int, ...]]:
-        """Return the gradient tensor shape.
+        """Return the grad tensor shape.
 
         Returns
         -------
         Optional[Tuple[int, ...]]
-            Shape of the gradient tensor, or ``None`` if no gradient exists.
+            Shape of the grad tensor, or ``None`` if no grad exists.
         """
         self._check_param_grad()
         return self._grad_shape
 
     @grad_shape.setter
     def grad_shape(self, value: Optional[Tuple[int, ...]]) -> None:
-        """Set cached gradient tensor shape.
+        """Set cached grad tensor shape.
 
         Parameters
         ----------
         value:
-            Cached gradient tensor shape, or ``None`` when absent.
+            Cached grad tensor shape, or ``None`` when absent.
         """
         self._grad_shape = value
 
     @property
     def grad_dtype(self) -> Optional[torch.dtype]:
-        """Return the gradient tensor dtype.
+        """Return the grad tensor dtype.
 
         Returns
         -------
         Optional[torch.dtype]
-            Dtype of the gradient tensor, or ``None`` if no gradient exists.
+            Dtype of the grad tensor, or ``None`` if no grad exists.
         """
         self._check_param_grad()
         return self._grad_dtype
 
     @grad_dtype.setter
     def grad_dtype(self, value: Optional[torch.dtype]) -> None:
-        """Set cached gradient tensor dtype.
+        """Set cached grad tensor dtype.
 
         Parameters
         ----------
         value:
-            Cached gradient tensor dtype, or ``None`` when absent.
+            Cached grad tensor dtype, or ``None`` when absent.
         """
         self._grad_dtype = value
 
     @property
     def grad_memory(self) -> int:
-        """Return the gradient tensor size in bytes.
+        """Return the grad tensor size in bytes.
 
         Returns
         -------
         int
-            Size of the gradient tensor in bytes.
+            Size of the grad tensor in bytes.
         """
         self._check_param_grad()
         return self._grad_memory
 
     @grad_memory.setter
     def grad_memory(self, value: int) -> None:
-        """Set cached gradient tensor size in bytes.
+        """Set cached grad tensor size in bytes.
 
         Parameters
         ----------
         value:
-            Cached gradient memory amount in bytes.
+            Cached grad memory amount in bytes.
         """
         self._grad_memory = value
 
     @property
     def grad_memory_str(self) -> str:
-        """Return gradient tensor size in human-readable units.
+        """Return grad tensor size in human-readable units.
 
         Returns
         -------
         str
-            Human-readable gradient memory amount.
+            Human-readable grad memory amount.
         """
         self._check_param_grad()
         return self._grad_memory_str
 
     @grad_memory_str.setter
     def grad_memory_str(self, value: str) -> None:
-        """Set cached gradient tensor size in human-readable units.
+        """Set cached grad tensor size in human-readable units.
 
         Parameters
         ----------
         value:
-            Human-readable gradient memory amount.
+            Human-readable grad memory amount.
         """
         self._grad_memory_str = value
 
@@ -284,20 +351,20 @@ class ParamLog:
             f"  size: {self.memory_str}",
             f"  {status}",
             f"  has_grad: {self.has_grad}",
-            f"  module: {self.module_address} ({self.module_type})",
+            f"  module: {self.address} ({self.module_type})",
         ]
         if self.used_by_layers:
             lines.append(f"  used by: {', '.join(self.used_by_layers)}")
-        if self.linked_params:
-            lines.append(f"  linked: {', '.join(self.linked_params)}")
+        if self.co_parent_params:
+            lines.append(f"  linked: {', '.join(self.co_parent_params)}")
         if self.has_optimizer is not None:
             lines.append(f"  has_optimizer: {self.has_optimizer}")
-        if self.num_passes > 1:
-            lines.append(f"  num_passes: {self.num_passes}")
+        if self.num_calls > 1:
+            lines.append(f"  num_calls: {self.num_calls}")
         return "\n".join(lines)
 
     def release_param_ref(self) -> None:
-        """Cache gradient info, then null _param_ref to allow param GC."""
+        """Cache grad info, then null _param_ref to allow param GC."""
         self._check_param_grad()
         self._param_ref = None
 
@@ -309,17 +376,18 @@ class ParamLog:
         """Return pickle state with live parameter references stripped."""
         state = self.__dict__.copy()
         state["_param_ref"] = None
+        state["_source_trace_ref"] = None
         state["io_format_version"] = IO_FORMAT_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state without reviving live parameter references."""
         read_io_format_version(state, cls_name=type(self).__name__)
-        default_fill_state(state, defaults={"_param_ref": None})
+        default_fill_state(state, defaults={"_param_ref": None, "_source_trace_ref": None})
         self.__dict__.update(state)
 
 
-class ParamAccessor:
+class ParamAccessor(Accessor["ParamLog"]):
     """Dict-like accessor for ParamLog objects.
 
     Supports indexing by:
@@ -327,7 +395,7 @@ class ParamAccessor:
     * **short name** (str) -- e.g. ``"weight"`` (must be unambiguous).
     * **ordinal position** (int) -- index into insertion-order list.
 
-    Available as ``model_log.params``, ``layer_log.params``, ``module_log.params``.
+    Available as ``trace.params``, ``layer_log.params``, ``module_log.params``.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -336,41 +404,24 @@ class ParamAccessor:
     }
 
     def __init__(self, param_logs: Dict[str, "ParamLog"]) -> None:
-        self._dict = param_logs  # address -> ParamLog
-        self._list = list(param_logs.values())  # insertion-order list
+        super().__init__(param_logs)
 
-    def __getitem__(self, key: Union[int, str]) -> "ParamLog":
-        """Retrieve a parameter by integer index, full address, or short name (e.g. 'weight')."""
-        if isinstance(key, int):
-            return self._list[key]
-        if key in self._dict:
-            return self._dict[key]
+    def _resolve_substring(self, key: str) -> "ParamLog | None":
+        """Resolve an unambiguous parameter short name."""
         # Fallback: match by short name (e.g. 'weight', 'bias')
         matches = [pl for pl in self._list if pl.name == key]
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
             raise KeyError(f"Ambiguous short name '{key}' — use full address")
-        raise KeyError(key)
+        return None
 
     def __contains__(self, key: object) -> bool:
         """Check membership by full address, short name, or integer index (#84)."""
-        if isinstance(key, int):
-            return 0 <= key < len(self._list)
-        if isinstance(key, str):
-            if key in self._dict:
-                return True
-            # Also check short name match
-            return any(pl.name == key for pl in self._list)
-        return False
-
-    def __len__(self) -> int:
-        """Return the number of parameters."""
-        return len(self._dict)
-
-    def __iter__(self) -> Iterator["ParamLog"]:
-        """Iterate over ParamLog objects in insertion order."""
-        return iter(self._list)
+        try:
+            return super().__contains__(key)
+        except KeyError:
+            return True
 
     def __repr__(self) -> str:
         """Format as a dict-like string of parameter addresses with shapes and status."""

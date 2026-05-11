@@ -17,7 +17,7 @@ def dataset(log: Any) -> Any:
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` containing saved output activations.
+        TorchLens ``Trace`` containing saved output outs.
 
     Returns
     -------
@@ -29,7 +29,7 @@ def dataset(log: Any) -> Any:
     ImportError
         If rsatoolbox is unavailable.
     ValueError
-        If the log does not contain a tensor output activation.
+        If the log does not contain a tensor output out.
     """
 
     try:
@@ -39,8 +39,8 @@ def dataset(log: Any) -> Any:
             "rsatoolbox bridge requires the `neuro` extra: install torchlens[neuro]."
         ) from exc
 
-    activation = _final_output_activation(log)
-    measurements = activation.detach().cpu().reshape(activation.shape[0], -1).numpy()
+    out = _final_output_out(log)
+    measurements = out.detach().cpu().reshape(out.shape[0], -1).numpy()
     return rsa.data.Dataset(
         measurements=measurements,
         obs_descriptors={"presentation": np.arange(measurements.shape[0])},
@@ -49,35 +49,35 @@ def dataset(log: Any) -> Any:
     )
 
 
-def _final_output_activation(log: Any) -> torch.Tensor:
-    """Return the first final output tensor activation.
+def _final_output_out(log: Any) -> torch.Tensor:
+    """Return the first final output tensor out.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog``.
+        TorchLens ``Trace``.
 
     Returns
     -------
     torch.Tensor
-        Final output activation.
+        Final output out.
 
     Raises
     ------
     ValueError
-        If no tensor output activation is available.
+        If no tensor output out is available.
     """
 
     for label in getattr(log, "output_layers", []) or []:
         layer = log[label]
-        activation = getattr(layer, "activation", None)
-        if isinstance(activation, torch.Tensor):
-            return activation
+        out = getattr(layer, "out", None)
+        if isinstance(out, torch.Tensor):
+            return out
     for layer in reversed(getattr(log, "layer_list", [])):
-        activation = getattr(layer, "activation", None)
-        if getattr(layer, "is_output_layer", False) and isinstance(activation, torch.Tensor):
-            return activation
-    raise ValueError("Could not find a tensor output activation for rsatoolbox export.")
+        out = getattr(layer, "out", None)
+        if getattr(layer, "is_output", False) and isinstance(out, torch.Tensor):
+            return out
+    raise ValueError("Could not find a tensor output out for rsatoolbox export.")
 
 
 __all__ = ["dataset"]

@@ -1,35 +1,33 @@
 """Postprocessing pipeline for cleaning up the model log after the forward pass.
 
-After the forward pass captures raw tensor metadata into a ModelLog, this pipeline
-transforms the raw graph into its user-facing form. The full pipeline has 20 steps,
+After the forward pass captures raw tensor metadata into a Trace, this pipeline
+transforms the raw graph into its user-facing form. The full pipeline has 19 steps,
 split into thematic submodules:
 
 - graph_traversal (Steps 1-4): Add output nodes, trace ancestry, remove orphans,
   compute input/output distances.
-- control_flow (Steps 5-7): Mark conditional branches, fix module containment for
-  internally-generated tensors, deduplicate/merge buffer layers.
-- loop_detection (Step 8): Identify repeated operations (loops/recurrence), assign
+- control_flow (Steps 5-6): Mark conditional branches and deduplicate/merge buffer layers.
+- loop_detection (Step 7): Identify repeated operations (loops/recurrence), assign
   same-layer groupings via BFS isomorphic subgraph expansion.
-- labeling (Steps 9-12): Generate final human-readable labels, rename all internal
+- labeling (Steps 8-11): Generate final human-readable labels, rename all internal
   references, trim/reorder fields, build lookup keys.
-- finalization (Steps 13-20): Undecorate saved tensors, log timing, finalize
+- finalization (Steps 12-19): Undecorate saved tensors, log timing, finalize
   ParamLogs, build LayerLog/ModuleLog aggregates, mark pass as finished, then
-  finalize any streamed bundle and optionally evict in-memory activations.
+  finalize any streamed bundle and optionally evict in-memory outs.
 
 Step ordering invariants:
 - Steps 1-3 MUST precede Step 5 (conditional branch detection needs orphan-free graph).
-- Step 6 (module suffix appending) MUST precede Step 8 (loop detection uses
-  operation_equivalence_type which includes module suffixes).
-- Step 8 MUST precede Step 9 (label generation needs recurrent_group).
-- Step 9 MUST precede Step 10 (final info logging uses finalized labels).
-- Step 10 MUST precede Step 12 (lookup key generation needs module hierarchy data
-  populated in Step 10).
-- Step 11 (rename) MUST precede Step 12 (cleanup uses renamed labels).
-- Step 16.5 (_build_layer_logs) MUST precede Step 17 (_build_module_logs) because
-  ModuleLog.all_layers references LayerLog keys.
+- Module suffixes must be present on equivalence_class before Step 7 loop detection.
+- Step 7 MUST precede Step 8 (label generation needs recurrent_ops).
+- Step 8 MUST precede Step 9 (final info logging uses finalized labels).
+- Step 9 MUST precede Step 11 (lookup key generation needs module hierarchy data
+  populated in Step 9).
+- Step 10 (rename) MUST precede Step 11 (cleanup uses renamed labels).
+- Step 15.5 (_build_layer_logs) MUST precede Step 16 (_build_module_logs) because
+  ModuleLog.layers references LayerLog keys.
 
-Fast mode skips Steps 1-10 and Step 17, reusing the exhaustive pass's metadata.
-It only copies activations from parent to output nodes, trims, renames, builds
+Fast mode skips Steps 1-9 and Step 16, reusing the exhaustive pass's metadata.
+It only copies outs from parent to output nodes, trims, renames, builds
 LayerLogs, and marks the pass as finished. See postprocess_fast() below.
 """
 
@@ -43,65 +41,187 @@ from ..utils.hashing import compute_graph_shape_hash
 
 from .control_flow import (
     _fix_buffer_layers,
-    _fix_modules_for_internal_tensors,
     _mark_conditional_branches,
 )
 from .finalization import (
     _build_layer_logs,
     _build_module_logs,
-    _evict_streamed_activations,
+    _evict_streamed_outs,
     _finalize_streamed_bundle,
     _finalize_param_logs,
     _log_time_elapsed,
-    _set_pass_finished,
+    _set_tracing_finished,
     _undecorate_all_saved_tensors,
 )
 from .graph_traversal import (
     _add_output_layers,
     _find_output_ancestors,
-    _mark_input_output_distances,
+    _mark_layer_depths,
     _remove_orphan_nodes,
 )
 from .labeling import (
-    _log_final_info_for_all_layers,
+    _add_lookup_keys_for_layer_entry,
+    _labels_in_replay_ready_call_groups_to_retain,
+    _log_final_info_for_layers,
     _map_raw_labels_to_final_labels,
     _remove_unwanted_entries_and_log_remaining,
     _rename_model_history_layer_names,
     _trim_and_reorder_model_history_fields,
 )
 from .loop_detection import _detect_and_label_loops, _group_by_shared_params
+from ._materialize import materialize_from_events
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 from ..utils.display import _vprint, _vtimed
 
 
+def _drop_transient_capture_state(self: "Trace") -> None:
+    """Remove capture/session scratch that must not survive on final traces.
+
+    Args:
+        self: Trace whose postprocess-local state should be discarded.
+
+    Returns:
+        None. Mutates ``self.__dict__``.
+    """
+
+    keep_deferred_streaming = bool(
+        self.__dict__.get("_defer_streaming_bundle_finalization", False)
+        and self.__dict__.get("_out_writer") is not None
+    )
+    keep_selective_sink = bool(
+        self.__dict__.get("_out_sink") is not None and getattr(self, "num_saved_ops", 0) == 0
+    )
+    field_names = [
+        "_build_state",
+        "capture_events",
+        "_output_container_specs_by_raw_label",
+    ]
+    if not keep_deferred_streaming and not keep_selective_sink:
+        field_names.extend(
+            [
+                "_out_writer",
+                "_out_sink",
+                "_keep_outs_in_memory",
+                "_keep_grads_in_memory",
+                "_defer_streaming_bundle_finalization",
+            ]
+        )
+    elif not keep_deferred_streaming:
+        field_names.extend(
+            [
+                "_out_writer",
+                "_keep_outs_in_memory",
+                "_keep_grads_in_memory",
+                "_defer_streaming_bundle_finalization",
+            ]
+        )
+    for field_name in field_names:
+        self.__dict__.pop(field_name, None)
+
+
+def _prune_final_unsaved_layers(self: "Trace") -> None:
+    """Prune unsaved final layer entries during fast two-pass postprocessing.
+
+    Args:
+        self: Trace whose final containers should be filtered.
+
+    Returns:
+        None. Mutates final layer containers in place.
+    """
+
+    if self.keep_unsaved_layers:
+        return
+    retained_call_group_labels = _labels_in_replay_ready_call_groups_to_retain(self)
+    layers_to_remove = [
+        layer_entry
+        for layer_entry in self.layer_list
+        if not getattr(layer_entry, "is_orphan", False)
+        and not getattr(layer_entry, "has_saved_outs", False)
+        and layer_entry.layer_label not in retained_call_group_labels
+    ]
+    if not layers_to_remove:
+        return
+
+    self.unlogged_ops.extend(layer_entry.layer_label for layer_entry in layers_to_remove)
+    self._batch_remove_log_entries(layers_to_remove, remove_references=True)
+    retained_layers = [
+        layer_entry for layer_entry in self.layer_list if layer_entry not in layers_to_remove
+    ]
+    self.layer_list = []
+    self.layer_dict_main_keys = {}
+    self.layer_dict_all_keys = {}
+    self.layer_labels = []
+    self.op_labels = []
+    self.layer_num_calls = {}
+    num_logged_tensors = len(retained_layers)
+    for layer_index, layer_entry in enumerate(retained_layers):
+        _add_lookup_keys_for_layer_entry(self, layer_entry, layer_index, num_logged_tensors)
+        self.layer_list.append(layer_entry)
+        self.layer_dict_main_keys[layer_entry.layer_label] = layer_entry
+        self.layer_labels.append(layer_entry.layer_label)
+        self.layer_labels.append(layer_entry.layer_label_no_pass)
+        self.op_labels.append(layer_entry.layer_label_w_pass)
+        self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_calls
+    self._layers_logged = self.num_saved_ops == len(self.layer_list)
+    self._layers_saved = self.num_saved_ops == len(self.layer_list)
+
+
+def _refresh_fast_saved_summary(self: "Trace") -> None:
+    """Refresh saved-output counters after a fast replay pass.
+
+    Args:
+        self: Trace whose final layer entries were updated in fast mode.
+
+    Returns:
+        None. Mutates aggregate saved-output fields on ``self``.
+    """
+
+    saved_layers = [
+        layer_entry
+        for layer_entry in self.layer_list
+        if getattr(layer_entry, "has_saved_outs", False)
+        and not getattr(layer_entry, "is_orphan", False)
+    ]
+    self.num_saved_ops = len(saved_layers)
+    self.saved_out_memory = sum(getattr(layer_entry, "memory", 0) for layer_entry in saved_layers)
+    self.ops_with_saved_outs = [layer_entry.layer_label for layer_entry in saved_layers]
+
+
 def postprocess(
-    self: "ModelLog", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
+    self: "Trace", output_tensors: List[torch.Tensor], output_tensor_addresses: List[str]
 ) -> None:
     """Run the full 18-step postprocessing pipeline (exhaustive mode).
 
-    Transforms the raw ModelLog captured during the forward pass into its
+    Transforms the raw Trace captured during the forward pass into its
     final user-facing form. In fast mode, delegates to ``postprocess_fast``
     which skips most steps (graph traversal, loop detection, module annotation)
-    and only copies activations, trims fields, and builds LayerLogs.
+    and only copies outs, trims fields, and builds LayerLogs.
 
     Args:
         output_tensors: The actual output tensors returned by the model's forward().
         output_tensor_addresses: Hierarchical address strings for each output
             (e.g., "0.1" for nested tuple outputs).
     """
-    if self.logging_mode == "fast":
+    if self.capture_mode == "fast":
         postprocess_fast(self)
         return
+
+    capture_events = getattr(self, "capture_events", None)
+    if capture_events is not None:
+        with _vtimed(self, "  Step 0: Materialize capture events"):
+            materialize_from_events(self, capture_events)
+        delattr(self, "capture_events")
 
     # Guard: if the model produced no logged layers, skip postprocessing (#153)
     if len(self._raw_layer_labels_list) == 0:
         import warnings
 
         warnings.warn("No layers were logged during the forward pass; skipping postprocessing.")
-        _set_pass_finished(self)
+        _set_tracing_finished(self)
+        _drop_transient_capture_state(self)
         return
 
     _vprint(
@@ -125,106 +245,106 @@ def postprocess(
 
     # Step 4: Find min/max distance from input and output nodes.
     # Conditional: only runs when the user requested distance metadata.
-    if self.mark_input_output_distances:
+    if self.mark_layer_depths:
         with _vtimed(self, "  Step 4: Input/output distances"):
-            _mark_input_output_distances(self)
+            _mark_layer_depths(self)
 
     # Step 5: Starting from terminal single boolean tensors, mark the conditional branches.
     with _vtimed(self, "  Step 5: Mark conditional branches"):
         _mark_conditional_branches(self)
 
-    # Step 6: Annotate the containing modules for all internally-generated tensors.
-    with _vtimed(self, "  Step 6: Fix module containment"):
-        _fix_modules_for_internal_tensors(self)
-
-    # Step 7: Fix the buffer passes and parent information.
-    with _vtimed(self, "  Step 7: Fix buffer layers"):
+    # Step 6: Fix the buffer ops and parent information.
+    with _vtimed(self, "  Step 6: Fix buffer layers"):
         _fix_buffer_layers(self)
 
-    # Step 8: Identify all loops, mark repeated layers.
+    # Step 7: Identify all loops, mark repeated layers.
     loop_desc = (
-        "  Step 8: Loop detection (full)"
-        if self.detect_loops
-        else "  Step 8: Loop detection (params only)"
+        "  Step 7: Loop detection (full)"
+        if self.recurrence_detection
+        else "  Step 7: Loop detection (params only)"
     )
     with _vtimed(self, loop_desc):
-        if self.detect_loops:
+        if self.recurrence_detection:
             _detect_and_label_loops(self)
         else:
             _group_by_shared_params(self)
 
-    # Step 9: Go down tensor list, get the mapping from raw tensor names to final tensor names.
-    with _vtimed(self, "  Step 9: Map labels"):
+    # Step 8: Go down tensor list, get the mapping from raw tensor names to final tensor names.
+    with _vtimed(self, "  Step 8: Map labels"):
         _map_raw_labels_to_final_labels(self)
 
-    # Step 10: Log final info for all layers
-    with _vtimed(self, "  Step 10: Log final info"):
-        _log_final_info_for_all_layers(self)
+    # Step 9: Log final info for all layers
+    with _vtimed(self, "  Step 9: Log final info"):
+        _log_final_info_for_layers(self)
 
-    # Step 11: Rename all raw labels to final labels
-    with _vtimed(self, "  Step 11: Rename labels"):
+    # Step 10: Rename all raw labels to final labels
+    with _vtimed(self, "  Step 10: Rename labels"):
         _rename_model_history_layer_names(self)
         _trim_and_reorder_model_history_fields(self)
 
-    # Step 12: Remove unsaved layers, build lookup key mappings
-    with _vtimed(self, "  Step 12: Build lookup keys"):
+    # Step 11: Remove unsaved layers, build lookup key mappings
+    with _vtimed(self, "  Step 11: Build lookup keys"):
         _remove_unwanted_entries_and_log_remaining(self)
 
-    # Step 13: Undecorate all saved tensors and remove saved grad_fns.
-    with _vtimed(self, "  Step 13: Undecorate tensors"):
+    # Step 12: Undecorate all saved tensors and remove saved grad_fns.
+    with _vtimed(self, "  Step 12: Undecorate tensors"):
         _undecorate_all_saved_tensors(self)
 
-    # Step 14: Clear the cache after any tensor deletions for garbage collection purposes.
+    # Step 13: Clear the cache after any tensor deletions for garbage collection purposes.
     # Gated behind cached cuda.is_available() so CPU-only runs don't pay the
     # CUDA driver / NVML probe cost (per profiling audit 2026-04-27 finding #4).
     if _is_cuda_available():
         torch.cuda.empty_cache()
 
-    # Step 15: Log time elapsed.
-    with _vtimed(self, "  Step 15: Log timing"):
+    # Step 14: Log time elapsed.
+    with _vtimed(self, "  Step 14: Log timing"):
         _log_time_elapsed(self)
 
-    # Step 16: Populate ParamLog reverse mappings, linked params, num_passes, and gradient metadata.
-    with _vtimed(self, "  Step 16: Finalize params"):
+    # Step 15: Populate ParamLog reverse mappings, linked params, num_calls, and grad metadata.
+    with _vtimed(self, "  Step 15: Finalize params"):
         _finalize_param_logs(self)
 
-    # Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
-    with _vtimed(self, "  Step 16.5: Build layer logs"):
+    # Step 15.5: Build aggregate LayerLog objects from per-pass OpLog entries.
+    with _vtimed(self, "  Step 15.5: Build layer logs"):
         _build_layer_logs(self)
 
-    # Step 17: Build structured ModuleLog objects from raw module_* dicts.
-    with _vtimed(self, "  Step 17: Build module logs"):
+    # Step 16: Build structured ModuleLog objects from raw module_* dicts.
+    with _vtimed(self, "  Step 16: Build module logs"):
         _build_module_logs(self)
 
-    # Step 17.5: Compute graph shape hash before _set_pass_finished changes access behavior.
-    with _vtimed(self, "  Step 17.5: Graph shape hash"):
+    # Step 16.5: Compute graph shape hash before _set_tracing_finished changes access behavior.
+    with _vtimed(self, "  Step 16.5: Graph shape hash"):
         self.graph_shape_hash = compute_graph_shape_hash(self)
 
-    # Step 18: log the pass as finished, changing the ModelLog behavior to its user-facing version.
-    with _vtimed(self, "  Step 18: Mark pass finished"):
-        _set_pass_finished(self)
+    # Step 17: log the pass as finished, changing the Trace behavior to its user-facing version.
+    with _vtimed(self, "  Step 17: Mark pass finished"):
+        _set_tracing_finished(self)
 
-    should_finalize_streaming = self._activation_writer is not None and not getattr(
+    for field_name in ("_build_state", "capture_events", "_output_container_specs_by_raw_label"):
+        self.__dict__.pop(field_name, None)
+
+    should_finalize_streaming = getattr(self, "_out_writer", None) is not None and not getattr(
         self, "_defer_streaming_bundle_finalization", False
     )
     if should_finalize_streaming:
-        with _vtimed(self, "  Step 19: Finalize streamed bundle"):
+        with _vtimed(self, "  Step 18: Finalize streamed bundle"):
             _finalize_streamed_bundle(self)
 
-    if should_finalize_streaming and not self._keep_activations_in_memory:
-        with _vtimed(self, "  Step 20: Evict streamed activations"):
-            _evict_streamed_activations(self)
+    if should_finalize_streaming and not self._keep_outs_in_memory:
+        with _vtimed(self, "  Step 19: Evict streamed outs"):
+            _evict_streamed_outs(self)
 
     if getattr(self, "verbose", False):
         print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")
+    _drop_transient_capture_state(self)
 
 
-def postprocess_fast(self: "ModelLog") -> None:
+def postprocess_fast(self: "Trace") -> None:
     """Lightweight postprocessing for fast (second-pass) logging mode.
 
     The fast pass reuses the exhaustive pass's graph structure, loop groupings,
     and labels. It only needs to:
-    1. Copy activation data from each output's parent tensor into the output node.
+    1. Copy out data from each output's parent tensor into the output node.
     2. Trim and reorder fields.
     3. Remove unsaved layers and build lookup keys.
     4. Undecorate saved tensors.
@@ -233,48 +353,49 @@ def postprocess_fast(self: "ModelLog") -> None:
 
     Skipped steps (already computed by the exhaustive pass):
     - Steps 1-4: Graph structure (output nodes, ancestry, orphans, distances)
-    - Steps 5-7: Conditional branches, module fixing, buffer fixing
-    - Step 8: Loop detection
-    - Steps 9-10: Label mapping and final info logging
-    - Step 17: _build_module_logs — module structure doesn't change between
-      passes and _module_build_data isn't repopulated in fast mode (#108).
+    - Steps 5-6: Conditional branches and buffer fixing
+    - Step 7: Loop detection
+    - Steps 8-9: Label mapping and final info logging
+    - Step 16: _build_module_logs — module structure doesn't change between
+      ops and _module_build_data isn't repopulated in fast mode (#108).
     """
     _vprint(self, "Fast-pass postprocessing...")
-    # Use layer_dict_main_keys to get LayerPassLog directly (not LayerLog)
+    # Use layer_dict_main_keys to get OpLog directly (not LayerLog)
     for output_layer_label in self.output_layers:
         output_layer = self.layer_dict_main_keys[output_layer_label]
-        if not output_layer.parent_layers:
+        if not output_layer.parents:
             continue  # Guard for parentless output layers (#152)
-        parent_layer = self.layer_dict_main_keys[output_layer.parent_layers[0]]
-        parent_contents = parent_layer.activation
-        parent_transformed = parent_layer.transformed_activation
+        parent_layer = self.layer_dict_main_keys[output_layer.parents[0]]
+        parent_contents = parent_layer.out
+        parent_transformed = parent_layer.transformed_out
         output_layer._internal_set(
-            "activation",
-            safe_copy(parent_contents, detach_tensor=self.detach_saved_tensors)
+            "out",
+            safe_copy(parent_contents, detach_tensor=self.detach_saved_activations)
             if parent_contents is not None
             else None,
         )
         output_layer._internal_set(
-            "transformed_activation",
-            safe_copy(parent_transformed, detach_tensor=self.detach_saved_tensors)
+            "transformed_out",
+            safe_copy(parent_transformed, detach_tensor=self.detach_saved_activations)
             if isinstance(parent_transformed, torch.Tensor)
             else parent_transformed,
         )
-        output_layer.tensor_memory = parent_layer.tensor_memory
-        output_layer.transformed_activation_shape = parent_layer.transformed_activation_shape
-        output_layer.transformed_activation_dtype = parent_layer.transformed_activation_dtype
-        output_layer.transformed_activation_memory = parent_layer.transformed_activation_memory
-        output_layer.has_saved_activations = parent_layer.has_saved_activations
-        output_layer.has_gradient = parent_layer.has_gradient
-        output_layer._internal_set("gradient", parent_layer.gradient)
-        output_layer._internal_set("transformed_gradient", parent_layer.transformed_gradient)
-        output_layer.transformed_gradient_shape = parent_layer.transformed_gradient_shape
-        output_layer.transformed_gradient_dtype = parent_layer.transformed_gradient_dtype
-        output_layer.transformed_gradient_memory = parent_layer.transformed_gradient_memory
-        if output_layer.has_saved_activations:
-            self.layers_with_saved_activations.append(output_layer_label)
+        output_layer.memory = parent_layer.memory
+        output_layer.transformed_out_shape = parent_layer.transformed_out_shape
+        output_layer.transformed_out_dtype = parent_layer.transformed_out_dtype
+        output_layer.transformed_out_memory = parent_layer.transformed_out_memory
+        output_layer.has_saved_outs = parent_layer.has_saved_outs
+        output_layer.has_grad = parent_layer.has_grad
+        output_layer._internal_set("grad", parent_layer.grad)
+        output_layer._internal_set("transformed_grad", parent_layer.transformed_grad)
+        output_layer.transformed_grad_shape = parent_layer.transformed_grad_shape
+        output_layer.transformed_grad_dtype = parent_layer.transformed_grad_dtype
+        output_layer.transformed_grad_memory = parent_layer.transformed_grad_memory
+        if output_layer.has_saved_outs:
+            self.ops_with_saved_outs.append(output_layer_label)
+    _refresh_fast_saved_summary(self)
     _trim_and_reorder_model_history_fields(self)
-    _remove_unwanted_entries_and_log_remaining(self)
+    _prune_final_unsaved_layers(self)
     _undecorate_all_saved_tensors(self)
 
     # Gated behind cached cuda.is_available() so CPU-only fast-pass runs don't
@@ -284,17 +405,18 @@ def postprocess_fast(self: "ModelLog") -> None:
     _log_time_elapsed(self)
     _build_layer_logs(self)
     # Note: _build_module_logs is NOT called here because module structure
-    # doesn't change between passes and _module_build_data isn't repopulated
-    # in fast mode (Step 10 is skipped). Existing module logs remain valid. (#108)
-    if self.intervention_ready and not getattr(self, "capture_full_args", False):
+    # doesn't change between ops and _module_build_data isn't repopulated
+    # in fast mode (Step 9 is skipped). Existing module logs remain valid. (#108)
+    if self.intervention_ready and not getattr(self, "capture_args_template", False):
         self.intervention_ready = False
     self.graph_shape_hash = compute_graph_shape_hash(self)
-    _set_pass_finished(self)
+    _set_tracing_finished(self)
 
-    should_finalize_streaming = self._activation_writer is not None and not getattr(
+    should_finalize_streaming = getattr(self, "_out_writer", None) is not None and not getattr(
         self, "_defer_streaming_bundle_finalization", False
     )
     if should_finalize_streaming:
         _finalize_streamed_bundle(self)
-    if should_finalize_streaming and not self._keep_activations_in_memory:
-        _evict_streamed_activations(self)
+    if should_finalize_streaming and not self._keep_outs_in_memory:
+        _evict_streamed_outs(self)
+    _drop_transient_capture_state(self)

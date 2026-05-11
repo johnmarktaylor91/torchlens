@@ -125,7 +125,7 @@ Rationale: Renderers and downstream tooling need exact pass lists to label mixed
 
 ## 2026-04 — D16: Make Cond-Id-Aware Structures Primary
 Context: Legacy THEN/ELIF/ELSE edge lists cannot represent multi-arm entry cleanly.
-Decision: Promote `conditional_arm_edges` and `cond_branch_children_by_cond` to the primary representation.
+Decision: Promote `conditional_arm_entry_edges` and `conditional_arm_children` to the primary representation.
 Rationale: Cond-id-aware structures preserve simultaneous entry into multiple arms while keeping legacy views derivable.
 
 ## 2026-04 — D17: Disabled-Source Mode Reuses No-Source Contract

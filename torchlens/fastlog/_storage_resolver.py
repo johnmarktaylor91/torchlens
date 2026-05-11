@@ -43,8 +43,8 @@ def _resolve_storage(
     spec: CaptureSpec,
     intent: StorageIntent,
     *,
-    activation_postfunc: "ActivationPostfunc | None" = None,
-    save_raw_activation: bool = True,
+    out_postfunc: "ActivationPostfunc | None" = None,
+    save_raw_outs: bool = True,
     ctx: RecordContext | None = None,
 ) -> tuple[
     torch.Tensor | None,
@@ -68,11 +68,11 @@ def _resolve_storage(
         Capture policy for the tensor.
     intent:
         Storage intent resolved from streaming options.
-    activation_postfunc:
+    out_postfunc:
         Optional callable applied to RAM/disk payloads after dtype/device
         transforms. Errors are wrapped in :class:`TorchLensPostfuncError`.
-    save_raw_activation:
-        When False and ``activation_postfunc`` is set, raw payloads are
+    save_raw_outs:
+        When False and ``out_postfunc`` is set, raw payloads are
         suppressed and only the transformed copy is retained.
     ctx:
         Record context used to enrich postfunc error messages.
@@ -82,10 +82,10 @@ def _resolve_storage(
     PredicateError
         If the requested storage policy is invalid for the tensor.
     TorchLensPostfuncError
-        If the activation postfunc raises while transforming a payload.
+        If the out postfunc raises while transforming a payload.
     TrainingModeConfigError
         If ``keep_grad=True`` and the transformed RAM payload is not a
-        gradient-capable tensor connected to the autograd graph.
+        grad-capable tensor connected to the autograd graph.
     """
 
     if spec.keep_grad and intent.on_disk and not intent.in_ram:
@@ -97,8 +97,8 @@ def _resolve_storage(
     disk_payload: torch.Tensor | None = None
     transformed_ram: torch.Tensor | None = None
     transformed_disk: torch.Tensor | None = None
-    postfunc = activation_postfunc
-    keep_raw = save_raw_activation or postfunc is None
+    postfunc = out_postfunc
+    keep_raw = save_raw_outs or postfunc is None
 
     if intent.in_ram:
         raw_ram = safe_copy(tensor, detach_tensor=not spec.keep_grad)
@@ -147,7 +147,7 @@ def _invoke_postfunc(
     intent: StorageIntent,
     target: str,
 ) -> torch.Tensor:
-    """Apply a fastlog activation postfunc with logging paused."""
+    """Apply a fastlog out postfunc with logging paused."""
 
     try:
         with pause_logging():
@@ -170,19 +170,19 @@ def _postfunc_error_message(
     intent: StorageIntent,
     target: str,
 ) -> str:
-    """Build context for an activation postfunc failure."""
+    """Build context for an out postfunc failure."""
 
     storage_target = _describe_storage_target(intent, target)
     if ctx is None:
         return (
-            "activation_postfunc raised while resolving a fastlog payload "
+            "out_postfunc raised while resolving a fastlog payload "
             f"(storage_target={storage_target}, keep_grad={spec.keep_grad})."
         )
     return (
-        f"activation_postfunc raised for fastlog event "
+        f"out_postfunc raised for fastlog event "
         f"label={ctx.label!r} kind={ctx.kind} func={ctx.func_name} "
-        f"shape={tuple(ctx.tensor_shape) if ctx.tensor_shape is not None else None} "
-        f"dtype={ctx.tensor_dtype} storage_target={storage_target} "
+        f"shape={tuple(ctx.shape) if ctx.shape is not None else None} "
+        f"dtype={ctx.dtype} storage_target={storage_target} "
         f"keep_grad={spec.keep_grad}."
     )
 
@@ -208,7 +208,7 @@ def _validate_train_mode_transformed(
 ) -> None:
     """Validate differentiability requirements for a transformed RAM payload.
 
-    The transformed payload must remain a gradient-capable tensor that stays
+    The transformed payload must remain a grad-capable tensor that stays
     graph-connected when the raw RAM payload retained autograd history.
     Disk transformed payloads are detached inspection copies and are not
     validated here.
@@ -217,19 +217,19 @@ def _validate_train_mode_transformed(
     label = ctx.label if ctx is not None else "<unknown>"
     if not isinstance(transformed, torch.Tensor):
         raise TrainingModeConfigError(
-            "activation_postfunc must return a torch.Tensor while keep_grad=True "
+            "out_postfunc must return a torch.Tensor while keep_grad=True "
             f"for fastlog event {label!r}."
         )
     if transformed.dtype in _INTEGER_DTYPES:
         raise TrainingModeConfigError(
             f"train_mode=True with non-grad dtype {transformed.dtype} on fastlog "
-            f"event {label!r}. Integer and bool dtypes cannot propagate gradients. "
-            "Adjust activation_postfunc to return a floating dtype."
+            f"event {label!r}. Integer and bool dtypes cannot propagate grads. "
+            "Adjust out_postfunc to return a floating dtype."
         )
     if raw_tensor.requires_grad and transformed.grad_fn is None:
         raise TrainingModeConfigError(
-            "activation_postfunc returned a tensor disconnected from the autograd "
-            "graph (grad_fn is None) while keep_grad=True. The transformed activation "
+            "out_postfunc returned a tensor disconnected from the autograd "
+            "graph (grad_fn is None) while keep_grad=True. The transformed out "
             f"for fastlog event {label!r} must remain differentiable."
         )
     _ = spec

@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._utils import activation_at
+from ._utils import out_at
 
 
 def encode(log: Any, site: Any, sae: Any) -> Any:
-    """Encode a TorchLens activation with an SAE Lens-compatible SAE.
+    """Encode a TorchLens out with an SAE Lens-compatible SAE.
 
     Parameters
     ----------
     log:
-        TorchLens ``ModelLog`` containing saved activations.
+        TorchLens ``Trace`` containing saved outs.
     site:
         Layer label, selector, or layer object to encode.
     sae:
@@ -22,14 +22,14 @@ def encode(log: Any, site: Any, sae: Any) -> Any:
     Returns
     -------
     Any
-        Encoded activation returned by the SAE.
+        Encoded out returned by the SAE.
 
     Raises
     ------
     ImportError
         If SAE Lens is unavailable.
     TypeError
-        If ``sae`` cannot encode an activation.
+        If ``sae`` cannot encode an out.
     """
 
     try:
@@ -39,11 +39,11 @@ def encode(log: Any, site: Any, sae: Any) -> Any:
             "SAE Lens bridge requires the `sae` extra: install torchlens[sae]."
         ) from exc
 
-    activation = activation_at(log, site)
+    out = out_at(log, site)
     if hasattr(sae, "encode"):
-        return sae.encode(activation)
+        return sae.encode(out)
     if callable(sae):
-        return sae(activation)
+        return sae(out)
     raise TypeError("SAE Lens bridge expected an SAE with encode(...) or a callable SAE.")
 
 

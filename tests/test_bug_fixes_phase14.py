@@ -43,7 +43,7 @@ def _sample_func_for_location(x: torch.Tensor) -> torch.Tensor:
 
 
 class _AlternatingBranchBlock(nn.Module):
-    """Shared block whose branch arm alternates across recurrent passes."""
+    """Shared block whose branch arm alternates across recurrent ops."""
 
     def __init__(self) -> None:
         """Initialize the shared linear layer."""
@@ -51,14 +51,14 @@ class _AlternatingBranchBlock(nn.Module):
         super().__init__()
         self.shared = nn.Linear(4, 4)
 
-    def forward(self, x: torch.Tensor, pass_num: int) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, call_index: int) -> torch.Tensor:
         """Run one alternating branch step.
 
         Parameters
         ----------
         x:
             Input tensor.
-        pass_num:
+        call_index:
             One-indexed recurrent pass number.
 
         Returns
@@ -67,7 +67,7 @@ class _AlternatingBranchBlock(nn.Module):
             Shared linear output.
         """
 
-        branch_marker = (x.mean() * 0) + (1.0 if pass_num % 2 == 1 else -1.0)
+        branch_marker = (x.mean() * 0) + (1.0 if call_index % 2 == 1 else -1.0)
         if branch_marker > 0:
             y = self.shared(x)
         else:
@@ -85,7 +85,7 @@ class _AlternatingRecurrentModel(nn.Module):
         self.block = _AlternatingBranchBlock()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run four recurrent passes.
+        """Run four recurrent ops.
 
         Parameters
         ----------
@@ -98,8 +98,8 @@ class _AlternatingRecurrentModel(nn.Module):
             Final recurrent output.
         """
 
-        for pass_num in range(1, 5):
-            x = self.block(x, pass_num)
+        for call_index in range(1, 5):
+            x = self.block(x, call_index)
         return x
 
 
@@ -151,7 +151,7 @@ class _IdentityOutputModel(nn.Module):
 
 
 class _ResidualRecurrentModel(nn.Module):
-    """Small recurrent model that produces gradients in rolled mode."""
+    """Small recurrent model that produces grads in rolled mode."""
 
     def __init__(self) -> None:
         """Initialize the shared projection."""
@@ -235,44 +235,44 @@ def test_arg_specs_extract_common_keyword_tensor_arguments() -> None:
 
 
 def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
-    """Rolled LayerLogs expose THEN and ELSE child views from all passes."""
+    """Rolled LayerLogs expose THEN and ELSE child views from all ops."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
         layers_to_save="all",
-        save_source_context=True,
+        save_code_context=True,
     )
-    conditional_id = model_log.conditional_events[0].id
+    conditional_id = trace.conditional_records[0].id
     parent_layer = next(
         layer
-        for layer in model_log.layer_logs.values()
-        if conditional_id in layer.cond_branch_children_by_cond
-        and "then" in layer.cond_branch_children_by_cond[conditional_id]
-        and "else" in layer.cond_branch_children_by_cond[conditional_id]
+        for layer in trace.layer_logs.values()
+        if conditional_id in layer.conditional_arm_children
+        and "then" in layer.conditional_arm_children[conditional_id]
+        and "else" in layer.conditional_arm_children[conditional_id]
     )
 
-    assert parent_layer.cond_branch_then_children
-    assert parent_layer.cond_branch_else_children
-    assert check_metadata_invariants(model_log) is True
+    assert parent_layer.conditional_then_children
+    assert parent_layer.conditional_else_children
+    assert check_metadata_invariants(trace) is True
 
 
 def test_conditional_then_invariant_catches_derived_view_corruption() -> None:
     """Metadata invariants reject stale THEN child projections."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
         layers_to_save="all",
-        save_source_context=True,
+        save_code_context=True,
     )
     parent_layer = next(
-        layer for layer in model_log.layer_logs.values() if layer.cond_branch_then_children
+        layer for layer in trace.layer_logs.values() if layer.conditional_then_children
     )
-    parent_layer.cond_branch_then_children = []
+    parent_layer.conditional_then_children = []
 
-    with pytest.raises(MetadataInvariantError, match="cond_branch_then_children"):
-        check_metadata_invariants(model_log)
+    with pytest.raises(MetadataInvariantError, match="conditional_then_children"):
+        check_metadata_invariants(trace)
 
 
 def test_short_barcode_uses_stable_sha256_prefix() -> None:
@@ -300,24 +300,24 @@ def test_validation_arglocs_allow_same_parent_tensor_in_multiple_slots() -> None
 
     parent = SimpleNamespace(
         layer_label="input_1",
-        activation=torch.tensor([2.0]),
-        children_tensor_versions={},
+        out=torch.tensor([2.0]),
+        output_versions_per_child={},
         func_name="input",
     )
     target = SimpleNamespace(
         layer_label="add_1_1",
-        parent_layers=["input_1"],
-        parent_layer_arg_locs={"args": {0: "input_1"}, "kwargs": {}},
+        parents=["input_1"],
+        parent_arg_positions={"args": {0: "input_1"}, "kwargs": {}},
     )
-    model_log = {"input_1": parent}
+    trace = {"input_1": parent}
 
     assert _check_arglocs_correct_for_arg(
-        model_log,
+        trace,
         target,  # type: ignore[arg-type]
         parent,  # type: ignore[arg-type]
         "args",
         1,
-        parent.activation,
+        parent.out,
     )
 
 
@@ -327,9 +327,9 @@ def test_lstm_exemption_only_treats_hidden_state_as_structural() -> None:
     h = torch.zeros(1, 2, 3)
     c = torch.ones(1, 2, 3)
     weight = torch.randn(12, 3)
-    layer = SimpleNamespace(captured_args=(torch.randn(4, 2, 3), (h, c), [weight]))
-    hidden_log = {"hidden": SimpleNamespace(activation=c)}
-    weight_log = {"weight": SimpleNamespace(activation=weight)}
+    layer = SimpleNamespace(saved_args=(torch.randn(4, 2, 3), (h, c), [weight]))
+    hidden_log = {"hidden": SimpleNamespace(out=c)}
+    weight_log = {"weight": SimpleNamespace(out=weight)}
 
     assert _check_lstm_exempt(hidden_log, layer, ["hidden"])  # type: ignore[arg-type]
     assert not _check_lstm_exempt(weight_log, layer, ["weight"])  # type: ignore[arg-type]
@@ -342,16 +342,16 @@ def test_validate_forward_pass_handles_identity_output_layer() -> None:
     assert validate_forward_pass(_IdentityOutputModel(), torch.randn(2, 3), random_seed=1)
 
 
-def test_rolled_forward_graph_supports_gradient_arrows(tmp_path: Path) -> None:
-    """Rolled forward graphs render gradient arrows after backward capture."""
+def test_rolled_forward_graph_supports_grad_arrows(tmp_path: Path) -> None:
+    """Rolled forward graphs render grad arrows after backward capture."""
 
-    model_log = tl.log_forward_pass(
+    trace = tl.trace(
         _ResidualRecurrentModel(),
         torch.randn(2, 3, requires_grad=True),
-        gradients_to_save="all",
+        grads_to_save="all",
     )
-    model_log[model_log.output_layers[0]].activation.backward()
-    dot = model_log.render_graph(
+    trace[trace.output_layers[0]].out.backward()
+    dot = trace.draw(
         vis_mode="rolled",
         vis_outpath=str(tmp_path / "rolled_grad"),
         vis_fileformat="dot",

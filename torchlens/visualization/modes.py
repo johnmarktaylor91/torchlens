@@ -92,13 +92,13 @@ def profiling_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
     """
 
     lines = list(spec.lines)
-    runtime = _get_optional_attr(layer_log, "func_time")
+    runtime = _get_optional_attr(layer_log, "func_duration")
     if isinstance(runtime, int | float):
         lines.append(f"t={runtime * 1000:.2f}ms")
 
-    tensor_memory = _get_optional_attr(layer_log, "tensor_memory")
-    if isinstance(tensor_memory, int | float):
-        lines.append(f"out={_compact_size(float(tensor_memory))}")
+    memory = _get_optional_attr(layer_log, "memory")
+    if isinstance(memory, int | float):
+        lines.append(f"out={_compact_size(float(memory))}")
 
     call_location = _first_call_location(layer_log)
     if call_location is not None:
@@ -134,7 +134,7 @@ def vision_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
         return spec
 
     input_shape = _first_input_shape(layer_log)
-    output_shape = _get_optional_attr(layer_log, "tensor_shape")
+    output_shape = _get_optional_attr(layer_log, "shape")
     if not isinstance(input_shape, tuple) or not isinstance(output_shape, tuple):
         return spec
 
@@ -198,23 +198,23 @@ def profiling_collapsed_node_mode(module_log: "ModuleLog", spec: NodeSpec) -> No
         Module node spec with aggregate profiling rows when available.
     """
 
-    model_log = getattr(module_log, "_source_model_log", None)
-    if model_log is None:
+    trace = getattr(module_log, "_source_trace", None)
+    if trace is None:
         return spec
 
     runtime = 0.0
     saw_runtime = False
     output_bytes = 0.0
     saw_output = False
-    for layer_label in getattr(module_log, "all_layers", []):
-        layer_log = model_log[layer_label]
-        layer_runtime = _get_optional_attr(layer_log, "func_time")
+    for layer_label in getattr(module_log, "layers", []):
+        layer_log = trace[layer_label]
+        layer_runtime = _get_optional_attr(layer_log, "func_duration")
         if isinstance(layer_runtime, int | float):
             runtime += float(layer_runtime)
             saw_runtime = True
-        tensor_memory = _get_optional_attr(layer_log, "tensor_memory")
-        if isinstance(tensor_memory, int | float):
-            output_bytes += float(tensor_memory)
+        memory = _get_optional_attr(layer_log, "memory")
+        if isinstance(memory, int | float):
+            output_bytes += float(memory)
             saw_output = True
 
     lines = list(spec.lines)
@@ -277,7 +277,7 @@ def _compact_size(size: float) -> str:
 def _first_call_location(layer_log: "LayerLog") -> Any | None:
     """Return the first captured call-stack location for a layer."""
 
-    call_stack = _get_optional_attr(layer_log, "func_call_stack")
+    call_stack = _get_optional_attr(layer_log, "code_context")
     if isinstance(call_stack, list) and call_stack:
         return call_stack[0]
     return None
@@ -292,18 +292,18 @@ def _normalized_layer_type(layer_log: "LayerLog") -> str:
 def _first_input_shape(layer_log: "LayerLog") -> tuple[int, ...] | None:
     """Infer the first tensor input shape from parent graph metadata or captured args."""
 
-    model_log = _get_optional_attr(layer_log, "source_model_log")
-    parent_layers = _get_optional_attr(layer_log, "parent_layers")
-    if model_log is not None and isinstance(parent_layers, list):
-        for parent_label in parent_layers:
-            parent = model_log[parent_label]
-            shape = _get_optional_attr(parent, "tensor_shape")
+    trace = _get_optional_attr(layer_log, "source_trace")
+    parents = _get_optional_attr(layer_log, "parents")
+    if trace is not None and isinstance(parents, list):
+        for parent_label in parents:
+            parent = trace[parent_label]
+            shape = _get_optional_attr(parent, "shape")
             if isinstance(shape, tuple):
                 return shape
 
-    captured_args = _get_optional_attr(layer_log, "captured_args")
-    if isinstance(captured_args, list):
-        for value in captured_args:
+    saved_args = _get_optional_attr(layer_log, "saved_args")
+    if isinstance(saved_args, list):
+        for value in saved_args:
             if isinstance(value, torch.Tensor):
                 return tuple(value.shape)
     return None
@@ -318,14 +318,14 @@ def _format_shape(shape: tuple[Any, ...]) -> str:
 def _is_inside_multihead_attention(layer_log: "LayerLog") -> bool:
     """Return whether the layer belongs to a recorded MultiheadAttention module."""
 
-    model_log = _get_optional_attr(layer_log, "source_model_log")
-    containing_modules = _get_optional_attr(layer_log, "containing_modules")
-    if model_log is None or not isinstance(containing_modules, list):
+    trace = _get_optional_attr(layer_log, "source_trace")
+    modules = _get_optional_attr(layer_log, "modules")
+    if trace is None or not isinstance(modules, list):
         return False
-    for module_pass in containing_modules:
-        module_address = str(module_pass).rsplit(":", 1)[0]
-        module_log = model_log.modules[module_address]
-        if module_log.module_class_name == "MultiheadAttention":
+    for module_pass in modules:
+        address = str(module_pass).rsplit(":", 1)[0]
+        module_log = trace.modules[address]
+        if module_log.class_name == "MultiheadAttention":
             return True
     return False
 
@@ -333,7 +333,7 @@ def _is_inside_multihead_attention(layer_log: "LayerLog") -> bool:
 def _format_attention_head_line(layer_log: "LayerLog") -> str:
     """Format head/embed/head-dim details for an attention operation."""
 
-    shape = _get_optional_attr(layer_log, "tensor_shape")
+    shape = _get_optional_attr(layer_log, "shape")
     heads: int | None = None
     head_dim: int | None = None
     if isinstance(shape, tuple) and len(shape) >= 4:
@@ -371,9 +371,9 @@ def _attention_projection_role(layer_log: "LayerLog", containing_mha: bool) -> s
     if "linear" not in layer_type:
         return None
 
-    containing_modules = _get_optional_attr(layer_log, "containing_modules")
-    if isinstance(containing_modules, list):
-        for module_pass in containing_modules:
+    modules = _get_optional_attr(layer_log, "modules")
+    if isinstance(modules, list):
+        for module_pass in modules:
             segment = str(module_pass).rsplit(":", 1)[0].split(".")[-1]
             if segment in ATTENTION_PROJECTION_ROLES:
                 return ATTENTION_PROJECTION_ROLES[segment]

@@ -11,7 +11,7 @@ from torchlens._run_state import RunState
 
 
 class _TinyReluModel(torch.nn.Module):
-    """Small model with a returned ReLU activation."""
+    """Small model with a returned ReLU out."""
 
     def __init__(self) -> None:
         """Initialize the model."""
@@ -20,7 +20,7 @@ class _TinyReluModel(torch.nn.Module):
         self.latest: torch.Tensor | None = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply and return a ReLU activation.
+        """Apply and return a ReLU out.
 
         Parameters
         ----------
@@ -30,7 +30,7 @@ class _TinyReluModel(torch.nn.Module):
         Returns
         -------
         torch.Tensor
-            ReLU activation.
+            ReLU out.
         """
 
         self.latest = torch.relu(x)
@@ -51,18 +51,18 @@ class _TinyShiftModel(torch.nn.Module):
         Returns
         -------
         torch.Tensor
-            Shifted ReLU activation.
+            Shifted ReLU out.
         """
 
         return torch.relu(x) + 1
 
 
-def _bad_hook(activation: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+def _bad_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
     """Raise from a live hook.
 
     Parameters
     ----------
-    activation:
+    out:
         Activation at the hook site.
     hook:
         Hook context.
@@ -85,26 +85,26 @@ def _bad_hook(activation: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor
 def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     """Default captures populate baseline fields and skip intervention-only data."""
 
-    log = tl.log_forward_pass(_TinyShiftModel(), torch.randn(2, 3), vis_opt="none")
+    log = tl.trace(_TinyShiftModel(), torch.randn(2, 3), vis_opt="none")
 
     assert log.intervention_ready is False
     assert log.run_state is RunState.PRISTINE
-    assert log.num_operations == 2
+    assert log.num_ops == 2
     assert log.layer_list
     assert log.layer_dict_main_keys
     assert log.layer_dict_all_keys
     assert log.layer_labels
-    assert log.layer_labels_no_pass
-    assert log.layer_labels_w_pass
-    assert log.layer_num_passes
+    assert log.layer_labels
+    assert log.op_labels
+    assert log.layer_num_calls
     assert log.input_layers == ["input_1"]
     assert log.output_layers == ["output_1"]
-    assert log.layers_with_saved_activations
-    assert all(layer.activation is not None for layer in log.layer_list)
-    assert all(layer.captured_arg_template is None for layer in log.layer_list)
-    assert all(layer.captured_kwarg_template is None for layer in log.layer_list)
+    assert log.ops_with_saved_outs
+    assert all(layer.out is not None for layer in log.layer_list)
+    assert all(layer.args_template is None for layer in log.layer_list)
+    assert all(layer.kwargs_template is None for layer in log.layer_list)
     assert all(layer.edge_uses == [] for layer in log.layer_list)
-    assert all(layer.output_path == () for layer in log.layer_list)
+    assert all(layer.container_path == () for layer in log.layer_list)
 
 
 @pytest.mark.smoke
@@ -115,13 +115,13 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     baseline_model = _TinyReluModel()
     ready_model = _TinyReluModel()
 
-    baseline_log = tl.log_forward_pass(
+    baseline_log = tl.trace(
         baseline_model,
         x,
         vis_opt="none",
         intervention_ready=False,
     )
-    ready_log = tl.log_forward_pass(
+    ready_log = tl.trace(
         ready_model,
         x,
         vis_opt="none",
@@ -132,8 +132,8 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     assert ready_model.latest is not None
     assert torch.equal(ready_model.latest, baseline_model.latest)
     assert torch.equal(
-        ready_log[ready_log.output_layers[0]].activation,
-        baseline_log[baseline_log.output_layers[0]].activation,
+        ready_log[ready_log.output_layers[0]].out,
+        baseline_log[baseline_log.output_layers[0]].out,
     )
 
 
@@ -144,7 +144,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
     model = _TinyReluModel()
 
     with pytest.raises(ValueError, match="boom"):
-        tl.log_forward_pass(
+        tl.trace(
             model,
             torch.randn(2, 3),
             vis_opt="none",
@@ -153,10 +153,10 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
         )
 
     assert _state._logging_enabled is False
-    assert _state._active_model_log is None
+    assert _state._active_trace is None
     assert _state._active_hook_plan is None
 
-    followup_log = tl.log_forward_pass(model, torch.randn(2, 3), vis_opt="none")
+    followup_log = tl.trace(model, torch.randn(2, 3), vis_opt="none")
 
     assert followup_log.intervention_ready is False
     assert followup_log.run_state is RunState.PRISTINE
@@ -168,7 +168,7 @@ def test_live_hook_exception_resets_reentrancy_depth() -> None:
     """Hook-raised exceptions reset the hook reentrancy guard."""
 
     with pytest.raises(ValueError, match="boom"):
-        tl.log_forward_pass(
+        tl.trace(
             _TinyReluModel(),
             torch.randn(2, 3),
             vis_opt="none",

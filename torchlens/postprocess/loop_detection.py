@@ -1,16 +1,16 @@
-"""Step 8: Loop detection, isomorphic subgraph expansion, and layer assignment.
+"""Step 7: Loop detection, isomorphic subgraph expansion, and layer assignment.
 
 This module identifies repeated operations (loops, recurrence) in the computational
-graph and assigns them to the same "layer" with multiple passes. For example, if a
-model calls sin() 8 times in a loop, those 8 operations become one layer with 8 passes.
+graph and assigns them to the same "layer" with multiple ops. For example, if a
+model calls sin() 8 times in a loop, those 8 operations become one layer with 8 ops.
 
 ALGORITHM OVERVIEW (5 phases):
 ==============================
 
 Phase 1 — Entry (``_detect_and_label_loops``):
     Iterates nodes in realtime order via a min-heap BFS from inputs. For each
-    unprocessed ``operation_equivalence_type``, calls ``_expand_isomorphic_subgraphs``.
-    The ``operation_equivalence_types_seen`` set ensures each equivalence type is
+    unprocessed ``equivalence_class``, calls ``_expand_isomorphic_subgraphs``.
+    The ``equivalence_classs_seen`` set ensures each equivalence type is
     processed exactly once, providing convergence. After all rounds, calls
     ``_rebuild_pass_assignments`` to fix stale cross-references.
 
@@ -19,7 +19,7 @@ Phase 2 — BFS Expansion (``_expand_isomorphic_subgraphs``):
     node and expands them in lockstep via BFS. At each frontier step:
     - Collects children (and parents, after the first step) of all current iso nodes.
     - Detects adjacency when a frontier node belongs to another subgraph.
-    - Matches frontier nodes across subgraphs by operation_equivalence_type.
+    - Matches frontier nodes across subgraphs by equivalence_class.
     - Registers matched nodes as new iso groups and adds them to the BFS queue.
     Expansion continues until no more isomorphic matches are found.
 
@@ -33,21 +33,20 @@ Phase 3 — Iso Group Refinement (``_refine_iso_groups``):
     group become the refined sub-groups.
 
 Phase 4 — Layer Assignment (``_finalize_layer_assignments`` + ``_merge_iso_groups_to_layers``):
-    Groups iso nodes into same-layer sets using union-find. Two merge passes:
+    Groups iso nodes into same-layer sets using union-find. Two merge ops:
     Pass 1 (Rules 2+3): Within each iso group, merge nodes whose subgraphs share
         parameter equivalence types OR are topologically adjacent.
     Pass 2 (Rule 1): Unconditionally merge ALL nodes with identical
-        (func_name, sorted(parent_param_barcodes)) — the fundamental
+        (func_name, sorted(_param_barcodes)) — the fundamental
         invariant that same function + same params = same layer.
 
 Phase 5 — Cleanup (``_rebuild_pass_assignments``):
     Multiple expansion rounds can reassign a node to a new group while leaving
-    stale recurrent_group in old group members. This function groups all
-    tensors by their authoritative ``layer_label_raw`` and rebuilds consistent
+    stale recurrent_ops in old group members. This function groups all
+    tensors by their authoritative ``_layer_label_raw`` and rebuilds consistent
     pass assignments. This is NOT just defensive cleanup — it is a NECESSARY
-    correctness step because Step 6's module suffix mutation causes the same
-    equivalence group to be processed multiple times, and conflicting assignments
-    from different rounds must be reconciled.
+    correctness step because repeated expansion rounds can leave conflicting
+    assignments that must be reconciled.
 
 CORE INVARIANT:
     Two operations may only be assigned to the same layer if their subgraphs either:
@@ -67,10 +66,10 @@ from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
-from ..data_classes.layer_pass_log import LayerPassLog
+from ..data_classes.op_log import OpLog
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.model_log import Trace
 
 
 @dataclass
@@ -125,43 +124,45 @@ class IsomorphicExpansionState:
     node_stack: deque[list[str]]
 
 
-def _group_by_shared_params(self: "ModelLog") -> None:
+def _group_by_shared_params(self: "Trace") -> None:
     """Lightweight same-param grouping without full loop detection.
 
     Groups operations that share identical ``(func_name,
-    sorted(parent_param_barcodes))`` into the same layer. This is Rule 1
+    sorted(_param_barcodes))`` into the same layer. This is Rule 1
     (the fundamental invariant) from the full loop detection algorithm,
     without the expensive isomorphic subgraph expansion (Phases 2-3).
 
     Operations without parameters remain as individual single-pass layers.
-    Sets ``layer_label_raw``, ``recurrent_group``, ``pass_num``,
-    and ``num_passes`` on each LayerPassLog.
+    Sets ``_layer_label_raw``, ``recurrent_ops``, ``call_index``,
+    and ``num_calls`` on each OpLog.
     """
     param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     for label in self._raw_layer_labels_list:
         node = self[label]
-        if node.uses_params and node.parent_param_barcodes:
-            key = (node.func_name, tuple(sorted(node.parent_param_barcodes)))
+        if getattr(node, "is_orphan", False):
+            continue
+        if node.uses_params and node._param_barcodes:
+            key = (node.func_name, tuple(sorted(node._param_barcodes)))
             param_barcode_groups[key].append(label)
 
-    # For multi-member groups, set layer_label_raw to the first member's raw label.
+    # For multi-member groups, set _layer_label_raw to the first member's raw label.
     for key, members in param_barcode_groups.items():
         if len(members) > 1:
-            leader = min(members, key=lambda x: self[x].creation_order)
-            leader_raw = self[leader].layer_label_raw
+            leader = min(members, key=lambda x: self[x].capture_index)
+            leader_raw = self[leader]._layer_label_raw
             for label in members:
-                self[label].layer_label_raw = leader_raw
+                self[label]._layer_label_raw = leader_raw
 
-    # Rebuild recurrent_group, pass_num, num_passes from layer_label_raw.
+    # Rebuild recurrent_ops, call_index, num_calls from _layer_label_raw.
     _rebuild_pass_assignments(self)
 
 
-def _detect_and_label_loops(self: "ModelLog") -> None:
+def _detect_and_label_loops(self: "Trace") -> None:
     """Phase 1: Entry point for loop detection.
 
     Iterates nodes in realtime order (earliest first) via a min-heap BFS starting
     from input and internally-initialized nodes. For each node, checks whether its
-    ``operation_equivalence_type`` has already been processed. If not, and the node
+    ``equivalence_class`` has already been processed. If not, and the node
     has equivalent operations (same function, args, shape, dtype, module path),
     initiates BFS expansion to find isomorphic subgraphs.
 
@@ -172,93 +173,94 @@ def _detect_and_label_loops(self: "ModelLog") -> None:
     3. **Adjacent param-free loops** (ABCABC patterns) are grouped when subgraphs
        are topologically adjacent.
 
-    The ``operation_equivalence_types_seen`` set ensures each equivalence type is
-    processed exactly once, which guarantees convergence. However, Step 6's module
-    suffix mutation can cause the same underlying equivalence group to appear under
-    different suffixed types — this means the same group may be processed multiple
-    times (once per module-path variant). ``_rebuild_pass_assignments`` (Phase 5)
-    reconciles any resulting conflicts.
+    The ``equivalence_classs_seen`` set ensures each equivalence type is
+    processed exactly once, which guarantees convergence. ``_rebuild_pass_assignments``
+    (Phase 5) still reconciles conflicts left by repeated expansion rounds.
     """
     # Pre-compute sort keys to avoid repeated attribute lookups in the heap.
-    _sort_keys = {label: self[label].creation_order for label in self._raw_layer_labels_list}
+    _sort_keys = {label: self[label].capture_index for label in self._raw_layer_labels_list}
 
     # Seed the heap with root nodes (inputs + internally-initialized tensors).
-    initial_labels = self.input_layers + self.internally_initialized_layers
+    initial_labels = [
+        label
+        for label in self.input_layers + self.internal_source_ops
+        if not getattr(self[label], "is_orphan", False)
+    ]
     node_heap = [(_sort_keys[label], label) for label in initial_labels]
     heapq.heapify(node_heap)
     heap_seen = set(initial_labels)
 
     # Track which equivalence types have been processed to avoid redundant work.
-    operation_equivalence_types_seen = set()
+    equivalence_classs_seen = set()
     while node_heap:
         _, node_label = heapq.heappop(node_heap)
         node = self[node_label]
-        node_operation_equivalence_type = node.operation_equivalence_type
+        node_equivalence_class = node.equivalence_class
 
         # Dedup: skip if this equivalence type has already been processed.
-        if node_operation_equivalence_type in operation_equivalence_types_seen:
+        if node_equivalence_class in equivalence_classs_seen:
             continue
-        operation_equivalence_types_seen.add(node_operation_equivalence_type)
+        equivalence_classs_seen.add(node_equivalence_class)
 
         # Push children of ALL equivalent operations onto the heap to ensure
         # downstream nodes are eventually visited, even if this node is skipped.
-        for equiv_op in node.equivalent_operations:
-            for child in self[equiv_op].child_layers:
-                if child not in heap_seen:
+        for equiv_op in node.equivalent_ops:
+            if getattr(self[equiv_op], "is_orphan", False):
+                continue
+            for child in self[equiv_op].children:
+                if child not in heap_seen and not getattr(self[child], "is_orphan", False):
                     heap_seen.add(child)
                     heapq.heappush(node_heap, (_sort_keys[child], child))
 
         # Singleton: only one operation of this type, no loop possible.
-        if len(node.equivalent_operations) == 1:
-            node.recurrent_group = [node_label]
+        if len(node.equivalent_ops) == 1:
+            node.recurrent_ops = [node_label]
             continue
 
         # Already fully resolved by a previous expansion round.
-        if len(node.equivalent_operations) == len(node.recurrent_group):
+        if len(node.equivalent_ops) == len(node.recurrent_ops):
             continue
 
         # Multiple equivalent operations exist — expand isomorphic subgraphs
         # to determine which ones belong to the same layer.
         _expand_isomorphic_subgraphs(self, node)
 
-    # Phase 5: Rebuild pass assignments from authoritative layer_label_raw.
+    # Phase 5: Rebuild pass assignments from authoritative _layer_label_raw.
     # This is NECESSARY (not just defensive) because multiple expansion rounds
-    # can leave stale recurrent_group references. See module docstring.
+    # can leave stale recurrent_ops references. See module docstring.
     _rebuild_pass_assignments(self)
 
 
-def _rebuild_pass_assignments(self: "ModelLog") -> None:
-    """Phase 5: Rebuild recurrent_group and pass numbers from layer_label_raw.
+def _rebuild_pass_assignments(self: "Trace") -> None:
+    """Phase 5: Rebuild recurrent_ops and pass numbers from _layer_label_raw.
 
     WHY NECESSARY: Multiple rounds of ``_expand_isomorphic_subgraphs`` can reassign
     a node to a new group (via ``_finalize_layer_assignments``) while leaving stale
-    references in the old group's ``recurrent_group``. Without this cleanup,
+    references in the old group's ``recurrent_ops``. Without this cleanup,
     duplicate layer:pass labels would cause dict overwrites during renaming, leading
-    to validation failures (e.g., wrong tensor looked up for children_tensor_versions).
+    to validation failures (e.g., wrong tensor looked up for output_versions_per_child).
 
-    Additionally, Step 6's module suffix mutation means the same equivalence group
-    can be processed multiple times (once per module-path variant), creating
-    conflicting assignments that must be reconciled.
-
-    HOW IT WORKS: Groups all tensors by their current ``layer_label_raw`` (the
+    HOW IT WORKS: Groups all tensors by their current ``_layer_label_raw`` (the
     authoritative group key set by ``_finalize_layer_assignments``), sorts each
-    group by realtime order, and rebuilds ``recurrent_group``, ``pass_num``,
-    and ``num_passes`` from scratch. O(n), runs once.
+    group by realtime order, and rebuilds ``recurrent_ops``, ``call_index``,
+    and ``num_calls`` from scratch. O(n), runs once.
     """
     groups: dict[str, list[str]] = defaultdict(list)
     for entry in self:
-        groups[entry.layer_label_raw].append(entry.tensor_label_raw)
+        if getattr(entry, "is_orphan", False):
+            continue
+        groups[entry._layer_label_raw].append(entry._label_raw)
 
     for raw_label, members in groups.items():
-        members_sorted = sorted(members, key=lambda x: self[x].creation_order)
+        members_sorted = sorted(members, key=lambda x: self[x].capture_index)
         for pass_index, member_label in enumerate(members_sorted):
             member = self[member_label]
-            member.recurrent_group = members_sorted
-            member.pass_num = pass_index + 1
-            member.num_passes = len(members_sorted)
+            member.recurrent_ops = members_sorted
+            member.call_index = pass_index + 1
+            member.num_calls = len(members_sorted)
 
 
-def _expand_isomorphic_subgraphs(self: "ModelLog", node: LayerPassLog) -> None:
+def _expand_isomorphic_subgraphs(self: "Trace", node: OpLog) -> None:
     """Phase 2: BFS expansion of isomorphic subgraphs from equivalent operations.
 
     Given a node with multiple equivalent operations, creates one subgraph per
@@ -271,16 +273,20 @@ def _expand_isomorphic_subgraphs(self: "ModelLog", node: LayerPassLog) -> None:
     2. BFS LOOP: Pop an iso-node list from the queue. For each set:
        a. Collect frontier nodes (children, and parents after the first step).
        b. Detect adjacency when a frontier node belongs to another subgraph.
-       c. Match frontier nodes across subgraphs by operation_equivalence_type.
+       c. Match frontier nodes across subgraphs by equivalence_class.
        d. Register matched nodes as new iso groups, add to subgraphs, push to queue.
     3. The first BFS step only expands children (not parents) to avoid immediately
        backtracking to the starting nodes' parents.
     4. After BFS completes: refine iso groups (Phase 3) and assign layers (Phase 4).
 
     Args:
-        node: The node whose equivalent_operations set will be expanded.
+        node: The node whose equivalent_ops set will be expanded.
     """
-    equivalent_operation_starting_labels = sorted(list(node.equivalent_operations))
+    equivalent_operation_starting_labels = sorted(
+        label for label in node.equivalent_ops if not getattr(self[label], "is_orphan", False)
+    )
+    if not equivalent_operation_starting_labels:
+        return
 
     # Create one SubgraphInfo per starting node.
     sg_info: dict[str, SubgraphInfo] = {}
@@ -324,7 +330,7 @@ def _expand_isomorphic_subgraphs(self: "ModelLog", node: LayerPassLog) -> None:
 
 
 def _refine_iso_groups(
-    self: "ModelLog",
+    self: "Trace",
     state: IsomorphicExpansionState,
 ) -> None:
     """Phase 3: Refine iso groups by splitting structurally unrelated members.
@@ -358,10 +364,10 @@ def _refine_iso_groups(
         for member_label in members:
             member_node = self[member_label]
             neighbor_groups: set[tuple[str, str]] = set()
-            for child in member_node.child_layers:
+            for child in member_node.children:
                 if child in state.node_to_iso_leader:
                     neighbor_groups.add(("child", state.node_to_iso_leader[child]))
-            for parent in member_node.parent_layers:
+            for parent in member_node.parents:
                 if parent in state.node_to_iso_leader:
                     neighbor_groups.add(("parent", state.node_to_iso_leader[parent]))
             member_neighbor_isos[member_label] = neighbor_groups
@@ -414,7 +420,7 @@ def _refine_iso_groups(
 
 
 def _advance_bfs_frontier(
-    self: "ModelLog",
+    self: "Trace",
     current_iso_nodes: List[str],
     state: IsomorphicExpansionState,
     is_first_node: bool,
@@ -461,7 +467,7 @@ def _advance_bfs_frontier(
 
 
 def _collect_frontier_and_detect_adjacency(
-    self: "ModelLog",
+    self: "Trace",
     current_iso_nodes: List[str],
     state: IsomorphicExpansionState,
     is_first_node: bool,
@@ -480,7 +486,7 @@ def _collect_frontier_and_detect_adjacency(
         Dict mapping subgraph_label -> {"children": [...], "parents": [...]},
         where each list contains candidate node labels for isomorphic matching.
     """
-    node_type_fields = {"children": "child_layers", "parents": "parent_layers"}
+    node_type_fields = {"children": "children", "parents": "parents"}
     if is_first_node:
         node_types_to_use = ["children"]
     else:
@@ -586,7 +592,7 @@ def _pop_frontier_node(
 
 
 def _find_isomorphic_matches(
-    self: "ModelLog",
+    self: "Trace",
     candidate_node_label: str,
     candidate_node_neighbor_type: str,
     candidate_node_subgraph: str,
@@ -595,7 +601,7 @@ def _find_isomorphic_matches(
     """Find nodes isomorphic to a candidate across other subgraphs' frontiers.
 
     For each other subgraph's frontier (same neighbor type: children or parents),
-    finds the first node with matching operation_equivalence_type. At most one
+    finds the first node with matching equivalence_class. At most one
     match per subgraph is taken, ensuring one-to-one correspondence.
 
     SAFETY NOTE on pop-during-iteration: The inner loop calls
@@ -616,7 +622,7 @@ def _find_isomorphic_matches(
         List of (node_label, subgraph_label) tuples for all matched isomorphic nodes.
     """
     candidate_node = self[candidate_node_label]
-    candidate_node_operation_equivalence_type = candidate_node.operation_equivalence_type
+    candidate_node_equivalence_class = candidate_node.equivalence_class
     new_equivalent_nodes = [(candidate_node_label, candidate_node_subgraph)]
     for subgraph_label in frontier_nodes:
         if subgraph_label == candidate_node_subgraph:  # Skip same subgraph.
@@ -624,10 +630,7 @@ def _find_isomorphic_matches(
         other_subgraph_nodes = frontier_nodes[subgraph_label][candidate_node_neighbor_type]
         for comparison_index, comparison_node_label in enumerate(other_subgraph_nodes):
             comparison_node = self[comparison_node_label]
-            if (
-                comparison_node.operation_equivalence_type
-                == candidate_node_operation_equivalence_type
-            ):
+            if comparison_node.equivalence_class == candidate_node_equivalence_class:
                 # Pop removes this node from the frontier so it won't be matched again.
                 # MUST break immediately after pop — see safety note above.
                 new_equivalent_nodes.append(
@@ -652,7 +655,7 @@ def _find_isomorphic_matches(
 
 
 def _register_isomorphic_group(
-    self: "ModelLog",
+    self: "Trace",
     new_isomorphic_nodes: List[Tuple[str, str]],
     state: IsomorphicExpansionState,
 ) -> None:
@@ -685,7 +688,7 @@ def _register_isomorphic_group(
 
 
 def _finalize_layer_assignments(
-    self: "ModelLog",
+    self: "Trace",
     state: IsomorphicExpansionState,
 ) -> None:
     """Phase 4: Assign same-layer labels based on iso groups, params, and adjacency.
@@ -696,12 +699,12 @@ def _finalize_layer_assignments(
     types OR are topologically adjacent.
 
     Guard: if a new layer assignment would REDUCE the number of equivalent layers
-    for any member node (compared to its current recurrent_group), the
+    for any member node (compared to its current recurrent_ops), the
     assignment is skipped. This prevents later expansion rounds from fragmenting
     groups established by earlier rounds.
 
-    For each accepted group, sets layer_label_raw, recurrent_group, pass_num,
-    num_passes, and unifies operation_equivalence_type to the canonical
+    For each accepted group, sets _layer_label_raw, recurrent_ops, call_index,
+    num_calls, and unifies equivalence_class to the canonical
     (first node's) type.
 
     Args:
@@ -714,33 +717,33 @@ def _finalize_layer_assignments(
     # Finally, label the nodes corresponding to the same layer.
     for layer_label, layer_nodes in merged_layer_groups.items():
         # Skip if the new layer asssignment reduces the number of equivalent layers.
-        if len(layer_nodes) < max([len(self[layer].recurrent_group) for layer in layer_nodes]):
+        if len(layer_nodes) < max([len(self[layer].recurrent_ops) for layer in layer_nodes]):
             continue
         # convert to list and sort
-        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].creation_order)  # type: ignore[assignment]
-        # Unify operation_equivalence_type: when param-sharing merges nodes
+        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].capture_index)  # type: ignore[assignment]
+        # Unify equivalence_class: when param-sharing merges nodes
         # from different iso groups (e.g., shared module called from different
         # parent blocks), their equivalence types may differ due to module path
         # suffixes.  Use the first node's type as canonical.
-        canonical_equiv_type = self[layer_nodes[0]].operation_equivalence_type  # type: ignore[index]
+        canonical_equiv_type = self[layer_nodes[0]].equivalence_class  # type: ignore[index]
         for pass_index, node_label in enumerate(layer_nodes):
             node = self[node_label]
-            node.layer_label_raw = layer_label
-            node.recurrent_group = layer_nodes
-            node.pass_num = pass_index + 1
-            node.num_passes = len(layer_nodes)
-            node.operation_equivalence_type = canonical_equiv_type
+            node._layer_label_raw = layer_label
+            node.recurrent_ops = layer_nodes
+            node.call_index = pass_index + 1
+            node.num_calls = len(layer_nodes)
+            node.equivalence_class = canonical_equiv_type
 
 
 def _merge_iso_groups_to_layers(
-    self: "ModelLog",
+    self: "Trace",
     iso_node_groups: Dict[str, List[str]],
     node_to_subgraph: Dict[str, SubgraphInfo],
     adjacent_subgraphs: Dict[str, set[str]],
 ) -> Dict[str, Set[str]]:
     """Merge iso groups into same-layer groups using union-find with path compression.
 
-    Implements the CORE INVARIANT via two merge passes:
+    Implements the CORE INVARIANT via two merge ops:
 
     Pass 1 — Within iso-groups (Rules 2+3):
         For each pair of nodes in the same iso group, merge if their subgraphs:
@@ -750,7 +753,7 @@ def _merge_iso_groups_to_layers(
 
     Pass 2 — Cross iso-groups (Rule 1):
         Unconditionally merge ALL nodes that share identical
-        ``(func_name, sorted(parent_param_barcodes))``, regardless of
+        ``(func_name, sorted(_param_barcodes))``, regardless of
         iso-group membership. This ensures the fundamental invariant: operations
         applying the same function to the same parameters are ALWAYS the same layer.
         Note: different functions on the same params (e.g., __getitem__ vs __add__)
@@ -800,7 +803,7 @@ def _merge_iso_groups_to_layers(
             sg_label = sg.starting_node
             if sg_label not in _sg_param_types:
                 _sg_param_types[sg_label] = frozenset(
-                    self[pnode].operation_equivalence_type for pnode in sg.param_nodes
+                    self[pnode].equivalence_class for pnode in sg.param_nodes
                 )
 
     # PASS 1: Within iso-groups — merge nodes whose subgraphs share param types or are adjacent.
@@ -825,8 +828,8 @@ def _merge_iso_groups_to_layers(
     param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     for node_label in all_iso_nodes:
         node = self[node_label]
-        if node.uses_params and node.parent_param_barcodes:
-            barcode_key = (node.func_name, tuple(sorted(node.parent_param_barcodes)))
+        if node.uses_params and node._param_barcodes:
+            barcode_key = (node.func_name, tuple(sorted(node._param_barcodes)))
             param_barcode_groups[barcode_key].append(node_label)
 
     for barcode_key, nodes_with_same_params in param_barcode_groups.items():

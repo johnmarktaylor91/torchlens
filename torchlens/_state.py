@@ -12,10 +12,10 @@ WARNING — No torchlens imports at module level:
 
 Design rationale:
     The "toggle architecture" means every torch function is wrapped once (on first
-    use of ``log_forward_pass`` or related API) and stays wrapped afterward.
+    use of ``trace`` or related API) and stays wrapped afterward.
     Wrappers check ``_logging_enabled`` (a single bool) on every call — when
     False, the wrapper is a one-branch-check no-op.  This avoids the cost of
-    re-wrapping / un-wrapping on every ``log_forward_pass`` call.  All shared
+    re-wrapping / un-wrapping on every ``trace`` call.  All shared
     state lives here so wrappers never need to import heavy torchlens modules
     just to check the toggle.
 """
@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Iterator
 # TYPE_CHECKING is False at runtime, so this import only exists for static
 # analysis / IDE support — it will never trigger the circular-import problem.
 if TYPE_CHECKING:
-    from .data_classes.model_log import ModelLog
+    from .data_classes.model_log import Trace
     from .intervention.types import InterventionSpec
 
 # ---------------------------------------------------------------------------
@@ -47,8 +47,8 @@ duration of a forward pass inside ``active_logging()``.
 # Session state — reset every forward pass
 # ---------------------------------------------------------------------------
 
-_active_model_log: "ModelLog | None" = None
-"""The ModelLog accumulating data for the current forward pass.
+_active_trace: "Trace | None" = None
+"""The Trace accumulating data for the current forward pass.
 
 Set at the start of ``active_logging()`` and cleared on exit.  Wrappers read
 this to know *where* to record tensor operations.  Always None outside a
@@ -61,14 +61,6 @@ _active_hook_plan: Any | None = None
 Phase 4a only stores this slot. Hook normalization/execution is intentionally
 deferred to Phase 4c, so the runtime value remains protocol-friendly and avoids
 importing ``torchlens.intervention`` at module load.
-"""
-
-_pending_live_fire_records: dict[str, list[Any]] = {}
-"""Live hook fire records keyed by capture-time raw label.
-
-Wrappers create these records before ``LayerPassLog`` construction so hooks can
-run before activation saving. ``capture.output_tensors`` consumes them after the
-real log entry exists.
 """
 
 _active_intervention_spec: "InterventionSpec | None" = None
@@ -87,10 +79,10 @@ _capture_replay_templates: bool = False
 Phase 4a only plumbs the flag. Phase 4b builds the actual templates.
 """
 
-_relationship_source_model_id: int | None = None
+_relationship_model_id: int | None = None
 """Relationship evidence seed: ``id(model)`` at capture start."""
 
-_relationship_source_model_class: str | None = None
+_relationship_model_class: str | None = None
 """Relationship evidence seed: model class qualname at capture start."""
 
 _relationship_weight_fingerprint: str | None = None
@@ -109,14 +101,14 @@ _hook_reentrancy_depth: int = 0
 which keeps this module free of runtime intervention imports.
 """
 
-_log_registry: "weakref.WeakSet[ModelLog]" = weakref.WeakSet()
-"""Process-wide weak registry of currently live ``ModelLog`` objects."""
+_log_registry: "weakref.WeakSet[Trace]" = weakref.WeakSet()
+"""Process-wide weak registry of currently live ``Trace`` objects."""
 
 _active_record_spans: list[dict[str, Any]] = []
 """Observer spans currently active around or inside a logging session."""
 
 _naming_counters: dict[str, int] = {}
-"""Process-global counters used by unnamed ``log_forward_pass`` captures.
+"""Process-global counters used by unnamed ``trace`` captures.
 
 The counter is intentionally not thread-safe. Public capture is serialized by
 ``active_logging()``'s re-entrancy guard, which is the same concurrency boundary
@@ -136,7 +128,7 @@ _HF_CLASS_SUFFIXES: tuple[str, ...] = (
 """Common HuggingFace class suffixes stripped from generated log names."""
 
 
-def _register_log(log: "ModelLog") -> None:
+def _register_log(log: "Trace") -> None:
     """Register a model log in the process-wide weak registry.
 
     Parameters
@@ -153,12 +145,12 @@ def _register_log(log: "ModelLog") -> None:
     _log_registry.add(log)
 
 
-def list_logs() -> tuple["ModelLog", ...]:
-    """Return a snapshot of currently live ``ModelLog`` objects.
+def list_logs() -> tuple["Trace", ...]:
+    """Return a snapshot of currently live ``Trace`` objects.
 
     Returns
     -------
-    tuple[ModelLog, ...]
+    tuple[Trace, ...]
         Immutable snapshot of logs still alive in this process.
     """
 
@@ -237,19 +229,17 @@ def reset_capture_runtime_context() -> None:
     """
 
     global _active_hook_plan, _active_intervention_spec, _func_call_id_counter
-    global _pending_live_fire_records
     global _capture_replay_templates
-    global _relationship_source_model_id, _relationship_source_model_class
+    global _relationship_model_id, _relationship_model_class
     global _relationship_weight_fingerprint, _relationship_input_id
     global _relationship_input_shape_hash
 
     _active_hook_plan = None
-    _pending_live_fire_records = {}
     _active_intervention_spec = None
     _func_call_id_counter = 0
     _capture_replay_templates = False
-    _relationship_source_model_id = None
-    _relationship_source_model_class = None
+    _relationship_model_id = None
+    _relationship_model_class = None
     _relationship_weight_fingerprint = None
     _relationship_input_id = None
     _relationship_input_shape_hash = None
@@ -260,8 +250,8 @@ def configure_capture_runtime_context(
     hook_plan: Any | None = None,
     intervention_spec: "InterventionSpec | None" = None,
     capture_replay_templates: bool = False,
-    source_model_id: int | None = None,
-    source_model_class: str | None = None,
+    model_id: int | None = None,
+    model_class: str | None = None,
     weight_fingerprint: str | None = None,
     input_id: int | None = None,
     input_shape_hash: str | None = None,
@@ -276,9 +266,9 @@ def configure_capture_runtime_context(
         Active intervention spec placeholder. Mutators land in a later phase.
     capture_replay_templates:
         Whether replay-template capture should be enabled for this run.
-    source_model_id:
+    model_id:
         ``id(model)`` captured at the public API boundary.
-    source_model_class:
+    model_class:
         Model class qualname captured at the public API boundary.
     weight_fingerprint:
         Deterministic model-parameter fingerprint.
@@ -294,15 +284,15 @@ def configure_capture_runtime_context(
     """
 
     global _active_hook_plan, _active_intervention_spec, _capture_replay_templates
-    global _relationship_source_model_id, _relationship_source_model_class
+    global _relationship_model_id, _relationship_model_class
     global _relationship_weight_fingerprint, _relationship_input_id
     global _relationship_input_shape_hash
 
     _active_hook_plan = hook_plan
     _active_intervention_spec = intervention_spec
     _capture_replay_templates = capture_replay_templates
-    _relationship_source_model_id = source_model_id
-    _relationship_source_model_class = source_model_class
+    _relationship_model_id = model_id
+    _relationship_model_class = model_class
     _relationship_weight_fingerprint = weight_fingerprint
     _relationship_input_id = input_id
     _relationship_input_shape_hash = input_shape_hash
@@ -353,7 +343,7 @@ in PyTorch's type stubs.
 # wrapper code can look up argument names and original functions without
 # importing the decoration subpackage.
 
-_func_argnames: dict[str, tuple[str, ...]] = {}
+_arg_names: dict[str, tuple[str, ...]] = {}
 """func_name -> tuple of argument names, pre-computed via ``inspect.signature``
 for every torch function at decoration time.  Used by the wrapper to build
 keyword-argument metadata for logged operations.
@@ -415,7 +405,7 @@ here means the model's forward and submodule hooks are already installed.
 
 _collect_usage_stats: bool = False
 """When True, every decorated wrapper increments call counts in
-``_function_call_counts`` during logged forward passes.  Used by the
+``_function_call_counts`` during logged forward ops.  Used by the
 test suite to verify ArgSpec lookup table coverage."""
 
 _functorch_warning_emitted: bool = False
@@ -424,7 +414,7 @@ the current logging session.  Reset to False at the start of every
 ``active_logging()`` context so each forward pass gets at most one warning."""
 
 _function_call_counts: dict[str, int] = {}
-"""func_name -> total calls across all logged forward passes."""
+"""func_name -> total calls across all logged forward ops."""
 
 _function_call_models: dict[str, set[str]] = {}
 """func_name -> set of model names that called this function."""
@@ -445,7 +435,7 @@ call to an uncovered function.  Subsequent calls reuse the cached spec."""
 # ---------------------------------------------------------------------------
 
 _tagged_buffer_ids: set[int] = set()
-"""ids of tensors tagged with tl_buffer_address during prepare_buffer_tensors.
+"""ids of tensors tagged with _tl.buffer_address during prepare_buffer_tensors.
 Used by _undecorate_model_tensors for O(n) cleanup instead of re-scanning
 all module attributes."""
 
@@ -455,45 +445,45 @@ all module attributes."""
 
 
 @contextmanager
-def active_logging(model_log: "ModelLog") -> Iterator[None]:
+def active_logging(trace: "Trace") -> Iterator[None]:
     """Activate logging for the duration of a forward pass.
 
-    Sets ``_logging_enabled = True`` and ``_active_model_log = model_log``.
+    Sets ``_logging_enabled = True`` and ``_active_trace = trace``.
     On exit (including exceptions), resets both.
 
     Ordering invariant:
-        - On entry: set ``_active_model_log`` *before* the toggle, so wrappers
-          never see ``_logging_enabled=True`` with a stale/None model_log.
-        - On exit: clear the toggle *before* the model_log, for the same reason.
+        - On entry: set ``_active_trace`` *before* the toggle, so wrappers
+          never see ``_logging_enabled=True`` with a stale/None trace.
+        - On exit: clear the toggle *before* the trace, for the same reason.
 
     This context manager is NOT nestable.  Only one forward pass may be logged
     at a time (single-threaded design).  Entering a second ``active_logging``
     while another is already active raises ``RuntimeError`` — silently
-    corrupting the outer log (overwriting ``_active_model_log`` and then
+    corrupting the outer log (overwriting ``_active_trace`` and then
     clearing it on inner exit) is worse than failing loudly.
     """
-    global _logging_enabled, _active_model_log, _functorch_warning_emitted, _func_call_id_counter
-    if _logging_enabled or _active_model_log is not None or _hook_reentrancy_depth > 0:
+    global _logging_enabled, _active_trace, _functorch_warning_emitted, _func_call_id_counter
+    if _logging_enabled or _active_trace is not None or _hook_reentrancy_depth > 0:
         raise RuntimeError(
-            "torchlens.log_forward_pass / active_logging is not re-entrant: "
+            "torchlens.trace / active_logging is not re-entrant: "
             "another forward pass is already being logged. Nested logging "
-            "would silently corrupt the outer ModelLog. If you need to log a "
-            "model's forward pass from inside another log_forward_pass call "
-            "(e.g., a custom activation_postfunc), finish the outer capture "
+            "would silently corrupt the outer Trace. If you need to log a "
+            "model's forward pass from inside another trace call "
+            "(e.g., a custom out_postfunc), finish the outer capture "
             "before starting another one."
         )
     # Model log must be visible before the toggle flips — wrappers will
-    # immediately read _active_model_log once _logging_enabled is True.
-    _active_model_log = model_log
+    # immediately read _active_trace once _logging_enabled is True.
+    _active_trace = trace
     _functorch_warning_emitted = False
     _func_call_id_counter = 0
     _logging_enabled = True
     try:
         yield
     finally:
-        # Toggle off first so no wrapper sees enabled=True with model_log=None
+        # Toggle off first so no wrapper sees enabled=True with trace=None
         _logging_enabled = False
-        _active_model_log = None
+        _active_trace = None
 
 
 @contextmanager
@@ -503,15 +493,15 @@ def pause_logging() -> Iterator[None]:
     Nestable via save/restore: if already paused, restoring ``prev`` (False)
     is a harmless no-op.  If logging was active, it resumes on exit.
 
-    This intentionally does NOT clear ``_active_model_log``. The active log
+    This intentionally does NOT clear ``_active_trace``. The active log
     remains visible while the toggle is paused so ``active_logging()`` can still
     reject nested captures inside paused internal work.
 
     Typical callers:
         - ``safe_copy``: copies tensors without logging the copy op
-        - ``activation_postfunc``: applies user post-processing without logging
-        - ``get_tensor_memory_amount``: calls ``nelement()`` / ``element_size()``
-          which are themselves decorated tensor methods — without pausing,
+        - ``out_postfunc``: applies user post-processing without logging
+        - ``get_memory_amount``: calls ``nelement()`` / ``element_size()``
+          which are themselves decorated tensor custom_methods — without pausing,
           they'd trigger infinite recursive logging.
     """
     global _logging_enabled

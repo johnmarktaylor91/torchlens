@@ -14,12 +14,12 @@ from . import _state
 
 @dataclass(frozen=True)
 class TapRecord:
-    """One observed activation value.
+    """One observed out value.
 
     Parameters
     ----------
     value:
-        Detached activation snapshot.
+        Detached out snapshot.
     site_label:
         Capture-time site label.
     span_names:
@@ -36,7 +36,7 @@ class TapRecord:
 
 @dataclass
 class TapObserver:
-    """Callable hook that records activations without modifying them.
+    """Callable hook that records outs without modifying them.
 
     Parameters
     ----------
@@ -47,12 +47,12 @@ class TapObserver:
     site: Any
     records: list[TapRecord] = field(default_factory=list)
 
-    def __call__(self, activation: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        """Record an activation and return it unchanged.
+    def __call__(self, out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        """Record an out and return it unchanged.
 
         Parameters
         ----------
-        activation:
+        out:
             Activation observed at the hook site.
         hook:
             Hook context supplied by TorchLens.
@@ -60,11 +60,11 @@ class TapObserver:
         Returns
         -------
         torch.Tensor
-            The original activation.
+            The original out.
         """
 
         with _state.pause_logging():
-            value = activation.detach().clone()
+            value = out.detach().clone()
         span_names = tuple(str(span["name"]) for span in _state._active_record_spans)
         self.records.append(
             TapRecord(
@@ -74,15 +74,15 @@ class TapObserver:
                 timestamp=time.monotonic(),
             )
         )
-        return activation
+        return out
 
     def values(self) -> list[torch.Tensor]:
-        """Return observed activation values.
+        """Return observed out values.
 
         Returns
         -------
         list[torch.Tensor]
-            Detached activation snapshots in observation order.
+            Detached out snapshots in observation order.
         """
 
         return [record.value for record in self.records]
@@ -133,9 +133,9 @@ def record_span(name: str) -> Iterator[dict[str, Any]]:
 
     span = {"name": str(name), "start": time.monotonic(), "end": None}
     _state._active_record_spans.append(span)
-    model_log = _state._active_model_log
-    if model_log is not None:
-        model_log.observer_spans.append(span)
+    trace = _state._active_trace
+    if trace is not None:
+        trace.observer_spans.append(span)
     try:
         yield span
     finally:

@@ -64,13 +64,13 @@ def _capture_pair(seed: int, offset: float) -> tl.Bundle:
     x = torch.randn(2, 3)
     baseline_model = _TinyRelu()
     changed_model = _TinyRelu(offset=offset)
-    baseline = tl.log_forward_pass(
+    baseline = tl.trace(
         baseline_model,
         x,
         vis_opt="none",
         intervention_ready=True,
     )
-    changed = tl.log_forward_pass(
+    changed = tl.trace(
         changed_model,
         x,
         vis_opt="none",
@@ -120,6 +120,9 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
         if not name.startswith("_") and (inspect.isfunction(value) or isinstance(value, property))
     ]
 
-    assert len(members) <= 26
+    assert len(members) <= 31
+    assert "joint_metric" in members
+    assert "set_capacity" in members
     assert "save" in members
+    assert "remove_except" in members
     assert "supergraph" in members

@@ -2,7 +2,7 @@
 
 | baukit operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
-| `Trace` a module output | `tl.log_forward_pass(...); log.find_sites(tl.module("module.path"))` | Similar for module boundaries. |
+| `Trace` a module output | `tl.trace(...); log.find_sites(tl.module("module.path"))` | Similar for module boundaries. |
 | `TraceDict` over many layers | `log.find_sites(tl.in_module(...), max_fanout=...)` and iterate results | Equivalent discovery, different object model. |
 | Edit an activation in a trace | `log.fork().set(site, value).replay()` | Equivalent post-hoc mutation for stable graphs. |
 | Retain input/output tensors | TorchLens records activations and selected argument metadata in `LayerPassLog` | TorchLens is broader but heavier. |

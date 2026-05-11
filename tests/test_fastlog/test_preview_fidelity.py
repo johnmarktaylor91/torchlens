@@ -30,7 +30,7 @@ class StaticGraph(nn.Module):
 
 @pytest.mark.xfail(
     reason=(
-        "Preview currently synthesizes ModelLog layer contexts only; dry_run includes "
+        "Preview currently synthesizes Trace layer contexts only; dry_run includes "
         "module events and uses raw labels, so exact field-by-field parity is pending."
     )
 )
@@ -39,9 +39,9 @@ def test_preview_and_dry_run_contexts_match_field_by_field() -> None:
 
     model = StaticGraph()
     x = torch.randn(1, 4)
-    model_log = tl.log_forward_pass(model, x)
+    trace = tl.trace(model, x)
     trace = tl.fastlog.dry_run(model, x, keep_op=lambda ctx: True, include_source_events=True)
-    preview_nodes = _build_preview_nodes(model_log, lambda ctx: True)
+    preview_nodes = _build_preview_nodes(trace, lambda ctx: True)
     preview_contexts = [node.ctx for node in dict.fromkeys(preview_nodes.values())]
     real_contexts = [
         ctx for ctx in trace.contexts if ctx.kind in {"input", "op"} and ctx.layer_type != "output"
@@ -55,14 +55,14 @@ def test_missing_record_context_field_errors_in_preview_and_dry_run() -> None:
 
     model = StaticGraph()
     x = torch.randn(1, 4)
-    model_log = tl.log_forward_pass(model, x)
+    trace = tl.trace(model, x)
 
     def bad_predicate(ctx: RecordContext) -> bool:
         """Access a field outside the RecordContext schema."""
 
-        return bool(ctx.recurrent_group)
+        return bool(ctx.recurrent_ops)
 
-    dot = model_log.preview_fastlog(predicate=bad_predicate)
+    dot = trace.preview_fastlog(predicate=bad_predicate)
 
     assert "exception" in dot
     with pytest.raises(RecordContextFieldError):

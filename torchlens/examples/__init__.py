@@ -49,7 +49,7 @@ def load(name: str, *, cache_dir: str | Path | None = None) -> Any:
     Returns
     -------
     Any
-        A ``ModelLog`` for the requested example.
+        A ``Trace`` for the requested example.
 
     Raises
     ------
@@ -62,12 +62,12 @@ def load(name: str, *, cache_dir: str | Path | None = None) -> Any:
     if normalized not in {"name", "tiny_linear", "linear"}:
         raise KeyError(f"Unknown TorchLens example {name!r}.")
 
-    from torchlens import log_forward_pass
+    from torchlens import trace
 
     torch.manual_seed(0)
     model = _TinyLinear()
     x = torch.randn(2, 3)
-    return log_forward_pass(model, x)
+    return trace(model, x)
 
 
 __all__ = ["load"]

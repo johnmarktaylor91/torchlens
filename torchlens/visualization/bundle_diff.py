@@ -14,13 +14,13 @@ from ._render_utils import html_escape, render_dot_to_file, strip_known_extensio
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ..data_classes.layer_pass_log import LayerPassLog
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.op_log import OpLog
+    from ..data_classes.model_log import Trace
     from ..intervention.bundle import Bundle
 
 
 DiffLayout = Literal["paired"]
-DiffTensorField = Literal["activation", "gradient"]
+DiffTensorField = Literal["out", "grad"]
 
 _CAPTION = (
     "Clean vs zero_ablate(layer1.0.relu) — top: clean, bottom: ablated. "
@@ -28,7 +28,7 @@ _CAPTION = (
 )
 _ARIA_LABEL = (
     "TorchLens bundle diff: clean versus zero ablate layer1.0.relu. "
-    "Blue means lower delta, white means no or middle delta, red means higher delta."
+    "White means zero delta; red intensity scales with the L2 delta magnitude."
 )
 
 
@@ -37,10 +37,10 @@ def bundle_diff(
     *,
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
     layout: DiffLayout = "paired",
-    left: str | "ModelLog" | None = None,
-    right: str | "ModelLog" | None = None,
-    baseline: str | "ModelLog" | None = None,
-    on: DiffTensorField = "activation",
+    left: str | "Trace" | None = None,
+    right: str | "Trace" | None = None,
+    baseline: str | "Trace" | None = None,
+    on: DiffTensorField = "out",
     vis_outpath: str = "bundle_diff",
     vis_save_only: bool = False,
     vis_fileformat: str = "svg",
@@ -67,11 +67,13 @@ def bundle_diff(
     on:
         Tensor field forwarded to ``bundle.delta_map``.
     vis_outpath:
-        Output path, with or without ``.svg``.
+        Output path, with or without a recognised extension.
     vis_save_only:
         Whether to suppress opening the rendered artifact.
     vis_fileformat:
-        Output format. Phase 9 supports ``"svg"``.
+        Output format. Any Graphviz-supported format (e.g., ``"svg"``,
+        ``"pdf"``, ``"png"``). Accessibility metadata is only embedded for
+        ``"svg"``.
     theme:
         Visualization theme preset.
     max_pairs:
@@ -87,8 +89,6 @@ def bundle_diff(
 
     if layout != "paired":
         raise ValueError("bundle_diff layout must be 'paired'.")
-    if vis_fileformat != "svg":
-        raise ValueError("bundle_diff currently renders SVG only.")
 
     left_name, right_name = _resolve_side_names(bundle, left=left, right=right)
     baseline_ref = baseline if baseline is not None else left_name
@@ -113,15 +113,16 @@ def bundle_diff(
     )
     outpath = strip_known_extension(vis_outpath)
     source = render_dot_to_file(dot, outpath, vis_fileformat, vis_save_only)
-    _add_svg_accessibility(f"{outpath}.{vis_fileformat}")
+    if vis_fileformat == "svg":
+        _add_svg_accessibility(f"{outpath}.{vis_fileformat}")
     return source
 
 
 def _resolve_side_names(
     bundle: "Bundle",
     *,
-    left: str | "ModelLog" | None,
-    right: str | "ModelLog" | None,
+    left: str | "Trace" | None,
+    right: str | "Trace" | None,
 ) -> tuple[str, str]:
     """Resolve the left and right bundle member names.
 
@@ -150,7 +151,7 @@ def _resolve_side_names(
     return left_name, right_name
 
 
-def _resolve_member_name(bundle: "Bundle", member: str | "ModelLog") -> str:
+def _resolve_member_name(bundle: "Bundle", member: str | "Trace") -> str:
     """Resolve a member reference inside a bundle.
 
     Parameters
@@ -158,7 +159,7 @@ def _resolve_member_name(bundle: "Bundle", member: str | "ModelLog") -> str:
     bundle:
         Bundle being queried.
     member:
-        Member name or ModelLog reference.
+        Member name or Trace reference.
 
     Returns
     -------
@@ -173,11 +174,11 @@ def _resolve_member_name(bundle: "Bundle", member: str | "ModelLog") -> str:
     for name, candidate in bundle.members.items():
         if candidate is member:
             return name
-    raise KeyError("ModelLog is not a member of this Bundle.")
+    raise KeyError("Trace is not a member of this Bundle.")
 
 
-def _layer_to_supergraph_node(bundle: "Bundle") -> dict[int, str]:
-    """Map concrete layer objects to their supergraph node names.
+def _layer_to_supergraph_node(bundle: "Bundle") -> dict[str, str]:
+    """Map layer labels to their supergraph node names.
 
     Parameters
     ----------
@@ -186,14 +187,20 @@ def _layer_to_supergraph_node(bundle: "Bundle") -> dict[int, str]:
 
     Returns
     -------
-    dict[int, str]
-        ``id(layer)`` to supergraph node name.
+    dict[str, str]
+        ``layer.layer_label`` to supergraph node name. Keyed by label rather
+        than ``id(layer)`` because ``bundle.aligned_pairs`` and
+        ``bundle.supergraph.nodes`` materialize independent layer objects with
+        different ``id()`` values; an id-keyed lookup misses every entry, the
+        delta lookup falls back to ``0.0``, and the diff renders all-white.
     """
 
-    lookup: dict[int, str] = {}
+    lookup: dict[str, str] = {}
     for node_name, node in bundle.supergraph.nodes.items():
         for layer in getattr(node, "layer_refs", {}).values():
-            lookup[id(layer)] = str(node_name)
+            label = str(getattr(layer, "layer_label", ""))
+            if label:
+                lookup[label] = str(node_name)
     return lookup
 
 
@@ -204,7 +211,7 @@ def _build_dot(
     left_name: str,
     right_name: str,
     delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[int, str],
+    layer_to_node: dict[str, str],
     theme_name: str,
     include_unmatched: bool,
 ) -> graphviz.Digraph:
@@ -241,7 +248,11 @@ def _build_dot(
         comment="TorchLens bundle diff",
         format="svg",
     )
-    graph_attrs = theme_graph_attrs(theme, font_size=18, dpi=100)
+    # ``dpi=72`` (graphviz default) keeps the SVG viewBox in the same units as
+    # graphviz's internal layout coords. Higher DPI inserts a ``scale(dpi/72)``
+    # on the inner ``<g>`` while leaving viewBox in internal coords, which
+    # makes content extend past the viewBox and clip vertically.
+    graph_attrs = theme_graph_attrs(theme, font_size=18, dpi=72)
     graph_attrs.update(
         {
             "rankdir": "TB",
@@ -249,9 +260,12 @@ def _build_dot(
             "splines": "ortho",
             "nodesep": "0.32",
             "ranksep": "0.34",
-            "size": "12,8!",
-            "ratio": "fill",
-            "label": _CAPTION + "\\nLegend: blue→white→red = increasing L2 delta.",
+            # Let graphviz auto-size to the natural aspect ratio. A hard
+            # ``size: 12,8!`` combined with ``ratio: fill`` forces a 1.5:1
+            # box; when the natural graph aspect is taller (e.g. 1.69:1 for
+            # the default paired layout) the bottom-positioned caption gets
+            # pushed outside the SVG viewBox and clipped.
+            "label": _CAPTION + "\\nLegend: white→red = increasing L2 delta.",
             "labelloc": "b",
             "labeljust": "l",
             "fontname": "Helvetica",
@@ -324,7 +338,7 @@ def _right_delta_values(
     pairs: list[tuple[Any, Any]],
     right_name: str,
     delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[int, str],
+    layer_to_node: dict[str, str],
 ) -> list[float]:
     """Return right-side delta values for color normalization.
 
@@ -347,7 +361,9 @@ def _right_delta_values(
 
     values: list[float] = []
     for left_layer, right_layer in pairs:
-        node_name = layer_to_node.get(id(left_layer), layer_to_node.get(id(right_layer)))
+        left_label = str(getattr(left_layer, "layer_label", ""))
+        right_label = str(getattr(right_layer, "layer_label", ""))
+        node_name = layer_to_node.get(left_label) or layer_to_node.get(right_label)
         if node_name is None:
             continue
         value = float(delta_map.get(node_name, {}).get(right_name, 0.0))
@@ -361,7 +377,7 @@ def _select_pairs(
     *,
     right_name: str,
     delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[int, str],
+    layer_to_node: dict[str, str],
     max_pairs: int | None,
 ) -> list[tuple[Any, Any]]:
     """Select high-signal aligned pairs for a compact hero diff.
@@ -391,7 +407,9 @@ def _select_pairs(
         raise ValueError("max_pairs must be at least 1 or None.")
     scored: list[tuple[float, int, tuple[Any, Any]]] = []
     for index, (left_layer, right_layer) in enumerate(pairs):
-        node_name = layer_to_node.get(id(left_layer), layer_to_node.get(id(right_layer)))
+        left_label = str(getattr(left_layer, "layer_label", ""))
+        right_label = str(getattr(right_layer, "layer_label", ""))
+        node_name = layer_to_node.get(left_label) or layer_to_node.get(right_label)
         value = float(delta_map.get(str(node_name), {}).get(right_name, 0.0))
         scored.append((value, index, (left_layer, right_layer)))
     chosen_indexes = {
@@ -409,7 +427,7 @@ def _add_side_cluster(
     member_name: str,
     compared_member_name: str,
     delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[int, str],
+    layer_to_node: dict[str, str],
     max_delta: float,
     unmatched_layer_ids: set[int],
 ) -> None:
@@ -451,7 +469,8 @@ def _add_side_cluster(
             style="rounded",
         )
         for layer in layers:
-            node_name = layer_to_node.get(id(layer), str(getattr(layer, "layer_label", "node")))
+            label = str(getattr(layer, "layer_label", "node"))
+            node_name = layer_to_node.get(label, label)
             value = float(delta_map.get(node_name, {}).get(compared_member_name, 0.0))
             subgraph.node(
                 _node_id(side, layer),
@@ -487,7 +506,7 @@ def _add_side_edges(dot: graphviz.Digraph, *, layers: list[Any], side: str) -> N
     visible = {str(getattr(layer, "layer_label", "")): layer for layer in layers}
     for layer in layers:
         target_id = _node_id(side, layer)
-        for parent_label in getattr(layer, "parent_layers", []) or []:
+        for parent_label in getattr(layer, "parents", []) or []:
             parent = visible.get(str(parent_label))
             if parent is not None:
                 dot.edge(_node_id(side, parent), target_id, color="#707070", arrowsize="0.5")
@@ -537,10 +556,10 @@ def _add_legend(dot: graphviz.Digraph) -> None:
         legend.attr(label="delta_map", color="#D0D0D0", style="rounded", labelloc="t")
         legend.node(
             "legend_low",
-            label="low",
+            label="zero",
             shape="box",
             style="filled,rounded",
-            fillcolor="#3B6FB6",
+            fillcolor="#FFFFFF",
             color="#222222",
         )
         legend.node(
@@ -548,12 +567,12 @@ def _add_legend(dot: graphviz.Digraph) -> None:
             label="mid",
             shape="box",
             style="filled,rounded",
-            fillcolor="#FFFFFF",
+            fillcolor=_interpolate("#FFFFFF", "#C93F3F", 0.5),
             color="#222222",
         )
         legend.node(
             "legend_high",
-            label="high",
+            label="max",
             shape="box",
             style="filled,rounded",
             fillcolor="#C93F3F",
@@ -602,9 +621,9 @@ def _node_label(layer: Any, delta: float) -> str:
 
     label = str(getattr(layer, "layer_label", "node"))
     func_name = str(getattr(layer, "func_name", "op"))
-    module = getattr(layer, "containing_module", None)
+    module = getattr(layer, "module", None)
     module_line = f"@{module}" if module else ""
-    shape = getattr(layer, "tensor_shape", None)
+    shape = getattr(layer, "shape", None)
     shape_line = str(tuple(shape)) if isinstance(shape, (list, tuple)) else str(shape or "")
     parts = [label, func_name]
     if module_line:
@@ -675,7 +694,7 @@ def _node_penwidth(layer: Any) -> str:
 
 
 def _delta_color(value: float, max_delta: float) -> str:
-    """Map a non-negative delta value to a blue-white-red color.
+    """Map a non-negative delta value to a white-to-red color.
 
     Parameters
     ----------
@@ -687,17 +706,14 @@ def _delta_color(value: float, max_delta: float) -> str:
     Returns
     -------
     str
-        Hex color.
+        Hex color. White at zero delta, progressively red as the delta
+        approaches ``max_delta``.
     """
 
     if max_delta <= 0.0:
         return "#FFFFFF"
     normalized = max(0.0, min(1.0, value / max_delta))
-    if normalized <= 0.5:
-        frac = normalized / 0.5
-        return _interpolate("#3B6FB6", "#FFFFFF", frac)
-    frac = (normalized - 0.5) / 0.5
-    return _interpolate("#FFFFFF", "#C93F3F", frac)
+    return _interpolate("#FFFFFF", "#C93F3F", normalized)
 
 
 def _interpolate(start: str, end: str, fraction: float) -> str:

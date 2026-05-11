@@ -1,6 +1,6 @@
 """Portable state scrubbing for TorchLens model logs.
 
-This module converts a live ``ModelLog`` object graph into portable metadata
+This module converts a live ``Trace`` object graph into portable metadata
 plus a list of tensor blob specs. It is the save-side counterpart to
 rehydration: every class-specific ``PORTABLE_STATE_SPEC`` is applied here so
 tensor payloads become ``BlobRef`` placeholders and non-portable live objects
@@ -9,6 +9,7 @@ are dropped or stringified before writing ``metadata.pkl``.
 
 from __future__ import annotations
 
+import logging
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
 from typing import Any, TypeAlias
@@ -16,42 +17,48 @@ from typing import Any, TypeAlias
 import torch
 
 from . import BlobRef, FieldPolicy, IO_FORMAT_VERSION, TorchLensIOError
-from ..data_classes.model_log import ModelLog
+from ..data_classes.model_log import Trace
 
 BlobSpec: TypeAlias = tuple[str, torch.Tensor, str, str]
 
 _SIMPLE_KEEP_TYPES = (str, int, float, bool, type(None), torch.dtype, torch.device)
+_RAW_INPUT_TEXT_LIMIT = 10_000
+_RAW_INPUT_TENSOR_BYTES_LIMIT = 1_000_000
+_RAW_OUTPUT_TEXT_LIMIT = _RAW_INPUT_TEXT_LIMIT
+_RAW_OUTPUT_TENSOR_BYTES_LIMIT = _RAW_INPUT_TENSOR_BYTES_LIMIT
+_RAW_CONTAINER_ITEM_LIMIT = 20
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
 class _ScrubOptions:
     """Flags controlling which optional tensor payloads are preserved."""
 
-    include_activations: bool
-    include_gradients: bool
-    include_captured_args: bool
+    include_outs: bool
+    include_grads: bool
+    include_saved_args: bool
     include_rng_states: bool
 
 
 def scrub_for_save(
-    model_log: ModelLog,
+    trace: Trace,
     *,
-    include_activations: bool = True,
-    include_gradients: bool = True,
-    include_captured_args: bool = False,
+    include_outs: bool = True,
+    include_grads: bool = True,
+    include_saved_args: bool = False,
     include_rng_states: bool = False,
 ) -> tuple[dict[str, Any], list[BlobSpec]]:
-    """Scrub a ``ModelLog`` into portable metadata plus tensor blob specs.
+    """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Live model log to scrub.
-    include_activations:
-        Whether saved activations should be replaced with blob references.
-    include_gradients:
-        Whether gradients should be replaced with blob references.
-    include_captured_args:
+    include_outs:
+        Whether saved outs should be replaced with blob references.
+    include_grads:
+        Whether grads should be replaced with blob references.
+    include_saved_args:
         Whether captured args/kwargs and related tensor payloads should be
         preserved via blob references.
     include_rng_states:
@@ -66,23 +73,23 @@ def scrub_for_save(
     """
 
     options = _ScrubOptions(
-        include_activations=include_activations,
-        include_gradients=include_gradients,
-        include_captured_args=include_captured_args,
+        include_outs=include_outs,
+        include_grads=include_grads,
+        include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
     )
     memo: dict[int, Any] = {}
     blob_specs: list[BlobSpec] = []
     blob_counter = [0]
 
-    scrubbed_model = _scrub_value(model_log, options, memo, blob_specs, blob_counter)
-    if not isinstance(scrubbed_model, ModelLog):
-        raise TorchLensIOError("Portable scrub expected a scrubbed ModelLog instance.")
+    scrubbed_model = _scrub_value(trace, options, memo, blob_specs, blob_counter)
+    if not isinstance(scrubbed_model, Trace):
+        raise TorchLensIOError("Portable scrub expected a scrubbed Trace instance.")
 
     scrubbed_state = dict(scrubbed_model.__dict__)
     scrubbed_state["io_format_version"] = IO_FORMAT_VERSION
 
-    module_accessor = getattr(model_log, "_module_logs", None)
+    module_accessor = getattr(trace, "_module_logs", None)
     if module_accessor is not None:
         scrubbed_state["_io_module_accessor_state"] = _scrub_value(
             module_accessor,
@@ -163,9 +170,9 @@ def _scrub_value(
             blob_counter=blob_counter,
         )
 
-    if isinstance(value, ModelLog):
-        scrubbed_state["activation_postfunc_repr"] = (
-            repr(value.activation_postfunc) if value.activation_postfunc is not None else None
+    if isinstance(value, Trace):
+        scrubbed_state["_out_transform_repr"] = (
+            repr(value.out_postfunc) if value.out_postfunc is not None else None
         )
         scrubbed_state["io_format_version"] = IO_FORMAT_VERSION
 
@@ -181,14 +188,14 @@ def _effective_policy(
 ) -> FieldPolicy:
     """Resolve the runtime policy for a field after include-flag overrides."""
 
-    if field_name in {"activation", "transformed_activation"} and not options.include_activations:
+    if field_name in {"out", "transformed_out"} and not options.include_outs:
         return FieldPolicy.DROP
-    if field_name in {"gradient", "transformed_gradient"} and not options.include_gradients:
+    if field_name in {"grad", "transformed_grad"} and not options.include_grads:
         return FieldPolicy.DROP
-    if field_name in {"captured_args", "captured_kwargs", "children_tensor_versions"}:
-        return FieldPolicy.BLOB_RECURSIVE if options.include_captured_args else FieldPolicy.DROP
+    if field_name in {"saved_args", "saved_kwargs", "output_versions_per_child"}:
+        return FieldPolicy.BLOB_RECURSIVE if options.include_saved_args else FieldPolicy.DROP
     if field_name in {"forward_args", "forward_kwargs"}:
-        return FieldPolicy.BLOB_RECURSIVE if options.include_captured_args else FieldPolicy.DROP
+        return FieldPolicy.BLOB_RECURSIVE if options.include_saved_args else FieldPolicy.DROP
     if field_name == "func_rng_states":
         return FieldPolicy.BLOB_RECURSIVE if options.include_rng_states else FieldPolicy.DROP
     return base_policy
@@ -207,6 +214,16 @@ def _scrub_field(
 ) -> Any:
     """Scrub one object field according to its effective field policy."""
 
+    if isinstance(owner, Trace) and field_name in {"raw_input", "raw_output"}:
+        return _scrub_raw_value_for_save(
+            owner,
+            field_name,
+            field_value,
+            options,
+            memo,
+            blob_specs,
+            blob_counter,
+        )
     if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
         return None
     if policy == FieldPolicy.STRINGIFY:
@@ -223,6 +240,109 @@ def _scrub_field(
             blob_counter=blob_counter,
         )
     return _scrub_value(field_value, options, memo, blob_specs, blob_counter)
+
+
+def _scrub_raw_value_for_save(
+    owner: Trace,
+    field_name: str,
+    value: Any,
+    options: _ScrubOptions,
+    memo: dict[int, Any],
+    blob_specs: list[BlobSpec],
+    blob_counter: list[int],
+) -> Any:
+    """Apply a raw-value save policy before portable metadata serialization.
+
+    Parameters
+    ----------
+    owner:
+        Trace carrying the raw-value save policy.
+    field_name:
+        Raw-value field being serialized.
+    value:
+        Raw user input or output metadata to serialize.
+    options:
+        Active scrub options.
+    memo:
+        Object-identity memo for recursive scrubbing.
+    blob_specs:
+        Accumulated tensor blob specs.
+    blob_counter:
+        Mutable blob id counter.
+
+    Returns
+    -------
+    Any
+        Scrubbed raw value, a bounded placeholder, or ``None``.
+    """
+
+    policy_name = f"save_{field_name}"
+    policy = getattr(owner, policy_name, "small")
+    if policy is False:
+        return None
+    if policy is True:
+        return _scrub_value(value, options, memo, blob_specs, blob_counter)
+    if policy != "small":
+        raise TorchLensIOError(f"{policy_name} must be 'small', True, or False.")
+    return _small_raw_value(value, field_name=field_name)
+
+
+def _small_raw_value(value: Any, *, field_name: str) -> Any:
+    """Return a bounded portable representation of a raw value.
+
+    Parameters
+    ----------
+    value:
+        Raw user input or output metadata.
+    field_name:
+        Raw-value field being serialized.
+
+    Returns
+    -------
+    Any
+        Truncated string, small tensor, recursively bounded container, or
+        ``None`` when the value is too large or unsupported.
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text_limit = _RAW_OUTPUT_TEXT_LIMIT if field_name == "raw_output" else _RAW_INPUT_TEXT_LIMIT
+        return value[:text_limit]
+    if isinstance(value, torch.Tensor):
+        tensor_bytes = value.nelement() * value.element_size()
+        tensor_limit = (
+            _RAW_OUTPUT_TENSOR_BYTES_LIMIT
+            if field_name == "raw_output"
+            else _RAW_INPUT_TENSOR_BYTES_LIMIT
+        )
+        if tensor_bytes <= tensor_limit:
+            return value
+        _LOGGER.debug(
+            "Dropping %s tensor over small-policy cap: %s bytes", field_name, tensor_bytes
+        )
+        return None
+    if isinstance(value, list):
+        return [
+            _small_raw_value(item, field_name=field_name)
+            for item in value[:_RAW_CONTAINER_ITEM_LIMIT]
+        ]
+    if isinstance(value, tuple):
+        return tuple(
+            _small_raw_value(item, field_name=field_name)
+            for item in value[:_RAW_CONTAINER_ITEM_LIMIT]
+        )
+    if isinstance(value, dict):
+        return {
+            key: _small_raw_value(item, field_name=field_name)
+            for key, item in list(value.items())[:_RAW_CONTAINER_ITEM_LIMIT]
+        }
+    _LOGGER.debug(
+        "Dropping unsupported %s type under small policy: %s",
+        field_name,
+        type(value).__name__,
+    )
+    return None
 
 
 def _blobify_tensor_field(
@@ -363,17 +483,17 @@ def _next_blob_id(blob_counter: list[int]) -> str:
 def _blob_kind_for_field(owner: Any, field_name: str) -> str:
     """Map an object field name to the portable manifest tensor kind."""
 
-    if field_name == "activation":
-        return "activation"
-    if field_name == "transformed_activation":
-        return "transformed_activation"
-    if field_name == "gradient":
-        return "gradient"
-    if field_name == "transformed_gradient":
-        return "transformed_gradient"
-    if field_name in {"captured_args", "captured_kwargs"}:
+    if field_name == "out":
+        return "out"
+    if field_name == "transformed_out":
+        return "transformed_out"
+    if field_name == "grad":
+        return "grad"
+    if field_name == "transformed_grad":
+        return "transformed_grad"
+    if field_name in {"saved_args", "saved_kwargs"}:
         return "captured_arg"
-    if field_name == "children_tensor_versions":
+    if field_name == "output_versions_per_child":
         return "child_version"
     if field_name == "func_rng_states":
         return "rng_state"
@@ -381,7 +501,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "module_arg"
     if field_name == "func_config":
         return "func_config"
-    if field_name == "extra_attributes":
+    if field_name == "custom_attributes":
         return "module_meta"
     if field_name in {"grad_inputs", "grad_outputs"}:
         return "grad_fn_grad"
@@ -393,8 +513,8 @@ def _blob_label_for_owner(owner: Any) -> str:
 
     if hasattr(owner, "layer_label_w_pass") and getattr(owner, "layer_label_w_pass") is not None:
         return str(getattr(owner, "layer_label_w_pass"))
-    if hasattr(owner, "pass_label") and getattr(owner, "pass_label") is not None:
-        return str(getattr(owner, "pass_label"))
+    if hasattr(owner, "call_label") and getattr(owner, "call_label") is not None:
+        return str(getattr(owner, "call_label"))
     if hasattr(owner, "address") and getattr(owner, "address") is not None:
         return str(getattr(owner, "address"))
     return type(owner).__name__

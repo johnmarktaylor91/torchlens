@@ -64,7 +64,7 @@ def test_none_abstain_uses_default_op() -> None:
         DefaultsModel(),
         torch.ones(1, 2),
         keep_op=lambda ctx: None,
-        default_op=CaptureSpec(save_activation=False, save_metadata=True),
+        default_op=CaptureSpec(save_out=False, save_metadata=True),
     )
 
     assert recording.records

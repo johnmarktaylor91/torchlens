@@ -30,7 +30,7 @@ def make_random_barcode(barcode_len: int = 8) -> str:
     """Generate a random alphanumeric identifier for internal tensor tracking.
 
     These barcodes are invisible to the user and are used as unique
-    internal keys for tensor entries in ``ModelLog``.
+    internal keys for tensor entries in ``Trace``.
 
     Args:
         barcode_len: Length of the identifier string.
@@ -68,12 +68,12 @@ _MODULE_PASS_SUFFIX_RE = re.compile(r":\d+(?=\.|$)")
 _ROLLED_LOOP_INDEX_RE = re.compile(r"\[\d+\]")
 
 
-def normalize_module_address_for_hash(module_address: Any) -> str | None:
+def normalize_address_for_hash(address: Any) -> str | None:
     """Normalize a module address for graph-shape hashing.
 
     Parameters
     ----------
-    module_address:
+    address:
         Module address in either tuple/list form, pass-qualified string form, or
         ``None``.
 
@@ -84,11 +84,11 @@ def normalize_module_address_for_hash(module_address: Any) -> str | None:
         module address is available.
     """
 
-    if module_address is None:
+    if address is None:
         return None
-    if isinstance(module_address, (tuple, list)):
-        module_address = ".".join(str(part) for part in module_address)
-    normalized = str(module_address)
+    if isinstance(address, (tuple, list)):
+        address = ".".join(str(part) for part in address)
+    normalized = str(address)
     normalized = _MODULE_PASS_SUFFIX_RE.sub("", normalized)
     normalized = _ROLLED_LOOP_INDEX_RE.sub("", normalized)
     normalized = " ".join(normalized.split())
@@ -143,18 +143,18 @@ def _container_cardinality(container_spec: Any) -> Any:
     }
 
 
-def compute_graph_shape_hash(model_log: Any) -> str:
+def compute_graph_shape_hash(trace: Any) -> str:
     """Compute a deterministic shape hash for a postprocessed graph.
 
-    The hash intentionally excludes run-specific activation values and raw/final
+    The hash intentionally excludes run-specific out values and raw/final
     labels. It includes operation order, normalized function names, parent-edge
     positions, normalized module addresses, output paths, and output container
     cardinality.
 
     Parameters
     ----------
-    model_log:
-        Postprocessed ``ModelLog`` with populated ``layer_list``.
+    trace:
+        Postprocessed ``Trace`` with populated ``layer_list``.
 
     Returns
     -------
@@ -162,16 +162,14 @@ def compute_graph_shape_hash(model_log: Any) -> str:
         SHA-256 hex digest over the canonical graph-shape payload.
     """
 
-    order_by_label = {layer.layer_label: index for index, layer in enumerate(model_log.layer_list)}
+    order_by_label = {layer.layer_label: index for index, layer in enumerate(trace.layer_list)}
     records = []
-    for index, layer in enumerate(model_log.layer_list):
-        module_address = normalize_module_address_for_hash(
-            getattr(layer, "containing_module", None)
-        )
-        layer.module_address_normalized = module_address
+    for index, layer in enumerate(trace.layer_list):
+        address = normalize_address_for_hash(getattr(layer, "module", None))
+        layer._address_normalized = address
         parent_indices = sorted(
             order_by_label[parent_label]
-            for parent_label in getattr(layer, "parent_layers", ())
+            for parent_label in getattr(layer, "parents", ())
             if parent_label in order_by_label
         )
         records.append(
@@ -180,17 +178,17 @@ def compute_graph_shape_hash(model_log: Any) -> str:
                 "layer_type": getattr(layer, "layer_type", None),
                 "func_name": str(getattr(layer, "func_name", None)),
                 "parent_indices": parent_indices,
-                "module_address_normalized": module_address,
-                "output_path": [
+                "_address_normalized": address,
+                "container_path": [
                     _hashable_path_component(component)
-                    for component in (getattr(layer, "output_path", None) or ())
+                    for component in (getattr(layer, "container_path", None) or ())
                 ],
                 "container_cardinality": _container_cardinality(
                     getattr(layer, "container_spec", None)
                 ),
-                "is_input": bool(getattr(layer, "is_input_layer", False)),
-                "is_output": bool(getattr(layer, "is_output_layer", False)),
-                "is_buffer": bool(getattr(layer, "is_buffer_layer", False)),
+                "is_input": bool(getattr(layer, "is_input", False)),
+                "is_output": bool(getattr(layer, "is_output", False)),
+                "is_buffer": bool(getattr(layer, "is_buffer", False)),
             }
         )
     payload = json.dumps(records, sort_keys=True, separators=(",", ":"), default=repr)

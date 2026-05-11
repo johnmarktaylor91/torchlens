@@ -5,7 +5,7 @@ module/label lookup. Keep Captum for attribution algorithms such as Integrated G
 
 | Captum construct | TorchLens equivalent |
 | --- | --- |
-| `LayerActivation(model, layer).attribute(x)`. | `log_forward_pass(model, x)` and read the layer activation. |
+| `LayerActivation(model, layer).attribute(x)`. | `trace(model, x)` and read the layer activation. |
 
 Their construct:
 
@@ -54,6 +54,6 @@ class Tiny(nn.Module):
         return torch.relu(self.proj(x))
 
 
-log = tl.log_forward_pass(Tiny(), torch.tensor([[2.0, 3.0]]), vis_opt="none")
-RESULT = log["linear_1_1"].activation.detach().tolist()
+log = tl.trace(Tiny(), torch.tensor([[2.0, 3.0]]), vis_opt="none")
+RESULT = log["linear_1_1"].out.detach().tolist()
 ```

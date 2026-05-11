@@ -1,7 +1,7 @@
 """Portable I/O primitives for TorchLens model logs.
 
 The ``torchlens._io`` package implements TorchLens' portable save/load path:
-it scrubs a ``ModelLog`` into metadata plus tensor blobs, writes directory
+it scrubs a ``Trace`` into metadata plus tensor blobs, writes directory
 bundles backed by ``safetensors``, and rehydrates those bundles into eager or
 lazy model logs. Portable bundles are for archival and analysis, not replay:
 ``validate_forward_pass()`` is unsupported after ``torchlens.load()`` (Fork L),
@@ -22,7 +22,38 @@ import torch
 
 from ..errors._base import CompatibilityError
 
-IO_FORMAT_VERSION = 2
+# v4 drops capture-only scratch fields from portable Trace state after the
+# capture-pipeline-unification sprint (2026-05-11).
+IO_FORMAT_VERSION = 4
+_LEGACY_THREAD_WARNING_EMITTED: dict[str, bool] = {"flag": False}
+
+
+def _warn_legacy_thread_fields_dropped() -> None:
+    """Emit one deprecation warning for legacy thread-replay fields.
+
+    Older TorchLens portable bundles with ``io_format_version <= 2`` carried
+    private fields removed by the module-containment-refactor sprint. Current
+    load code drops those fields and uses the stored ``modules`` field
+    directly.
+    """
+
+    if not _LEGACY_THREAD_WARNING_EMITTED["flag"]:
+        warnings.warn(
+            "Loaded a TorchLens bundle from io_format_version<=2; "
+            "legacy thread-replay fields were dropped. "
+            "Module containment is reconstructed from hook-stack "
+            "snapshots in current capture; this load uses the stored "
+            "modules field directly.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        _LEGACY_THREAD_WARNING_EMITTED["flag"] = True
+
+
+def reset_legacy_thread_warning() -> None:
+    """Reset the once-per-process legacy-thread warning flag for tests."""
+
+    _LEGACY_THREAD_WARNING_EMITTED["flag"] = False
 
 
 class TorchLensIOError(CompatibilityError, RuntimeError):
@@ -107,7 +138,7 @@ def default_fill_state(state: dict[str, Any], *, defaults: dict[str, Any]) -> No
             state[field_name] = copy.deepcopy(default_value)
 
 
-def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu") -> None:
+def rehydrate_nested(trace: Any, *, map_location: str | torch.device = "cpu") -> None:
     """Replace any remaining nested portable blob refs on a loaded model log.
 
     This function is a no-op unless the model log was loaded with
@@ -116,7 +147,7 @@ def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu"
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log loaded from a portable bundle.
     map_location:
         Target device for the materialized nested tensors.
@@ -131,4 +162,4 @@ def rehydrate_nested(model_log: Any, *, map_location: str | torch.device = "cpu"
 
     from .rehydrate import rehydrate_nested as _rehydrate_nested
 
-    _rehydrate_nested(model_log, map_location=map_location)
+    _rehydrate_nested(trace, map_location=map_location)

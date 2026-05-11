@@ -1,5 +1,79 @@
 # CHANGELOG
 
+## Unreleased — capture-pipeline-unification sprint (2026-05-11)
+
+### Architecture
+
+- **Unified capture pipeline**: backend wrappers now emit typed `OpEvent`
+  records into `torchlens.ir.CaptureEvents`; postprocess consumes events
+  to materialize the final user-facing `Trace`. No more dual capture paths
+  (exhaustive `log_forward_pass` and `fastlog.record` now share one engine).
+- **Backend abstraction**: new `torchlens.backends.CaptureBackend` Protocol.
+  PyTorch implementation at `torchlens.backends.torch`; MLX implementation
+  at `torchlens.backends.mlx` (technical preview).
+- **`torchlens.decoration` namespace deleted**: torch wrappers, model prep,
+  and `_tl` namespace metadata now live under `torchlens.backends.torch`.
+  Anyone reaching into `torchlens.decoration.*` directly will need to update
+  imports.
+- **Zero capture-only scratch on final `Trace`**: `_raw_layer_dict`,
+  `_module_build_data`, `_mod_entered`, etc. no longer exist on a
+  post-capture `Trace`. They live transiently on a postprocess-local
+  `TraceBuildState` and are discarded.
+
+### Behavior changes (CHECK YOUR CODE)
+
+- **`PartialTrace.raw_layers`**: now returns `tuple[OpEvent, ...]` instead
+  of `tuple[OpLog, ...]`. Recovery-path API; rarely-used.
+- **`Trace.orphan_logs: tuple[OpLog, ...]`** added (orphan access without
+  `_raw_layer_dict`).
+- **`Trace.has_backward_pass`** is now backend-conditional. MLX traces
+  always have `has_backward_pass = False`; `log_backward()` and
+  `recording_backward()` raise `NotImplementedError` on MLX traces.
+
+### Artifact format
+
+- **`io_format_version: 3 -> 4`**. v3 `.tlspec` bundles continue to load
+  cleanly under v4 via a normalizer in `_io/rehydrate.py` that strips the
+  dropped capture-only fields. No user action required.
+- `tlspec_version` and manifest `schema_version` unchanged (still 1).
+
+### New features
+
+- **`tl.fastlog.record(..., predicate=...)`**: predicate is now a
+  first-class parameter on the unified entry point as well as fastlog.
+  The intervention selector DSL (`tl.func`, `tl.module`, `tl.label`,
+  `tl.contains`, `tl.where`, `tl.in_module`) composes via Boolean algebra
+  as the unified predicate language; fastlog's bare-callable predicates
+  still work.
+- **MLX backend (technical preview)**: `pip install torchlens[mlx]`,
+  then `tl.trace(mlx_model, mlx_input)` works for eager MLX models.
+  Lazy-safe metadata extraction; batched `mx.eval` at end-of-forward.
+  `mx.compile`-wrapped models, MLX backward capture, and MLX RNG replay
+  are not yet supported.
+
+### Public API surface
+
+- `torchlens.__all__` unchanged (40 names).
+- All public symbols (`tl.trace`, `tl.fastlog.*`, intervention API,
+  `Trace.summary`, `Trace.fork`, `Trace.rerun`, etc.) byte-identical.
+- Public package version: 2.x.x. No major bump.
+
+### Internal package layout
+
+- `torchlens/ir/` — backend-neutral event types (new)
+- `torchlens/backends/{torch,mlx}/` — backend implementations (new)
+- `torchlens/decoration/` — deleted (was torch-specific)
+- `torchlens/fastlog/` — internals gutted; public symbols preserved
+- `torchlens/postprocess/_materialize.py` — Step 0 prelude (new)
+- `torchlens/capture/predicates.py`, `projections.py` — extracted from
+  fastlog (new)
+
+### Performance
+
+- Hot-path overhead: within ≤+5% on ResNet-50 and ≤+7.5% on GPT-2 small
+  (target bars from plan §11).
+- Memory: `Trace` post-capture is now smaller (no capture scratch).
+
 
 ## v2.17.0 (2026-05-01)
 

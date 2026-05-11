@@ -92,7 +92,7 @@ class BaseSelector:
         -------
         list[str]
             Standard selector attributes. Selectors are not bound to a
-            ``ModelLog``, so layer-name completion lives on log accessors.
+            ``Trace``, so layer-name completion lives on log accessors.
         """
 
         return sorted(set(super().__dir__()) | {"selector_kind", "selector_value"})
@@ -226,7 +226,7 @@ class ContainsSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class WhereSelector(BaseSelector):
-    """Predicate selector over ``LayerPassLog`` objects.
+    """Predicate selector over ``OpLog`` objects.
 
     Parameters
     ----------
@@ -573,9 +573,9 @@ def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSele
     if address is None:
         return InModuleSelector(str(address_or_layer))
 
-    containing_modules = getattr(address_or_layer, "containing_modules", ())
-    module_passes = getattr(address_or_layer, "module_passes_exited", ())
-    candidates = tuple(containing_modules) + tuple(module_passes)
+    modules = getattr(address_or_layer, "modules", ())
+    module_ops = getattr(address_or_layer, "output_of_module_calls", ())
+    candidates = tuple(modules) + tuple(module_ops)
     return any(_module_pass_matches(candidate, address) for candidate in candidates)
 
 

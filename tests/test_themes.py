@@ -17,9 +17,9 @@ from torchlens.options import VisualizationOptions
 def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
     """Each public theme preset should render a Graphviz graph."""
 
-    log = tl.log_forward_pass(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
+    log = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
 
-    dot = log.render_graph(
+    dot = log.draw(
         vis_save_only=True,
         vis_fileformat="svg",
         vis_outpath=str(tmp_path / theme),
@@ -32,12 +32,12 @@ def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
 
 
 def test_visualization_options_convenience_knobs_return_graph(tmp_path: Path) -> None:
-    """Grouped convenience knobs should forward to render_graph."""
+    """Grouped convenience knobs should forward to draw."""
 
-    log = tl.log_forward_pass(nn.Linear(2, 2), torch.randn(1, 2))
+    log = tl.trace(nn.Linear(2, 2), torch.randn(1, 2))
     options = VisualizationOptions(
         view="unrolled",
-        output_path=str(tmp_path / "paper.svg"),
+        container_path=str(tmp_path / "paper.svg"),
         save_only=True,
         file_format="svg",
         for_paper=True,
@@ -46,7 +46,7 @@ def test_visualization_options_convenience_knobs_return_graph(tmp_path: Path) ->
         return_graph=True,
     )
 
-    graph = log.render_graph(**tl.options.visualization_to_render_kwargs(options))
+    graph = log.draw(**tl.options.visualization_to_render_kwargs(options))
 
     assert isinstance(graph, graphviz.Digraph)
     assert graph.graph_attr["dpi"] == "120"

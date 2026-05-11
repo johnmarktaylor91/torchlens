@@ -1,12 +1,12 @@
 # validation/ - Implementation Guide
 
 ## core.py
-- `validate_saved_activations()` is the main saved-forward replay entry point.
+- `validate_saved_outs()` is the main saved-forward replay entry point.
 - `_validate_single_layer()` handles one layer's replay and perturbation.
 - `_execute_func_with_restored_state()` restores RNG/autocast state around replay.
-- `_perturb_layer_activations()` is bounded by `MAX_PERTURB_ATTEMPTS`.
+- `_perturb_layer_outs()` is bounded by `MAX_PERTURB_ATTEMPTS`.
 - Validation requires saved function args for replay; check callers preserve
-  `save_function_args=True`.
+  `save_arg_values=True`.
 
 ## backward.py
 - `validate_backward_pass()` compares TorchLens backward capture against stock autograd.

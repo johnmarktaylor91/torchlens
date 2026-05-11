@@ -1,21 +1,23 @@
-"""Steps 13-18: Tensor undecoration, timing, param logs, layer logs, module logs, pass finish.
+"""Steps 12-19: Tensor undecoration, timing, param logs, layer/module logs, streaming.
 
-Step 13 (_undecorate_all_saved_tensors): Removes tl_tensor_label_raw attribute from
+Step 12 (_undecorate_all_saved_tensors): Removes TorchLens tensor metadata from
     all saved tensors and their creation args/kwargs.
-Step 14: torch.cuda.empty_cache() — handled inline in __init__.py.
-Step 15 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
-Step 16 (_finalize_param_logs): Populates ParamLog reverse mappings (used_by_layers,
-    linked_params), num_passes, and clears Parameter tensor references.
-Step 16.5 (_build_layer_logs): Groups LayerPassLog entries by layer_label_no_pass to
+Step 13: torch.cuda.empty_cache() — handled inline in __init__.py.
+Step 14 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
+Step 15 (_finalize_param_logs): Populates ParamLog reverse mappings (used_by_layers,
+    co_parent_params), num_calls, and clears Parameter tensor references.
+Step 15.5 (_build_layer_logs): Groups OpLog entries by layer_label_no_pass to
     create aggregate LayerLog objects. Static identity fields still use first-pass
-    values, while aggregate fields merge across passes, including conditional
+    values, while aggregate fields merge across ops, including conditional
     branch signatures, pass maps, and pass-stripped child views.
-Step 17 (_build_module_logs): Builds structured ModuleLog/ModulePassLog objects from
+Step 16 (_build_module_logs): Builds structured ModuleLog/ModuleCallLog objects from
     _module_build_data and _module_metadata. MUST NOT run in fast mode — _module_build_data
-    isn't repopulated in fast mode (Step 10 is skipped). Existing module logs from the
+    isn't repopulated in fast mode (Step 9 is skipped). Existing module logs from the
     exhaustive pass remain valid.
-Step 18 (_set_pass_finished): Marks ModelLog and all LayerPassLogs as finished, switching
-    to user-facing mode for display and access methods.
+Step 17 (_set_tracing_finished): Marks Trace and all OpLogs as finished, switching
+    to user-facing mode for display and access custom_methods.
+Step 18 (_finalize_streamed_bundle): Finalizes any streamed out bundle.
+Step 19 (_evict_streamed_outs): Optionally drops in-memory outs after streaming refs attach.
 """
 
 import time
@@ -25,112 +27,112 @@ from typing import Any, Dict, List, Literal, NamedTuple, Optional, TYPE_CHECKING
 
 import torch
 
+from ..backends.torch._tl import clear_meta
 from .._io import BlobRef, TorchLensIOError
-from .._io.accessor_rebuild import rebuild_model_log_accessors
+from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
 from .._io.manifest import sha256_of_file
 from .._io.streaming import BundleStreamWriter
 from ..data_classes._summary import format_call_arg
-from ..data_classes.module_log import ModuleLog, ModulePassLog
+from ..data_classes.module_log import ModuleLog, ModuleCallLog
 from ..utils.introspection import get_vars_of_type_from_obj
 
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog
-    from ..data_classes.layer_pass_log import LayerPassLog
-    from ..data_classes.model_log import ModelLog
+    from ..data_classes.op_log import OpLog
+    from ..data_classes.model_log import Trace
 
 
-def _undecorate_all_saved_tensors(self: "ModelLog") -> None:
-    """Step 13: Remove tl_tensor_label_raw from all saved tensors.
+def _undecorate_all_saved_tensors(self: "Trace") -> None:
+    """Step 12: Remove TorchLens metadata from all saved tensors.
 
-    During logging, tensors are "decorated" with a tl_tensor_label_raw attribute
-    for tracking. This function strips that attribute from saved activations and
-    any tensors embedded in captured_args/captured_kwargs, so that tensors
-    returned to the user are clean.
+    During logging, tensors are tagged with private ``_tl`` metadata for
+    tracking. This function strips that metadata from saved outs and any
+    tensors embedded in saved_args/saved_kwargs, so tensors returned to the
+    user are clean.
     """
     tensors_to_undecorate = []
-    for layer_label in self.layer_labels:
-        layer_entry = self.layer_dict_main_keys[layer_label]
-        if layer_entry.activation is not None:
-            tensors_to_undecorate.append(layer_entry.activation)
-        if getattr(layer_entry, "transformed_activation", None) is not None:
-            tensors_to_undecorate.append(layer_entry.transformed_activation)
+    for layer_entry in [*self.layer_list, *self.orphans.values()]:
+        if layer_entry.out is not None:
+            tensors_to_undecorate.append(layer_entry.out)
+        if getattr(layer_entry, "transformed_out", None) is not None:
+            tensors_to_undecorate.append(layer_entry.transformed_out)
 
-        if layer_entry.captured_args:
+        if layer_entry.saved_args:
             tensors_to_undecorate.extend(
-                get_vars_of_type_from_obj(layer_entry.captured_args, torch.Tensor, search_depth=2)
+                get_vars_of_type_from_obj(layer_entry.saved_args, torch.Tensor, search_depth=2)
             )
-        if layer_entry.captured_kwargs:
+        if layer_entry.saved_kwargs:
             tensors_to_undecorate.extend(
-                get_vars_of_type_from_obj(layer_entry.captured_kwargs, torch.Tensor, search_depth=2)
+                get_vars_of_type_from_obj(layer_entry.saved_kwargs, torch.Tensor, search_depth=2)
             )
 
     for t in tensors_to_undecorate:
-        if hasattr(t, "tl_tensor_label_raw"):
-            delattr(t, "tl_tensor_label_raw")
+        clear_meta(t)
 
 
-def _log_time_elapsed(self: "ModelLog") -> None:
-    """Step 15: Record wall-clock timing for the cleanup phase and overall pass.
+def _log_time_elapsed(self: "Trace") -> None:
+    """Step 14: Record wall-clock timing for the cleanup phase and overall pass.
 
     Computes cleanup time as the residual after subtracting setup and forward
     pass times from total elapsed time. Also computes torchlens_logging overhead
     as total time minus actual function call time.
     """
-    self.pass_end_time = time.time()
-    self.time_cleanup = (
-        self.pass_end_time - self.pass_start_time - self.time_setup - self.time_forward_pass
+    self.end_time = time.time()
+    self.cleanup_duration = (
+        self.end_time - self.start_time - self.setup_duration - self.forward_duration
     )
 
 
-def _finalize_param_logs(self: "ModelLog") -> None:
-    """Step 16: Populate ParamLog reverse mappings, linked params, and num_passes.
+def _finalize_param_logs(self: "Trace") -> None:
+    """Step 15: Populate ParamLog reverse mappings, linked params, and num_calls.
 
-    For each LayerPassLog with parent_param_logs:
+    For each OpLog with _param_logs:
     - Adds the layer's label to each ParamLog's used_by_layers list.
-    - Links params that co-occur in the same operation (linked_params).
-    - Sets num_passes = max(1, len(used_by_layers)).
+    - Links params that co-occur in the same operation (co_parent_params).
+    - Sets num_calls = max(1, len(used_by_layers)).
 
     Then clears actual Parameter tensor references (parent_params) from
-    LayerPassLog entries to reduce memory, while preserving ParamLog._param_ref
+    OpLog entries to reduce memory, while preserving ParamLog._param_ref
     for potential backward() calls by the user.
     """
-    # Build used_by_layers and linked_params from LayerPassLog entries
+    # Build used_by_layers and co_parent_params from OpLog entries
     for layer_entry in self.layer_list:
-        if not layer_entry.parent_param_logs:
+        if not layer_entry._param_logs:
             continue
-        addresses_in_op = [pl.address for pl in layer_entry.parent_param_logs]
-        for pl in layer_entry.parent_param_logs:
+        addresses_in_op = [pl.address for pl in layer_entry._param_logs]
+        for pl in layer_entry._param_logs:
             if layer_entry.layer_label not in pl.used_by_layers:
                 pl.used_by_layers.append(layer_entry.layer_label)
             # Link to other params in the same operation
             for other_addr in addresses_in_op:
-                if other_addr != pl.address and other_addr not in pl.linked_params:
-                    pl.linked_params.append(other_addr)
+                if other_addr != pl.address and other_addr not in pl.co_parent_params:
+                    pl.co_parent_params.append(other_addr)
 
-    # Populate num_passes: how many times this parameter was used in the forward pass
+    # Populate num_calls: how many times this parameter was used in the forward pass
     for pl in self.param_logs:
-        pl.num_passes = max(1, len(pl.used_by_layers))
+        pl.num_calls = max(1, len(pl.used_by_layers))
+        pl.source_trace = self
 
-    # ParamLog gradient metadata is populated lazily via backward hooks in _log_tensor_grad.
+    # ParamLog grad metadata is populated lazily via backward hooks in _log_tensor_grad.
     # Each ParamLog holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
     # reads param.grad after backward is called.
 
     # Note: _param_ref (GC-1) is NOT cleared here because the user may call backward()
-    # after postprocessing to populate gradients. It's cleared in cleanup() instead.
-    # Same for parent_param_logs (GC-9) and func_applied (GC-10) — needed by validation.
+    # after postprocessing to populate grads. It's cleared in cleanup() instead.
+    # Same for _param_logs (GC-9) and func (GC-10) — needed by validation.
 
-    # Clear actual Parameter tensor references from LayerPassLog entries to save memory.
+    # Clear actual Parameter tensor references from OpLog entries to save memory.
     for layer_entry in self.layer_list:
         layer_entry.parent_params = []
 
 
 def _build_root_module_log(
-    self: "ModelLog", pass_dict: dict[str, "ModulePassLog"], mbd: dict[str, Any]
+    self: "Trace", pass_dict: dict[str, "ModuleCallLog"], mbd: dict[str, Any]
 ) -> "ModuleLog":
     """Build the root ModuleLog ("self") representing the model itself.
 
-    The root module encompasses all layers and params. Its address_children are
+    The root module encomops all layers and params. Its address_children are
     only direct children (no dots in address), while call_children may include
     grandchildren called directly (e.g., self.level21.level12(x)).
     """
@@ -138,7 +140,7 @@ def _build_root_module_log(
 
     module_metadata = cast(dict[str, dict[str, Any]], self._module_metadata)
     root_meta = module_metadata.get("self", {})
-    root_all_layers = list(self.layer_logs.keys())
+    root_layers = list(self.layer_logs.keys())
 
     root_param_dict = {pl.address: pl for pl in self.param_logs}
     root_params = ParamAccessor(root_param_dict)
@@ -151,7 +153,9 @@ def _build_root_module_log(
         address="self",
         all_addresses=root_meta.get("all_addresses", ["self"]),
         name="self",
-        module_class_name=root_meta.get("module_class_name", self.model_name),
+        cls=root_meta.get("cls"),
+        class_name=root_meta.get("class_name", self.model_name),
+        class_qualname=root_meta.get("class_qualname", ""),
         source_file=root_meta.get("source_file"),
         source_line=root_meta.get("source_line"),
         class_docstring=root_meta.get("class_docstring"),
@@ -168,45 +172,50 @@ def _build_root_module_log(
         address_depth=0,
         call_parent=None,
         call_children=mbd["top_level_modules"][:],
-        nesting_depth=0,
-        num_passes=1,
-        passes={},
-        pass_labels=["self:1"],
-        all_layers=root_all_layers,
+        call_depth=0,
+        num_calls=1,
+        ops={},
+        call_labels=["self:1"],
+        layers=root_layers,
         params=root_params,
         num_params=root_num_params,
         num_params_trainable=root_num_trainable,
         num_params_frozen=root_num_frozen,
-        params_memory=root_fsize,
-        requires_grad=root_num_trainable > 0,
+        param_memory=root_fsize,
+        has_trainable_params=root_num_trainable > 0,
         buffer_layers=list(self.buffer_layers),
-        is_training=root_meta.get("is_training", True),
-        has_forward_hooks=root_meta.get("has_forward_hooks", False),
-        has_backward_hooks=root_meta.get("has_backward_hooks", False),
-        extra_attributes=root_meta.get("extra_attributes", {}),
-        methods=root_meta.get("methods", []),
-        _source_model_log=self,
+        is_train_mode=root_meta.get("is_train_mode", True),
+        forward_pre_hook_info=root_meta.get("forward_pre_hook_info"),
+        forward_hook_info=root_meta.get("forward_hook_info"),
+        backward_pre_hook_info=root_meta.get("backward_pre_hook_info"),
+        backward_hook_info=root_meta.get("backward_hook_info"),
+        full_backward_pre_hook_info=root_meta.get("full_backward_pre_hook_info"),
+        full_backward_hook_info=root_meta.get("full_backward_hook_info"),
+        custom_attributes=root_meta.get("custom_attributes", {}),
+        custom_methods=root_meta.get("custom_methods", []),
+        _source_trace=self,
     )
 
-    root_pass = ModulePassLog(
-        module_address="self",
-        pass_num=1,
-        pass_label="self:1",
-        layers=root_all_layers,
+    root_pass = ModuleCallLog(
+        address="self",
+        call_index=1,
+        call_label="self:1",
+        layers=root_layers,
         input_layers=list(self.input_layers),
         output_layers=list(self.output_layers),
         call_parent=None,
-        call_children=mbd["top_level_module_passes"][:],
-        all_module_addresses=root_meta.get("all_addresses", ["self"]),
+        call_children=mbd["top_level_module_ops"][:],
+        all_addresses=root_meta.get("all_addresses", ["self"]),
+        _source_trace=self,
     )
-    root_module.passes = {1: root_pass}
+    root_module.ops[1] = root_pass
     pass_dict["self:1"] = root_pass
 
     return root_module
 
 
-def _compute_nesting_depths(module_dict: dict[str, "ModuleLog"], root_module: "ModuleLog") -> None:
-    """Assign nesting_depth to each ModuleLog via BFS from the root.
+def _compute_call_depths(module_dict: dict[str, "ModuleLog"], root_module: "ModuleLog") -> None:
+    """Assign call_depth to each ModuleLog via BFS from the root.
 
     Root ("self") has depth 0. Each level of call_children nesting adds 1.
     """
@@ -214,7 +223,7 @@ def _compute_nesting_depths(module_dict: dict[str, "ModuleLog"], root_module: "M
     queue: deque[str] = deque()
     for child_addr in root_module.call_children:
         if child_addr in module_dict:
-            module_dict[child_addr].nesting_depth = 1
+            module_dict[child_addr].call_depth = 1
             visited[child_addr] = 1
             queue.append(child_addr)
 
@@ -224,7 +233,7 @@ def _compute_nesting_depths(module_dict: dict[str, "ModuleLog"], root_module: "M
         for child_addr in ml.call_children:
             if child_addr not in visited and child_addr in module_dict:
                 depth = visited[addr] + 1
-                module_dict[child_addr].nesting_depth = depth
+                module_dict[child_addr].call_depth = depth
                 visited[child_addr] = depth
                 queue.append(child_addr)
 
@@ -244,7 +253,7 @@ def _append_unique_child_label(child_labels: List[str], child_label: str) -> Non
 
 
 def _strip_pass_suffix(layer_label: str) -> str:
-    """Strip the ``:pass_num`` suffix from a layer label.
+    """Strip the ``:call_index`` suffix from a layer label.
 
     Parameters
     ----------
@@ -261,7 +270,7 @@ def _strip_pass_suffix(layer_label: str) -> str:
 
 def _merge_layer_log_conditional_fields(
     layer_log: "LayerLog",
-    pass_log: "LayerPassLog",
+    pass_log: "OpLog",
 ) -> None:
     """Merge one pass's conditional metadata into an aggregate ``LayerLog``.
 
@@ -272,21 +281,21 @@ def _merge_layer_log_conditional_fields(
     pass_log:
         Per-pass layer entry contributing conditional metadata.
     """
-    if pass_log.in_cond_branch:
-        layer_log.in_cond_branch = True
+    if pass_log.is_in_conditional_body:
+        layer_log.is_in_conditional_body = True
 
     stack_signature = tuple(pass_log.conditional_branch_stack)
-    if stack_signature not in layer_log.conditional_branch_stack_passes:
-        layer_log.conditional_branch_stacks.append(list(pass_log.conditional_branch_stack))
-        layer_log.conditional_branch_stack_passes[stack_signature] = []
+    if stack_signature not in layer_log.conditional_branch_stack_ops:
+        layer_log.conditional_role_stacks.append(list(pass_log.conditional_branch_stack))
+        layer_log.conditional_branch_stack_ops[stack_signature] = []
 
-    signature_passes = layer_log.conditional_branch_stack_passes[stack_signature]
-    if pass_log.pass_num not in signature_passes:
-        signature_passes.append(pass_log.pass_num)
-        signature_passes.sort()
+    signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
+    if pass_log.call_index not in signature_ops:
+        signature_ops.append(pass_log.call_index)
+        signature_ops.sort()
 
-    for conditional_id, branch_children in pass_log.cond_branch_children_by_cond.items():
-        merged_branch_children = layer_log.cond_branch_children_by_cond.setdefault(
+    for conditional_id, branch_children in pass_log.conditional_arm_children.items():
+        merged_branch_children = layer_log.conditional_arm_children.setdefault(
             conditional_id,
             {},
         )
@@ -307,42 +316,42 @@ def _rebuild_layer_log_conditional_views(layer_log: "LayerLog") -> None:
     layer_log:
         Aggregate layer entry whose derived conditional fields are refreshed.
     """
-    layer_log.in_cond_branch = any(
-        len(branch_stack) > 0 for branch_stack in layer_log.conditional_branch_stacks
+    layer_log.is_in_conditional_body = any(
+        len(branch_stack) > 0 for branch_stack in layer_log.conditional_role_stacks
     )
 
-    cond_branch_start_children: List[str] = []
-    for pass_num in sorted(layer_log.passes):
-        pass_log = layer_log.passes[pass_num]
-        for child_label in pass_log.cond_branch_start_children:
+    conditional_entry_children: List[str] = []
+    for call_index in sorted(layer_log.ops):
+        pass_log = layer_log.ops[call_index]
+        for child_label in pass_log.conditional_entry_children:
             _append_unique_child_label(
-                cond_branch_start_children,
+                conditional_entry_children,
                 _strip_pass_suffix(child_label),
             )
-    layer_log.cond_branch_start_children = cond_branch_start_children
+    layer_log.conditional_entry_children = conditional_entry_children
 
-    cond_branch_then_children: List[str] = []
-    cond_branch_elif_children: Dict[int, List[str]] = {}
-    cond_branch_else_children: List[str] = []
-    for branch_children in layer_log.cond_branch_children_by_cond.values():
+    conditional_then_children: List[str] = []
+    conditional_elif_children: Dict[int, List[str]] = {}
+    conditional_else_children: List[str] = []
+    for branch_children in layer_log.conditional_arm_children.values():
         for child_label in branch_children.get("then", []):
-            _append_unique_child_label(cond_branch_then_children, child_label)
+            _append_unique_child_label(conditional_then_children, child_label)
         for branch_kind, child_labels in branch_children.items():
             if not branch_kind.startswith("elif_"):
                 continue
             elif_index = int(branch_kind.split("_", 1)[1])
-            elif_children = cond_branch_elif_children.setdefault(elif_index, [])
+            elif_children = conditional_elif_children.setdefault(elif_index, [])
             for child_label in child_labels:
                 _append_unique_child_label(elif_children, child_label)
         for child_label in branch_children.get("else", []):
-            _append_unique_child_label(cond_branch_else_children, child_label)
+            _append_unique_child_label(conditional_else_children, child_label)
 
-    layer_log.cond_branch_then_children = cond_branch_then_children
-    layer_log.cond_branch_elif_children = cond_branch_elif_children
-    layer_log.cond_branch_else_children = cond_branch_else_children
+    layer_log.conditional_then_children = conditional_then_children
+    layer_log.conditional_elif_children = conditional_elif_children
+    layer_log.conditional_else_children = conditional_else_children
 
 
-def _rebuild_conditional_edge_passes(self: "ModelLog") -> None:
+def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
     """Recompute rolled conditional edge-pass metadata from arm-entry edges.
 
     Parameters
@@ -350,33 +359,34 @@ def _rebuild_conditional_edge_passes(self: "ModelLog") -> None:
     self:
         Model log being finalized.
     """
-    conditional_edge_passes: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
-    for (conditional_id, branch_kind), edge_list in self.conditional_arm_edges.items():
+    conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
+    for (conditional_id, branch_kind), edge_list in self.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             parent_no_pass = _strip_pass_suffix(parent_label)
             child_no_pass = _strip_pass_suffix(child_label)
-            child_pass_num = _get_label_pass_num(child_label)
+            child_call_index = _get_label_call_index(child_label)
             edge_key = (
                 parent_no_pass,
                 child_no_pass,
                 conditional_id,
                 branch_kind,
             )
-            if child_pass_num not in conditional_edge_passes[edge_key]:
-                conditional_edge_passes[edge_key].append(child_pass_num)
+            if child_call_index not in conditional_edge_call_indices[edge_key]:
+                conditional_edge_call_indices[edge_key].append(child_call_index)
 
-    self.conditional_edge_passes = {
-        edge_key: sorted(pass_nums) for edge_key, pass_nums in conditional_edge_passes.items()
+    self.conditional_edge_call_indices = {
+        edge_key: sorted(call_indexs)
+        for edge_key, call_indexs in conditional_edge_call_indices.items()
     }
 
 
-def _get_label_pass_num(layer_label: str) -> int:
+def _get_label_call_index(layer_label: str) -> int:
     """Extract the pass number encoded in a layer label.
 
     Parameters
     ----------
     layer_label:
-        Layer label that may include a ``:pass_num`` suffix.
+        Layer label that may include a ``:call_index`` suffix.
 
     Returns
     -------
@@ -389,62 +399,62 @@ def _get_label_pass_num(layer_label: str) -> int:
     return 1
 
 
-def _build_submodule_pass_logs(
-    self: "ModelLog",
+def _build_submodule_call_logs(
+    self: "Trace",
     address: str,
-    num_passes: int,
-    pass_dict: dict[str, "ModulePassLog"],
+    num_calls: int,
+    pass_dict: dict[str, "ModuleCallLog"],
     mbd: dict[str, Any],
     _child_to_parent_pass: dict[str, str] | None = None,
-    all_module_addresses: list[str] | None = None,
-) -> tuple[dict[int, "ModulePassLog"], list[str]]:
-    """Build ModulePassLog objects for all passes of a single submodule.
+    all_addresses: list[str] | None = None,
+) -> tuple[dict[int, "ModuleCallLog"], list[str]]:
+    """Build ModuleCallLog objects for all ops of a single submodule.
 
-    For each pass, derives input/output layers from LayerPassLog fields,
+    For each pass, derives input/output layers from OpLog fields,
     retrieves forward args, and resolves call parent/children relationships.
 
     Returns:
-        Tuple of (passes dict {pass_num: ModulePassLog}, pass_labels list).
+        Tuple of (ops dict {call_index: ModuleCallLog}, call_labels list).
     """
-    passes = {}
-    pass_labels_list = []
-    for pass_num in range(1, num_passes + 1):
-        pass_label = f"{address}:{pass_num}"
-        pass_labels_list.append(pass_label)
+    ops = {}
+    call_labels_list = []
+    for call_index in range(1, num_calls + 1):
+        call_label = f"{address}:{call_index}"
+        call_labels_list.append(call_label)
 
-        pass_layers = list(mbd["module_pass_layers"].get(pass_label, []))
+        pass_layers = list(mbd["module_pass_layers"].get(call_label, []))
 
-        # Derive input/output layers per pass from LayerPassLog fields
+        # Derive input/output layers per pass from OpLog fields
         pass_input_layers = []
         pass_output_layers = []
         for layer_label in pass_layers:
             if layer_label in self.layer_dict_all_keys:
                 te = self.layer_dict_all_keys[layer_label]
-                if te.is_submodule_input and pass_label in te.module_passes_entered:
+                if te.is_submodule_input and call_label in te.module_ops_entered:
                     pass_input_layers.append(layer_label)
-                if te.is_submodule_output and pass_label in te.module_passes_exited:
+                if te.is_submodule_output and call_label in te.output_of_module_calls:
                     pass_output_layers.append(layer_label)
 
         # Forward args for this pass
         module_forward_args = cast(
             dict[tuple[str, int], tuple[Any, Any]], self._module_forward_args
         )
-        fwd_args = module_forward_args.get((address, pass_num))
+        fwd_args = module_forward_args.get((address, call_index))
         fwd_positional = fwd_args[0] if fwd_args else None
         fwd_kwargs = fwd_args[1] if fwd_args else None
 
         # Call children for this pass
-        call_children_pass = list(mbd["module_pass_children"].get(pass_label, []))
+        call_children_pass = list(mbd["module_pass_children"].get(call_label, []))
 
         # Call parent for this pass: look up from pre-computed reverse mapping
-        call_parent_pass = _child_to_parent_pass.get(pass_label) if _child_to_parent_pass else None
-        if call_parent_pass is None and pass_label in mbd["top_level_module_passes"]:
+        call_parent_pass = _child_to_parent_pass.get(call_label) if _child_to_parent_pass else None
+        if call_parent_pass is None and call_label in mbd["top_level_module_ops"]:
             call_parent_pass = "self:1"
 
-        module_pass_log = ModulePassLog(
-            module_address=address,
-            pass_num=pass_num,
-            pass_label=pass_label,
+        module_call_log = ModuleCallLog(
+            address=address,
+            call_index=call_index,
+            call_label=call_label,
             layers=pass_layers,
             input_layers=pass_input_layers,
             output_layers=pass_output_layers,
@@ -452,20 +462,21 @@ def _build_submodule_pass_logs(
             forward_kwargs=fwd_kwargs,
             call_parent=call_parent_pass,
             call_children=call_children_pass,
-            all_module_addresses=all_module_addresses,
+            all_addresses=all_addresses,
+            _source_trace=self,
         )
-        passes[pass_num] = module_pass_log
-        pass_dict[pass_label] = module_pass_log
+        ops[call_index] = module_call_log
+        pass_dict[call_label] = module_call_log
 
-    return passes, pass_labels_list
+    return ops, call_labels_list
 
 
 def _resolve_call_hierarchy(
-    passes: dict[int, "ModulePassLog"],
+    ops: dict[int, "ModuleCallLog"],
 ) -> tuple[list[str], str | None]:
     """Derive module-level call_children and call_parent from per-pass data.
 
-    Unions call_children across all passes (stripping pass suffixes to get
+    Unions call_children across all ops (stripping pass suffixes to get
     addresses). call_parent is taken from the first pass and converted from
     pass-label to address.
 
@@ -473,15 +484,15 @@ def _resolve_call_hierarchy(
         Tuple of (call_children_all: list of addresses, call_parent_addr or None).
     """
     call_children_all = []
-    for module_pass_log in passes.values():
-        for child_pass_label in module_pass_log.call_children:
-            cc_addr = child_pass_label.split(":")[0]
+    for module_call_log in ops.values():
+        for child_call_label in module_call_log.call_children:
+            cc_addr = child_call_label.split(":")[0]
             if cc_addr not in call_children_all:
                 call_children_all.append(cc_addr)
 
     call_parent_addr = None
-    if passes:
-        first_pass = passes[1]
+    if ops:
+        first_pass = ops[1]
         if first_pass.call_parent and first_pass.call_parent != "self:1":
             call_parent_addr = first_pass.call_parent.split(":")[0]
         elif first_pass.call_parent == "self:1":
@@ -502,7 +513,7 @@ class ModuleParamInfo(NamedTuple):
 
 
 def _build_module_param_info(
-    self: "ModelLog",
+    self: "Trace",
     address: str,
     mbd: dict[str, Any],
     _buffer_layers_by_module: dict[str, list[str]] | None = None,
@@ -534,17 +545,17 @@ def _build_module_param_info(
     )
 
 
-def _build_module_logs(self: "ModelLog") -> None:
-    """Step 17: Build structured ModuleLog/ModulePassLog objects.
+def _build_module_logs(self: "Trace") -> None:
+    """Step 16: Build structured ModuleLog/ModuleCallLog objects.
 
-    Constructs the module hierarchy from _module_build_data (populated in Step 10)
+    Constructs the module hierarchy from _module_build_data (populated in Step 9)
     and _module_metadata (captured during model preparation). Creates:
     - A root ModuleLog for "self" (the model itself).
-    - ModuleLogs for each submodule with ModulePassLogs for each pass.
+    - ModuleLogs for each submodule with ModuleCallLogs for each pass.
     - ModuleAccessor and BufferAccessor for user-facing access.
 
     MUST NOT be called in fast mode (postprocess_fast) because _module_build_data
-    is not repopulated when Step 10 is skipped. Existing module logs from the
+    is not repopulated when Step 9 is skipped. Existing module logs from the
     exhaustive pass remain valid (#108).
 
     Handles shared modules (same nn.Module registered under multiple addresses)
@@ -554,7 +565,7 @@ def _build_module_logs(self: "ModelLog") -> None:
     """
     mbd = self._module_build_data
     module_dict = {}  # address -> ModuleLog
-    pass_dict: Dict[str, ModulePassLog] = {}  # "addr:pass" -> ModulePassLog
+    pass_dict: Dict[str, ModuleCallLog] = {}  # "addr:pass" -> ModuleCallLog
     module_order = []  # ordered by first appearance
 
     # --- Build root ModuleLog ("self") ---
@@ -565,18 +576,19 @@ def _build_module_logs(self: "ModelLog") -> None:
     # Pre-compute param_logs grouped by module address
     self._param_logs_by_module = defaultdict(list)  # type: ignore[attr-defined]
     for pl in self.param_logs:
-        self._param_logs_by_module[pl.module_address].append(pl)  # type: ignore[attr-defined]
+        for module_address in pl.all_module_addresses:
+            self._param_logs_by_module[module_address].append(pl)  # type: ignore[attr-defined]
 
-    # Pre-compute reverse mapping: child_pass_label -> parent_pass_label
+    # Pre-compute reverse mapping: child_call_label -> parent_call_label
     _child_to_parent_pass = {}
-    for parent_pass_label, children in mbd["module_pass_children"].items():
+    for parent_call_label, children in mbd["module_pass_children"].items():
         for child_label in children:
-            _child_to_parent_pass[child_label] = parent_pass_label
+            _child_to_parent_pass[child_label] = parent_call_label
 
     # Build alias-to-metadata map for shared modules (same nn.Module instance
     # registered under multiple addresses). _module_metadata stores metadata
     # under the FIRST address visited by _capture_module_metadata, but
-    # tl_module_address may be overwritten to a LATER address by
+    # Module addresses may be overwritten to a LATER address by
     # _prepare_model_once. This map ensures all aliases resolve to the same meta.
     _metadata_by_alias: dict[str, dict[str, Any]] = {}
     for _primary_addr, _meta in self._module_metadata.items():
@@ -593,35 +605,35 @@ def _build_module_logs(self: "ModelLog") -> None:
                 _buffer_layers_by_module[module_addr].append(bl)
 
     # --- Build ModuleLogs for each submodule ---
-    for address in mbd["module_addresses"]:
+    for address in mbd["addresses"]:
         meta = _metadata_by_alias.get(address, {})
-        num_passes = mbd["module_num_passes"].get(address, 1)
+        num_calls = mbd["module_num_calls"].get(address, 1)
 
         name = address.rsplit(".", 1)[-1] if "." in address else address
         address_parent = address.rsplit(".", 1)[0] if "." in address else "self"
         address_depth = address.count(".") + 1
-        all_layers_raw = list(mbd["module_layers"].get(address, []))
+        layers_raw = list(mbd["module_layers"].get(address, []))
         seen = set()
-        all_layers = []
-        for label in all_layers_raw:
+        layers = []
+        for label in layers_raw:
             entry = self.layer_dict_all_keys.get(label)
             if entry is not None:
                 no_pass = entry.layer_label_no_pass
                 if no_pass not in seen:
                     seen.add(no_pass)
-                    all_layers.append(no_pass)
+                    layers.append(no_pass)
 
         all_addresses = meta.get("all_addresses", [address])
-        passes, pass_labels_list = _build_submodule_pass_logs(
+        ops, call_labels_list = _build_submodule_call_logs(
             self,
             address,
-            num_passes,
+            num_calls,
             pass_dict,
             mbd,
             _child_to_parent_pass,
-            all_module_addresses=all_addresses,
+            all_addresses=all_addresses,
         )
-        call_children_all, call_parent_addr = _resolve_call_hierarchy(passes)
+        call_children_all, call_parent_addr = _resolve_call_hierarchy(ops)
         param_info = _build_module_param_info(self, address, mbd, _buffer_layers_by_module)
 
         # address_children from metadata may have a different address prefix
@@ -649,7 +661,9 @@ def _build_module_logs(self: "ModelLog") -> None:
             address=address,
             all_addresses=meta.get("all_addresses", [address]),
             name=name,
-            module_class_name=meta.get("module_class_name", mbd["module_types"].get(address, "")),
+            cls=meta.get("cls"),
+            class_name=meta.get("class_name", mbd["module_types"].get(address, "")),
+            class_qualname=meta.get("class_qualname", ""),
             source_file=meta.get("source_file"),
             source_line=meta.get("source_line"),
             class_docstring=meta.get("class_docstring"),
@@ -662,42 +676,48 @@ def _build_module_logs(self: "ModelLog") -> None:
             address_depth=address_depth,
             call_parent=call_parent_addr,
             call_children=call_children_all,
-            nesting_depth=0,  # computed below
-            num_passes=num_passes,
-            passes=passes,
-            pass_labels=pass_labels_list,
-            all_layers=all_layers,
+            call_depth=0,  # computed below
+            num_calls=num_calls,
+            ops=ops,
+            call_labels=call_labels_list,
+            layers=layers,
             params=param_info.params,  # type: ignore[arg-type]
             num_params=param_info.num_params,
             num_params_trainable=param_info.num_trainable,
             num_params_frozen=param_info.num_frozen,
-            params_memory=param_info.memory,
-            requires_grad=param_info.num_trainable > 0,
+            param_memory=param_info.memory,
+            has_trainable_params=param_info.num_trainable > 0,
             buffer_layers=param_info.buffer_layers,
-            is_training=mbd["module_training_modes"].get(address, meta.get("is_training", True)),
-            has_forward_hooks=meta.get("has_forward_hooks", False),
-            has_backward_hooks=meta.get("has_backward_hooks", False),
-            extra_attributes=meta.get("extra_attributes", {}),
-            methods=meta.get("methods", []),
-            _source_model_log=self,
+            is_train_mode=mbd["module_training_modes"].get(
+                address, meta.get("is_train_mode", True)
+            ),
+            forward_pre_hook_info=meta.get("forward_pre_hook_info"),
+            forward_hook_info=meta.get("forward_hook_info"),
+            backward_pre_hook_info=meta.get("backward_pre_hook_info"),
+            backward_hook_info=meta.get("backward_hook_info"),
+            full_backward_pre_hook_info=meta.get("full_backward_pre_hook_info"),
+            full_backward_hook_info=meta.get("full_backward_hook_info"),
+            custom_attributes=meta.get("custom_attributes", {}),
+            custom_methods=meta.get("custom_methods", []),
+            _source_trace=self,
         )
         module_dict[address] = ml
         module_order.append(ml)
 
     # --- Compute nesting depths ---
-    _compute_nesting_depths(module_dict, root_module)
+    _compute_call_depths(module_dict, root_module)
 
-    rebuild_model_log_accessors(self, module_dict, module_order, pass_dict)
+    rebuild_trace_accessors(self, module_dict, module_order, pass_dict)
 
     # Clean up temporary build state to free memory. These dicts are only
     # needed during construction and are not part of the user-facing API.
     self._module_metadata = {}
     self._module_forward_args = {}
-    from ..data_classes.model_log import _init_module_build_data
+    from ..data_classes.model_log import _init_module_hierarchy_data
 
-    self._module_build_data = _init_module_build_data()
+    self._module_build_data = _init_module_hierarchy_data()
 
-    # GC-11: Clear forward_args/kwargs from ModulePassLogs to release tensor references.
+    # GC-11: Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.
     for pass_log in pass_dict.values():
         pass_log.forward_args_summary = format_call_arg(pass_log.forward_args)
@@ -706,22 +726,22 @@ def _build_module_logs(self: "ModelLog") -> None:
         pass_log.forward_kwargs = None
 
 
-def _build_layer_logs(self: "ModelLog") -> None:
-    """Step 16.5: Build aggregate LayerLog objects from per-pass LayerPassLog entries.
+def _build_layer_logs(self: "Trace") -> None:
+    """Step 15.5: Build aggregate LayerLog objects from per-pass OpLog entries.
 
     Groups layer_list entries by layer_label_no_pass and creates a LayerLog for
     each unique layer. For single-pass layers, the LayerLog is a thin wrapper
-    delegating attribute access to the sole LayerPassLog.
+    delegating attribute access to the sole OpLog.
 
     MERGE RULES for multi-pass layers:
-    1. has_input_ancestor: OR across passes (True if ANY pass has an input ancestor).
+    1. has_input_ancestor: OR across ops (True if ANY pass has an input ancestor).
     2. io_role: Character-wise merge with '*' for differing characters
        (e.g., "output.0" + "output.1" -> "output.*").
-    3. is_leaf_module_output: OR across passes.
-    4. in_cond_branch: OR across passes.
-    5. conditional_branch_stacks / conditional_branch_stack_passes:
+    3. is_atomic_module_op: OR across ops.
+    4. is_in_conditional_body: OR across ops.
+    5. conditional_role_stacks / conditional_branch_stack_ops:
        unique stack signatures in first-seen order plus sorted pass maps.
-    6. cond_branch_children_by_cond: pass-stripped union across passes with
+    6. conditional_arm_children: pass-stripped union across ops with
        insertion-order preservation.
 
     Derived aggregate views (cond_branch_then/elif/else/start_children) are
@@ -729,9 +749,9 @@ def _build_layer_logs(self: "ModelLog") -> None:
 
     All other 78+ fields use first-pass values only. This is correct because
     same-layer grouping requires same structural position, so module containment,
-    function info, param info, etc. are identical across passes.
+    function info, param info, etc. are identical across ops.
 
-    Note: modules_exited/module_passes_exited are NOT updated during merge
+    Note: output_of_modules/output_of_module_calls are NOT updated during merge
     (same structural position implies same modules). The comment in layer_log.py:107
     ("may be updated") is misleading — no such update occurs.
     """
@@ -742,16 +762,16 @@ def _build_layer_logs(self: "ModelLog") -> None:
     layer_logs = OrderedDict()
 
     for pass_log in self.layer_list:
-        no_pass_label = pass_log.layer_label_no_pass
+        no_call_label = pass_log.layer_label_no_pass
 
-        if no_pass_label not in layer_logs:
+        if no_call_label not in layer_logs:
             # First pass: create LayerLog from this pass's data.
             layer_log = LayerLog(pass_log)
-            layer_logs[no_pass_label] = layer_log
+            layer_logs[no_call_label] = layer_log
         else:
             # Subsequent pass: merge only the 3 aggregate fields.
-            layer_log = layer_logs[no_pass_label]
-            # Merge field 1/3: has_input_ancestor (OR across passes).
+            layer_log = layer_logs[no_call_label]
+            # Merge field 1/3: has_input_ancestor (OR across ops).
             if pass_log.has_input_ancestor:
                 layer_log.has_input_ancestor = True
             # Merge field 2/3: io_role (char-merge with '*').
@@ -768,72 +788,164 @@ def _build_layer_logs(self: "ModelLog") -> None:
                 if merged.endswith("*"):
                     merged = merged.rstrip("*") + "*"
                 layer_log.io_role = merged
-            # Merge field 3/3: is_leaf_module_output (OR across passes).
-            if pass_log.is_leaf_module_output:
-                layer_log.is_leaf_module_output = True
+            # Merge field 3/3: is_atomic_module_op (OR across ops).
+            if pass_log.is_atomic_module_op:
+                layer_log.is_atomic_module_op = True
 
-        layer_log.passes[pass_log.pass_num] = pass_log
-        layer_log.pass_labels.append(pass_log.layer_label)
+        layer_log.ops[pass_log.call_index] = pass_log
+        layer_log.call_labels.append(pass_log.layer_label)
         pass_log.parent_layer_log = layer_log
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 
-    total_autograd_saved_bytes = 0
+    autograd_saved_memory = 0
     has_autograd_saved_value = False
     for layer_log in layer_logs.values():
-        for pass_log in layer_log.passes.values():
+        for pass_log in layer_log.ops.values():
             linked_labels = []
-            for param_log in getattr(pass_log, "parent_param_logs", []):
-                for linked_address in getattr(param_log, "linked_params", []):
+            for param_log in getattr(pass_log, "_param_logs", []):
+                for linked_address in getattr(param_log, "co_parent_params", []):
                     linked_labels.append(f"{param_log.address} → {linked_address}")
             if linked_labels:
-                pass_log.extra_data["tied_parameter_notation"] = linked_labels
+                pass_log.annotations["tied_parameter_notation"] = linked_labels
         pass_autograd_bytes = [
-            pass_log.autograd_saved_bytes
-            for pass_log in layer_log.passes.values()
-            if pass_log.autograd_saved_bytes is not None
+            pass_log.autograd_saved_memory
+            for pass_log in layer_log.ops.values()
+            if pass_log.autograd_saved_memory is not None
         ]
         pass_autograd_tensor_counts = [
-            pass_log.autograd_saved_tensor_count
-            for pass_log in layer_log.passes.values()
-            if pass_log.autograd_saved_tensor_count is not None
+            pass_log.num_autograd_saved_tensors
+            for pass_log in layer_log.ops.values()
+            if pass_log.num_autograd_saved_tensors is not None
         ]
         if pass_autograd_bytes:
-            layer_log.autograd_saved_bytes = sum(pass_autograd_bytes)
-            layer_log.autograd_saved_tensor_count = sum(pass_autograd_tensor_counts)
-            total_autograd_saved_bytes += layer_log.autograd_saved_bytes
+            layer_log.autograd_saved_memory = sum(pass_autograd_bytes)
+            layer_log.num_autograd_saved_tensors = sum(pass_autograd_tensor_counts)
+            autograd_saved_memory += layer_log.autograd_saved_memory
             has_autograd_saved_value = True
         else:
-            layer_log.autograd_saved_bytes = None
-            layer_log.autograd_saved_tensor_count = None
+            layer_log.autograd_saved_memory = None
+            layer_log.num_autograd_saved_tensors = None
         _rebuild_layer_log_conditional_views(layer_log)
 
-    self.total_autograd_saved_bytes = (
-        total_autograd_saved_bytes if has_autograd_saved_value else None
-    )
+    self.autograd_saved_memory = autograd_saved_memory if has_autograd_saved_value else None
     self.layer_logs = layer_logs
-    _rebuild_conditional_edge_passes(self)
+    _rebuild_conditional_edge_call_indices(self)
+    _build_conditional_records(self)
 
 
-def _set_pass_finished(self: "ModelLog") -> None:
-    """Step 18: Mark the ModelLog and all LayerPassLogs as pass-finished.
+def _build_conditional_records(self: "Trace") -> None:
+    """Build the public ConditionalAccessor from conditional postprocess data."""
 
-    Sets ``_pass_finished = True`` on the ModelLog and every retained
-    LayerPassLog entry. This flag switches various methods (e.g., __str__,
+    from ..data_classes.model_log import (
+        Conditional,
+        ConditionalAccessor,
+        ConditionalArm,
+        ConditionalRoleRef,
+    )
+
+    conditionals: list[Conditional] = []
+    event_by_id = {event.id: event for event in self.conditional_records}
+    for event in self.conditional_records:
+        terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
+        conditional_id = f"cond_{terminal_bool_label}"
+        # Use AST-derived branch_ranges so every static arm is materialized,
+        # regardless of which arm fired at runtime. fired-vs-not is captured
+        # per-arm via ConditionalArm.fired below.
+        ast_branch_kinds = list(event.branch_ranges)
+        ordered_branch_kinds = ["then"]
+        ordered_branch_kinds.extend(
+            sorted(
+                (kind for kind in ast_branch_kinds if kind.startswith("elif_")),
+                key=lambda kind: int(kind.split("_", 1)[1]),
+            )
+        )
+        if "else" in ast_branch_kinds:
+            ordered_branch_kinds.append("else")
+
+        arms: list[ConditionalArm] = []
+        for branch_kind in ordered_branch_kinds:
+            kind = "elif" if branch_kind.startswith("elif_") else branch_kind
+            edge_list = list(self.conditional_arm_entry_edges.get((event.id, branch_kind), []))
+            execution_labels = list(dict.fromkeys(child for _parent, child in edge_list))
+            evaluation_labels = list(event.bool_layers) if kind in {"then", "elif"} else []
+            terminal_bool = terminal_bool_label if kind == "then" and event.bool_layers else None
+            bool_value = None
+            if terminal_bool is not None and terminal_bool in self.layer_dict_all_keys:
+                bool_value = getattr(self.layer_dict_all_keys[terminal_bool], "bool_value", None)
+            arm = ConditionalArm(
+                kind=kind,  # type: ignore[arg-type]
+                evaluation_op_labels=evaluation_labels,
+                terminal_bool_op_label=terminal_bool,
+                bool_value_at_run=bool_value,
+                condition_evaluated=bool(evaluation_labels) or kind == "else",
+                evaluation_entry_edge=(event.bool_layers[0], event.bool_layers[0])
+                if event.bool_layers and kind in {"then", "elif"}
+                else None,
+                execution_op_labels=execution_labels,
+                fired=bool(execution_labels),
+                execution_entry_edge=edge_list[0] if edge_list else None,
+            )
+            arms.append(arm)
+
+        fired_arm_index = next((index for index, arm in enumerate(arms) if arm.fired), None)
+        fired_arm_kind = arms[fired_arm_index].kind if fired_arm_index is not None else None
+        conditionals.append(
+            Conditional(
+                id=conditional_id,
+                arms=arms,
+                fired_arm_index=fired_arm_index,
+                fired_arm_kind=fired_arm_kind,
+                source_file=event.source_file,
+                source_line=event.if_stmt_span[0] if event.if_stmt_span else None,
+            )
+        )
+
+    for layer in self.layer_list:
+        roles = []
+        for conditional in conditionals:
+            for arm_index, arm in enumerate(conditional.arms):
+                if layer.layer_label in arm.evaluation_op_labels:
+                    roles.append(
+                        ConditionalRoleRef(conditional.id, arm_index, arm.kind, "evaluation")
+                    )
+                if layer.layer_label in arm.execution_op_labels:
+                    roles.append(ConditionalRoleRef(conditional.id, arm_index, arm.kind, "body"))
+        layer.in_conditionals = roles
+        if (
+            layer.terminal_conditional_id is not None
+            and layer.terminal_conditional_id in event_by_id
+        ):
+            event = event_by_id[layer.terminal_conditional_id]
+            event_index = [conditional.id for conditional in conditionals].index(
+                f"cond_{event.bool_layers[0] if event.bool_layers else event.id}"
+            )
+            layer.terminal_bool_for = (conditionals[event_index].id, 0)
+        else:
+            layer.terminal_bool_for = None
+
+    self.conditionals = ConditionalAccessor(conditionals)
+
+
+def _set_tracing_finished(self: "Trace") -> None:
+    """Step 17: Mark the Trace and all OpLogs as pass-finished.
+
+    Sets ``_tracing_finished = True`` on the Trace and every retained
+    OpLog entry. This flag switches various custom_methods (e.g., __str__,
     __getitem__) from their "realtime debugging" behavior to their
     "user-facing" behavior.
 
-    Note: _pass_finished is NOT reset between exhaustive and fast passes.
+    Note: _tracing_finished is NOT reset between exhaustive and fast ops.
     This is intentional — it enables fast-path postprocessing to use
     fully-populated lookup dicts from the exhaustive pass.
     """
     for layer_label in self.layer_dict_main_keys:
         tensor = self.layer_dict_main_keys[layer_label]
-        tensor._pass_finished = True
-    self._pass_finished = True
+        tensor._tracing_finished = True
+    self._tracing_finished = True
 
 
-def _finalize_streamed_bundle(self: "ModelLog") -> None:
-    """Step 19: Finalize any in-progress streamed tensor bundle.
+def _finalize_streamed_bundle(self: "Trace") -> None:
+    """Step 18: Finalize any in-progress streamed tensor bundle.
 
     Parameters
     ----------
@@ -846,7 +958,7 @@ def _finalize_streamed_bundle(self: "ModelLog") -> None:
         If portable scrubbing or bundle finalization fails.
     """
 
-    writer = self._activation_writer
+    writer = self._out_writer
     if writer is None:
         return
 
@@ -854,9 +966,9 @@ def _finalize_streamed_bundle(self: "ModelLog") -> None:
 
     scrubbed_state, blob_specs = scrub_for_save(
         self,
-        include_activations=True,
-        include_gradients=self.save_gradients,
-        include_captured_args=self.save_function_args,
+        include_outs=True,
+        include_grads=self.save_grads,
+        include_saved_args=self.save_arg_values,
         include_rng_states=self.save_rng_states,
     )
     scrubbed_state, blob_specs = _reuse_streamed_blob_ids(
@@ -877,44 +989,44 @@ def _finalize_streamed_bundle(self: "ModelLog") -> None:
     _attach_streamed_tensor_refs(
         self, scrubbed_state=scrubbed_state, writer=writer, final_path=final_path
     )
-    self._activation_writer = None
+    self._out_writer = None
     self._defer_streaming_bundle_finalization = False
 
 
-def _evict_streamed_activations(self: "ModelLog") -> None:
-    """Step 20: Drop in-memory activations once streaming refs have been attached.
+def _evict_streamed_outs(self: "Trace") -> None:
+    """Step 19: Drop in-memory outs once streaming refs have been attached.
 
     Parameters
     ----------
     self:
-        Model log whose streamed activations should be evicted.
+        Model log whose streamed outs should be evicted.
     """
 
     for layer_entry in self.layer_list:
-        if getattr(layer_entry, "activation_ref", None) is not None:
-            layer_entry._internal_set("activation", None)
-        if getattr(layer_entry, "_pending_transformed_activation_blob_id", None) is not None:
-            layer_entry._internal_set("transformed_activation", None)
+        if getattr(layer_entry, "out_ref", None) is not None:
+            layer_entry._internal_set("out", None)
+        if getattr(layer_entry, "_pending_transformed_out_blob_id", None) is not None:
+            layer_entry._internal_set("transformed_out", None)
 
 
-def _evict_streamed_gradients(self: "ModelLog") -> None:
-    """Drop in-memory gradients once streaming refs have been attached.
+def _evict_streamed_grads(self: "Trace") -> None:
+    """Drop in-memory grads once streaming refs have been attached.
 
     Parameters
     ----------
     self:
-        Model log whose streamed gradients should be evicted.
+        Model log whose streamed grads should be evicted.
     """
 
     for layer_entry in self.layer_list:
-        if getattr(layer_entry, "gradient_ref", None) is not None:
-            layer_entry._internal_set("gradient", None)
-        if getattr(layer_entry, "_pending_transformed_gradient_blob_id", None) is not None:
-            layer_entry._internal_set("transformed_gradient", None)
+        if getattr(layer_entry, "grad_ref", None) is not None:
+            layer_entry._internal_set("grad", None)
+        if getattr(layer_entry, "_pending_transformed_grad_blob_id", None) is not None:
+            layer_entry._internal_set("transformed_grad", None)
 
 
 def _reuse_streamed_blob_ids(
-    model_log: "ModelLog",
+    trace: "Trace",
     *,
     scrubbed_state: dict[str, Any],
     blob_specs: list[tuple[str, torch.Tensor, str, str]],
@@ -924,14 +1036,14 @@ def _reuse_streamed_blob_ids(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Live model log containing pending streamed blob ids.
     scrubbed_state:
         Scrubbed portable metadata state produced by ``scrub_for_save``.
     blob_specs:
         Scrub-generated blob specs.
     writer:
-        Streaming writer holding already-written activation entries.
+        Streaming writer holding already-written out entries.
 
     Returns
     -------
@@ -946,12 +1058,12 @@ def _reuse_streamed_blob_ids(
         )
 
     skipped_blob_ids: set[str] = set()
-    for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
+    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers):
         for tensor_field, pending_field in (
-            ("activation", "_pending_blob_id"),
-            ("transformed_activation", "_pending_transformed_activation_blob_id"),
-            ("gradient", "_pending_gradient_blob_id"),
-            ("transformed_gradient", "_pending_transformed_gradient_blob_id"),
+            ("out", "_pending_blob_id"),
+            ("transformed_out", "_pending_transformed_out_blob_id"),
+            ("grad", "_pending_grad_blob_id"),
+            ("transformed_grad", "_pending_transformed_grad_blob_id"),
         ):
             tensor_blob = getattr(scrubbed_layer, tensor_field, None)
             if not isinstance(tensor_blob, BlobRef):
@@ -972,7 +1084,7 @@ def _reuse_streamed_blob_ids(
 
 
 def _attach_streamed_tensor_refs(
-    model_log: "ModelLog",
+    trace: "Trace",
     *,
     scrubbed_state: dict[str, Any],
     writer: BundleStreamWriter,
@@ -982,10 +1094,10 @@ def _attach_streamed_tensor_refs(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Live model log receiving the refs.
     scrubbed_state:
-        Scrubbed metadata state whose activation ``BlobRef`` values now match the
+        Scrubbed metadata state whose out ``BlobRef`` values now match the
         final persisted blob ids.
     writer:
         Streaming writer containing manifest entries for all saved blobs.
@@ -999,10 +1111,10 @@ def _attach_streamed_tensor_refs(
             "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
         )
 
-    for live_layer, scrubbed_layer in zip(model_log.layer_list, scrubbed_layers):
+    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers):
         for tensor_field, ref_field, kind in (
-            ("activation", "activation_ref", "activation"),
-            ("gradient", "gradient_ref", "gradient"),
+            ("out", "out_ref", "out"),
+            ("grad", "grad_ref", "grad"),
         ):
             tensor_blob = getattr(scrubbed_layer, tensor_field, None)
             if not isinstance(tensor_blob, BlobRef):
@@ -1018,7 +1130,7 @@ def _attach_streamed_tensor_refs(
                     device_at_save=manifest_entry.device_at_save,
                     source_bundle_path=Path(final_path),
                     relative_path=manifest_entry.relative_path,
-                    kind=cast(Literal["activation", "gradient"], kind),
+                    kind=cast(Literal["out", "grad"], kind),
                     expected_sha256=manifest_entry.sha256,
                 ),
             )

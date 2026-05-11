@@ -47,7 +47,7 @@ class _DoubleFn(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx: torch.autograd.function.FunctionCtx, grad: torch.Tensor) -> torch.Tensor:
-        """Return doubled upstream gradient."""
+        """Return doubled upstream grad."""
         return grad * 2
 
 
@@ -59,8 +59,8 @@ class _CustomModel(nn.Module):
         return _DoubleFn.apply(x).sum()
 
 
-def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
-    """Return a ModelLog with backward metadata captured.
+def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+    """Return a Trace with backward metadata captured.
 
     Parameters
     ----------
@@ -71,22 +71,22 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.ModelLog:
 
     Returns
     -------
-    tl.ModelLog
+    tl.Trace
         Model log after backward capture.
     """
 
-    model_log = tl.log_forward_pass(model, x, gradients_to_save="all")
-    model_log.log_backward(model_log[model_log.output_layers[0]].activation.sum())
-    return model_log
+    trace = tl.trace(model, x, grads_to_save="all")
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    return trace
 
 
 @pytest.mark.smoke
-def test_show_backward_graph_renders(tmp_path: Path) -> None:
-    """show_backward_graph returns DOT source and writes a non-empty output file."""
-    model_log = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+def test_draw_backward_renders(tmp_path: Path) -> None:
+    """draw_backward returns DOT source and writes a non-empty output file."""
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
     outpath = tmp_path / "backward_graph"
 
-    dot = model_log.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(outpath),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -100,9 +100,9 @@ def test_show_backward_graph_renders(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
     """Backward DOT contains expected grad_fn labels."""
-    model_log = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = model_log.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(tmp_path / "grad_fns"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -116,9 +116,9 @@ def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
     """Intervening grad_fns use the documented ``[i]`` label prefix."""
-    model_log = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
+    trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
 
-    dot = model_log.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(tmp_path / "intervening"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -130,9 +130,9 @@ def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
     """Custom autograd grad_fns use the documented ``[custom]`` suffix."""
-    model_log = _log_backward_model(_CustomModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _log_backward_model(_CustomModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = model_log.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(tmp_path / "custom"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -145,9 +145,9 @@ def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
 @pytest.mark.smoke
 def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
     """Backward node labels include corresponding forward layer labels."""
-    model_log = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = model_log.show_backward_graph(
+    dot = trace.draw_backward(
         vis_outpath=str(tmp_path / "cross_ref"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -158,12 +158,12 @@ def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_show_backward_graph_top_level_function(tmp_path: Path) -> None:
-    """The top-level ``tl.show_backward_graph`` helper renders a ModelLog."""
-    model_log = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+def test_draw_backward_top_level_function(tmp_path: Path) -> None:
+    """The top-level ``tl.draw_backward`` helper renders a Trace."""
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = tl.show_backward_graph(
-        model_log,
+    dot = tl.draw_backward(
+        trace,
         vis_outpath=str(tmp_path / "top_level"),
         vis_save_only=True,
         vis_fileformat="svg",
@@ -173,16 +173,16 @@ def test_show_backward_graph_top_level_function(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_show_backward_graph_errors_without_log_backward() -> None:
-    """show_backward_graph errors clearly before explicit backward capture."""
-    model_log = tl.log_forward_pass(
+def test_draw_backward_errors_without_log_backward() -> None:
+    """draw_backward errors clearly before explicit backward capture."""
+    trace = tl.trace(
         _LinearReluModel(),
         torch.randn(2, 3, requires_grad=True),
-        gradients_to_save="all",
+        grads_to_save="all",
     )
 
     with pytest.raises(ValueError, match="call log_backward\\(loss\\) first"):
-        model_log.show_backward_graph(vis_save_only=True)
+        trace.draw_backward(vis_save_only=True)
 
 
 @pytest.mark.smoke
@@ -200,8 +200,8 @@ def test_forward_graph_unchanged(tmp_path: Path) -> None:
         vis_save_only=True,
         vis_fileformat="dot",
     )
-    model_log = _log_backward_model(model, x)
-    model_log.show_backward_graph(
+    trace = _log_backward_model(model, x)
+    trace.draw_backward(
         vis_outpath=str(tmp_path / "backward"),
         vis_save_only=True,
         vis_fileformat="svg",

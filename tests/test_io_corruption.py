@@ -9,14 +9,15 @@ from typing import Any
 
 import pytest
 import torch
+import torchlens as tl
 from torch import nn
 
 pytest.importorskip("safetensors")
 
-from torchlens import load, log_forward_pass, save
+from torchlens import load, trace as trace_fn, save
 from torchlens._io import TorchLensIOError
 from torchlens._io.manifest import sha256_of_file
-from torchlens.data_classes.model_log import ModelLog
+from torchlens.data_classes.model_log import Trace
 
 
 class _CorruptionModel(nn.Module):
@@ -65,9 +66,9 @@ def _save_bundle(tmp_path: Path, path_name: str = "bundle.tl") -> Path:
     torch.manual_seed(0)
     model = _CorruptionModel()
     inputs = torch.randn(2, 4)
-    model_log = log_forward_pass(model, inputs, layers_to_save="all", random_seed=0)
+    trace = tl.trace(model, inputs, layers_to_save="all", random_seed=0)
     bundle_path = tmp_path / path_name
-    save(model_log, bundle_path)
+    save(trace, bundle_path)
     return bundle_path
 
 
@@ -124,12 +125,12 @@ def _first_tensor_entry(manifest: dict[str, Any]) -> dict[str, Any]:
     return tensors[0]
 
 
-def _first_saved_layer(model_log: ModelLog) -> Any:
+def _first_saved_layer(trace: Trace) -> Any:
     """Return the first saved layer from one model log.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log under test.
 
     Returns
@@ -138,7 +139,7 @@ def _first_saved_layer(model_log: ModelLog) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in model_log.layer_list if layer.has_saved_activations)
+    return next(layer for layer in trace.layer_list if layer.has_saved_outs)
 
 
 def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> None:
@@ -160,7 +161,7 @@ def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> Non
         TorchLensIOError,
         match=rf"Failed to materialize blob at {re.escape(str(blob_path))}\.",
     ):
-        layer.materialize_activation()
+        layer.materialize_out()
 
 
 def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:
@@ -211,10 +212,10 @@ def test_stale_blob_counts_raise_with_count_field(tmp_path: Path) -> None:
 
     bundle_path = _save_bundle(tmp_path)
     manifest = _read_manifest(bundle_path)
-    manifest["n_activation_blobs"] += 1
+    manifest["n_out_blobs"] += 1
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match=r"n_activation_blobs"):
+    with pytest.raises(TorchLensIOError, match=r"n_out_blobs"):
         load(bundle_path)
 
 
@@ -231,7 +232,7 @@ def test_unknown_extra_files_warn_but_do_not_raise(tmp_path: Path) -> None:
     ):
         restored = load(bundle_path, lazy=True)
 
-    assert isinstance(restored, ModelLog)
+    assert isinstance(restored, Trace)
     assert restored._loaded_from_bundle is True
 
 

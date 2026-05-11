@@ -13,7 +13,7 @@ from conftest import VIS_OUTPUT_DIR
 
 import example_models
 from torchlens import (
-    log_forward_pass,
+    trace,
     get_model_metadata,
     show_model_graph,
     validate_forward_pass,
@@ -169,7 +169,7 @@ def test_batchnorm_train(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=True,
+        vis_buffers=True,
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "batchnorm_train_showbuffer"),
     )
     show_model_graph(
@@ -177,7 +177,7 @@ def test_batchnorm_train(default_input1):
         default_input1,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_buffer_layers=False,
+        vis_buffers=False,
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "batchnorm_train_invisbuffer"),
     )
 
@@ -481,7 +481,7 @@ def test_buffer_model():
         vis_save_only=True,
         vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "buffer_visible"),
-        vis_buffer_layers=True,
+        vis_buffers=True,
     )
     show_model_graph(
         model,
@@ -489,7 +489,7 @@ def test_buffer_model():
         vis_save_only=True,
         vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "buffer_invisible"),
-        vis_buffer_layers=False,
+        vis_buffers=False,
     )
 
 
@@ -502,26 +502,26 @@ def test_buffer_rewrite_model():
         model_input,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "toy-networks",
             "buffer_rewrite_model_visible_unnested_unrolled",
         ),
-        vis_buffer_layers=True,
+        vis_buffers=True,
     )
     show_model_graph(
         model,
         model_input,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "toy-networks",
             "buffer_rewrite_model_invisible_unnested_unrolled",
         ),
-        vis_buffer_layers=False,
+        vis_buffers=False,
     )
     show_model_graph(
         model,
@@ -533,7 +533,7 @@ def test_buffer_rewrite_model():
             "toy-networks",
             "buffer_rewrite_model_visible_nested_unrolled",
         ),
-        vis_buffer_layers=True,
+        vis_buffers=True,
     )
     show_model_graph(
         model,
@@ -545,33 +545,33 @@ def test_buffer_rewrite_model():
             "toy-networks",
             "buffer_rewrite_model_invisible_nested_unrolled",
         ),
-        vis_buffer_layers=False,
+        vis_buffers=False,
     )
     show_model_graph(
         model,
         model_input,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "toy-networks",
             "buffer_rewrite_model_visible_unnested_rolled",
         ),
-        vis_buffer_layers=True,
+        vis_buffers=True,
     )
     show_model_graph(
         model,
         model_input,
         vis_save_only=True,
         vis_mode="rolled",
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_outpath=opj(
             VIS_OUTPUT_DIR,
             "toy-networks",
             "buffer_rewrite_model_invisible_unnested_rolled",
         ),
-        vis_buffer_layers=False,
+        vis_buffers=False,
     )
     show_model_graph(
         model,
@@ -583,7 +583,7 @@ def test_buffer_rewrite_model():
             "toy-networks",
             "buffer_rewrite_model_visible_nested_rolled",
         ),
-        vis_buffer_layers=True,
+        vis_buffers=True,
     )
     show_model_graph(
         model,
@@ -595,7 +595,7 @@ def test_buffer_rewrite_model():
             "toy-networks",
             "buffer_rewrite_model_invisible_nested_rolled",
         ),
-        vis_buffer_layers=False,
+        vis_buffers=False,
     )
 
 
@@ -667,7 +667,7 @@ def test_nested_modules(default_input1):
         model,
         default_input1,
         vis_save_only=True,
-        vis_nesting_depth=1,
+        vis_call_depth=1,
         vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_depth1"),
     )
@@ -675,7 +675,7 @@ def test_nested_modules(default_input1):
         model,
         default_input1,
         vis_save_only=True,
-        vis_nesting_depth=2,
+        vis_call_depth=2,
         vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_depth2"),
     )
@@ -683,7 +683,7 @@ def test_nested_modules(default_input1):
         model,
         default_input1,
         vis_save_only=True,
-        vis_nesting_depth=3,
+        vis_call_depth=3,
         vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_depth3"),
     )
@@ -691,7 +691,7 @@ def test_nested_modules(default_input1):
         model,
         default_input1,
         vis_save_only=True,
-        vis_nesting_depth=4,
+        vis_call_depth=4,
         vis_mode="unrolled",
         vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "nested_modules_depth4"),
     )
@@ -1093,18 +1093,18 @@ def test_nested_param_free_loops(default_input1):
     across levels but surrounding ops differ per level.
 
     4 outer iterations x 3 inner levels = 12 sin operations, all with the same
-    equivalence type. They should be ONE group of 12 passes.
+    equivalence type. They should be ONE group of 12 ops.
     """
     model = example_models.NestedParamFreeLoops()
     assert validate_forward_pass(model, default_input1)
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
 
-    # All sin ops should be in one layer group with 12 passes
+    # All sin ops should be in one layer group with 12 ops
     sin_pass_counts = set()
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.func_name == "sin":
-            sin_pass_counts.add(entry.num_passes)
+            sin_pass_counts.add(entry.num_calls)
     assert sin_pass_counts == {12}, (
         f"sin ops fragmented into groups with pass counts {sin_pass_counts}, expected {{12}}"
     )
@@ -1318,14 +1318,14 @@ def test_data_dependent_branch_loop(input_2d):
 def test_sequential_param_free_loops(default_input1):
     model = example_models.SequentialParamFreeLoops()
     assert validate_forward_pass(model, default_input1)
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     # Verify the two sequential loops produce SEPARATE groups (not merged)
     sin_groups = set()
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.func_name == "sin":
-            sin_groups.add(entry.num_passes)
-    assert sin_groups == {3}, f"Sequential sin loops should each have 3 passes, got {sin_groups}"
+            sin_groups.add(entry.num_calls)
+    assert sin_groups == {3}, f"Sequential sin loops should each have 3 ops, got {sin_groups}"
     show_model_graph(
         model,
         default_input1,
@@ -1521,54 +1521,54 @@ def test_gelu_model(default_input1):
 # =============================================================================
 
 
-def test_log_forward_pass_layers_to_save(default_input1):
-    """Test layers_to_save parameter selectively saves activations."""
+def test_trace_layers_to_save(default_input1):
+    """Test layers_to_save parameter selectively saves outs."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1, layers_to_save="all")
+    mh = trace(model, default_input1, layers_to_save="all")
     all_labels = mh.layer_labels
     assert len(all_labels) > 0
 
     # Save only the first layer
-    mh_partial = log_forward_pass(model, default_input1, layers_to_save=[all_labels[0]])
+    mh_partial = trace(model, default_input1, layers_to_save=[all_labels[0]])
     # The layer list should still track all layers
     assert len(mh_partial.layer_labels) > 0
-    # But only the requested layer should have saved activations
+    # But only the requested layer should have saved outs
     saved_entry = mh_partial[all_labels[0]]
-    assert saved_entry.activation is not None
+    assert saved_entry.out is not None
 
 
-def test_log_forward_pass_save_function_args(default_input1):
-    """Test save_function_args=True populates captured_args on entries."""
+def test_trace_save_arg_values(default_input1):
+    """Test save_arg_values=True populates saved_args on entries."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1, save_function_args=True)
-    assert mh.save_function_args is True
-    # At least one non-input layer should have captured_args
+    mh = trace(model, default_input1, save_arg_values=True)
+    assert mh.save_arg_values is True
+    # At least one non-input layer should have saved_args
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input_layer and entry.captured_args is not None:
+        if not entry.is_input and entry.saved_args is not None:
             found = True
             break
-    assert found, "No non-input layer had captured_args populated"
+    assert found, "No non-input layer had saved_args populated"
 
 
-def test_log_forward_pass_activation_postfunc(default_input1):
-    """Test activation_postfunc applies to saved tensors."""
+def test_trace_out_postfunc(default_input1):
+    """Test out_postfunc applies to saved tensors."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1, activation_postfunc=torch.mean)
+    mh = trace(model, default_input1, out_postfunc=torch.mean)
     # All saved tensors should be scalar (mean reduces to scalar)
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.transformed_activation is not None:
-            assert entry.transformed_activation.dim() == 0, (
+        if entry.transformed_out is not None:
+            assert entry.transformed_out.dim() == 0, (
                 f"Layer {label} tensor should be scalar after torch.mean postfunc"
             )
 
 
-def test_log_forward_pass_mark_distances(default_input1):
-    """Test mark_input_output_distances=True populates distance fields."""
+def test_trace_mark_distances(default_input1):
+    """Test mark_layer_depths=True populates distance fields."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1, mark_input_output_distances=True)
+    mh = trace(model, default_input1, mark_layer_depths=True)
     for label in mh.layer_labels:
         entry = mh[label]
         assert entry.min_distance_from_input is not None
@@ -1578,57 +1578,58 @@ def test_log_forward_pass_mark_distances(default_input1):
 
 
 def test_get_model_metadata(default_input1):
-    """Test get_model_metadata returns ModelLog without saving activations."""
+    """Test get_model_metadata returns Trace without saving outs."""
     model = example_models.SimpleFF()
     mh = get_model_metadata(model, default_input1)
     assert len(mh.layer_labels) > 0
-    assert mh.num_tensors_total > 0
+    assert mh.num_tensors > 0
 
 
-def test_model_log_getitem_by_index(default_input1):
-    """Test ModelLog supports integer indexing."""
+def test_trace_getitem_by_index(default_input1):
+    """Test Trace supports integer indexing."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     first = mh[0]
     last = mh[-1]
-    assert first.layer_label == mh.layer_labels[0]
-    assert last.layer_label == mh.layer_labels[-1]
+    layer_labels = [layer.layer_label for layer in mh.layer_list]
+    assert first.layer_label == layer_labels[0]
+    assert last.layer_label == layer_labels[-1]
 
 
-def test_model_log_getitem_by_label(default_input1):
-    """Test ModelLog supports string label access."""
+def test_trace_getitem_by_label(default_input1):
+    """Test Trace supports string label access."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     label = mh.layer_labels[0]
     entry = mh[label]
     assert entry.layer_label == label
 
 
-def test_model_log_len(default_input1):
-    """Test len(ModelLog) matches layer count."""
+def test_trace_len(default_input1):
+    """Test len(Trace) matches layer count."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
-    assert len(mh) == len(mh.layer_labels)
+    mh = trace(model, default_input1)
+    assert len(mh) == len(mh.layer_list)
 
 
-def test_model_log_iter(default_input1):
-    """Test iteration over ModelLog yields entries."""
+def test_trace_iter(default_input1):
+    """Test iteration over Trace yields entries."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     items = list(mh)
-    assert len(items) == len(mh.layer_labels)
+    assert len(items) == len(mh.layer_list)
 
 
-def test_model_log_layer_labels(default_input1):
-    """Test layer_labels, layer_labels_no_pass, layer_labels_w_pass properties."""
+def test_trace_layer_labels(default_input1):
+    """Test layer_labels, layer_labels, op_labels properties."""
     model = example_models.SimpleFF()
-    mh = log_forward_pass(model, default_input1)
+    mh = trace(model, default_input1)
     assert isinstance(mh.layer_labels, list)
     assert all(isinstance(lbl, str) for lbl in mh.layer_labels)
-    assert isinstance(mh.layer_labels_no_pass, list)
-    assert all(isinstance(lbl, str) for lbl in mh.layer_labels_no_pass)
-    assert isinstance(mh.layer_labels_w_pass, list)
-    assert all(isinstance(lbl, str) for lbl in mh.layer_labels_w_pass)
+    assert isinstance(mh.layer_labels, list)
+    assert all(isinstance(lbl, str) for lbl in mh.layer_labels)
+    assert isinstance(mh.op_labels, list)
+    assert all(isinstance(lbl, str) for lbl in mh.op_labels)
 
 
 def test_rolled_vs_unrolled_visualization(input_2d):
@@ -1666,7 +1667,7 @@ def test_view_mutation_unsqueeze(input_2d):
     """Mutation through unsqueeze view should be logged without error."""
     model = example_models.ViewMutationUnsqueeze()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1675,7 +1676,7 @@ def test_view_mutation_reshape(input_2d):
     """Mutation through reshape view should be logged without error."""
     model = example_models.ViewMutationReshape()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1684,7 +1685,7 @@ def test_view_mutation_transpose(input_2d):
     """Mutation through transpose view should be logged without error."""
     model = example_models.ViewMutationTranspose()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1693,7 +1694,7 @@ def test_multiple_view_mutations(input_2d):
     """Multiple views mutated independently should be logged without error."""
     model = example_models.MultipleViewMutations()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1702,7 +1703,7 @@ def test_chained_view_mutation(input_2d):
     """Mutation through chained views should be logged without error."""
     model = example_models.ChainedViewMutation()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1711,15 +1712,15 @@ def test_output_matches_parent_no_false_positive(input_2d):
     """No mutation model: verify no false-positive child tensor variations."""
     model = example_models.OutputMatchesParent()
     assert validate_forward_pass(model, input_2d)
-    mh = log_forward_pass(model, input_2d, save_function_args=True)
+    mh = trace(model, input_2d, save_arg_values=True)
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # No layer should have child tensor variations since nothing is mutated
     for label in mh.layer_labels:
         entry = mh[label]
-        assert not entry.has_child_tensor_variations, (
+        assert not entry.has_output_variations, (
             f"Layer {label} should not have child tensor variations in a "
-            f"mutation-free model, but has_child_tensor_variations={entry.has_child_tensor_variations}"
+            f"mutation-free model, but has_output_variations={entry.has_output_variations}"
         )
 
 
@@ -1740,7 +1741,7 @@ def test_wrapped_input_no_deepcopy_hang():
     original_data = original_tensor.clone()
     wrapper = example_models.TensorWrapper(original_tensor)
     model = example_models.WrappedInputModel()
-    mh = log_forward_pass(model, wrapper)
+    mh = trace(model, wrapper)
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # Original tensor should not have been mutated (same-device case)
@@ -1760,7 +1761,7 @@ def test_tuple_input_single_arg():
     """
     model = example_models.TupleInputModel()
     input_tuple = (torch.rand(5, 5), torch.rand(5, 5))
-    mh = log_forward_pass(model, input_tuple)
+    mh = trace(model, input_tuple)
     assert mh is not None
     assert len(mh.layer_labels) > 0
     assert validate_forward_pass(model, input_tuple)
@@ -1781,7 +1782,7 @@ def test_functional_after_submodule_not_box():
 
     model = example_models.FunctionalAfterSubmodule()
     x = torch.rand(2, 5)
-    mh = log_forward_pass(model, x)
+    mh = trace(model, x)
     # Find the relu layer
     relu_layers = [label for label in mh.layer_labels if "relu" in label.lower()]
     assert len(relu_layers) > 0, "No relu layer found"
@@ -1791,23 +1792,23 @@ def test_functional_after_submodule_not_box():
 
 
 # =============================================================================
-# Regression: issue #46 — output layer activation None with layers_to_save
+# Regression: issue #46 — output layer out None with layers_to_save
 # =============================================================================
 
 
 def test_output_layer_saved_with_layers_to_save():
-    """Output layers should have activation even when layers_to_save is a subset (issue #46).
+    """Output layers should have out even when layers_to_save is a subset (issue #46).
 
-    The output layer copies activation from its parent, so the parent must
+    The output layer copies out from its parent, so the parent must
     also be saved during the fast pass.
     """
     model = example_models.FunctionalAfterSubmodule()
     x = torch.rand(2, 5)
     # Save only the relu layer (not explicitly the output)
-    mh = log_forward_pass(model, x, layers_to_save=["relu_1"])
+    mh = trace(model, x, layers_to_save=["relu_1"])
     for label in mh.output_layers:
         entry = mh[label]
-        assert entry.activation is not None, f"Output layer {label} should have activation"
+        assert entry.out is not None, f"Output layer {label} should have out"
 
 
 # =============================================================================
@@ -1823,12 +1824,12 @@ def test_stochastic_depth_layers_to_save():
     model.train()
     x = torch.rand(2, 5)
     # layers_to_save triggers the two-pass path; use substring match
-    mh = log_forward_pass(model, x, layers_to_save=["linear"])
+    mh = trace(model, x, layers_to_save=["linear"])
     assert mh is not None
     assert len(mh.layer_labels) > 0
-    # Linear layers should have saved activations
-    linear_layers = [label for label in mh.layers_with_saved_activations if "linear" in label]
-    assert len(linear_layers) > 0, "linear layers should have saved activations"
+    # Linear layers should have saved outs
+    linear_layers = [label for label in mh.ops_with_saved_outs if "linear" in label]
+    assert len(linear_layers) > 0, "linear layers should have saved outs"
 
 
 # =============================================================================
@@ -2956,7 +2957,7 @@ def test_simclr():
     )
 
 
-def test_stop_gradient():
+def test_stop_grad():
     model = example_models.StopGradientModel()
     x = torch.rand(4, 16)
     assert validate_forward_pass(model, x)
@@ -2965,7 +2966,7 @@ def test_stop_gradient():
         x,
         vis_save_only=True,
         vis_mode="unrolled",
-        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "stop_gradient"),
+        vis_outpath=opj(VIS_OUTPUT_DIR, "toy-networks", "stop_grad"),
     )
 
 
@@ -3915,12 +3916,12 @@ def test_autocast_mid_forward():
 
 
 # =============================================================================
-# Loop detection comparison (detect_loops=True vs False)
+# Loop detection comparison (recurrence_detection=True vs False)
 # =============================================================================
 # These tests render the same looping models with and without full loop
 # detection, producing side-by-side visualizations for manual comparison.
-# With detect_loops=True: repeated operations are collapsed into multi-pass layers.
-# With detect_loops=False: only same-param operations are grouped.
+# With recurrence_detection=True: repeated operations are collapsed into multi-pass layers.
+# With recurrence_detection=False: only same-param operations are grouped.
 
 
 LOOP_COMPARISON_DIR = opj(VIS_OUTPUT_DIR, "loop-comparison")
@@ -3941,7 +3942,7 @@ def _render_both(model, x, name):
         vis_save_only=True,
         vis_mode="rolled",
         vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_on"),
-        detect_loops=True,
+        recurrence_detection=True,
     )
     show_model_graph(
         model,
@@ -3949,7 +3950,7 @@ def _render_both(model, x, name):
         vis_save_only=True,
         vis_mode="rolled",
         vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off"),
-        detect_loops=False,
+        recurrence_detection=False,
     )
     # Also render unrolled for the no-loops case
     show_model_graph(
@@ -3958,7 +3959,7 @@ def _render_both(model, x, name):
         vis_save_only=True,
         vis_mode="unrolled",
         vis_outpath=opj(LOOP_COMPARISON_DIR, f"{name}_loops_off_unrolled"),
-        detect_loops=False,
+        recurrence_detection=False,
     )
 
 

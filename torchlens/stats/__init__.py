@@ -1,4 +1,4 @@
-"""Streaming statistics for activation aggregation."""
+"""Streaming statistics for out aggregation."""
 
 from __future__ import annotations
 
@@ -356,7 +356,7 @@ class Aggregator:
 
 
 def _metric_value_from_log(log: Any, metric_name: str) -> Any:
-    """Resolve one metric input value from a ModelLog.
+    """Resolve one metric input value from a Trace.
 
     Parameters
     ----------
@@ -372,18 +372,18 @@ def _metric_value_from_log(log: Any, metric_name: str) -> Any:
     """
 
     if metric_name == "output" and log.output_layers:
-        return log[log.output_layers[-1]].activation
+        return log[log.output_layers[-1]].out
     try:
-        return log[metric_name].activation
+        return log[metric_name].out
     except Exception:
         matches = [
             layer
             for layer in log.layer_list
-            if metric_name in str(layer.layer_label) and layer.has_saved_activations
+            if metric_name in str(layer.layer_label) and layer.has_saved_outs
         ]
         if not matches:
-            raise KeyError(f"No saved activation matched metric {metric_name!r}.")
-        return matches[0].activation
+            raise KeyError(f"No saved out matched metric {metric_name!r}.")
+        return matches[0].out
 
 
 def aggregate(
@@ -391,7 +391,7 @@ def aggregate(
     dataloader: Iterable[Any],
     metrics: Mapping[str, StreamingStat],
 ) -> dict[str, Any]:
-    """Stream activations through metric accumulators.
+    """Stream outs through metric accumulators.
 
     Parameters
     ----------
@@ -408,12 +408,12 @@ def aggregate(
         Finalized metric results.
     """
 
-    from .. import log_forward_pass
+    from .. import trace
 
     layers = [name for name in metrics if name != "output"]
     capture_layers: str | list[str] = layers if layers else "all"
     for batch in dataloader:
-        log = log_forward_pass(model, batch, layers_to_save=capture_layers)
+        log = trace(model, batch, layers_to_save=capture_layers)
         try:
             for metric_name, stat in metrics.items():
                 stat.update(_metric_value_from_log(log, metric_name))

@@ -59,6 +59,6 @@ class Tiny(nn.Module):
 
 model = Tiny()
 x = torch.tensor([[2.0, 3.0]])
-log = tl.log_forward_pass(model, x, vis_opt="none")
-RESULT = log["linear_1_1"].activation.detach().tolist()
+log = tl.trace(model, x, vis_opt="none")
+RESULT = log["linear_1_1"].out.detach().tolist()
 ```

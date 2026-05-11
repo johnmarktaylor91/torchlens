@@ -88,33 +88,33 @@ class _TinySae:
 
         self.weight = torch.eye(width)
 
-    def encode(self, activation: torch.Tensor) -> torch.Tensor:
-        """Encode an activation.
+    def encode(self, out: torch.Tensor) -> torch.Tensor:
+        """Encode an out.
 
         Parameters
         ----------
-        activation:
-            Tensor activation.
+        out:
+            Tensor out.
 
         Returns
         -------
         torch.Tensor
-            Encoded activation.
+            Encoded out.
         """
 
-        return activation @ self.weight.to(activation.device)
+        return out @ self.weight.to(out.device)
 
 
 class _OfflineBenchmark:
     """Callable Brain-Score-style offline benchmark fixture."""
 
-    def __call__(self, activation: torch.Tensor, *, layer: str) -> float:
-        """Score an activation.
+    def __call__(self, out: torch.Tensor, *, layer: str) -> float:
+        """Score an out.
 
         Parameters
         ----------
-        activation:
-            Layer activation.
+        out:
+            Layer out.
         layer:
             Layer label.
 
@@ -124,7 +124,7 @@ class _OfflineBenchmark:
             Deterministic fixture score.
         """
 
-        return float(activation.detach().float().mean().item() + len(layer) * 0.001)
+        return float(out.detach().float().mean().item() + len(layer) * 0.001)
 
 
 class _TraceObject:
@@ -154,11 +154,11 @@ def _cnn_log() -> tuple[_TinyCnn, torch.Tensor, Any]:
     torch.manual_seed(12)
     model = _TinyCnn().eval()
     x = torch.randn(3, 1, 8, 8)
-    log = tl.log_forward_pass(model, x, layers_to_save="all")
+    log = tl.trace(model, x, layers_to_save="all")
     return model, x, log
 
 
-def test_captum_bridge_matches_direct_layer_integrated_gradients() -> None:
+def test_captum_bridge_matches_direct_layer_integrated_grads() -> None:
     """Captum bridge attribution should match direct Captum on a tiny CNN."""
 
     captum_attr = pytest.importorskip("captum.attr")
@@ -179,12 +179,12 @@ def test_sae_lens_bridge_encode_matches_direct_sae() -> None:
     torch.manual_seed(13)
     model = _TinyTransformer().eval()
     tokens = torch.tensor([[1, 2, 3], [4, 5, 6]])
-    log = tl.log_forward_pass(model, tokens, layers_to_save="all")
-    activation = log.resolve_sites("linear", max_fanout=1).first().activation
-    sae = _TinySae(width=activation.shape[-1])
+    log = tl.trace(model, tokens, layers_to_save="all")
+    out = log.resolve_sites("linear", max_fanout=1).first().out
+    sae = _TinySae(width=out.shape[-1])
 
     bridge_result = tl.bridge.sae_lens.encode(log, "linear", sae)
-    direct_result = sae.encode(activation)
+    direct_result = sae.encode(out)
 
     assert torch.allclose(bridge_result, direct_result)
 
@@ -195,7 +195,7 @@ def test_rsatoolbox_bridge_rdm_matches_direct_dataset() -> None:
     rsa = pytest.importorskip("rsatoolbox")
     _model, _x, log = _cnn_log()
     bridge_dataset = tl.bridge.rsatoolbox.dataset(log)
-    output = log[log.output_layers[0]].activation.detach().cpu().reshape(3, -1).numpy()
+    output = log[log.output_layers[0]].out.detach().cpu().reshape(3, -1).numpy()
     direct_dataset = rsa.data.Dataset(
         measurements=output,
         obs_descriptors={"presentation": np.arange(output.shape[0])},
@@ -218,7 +218,7 @@ def test_brain_score_bridge_mocked_offline_fixture_matches_direct_scores() -> No
 
     bridge_scores = tl.bridge.brain_score.per_layer(log, benchmark, sites=sites)
     direct_scores = {
-        layer.layer_label: benchmark(layer.activation, layer=layer.layer_label)
+        layer.layer_label: benchmark(layer.out, layer=layer.layer_label)
         for layer in [log.resolve_sites(site, max_fanout=1).first() for site in sites]
     }
 
@@ -265,14 +265,14 @@ def test_lightning_layer_profiler_callback_fires_and_saves_results(tmp_path: Pat
 
         global_step = 7
 
-    output_path = tmp_path / "lightning_layers.jsonl"
-    callback = tl_callbacks.lightning.LayerProfilerCallback(output_path)
+    container_path = tmp_path / "lightning_layers.jsonl"
+    callback = tl_callbacks.lightning.LayerProfilerCallback(container_path)
     batch = (torch.randn(2, 4), torch.tensor([0, 1]))
 
     callback.on_validation_batch_end(TrainerStub(), TinyLightningModule(), None, batch, 0)
 
     assert callback.records
-    saved = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
+    saved = [json.loads(line) for line in container_path.read_text(encoding="utf-8").splitlines()]
     assert saved[0]["stage"] == "validation"
     assert saved[0]["num_layers"] > 0
 

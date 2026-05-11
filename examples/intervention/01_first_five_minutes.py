@@ -54,7 +54,7 @@ def main() -> None:
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
 
-    log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
     relu_site = log.find_sites(tl.func("relu")).first()
     assert relu_site.func_name == "relu"
 
@@ -62,8 +62,8 @@ def main() -> None:
     edited.attach_hooks(tl.func("relu"), tl.zero_ablate())
     edited.replay()
 
-    clean_out = log.layer_list[-1].activation
-    edited_out = edited.layer_list[-1].activation
+    clean_out = log.layer_list[-1].out
+    edited_out = edited.layer_list[-1].out
     assert not torch.allclose(clean_out, edited_out)
     assert edited.last_run_records()[-1].helper_name == "zero_ablate"
 

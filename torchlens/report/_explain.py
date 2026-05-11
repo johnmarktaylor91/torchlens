@@ -16,7 +16,7 @@ def explain(log: Any, audience: Audience = "auto") -> str:
     Parameters
     ----------
     log:
-        Completed ``ModelLog``-like object.
+        Completed ``Trace``-like object.
     audience:
         Report style. ``"researcher"`` includes graph-pattern detail,
         ``"practitioner"`` emphasizes operational status, and ``"auto"``
@@ -72,15 +72,15 @@ def _model_summary_lines(log: Any) -> list[str]:
     """
 
     model_name = getattr(log, "model_name", type(log).__name__)
-    total_params = int(getattr(log, "total_params", 0) or 0)
-    trainable_params = int(getattr(log, "total_params_trainable", 0) or 0)
-    frozen_params = int(getattr(log, "total_params_frozen", 0) or 0)
+    num_params = int(getattr(log, "num_params", 0) or 0)
+    trainable_params = int(getattr(log, "num_params_trainable", 0) or 0)
+    frozen_params = int(getattr(log, "num_params_frozen", 0) or 0)
     total_flops = int(getattr(log, "total_flops_forward", getattr(log, "total_flops", 0)) or 0)
     module_count = _safe_len(getattr(log, "modules", None))
     return [
         f"- Architecture: {model_name}.",
         (
-            f"- Parameters: {_format_count(total_params)} total "
+            f"- Parameters: {_format_count(num_params)} total "
             f"({_format_count(trainable_params)} trainable, {_format_count(frozen_params)} frozen)."
         ),
         f"- Forward FLOPs: {_format_count(total_flops)}.",
@@ -103,20 +103,20 @@ def _capture_summary_lines(log: Any) -> list[str]:
     """
 
     layer_count = _safe_len(getattr(log, "layer_list", None))
-    operation_count = int(getattr(log, "num_operations", 0) or 0)
-    tensor_total = int(getattr(log, "num_tensors_total", 0) or 0)
-    tensor_saved = int(getattr(log, "num_tensors_saved", 0) or 0)
+    operation_count = int(getattr(log, "num_ops", 0) or 0)
+    tensor_total = int(getattr(log, "num_tensors", 0) or 0)
+    tensor_saved = int(getattr(log, "num_saved_ops", 0) or 0)
     pass_counts = [
         int(value)
-        for value in (getattr(log, "layer_num_passes", {}) or {}).values()
+        for value in (getattr(log, "layer_num_calls", {}) or {}).values()
         if isinstance(value, int)
     ]
-    max_passes = max(pass_counts, default=1)
+    max_ops = max(pass_counts, default=1)
     return [
         f"- Layers logged: {_format_count(layer_count)}.",
         f"- Operations logged: {_format_count(operation_count)}.",
         f"- Tensors saved: {_format_count(tensor_saved)} of {_format_count(tensor_total)}.",
-        f"- Maximum observed passes for one layer: {_format_count(max_passes)}.",
+        f"- Maximum observed ops for one layer: {_format_count(max_ops)}.",
     ]
 
 
@@ -131,26 +131,26 @@ def _anomaly_lines(log: Any) -> list[str]:
     Returns
     -------
     list[str]
-        Bullet lines describing non-finite activations.
+        Bullet lines describing non-finite outs.
     """
 
     nonfinite_labels: list[str] = []
     for layer in getattr(log, "layer_list", []) or []:
-        activation = getattr(layer, "activation", None)
-        if not isinstance(activation, torch.Tensor) or activation.numel() == 0:
+        out = getattr(layer, "out", None)
+        if not isinstance(out, torch.Tensor) or out.numel() == 0:
             continue
         try:
-            has_nonfinite = bool((~torch.isfinite(activation.detach())).any().item())
+            has_nonfinite = bool((~torch.isfinite(out.detach())).any().item())
         except (RuntimeError, TypeError):
             continue
         if has_nonfinite:
             nonfinite_labels.append(str(getattr(layer, "layer_label", "unknown")))
 
     if not nonfinite_labels:
-        return ["- No NaN or Inf values were found in saved activations."]
+        return ["- No NaN or Inf values were found in saved outs."]
     first = nonfinite_labels[0]
     return [
-        f"- {len(nonfinite_labels)} saved activation(s) contain NaN or Inf values.",
+        f"- {len(nonfinite_labels)} saved out(s) contain NaN or Inf values.",
         f"- First affected layer: {first}.",
         f"- Detail: {log.first_nonfinite() if hasattr(log, 'first_nonfinite') else 'unavailable'}",
     ]
@@ -173,7 +173,7 @@ def _intervention_lines(log: Any) -> list[str]:
     spec = getattr(log, "_intervention_spec", None)
     target_specs = tuple(getattr(spec, "target_value_specs", ()) or ())
     hook_specs = tuple(getattr(spec, "hook_specs", ()) or ())
-    history = list(getattr(log, "operation_history", []) or [])
+    history = list(getattr(log, "ledger", []) or [])
     if not target_specs and not hook_specs and not history:
         return ["- No interventions are recorded on this log."]
     return [
@@ -227,7 +227,7 @@ def _shared_parameter_line(log: Any) -> str:
 
     shared = 0
     for param_log in getattr(log, "param_logs", []) or []:
-        linked = getattr(param_log, "linked_params", ()) or ()
+        linked = getattr(param_log, "co_parent_params", ()) or ()
         if linked:
             shared += 1
     if shared:
@@ -253,8 +253,8 @@ def _recurrent_loop_line(log: Any) -> str:
 
     max_loops = int(getattr(log, "max_recurrent_loops", 1) or 1)
     if max_loops > 1:
-        return f"- Recurrent loops: at least one layer was observed across {max_loops} passes."
-    return "- Recurrent loops: no repeated layer passes were detected."
+        return f"- Recurrent loops: at least one layer was observed across {max_loops} ops."
+    return "- Recurrent loops: no repeated layer ops were detected."
 
 
 def _dynamic_control_flow_line(log: Any) -> str:
@@ -271,7 +271,7 @@ def _dynamic_control_flow_line(log: Any) -> str:
         Dynamic-control-flow summary.
     """
 
-    event_count = _safe_len(getattr(log, "conditional_events", None))
+    event_count = _safe_len(getattr(log, "conditional_records", None))
     has_branching = bool(getattr(log, "has_conditional_branching", False))
     if event_count or has_branching:
         return (
@@ -320,8 +320,8 @@ def _operational_status_line(log: Any) -> str:
     """
 
     cache_hit = bool(getattr(log, "capture_cache_hit", False))
-    streamed = int(getattr(log, "num_streamed_passes", 1) or 1)
-    return f"- Operational status: cache_hit={cache_hit}, streamed_passes={streamed}."
+    streamed = int(getattr(log, "num_streamed_ops", 1) or 1)
+    return f"- Operational status: cache_hit={cache_hit}, streamed_ops={streamed}."
 
 
 def _safe_len(value: Any) -> int:

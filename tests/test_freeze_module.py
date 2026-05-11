@@ -7,7 +7,7 @@ import torch
 import torchlens as tl
 
 
-def test_freeze_module_restores_requires_grad_and_gradients() -> None:
+def test_freeze_module_restores_requires_grad_and_grads() -> None:
     """``freeze_module`` should restore parameter training state."""
 
     layer = torch.nn.Linear(2, 2)

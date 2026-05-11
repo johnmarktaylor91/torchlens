@@ -1,4 +1,4 @@
-"""Build compact text summaries for ``ModelLog`` objects."""
+"""Build compact text summaries for ``Trace`` objects."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from ..._source_links import terminal_file_line_link
 
 if TYPE_CHECKING:
     from ..data_classes.layer_log import LayerLog
-    from ..data_classes.layer_pass_log import LayerPassLog
-    from ..data_classes.model_log import ConditionalEvent, ModelLog
+    from ..data_classes.op_log import OpLog
+    from ..data_classes.model_log import ConditionalEvent, Trace
     from ..data_classes.module_log import ModuleLog
 
 
@@ -68,7 +68,7 @@ _LEVEL_DEFAULT_FIELDS: Dict[str, List[str]] = {
 
 
 def render_model_summary(
-    model_log: "ModelLog",
+    trace: "Trace",
     *,
     level: SummaryLevel = "overview",
     preset: SummaryLevel | None = None,
@@ -80,11 +80,11 @@ def render_model_summary(
     max_rows: Optional[int] = 200,
     print_to: Optional[Callable[[str], None]] = None,
 ) -> str:
-    """Render a textual summary for a ``ModelLog``.
+    """Render a textual summary for a ``Trace``.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Logged model metadata to summarize.
     level:
         Primary summary level. This is the public selector used by the sprint
@@ -97,7 +97,7 @@ def render_model_summary(
         Alias for ``fields``.
     mode:
         Operation aggregation mode. ``"rolled"`` uses ``LayerLog`` rows,
-        ``"unrolled"`` uses ``LayerPassLog`` rows, and ``"auto"`` chooses
+        ``"unrolled"`` uses ``OpLog`` rows, and ``"auto"`` chooses
         based on recurrence.
     show_ops:
         Whether to append an operation table after the primary summary.
@@ -117,9 +117,9 @@ def render_model_summary(
     resolved_show_ops = _resolve_show_ops(show_ops=show_ops, include_ops=include_ops)
     resolved_fields = _resolve_fields(resolved_level, fields=fields, columns=columns)
 
-    if not model_log._pass_finished:
+    if not trace._tracing_finished:
         legacy_text = _render_in_progress_summary(
-            model_log=model_log,
+            trace=trace,
             fields=resolved_fields,
             mode=mode,
             show_ops=resolved_show_ops,
@@ -127,25 +127,25 @@ def render_model_summary(
         )
     else:
         legacy_text = _render_finished_summary(
-            model_log=model_log,
+            trace=trace,
             level=resolved_level,
             fields=resolved_fields,
             mode=mode,
             show_ops=resolved_show_ops,
             max_rows=max_rows,
         )
-    text = f"{format_discoverability_summary(model_log)}\n\n{legacy_text}"
+    text = f"{format_discoverability_summary(trace)}\n\n{legacy_text}"
     if print_to is not None:
         print_to(text)
     return text
 
 
-def format_model_repr(model_log: "ModelLog") -> str:
-    """Return a short ``repr`` string for a ``ModelLog``.
+def format_model_repr(trace: "Trace") -> str:
+    """Return a short ``repr`` string for a ``Trace``.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Logged model metadata to summarize.
 
     Returns
@@ -153,27 +153,27 @@ def format_model_repr(model_log: "ModelLog") -> str:
     str
         Short two-line representation.
     """
-    run_state = getattr(getattr(model_log, "run_state", None), "name", "UNKNOWN")
-    if not model_log._pass_finished:
+    run_state = getattr(getattr(trace, "run_state", None), "name", "UNKNOWN")
+    if not trace._tracing_finished:
         return (
-            f"ModelLog(name={getattr(model_log, 'name', None)!r}, "
-            f"model_class={model_log.model_name!r}, layers={len(model_log._raw_layer_dict)}, "
+            f"Trace(name={getattr(trace, 'name', None)!r}, "
+            f"model_class={trace.model_name!r}, layers={len(trace._raw_layer_dict)}, "
             f"run_state={run_state})"
         )
 
     return (
-        f"ModelLog(name={getattr(model_log, 'name', None)!r}, "
-        f"model_class={model_log.model_name!r}, layers={len(model_log.layer_logs)}, "
+        f"Trace(name={getattr(trace, 'name', None)!r}, "
+        f"model_class={trace.model_name!r}, layers={len(trace.layer_logs)}, "
         f"run_state={run_state})"
     )
 
 
-def format_discoverability_summary(model_log: "ModelLog") -> str:
+def format_discoverability_summary(trace: "Trace") -> str:
     """Render the Phase 13 user-facing discoverability summary.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to summarize.
 
     Returns
@@ -182,54 +182,53 @@ def format_discoverability_summary(model_log: "ModelLog") -> str:
         Multi-section notebook-friendly summary.
     """
 
-    spec = getattr(model_log, "_intervention_spec", None)
+    spec = getattr(trace, "_intervention_spec", None)
     target_specs = tuple(getattr(spec, "target_value_specs", ()) or ())
     hook_specs = tuple(getattr(spec, "hook_specs", ()) or ())
     lines = [
         "TorchLens Discoverability Summary",
         "Capture:",
-        f"  name: {getattr(model_log, 'name', None)!r}",
-        f"  model_class: {getattr(model_log, 'model_name', None)}",
-        f"  input_shape: {_input_shape_summary(model_log)}",
-        f"  capture_timestamp: {_capture_timestamp(model_log)}",
-        f"  intervention_ready: {bool(getattr(model_log, 'intervention_ready', False))}",
-        f"  capture_full_args: {bool(getattr(model_log, 'capture_full_args', False))}",
+        f"  name: {getattr(trace, 'name', None)!r}",
+        f"  model_class: {getattr(trace, 'model_name', None)}",
+        f"  input_shape: {_input_shape_summary(trace)}",
+        f"  capture_timestamp: {_capture_timestamp(trace)}",
+        f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
+        f"  capture_args_template: {bool(getattr(trace, 'capture_args_template', False))}",
         "Run state:",
-        f"  run_state: {_run_state_name(model_log)}",
-        f"  direct_write_dirty: {bool(getattr(model_log, '_has_direct_writes', False))}",
-        f"  append: is_appended={bool(getattr(model_log, 'is_appended', False))}, "
-        f"sequence_id={getattr(model_log, '_append_sequence_id', 0)}",
-        f"  stale_spec: {_stale_spec_status(model_log)}",
-        f"  last_run: {_last_run_summary(model_log)}",
+        f"  run_state: {_run_state_name(trace)}",
+        f"  direct_write_dirty: {bool(getattr(trace, '_has_direct_writes', False))}",
+        f"  append: is_appended={bool(getattr(trace, 'is_appended', False))}, "
+        f"sequence_id={getattr(trace, '_append_sequence_id', 0)}",
+        f"  stale_spec: {_stale_spec_status(trace)}",
+        f"  last_run: {_last_run_summary(trace)}",
         "Active recipe:",
         f"  target_value_specs: {len(target_specs)}{_spec_sample(target_specs)}",
         f"  hook_specs: {len(hook_specs)}{_spec_sample(hook_specs)}",
         f"  portability: {_portability_status(target_specs, hook_specs)}",
         "Recent operations:",
-        *_recent_operation_lines(model_log),
+        *_recent_operation_lines(trace),
         "Lineage:",
-        f"  parent_run: {_parent_run_summary(model_log)}",
-        f"  fork_chain: {_fork_chain_summary(model_log)}",
+        f"  parent_run: {_parent_run_summary(trace)}",
+        f"  fork_chain: {_fork_chain_summary(trace)}",
         "Graph and relationship evidence:",
-        f"  graph_shape_hash: {_truncated(getattr(model_log, 'graph_shape_hash', None))}",
-        f"  source_model_class: {getattr(model_log, 'source_model_class', None)}",
-        "  weight_fingerprint: "
-        f"{_truncated(getattr(model_log, 'weight_fingerprint_at_capture', None))}",
-        f"  relationship_evidence: {_relationship_evidence_summary(model_log)}",
+        f"  graph_shape_hash: {_truncated(getattr(trace, 'graph_shape_hash', None))}",
+        f"  model_class: {getattr(trace, 'model_class', None)}",
+        f"  weight_fingerprint: {_truncated(getattr(trace, 'param_hash_quick', None))}",
+        f"  relationship_evidence: {_relationship_evidence_summary(trace)}",
         "Next operations:",
-        f"  {_next_operation_hint(model_log)}",
+        f"  {_next_operation_hint(trace)}",
         "RNG and helper notes:",
-        f"  {_rng_note_summary(model_log)}",
+        f"  {_rng_note_summary(trace)}",
     ]
     return "\n".join(lines)
 
 
-def _input_shape_summary(model_log: "ModelLog") -> str:
+def _input_shape_summary(trace: "Trace") -> str:
     """Return a compact input-shape summary.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -238,22 +237,22 @@ def _input_shape_summary(model_log: "ModelLog") -> str:
         Shape summary or ``"unknown"``.
     """
 
-    layers = getattr(model_log, "input_layers", []) or []
-    shape = _combined_shape_str(model_log, layers)
+    layers = getattr(trace, "input_layers", []) or []
+    shape = _combined_shape_str(trace, layers)
     if shape and shape != "-":
         return shape
-    metadata = getattr(model_log, "input_metadata", {}) or {}
+    metadata = getattr(trace, "input_annotations", {}) or {}
     if metadata:
         return _shorten(repr(metadata), limit=80)
     return "unknown"
 
 
-def _capture_timestamp(model_log: "ModelLog") -> str:
+def _capture_timestamp(trace: "Trace") -> str:
     """Return a readable capture timestamp surrogate.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -262,8 +261,8 @@ def _capture_timestamp(model_log: "ModelLog") -> str:
         Pass start/end timing information.
     """
 
-    pass_start = float(getattr(model_log, "pass_start_time", 0.0) or 0.0)
-    pass_end = float(getattr(model_log, "pass_end_time", 0.0) or 0.0)
+    pass_start = float(getattr(trace, "start_time", 0.0) or 0.0)
+    pass_end = float(getattr(trace, "end_time", 0.0) or 0.0)
     if pass_start <= 0:
         return "unknown"
     if pass_end > 0:
@@ -271,12 +270,12 @@ def _capture_timestamp(model_log: "ModelLog") -> str:
     return f"start={pass_start:.6f}"
 
 
-def _run_state_name(model_log: "ModelLog") -> str:
+def _run_state_name(trace: "Trace") -> str:
     """Return the run-state enum name.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -285,16 +284,16 @@ def _run_state_name(model_log: "ModelLog") -> str:
         Run-state name or repr.
     """
 
-    run_state = getattr(model_log, "run_state", None)
+    run_state = getattr(trace, "run_state", None)
     return str(getattr(run_state, "name", run_state))
 
 
-def _stale_spec_status(model_log: "ModelLog") -> str:
-    """Return whether the activation recipe is stale.
+def _stale_spec_status(trace: "Trace") -> str:
+    """Return whether the out recipe is stale.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -303,18 +302,18 @@ def _stale_spec_status(model_log: "ModelLog") -> str:
         Staleness summary.
     """
 
-    spec_revision = int(getattr(model_log, "_spec_revision", 0) or 0)
-    recipe_revision = int(getattr(model_log, "_activation_recipe_revision", 0) or 0)
+    spec_revision = int(getattr(trace, "_spec_revision", 0) or 0)
+    recipe_revision = int(getattr(trace, "_out_recipe_revision", 0) or 0)
     stale = spec_revision != recipe_revision
-    return f"{stale} (spec={spec_revision}, activation_recipe={recipe_revision})"
+    return f"{stale} (spec={spec_revision}, out_recipe={recipe_revision})"
 
 
-def _last_run_summary(model_log: "ModelLog") -> str:
+def _last_run_summary(trace: "Trace") -> str:
     """Return a compact last-run context summary.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -323,11 +322,11 @@ def _last_run_summary(model_log: "ModelLog") -> str:
         Last-run status.
     """
 
-    ctx = getattr(model_log, "last_run_ctx", None)
+    ctx = getattr(trace, "last_run_ctx", None)
     if not isinstance(ctx, dict) or not ctx:
         return "none"
     engine = ctx.get("engine", "unknown")
-    revision = ctx.get("spec_revision", getattr(model_log, "_spec_revision", 0))
+    revision = ctx.get("spec_revision", getattr(trace, "_spec_revision", 0))
     duration = ctx.get("duration_s")
     duration_text = (
         f", duration={float(duration):.4f}s" if isinstance(duration, (int, float)) else ""
@@ -415,12 +414,12 @@ def _portability_status(target_specs: Sequence[Any], hook_specs: Sequence[Any]) 
     return "all helpers builtin -> portable"
 
 
-def _recent_operation_lines(model_log: "ModelLog") -> list[str]:
+def _recent_operation_lines(trace: "Trace") -> list[str]:
     """Return recent operation-history lines.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -429,7 +428,7 @@ def _recent_operation_lines(model_log: "ModelLog") -> list[str]:
         Indented operation lines.
     """
 
-    history = list(getattr(model_log, "operation_history", []) or [])
+    history = list(getattr(trace, "ledger", []) or [])
     if not history:
         return ["  none"]
     lines = []
@@ -466,12 +465,12 @@ def _operation_detail(record: Mapping[str, Any]) -> str:
     return f": {', '.join(parts)}" if parts else ""
 
 
-def _parent_run_summary(model_log: "ModelLog") -> str:
+def _parent_run_summary(trace: "Trace") -> str:
     """Return parent-run status.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -480,7 +479,7 @@ def _parent_run_summary(model_log: "ModelLog") -> str:
         Parent summary.
     """
 
-    parent_ref = getattr(model_log, "parent_run", None)
+    parent_ref = getattr(trace, "parent_run", None)
     if parent_ref is None:
         return "none"
     parent = parent_ref()
@@ -489,12 +488,12 @@ def _parent_run_summary(model_log: "ModelLog") -> str:
     return f"{getattr(parent, 'name', None)!r} ({getattr(parent, 'model_name', None)})"
 
 
-def _fork_chain_summary(model_log: "ModelLog") -> str:
+def _fork_chain_summary(trace: "Trace") -> str:
     """Return a compact fork lineage chain.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -503,9 +502,9 @@ def _fork_chain_summary(model_log: "ModelLog") -> str:
         Fork chain from root to current log.
     """
 
-    names = [str(getattr(model_log, "name", None))]
-    seen = {id(model_log)}
-    current = model_log
+    names = [str(getattr(trace, "name", None))]
+    seen = {id(trace)}
+    current = trace
     while True:
         parent_ref = getattr(current, "parent_run", None)
         if parent_ref is None:
@@ -541,12 +540,12 @@ def _truncated(value: Any, *, length: int = 8) -> str:
     return text[:length]
 
 
-def _relationship_evidence_summary(model_log: "ModelLog") -> str:
+def _relationship_evidence_summary(trace: "Trace") -> str:
     """Return relationship evidence enum names.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -555,7 +554,7 @@ def _relationship_evidence_summary(model_log: "ModelLog") -> str:
         Compact relationship summary.
     """
 
-    evidence = getattr(model_log, "relationship_evidence", {}) or {}
+    evidence = getattr(trace, "relationship_evidence", {}) or {}
     if not evidence:
         return "unknown"
     parts = []
@@ -565,12 +564,12 @@ def _relationship_evidence_summary(model_log: "ModelLog") -> str:
     return ", ".join(parts)
 
 
-def _next_operation_hint(model_log: "ModelLog") -> str:
+def _next_operation_hint(trace: "Trace") -> str:
     """Return available next-operation guidance.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -579,23 +578,21 @@ def _next_operation_hint(model_log: "ModelLog") -> str:
         User-facing next-step hint.
     """
 
-    if getattr(model_log, "_has_direct_writes", False):
+    if getattr(trace, "_has_direct_writes", False):
         return "direct writes present; replay() or rerun() will overlay recipe state"
-    if getattr(model_log, "_spec_revision", 0) != getattr(
-        model_log, "_activation_recipe_revision", 0
-    ):
+    if getattr(trace, "_spec_revision", 0) != getattr(trace, "_out_recipe_revision", 0):
         return "spec stale; call replay() or rerun() to propagate"
-    if not getattr(model_log, "intervention_ready", False):
+    if not getattr(trace, "intervention_ready", False):
         return "not intervention-ready; recapture with intervention_ready=True for replay templates"
     return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
 
 
-def _rng_note_summary(model_log: "ModelLog") -> str:
+def _rng_note_summary(trace: "Trace") -> str:
     """Return helper RNG and non-determinism notes.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Model log to inspect.
 
     Returns
@@ -605,14 +602,14 @@ def _rng_note_summary(model_log: "ModelLog") -> str:
     """
 
     notes = []
-    for layer in getattr(model_log, "layer_list", []) or []:
-        for record in getattr(layer, "intervention_log", []) or []:
+    for layer in getattr(trace, "layer_list", []) or []:
+        for record in getattr(layer, "interventions", []) or []:
             note = getattr(record, "determinism_note", None)
             if note:
                 notes.append(str(note))
     if notes:
         return _shorten("; ".join(notes[:3]), limit=140)
-    if getattr(model_log, "save_rng_states", False):
+    if getattr(trace, "save_rng_states", False):
         return "per-operation RNG states captured"
     return "no unseeded helper RNG notes"
 
@@ -735,7 +732,7 @@ def _resolve_fields(
 
 def _render_in_progress_summary(
     *,
-    model_log: "ModelLog",
+    trace: "Trace",
     fields: Sequence[str],
     mode: SummaryMode,
     show_ops: bool,
@@ -745,7 +742,7 @@ def _render_in_progress_summary(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Log still being populated.
     fields:
         Requested primary fields.
@@ -762,21 +759,21 @@ def _render_in_progress_summary(
         Rendered in-progress summary.
     """
     lines = [
-        f"Model: {model_log.model_name}",
+        f"Model: {trace.model_name}",
         "Status: pass in progress; postprocessing has not finished yet.",
-        f"Ops logged so far: {len(model_log._raw_layer_dict)}",
+        f"Ops logged so far: {len(trace._raw_layer_dict)}",
     ]
-    if show_ops and model_log._raw_layer_dict:
+    if show_ops and trace._raw_layer_dict:
         rows = []
-        for raw_label in model_log._raw_layer_labels_list:
-            entry = model_log._raw_layer_dict[raw_label]
+        for raw_label in trace._raw_layer_labels_list:
+            entry = trace._raw_layer_dict[raw_label]
             row = {
                 "name": str(
-                    getattr(entry, "layer_label_raw", None)
-                    or getattr(entry, "tensor_label_raw", raw_label)
+                    getattr(entry, "_layer_label_raw", None)
+                    or getattr(entry, "_label_raw", raw_label)
                 ),
-                "shape": _shape_str(getattr(entry, "tensor_shape", None)),
-                "dtype": _dtype_str(getattr(entry, "tensor_dtype", None)),
+                "shape": _shape_str(getattr(entry, "shape", None)),
+                "dtype": _dtype_str(getattr(entry, "dtype", None)),
             }
             rows.append(row)
         display_fields = [field for field in fields if field in {"name", "shape", "dtype"}] or [
@@ -796,18 +793,18 @@ def _render_in_progress_summary(
 
 def _render_finished_summary(
     *,
-    model_log: "ModelLog",
+    trace: "Trace",
     level: str,
     fields: Sequence[str],
     mode: SummaryMode,
     show_ops: bool,
     max_rows: Optional[int],
 ) -> str:
-    """Render a summary for a finalized ``ModelLog``.
+    """Render a summary for a finalized ``Trace``.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     level:
         Canonical summary level.
@@ -825,18 +822,16 @@ def _render_finished_summary(
     str
         Rendered summary text.
     """
-    primary_rows, footer_lines = _build_level_rows(model_log=model_log, level=level, mode=mode)
+    primary_rows, footer_lines = _build_level_rows(trace=trace, level=level, mode=mode)
     lines = [
-        _level_title(model_log=model_log, level=level),
+        _level_title(trace=trace, level=level),
         _render_table(fields, primary_rows, max_rows=max_rows),
     ]
     if footer_lines:
         lines.extend(footer_lines)
     if show_ops and level != "control_flow":
         op_fields = _default_op_fields(level)
-        op_rows, op_footer_lines = _build_operation_rows(
-            model_log=model_log, mode=mode, level=level
-        )
+        op_rows, op_footer_lines = _build_operation_rows(trace=trace, mode=mode, level=level)
         lines.extend(
             [
                 "",
@@ -849,12 +844,12 @@ def _render_finished_summary(
     return "\n".join(lines)
 
 
-def _level_title(*, model_log: "ModelLog", level: str) -> str:
+def _level_title(*, trace: "Trace", level: str) -> str:
     """Return the section title for a summary level.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     level:
         Canonical level name.
@@ -865,19 +860,19 @@ def _level_title(*, model_log: "ModelLog", level: str) -> str:
         Section title.
     """
     title_map = {
-        "overview": f"Model: {model_log.model_name}",
-        "graph": f"Graph Summary: {model_log.model_name}",
-        "memory": f"Memory Summary: {model_log.model_name}",
-        "control_flow": f"Control-Flow Summary: {model_log.model_name}",
-        "compute": f"Compute Summary: {model_log.model_name}",
-        "waterfall": f"Waterfall Summary: {model_log.model_name}",
+        "overview": f"Model: {trace.model_name}",
+        "graph": f"Graph Summary: {trace.model_name}",
+        "memory": f"Memory Summary: {trace.model_name}",
+        "control_flow": f"Control-Flow Summary: {trace.model_name}",
+        "compute": f"Compute Summary: {trace.model_name}",
+        "waterfall": f"Waterfall Summary: {trace.model_name}",
     }
     return title_map[level]
 
 
 def _build_level_rows(
     *,
-    model_log: "ModelLog",
+    trace: "Trace",
     level: str,
     mode: SummaryMode,
 ) -> tuple[List[Dict[str, str]], List[str]]:
@@ -885,7 +880,7 @@ def _build_level_rows(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     level:
         Canonical level name.
@@ -898,24 +893,24 @@ def _build_level_rows(
         Primary table rows and footer lines.
     """
     if level == "overview":
-        return _build_overview_rows(model_log)
+        return _build_overview_rows(trace)
     if level == "graph":
-        return _build_graph_rows(model_log)
+        return _build_graph_rows(trace)
     if level == "memory":
-        return _build_memory_rows(model_log, mode=mode)
+        return _build_memory_rows(trace, mode=mode)
     if level == "control_flow":
-        return _build_control_flow_rows(model_log)
+        return _build_control_flow_rows(trace)
     if level == "waterfall":
-        return _build_waterfall_rows(model_log, mode=mode)
-    return _build_compute_rows(model_log)
+        return _build_waterfall_rows(trace, mode=mode)
+    return _build_compute_rows(trace)
 
 
-def _build_overview_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], List[str]]:
+def _build_overview_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]]:
     """Build the default overview rows.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
 
     Returns
@@ -926,40 +921,40 @@ def _build_overview_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], L
     rows: List[Dict[str, str]] = [
         {
             "name": "input",
-            "shape": _combined_shape_str(model_log, model_log.input_layers),
+            "shape": _combined_shape_str(trace, trace.input_layers),
             "params": "0",
             "train": "-",
         }
     ]
-    for module in _iter_summary_modules(model_log):
-        rows.append(_module_overview_row(model_log, module))
+    for module in _iter_summary_modules(trace):
+        rows.append(_module_overview_row(trace, module))
     rows.append(
         {
             "name": "output",
-            "shape": _combined_shape_str(model_log, model_log.output_layers),
+            "shape": _combined_shape_str(trace, trace.output_layers),
             "params": "-",
             "train": "-",
         }
     )
     footer_lines = [
-        f"Params: {_int_with_commas(model_log.total_params)} unique; trainable: "
-        f"{_int_with_commas(model_log.total_params_trainable)}",
-        f"Ops: {model_log.num_operations} total",
-        f"Saved activations: {human_readable_size(model_log.saved_activation_memory)}",
-        f"Forward FLOPs: {_human_flops(model_log.total_flops_forward)}  "
-        f"MACs: {_human_flops(model_log.total_macs_forward)}",
+        f"Params: {_int_with_commas(trace.num_params)} unique; trainable: "
+        f"{_int_with_commas(trace.num_params_trainable)}",
+        f"Ops: {trace.num_ops} total",
+        f"Saved outs: {human_readable_size(trace.saved_out_memory)}",
+        f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}  "
+        f"MACs: {_human_flops(trace.total_macs_forward)}",
         "FLOP convention: counts use the captured TorchLens convention; "
         "MACs are reported as FLOPs // 2.",
     ]
     return rows, footer_lines
 
 
-def _build_graph_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], List[str]]:
+def _build_graph_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]]:
     """Build graph-summary rows.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
 
     Returns
@@ -968,24 +963,24 @@ def _build_graph_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], List
         Graph rows and footer lines.
     """
     rows = []
-    for module in _iter_summary_modules(model_log):
+    for module in _iter_summary_modules(trace):
         rows.append(
             {
-                "name": f"{module.address} ({module.module_class_name})",
-                "shape": _module_shape(model_log, module),
+                "name": f"{module.address} ({module.class_name})",
+                "shape": _module_shape(trace, module),
                 "params": _human_count(module.num_params),
                 "parents": _module_parent_summary(module),
             }
         )
     footer_lines = [
         f"Modules shown: {len(rows)}",
-        f"Ops tracked: {model_log.num_operations}",
+        f"Ops tracked: {trace.num_ops}",
     ]
     return rows, footer_lines
 
 
 def _build_memory_rows(
-    model_log: "ModelLog",
+    trace: "Trace",
     *,
     mode: SummaryMode,
 ) -> tuple[List[Dict[str, str]], List[str]]:
@@ -993,7 +988,7 @@ def _build_memory_rows(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     mode:
         Operation aggregation mode.
@@ -1005,32 +1000,32 @@ def _build_memory_rows(
     """
     running_total = 0
     rows: List[Dict[str, str]] = []
-    for entry in _iter_operation_entries(model_log, mode=mode):
-        tensor_memory = int(getattr(entry, "tensor_memory", 0) or 0)
-        running_total += tensor_memory
+    for entry in _iter_operation_entries(trace, mode=mode):
+        memory = int(getattr(entry, "memory", 0) or 0)
+        running_total += memory
         rows.append(
             {
                 "name": _entry_name(entry),
-                "shape": _shape_str(getattr(entry, "tensor_shape", None)),
-                "dtype": _dtype_str(getattr(entry, "tensor_dtype", None)),
-                "tensor_mb": _mb_str(tensor_memory),
+                "shape": _shape_str(getattr(entry, "shape", None)),
+                "dtype": _dtype_str(getattr(entry, "dtype", None)),
+                "tensor_mb": _mb_str(memory),
                 "running_mb": _mb_str(running_total),
             }
         )
     footer_lines = [
-        f"Tracked tensor volume: {human_readable_size(model_log.total_activation_memory)}",
-        f"Saved activations: {human_readable_size(model_log.saved_activation_memory)}",
-        "Live forward-memory peak: not tracked in ModelLog",
+        f"Tracked tensor volume: {human_readable_size(trace.total_out_memory)}",
+        f"Saved outs: {human_readable_size(trace.saved_out_memory)}",
+        "Live forward-memory peak: not tracked in Trace",
     ]
     return rows, footer_lines
 
 
-def _build_control_flow_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], List[str]]:
+def _build_control_flow_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]]:
     """Build control-flow rows or an empty state.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
 
     Returns
@@ -1039,15 +1034,15 @@ def _build_control_flow_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]
         Control-flow rows and footer lines.
     """
     rows: List[Dict[str, str]] = []
-    for event in model_log.conditional_events:
-        branch_kinds = _event_branch_kinds(model_log, event)
+    for event in trace.conditional_records:
+        branch_kinds = _event_branch_kinds(trace, event)
         rows.append(
             {
                 "site": f"cond#{event.id}",
                 "source": _event_source(event),
                 "taken": ",".join(branch_kinds) if branch_kinds else "unknown",
                 "bool_layer": _event_bool_layer(event),
-                "branch_ops": str(_event_branch_op_count(model_log, event)),
+                "branch_ops": str(_event_branch_op_count(trace, event)),
                 "notes": event.function_qualname,
             }
         )
@@ -1060,12 +1055,12 @@ def _build_control_flow_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]
     return rows, footer_lines
 
 
-def _build_compute_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], List[str]]:
+def _build_compute_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]]:
     """Build compute-summary rows.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
 
     Returns
@@ -1074,28 +1069,28 @@ def _build_compute_rows(model_log: "ModelLog") -> tuple[List[Dict[str, str]], Li
         Compute rows and footer lines.
     """
     rows = []
-    for module in _iter_summary_modules(model_log):
+    for module in _iter_summary_modules(trace):
         rows.append(
             {
                 "name": module.address,
                 "params": _human_count(module.num_params),
                 "flops": _human_flops(module.flops_forward),
                 "macs": _human_flops(module.macs_forward),
-                "time_ms": f"{_module_time_ms(model_log, module):.2f}",
-                "dtype": _module_dtype(model_log, module),
+                "time_ms": f"{_module_time_ms(trace, module):.2f}",
+                "dtype": _module_dtype(trace, module),
             }
         )
     footer_lines = [
-        f"Params: {_int_with_commas(model_log.total_params)} unique",
-        f"Forward FLOPs: {_human_flops(model_log.total_flops_forward)}",
-        f"MACs: {_human_flops(model_log.total_macs_forward)}",
-        f"Forward time: {model_log.time_forward_pass * 1000:.2f} ms",
+        f"Params: {_int_with_commas(trace.num_params)} unique",
+        f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}",
+        f"MACs: {_human_flops(trace.total_macs_forward)}",
+        f"Forward time: {trace.forward_duration * 1000:.2f} ms",
     ]
     return rows, footer_lines
 
 
 def _build_waterfall_rows(
-    model_log: "ModelLog",
+    trace: "Trace",
     *,
     mode: SummaryMode,
 ) -> tuple[List[Dict[str, str]], List[str]]:
@@ -1103,7 +1098,7 @@ def _build_waterfall_rows(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     mode:
         Operation aggregation mode.
@@ -1117,9 +1112,9 @@ def _build_waterfall_rows(
     elapsed = 0.0
     peak_memory = 0
     rows: List[Dict[str, str]] = []
-    for entry in _iter_operation_entries(model_log, mode=mode):
-        duration = float(getattr(entry, "func_time", 0.0) or 0.0)
-        memory = int(getattr(entry, "tensor_memory", 0) or 0)
+    for entry in _iter_operation_entries(trace, mode=mode):
+        duration = float(getattr(entry, "func_duration", 0.0) or 0.0)
+        memory = int(getattr(entry, "memory", 0) or 0)
         peak_memory = max(peak_memory, memory)
         rows.append(
             {
@@ -1140,7 +1135,7 @@ def _build_waterfall_rows(
 
 def _build_operation_rows(
     *,
-    model_log: "ModelLog",
+    trace: "Trace",
     mode: SummaryMode,
     level: str,
 ) -> tuple[List[Dict[str, str]], List[str]]:
@@ -1148,7 +1143,7 @@ def _build_operation_rows(
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     mode:
         Operation aggregation mode.
@@ -1162,25 +1157,25 @@ def _build_operation_rows(
     """
     rows: List[Dict[str, str]] = []
     running_total = 0
-    for entry in _iter_operation_entries(model_log, mode=mode):
-        tensor_memory = int(getattr(entry, "tensor_memory", 0) or 0)
-        running_total += tensor_memory
+    for entry in _iter_operation_entries(trace, mode=mode):
+        memory = int(getattr(entry, "memory", 0) or 0)
+        running_total += memory
         rows.append(
             {
                 "name": _entry_name(entry),
-                "shape": _shape_str(getattr(entry, "tensor_shape", None)),
-                "params": _human_count(int(getattr(entry, "num_params_total", 0) or 0)),
-                "parents": _parent_summary(getattr(entry, "parent_layers", [])),
-                "dtype": _dtype_str(getattr(entry, "tensor_dtype", None)),
-                "tensor_mb": _mb_str(tensor_memory),
+                "shape": _shape_str(getattr(entry, "shape", None)),
+                "params": _human_count(int(getattr(entry, "num_params", 0) or 0)),
+                "parents": _parent_summary(getattr(entry, "parents", [])),
+                "dtype": _dtype_str(getattr(entry, "dtype", None)),
+                "tensor_mb": _mb_str(memory),
                 "running_mb": _mb_str(running_total),
                 "flops": _human_flops(int(getattr(entry, "flops_forward", 0) or 0)),
                 "macs": _human_flops(int(getattr(entry, "macs_forward", 0) or 0)),
-                "time_ms": f"{float(getattr(entry, 'func_time', 0.0) or 0.0) * 1000:.2f}",
+                "time_ms": f"{float(getattr(entry, 'func_duration', 0.0) or 0.0) * 1000:.2f}",
             }
         )
     footer_lines = [
-        f"Operation rows shown: {len(rows)} ({mode if mode != 'auto' else _effective_mode(model_log, mode)})"
+        f"Operation rows shown: {len(rows)} ({mode if mode != 'auto' else _effective_mode(trace, mode)})"
     ]
     return rows, footer_lines
 
@@ -1205,12 +1200,12 @@ def _default_op_fields(level: str) -> List[str]:
     return ["name", "shape", "params", "parents"]
 
 
-def _iter_summary_modules(model_log: "ModelLog") -> List["ModuleLog"]:
+def _iter_summary_modules(trace: "Trace") -> List["ModuleLog"]:
     """Return top-level module rows for summary tables.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
 
     Returns
@@ -1219,7 +1214,7 @@ def _iter_summary_modules(model_log: "ModelLog") -> List["ModuleLog"]:
         Top-level modules in accessor order.
     """
     modules = []
-    for module in model_log.modules:
+    for module in trace.modules:
         if module.address == "self":
             continue
         if module.address_depth == 1:
@@ -1227,12 +1222,12 @@ def _iter_summary_modules(model_log: "ModelLog") -> List["ModuleLog"]:
     return modules
 
 
-def _module_overview_row(model_log: "ModelLog", module: "ModuleLog") -> Dict[str, str]:
+def _module_overview_row(trace: "Trace", module: "ModuleLog") -> Dict[str, str]:
     """Build one overview row for a module.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     module:
         Module to summarize.
@@ -1246,21 +1241,21 @@ def _module_overview_row(model_log: "ModelLog", module: "ModuleLog") -> Dict[str
     if module.num_params > 0:
         train = "yes" if module.num_params_trainable > 0 else "no"
     return {
-        "name": f"{module.address} ({module.module_class_name})",
-        "shape": _module_shape(model_log, module),
+        "name": f"{module.address} ({module.class_name})",
+        "shape": _module_shape(trace, module),
         "params": _human_count(module.num_params),
         "train": train,
         "parents": _module_parent_summary(module),
-        "class": module.module_class_name,
+        "class": module.class_name,
     }
 
 
-def _module_shape(model_log: "ModelLog", module: "ModuleLog") -> str:
+def _module_shape(trace: "Trace", module: "ModuleLog") -> str:
     """Return a representative output shape for a module.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     module:
         Module to summarize.
@@ -1270,13 +1265,13 @@ def _module_shape(model_log: "ModelLog", module: "ModuleLog") -> str:
     str
         Representative output shape.
     """
-    if not module.all_layers:
+    if not module.layers:
         return "-"
     try:
-        layer = model_log[module.all_layers[-1]]
+        layer = trace[module.layers[-1]]
     except KeyError:
         return "-"
-    return _shape_str(getattr(layer, "tensor_shape", None))
+    return _shape_str(getattr(layer, "shape", None))
 
 
 def _module_parent_summary(module: "ModuleLog") -> str:
@@ -1297,12 +1292,12 @@ def _module_parent_summary(module: "ModuleLog") -> str:
     return str(module.address_parent)
 
 
-def _module_dtype(model_log: "ModelLog", module: "ModuleLog") -> str:
+def _module_dtype(trace: "Trace", module: "ModuleLog") -> str:
     """Return a representative dtype for a module.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     module:
         Module to summarize.
@@ -1312,21 +1307,21 @@ def _module_dtype(model_log: "ModelLog", module: "ModuleLog") -> str:
     str
         Representative dtype.
     """
-    if not module.all_layers:
+    if not module.layers:
         return "-"
     try:
-        layer = model_log[module.all_layers[-1]]
+        layer = trace[module.layers[-1]]
     except KeyError:
         return "-"
-    return _dtype_str(getattr(layer, "tensor_dtype", None))
+    return _dtype_str(getattr(layer, "dtype", None))
 
 
-def _module_time_ms(model_log: "ModelLog", module: "ModuleLog") -> float:
+def _module_time_ms(trace: "Trace", module: "ModuleLog") -> float:
     """Return the summed forward time for a module.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     module:
         Module to summarize.
@@ -1337,46 +1332,46 @@ def _module_time_ms(model_log: "ModelLog", module: "ModuleLog") -> float:
         Summed execution time in milliseconds.
     """
     total = 0.0
-    for layer_label in module.all_layers:
+    for layer_label in module.layers:
         try:
-            layer = model_log[layer_label]
+            layer = trace[layer_label]
         except KeyError:
             continue
-        total += float(getattr(layer, "func_time", 0.0) or 0.0)
+        total += float(getattr(layer, "func_duration", 0.0) or 0.0)
     return total * 1000.0
 
 
 def _iter_operation_entries(
-    model_log: "ModelLog",
+    trace: "Trace",
     *,
     mode: SummaryMode,
-) -> Iterable["LayerLog | LayerPassLog"]:
+) -> Iterable["LayerLog | OpLog"]:
     """Iterate operation-like entries according to the requested mode.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     mode:
         Requested aggregation mode.
 
     Returns
     -------
-    Iterable[LayerLog | LayerPassLog]
+    Iterable[LayerLog | OpLog]
         Operation entries in display order.
     """
-    effective_mode = _effective_mode(model_log, mode)
+    effective_mode = _effective_mode(trace, mode)
     if effective_mode == "rolled":
-        return cast(Iterable["LayerLog | LayerPassLog"], model_log.layer_logs.values())
-    return cast(Iterable["LayerLog | LayerPassLog"], model_log.layer_list)
+        return cast(Iterable["LayerLog | OpLog"], trace.layer_logs.values())
+    return cast(Iterable["LayerLog | OpLog"], trace.layer_list)
 
 
-def _effective_mode(model_log: "ModelLog", mode: SummaryMode) -> Literal["rolled", "unrolled"]:
+def _effective_mode(trace: "Trace", mode: SummaryMode) -> Literal["rolled", "unrolled"]:
     """Resolve the effective operation mode.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     mode:
         Requested mode.
@@ -1387,7 +1382,7 @@ def _effective_mode(model_log: "ModelLog", mode: SummaryMode) -> Literal["rolled
         Effective operation mode.
     """
     if mode == "auto":
-        return "unrolled" if model_log.is_recurrent else "rolled"
+        return "unrolled" if trace.is_recurrent else "rolled"
     return mode
 
 
@@ -1408,22 +1403,22 @@ def _entry_name(entry: Any) -> str:
     if base_name is None:
         base_name = getattr(entry, "layer_label_w_pass", None) or getattr(entry, "layer_label", "?")
     if (
-        getattr(entry, "num_passes", 1)
-        and getattr(entry, "num_passes", 1) > 1
-        and hasattr(entry, "passes")
+        getattr(entry, "num_calls", 1)
+        and getattr(entry, "num_calls", 1) > 1
+        and hasattr(entry, "ops")
     ):
-        return f"{base_name} x{getattr(entry, 'num_passes', 1)}"
-    if getattr(entry, "pass_num", 1) > 1:
+        return f"{base_name} x{getattr(entry, 'num_calls', 1)}"
+    if getattr(entry, "call_index", 1) > 1:
         return str(getattr(entry, "layer_label", base_name))
     return str(base_name)
 
 
-def _combined_shape_str(model_log: "ModelLog", labels: Sequence[str]) -> str:
+def _combined_shape_str(trace: "Trace", labels: Sequence[str]) -> str:
     """Return a compact combined shape string for one or more labels.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     labels:
         Layer labels whose shapes should be summarized.
@@ -1438,7 +1433,7 @@ def _combined_shape_str(model_log: "ModelLog", labels: Sequence[str]) -> str:
     shapes = []
     for label in labels:
         try:
-            shapes.append(_shape_str(getattr(model_log[label], "tensor_shape", None)))
+            shapes.append(_shape_str(getattr(trace[label], "shape", None)))
         except KeyError:
             continue
     if not shapes:
@@ -1448,12 +1443,12 @@ def _combined_shape_str(model_log: "ModelLog", labels: Sequence[str]) -> str:
     return f"{len(shapes)} tensors"
 
 
-def _event_branch_kinds(model_log: "ModelLog", event: "ConditionalEvent") -> List[str]:
+def _event_branch_kinds(trace: "Trace", event: "ConditionalEvent") -> List[str]:
     """Return the taken branch kinds for one conditional event.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     event:
         Conditional event to inspect.
@@ -1465,7 +1460,7 @@ def _event_branch_kinds(model_log: "ModelLog", event: "ConditionalEvent") -> Lis
     """
     branch_kinds = {
         branch_kind
-        for (cond_id, branch_kind) in model_log.conditional_arm_edges
+        for (cond_id, branch_kind) in trace.conditional_arm_entry_edges
         if cond_id == event.id
     }
     return sorted(branch_kinds)
@@ -1507,12 +1502,12 @@ def _event_bool_layer(event: "ConditionalEvent") -> str:
     return f"{event.bool_layers[0]} +{len(event.bool_layers) - 1}"
 
 
-def _event_branch_op_count(model_log: "ModelLog", event: "ConditionalEvent") -> int:
+def _event_branch_op_count(trace: "Trace", event: "ConditionalEvent") -> int:
     """Return the number of operation edges attributed to a conditional event.
 
     Parameters
     ----------
-    model_log:
+    trace:
         Finalized log object.
     event:
         Conditional event to inspect.
@@ -1524,17 +1519,17 @@ def _event_branch_op_count(model_log: "ModelLog", event: "ConditionalEvent") -> 
     """
     return sum(
         len(edges)
-        for (cond_id, _branch_kind), edges in model_log.conditional_arm_edges.items()
+        for (cond_id, _branch_kind), edges in trace.conditional_arm_entry_edges.items()
         if cond_id == event.id
     )
 
 
-def _parent_summary(parent_layers: Sequence[str]) -> str:
+def _parent_summary(parents: Sequence[str]) -> str:
     """Return a compact parent-layer summary.
 
     Parameters
     ----------
-    parent_layers:
+    parents:
         Parent layer labels.
 
     Returns
@@ -1542,11 +1537,11 @@ def _parent_summary(parent_layers: Sequence[str]) -> str:
     str
         Compact parent summary.
     """
-    if not parent_layers:
+    if not parents:
         return "-"
-    if len(parent_layers) == 1:
-        return str(parent_layers[0])
-    return f"{parent_layers[0]} +{len(parent_layers) - 1}"
+    if len(parents) == 1:
+        return str(parents[0])
+    return f"{parents[0]} +{len(parents) - 1}"
 
 
 def _shape_str(shape: Any) -> str:

@@ -8,9 +8,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens import validate_forward_pass, validate_saved_activations, ModelLog
+from torchlens import validate_forward_pass, validate_saved_outs, Trace
 from torchlens import check_metadata_invariants, MetadataInvariantError
-from torchlens.validation import validate_saved_activations as validate_from_subpkg
+from torchlens.validation import validate_saved_outs as validate_from_subpkg
 from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     SKIP_PERTURBATION_ENTIRELY,
@@ -18,7 +18,7 @@ from torchlens.validation.exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
 )
 from torchlens.validation.core import (
-    _perturb_layer_activations,
+    _perturb_layer_outs,
     _deep_clone_tensors,
     _copy_validation_args,
     MAX_PERTURB_ATTEMPTS,
@@ -32,7 +32,7 @@ from torchlens.utils.tensor_utils import tensor_nanequal
 
 
 def test_validation_import_path():
-    """from torchlens.validation import validate_saved_activations works."""
+    """from torchlens.validation import validate_saved_outs works."""
     assert callable(validate_from_subpkg)
 
 
@@ -48,16 +48,16 @@ def test_check_metadata_invariants_importable():
     assert issubclass(MetadataInvariantError, ValueError)
 
 
-def test_model_log_validate_method_bound():
-    """ModelLog.validate_saved_activations is callable."""
-    assert hasattr(ModelLog, "validate_saved_activations")
-    assert callable(ModelLog.validate_saved_activations)
+def test_trace_validate_method_bound():
+    """Trace.validate_saved_outs is callable."""
+    assert hasattr(Trace, "validate_saved_outs")
+    assert callable(Trace.validate_saved_outs)
 
 
-def test_model_log_check_metadata_method_bound():
-    """ModelLog.check_metadata_invariants is callable."""
-    assert hasattr(ModelLog, "check_metadata_invariants")
-    assert callable(ModelLog.check_metadata_invariants)
+def test_trace_check_metadata_method_bound():
+    """Trace.check_metadata_invariants is callable."""
+    assert hasattr(Trace, "check_metadata_invariants")
+    assert callable(Trace.check_metadata_invariants)
 
 
 def test_tensor_nanequal_uses_relative_tolerance_for_replay() -> None:
@@ -111,7 +111,7 @@ def test_custom_exemption_checks_are_callable():
 def test_perturbation_changes_float_tensor():
     parent = torch.randn(10, 10)
     output = torch.randn(10, 10)
-    perturbed = _perturb_layer_activations(parent, output)
+    perturbed = _perturb_layer_outs(parent, output)
     assert not torch.equal(perturbed, parent)
     assert perturbed.shape == parent.shape
 
@@ -119,7 +119,7 @@ def test_perturbation_changes_float_tensor():
 def test_perturbation_changes_int_tensor():
     parent = torch.randint(0, 100, (10, 10))
     output = torch.randn(10, 10)
-    perturbed = _perturb_layer_activations(parent, output)
+    perturbed = _perturb_layer_outs(parent, output)
     assert not torch.equal(perturbed, parent)
     assert perturbed.dtype == parent.dtype
 
@@ -127,7 +127,7 @@ def test_perturbation_changes_int_tensor():
 def test_perturbation_changes_bool_tensor():
     parent = torch.ones(10, 10, dtype=torch.bool)
     output = torch.randn(10, 10)
-    perturbed = _perturb_layer_activations(parent, output)
+    perturbed = _perturb_layer_outs(parent, output)
     # With 100 elements all True, random should differ
     assert not torch.equal(perturbed, parent)
     assert perturbed.dtype == torch.bool
@@ -136,7 +136,7 @@ def test_perturbation_changes_bool_tensor():
 def test_perturbation_changes_complex_tensor():
     parent = torch.complex(torch.randn(5, 5), torch.randn(5, 5))
     output = torch.randn(5, 5)
-    perturbed = _perturb_layer_activations(parent, output)
+    perturbed = _perturb_layer_outs(parent, output)
     assert not torch.equal(perturbed, parent)
     assert perturbed.is_complex()
 
@@ -150,14 +150,14 @@ def test_perturbation_respects_dtype():
         else:
             parent = torch.randn(5, 5, dtype=dtype)
         output = torch.randn(5, 5)
-        perturbed = _perturb_layer_activations(parent, output)
+        perturbed = _perturb_layer_outs(parent, output)
         assert perturbed.dtype == dtype
 
 
 def test_perturbation_handles_empty_tensor():
     parent = torch.tensor([])
     output = torch.tensor([])
-    perturbed = _perturb_layer_activations(parent, output)
+    perturbed = _perturb_layer_outs(parent, output)
     assert perturbed.numel() == 0
     assert torch.equal(perturbed, parent)
 
@@ -168,7 +168,7 @@ def test_perturbation_terminates_on_scalar():
     # With MAX_PERTURB_ATTEMPTS=100, it should terminate regardless.
     parent = torch.tensor([True])
     output = torch.tensor([1.0])
-    perturbed = _perturb_layer_activations(parent, output)
+    perturbed = _perturb_layer_outs(parent, output)
     assert perturbed.dtype == torch.bool
     assert perturbed.shape == parent.shape
 
@@ -338,22 +338,22 @@ class _SimpleFF(nn.Module):
 
 
 def _make_clean_log():
-    """Return a ModelLog with all activations and metadata for a simple FF model."""
-    from torchlens import log_forward_pass
+    """Return a Trace with all outs and metadata for a simple FF model."""
+    from torchlens import trace as trace_fn
 
     model = _SimpleFF()
-    return log_forward_pass(model, torch.randn(2, 5), random_seed=42)
+    return trace_fn(model, torch.randn(2, 5), random_seed=42)
 
 
-def test_clean_log_passes_all_invariants():
-    """An uncorrupted ModelLog passes all invariant checks."""
+def test_clean_log_ops_all_invariants():
+    """An uncorrupted Trace ops all invariant checks."""
     log = _make_clean_log()
     assert check_metadata_invariants(log) is True
     log.cleanup()
 
 
-def test_clean_log_passes_as_method():
-    """check_metadata_invariants works as a bound method on ModelLog."""
+def test_clean_log_ops_as_method():
+    """check_metadata_invariants works as a bound method on Trace."""
     log = _make_clean_log()
     assert log.check_metadata_invariants() is True
     log.cleanup()
@@ -364,51 +364,51 @@ def test_corruption_parent_child_link():
     log = _make_clean_log()
     # Find a layer with children and corrupt
     for lpl in log.layer_list:
-        if lpl.child_layers:
-            child_label = lpl.child_layers[0]
+        if lpl.children:
+            child_label = lpl.children[0]
             child = log[child_label]
-            # Remove the parent from the child's parent_layers
-            child.parent_layers = [p for p in child.parent_layers if p != lpl.layer_label]
+            # Remove the parent from the child's parents
+            child.parents = [p for p in child.parents if p != lpl.layer_label]
             break
     with pytest.raises(MetadataInvariantError, match="graph_topology"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
-def test_corruption_num_operations():
-    """Mismatched num_operations raises MetadataInvariantError."""
+def test_corruption_num_ops():
+    """Mismatched num_ops raises MetadataInvariantError."""
     log = _make_clean_log()
-    log.num_operations = 9999
-    with pytest.raises(MetadataInvariantError, match="model_log_self_consistency"):
+    log.num_ops = 9999
+    with pytest.raises(MetadataInvariantError, match="trace_self_consistency"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
 def test_corruption_module_back_reference():
-    """Removing a layer from its module's all_layers raises MetadataInvariantError."""
+    """Removing a layer from its module's layers raises MetadataInvariantError."""
     log = _make_clean_log()
     # Find a layer with a containing module and corrupt the ModuleLog
     for lpl in log.layer_list:
-        cmo = lpl.containing_module
+        cmo = lpl.module
         if cmo:
-            # containing_module may include pass (e.g. 'fc:1'), strip it
+            # module may include pass (e.g. 'fc:1'), strip it
             cmo_addr = cmo.split(":")[0] if ":" in cmo else cmo
             mod_log = log.modules._dict[cmo_addr]
-            if lpl.layer_label_no_pass in mod_log.all_layers:
-                mod_log.all_layers = [x for x in mod_log.all_layers if x != lpl.layer_label_no_pass]
-                # num_layers is a read-only property derived from all_layers
+            if lpl.layer_label_no_pass in mod_log.layers:
+                mod_log.layers = [x for x in mod_log.layers if x != lpl.layer_label_no_pass]
+                # num_layers is a read-only property derived from layers
                 break
     with pytest.raises(MetadataInvariantError, match="module_layer_containment"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
-def test_corruption_layer_num_passes():
-    """Wrong layer_num_passes raises MetadataInvariantError."""
+def test_corruption_layer_num_calls():
+    """Wrong layer_num_calls raises MetadataInvariantError."""
     log = _make_clean_log()
     # Corrupt one entry
-    first_key = list(log.layer_num_passes.keys())[0]
-    log.layer_num_passes[first_key] = 999
+    first_key = list(log.layer_num_calls.keys())[0]
+    log.layer_num_calls[first_key] = 999
     with pytest.raises(MetadataInvariantError, match="recurrence_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -418,7 +418,7 @@ def test_corruption_output_layers_empty():
     """Emptying output_layers raises MetadataInvariantError."""
     log = _make_clean_log()
     log.output_layers = []
-    with pytest.raises(MetadataInvariantError, match="model_log_self_consistency"):
+    with pytest.raises(MetadataInvariantError, match="trace_self_consistency"):
         check_metadata_invariants(log)
     log.cleanup()
 
@@ -456,41 +456,41 @@ class _NestedModel(nn.Module):
 
 
 def _make_recurrent_log():
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
 
-    return log_forward_pass(_RecurrentFF(), torch.randn(2, 5), random_seed=42)
+    return trace_fn(_RecurrentFF(), torch.randn(2, 5), random_seed=42)
 
 
 def _make_nested_log():
-    from torchlens import log_forward_pass
+    from torchlens import trace as trace_fn
 
-    return log_forward_pass(_NestedModel(), torch.randn(2, 5), random_seed=42)
+    return trace_fn(_NestedModel(), torch.randn(2, 5), random_seed=42)
 
 
 # -- M. Graph ordering corruption --
 
 
 def test_corruption_graph_ordering_duplicate_rt_num():
-    """Duplicate creation_order triggers graph_ordering error."""
+    """Duplicate capture_index triggers graph_ordering error."""
     log = _make_clean_log()
-    # Set two layers to the same creation_order
-    log.layer_list[0].creation_order = log.layer_list[1].creation_order
+    # Set two layers to the same capture_index
+    log.layer_list[0].capture_index = log.layer_list[1].capture_index
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
 def test_corruption_graph_ordering_topo_violation():
-    """Parent with higher creation_order than child triggers error."""
+    """Parent with higher capture_index than child triggers error."""
     log = _make_clean_log()
     # Find a layer with parents and swap rt nums to break topo order
     for lpl in log.layer_list:
-        if lpl.parent_layers:
-            parent = log[lpl.parent_layers[0]]
+        if lpl.parents:
+            parent = log[lpl.parents[0]]
             # Give parent a higher rt num than child
-            parent.creation_order, lpl.creation_order = (
-                lpl.creation_order,
-                parent.creation_order,
+            parent.capture_index, lpl.capture_index = (
+                lpl.capture_index,
+                parent.capture_index,
             )
             break
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
@@ -502,32 +502,32 @@ def test_corruption_graph_ordering_topo_violation():
 
 
 def test_corruption_loop_detection_slo_empty():
-    """Empty recurrent_group triggers loop_detection error."""
+    """Empty recurrent_ops triggers loop_detection error."""
     log = _make_clean_log()
-    log.layer_list[0].recurrent_group = []
+    log.layer_list[0].recurrent_ops = []
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
 def test_corruption_loop_detection_slo_asymmetry():
-    """Asymmetric recurrent_group triggers loop_detection error."""
+    """Asymmetric recurrent_ops triggers loop_detection error."""
     log = _make_recurrent_log()
     # Find a multi-pass layer and corrupt one member's slo list
     for lpl in log.layer_list:
-        if lpl.num_passes > 1:
+        if lpl.num_calls > 1:
             # Remove one member from slo
-            lpl.recurrent_group = [lpl.layer_label]
+            lpl.recurrent_ops = [lpl.layer_label]
             break
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
-def test_corruption_loop_detection_passes_total():
-    """Mismatched num_passes vs len(recurrent_group) triggers error."""
+def test_corruption_loop_detection_ops_total():
+    """Mismatched num_calls vs len(recurrent_ops) triggers error."""
     log = _make_clean_log()
-    log.layer_list[0].num_passes = 99
+    log.layer_list[0].num_calls = 99
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -549,7 +549,7 @@ def test_corruption_distance_min_gt_max():
             lpl.min_distance_from_input = lpl.max_distance_from_input + 1
             break
     else:
-        # If no layer has distances, skip (mark_input_output_distances might be False)
+        # If no layer has distances, skip (mark_layer_depths might be False)
         log.cleanup()
         return
     with pytest.raises(MetadataInvariantError, match="distance_invariants"):
@@ -560,7 +560,7 @@ def test_corruption_distance_min_gt_max():
 def test_corruption_distance_input_nonzero():
     """Input layer with nonzero distance_from_input triggers error."""
     log = _make_clean_log()
-    if not log.mark_input_output_distances:
+    if not log.mark_layer_depths:
         log.cleanup()
         return
     for label in log.input_layers:
@@ -576,7 +576,7 @@ def test_corruption_distance_input_nonzero():
 def test_corruption_distance_ancestor_flag():
     """Mismatch between has_input_ancestor and input_ancestors triggers error."""
     log = _make_clean_log()
-    if not log.mark_input_output_distances:
+    if not log.mark_layer_depths:
         log.cleanup()
         return
     for lpl in log.layer_list:
@@ -596,19 +596,19 @@ def test_corruption_connectivity_parentless_layer():
     log = _make_clean_log()
     for lpl in log.layer_list:
         if (
-            not lpl.is_input_layer
-            and not lpl.is_buffer_layer
-            and not lpl.is_output_layer
-            and not lpl.is_internally_initialized
-            and lpl.parent_layers
+            not lpl.is_input
+            and not lpl.is_buffer
+            and not lpl.is_output
+            and not lpl.is_internal_source
+            and lpl.parents
         ):
             # Also fix the parent's child list to avoid graph_topology catching it first
-            for p_label in lpl.parent_layers:
+            for p_label in lpl.parents:
                 parent = log[p_label]
-                parent.child_layers = [c for c in parent.child_layers if c != lpl.layer_label]
-                parent.has_children = len(parent.child_layers) > 0
-            lpl.parent_layers = []
-            # has_parents is a read-only property derived from parent_layers
+                parent.children = [c for c in parent.children if c != lpl.layer_label]
+                parent.has_children = len(parent.children) > 0
+            lpl.parents = []
+            # has_parents is a read-only property derived from parents
             break
     with pytest.raises(MetadataInvariantError, match="graph_connectivity"):
         check_metadata_invariants(log)
@@ -616,9 +616,9 @@ def test_corruption_connectivity_parentless_layer():
 
 
 def test_corruption_connectivity_orphan_in_layer_list():
-    """Adding a label to orphan_layers that is also in layer_labels triggers error."""
+    """Adding a label to orphan_ops that is also in layer_labels triggers error."""
     log = _make_clean_log()
-    log.orphan_layers = [log.layer_labels[0]]
+    log.orphan_ops = [log.layer_labels[0]]
     with pytest.raises(MetadataInvariantError, match="graph_connectivity"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -640,15 +640,15 @@ def test_corruption_module_depth():
 
 
 def test_corruption_module_nested_path_leaf():
-    """Last element of containing_modules != containing_module triggers error."""
+    """Last element of modules != module triggers error."""
     log = _make_nested_log()
     for lpl in log.layer_list:
-        if len(lpl.containing_modules) >= 2 and lpl.containing_module:
+        if len(lpl.modules) >= 2 and lpl.module:
             # Swap the last nested module to a different valid module so it
             # doesn't fail the module_layer_containment check but does fail
             # the leaf consistency check in module_containment_logic.
             # Use the first (parent) module as the last entry — valid module but wrong leaf
-            lpl.containing_modules[-1] = lpl.containing_modules[0]
+            lpl.modules[-1] = lpl.modules[0]
             break
     with pytest.raises(MetadataInvariantError, match="module_containment_logic"):
         check_metadata_invariants(log)
@@ -693,15 +693,15 @@ def test_corruption_raw_label_asymmetry():
 # -- Clean recurrent and nested models pass all invariants --
 
 
-def test_clean_recurrent_log_passes_all_invariants():
-    """Recurrent model ModelLog passes all invariant checks."""
+def test_clean_recurrent_log_ops_all_invariants():
+    """Recurrent model Trace ops all invariant checks."""
     log = _make_recurrent_log()
     assert check_metadata_invariants(log) is True
     log.cleanup()
 
 
-def test_clean_nested_log_passes_all_invariants():
-    """Nested model ModelLog passes all invariant checks."""
+def test_clean_nested_log_ops_all_invariants():
+    """Nested model Trace ops all invariant checks."""
     log = _make_nested_log()
     assert check_metadata_invariants(log) is True
     log.cleanup()
@@ -774,24 +774,24 @@ class TestValidationBugfixes:
 
     def test_validation_unsaved_parent_no_crash(self):
         """Validation with layers_to_save subset should not crash on None parents."""
-        from torchlens import log_forward_pass
+        from torchlens import trace as trace_fn
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x, layers_to_save="all")
+        log = trace_fn(model, x, layers_to_save="all")
         assert log is not None
 
 
 class TestValidationNoSavedArgs:
-    """Validation with save_function_args=False."""
+    """Validation with save_arg_values=False."""
 
     def test_validation_no_args(self):
-        """validate with save_function_args=False should not crash."""
-        from torchlens import log_forward_pass
+        """validate with save_arg_values=False should not crash."""
+        from torchlens import trace as trace_fn
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x, save_function_args=False)
+        log = trace_fn(model, x, save_arg_values=False)
         assert log is not None
 
 
@@ -813,24 +813,24 @@ class TestUnusedInputValidation:
     """Regression: unused input kwargs should not crash validation.
 
     When a model ignores a kwarg (e.g. token_type_ids in DistilBert), the
-    corresponding input layer has func_applied=None and no children. Validation
+    corresponding input layer has func=None and no children. Validation
     must skip replay for such layers instead of crashing on None().
     """
 
-    def test_unused_kwarg_input_passes_validation(self):
+    def test_unused_kwarg_input_ops_validation(self):
         model = _UnusedInputModel()
         x = torch.randn(2, 10)
         mask = torch.ones(2, 10)
         assert validate_forward_pass(model, x, input_kwargs={"unused_mask": mask})
 
-    def test_unused_kwarg_input_metadata_passes(self):
+    def test_unused_kwarg_input_annotations_ops(self):
         """Metadata invariants pass even with unused input layers."""
-        from torchlens import log_forward_pass
+        from torchlens import trace as trace_fn
 
         model = _UnusedInputModel()
         x = torch.randn(2, 10)
         mask = torch.ones(2, 10)
-        log = log_forward_pass(model, x, input_kwargs={"unused_mask": mask})
+        log = trace_fn(model, x, input_kwargs={"unused_mask": mask})
         check_metadata_invariants(log)
 
 
@@ -843,15 +843,15 @@ class TestSharedParamDifferentOps:
     would be falsely flagged as needing the same layer_label_no_pass.
     """
 
-    def test_shared_param_different_ops_passes_validation(self):
+    def test_shared_param_different_ops_ops_validation(self):
         model = _SharedParamDifferentOps()
         x = torch.randn(2, 10)
         assert validate_forward_pass(model, x)
 
-    def test_shared_param_different_ops_metadata_passes(self):
-        from torchlens import log_forward_pass
+    def test_shared_param_different_ops_metadata_ops(self):
+        from torchlens import trace as trace_fn
 
         model = _SharedParamDifferentOps()
         x = torch.randn(2, 10)
-        log = log_forward_pass(model, x)
+        log = trace_fn(model, x)
         check_metadata_invariants(log)

@@ -47,15 +47,15 @@ def main() -> None:
     torch.manual_seed(10)
     model = TinyGenerator().eval()
     x = torch.randn(2, 4)
-    log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
     first_relu = log.find_sites(tl.func("relu"), max_fanout=3).labels()[0]
 
     edited = log.fork("generation_patch")
     edited.attach_hooks(tl.label(first_relu), tl.zero_ablate()).replay()
 
-    assert edited.layer_list[-1].activation.shape == (2, 3, 4)
+    assert edited.layer_list[-1].out.shape == (2, 3, 4)
     assert edited.last_run_records()[-1].site_label == first_relu
-    assert not torch.allclose(log.layer_list[-1].activation, edited.layer_list[-1].activation)
+    assert not torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
 
 
 if __name__ == "__main__":

@@ -48,8 +48,8 @@ class RamStorageBackend:
         intent:
             Storage intent resolved from streaming options.
         options:
-            Active recording options carrying the activation postfunc and
-            ``save_raw_activation`` flag.
+            Active recording options carrying the out postfunc and
+            ``save_raw_outs`` flag.
         ctx:
             Record context used to enrich postfunc error messages.
 
@@ -64,8 +64,8 @@ class RamStorageBackend:
             tensor,
             spec,
             intent,
-            activation_postfunc=options.activation_transform,
-            save_raw_activation=options.save_raw_activation,
+            out_postfunc=options.out_transform,
+            save_raw_outs=options.save_raw_outs,
             ctx=ctx,
         )
 
@@ -75,7 +75,7 @@ class RamStorageBackend:
         Parameters
         ----------
         record:
-            Fastlog activation record to retain.
+            Fastlog out record to retain.
         """
 
         index = len(self.recording.records)
@@ -88,15 +88,15 @@ class RamStorageBackend:
             self.recording.by_label.setdefault(record.ctx.raw_label, []).append(
                 (record.ctx.pass_index, index)
             )
-        if record.ctx.module_address is not None:
-            self.recording.by_module_address.setdefault(record.ctx.module_address, []).append(index)
+        if record.ctx.address is not None:
+            self.recording.by_address.setdefault(record.ctx.address, []).append(index)
 
     def finalize(self) -> None:
         """Finalize RAM indexes after a pass."""
 
         self.recording.by_pass.clear()
         self.recording.by_label.clear()
-        self.recording.by_module_address.clear()
+        self.recording.by_address.clear()
         for index, record in enumerate(self.recording.records):
             self.recording.by_pass.setdefault(record.ctx.pass_index, []).append(index)
             self.recording.by_label.setdefault(record.ctx.label, []).append(
@@ -106,10 +106,8 @@ class RamStorageBackend:
                 self.recording.by_label.setdefault(record.ctx.raw_label, []).append(
                     (record.ctx.pass_index, index)
                 )
-            if record.ctx.module_address is not None:
-                self.recording.by_module_address.setdefault(record.ctx.module_address, []).append(
-                    index
-                )
+            if record.ctx.address is not None:
+                self.recording.by_address.setdefault(record.ctx.address, []).append(index)
 
     def abort(self, reason: str) -> None:
         """Ignore abort requests for RAM-only recordings.
