@@ -8,6 +8,7 @@ import pickle
 import time
 from typing import Any, Iterator
 import weakref
+import gzip
 
 import pytest
 import torch
@@ -16,6 +17,9 @@ import numpy as np
 
 import torchlens as tl
 from torchlens.user_funcs import _detach_nested_for_cache
+
+
+_GZIP_MAGIC = b"\x1f\x8b"
 
 
 class TinyTransformerBlock(nn.Module):
@@ -86,7 +90,7 @@ def fixture_model_input(request: pytest.FixtureRequest) -> tuple[nn.Module, torc
     elif model_name == "resnet50":
         torchvision = pytest.importorskip("torchvision")
         model = torchvision.models.resnet50(weights=None)
-        x = torch.randn(1, 3, 224, 224)
+        x = torch.randn(1, 3, 64, 64)
     elif model_name == "gpt2_small":
         model = TinyTransformerBlock()
         x = torch.randn(2, 4, 16)
@@ -253,8 +257,12 @@ def _make_trace_pickleable(trace: Any) -> None:
         trace._source_code_blob = {}
     if hasattr(trace, "forward_source_file"):
         trace.forward_source_file = None
+    if hasattr(trace, "forward_source_line"):
+        trace.forward_source_line = None
     if hasattr(trace, "model_source_file"):
         trace.model_source_file = None
+    if hasattr(trace, "model_source_line"):
+        trace.model_source_line = None
     if hasattr(trace, "name"):
         trace.name = "capture_events_parity"
     _drop_capture_scratch(trace)
@@ -304,6 +312,52 @@ def _drop_capture_scratch(trace: Any) -> None:
         trace.__dict__.pop(field_name, None)
     if trace.__dict__.get("orphan_logs") is None:
         trace.__dict__["orphan_logs"] = ()
+    if "forward_source_line" in trace.__dict__:
+        trace.__dict__["forward_source_line"] = None
+    if "model_source_line" in trace.__dict__:
+        trace.__dict__["model_source_line"] = None
+
+
+def _read_golden_pickle_bytes(path: Path) -> bytes:
+    """Read raw pickle bytes, transparently handling compressed large goldens.
+
+    Parameters
+    ----------
+    path
+        Golden pickle path.
+
+    Returns
+    -------
+    bytes
+        Uncompressed pickle bytes.
+    """
+
+    data = path.read_bytes()
+    if data.startswith(_GZIP_MAGIC):
+        return gzip.decompress(data)
+    return data
+
+
+def _write_golden_pickle_bytes(path: Path, data: bytes, model_name: str) -> None:
+    """Write pickle bytes, compressing oversized ResNet goldens for pre-commit.
+
+    Parameters
+    ----------
+    path
+        Golden pickle path.
+    data
+        Raw pickle bytes to persist.
+    model_name
+        Fixture model name.
+
+    Returns
+    -------
+    None
+        Writes the golden artifact in place.
+    """
+
+    payload = gzip.compress(data, compresslevel=9) if model_name == "resnet50" else data
+    path.write_bytes(payload)
 
 
 def test_pickle_byte_equal_pre_m6(
@@ -333,10 +387,10 @@ def test_pickle_byte_equal_pre_m6(
     actual = pickle.dumps(trace, protocol=4)
     if os.environ.get("TL_REGEN_GOLDEN") == "1":
         golden_path.parent.mkdir(parents=True, exist_ok=True)
-        golden_path.write_bytes(actual)
+        _write_golden_pickle_bytes(golden_path, actual, model_name)
         pytest.skip(f"regenerated golden at {golden_path}")
 
-    expected_trace = pickle.loads(golden_path.read_bytes())
+    expected_trace = pickle.loads(_read_golden_pickle_bytes(golden_path))
     _drop_capture_scratch(expected_trace)
     expected = pickle.dumps(expected_trace, protocol=4)
     if actual != expected:
