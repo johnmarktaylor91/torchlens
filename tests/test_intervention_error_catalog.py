@@ -380,6 +380,7 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     assert torch.equal(replay_output, rerun_output)
 
 
+@pytest.mark.smoke
 def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
     """``tl.list_logs()`` returns valid snapshots while logs are created concurrently."""
 

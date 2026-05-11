@@ -141,6 +141,7 @@ def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
     assert log._intervention_spec.hook_specs == []
 
 
+@pytest.mark.smoke
 def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     """Frozen intervention-spec snapshots refresh after each public mutator."""
 

@@ -63,6 +63,14 @@ position, so `def hook(activation, *, hook): ...` and
 `lambda g, *, hook: ...` are both valid. Hooks must return the replacement
 tensor.
 
+## Attribution Patching
+
+Attribution-patching examples in this guide use the `(corrupt - clean) * patched`
+sign convention so positive scores mean the patched activation moves the run
+toward the corrupt direction under that local linearization. The more common
+TransformerLens presentation is `grad * (clean - corrupt)`. Both are valid as
+long as the sign convention is named and used consistently.
+
 ## Raw PyTorch Forward Hooks
 
 The TorchLens intervention API is the preferred path when you want selectors,
@@ -120,3 +128,9 @@ Common operations:
 
 Relationship gates are intentional. Operations that require shared topology or
 same-input evidence fail when TorchLens cannot prove enough compatibility.
+
+## Cohort Migration
+
+| TransformerLens pattern | TorchLens pattern |
+| --- | --- |
+| `act_patch` attribution patching | Attach a `tl.bwd_hook(...)` gradient observer at the site, then `log.rerun(model, x)` under the active spec and score from the captured gradients/outs. |

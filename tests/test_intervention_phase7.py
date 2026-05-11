@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 import pytest
@@ -176,6 +177,39 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
     assert log.graph_shape_hash == original_hash
     assert tuple(log.layer_labels) == original_labels
     assert log.ledger == history_after_success
+
+
+@pytest.mark.smoke
+def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Interruptions before validation do not partially swap rerun state."""
+
+    rerun_module = importlib.import_module("torchlens.intervention.rerun")
+
+    x = torch.randn(2, 3)
+    log = _capture(ReluAdd(), x)
+    original_hash = log.graph_shape_hash
+    original_labels = tuple(log.layer_labels)
+    original_ledger = list(log.ledger)
+    original_output = log[log.output_layers[0]].out.clone()
+    original_run_state = log.run_state
+
+    def interrupt_capture(*_: Any, **__: Any) -> tl.Trace:
+        """Raise as if the fresh off-side capture was interrupted."""
+
+        raise KeyboardInterrupt("simulated interrupt")
+
+    monkeypatch.setattr(rerun_module, "_capture_with_active_spec", interrupt_capture)
+
+    with pytest.raises(KeyboardInterrupt, match="simulated interrupt"):
+        log.rerun(ReluAdd(), x)
+
+    assert log.run_state is original_run_state
+    assert log.graph_shape_hash == original_hash
+    assert tuple(log.layer_labels) == original_labels
+    assert log.ledger == original_ledger
+    assert torch.equal(log[log.output_layers[0]].out, original_output)
 
 
 def test_rerun_strict_divergence_raises_before_swap() -> None:
