@@ -1215,10 +1215,13 @@ def module_forward_decorator(
             return out
 
         if trace.capture_mode == "predicate":
-            from ...fastlog._predicate import _evaluate_keep_module
-            from ...fastlog._record_context import _build_record_context
-            from ...fastlog._state import get_active_recording_state
-            from ...fastlog.types import ActivationRecord
+            from ...capture.predicates import _evaluate_keep_module
+            from ...capture.projections import (
+                _build_record_context,
+                append_projected_event,
+                get_active_recording_state,
+            )
+            from ...fastlog.types import ActivationRecord, CaptureSpec
 
             state = get_active_recording_state()
             frame = _mstack.push_frame(trace, state.module_stack, module)
@@ -1241,13 +1244,32 @@ def module_forward_decorator(
                 include_source_events=state.options.include_source_events,
                 sample_id=state.sample_id,
             )
+            skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
+            enter_spec = skipped_spec
             try:
                 enter_spec = _evaluate_keep_module(enter_ctx, state.options)
                 if enter_spec.save_out or enter_spec.save_metadata:
-                    state.add_record(ActivationRecord(ctx=enter_ctx, spec=enter_spec))
+                    if state.storage_intent.on_disk:
+                        state.add_record(ActivationRecord(ctx=enter_ctx, spec=enter_spec))
+                append_projected_event(
+                    trace,
+                    enter_ctx,
+                    enter_spec,
+                    predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
+                )
             except Exception as exc:
                 state.handle_predicate_exception(enter_ctx, exc)
             finally:
+                if not any(
+                    event.capture_index == enter_ctx.event_index
+                    for event in trace.capture_events.op_events
+                ):
+                    append_projected_event(
+                        trace,
+                        enter_ctx,
+                        skipped_spec,
+                        predicate_matched=False,
+                    )
                 state.append_context(enter_ctx)
             try:
                 return orig_forward(*args, **kwargs)
@@ -1271,13 +1293,31 @@ def module_forward_decorator(
                     include_source_events=state.options.include_source_events,
                     sample_id=state.sample_id,
                 )
+                exit_spec = skipped_spec
                 try:
                     exit_spec = _evaluate_keep_module(exit_ctx, state.options)
                     if exit_spec.save_out or exit_spec.save_metadata:
-                        state.add_record(ActivationRecord(ctx=exit_ctx, spec=exit_spec))
+                        if state.storage_intent.on_disk:
+                            state.add_record(ActivationRecord(ctx=exit_ctx, spec=exit_spec))
+                    append_projected_event(
+                        trace,
+                        exit_ctx,
+                        exit_spec,
+                        predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
+                    )
                 except Exception as exc:
                     state.handle_predicate_exception(exit_ctx, exc)
                 finally:
+                    if not any(
+                        event.capture_index == exit_ctx.event_index
+                        for event in trace.capture_events.op_events
+                    ):
+                        append_projected_event(
+                            trace,
+                            exit_ctx,
+                            skipped_spec,
+                            predicate_matched=False,
+                        )
                     state.append_context(exit_ctx)
                     _mstack.pop_frame(state.module_stack, frame)
 

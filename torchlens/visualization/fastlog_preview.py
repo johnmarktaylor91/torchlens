@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
 
-from ..fastlog._predicate import _normalize_capture_decision
-from ..fastlog._record_context import _build_record_context
+from ..capture.predicates import _normalize_capture_decision
+from ..capture.projections import _build_record_context
 from ..fastlog.exceptions import RecordContextFieldError
 from ..fastlog.types import CaptureDecision, ModuleStackFrame, RecordContext
 from .node_spec import NodeSpec

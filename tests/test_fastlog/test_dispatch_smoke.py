@@ -15,7 +15,7 @@ from torchlens.backends.torch.model_prep import (
     _ensure_model_prepared,
     _prepare_model_session,
 )
-from torchlens.fastlog._state import RecordingState, active_recording_state
+from torchlens.capture.projections import RecordingState, active_recording_state
 from torchlens.fastlog.options import RecordingOptions
 from torchlens.fastlog.types import CaptureSpec, Recording
 
@@ -75,7 +75,8 @@ def _run_dispatcher_smoke(
             model(x)
     finally:
         _cleanup_model_session(model, [x])
-    return state.recording
+    trace._fastlog_recording = state.recording
+    return Recording.from_capture_events(trace)
 
 
 def test_predicate_dispatchers_fire_and_store_ram_payloads() -> None:

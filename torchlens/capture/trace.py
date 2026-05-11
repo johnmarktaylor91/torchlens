@@ -484,7 +484,8 @@ def run_and_log_inputs_through_model(
     layers_to_save: str | list[str | int] | None = "all",
     grads_to_save: str | list[str | int] | None = "all",
     random_seed: int | None = None,
-) -> None:
+    postprocess: bool = True,
+) -> Any:
     """Core orchestration: run a forward pass and log everything into Trace.
 
     Execution order (ordering matters for correctness):
@@ -509,8 +510,12 @@ def run_and_log_inputs_through_model(
     self.random_seed = random_seed  # type: ignore[assignment]
     set_random_seed(random_seed)
 
-    self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
-    self._grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grads_to_save)
+    if self.capture_mode == "predicate":
+        self._layer_nums_to_save = []
+        self._grad_layer_nums_to_save = []
+    else:
+        self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
+        self._grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grads_to_save)
 
     # In fast mode, output layers' out are derived from their parents
     # (see postprocess_fast).  If the user requested a subset of layers, we must
@@ -583,7 +588,105 @@ def run_and_log_inputs_through_model(
             for i, t in enumerate(input_tensors):
                 log_source_tensor(self, t, "input", input_tensor_addresses[i])
 
-            outputs = model(*input_args, **input_kwargs)
+            if self.capture_mode == "predicate":
+                from ..backends.torch import module_stack as _mstack
+                from ..capture.predicates import _evaluate_keep_module
+                from ..capture.projections import (
+                    _build_record_context,
+                    append_projected_event,
+                    get_active_recording_state,
+                )
+                from ..fastlog.types import CaptureSpec, ModuleStackFrame
+
+                state = get_active_recording_state()
+                root_frame = ModuleStackFrame(
+                    address="",
+                    module_type=type(model).__name__,
+                    module_id=id(model),
+                    pass_index=1,
+                )
+                skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
+                _mstack.push_existing_frame(state.module_stack, root_frame)
+                state.event_index += 1
+                enter_ctx = _build_record_context(
+                    kind="module_enter",
+                    op_log_or_op_data={
+                        "label": "root:enter:1",
+                        "address": "",
+                        "module_type": type(model).__name__,
+                        "module_pass_index": root_frame.pass_index,
+                    },
+                    module_stack=state.module_stack,
+                    history=tuple(state.history),
+                    op_counts=state.op_counts,
+                    pass_index=state.pass_index,
+                    event_index=state.event_index,
+                    compute_index=None,
+                    time_since_pass_start=time.time() - self.start_time,
+                    include_source_events=state.options.include_source_events,
+                    sample_id=state.sample_id,
+                )
+                try:
+                    enter_spec = _evaluate_keep_module(enter_ctx, state.options)
+                    append_projected_event(
+                        self,
+                        enter_ctx,
+                        enter_spec,
+                        predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
+                    )
+                except Exception as exc:
+                    state.handle_predicate_exception(enter_ctx, exc)
+                    append_projected_event(
+                        self,
+                        enter_ctx,
+                        skipped_spec,
+                        predicate_matched=False,
+                    )
+                finally:
+                    state.append_context(enter_ctx)
+                try:
+                    outputs = model(*input_args, **input_kwargs)
+                finally:
+                    state.event_index += 1
+                    exit_ctx = _build_record_context(
+                        kind="module_exit",
+                        op_log_or_op_data={
+                            "label": "root:exit:1",
+                            "address": "",
+                            "module_type": type(model).__name__,
+                            "module_pass_index": root_frame.pass_index,
+                        },
+                        module_stack=state.module_stack,
+                        history=tuple(state.history),
+                        op_counts=state.op_counts,
+                        pass_index=state.pass_index,
+                        event_index=state.event_index,
+                        compute_index=None,
+                        time_since_pass_start=time.time() - self.start_time,
+                        include_source_events=state.options.include_source_events,
+                        sample_id=state.sample_id,
+                    )
+                    try:
+                        exit_spec = _evaluate_keep_module(exit_ctx, state.options)
+                        append_projected_event(
+                            self,
+                            exit_ctx,
+                            exit_spec,
+                            predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
+                        )
+                    except Exception as exc:
+                        state.handle_predicate_exception(exit_ctx, exc)
+                        append_projected_event(
+                            self,
+                            exit_ctx,
+                            skipped_spec,
+                            predicate_matched=False,
+                        )
+                    finally:
+                        state.append_context(exit_ctx)
+                        _mstack.pop_frame(state.module_stack, root_frame)
+            else:
+                outputs = model(*input_args, **input_kwargs)
 
         output_transform = getattr(self, "_output_transform", None)
         self.raw_output = output_transform(outputs) if output_transform is not None else None
@@ -595,11 +698,17 @@ def run_and_log_inputs_through_model(
             f"{len(self._raw_layer_dict)} raw operations)",
         )
 
+        if not postprocess:
+            backend.cleanup_model_session(self, (model, input_tensors))
+            self.end_time = time.time()
+            return outputs
+
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs)
 
         backend.cleanup_model_session(self, (model, input_tensors))
         _vprint(self, f"Postprocessing {len(self._raw_layer_dict)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
+        return outputs
 
     except Exception as e:
         # active_logging's __exit__ already turned off the toggle.

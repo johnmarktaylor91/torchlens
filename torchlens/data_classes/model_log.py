@@ -4038,7 +4038,8 @@ class Trace:
         layers_to_save: Optional[str | List[str | int]] = "all",
         grads_to_save: Optional[str | List[str | int]] = "all",
         random_seed: Optional[int] = None,
-    ) -> None:
+        postprocess: bool = True,
+    ) -> Any:
         """Run a forward pass and capture it into this model log.
 
         Parameters
@@ -4057,6 +4058,7 @@ class Trace:
             layers_to_save=layers_to_save,
             grads_to_save=grads_to_save,
             random_seed=random_seed,
+            postprocess=postprocess,
         )
 
     def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":

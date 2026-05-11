@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import torchlens as tl
-from torchlens.fastlog._state import _resolve_storage_intent
+from torchlens.capture.projections import _resolve_storage_intent
 from torchlens.fastlog.options import RecordingOptions
 
 

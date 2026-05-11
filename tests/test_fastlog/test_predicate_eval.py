@@ -7,12 +7,12 @@ from dataclasses import asdict
 import pytest
 import torch
 
-from torchlens.fastlog._predicate import (
+from torchlens.capture.predicates import (
     _evaluate_keep_module,
     _evaluate_keep_op,
     _normalize_capture_decision,
 )
-from torchlens.fastlog._record_context import _build_record_context
+from torchlens.capture.projections import _build_record_context
 from torchlens.fastlog.exceptions import PredicateError
 from torchlens.fastlog.options import RecordingOptions
 from torchlens.fastlog.types import CaptureSpec, ModuleStackFrame

@@ -108,9 +108,12 @@ from .tensor_tracking import (
 from ..._errors import TorchLensPostfuncError
 from ..._training_validation import TrainingModeConfigError
 from ...data_classes.internal_types import FuncExecutionContext
-from ...fastlog._predicate import _evaluate_keep_op
-from ...fastlog._record_context import _build_record_context
-from ...fastlog._state import get_active_recording_state
+from ...capture.predicates import _evaluate_keep_op
+from ...capture.projections import (
+    _build_record_context,
+    append_projected_event,
+    get_active_recording_state,
+)
 from ...fastlog.types import ActivationRecord, CaptureSpec
 from ...capture.salient_args import extract_salient_args
 from ...postprocess._materialize import register_materialized_event
@@ -1121,11 +1124,11 @@ def _record_predicate_output(
     ctx: Any,
     out: torch.Tensor,
     spec: CaptureSpec,
-) -> None:
+) -> tuple[torch.Tensor | None, torch.Tensor | None]:
     """Store a predicate-selected operation output."""
 
     if not spec.save_out and not spec.save_metadata:
-        return
+        return None, None
     state = get_active_recording_state()
     ram_payload = None
     disk_payload = None
@@ -1138,16 +1141,18 @@ def _record_predicate_output(
             transformed_ram_payload,
             transformed_disk_payload,
         ) = state.resolve_storage(out, spec, ctx=ctx)
-    state.add_record(
-        ActivationRecord(
-            ctx=ctx,
-            spec=spec,
-            ram_payload=ram_payload,
-            disk_payload=disk_payload,
-            transformed_ram_payload=transformed_ram_payload,
-            transformed_disk_payload=transformed_disk_payload,
+    if state.storage_intent.on_disk:
+        state.add_record(
+            ActivationRecord(
+                ctx=ctx,
+                spec=spec,
+                ram_payload=ram_payload,
+                disk_payload=disk_payload,
+                transformed_ram_payload=transformed_ram_payload,
+                transformed_disk_payload=transformed_disk_payload,
+            )
         )
-    )
+    return ram_payload, transformed_ram_payload
 
 
 def log_function_output_tensors_predicate(
@@ -1208,7 +1213,16 @@ def log_function_output_tensors_predicate(
         )
         try:
             spec = _evaluate_keep_op(ctx, state.options)
-            _record_predicate_output(ctx, out, spec)
+            ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
+            append_projected_event(
+                self,
+                ctx,
+                spec,
+                tensor=out,
+                ram_payload=ram_payload,
+                transformed_ram_payload=transformed_ram_payload,
+                predicate_matched=spec.save_out or spec.save_metadata,
+            )
         except (TorchLensPostfuncError, TrainingModeConfigError):
             # Postfunc + train-mode validation errors are storage failures and
             # must surface directly to the caller, not be aggregated through
@@ -1219,6 +1233,17 @@ def log_function_output_tensors_predicate(
         except Exception as exc:
             state.handle_predicate_exception(ctx, exc)
         finally:
+            if not any(
+                event.capture_index == capture_index
+                for event in getattr(getattr(self, "capture_events", None), "op_events", ())
+            ):
+                append_projected_event(
+                    self,
+                    ctx,
+                    CaptureSpec(save_out=False, save_metadata=False),
+                    tensor=out,
+                    predicate_matched=False,
+                )
             state.append_context(ctx)
 
 

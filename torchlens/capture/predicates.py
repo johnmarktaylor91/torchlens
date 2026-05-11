@@ -1,10 +1,14 @@
-"""Predicate evaluation helpers for fastlog capture decisions."""
+"""Predicate evaluation helpers for capture-time fastlog projections."""
 
 from __future__ import annotations
 
-from .exceptions import PredicateError
-from .options import RecordingOptions
-from .types import CaptureSpec, RecordContext
+from typing import TYPE_CHECKING
+
+from ..fastlog.exceptions import PredicateError
+from ..fastlog.types import CaptureSpec, RecordContext
+
+if TYPE_CHECKING:
+    from ..fastlog.options import RecordingOptions
 
 
 def _coerce_default_capture_spec(default: bool | CaptureSpec) -> CaptureSpec:
@@ -68,7 +72,7 @@ def _normalize_capture_decision(
     )
 
 
-def _evaluate_keep_op(ctx: RecordContext, options: RecordingOptions) -> CaptureSpec:
+def _evaluate_keep_op(ctx: RecordContext, options: "RecordingOptions") -> CaptureSpec:
     """Evaluate the operation/source predicate slot for one event."""
 
     if options.keep_op is None:
@@ -78,7 +82,7 @@ def _evaluate_keep_op(ctx: RecordContext, options: RecordingOptions) -> CaptureS
     return _normalize_capture_decision(result, ctx, options.default_op)
 
 
-def _evaluate_keep_module(ctx: RecordContext, options: RecordingOptions) -> CaptureSpec:
+def _evaluate_keep_module(ctx: RecordContext, options: "RecordingOptions") -> CaptureSpec:
     """Evaluate the module predicate slot for one event."""
 
     if options.keep_module is None:

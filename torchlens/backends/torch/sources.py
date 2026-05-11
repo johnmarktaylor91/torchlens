@@ -34,10 +34,13 @@ from ..._training_validation import TrainingModeConfigError
 from ...data_classes.buffer_log import BufferLog
 from ...data_classes.op_log import OpLog
 from . import module_stack as _mstack
-from ...fastlog._predicate import _evaluate_keep_op
-from ...fastlog._record_context import _build_record_context
-from ...fastlog._state import get_active_recording_state
-from ...fastlog.types import ActivationRecord
+from ...capture.predicates import _evaluate_keep_op
+from ...capture.projections import (
+    _build_record_context,
+    append_projected_event,
+    get_active_recording_state,
+)
+from ...fastlog.types import ActivationRecord, CaptureSpec
 from ...utils.introspection import _get_code_context
 from ...utils.rng import log_current_rng_states
 from ...utils.tensor_utils import get_memory_amount
@@ -139,13 +142,14 @@ def log_source_tensor_predicate(
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
     )
+    spec = CaptureSpec(save_out=False, save_metadata=False)
+    ram_payload = None
+    transformed_ram_payload = None
     try:
         if state.options.include_source_events:
             spec = _evaluate_keep_op(ctx, state.options)
             if spec.save_out or spec.save_metadata:
-                ram_payload = None
                 disk_payload = None
-                transformed_ram_payload = None
                 transformed_disk_payload = None
                 if spec.save_out:
                     (
@@ -154,16 +158,26 @@ def log_source_tensor_predicate(
                         transformed_ram_payload,
                         transformed_disk_payload,
                     ) = state.resolve_storage(t, spec, ctx=ctx)
-                state.add_record(
-                    ActivationRecord(
-                        ctx=ctx,
-                        spec=spec,
-                        ram_payload=ram_payload,
-                        disk_payload=disk_payload,
-                        transformed_ram_payload=transformed_ram_payload,
-                        transformed_disk_payload=transformed_disk_payload,
+                if state.storage_intent.on_disk:
+                    state.add_record(
+                        ActivationRecord(
+                            ctx=ctx,
+                            spec=spec,
+                            ram_payload=ram_payload,
+                            disk_payload=disk_payload,
+                            transformed_ram_payload=transformed_ram_payload,
+                            transformed_disk_payload=transformed_disk_payload,
+                        )
                     )
-                )
+        append_projected_event(
+            self,
+            ctx,
+            spec,
+            tensor=t,
+            ram_payload=ram_payload,
+            transformed_ram_payload=transformed_ram_payload,
+            predicate_matched=spec.save_out or spec.save_metadata,
+        )
     except (TorchLensPostfuncError, TrainingModeConfigError):
         # Postfunc + train-mode validation errors are storage failures and
         # must surface directly to the caller, not be aggregated through
@@ -174,6 +188,17 @@ def log_source_tensor_predicate(
     except Exception as exc:
         state.handle_predicate_exception(ctx, exc)
     finally:
+        if not any(
+            event.capture_index == capture_index
+            for event in getattr(getattr(self, "capture_events", None), "op_events", ())
+        ):
+            append_projected_event(
+                self,
+                ctx,
+                CaptureSpec(save_out=False, save_metadata=False),
+                tensor=t,
+                predicate_matched=False,
+            )
         state.append_context(ctx)
 
 
