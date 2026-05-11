@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -20,9 +19,6 @@ _DROPPED_CAPTURE_FIELDS = (
 
 def test_load_v3_artifact_into_v4_runtime() -> None:
     """Load a v3 bundle and confirm loader-only normalization strips scratch fields."""
-
-    if not V3_GOLDEN.exists():
-        pytest.skip("v3 golden bundle missing; generate via legacy build")
 
     log = tl.load(str(V3_GOLDEN))
 

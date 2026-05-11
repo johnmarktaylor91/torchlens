@@ -1,0 +1,209 @@
+{
+  "io_format_version": 3,
+  "torchlens_version": "2.17.0",
+  "torch_version": "2.8.0+cu128",
+  "python_version": "3.11.6",
+  "platform": "linux-x86_64",
+  "created_at": "2026-05-11T18:49:19Z",
+  "bundle_format": "directory",
+  "n_layers": 5,
+  "n_out_blobs": 5,
+  "n_grad_blobs": 0,
+  "n_auxiliary_blobs": 0,
+  "tensors": [
+    {
+      "blob_id": "0000000001",
+      "kind": "out",
+      "label": "input_1:1",
+      "relative_path": "blobs/0000000001.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 32,
+      "sha256": "3b0c867df8f134fedcc35e2cbe1fefefa29db5bb92c52b54b6612287276aa9b7"
+    },
+    {
+      "blob_id": "0000000002",
+      "kind": "out",
+      "label": "linear_1_1:1",
+      "relative_path": "blobs/0000000002.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 32,
+      "sha256": "343b4f69590091f2292de6300aed6ad5fc9ec20715851fffd5bded0b836d492e"
+    },
+    {
+      "blob_id": "0000000003",
+      "kind": "out",
+      "label": "relu_1_2:1",
+      "relative_path": "blobs/0000000003.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 32,
+      "sha256": "71ce38a64e7ab157f9557cf9160cf9f5e0adeec38ca9aa53bda4ab48c8bf4bfe"
+    },
+    {
+      "blob_id": "0000000004",
+      "kind": "out",
+      "label": "linear_2_3:1",
+      "relative_path": "blobs/0000000004.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 32,
+      "sha256": "27ef85406e1e8865dd3f7711c87470e0779d0d2da852b9129ad1e2cbef64a517"
+    },
+    {
+      "blob_id": "0000000005",
+      "kind": "out",
+      "label": "output_1:1",
+      "relative_path": "blobs/0000000005.safetensors",
+      "backend": "safetensors",
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "float32",
+      "device_at_save": "cpu",
+      "layout": "strided",
+      "bytes": 32,
+      "sha256": "27ef85406e1e8865dd3f7711c87470e0779d0d2da852b9129ad1e2cbef64a517"
+    }
+  ],
+  "unsupported_tensors": [],
+  "tlspec_version": 1,
+  "kind": "trace",
+  "schema_version": 1,
+  "model_signature": "torch.nn.modules.container.Sequential",
+  "model_fingerprint": {
+    "parameter_meta_hash": "a2facaec63ddfffe45c0b9c8876cdfabe4918ecc432fda374bf251e5f23cb267",
+    "buffer_meta_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "class_qualname": "torch.nn.modules.container.Sequential",
+    "extra_metadata": {
+      "model_name": "Sequential",
+      "graph_shape_hash": "7217e3c4f38ae64549e0fb7135af07d65f7b720e8c950176bc6fd9cf7a22fc9f",
+      "input_shape_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38"
+    }
+  },
+  "sites": [
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "input_1",
+      "pass_index": 1,
+      "op_kind": "input_2_4_torch.float32"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "0:1",
+      "layer_label": "linear_1_1",
+      "pass_index": 1,
+      "op_kind": "linear_TE0N7hxG_hKev9pGE0"
+    },
+    {
+      "function_path": "relu",
+      "module_path": "1:1",
+      "layer_label": "relu_1_2",
+      "pass_index": 1,
+      "op_kind": "relu_32825ad238ff46ce_module11"
+    },
+    {
+      "function_path": "linear",
+      "module_path": "2:1",
+      "layer_label": "linear_2_3",
+      "pass_index": 1,
+      "op_kind": "linear_CHlEYO66_X2SS0nzo2"
+    },
+    {
+      "function_path": "none",
+      "module_path": null,
+      "layer_label": "output_1",
+      "pass_index": 1,
+      "op_kind": "output_2_4_torch.float32"
+    }
+  ],
+  "spec_compat_info": null,
+  "body_format": "safetensors",
+  "body_index": [
+    {
+      "filename": "blobs/0000000001.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4
+      ],
+      "num_elements": 8,
+      "intended_use": "out",
+      "sha256": "3b0c867df8f134fedcc35e2cbe1fefefa29db5bb92c52b54b6612287276aa9b7"
+    },
+    {
+      "filename": "blobs/0000000002.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4
+      ],
+      "num_elements": 8,
+      "intended_use": "out",
+      "sha256": "343b4f69590091f2292de6300aed6ad5fc9ec20715851fffd5bded0b836d492e"
+    },
+    {
+      "filename": "blobs/0000000003.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4
+      ],
+      "num_elements": 8,
+      "intended_use": "out",
+      "sha256": "71ce38a64e7ab157f9557cf9160cf9f5e0adeec38ca9aa53bda4ab48c8bf4bfe"
+    },
+    {
+      "filename": "blobs/0000000004.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4
+      ],
+      "num_elements": 8,
+      "intended_use": "out",
+      "sha256": "27ef85406e1e8865dd3f7711c87470e0779d0d2da852b9129ad1e2cbef64a517"
+    },
+    {
+      "filename": "blobs/0000000005.safetensors",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4
+      ],
+      "num_elements": 8,
+      "intended_use": "out",
+      "sha256": "27ef85406e1e8865dd3f7711c87470e0779d0d2da852b9129ad1e2cbef64a517"
+    }
+  ],
+  "save_level": "portable",
+  "optional_dependencies": [],
+  "intervention_compat_metadata": null
+}
