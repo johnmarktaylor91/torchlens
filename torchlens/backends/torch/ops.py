@@ -65,6 +65,7 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
+from ...ir.intervention import FireResult
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...intervention.types import (
@@ -119,6 +120,7 @@ if TYPE_CHECKING:
 
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
+_LIVE_FIRE_RESULTS_ATTR = "_tl_live_fire_results"
 
 
 def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
@@ -139,57 +141,6 @@ def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
         (frame.address, frame.pass_index)
         for frame in _mstack.snapshot(self._exhaustive_module_stack)
     ]
-
-
-def _shape_or_none(tensor: torch.Tensor | None) -> tuple[int, ...] | None:
-    """Return a tensor shape tuple or ``None``.
-
-    Parameters
-    ----------
-    tensor
-        Tensor-like value to inspect.
-
-    Returns
-    -------
-    tuple[int, ...] | None
-        Shape tuple when a tensor is present.
-    """
-
-    return tuple(tensor.shape) if isinstance(tensor, torch.Tensor) else None
-
-
-def _dtype_or_none(tensor: torch.Tensor | None) -> torch.dtype | None:
-    """Return a tensor dtype or ``None``.
-
-    Parameters
-    ----------
-    tensor
-        Tensor-like value to inspect.
-
-    Returns
-    -------
-    torch.dtype | None
-        Dtype when a tensor is present.
-    """
-
-    return tensor.dtype if isinstance(tensor, torch.Tensor) else None
-
-
-def _memory_or_none(tensor: torch.Tensor | None) -> int | None:
-    """Return tensor memory bytes or ``None``.
-
-    Parameters
-    ----------
-    tensor
-        Tensor-like value to inspect.
-
-    Returns
-    -------
-    int | None
-        Memory amount when a tensor is present.
-    """
-
-    return get_memory_amount(tensor) if isinstance(tensor, torch.Tensor) else None
 
 
 def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -> TensorRef:
@@ -307,6 +258,7 @@ def _op_event_from_log(
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
     op_log: OpLog,
+    fire_results: tuple[FireResult, ...] = (),
 ) -> OpEvent:
     """Build an ``OpEvent`` that mirrors a just-constructed ``OpLog``.
 
@@ -318,6 +270,8 @@ def _op_event_from_log(
         Live output tensor for backend metadata.
     op_log
         Temporary M3 materialized log bridge.
+    fire_results
+        Live intervention fire results associated with this output.
 
     Returns
     -------
@@ -421,9 +375,9 @@ def _op_event_from_log(
         is_bottom_level=True,
         is_scalar_bool=fields_dict["is_scalar_bool"],
         bool_value=fields_dict["bool_value"],
-        intervention_fired=bool(fields_dict["interventions"]),
+        intervention_fired=bool(fire_results),
         intervention_replaced=fields_dict["intervention_replaced"],
-        fire_results=(),
+        fire_results=fire_results,
         intervention_template_ref=None,
     )
 
@@ -964,6 +918,7 @@ def apply_live_hooks_to_outputs(
     -------
     Any
         Output object with hooked tensors replaced in place where possible.
+        Fired hook results are stored temporarily on the tensor being logged.
     """
 
     if not _st._active_hook_plan or self.capture_mode != "exhaustive":
@@ -987,6 +942,8 @@ def apply_live_hooks_to_outputs(
         predicted_layer_counter += 1
         predicted_type_counter += 1
         raw_label = f"{layer_type}_{predicted_type_counter}_{predicted_layer_counter}_raw"
+        site_fields = dict(shared_fields)
+        site_fields["capture_index"] = predicted_layer_counter
         site = make_live_site_proxy(
             _layer_label_raw=raw_label,
             func_name=func_name,
@@ -994,9 +951,11 @@ def apply_live_hooks_to_outputs(
             tensor=out,
             func_call_id=func_call_id,
             container_path=container_path,
-            fields=shared_fields,
+            fields=site_fields,
         )
-        hooked = _apply_live_hooks(out, site=site, container_path=container_path)
+        hooked, fire_results = _apply_live_hooks(out, site=site, container_path=container_path)
+        if fire_results:
+            _set_tensor_live_fire_results(hooked, fire_results)
         if hooked is not out:
             replacements[container_path] = hooked
 
@@ -1055,6 +1014,53 @@ def _replace_output_tensors_by_path(
     return _replace_output_value(out_orig, (), replacements)
 
 
+def _set_tensor_live_fire_results(
+    tensor: torch.Tensor,
+    fire_results: tuple[FireResult, ...],
+) -> None:
+    """Attach transient live hook results to the tensor that will be logged.
+
+    Parameters
+    ----------
+    tensor
+        Tensor returned by live hook handling.
+    fire_results
+        Typed hook fire results for the corresponding raw output site.
+
+    Returns
+    -------
+    None
+        The tensor receives best-effort transient metadata.
+    """
+
+    try:
+        setattr(tensor, _LIVE_FIRE_RESULTS_ATTR, fire_results)
+    except Exception:
+        pass
+
+
+def _pop_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...]:
+    """Return and clear transient live hook results attached to ``tensor``.
+
+    Parameters
+    ----------
+    tensor
+        Tensor about to be materialized into an ``OpLog``.
+
+    Returns
+    -------
+    tuple[FireResult, ...]
+        Hook fire results associated with the tensor, if any.
+    """
+
+    fire_results = getattr(tensor, _LIVE_FIRE_RESULTS_ATTR, ())
+    try:
+        delattr(tensor, _LIVE_FIRE_RESULTS_ATTR)
+    except Exception:
+        pass
+    return tuple(fire_results)
+
+
 def _replace_output_value(
     value: Any,
     path: tuple[OutputPathComponent, ...],
@@ -1109,64 +1115,6 @@ def _replace_output_value(
             for key, item in value.items()
         }
     return value
-
-
-def _apply_live_fire_records_to_entry(entry: OpLog) -> None:
-    """Attach pending live fire records and refresh saved tensor metadata.
-
-    Parameters
-    ----------
-    entry
-        Newly created layer-pass entry.
-
-    Returns
-    -------
-    None
-        The entry is updated in place through internal setters.
-    """
-
-    records = _st._pending_live_fire_records.pop(entry._label_raw, [])
-    if not records:
-        return
-    entry.interventions.extend(records)
-    entry.intervention_replaced = True
-    tensor = entry.out if isinstance(entry.out, torch.Tensor) else None
-    if tensor is not None:
-        _set_saved_out_metadata(entry, tensor)
-
-
-def _set_saved_out_metadata(entry: OpLog, tensor: torch.Tensor) -> None:
-    """Refresh out metadata through internal setters.
-
-    Parameters
-    ----------
-    entry
-        Layer pass whose saved out metadata should match ``tensor``.
-    tensor
-        Saved out tensor.
-
-    Returns
-    -------
-    None
-        Metadata fields are updated atomically through ``_internal_set``.
-    """
-
-    entry._internal_set("shape", tuple(tensor.shape))
-    entry._internal_set("dtype", tensor.dtype)
-    entry._internal_set("memory", get_memory_amount(tensor))
-    entry._internal_set("has_saved_outs", True)
-    entry._internal_set(
-        "transformed_out_shape",
-        _shape_or_none(entry.transformed_out),
-    )
-    entry._internal_set(
-        "transformed_out_dtype",
-        _dtype_or_none(entry.transformed_out),
-    )
-    entry._internal_set(
-        "transformed_out_memory",
-        _memory_or_none(entry.transformed_out),
-    )
 
 
 def _record_predicate_output(
@@ -1656,6 +1604,15 @@ def log_function_output_tensors_exhaustive(
             fields_dict_onetensor,
             autograd_saved_stats.get(i, (None, None)),
         )
+        fire_results = _pop_tensor_live_fire_results(out)
+        if fire_results:
+            fields_dict_onetensor["fire_results"] = fire_results
+            fields_dict_onetensor["interventions"] = [
+                result.fire_record for result in fire_results if result.fire_record is not None
+            ]
+            fields_dict_onetensor["intervention_replaced"] = any(
+                result.replaced for result in fire_results
+            )
         if getattr(self, "intervention_ready", False):
             fields_dict_onetensor["edge_uses"] = _build_edge_use_records(
                 self,
@@ -2246,6 +2203,7 @@ def _log_output_tensor_info(
     fields_dict["out_postfunc"] = self.out_postfunc
     fields_dict["annotations"] = {}
     fields_dict["intervention_replaced"] = False
+    fields_dict["fire_results"] = ()
     fields_dict["has_saved_args"] = False
     fields_dict["saved_args"] = None
     fields_dict["saved_kwargs"] = None
@@ -2315,6 +2273,7 @@ def _make_layer_log_entry(
     if t_kwargs is None:
         t_kwargs = {}
 
+    fire_results = tuple(fields_dict.pop("fire_results", ()))
     if fields_dict.get("is_buffer"):
         new_entry = BufferLog(fields_dict)
     else:
@@ -2335,8 +2294,7 @@ def _make_layer_log_entry(
             out_postfunc,
         )
         self.ops_with_saved_outs.append(new_entry._label_raw)
-    _apply_live_fire_records_to_entry(new_entry)
-    op_event = _op_event_from_log(fields_dict, t, new_entry)
+    op_event = _op_event_from_log(fields_dict, t, new_entry, fire_results)
     register_materialized_event(self, op_event)
     _raise_if_nonfinite_requested(self, t, new_entry)
 

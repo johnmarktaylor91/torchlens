@@ -693,6 +693,7 @@ def make_live_site_proxy(
         layer_label=_layer_label_raw,
         _layer_label_raw=_layer_label_raw,
         _label_raw=_layer_label_raw,
+        capture_index=fields.get("capture_index"),
         layer_type=layer_type,
         func_name=func_name,
         func_call_id=func_call_id,

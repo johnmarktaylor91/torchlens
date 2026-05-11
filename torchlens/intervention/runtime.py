@@ -12,6 +12,7 @@ import torch
 from .. import _state
 from .._state import pause_logging
 from ..backends.torch._tl import copy_replacement_meta
+from ..ir.intervention import FireResult
 from .errors import HookSignatureError, HookValueError
 from .hooks import HookContext, NormalizedHookEntry, make_hook_context, live_selector_matches_site
 from .types import FireRecord
@@ -252,7 +253,7 @@ def _apply_live_hooks(
     *,
     site: Any,
     container_path: tuple[Any, ...] = (),
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, tuple[FireResult, ...]]:
     """Apply active live post-hooks to one capture-time output tensor.
 
     Parameters
@@ -266,15 +267,17 @@ def _apply_live_hooks(
 
     Returns
     -------
-    torch.Tensor
-        Original or hook-replaced tensor to pass into output logging.
+    tuple[torch.Tensor, tuple[FireResult, ...]]
+        Original or hook-replaced tensor plus typed fire results for the
+        corresponding capture event.
     """
 
     hook_plan = _state._active_hook_plan
     if not hook_plan:
-        return out
+        return out, ()
 
     current_out = out
+    fire_results: list[FireResult] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
         if normalized_entry.metadata.get("direction", "forward") != "forward":
@@ -294,6 +297,8 @@ def _apply_live_hooks(
             kwargs={},
         )
         previous_notes = tuple(hook_context.run_ctx.get("ledger_notes", ()))
+        pre_hook_shape = tuple(current_out.shape)
+        pre_hook_dtype = str(current_out.dtype)
         result = _execute_hook(
             normalized_entry.normalized_callable,
             current_out,
@@ -307,9 +312,28 @@ def _apply_live_hooks(
             previous_notes=previous_notes,
             run_ctx=hook_context.run_ctx,
         )
-        _state._pending_live_fire_records.setdefault(site._layer_label_raw, []).append(record)
+        fire_results.append(
+            FireResult(
+                plan_id=str(
+                    normalized_entry.metadata.get(
+                        "plan_id",
+                        normalized_entry.metadata.get(
+                            "hook_id", _hook_display_name(normalized_entry)
+                        ),
+                    )
+                ),
+                site_label=site._layer_label_raw,
+                fired_at_capture_index=int(getattr(site, "capture_index", 0) or 0),
+                pre_hook_shape=pre_hook_shape,
+                post_hook_shape=tuple(result.shape),
+                pre_hook_dtype=pre_hook_dtype,
+                post_hook_dtype=str(result.dtype),
+                replaced=result is not current_out,
+                fire_record=record,
+            )
+        )
         current_out = result
-    return current_out
+    return current_out, tuple(fire_results)
 
 
 def _coerce_hook_entry(entry: Any) -> NormalizedHookEntry:

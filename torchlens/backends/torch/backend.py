@@ -20,7 +20,6 @@ from . import _tl
 from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
 from .ops import (
     _get_autograd_saved_stats_for_tensor,
-    apply_live_hooks_to_outputs,
     log_function_output_tensors,
 )
 from .wrappers import unwrap_torch, wrap_torch
@@ -252,28 +251,14 @@ class TorchBackend:
         self,
         session: object,
         value: object,
-        site: object,
+        site: ReservedLabel,
     ) -> tuple[object, tuple[FireResult, ...]]:
-        """Apply live hooks through the existing torch output hook path when possible."""
-        if not isinstance(site, FunctionEventInput):
+        """Apply live hooks through the torch intervention runtime."""
+        if not isinstance(value, torch.Tensor):
             return value, ()
-        exec_ctx = FuncExecutionContext(
-            time_elapsed=0.0,
-            rng_states={},
-            autocast_state={},
-        )
-        output = apply_live_hooks_to_outputs(
-            cast(Any, session),
-            cast(Any, site.func),
-            site.func_name,
-            site.args,
-            dict(site.kwargs),
-            value,
-            exec_ctx,
-            site.is_bottom_level_func,
-            site.func_call_id,
-        )
-        return output, ()
+        from ...intervention.runtime import _apply_live_hooks
+
+        return _apply_live_hooks(value, site=site.site)
 
     def safe_copy(self, session: object, value: object, policy: CapturePolicy) -> object:
         """Copy a torch value with logging paused."""

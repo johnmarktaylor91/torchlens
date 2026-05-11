@@ -146,6 +146,31 @@ def _memory_or_none(value: Any) -> int | None:
     return get_memory_amount(value) if isinstance(value, torch.Tensor) else None
 
 
+def _set_saved_out_metadata(entry: "OpLog", tensor: torch.Tensor) -> None:
+    """Refresh saved output metadata from a replacement tensor.
+
+    Parameters
+    ----------
+    entry:
+        Layer pass whose saved output metadata should match ``tensor``.
+    tensor:
+        Saved output tensor.
+
+    Returns
+    -------
+    None
+        Metadata fields are updated through internal setters.
+    """
+
+    entry._internal_set("shape", tuple(tensor.shape))
+    entry._internal_set("dtype", tensor.dtype)
+    entry._internal_set("memory", get_memory_amount(tensor))
+    entry._internal_set("has_saved_outs", True)
+    entry._internal_set("transformed_out_shape", _shape_or_none(entry.transformed_out))
+    entry._internal_set("transformed_out_dtype", _dtype_or_none(entry.transformed_out))
+    entry._internal_set("transformed_out_memory", _memory_or_none(entry.transformed_out))
+
+
 def _tensor_content_hash(value: torch.Tensor) -> str:
     """Return a CPU content hash for a tensor.
 

@@ -138,9 +138,12 @@ class CaptureBackend(Protocol):
         self,
         session: object,
         value: object,
-        site: object,
+        site: ReservedLabel,
     ) -> tuple[object, tuple[FireResult, ...]]:
-        """Apply matching live intervention hooks for one output site."""
+        """Run live intervention hooks against the candidate output tensor.
+
+        Returns the possibly mutated tensor and the ``FireResult`` tuple.
+        """
         ...
 
     def safe_copy(self, session: object, value: object, policy: CapturePolicy) -> object:

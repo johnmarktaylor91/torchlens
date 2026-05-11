@@ -1975,6 +1975,9 @@ class Trace:
         self.layer_dict_all_keys = OrderedDict(
             (key, remap_pass(layer)) for key, layer in parent.layer_dict_all_keys.items()
         )
+        # TODO(M6): remove _raw_layer_dict entirely once postprocess no longer stores it
+        # on final Trace state. Until then, fork mirrors the parent's final graph objects.
+        self._raw_layer_labels_list = list(parent._raw_layer_labels_list)
         self._raw_layer_dict = OrderedDict(
             (key, remap_pass(layer)) for key, layer in parent._raw_layer_dict.items()
         )

@@ -583,7 +583,7 @@ def _apply_out_update(site: "OpLog", tensor: torch.Tensor) -> None:
         Replacement out.
     """
 
-    from ..backends.torch.ops import _set_saved_out_metadata
+    from ..data_classes.op_log import _set_saved_out_metadata
 
     site._internal_set("out", tensor)
     site._internal_set("transformed_out", None)
