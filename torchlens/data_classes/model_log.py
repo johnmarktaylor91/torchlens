@@ -4104,6 +4104,8 @@ class Trace:
         Trace
             This model log, for chaining.
         """
+        if getattr(self, "_backend_name", "torch") == "mlx":
+            raise NotImplementedError("backward capture is not supported on the mlx backend")
         from ..backends.torch.backward import log_backward as _impl
 
         return cast("Trace", _impl(self, loss, **backward_kwargs))
@@ -4116,6 +4118,8 @@ class Trace:
         Any
             Backward recording context manager.
         """
+        if getattr(self, "_backend_name", "torch") == "mlx":
+            raise NotImplementedError("backward capture is not supported on the mlx backend")
         from ..backends.torch.backward import recording_backward as _impl
 
         return _impl(self)

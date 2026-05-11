@@ -48,6 +48,7 @@ sae = ["sae-lens~=4.0"]
 profiler = []
 lightning = ["lightning~=2.4"]
 wandb = ["wandb>=0.16"]
+mlx = ["mlx"]
 hf = ["transformers~=4.45", "timm~=1.0"]
 gradcam = ["pytorch-grad-cam~=1.5"]
 shap = ["shap~=0.46"]
@@ -104,6 +105,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "smoke: marks tests as smoke tests for quick critical-path validation (select with '-m smoke')",
     "rare: marks tests that are always excluded unless explicitly requested (select with '-m rare')",
+    "optional: marks tests that require optional dependencies",
 ]
 addopts = "-m 'not rare'"
 filterwarnings = [

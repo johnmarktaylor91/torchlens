@@ -113,6 +113,180 @@ def reset_naming_counter(class_name: str | None = None) -> None:
     _state.reset_naming_counter(class_name)
 
 
+def _is_mlx_module_instance(model: object) -> bool:
+    """Return whether ``model`` is an MLX module without requiring MLX otherwise.
+
+    Parameters
+    ----------
+    model:
+        Candidate model object.
+
+    Returns
+    -------
+    bool
+        ``True`` if MLX is installed and ``model`` is an ``mlx.nn.Module``.
+    """
+
+    if not type(model).__module__.startswith("mlx."):
+        return False
+    try:
+        import mlx.nn as mlx_nn
+    except ImportError:
+        return False
+    return isinstance(model, mlx_nn.Module)
+
+
+def _trace_mlx_model(
+    model: object,
+    input_args: object,
+    input_kwargs: dict[Any, Any] | None,
+    *,
+    layers_to_save: str | list[Any] | None | MissingType,
+    transform: Callable[[Any], Any] | None | MissingType,
+    save_raw_input: str | bool | MissingType,
+    batch_render: str | MissingType,
+    output_transform: Callable[[Any], Any] | None | MissingType,
+    save_raw_output: str | bool | MissingType,
+    layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType,
+    save_visualizations: bool | MissingType,
+    keep_unsaved_layers: bool | MissingType,
+    keep_orphans: bool | MissingType,
+    output_device: OutputDeviceLiteral | MissingType,
+    out_transform: ActivationPostfunc | None | MissingType,
+    grad_transform: GradientPostfunc | None | MissingType,
+    save_raw_outs: bool | MissingType,
+    save_raw_grads: bool | MissingType,
+    save_arg_values: bool | MissingType,
+    save_grads: bool | MissingType,
+    grads_to_save: str | list[Any] | None | MissingType,
+    save_code_context: bool | MissingType,
+    save_rng_states: bool | MissingType,
+    random_seed: int | None | MissingType,
+    num_context_lines: int | MissingType,
+    recurrence_detection: bool | MissingType,
+    capture: CaptureOptions | None,
+    save: SaveOptions | None,
+    visualization: VisualizationOptions | None,
+    train_mode: bool | MissingType,
+    name: str | None | MissingType,
+    module_filter: Callable[[Any], bool] | None | MissingType,
+    verbose: bool | MissingType,
+) -> Trace:
+    """Dispatch an MLX module capture through the optional MLX backend.
+
+    Parameters
+    ----------
+    model, input_args, input_kwargs:
+        MLX model and forward inputs.
+
+    Returns
+    -------
+    Trace
+        Captured technical-preview MLX trace.
+    """
+
+    if out_transform is MISSING:
+        resolved_out_transform = None
+    else:
+        resolved_out_transform = out_transform
+    capture_options = merge_capture_options(
+        capture=capture,
+        layers_to_save=layers_to_save,
+        transform=transform,
+        save_raw_input=save_raw_input,
+        batch_render=batch_render,
+        output_transform=output_transform,
+        save_raw_output=save_raw_output,
+        layer_visualizers=layer_visualizers,
+        save_visualizations=save_visualizations,
+        keep_unsaved_layers=keep_unsaved_layers,
+        keep_orphans=keep_orphans,
+        output_device=output_device,
+        save_arg_values=save_arg_values,
+        save_grads=save_grads,
+        grads_to_save=grads_to_save,
+        save_code_context=save_code_context,
+        save_rng_states=save_rng_states,
+        random_seed=random_seed,
+        source_context_lines=MISSING,
+        num_context_lines=num_context_lines,
+        compute_input_output_distances=MISSING,
+        mark_layer_depths=MISSING,
+        detach_saved_activations=MISSING,
+        recurrence_detection=recurrence_detection,
+        intervention_ready=MISSING,
+        hooks=MISSING,
+        unwrap_when_done=MISSING,
+        verbose=verbose,
+        train_mode=train_mode,
+        name=name,
+        cache=MISSING,
+        cache_dir=MISSING,
+        module_filter=module_filter,
+        stop_after=MISSING,
+        raise_on_nan=MISSING,
+    )
+    save_options = merge_save_options(
+        save=save,
+        out_transform=resolved_out_transform,
+        grad_transform=grad_transform,
+        save_raw_outs=save_raw_outs,
+        save_raw_grads=save_raw_grads,
+    )
+    if visualization is not None and visualization.mode not in ["none", "rolled", "unrolled"]:
+        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
+    if capture_options.save_grads:
+        raise NotImplementedError("backward capture is not supported on the mlx backend")
+    raw_input = None
+    model_input_args = input_args
+    model_input_kwargs = input_kwargs
+    if capture_options.transform is not None:
+        raw_input = input_args
+        transformed_input = capture_options.transform(input_args)
+        if isinstance(transformed_input, collections.abc.Mapping):
+            model_input_args = []
+            model_input_kwargs = dict(transformed_input)
+        else:
+            model_input_args = transformed_input
+            model_input_kwargs = None
+    from .backends.mlx import MLXBackend
+
+    backend = MLXBackend()
+    trace = backend.capture_trace(
+        model,
+        model_input_args,
+        model_input_kwargs,
+        layers_to_save=capture_options.layers_to_save,
+        keep_unsaved_layers=capture_options.keep_unsaved_layers,
+        keep_orphans=capture_options.keep_orphans,
+        output_device=capture_options.output_device,
+        out_transform=save_options.out_transform,
+        save_raw_outs=save_options.save_raw_outs,
+        detach_saved_activations=capture_options.detach_saved_activations,
+        save_grads=capture_options.save_grads,
+        grads_to_save=capture_options.grads_to_save,
+        random_seed=capture_options.random_seed,
+        num_context_lines=capture_options.source_context_lines,
+        save_arg_values=capture_options.save_arg_values,
+        save_code_context=capture_options.save_code_context,
+        save_rng_states=capture_options.save_rng_states,
+        recurrence_detection=capture_options.recurrence_detection,
+        verbose=capture_options.verbose,
+        train_mode=capture_options.train_mode,
+        name=capture_options.name,
+        module_filter=capture_options.module_filter,
+        transform=capture_options.transform,
+        raw_input=raw_input,
+        save_raw_input=capture_options.save_raw_input,
+        batch_render=capture_options.batch_render,
+        output_transform=capture_options.output_transform,
+        save_raw_output=capture_options.save_raw_output,
+        layer_visualizers=capture_options.layer_visualizers,
+        save_visualizations=capture_options.save_visualizations,
+    )
+    return trace
+
+
 def record_kpi_in_graph(name: str, value: Any) -> None:
     """Record a user KPI on the active capture graph.
 
@@ -1258,9 +1432,54 @@ def trace(
     """
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
+    if _is_mlx_module_instance(model):
+        if out_postfunc is not MISSING:
+            if out_transform is not MISSING:
+                raise TypeError(
+                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
+                )
+            warn_deprecated_alias("out_postfunc", "out_transform")
+            out_transform = out_postfunc
+        return _trace_mlx_model(
+            model,
+            input_args,
+            input_kwargs,
+            layers_to_save=layers_to_save,
+            transform=transform,
+            save_raw_input=save_raw_input,
+            batch_render=batch_render,
+            output_transform=output_transform,
+            save_raw_output=save_raw_output,
+            layer_visualizers=layer_visualizers,
+            save_visualizations=save_visualizations,
+            keep_unsaved_layers=keep_unsaved_layers,
+            keep_orphans=keep_orphans,
+            output_device=output_device,
+            out_transform=out_transform,
+            grad_transform=grad_transform,
+            save_raw_outs=save_raw_outs,
+            save_raw_grads=save_raw_grads,
+            save_arg_values=save_arg_values,
+            save_grads=save_grads,
+            grads_to_save=grads_to_save,
+            save_code_context=save_code_context,
+            save_rng_states=save_rng_states,
+            random_seed=random_seed,
+            num_context_lines=num_context_lines,
+            recurrence_detection=recurrence_detection,
+            capture=capture,
+            save=save,
+            visualization=visualization,
+            train_mode=train_mode,
+            name=name,
+            module_filter=module_filter,
+            verbose=verbose,
+        )
     # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
     _reject_opaque_wrappers(model)
+    if not isinstance(model, nn.Module):
+        raise ValueError("Unsupported model type for capture")
     model = _unwrap_data_parallel(model)
 
     if out_postfunc is not MISSING:
