@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
-from typing import Any, Mapping, cast
+from typing import TYPE_CHECKING, Any, Mapping, cast
 
 import torch
 
@@ -23,6 +23,9 @@ from .ops import (
     log_function_output_tensors,
 )
 from .wrappers import unwrap_torch, wrap_torch
+
+if TYPE_CHECKING:
+    from ...data_classes.model_log import Trace
 
 
 class TorchBackend:
@@ -78,7 +81,7 @@ class TorchBackend:
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch logging context manager."""
-        return _state.active_logging(session)
+        return _state.active_logging(cast("Trace", session))
 
     def pause_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch pause-logging context manager."""
@@ -121,8 +124,8 @@ class TorchBackend:
             parent_labels=(),
             input_output_address=None,
             shape=tuple(tensor.shape) if tensor is not None else None,
-            dtype=str(tensor.dtype) if tensor is not None else None,
-            tensor_device=str(tensor.device) if tensor is not None else None,
+            dtype=tensor.dtype if tensor is not None else None,
+            tensor_device=tensor.device if tensor is not None else None,
             tensor_requires_grad=tensor.requires_grad if tensor is not None else None,
             output_index=None,
             is_bottom_level_func=func_event_input.is_bottom_level_func,

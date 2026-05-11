@@ -88,7 +88,9 @@ class ModuleCallAccessor(Accessor["ModuleCallLog"]):
             return any(key == call.call_label for call in self._dict.values())
         return False
 
-    def __iter__(self) -> Iterator[int]:
+    # This scoped accessor intentionally iterates call-index keys, unlike the generic
+    # Trace-level accessors that iterate log values.
+    def __iter__(self) -> Iterator[int]:  # type: ignore[override]
         """Iterate call-index keys."""
 
         return iter(self._dict)
@@ -1046,7 +1048,7 @@ class ModuleLog:
         self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
 
-class ModuleAccessor(Accessor[Union["ModuleLog", "ModuleCallLog"]]):
+class ModuleAccessor(Accessor["ModuleLog"]):
     """Dict-like accessor for ModuleLog objects.
 
     Supports indexing by:
@@ -1082,7 +1084,9 @@ class ModuleAccessor(Accessor[Union["ModuleLog", "ModuleCallLog"]]):
                 if alias not in self._dict:
                     self._alias_dict[alias] = ml
 
-    def __getitem__(self, key: Union[int, str]) -> Union["ModuleLog", "ModuleCallLog"]:
+    def __getitem__(  # type: ignore[override]
+        self, key: Union[int, str]
+    ) -> Union["ModuleLog", "ModuleCallLog"]:
         """Return a ModuleLog or ModuleCallLog by module-specific lookup rules."""
         if key == "":
             key = "self"

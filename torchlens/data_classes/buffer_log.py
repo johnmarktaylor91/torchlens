@@ -153,8 +153,6 @@ class BufferAccessor(Accessor["BufferLog"]):
     ) -> None:
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(buffer_dict, source_ref=source_ref)
-        # Store as weakref to avoid preventing Trace GC.
-        self._source_ref = source_ref
 
     def _resolve_substring(self, key: str) -> "BufferLog | None":
         """Resolve an unambiguous buffer short name."""

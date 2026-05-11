@@ -1,10 +1,11 @@
 """Shared lookup-key validation helpers for ``Trace`` access paths."""
 
 import random
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Union, cast
 
 if TYPE_CHECKING:
     from .model_log import Trace
+    from .module_log import ModuleLog
 
 
 def _give_user_feedback_about_lookup_key(
@@ -93,11 +94,12 @@ def _get_lookup_help_str(self: "Trace", layer_label: Union[int, str], mode: str)
     else:
         sample_layer1 = random.choice(self.op_labels)
         sample_layer2 = random.choice(self.layer_labels)
-    module_addrs = [ml.address for ml in self.modules if ml.address != "self"]
+    module_logs = cast("list[ModuleLog]", list(self.modules))
+    module_addrs = [ml.address for ml in module_logs if ml.address != "self"]
     if len(module_addrs) > 0:
         sample_module1 = random.choice(module_addrs)
         all_call_labels = [
-            pl for ml in self.modules for pl in ml.call_labels if ml.address != "self"
+            pl for ml in module_logs for pl in ml.call_labels if ml.address != "self"
         ]
         sample_module2 = random.choice(all_call_labels) if all_call_labels else "features.4:2"
     else:

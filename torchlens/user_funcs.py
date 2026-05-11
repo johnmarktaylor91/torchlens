@@ -281,7 +281,9 @@ def _trace_mlx_model(
         batch_render=capture_options.batch_render,
         output_transform=capture_options.output_transform,
         save_raw_output=capture_options.save_raw_output,
-        layer_visualizers=capture_options.layer_visualizers,
+        layer_visualizers=cast(
+            "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
+        ),
         save_visualizations=capture_options.save_visualizations,
     )
     return trace
@@ -1585,7 +1587,9 @@ def trace(
     batch_render_policy = capture_options.batch_render
     output_transform_value = capture_options.output_transform
     save_raw_output_policy = capture_options.save_raw_output
-    layer_visualizers_value = capture_options.layer_visualizers
+    layer_visualizers_value = cast(
+        "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
+    )
     save_visualizations_value = capture_options.save_visualizations
     keep_unsaved_layers = capture_options.keep_unsaved_layers
     keep_orphans = capture_options.keep_orphans

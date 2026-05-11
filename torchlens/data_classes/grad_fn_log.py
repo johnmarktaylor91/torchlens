@@ -70,7 +70,9 @@ class GradFnCallAccessor(Accessor[GradFnCallLog]):
             return True
         return False
 
-    def __iter__(self) -> Iterator[int]:
+    # This scoped accessor intentionally iterates call-index keys, unlike the generic
+    # Trace-level accessors that iterate log values.
+    def __iter__(self) -> Iterator[int]:  # type: ignore[override]
         """Iterate call-index keys."""
 
         return iter(self._dict)
@@ -279,7 +281,7 @@ class GradFnLog:
         return pd.DataFrame([row], columns=GRAD_FN_LOG_FIELD_ORDER)
 
 
-class GradFnAccessor(Accessor[GradFnLog | GradFnCallLog]):
+class GradFnAccessor(Accessor[GradFnLog]):
     """Dict-like accessor for ``GradFnLog`` objects.
 
     Supports integer order, exact label, pass-qualified label, and first
@@ -300,7 +302,11 @@ class GradFnAccessor(Accessor[GradFnLog | GradFnCallLog]):
         grad_fn_list = [grad_fn_logs[grad_fn_id] for grad_fn_id in grad_fn_order]
         super().__init__(grad_fn_dict, item_list=grad_fn_list)
 
-    def _resolve_pass_qualified(self, key: str) -> GradFnCallLog | None:
+    def __getitem__(self, key: int | str) -> GradFnLog | GradFnCallLog:  # type: ignore[override]
+        """Return a GradFnLog or GradFnCallLog by grad-fn-specific lookup rules."""
+        return super().__getitem__(key)
+
+    def _resolve_pass_qualified(self, key: str) -> GradFnCallLog | None:  # type: ignore[override]
         """Resolve ``grad_fn_label:pass`` notation to a GradFnCallLog."""
         base, _, pass_str = key.rpartition(":")
         if base in self._dict:

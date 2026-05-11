@@ -32,6 +32,7 @@ from ..ir.events import (
     ParentEdge,
 )
 from ..ir.refs import TensorRef
+from ..ir.predicate import EventKind
 from ..ir.semantics import BackendSemantics, CapturePolicy
 
 if TYPE_CHECKING:
@@ -204,7 +205,7 @@ class RecordingState:
 
         failure = PredicateFailure(
             event_index=ctx.event_index,
-            kind=ctx.kind,
+            kind=cast(EventKind, ctx.kind),
             label=ctx.label,
             traceback="".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
         )
@@ -590,14 +591,18 @@ def activation_record_from_event(event: OpEvent) -> ActivationRecord | None:
         return None
     spec = getattr(event, "capture_spec", CaptureSpec(save_out=False, save_metadata=True))
     ctx = _record_context_from_event(event)
+    ram_payload = event.output.tensor.payload if spec.save_out else None
+    transformed_ram_payload = (
+        event.output.transformed_tensor.payload
+        if event.output.transformed_tensor is not None and spec.save_out
+        else None
+    )
     return ActivationRecord(
         ctx=ctx,
         spec=spec,
-        ram_payload=event.output.tensor.payload if spec.save_out else None,
+        ram_payload=ram_payload if isinstance(ram_payload, torch.Tensor) else None,
         transformed_ram_payload=(
-            event.output.transformed_tensor.payload
-            if event.output.transformed_tensor is not None and spec.save_out
-            else None
+            transformed_ram_payload if isinstance(transformed_ram_payload, torch.Tensor) else None
         ),
     )
 

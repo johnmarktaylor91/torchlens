@@ -96,7 +96,9 @@ class OpAccessor(Accessor["OpLog"]):
             return True
         return False
 
-    def __iter__(self) -> Iterator[int]:
+    # This scoped accessor intentionally iterates call-index keys, unlike the generic
+    # Trace-level accessors that iterate log values.
+    def __iter__(self) -> Iterator[int]:  # type: ignore[override]
         """Iterate call-index keys."""
 
         return iter(self._dict)
@@ -1213,8 +1215,6 @@ class LayerAccessor(Accessor[Union["LayerLog", "OpLog"]]):
     ) -> None:
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(layer_logs, source_ref=source_ref)
-        # Store as weakref to avoid preventing Trace GC.
-        self._source_ref = source_ref
 
     def _resolve_pass_qualified(self, key: str) -> "OpLog | None":
         """Resolve ``layer_label:pass`` notation to an OpLog."""
@@ -1229,7 +1229,8 @@ class LayerAccessor(Accessor[Union["LayerLog", "OpLog"]]):
 
     def _suggest(self, key: str) -> list[str]:
         """Return similar layer labels from the source Trace."""
-        source = self._source_ref() if self._source_ref is not None else None
+        source_ref = getattr(self, "_source_ref", None)
+        source = source_ref() if source_ref is not None else None
         if source is not None and hasattr(source, "find_layers"):
             return source.find_layers(str(key))
         return []

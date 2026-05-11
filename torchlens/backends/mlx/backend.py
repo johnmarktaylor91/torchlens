@@ -6,7 +6,7 @@ import random
 import time
 from collections import OrderedDict, defaultdict
 from contextlib import AbstractContextManager, contextmanager
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 from ... import _state
 from ...data_classes.layer_log import LayerLog
@@ -93,7 +93,7 @@ class MLXBackend:
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Return a context manager that enables MLX logging."""
 
-        return _state.active_logging(session)
+        return _state.active_logging(cast(Trace, session))
 
     def pause_logging(self, session: object) -> AbstractContextManager[None]:
         """Return a context manager that pauses MLX logging."""
@@ -145,8 +145,8 @@ class MLXBackend:
             parent_labels=(),
             input_output_address=None,
             shape=self._shape(output),
-            dtype=self._dtype(output),
-            tensor_device=self._device(output),
+            dtype=cast(Any, self._dtype(output)),
+            tensor_device=cast(Any, self._device(output)),
             tensor_requires_grad=None,
             output_index=None,
             is_bottom_level_func=func_event_input.is_bottom_level_func,
@@ -343,7 +343,7 @@ class MLXBackend:
         trace = Trace(
             model_name=type(model).__name__,
             output_device=output_device,
-            out_postfunc=out_transform,
+            out_postfunc=cast("Callable[[Any], Any] | None", out_transform),
             grad_transform=None,
             save_raw_outs=save_raw_outs,
             save_raw_grads=True,
@@ -361,13 +361,13 @@ class MLXBackend:
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             train_mode=train_mode,
-            module_filter=module_filter,
+            module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
-            transform=transform,
+            transform=cast("Callable[[Any], Any] | None", transform),
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            output_transform=output_transform,
+            output_transform=cast("Callable[[Any], Any] | None", output_transform),
             save_raw_output=save_raw_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
@@ -377,8 +377,10 @@ class MLXBackend:
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
         trace._pre_forward_rng_states = None
-        trace.random_seed = (
-            random_seed if random_seed is not None else random.randint(1, 4294967294)
+        setattr(
+            trace,
+            "random_seed",
+            cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294),
         )
         self.tensor_store.clear()
         self.wrap(model)
