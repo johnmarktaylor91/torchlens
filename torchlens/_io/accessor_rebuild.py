@@ -41,7 +41,10 @@ def rebuild_trace_accessors(
     for module_log in module_dict.values():
         module_log._source_trace = trace
         module_log._buffer_accessor = None
-        for module_call in module_log.ops._dict.values():
+        module_ops = getattr(module_log, "ops", None)
+        if module_ops is None:
+            continue
+        for module_call in module_ops._dict.values():
             module_call._source_trace = trace
             if not module_call.outputs:
                 module_call.outputs = [
