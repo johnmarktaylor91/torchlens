@@ -18,8 +18,32 @@ import numpy as np
 import torchlens as tl
 from torchlens.user_funcs import _detach_nested_for_cache
 
+from _pickle_compare import _canonical_pickle_diff, _tensor_equal
+from _pickle_compare_allowlist import ALLOWED_PICKLE_DIFF_FIELDS
 
 _GZIP_MAGIC = b"\x1f\x8b"
+_EXPECTED_ALLOWLIST = {
+    "Trace": frozenset(
+        {
+            "backward_peak_memory",
+            "cleanup_duration",
+            "end_time",
+            "forward_duration",
+            "forward_peak_memory",
+            "func_calls_duration",
+            "setup_duration",
+            "start_time",
+        }
+    ),
+    "OpLog": frozenset(
+        {
+            "bytes_peak_at_call",
+            "capture_index",
+            "func_call_id",
+            "func_duration",
+        }
+    ),
+}
 
 
 class TinyTransformerBlock(nn.Module):
@@ -396,6 +420,32 @@ def test_pickle_byte_equal_pre_m6(
     if actual != expected:
         actual_trace = pickle.loads(actual)
         expected_trace = pickle.loads(expected)
-        diff = _first_state_difference(actual_trace, expected_trace)
-        if diff is not None:
-            pytest.fail(f"Trace pickle bytes differ for {model_name}: {diff}")
+        diffs = _canonical_pickle_diff(actual_trace, expected_trace)
+        if diffs:
+            diff = _first_state_difference(actual_trace, expected_trace)
+            if diff is not None:
+                diffs.insert(0, diff)
+            pytest.fail(f"Trace pickle differs for {model_name}: {diffs[:5]!r}")
+
+
+def test_pickle_compare_allowlist_stable() -> None:
+    """Assert the parity allow-list is an explicit committed contract."""
+
+    assert ALLOWED_PICKLE_DIFF_FIELDS == _EXPECTED_ALLOWLIST
+
+
+def test_tensor_equal_handles_bool_int_nan_dtypes() -> None:
+    """Cover dtype-sensitive exact tensor comparisons used by parity tests."""
+
+    assert _tensor_equal(torch.tensor([True, False]), torch.tensor([True, False]))
+    assert not _tensor_equal(torch.tensor([True, False]), torch.tensor([False, False]))
+    assert _tensor_equal(
+        torch.tensor([1, 2], dtype=torch.int32), torch.tensor([1, 2], dtype=torch.int32)
+    )
+    assert _tensor_equal(
+        torch.tensor([1, 2], dtype=torch.int64), torch.tensor([1, 2], dtype=torch.int64)
+    )
+    assert _tensor_equal(torch.tensor([float("nan"), 1.0]), torch.tensor([float("nan"), 1.0]))
+    assert not _tensor_equal(
+        torch.tensor([1], dtype=torch.int32), torch.tensor([1], dtype=torch.int64)
+    )
