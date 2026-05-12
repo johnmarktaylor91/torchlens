@@ -1995,15 +1995,14 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
             groups_seen[group_key] = slo
 
     # Rule 1: Parameter sharing invariant.
-    # Layers with the same func_name AND identical sorted(_param_barcodes)
-    # must share the same layer_label_no_pass (they are the same "layer" across
-    # different ops).  The func_name is included in the grouping key
-    # because different operations (e.g., isinf, expand, nantonum) can consume
-    # the same parameter tensor without being the same logical layer.
-    param_groups: dict[tuple[str, tuple[str, ...]], list[OpLog]] = defaultdict(list)
+    # Layers with the same func_name, identical sorted(_param_barcodes), and the
+    # same output-specific equivalence class must share layer_label_no_pass. The
+    # equivalence class keeps distinct outputs of a multi-output parameterized op
+    # from being collapsed into one logical layer.
+    param_groups: dict[tuple[str, tuple[str, ...], str], list[OpLog]] = defaultdict(list)
     for lpl in ml.layer_list:
         if lpl.uses_params and lpl._param_barcodes:
-            key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)))
+            key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.equivalence_class)
             param_groups[key].append(lpl)
 
     for param_key, layers in param_groups.items():
