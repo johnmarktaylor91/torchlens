@@ -30,13 +30,44 @@ class _MLXWrapperRegistry:
         if self._wrapped:
             self.unwrap()
         mx, nn = _import_mlx()
-        for name in ("add", "matmul", "multiply", "subtract", "divide", "maximum", "minimum"):
+        for name in (
+            "add",
+            "matmul",
+            "multiply",
+            "subtract",
+            "divide",
+            "maximum",
+            "minimum",
+            "power",
+            "sum",
+            "mean",
+            "max",
+            "min",
+            "argmax",
+            "argmin",
+            "reshape",
+            "transpose",
+            "concatenate",
+            "stack",
+            "split",
+        ):
             self.wrap_attr(mx, name, backend, name)
-        for name in ("relu", "gelu", "sigmoid", "tanh", "softmax"):
+        for name in ("relu", "gelu", "sigmoid", "tanh", "softmax", "silu"):
             self.wrap_attr(nn, name, backend, name)
-        linear_cls = getattr(nn, "Linear", None)
-        if linear_cls is not None:
-            self.wrap_attr(linear_cls, "__call__", backend, "linear")
+        for cls_name, op_name in (
+            ("Linear", "linear"),
+            ("Conv2d", "conv2d"),
+            ("LayerNorm", "layernorm"),
+            ("RMSNorm", "rmsnorm"),
+            ("BatchNorm", "batchnorm"),
+            ("GroupNorm", "groupnorm"),
+            ("Dropout", "dropout"),
+            ("Embedding", "embedding"),
+            ("MultiHeadAttention", "multiheadattention"),
+        ):
+            cls = getattr(nn, cls_name, None)
+            if cls is not None:
+                self.wrap_attr(cls, "__call__", backend, op_name)
         self._wrapped = True
 
     def unwrap(self) -> None:
