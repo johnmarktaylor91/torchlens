@@ -89,6 +89,41 @@ def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:
     assert "backward" in backward_source
 
 
+def test_bundle_backward_regression_path(tmp_path: Path) -> None:
+    """Bundle backward rendering emits per-member backward subgraphs."""
+
+    bundle = _bundle()
+    source = tl.show_bundle_graph(
+        bundle,
+        vis_outpath=str(tmp_path / "backward_bundle_regression"),
+        direction="backward",
+        vis_save_only=True,
+        vis_fileformat="svg",
+    )
+
+    assert source is not None
+    assert "cluster_backward_first" in source
+    assert "cluster_backward_second" in source
+    assert "backward" in source
+
+
+def test_bundle_backward_no_unified_supergraph(tmp_path: Path) -> None:
+    """Bundle backward rendering stays per-member in P6."""
+
+    bundle = _bundle()
+    source = tl.show_bundle_graph(
+        bundle,
+        vis_outpath=str(tmp_path / "backward_bundle_no_supergraph"),
+        direction="backward",
+        vis_save_only=True,
+        vis_fileformat="svg",
+    )
+
+    assert source is not None
+    assert "cluster_backward" in source
+    assert "backward_supergraph" not in source
+
+
 def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> None:
     """Per-node/edge styles feed rendering and chrome trace diff writes JSON."""
 
