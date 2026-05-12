@@ -2415,7 +2415,7 @@ def _make_layer_log_entry(
     return new_entry
 
 
-def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: OpLog) -> None:
+def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -> None:
     """Raise a structured capture error if ``raise_on_nan`` finds a non-finite tensor.
 
     Parameters
