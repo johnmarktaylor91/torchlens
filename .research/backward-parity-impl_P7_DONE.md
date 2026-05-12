@@ -1,11 +1,11 @@
 # Phase P7 BLOCK -- Final wrap-up
 
-blocked_at: 2026-05-12T06:39:21-04:00
+blocked_at: 2026-05-12T06:53:44-04:00
 branch: codex/backward-parity-P1-alpha3
-head_before_p7_block_commit: bcfe094bcb9bd0888e62a16a32cc468861f81a94
-commits_since_main_before_p7_block_commit: 29
-files_touched_since_main_before_p7_block_commit: 63
-loc_delta_before_p7_block_commit: 5573 insertions(+), 260 deletions(-)
+head_before_p7_block_update: 20b7fd0cc357001915f569f202c5af2ca2d784ad
+commits_since_main_before_p7_block_update: 31
+files_touched_since_main_before_p7_block_update: 65
+loc_delta_before_p7_block_update: 5714 insertions(+), 260 deletions(-)
 ready_for_review_merge: no
 suggested_merge_strategy: blocked until T2 is green
 
@@ -30,23 +30,37 @@ Pytest collected 2399 items, deselected 209, skipped 1, and selected 2190.
 It stopped after 1 failure:
 
 ```text
-tests/test_activation_postfunc_refactor.py::test_train_mode_out_postfunc_detach_rejected
-FAILED: DID NOT RAISE <class 'torchlens._training_validation.TrainingModeConfigError'>
+tests/test_api_surface.py::test_all_size_exactly_40
+FAILED: AssertionError: assert 46 == 40
 ```
 
 Full failure excerpt:
 
 ```text
-_________________ test_train_mode_out_postfunc_detach_rejected _________________
-tests/test_activation_postfunc_refactor.py:136: in test_train_mode_out_postfunc_detach_rejected
-    with pytest.raises(tl.TrainingModeConfigError, match="disconnected from the autograd graph"):
-E   Failed: DID NOT RAISE <class 'torchlens._training_validation.TrainingModeConfigError'>
+___________________________ test_all_size_exactly_40 ___________________________
+tests/test_api_surface.py:82: in test_all_size_exactly_40
+    assert len(torchlens.__all__) == 40
+E   AssertionError: assert 46 == 40
+E    +  where 46 = len(['trace', 'fastlog', 'load', 'save', 'do', 'replay', ...])
+E    +    where ['trace', 'fastlog', 'load', 'save', 'do', 'replay', ...] = torchlens.__all__
 ```
 
 Final pytest summary:
 
 ```text
-===== 1 failed, 5 passed, 1 skipped, 209 deselected, 58 warnings in 1.98s ======
+===== 1 failed, 74 passed, 1 skipped, 209 deselected, 66 warnings in 2.13s =====
+```
+
+The current top-level `torchlens.__all__` has 46 names. The six sprint-added
+public names causing the budget mismatch are:
+
+```text
+grad_fn
+intervening
+grad_fn_label
+grad_clip
+grad_noise
+grad_clamp
 ```
 
 The remaining T2 commands were not run because the first T2 gate failed:
@@ -76,18 +90,20 @@ mypy torchlens/
   `aggregate(target="grad", loss_fn=...)` support.
 - P6: Observer direction support, backward bundle visualization regression
   coverage, validation hardening, and deferred per-layer-grad oracle tracking.
+- P7B: Restored train-mode `out_postfunc` validation after the earlier P7 block,
+  but the full T2 rerun is now blocked by API-surface budget drift.
 
 ## Assumptions
 
-- I treated the T2 failure-stop instruction as stronger than the general
-  cleanup instruction to consolidate docs, because declaring DONE after a known
-  non-slow failure would be misleading.
+- I treated the T2 failure-stop instruction as stronger than the wrap-up
+  instruction, because marking the sprint DONE after a known non-slow failure
+  would be misleading.
 - I did not modify or revert unrelated dirty work already present in the
   worktree.
 
 ## Suggested next step
 
-Fix the regression where `train_mode=True` plus a detaching `out_postfunc`
-does not raise `TrainingModeConfigError`, then rerun the full P7 T2 command
-sequence before resuming changelog, summary, STATE DONE, and final branch
-review notes.
+Decide whether the Phase 1a top-level API budget should remain exactly 40 or
+be updated to include the six backward-parity public names. Then rerun the full
+P7 T2 command sequence before resuming changelog, summary, STATE DONE, and final
+branch review notes.
