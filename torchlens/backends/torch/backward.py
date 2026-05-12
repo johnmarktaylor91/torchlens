@@ -703,7 +703,10 @@ def _run_backward_with_capture(
     previous_spec = _state._active_intervention_spec
     _state._active_trace = trace
     _state._active_intervention_spec = getattr(trace, "_intervention_spec", None)
-    _state._active_hook_plan = normalize_hooks_from_spec(_state._active_intervention_spec)
+    _state._active_hook_plan = [
+        *normalize_hooks_from_spec(_state._active_intervention_spec),
+        *getattr(trace, "_initial_hook_plan", ()),
+    ]
     handles = _walk_and_hook_backward_graph(trace, loss)
     backend, before = _reset_peak_memory(loss.device)
     try:

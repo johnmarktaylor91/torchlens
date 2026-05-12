@@ -1049,6 +1049,7 @@ def _run_model_and_save_specified_outs(
     trace.intervention_ready = intervention_ready
     if hook_plan:
         trace.run_state = RunState.LIVE_CAPTURED
+        trace._initial_hook_plan = tuple(hook_plan)
     trace.model_id = model_id
     trace.model_class = model_class
     trace.param_hash_quick = weight_fingerprint

@@ -209,26 +209,75 @@ def normalize_hook_plan(
     entries: list[NormalizedHookEntry] = []
     for order, (site_target, hook_like) in enumerate(pairs):
         helper_spec = hook_like if isinstance(hook_like, HelperSpec) else None
-        direction: HookDirection = helper_spec.kind if helper_spec is not None else "forward"
-        _validate_helper_mount(site_target, helper_spec)
-        normalized_callable = normalize_hook(hook_like, direction=direction)
-        entries.append(
-            NormalizedHookEntry(
-                site_target=site_target,
-                normalized_callable=normalized_callable,
-                helper_spec=helper_spec,
-                metadata=MappingProxyType(
-                    {
-                        "attach_order": order,
-                        "composition": "left_to_right",
-                        "force_shape_change": force_shape_change,
-                        "direction": direction,
-                        "timing": "post",
-                    }
-                ),
+        for direction in _hook_directions(hook_like, helper_spec):
+            _validate_helper_mount(site_target, helper_spec)
+            normalized_callable = _normalize_directional_hook(hook_like, direction=direction)
+            entries.append(
+                NormalizedHookEntry(
+                    site_target=site_target,
+                    normalized_callable=normalized_callable,
+                    helper_spec=helper_spec,
+                    metadata=MappingProxyType(
+                        {
+                            "attach_order": order,
+                            "composition": "left_to_right",
+                            "force_shape_change": force_shape_change,
+                            "direction": direction,
+                            "timing": "post",
+                        }
+                    ),
+                )
             )
-        )
     return entries
+
+
+def _hook_directions(
+    hook_like: HookInput, helper_spec: HelperSpec | None
+) -> tuple[HookDirection, ...]:
+    """Return hook directions requested by a hook-like object.
+
+    Parameters
+    ----------
+    hook_like:
+        User callable, observer, or helper spec.
+    helper_spec:
+        Helper spec when ``hook_like`` is a built-in helper.
+
+    Returns
+    -------
+    tuple[HookDirection, ...]
+        One or two concrete hook directions.
+    """
+
+    if helper_spec is not None:
+        return (helper_spec.kind,)
+    direction = getattr(hook_like, "direction", "forward")
+    if direction == "both":
+        return ("forward", "backward")
+    if direction in {"forward", "backward"}:
+        return (cast(HookDirection, direction),)
+    raise HookSignatureError("hook direction must be 'forward', 'backward', or 'both'")
+
+
+def _normalize_directional_hook(hook_like: HookInput, *, direction: HookDirection) -> HookCallable:
+    """Normalize a hook for a concrete direction.
+
+    Parameters
+    ----------
+    hook_like:
+        User callable, observer, or helper spec.
+    direction:
+        Concrete hook direction.
+
+    Returns
+    -------
+    HookCallable
+        Direction-specific hook callable.
+    """
+
+    if direction == "backward" and hasattr(hook_like, "record_backward"):
+        return normalize_hook(getattr(hook_like, "record_backward"), direction=direction)
+    return normalize_hook(hook_like, direction=direction)
 
 
 def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedHookEntry]:
@@ -561,8 +610,9 @@ def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> 
         return
     helper_metadata = dict(helper_spec.metadata)
     mount_shape = helper_metadata.get("mount_shape", "tensor")
-    selector = _normalize_live_selector(site_target)
-    selector_direction = _selector_direction_recursive(selector)
+    from .resolver import _selector_resolution_direction
+
+    selector_direction = _selector_resolution_direction(site_target)
     if mount_shape == "tuple" and selector_direction != "backward":
         raise HelperMountError(
             f"{helper_spec.name} is a grad_fn helper and must be mounted on a backward selector."
