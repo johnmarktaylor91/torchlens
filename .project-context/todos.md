@@ -2,6 +2,20 @@
 
 ## Active Tasks
 
+### Backward validation per-layer-grad oracle (DEFERRED from P6 via AD-32)
+
+P6 intentionally shipped parameter-gradient parity hardening only. The
+per-layer gradient oracle remains deferred because the round 5/6/7/8 design
+iterations each exposed correctness risks in the proposed mechanism:
+retain-grad-on-clone mismatch, same-run side-channel coupling, autograd
+version-counter hazards, and zero-grad accumulation hazards.
+
+Follow-up sprint should redesign the oracle from scratch. Candidate directions:
+`torch.fx` symbolic trace, hook-install-via-wrappers stock run, or a
+disposable-trace probe followed by state restoration. Do not reuse the deleted
+P6 helper names (`_collect_stock_grads`, `_compare_layer_grads`,
+`CoverageDiagnostic`, etc.) without a fresh design review.
+
 ### Intervention API naming sprint leftovers (raised cycle 2 round 7, 2026-04-29)
 
 Naming sprint 2026-05-11. Items 1-7 and 10 from the original v1
