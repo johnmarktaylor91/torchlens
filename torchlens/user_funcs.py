@@ -163,6 +163,8 @@ def _trace_mlx_model(
     random_seed: int | None | MissingType,
     num_context_lines: int | MissingType,
     recurrence_detection: bool | MissingType,
+    intervention_ready: bool | MissingType,
+    hooks: Any | None | MissingType,
     capture: CaptureOptions | None,
     save: SaveOptions | None,
     visualization: VisualizationOptions | None,
@@ -213,8 +215,8 @@ def _trace_mlx_model(
         mark_layer_depths=MISSING,
         detach_saved_activations=MISSING,
         recurrence_detection=recurrence_detection,
-        intervention_ready=MISSING,
-        hooks=MISSING,
+        intervention_ready=intervention_ready,
+        hooks=hooks,
         unwrap_when_done=MISSING,
         verbose=verbose,
         train_mode=train_mode,
@@ -232,6 +234,17 @@ def _trace_mlx_model(
         save_raw_outs=save_raw_outs,
         save_raw_grads=save_raw_grads,
     )
+    if capture_options.intervention_ready:
+        raise NotImplementedError(
+            "MLX backend does not support intervention_ready=True. "
+            "Intervention requires PyTorch autograd integration not present in MLX. "
+            "Omit intervention_ready or set False."
+        )
+    if capture_options.hooks:
+        raise NotImplementedError(
+            "MLX backend does not support pre-attached hooks. "
+            "Omit hooks or use the PyTorch backend."
+        )
     if visualization is not None and visualization.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
     if capture_options.save_grads:
@@ -1495,6 +1508,8 @@ def trace(
             random_seed=random_seed,
             num_context_lines=num_context_lines,
             recurrence_detection=recurrence_detection,
+            intervention_ready=intervention_ready,
+            hooks=hooks,
             capture=capture,
             save=save,
             visualization=visualization,
