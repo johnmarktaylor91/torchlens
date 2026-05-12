@@ -2336,8 +2336,14 @@ def _save_activation_fields(
     fields_dict["transformed_out_dtype"] = None
     fields_dict["transformed_out_memory"] = None
     if out_postfunc is not None:
-        with pause_logging():
-            transformed_out = out_postfunc(raw_out)
+        op_log = OpLog(fields_dict)
+        transformed_out = op_log._apply_postfunc(
+            raw_out,
+            out_postfunc,
+            postfunc_kind="out",
+            streaming_active=getattr(trace, "_out_writer", None) is not None,
+        )
+        op_log._validate_train_mode_postfunc_output(raw_out, transformed_out, postfunc_kind="out")
         fields_dict["transformed_out"] = transformed_out
         fields_dict["transformed_out_shape"] = _shape_or_none(transformed_out)
         fields_dict["transformed_out_dtype"] = _dtype_or_none(transformed_out)
