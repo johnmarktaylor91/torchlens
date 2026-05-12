@@ -710,8 +710,9 @@ def run_and_log_inputs_through_model(
         except Exception:
             pass
         _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
-        for label in list(self._raw_layer_dict.keys()):
-            entry = self._raw_layer_dict.get(label)
+        raw_layer_dict = getattr(self, "_raw_layer_dict", {})
+        for label in list(raw_layer_dict.keys()):
+            entry = raw_layer_dict.get(label)
             if entry is not None and hasattr(entry, "out") and entry.out is not None:
                 clear_meta(entry.out)
         print(

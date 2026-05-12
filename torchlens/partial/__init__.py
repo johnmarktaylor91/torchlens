@@ -46,6 +46,7 @@ class PartialTrace:
             Wrapper exposing minimal inspection and graph rendering helpers.
         """
 
+        _materialize_failed_capture_events(trace)
         return cls(trace=trace, original_exception=exception)
 
     @property
@@ -215,6 +216,31 @@ def from_failed_capture(exception: BaseException) -> PartialTrace:
     if isinstance(partial_log, PartialTrace):
         return partial_log
     raise ValueError("exception does not contain a TorchLens partial capture")
+
+
+def _materialize_failed_capture_events(trace: Trace) -> None:
+    """Drain live capture records into raw layers for failed captures.
+
+    Parameters
+    ----------
+    trace:
+        Partially populated trace from a failed forward pass.
+
+    Returns
+    -------
+    None
+        Mutates the trace raw-layer lookup structures when live events are pending.
+    """
+
+    if getattr(trace, "_raw_layer_dict", None):
+        return
+    events = getattr(trace, "capture_events", None)
+    if events is None or not getattr(events, "op_events", None):
+        return
+
+    from torchlens.postprocess._materialize import materialize_from_events
+
+    materialize_from_events(trace, events)
 
 
 def _raw_label(layer: OpLog) -> str:
