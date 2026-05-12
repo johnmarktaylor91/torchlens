@@ -13,7 +13,7 @@ import torch
 from ..._io.streaming import BundleStreamWriter
 from ..._state import pause_logging
 from ...data_classes.grad_fn_log import GradFnLog
-from .tensor_tracking import _add_backward_hook
+from .tensor_tracking import _add_tensor_backward_hook
 
 
 def _grad_fn_is_custom(grad_fn: Any) -> bool:
@@ -408,7 +408,7 @@ def _ensure_layer_grad_hooks(trace: Any) -> None:
     for layer in getattr(trace, "layer_list", []):
         out = getattr(layer, "out", None)
         if isinstance(out, torch.Tensor):
-            _add_backward_hook(trace, out, layer._label_raw)
+            _add_tensor_backward_hook(trace, out, layer._label_raw)
 
 
 def _configure_grad_streaming(

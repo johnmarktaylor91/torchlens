@@ -103,7 +103,7 @@ from ...capture.arg_positions import (
 )
 
 from .tensor_tracking import (
-    _add_backward_hook,
+    _add_tensor_backward_hook,
     _append_module_suffix_to_equivalence_class,
     _get_ancestors_from_parents,
     _get_equivalence_class,
@@ -1527,7 +1527,7 @@ def _tag_tensor_and_track_variations(
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
     if self.save_grads:
-        _add_backward_hook(self, out, out_label)
+        _add_tensor_backward_hook(self, out, out_label)
 
     for parent_label in new_layer_entry.parents:
         parent = live_record_for_label(self, parent_label).fields
@@ -1764,7 +1764,7 @@ def log_function_output_tensors_fast(
         previous_shape = orig_layer_entry.shape
 
         if self.save_grads:
-            _add_backward_hook(self, out, _label_raw)  # Must pass RAW label (#86)
+            _add_tensor_backward_hook(self, out, _label_raw)  # Must pass RAW label (#86)
 
         # Structural integrity check: verify counter, type, label, and parents
         # all match the exhaustive pass.  Any mismatch means dynamic control flow

@@ -1039,9 +1039,9 @@ def _ensure_module_output_tensor_logged(
         parent_entry["has_children"] = True
     set_tensor_label(tensor, new_entry._label_raw)
     if trace.save_grads:
-        from .ops import _add_backward_hook
+        from .ops import _add_tensor_backward_hook
 
-        _add_backward_hook(trace, tensor, new_entry._label_raw)
+        _add_tensor_backward_hook(trace, tensor, new_entry._label_raw)
 
 
 def _wrap_user_forward_hooks(module: nn.Module) -> None:

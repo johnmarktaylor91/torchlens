@@ -45,7 +45,7 @@ from ...utils.introspection import _get_code_context
 from ...utils.rng import log_current_rng_states
 from ...utils.tensor_utils import get_memory_amount
 
-from .tensor_tracking import _add_backward_hook, _append_module_suffix_to_equivalence_class
+from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
 
 if TYPE_CHECKING:
     from ...data_classes.model_log import Trace
@@ -453,7 +453,7 @@ def log_source_tensor_exhaustive(
 
     # Register backward hook for grad capture if requested.
     if self.save_grads:
-        _add_backward_hook(self, t, tensor_label)
+        _add_tensor_backward_hook(self, t, tensor_label)
 
 
 def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:

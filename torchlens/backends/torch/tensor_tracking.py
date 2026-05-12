@@ -18,7 +18,7 @@ Key concepts:
     non-parameterized ops, it hashes non-tensor args, output index, and
     containing module.
 
-**Backward hooks** (``_add_backward_hook``):
+**Backward hooks** (``_add_tensor_backward_hook``):
     Uses ``weakref.ref(Trace)`` to avoid preventing garbage collection of the
     Trace after the user is done with it.  The hook closure captures the weakref
     and the raw tensor label (a string, not the tensor itself).
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from ...data_classes.model_log import Trace
 
 
-def _add_backward_hook(self: "Trace", t: torch.Tensor, tensor_label: str) -> None:
+def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str) -> None:
     """Register a backward hook on ``t`` that captures its grad into Trace.
 
     The hook closure captures a ``weakref`` to Trace (not a strong reference)
@@ -60,13 +60,13 @@ def _add_backward_hook(self: "Trace", t: torch.Tensor, tensor_label: str) -> Non
         tensor_label: Raw tensor label (e.g. ``"conv2d_3_47_raw"``) used to
             look up the corresponding log entry when the grad arrives.
     """
-    # Weak reference prevents Trace → tensor → hook → Trace ref cycle.
-    self_ref = weakref.ref(self)
+    # Weak reference prevents Trace -> tensor -> hook -> Trace ref cycle.
+    trace_ref = weakref.ref(trace)
 
     def log_grad_to_model_history(grad: torch.Tensor) -> None:
-        trace = self_ref()
-        if trace is not None:
-            _log_tensor_grad(trace, grad, tensor_label)
+        active_trace = trace_ref()
+        if active_trace is not None:
+            _log_tensor_grad(active_trace, grad, tensor_label)
 
     if (t.grad_fn is not None) or t.requires_grad:
         t.register_hook(log_grad_to_model_history)  # type: ignore[no-untyped-call]
