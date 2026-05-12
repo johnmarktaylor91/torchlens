@@ -75,6 +75,7 @@ from .selectors import (
     intervening,
     label,
     module,
+    output,
     where,
 )
 from .sites import SiteCollection, SiteSpec, sites
@@ -101,6 +102,7 @@ from .errors import (
     LiveModeLabelError,
     ModelMismatchError,
     MultiMatchWarning,
+    MultiOutputModuleError,
     MutateInPlaceWarning,
     NoParentError,
     OpaqueCallableInExecutableSaveError,
@@ -139,6 +141,7 @@ from .types import (
     TensorSliceSpec,
     TupleIndex,
     Unsupported,
+    rebuild_container_from_spec,
 )
 
 __all__ = [
@@ -184,6 +187,7 @@ __all__ = [
     "METRIC_REGISTRY",
     "ModelMismatchError",
     "MultiMatchWarning",
+    "MultiOutputModuleError",
     "MutateInPlaceWarning",
     "NamedField",
     "NoParentError",
@@ -245,6 +249,7 @@ __all__ = [
     "normalize_hook",
     "normalize_hook_plan",
     "NormalizedHookEntry",
+    "output",
     "pearson_correlation_distance",
     "project_off",
     "project_onto",
@@ -264,4 +269,5 @@ __all__ = [
     "where",
     "UnclassifiedSelectorError",
     "zero_ablate",
+    "rebuild_container_from_spec",
 ]

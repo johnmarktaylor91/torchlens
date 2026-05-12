@@ -12,6 +12,7 @@ SelectorKind: TypeAlias = Literal[
     "label",
     "func",
     "module",
+    "output",
     "contains",
     "predicate",
     "in_module",
@@ -162,8 +163,9 @@ class FuncSelector(BaseSelector):
     """
 
     name: str
+    output: int | str | None = None
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, *, output: int | str | None = None) -> None:
         """Create a function-name selector.
 
         Parameters
@@ -173,8 +175,10 @@ class FuncSelector(BaseSelector):
         """
 
         object.__setattr__(self, "selector_kind", "func")
-        object.__setattr__(self, "selector_value", name)
+        selector_value: Any = name if output is None else {"name": name, "output": output}
+        object.__setattr__(self, "selector_value", selector_value)
         object.__setattr__(self, "name", name)
+        object.__setattr__(self, "output", output)
 
 
 @dataclass(frozen=True, repr=False)
@@ -201,6 +205,32 @@ class ModuleSelector(BaseSelector):
         object.__setattr__(self, "selector_kind", "module")
         object.__setattr__(self, "selector_value", address)
         object.__setattr__(self, "address", address)
+
+
+@dataclass(frozen=True, repr=False)
+class OutputSelector(BaseSelector):
+    """Module or function output selector.
+
+    Parameters
+    ----------
+    target:
+        Output index or semantic output role.
+    """
+
+    target: int | str
+
+    def __init__(self, target: int | str) -> None:
+        """Create an output selector.
+
+        Parameters
+        ----------
+        target:
+            Output index or semantic output role.
+        """
+
+        object.__setattr__(self, "selector_kind", "output")
+        object.__setattr__(self, "selector_value", target)
+        object.__setattr__(self, "target", target)
 
 
 @dataclass(frozen=True, repr=False)
@@ -530,13 +560,15 @@ def label(name: str) -> LabelSelector:
     return LabelSelector(name)
 
 
-def func(name: str) -> FuncSelector:
+def func(name: str, *, output: int | str | None = None) -> FuncSelector:
     """Create a function-name selector.
 
     Parameters
     ----------
     name:
         Function name to match.
+    output:
+        Optional output index or semantic role to match.
 
     Returns
     -------
@@ -544,7 +576,24 @@ def func(name: str) -> FuncSelector:
         Immutable selector.
     """
 
-    return FuncSelector(name)
+    return FuncSelector(name, output=output)
+
+
+def output(target: int | str) -> OutputSelector:
+    """Create an output selector.
+
+    Parameters
+    ----------
+    target:
+        Output index or semantic role.
+
+    Returns
+    -------
+    OutputSelector
+        Immutable selector.
+    """
+
+    return OutputSelector(target)
 
 
 def module(address: str) -> ModuleSelector:
@@ -762,7 +811,17 @@ def _classify_selector_direction(
             return "backward"
         if kind == "func":
             return "forward"
-        if kind in {"label", "module", "contains", "predicate", "in_module", "and", "or", "not"}:
+        if kind in {
+            "label",
+            "module",
+            "output",
+            "contains",
+            "predicate",
+            "in_module",
+            "and",
+            "or",
+            "not",
+        }:
             return None
     if isinstance(sel, (GradFnSelector, InterveningSelector, GradFnLabelSelector)):
         return "backward"
@@ -773,6 +832,7 @@ def _classify_selector_direction(
         (
             LabelSelector,
             ModuleSelector,
+            OutputSelector,
             ContainsSelector,
             WhereSelector,
             InModuleSelector,
@@ -825,6 +885,7 @@ __all__ = [
     "LabelSelector",
     "ModuleSelector",
     "NotSelector",
+    "OutputSelector",
     "SelectorLike",
     "WhereSelector",
     "contains",
@@ -835,5 +896,6 @@ __all__ = [
     "intervening",
     "label",
     "module",
+    "output",
     "where",
 ]

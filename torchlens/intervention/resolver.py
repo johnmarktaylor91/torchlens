@@ -496,6 +496,8 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "module":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
+    if kind == "output":
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "contains":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "in_module":
@@ -579,7 +581,13 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
     if kind == "label":
         return _label_matches(site, str(value))
     if kind == "func":
+        if isinstance(value, dict):
+            return site.func_name == value.get("name") and _output_matches(
+                site, value.get("output")
+            )
         return site.func_name == value
+    if kind == "output":
+        return _output_matches(site, value)
     if kind == "module":
         return _module_output_matches(site, str(value))
     if kind == "contains":
@@ -627,6 +635,27 @@ def _resolve_grad_fn_kind(site: "GradFnLog", kind: str, value: Any) -> bool:
             return False
         return True
     return False
+
+
+def _output_matches(site: Site, value: Any) -> bool:
+    """Return whether a forward site matches an output index or role.
+
+    Parameters
+    ----------
+    site:
+        Candidate forward site.
+    value:
+        Output index or semantic role.
+
+    Returns
+    -------
+    bool
+        Whether the site matches the requested output.
+    """
+
+    if isinstance(value, int):
+        return getattr(site, "multi_output_index", None) == value
+    return getattr(site, "multi_output_role", None) == str(value)
 
 
 def _grad_fn_type_matches(site: "GradFnLog", requested: str) -> bool:
@@ -709,14 +738,28 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         Selector matching the target spec.
     """
 
-    from .selectors import contains, func, grad_fn, grad_fn_label, intervening, label, module, where
+    from .selectors import (
+        contains,
+        func,
+        grad_fn,
+        grad_fn_label,
+        intervening,
+        label,
+        module,
+        output,
+        where,
+    )
 
     if kind == "label":
         return label(str(value))
     if kind == "func":
+        if isinstance(value, dict):
+            return func(str(value.get("name")), output=value.get("output"))
         return func(str(value))
     if kind == "module":
         return module(str(value))
+    if kind == "output":
+        return output(value)
     if kind == "contains":
         return contains(str(value))
     if kind == "in_module":

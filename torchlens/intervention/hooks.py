@@ -532,9 +532,18 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
     if target.selector_kind == "label":
         return label(str(target.selector_value))
     if target.selector_kind == "func":
+        if isinstance(target.selector_value, dict):
+            return func(
+                str(target.selector_value.get("name")),
+                output=target.selector_value.get("output"),
+            )
         return func(str(target.selector_value))
     if target.selector_kind == "module":
         return module(str(target.selector_value))
+    if target.selector_kind == "output":
+        from .selectors import output
+
+        return output(cast("int | str", target.selector_value))
     if target.selector_kind == "contains":
         return contains(str(target.selector_value))
     if target.selector_kind == "in_module":
@@ -688,9 +697,15 @@ def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
     if kind == "label":
         return _live_label_matches(site, str(value))
     if kind == "func":
+        if isinstance(value, dict):
+            return bool(getattr(site, "func_name", None) == value.get("name")) and (
+                _live_output_matches(site, value.get("output"))
+            )
         return bool(getattr(site, "func_name", None) == value)
     if kind == "module":
         return _live_module_matches(site, str(value))
+    if kind == "output":
+        return _live_output_matches(site, value)
     if kind == "contains":
         return str(value).lower() in str(getattr(site, "_layer_label_raw", "")).lower()
     if kind == "in_module":
@@ -752,6 +767,27 @@ def _live_module_matches(site: Any, address: str) -> bool:
         getattr(site, "modules", ()) or ()
     )
     return any(_module_label_matches(str(candidate), address) for candidate in candidates)
+
+
+def _live_output_matches(site: Any, value: Any) -> bool:
+    """Return whether a live site matches an output index or role.
+
+    Parameters
+    ----------
+    site:
+        Capture-time site proxy.
+    value:
+        Output index or semantic role.
+
+    Returns
+    -------
+    bool
+        Whether the site matches the requested output.
+    """
+
+    if isinstance(value, int):
+        return getattr(site, "multi_output_index", None) == value
+    return getattr(site, "multi_output_role", None) == str(value)
 
 
 def _module_label_matches(module_pass: str, address: str) -> bool:
