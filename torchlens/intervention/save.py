@@ -236,6 +236,7 @@ def _append_state_for_json(log: Any) -> dict[str, Any]:
     return {
         "is_appended": bool(getattr(log, "is_appended", False)),
         "append_sequence_id": int(getattr(log, "_append_sequence_id", 0)),
+        "append_history": list(getattr(log, "append_history", [])),
         "ledger": append_records,
     }
 

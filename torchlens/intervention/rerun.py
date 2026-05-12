@@ -201,6 +201,7 @@ def _append_rerun(
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": getattr(new_log, "graph_shape_hash", None),
     }
+    log.append_history.append(dict(log.last_run_ctx))
     log._record_operation(
         "append",
         engine="append",

@@ -146,6 +146,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_intervention_spec": None,
     "ledger": [],
     "last_run_ctx": None,
+    "append_history": [],
     "_has_direct_writes": False,
     "_warned_direct_write": False,
     "_warned_mutate_in_place": False,
@@ -777,6 +778,7 @@ class Trace:
         "_intervention_spec": FieldPolicy.DROP,
         "ledger": FieldPolicy.KEEP,
         "last_run_ctx": FieldPolicy.DROP,
+        "append_history": FieldPolicy.KEEP,
         "_has_direct_writes": FieldPolicy.KEEP,
         "_warned_direct_write": FieldPolicy.DROP,
         "_warned_mutate_in_place": FieldPolicy.DROP,
@@ -1037,6 +1039,7 @@ class Trace:
         self.observer_spans: list[dict[str, Any]] = list(_state._active_record_spans)
         self.report_values: dict[str, Any] = {}
         self.last_run_ctx: Any | None = None
+        self.append_history: list[dict[str, Any]] = []
         self._has_direct_writes = False
         self._warned_direct_write = False
         self._warned_mutate_in_place = False
@@ -2341,6 +2344,7 @@ class Trace:
                 "_keep_grads_in_memory": True,
                 "_defer_streaming_bundle_finalization": False,
                 "_out_sink": None,
+                "append_history": [],
                 "_in" + "_exhaustive_pass": False,
                 "_module" + "_containment_engine": "hook_stack",
                 "_exhaustive" + "_module_stack": [],
@@ -2469,13 +2473,11 @@ class Trace:
             "param_hash_full",
             "input_id",
             "input_shape_hash",
-            "is_appended",
             "relationship_evidence",
             "_source_model_ref",
             "_has_direct_writes",
             "_spec_revision",
             "_out_recipe_revision",
-            "_append_sequence_id",
         )
         preserved_state = {
             field_name: self.__dict__.get(field_name) for field_name in preserved_fields

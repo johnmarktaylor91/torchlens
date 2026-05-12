@@ -106,6 +106,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_intervention_spec",
     "ledger",
     "last_run_ctx",
+    "append_history",
     "_has_direct_writes",
     "_warned_direct_write",
     "_warned_mutate_in_place",
