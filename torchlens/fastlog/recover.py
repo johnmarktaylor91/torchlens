@@ -219,6 +219,12 @@ def _recording_from_records(
         end_times=list(metadata.get("end_times", [])),
         predicate_failures=[],
         predicate_failure_overflow_count=int(metadata.get("predicate_failure_overflow_count", 0)),
+        halted=bool(metadata.get("halted", False)),
+        halt_reason=metadata.get("halt_reason"),
+        halts_by_pass={
+            int(pass_index): str(reason)
+            for pass_index, reason in dict(metadata.get("halts_by_pass", {})).items()
+        },
         keep_op_repr=metadata.get("keep_op_repr"),
         keep_module_repr=metadata.get("keep_module_repr"),
         history_size=int(metadata.get("history_size", 0)),

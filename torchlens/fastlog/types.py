@@ -273,6 +273,9 @@ class Recording:
     keep_op_repr: str | None
     keep_module_repr: str | None
     history_size: int
+    halted: bool = False
+    halt_reason: str | None = None
+    halts_by_pass: dict[int, str] = field(default_factory=dict)
     grad_records: list[GradientRecord] = field(default_factory=list)
     grad_by_pass: dict[int, list[int]] = field(default_factory=dict)
     grad_by_label: dict[str, list[int]] = field(default_factory=dict)
@@ -442,6 +445,13 @@ class Recording:
             This recording, mutated with gradient records.
         """
 
+        if self.halted:
+            from .exceptions import RecorderStateError
+
+            raise RecorderStateError(
+                f"Cannot call log_backward on halted Recording (halt_reason={self.halt_reason!r})."
+            )
+
         from ..backends.torch.backward import log_recording_backward
 
         return log_recording_backward(
@@ -531,6 +541,26 @@ class Recording:
         from ..postprocess.incremental import enrich_recording
 
         return enrich_recording(self, steps)
+
+
+def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:
+    """Set halt state on a frozen ``Recording``.
+
+    Parameters
+    ----------
+    recording:
+        Recording to mutate via ``object.__setattr__``.
+    pass_index:
+        Recorder pass index that observed the halt.
+    reason:
+        User-supplied halt reason. Empty string means no reason was provided.
+    """
+
+    recording.halts_by_pass.setdefault(pass_index, reason)
+    if recording.halted:
+        return
+    object.__setattr__(recording, "halted", True)
+    object.__setattr__(recording, "halt_reason", reason)
 
 
 def build_grad_record_context(
