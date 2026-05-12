@@ -275,7 +275,12 @@ def _process_parent_param_ops(
     return parent_param_ops
 
 
-def _make_raw_param_group_barcode(indiv_param_barcodes: list[str], layer_type: str) -> str:
+def _make_raw_param_group_barcode(
+    indiv_param_barcodes: list[str],
+    layer_type: str,
+    *,
+    output_index: int | None = None,
+) -> str:
     """Build an equivalence_class string for a parameterized operation.
 
     Combines the layer type with sorted parameter barcodes to produce a
@@ -288,14 +293,24 @@ def _make_raw_param_group_barcode(indiv_param_barcodes: list[str], layer_type: s
 
     Example: ``"conv2d_abc123_def456"``
 
-    Args:
-        indiv_param_barcodes: Barcodes for each parameter tensor.
-        layer_type: The normalized operation name.
+    Parameters
+    ----------
+    indiv_param_barcodes:
+        Barcodes for each parameter tensor.
+    layer_type:
+        The normalized operation name.
+    output_index:
+        Zero-based output index for iterable or structured multi-output
+        operations, or ``None`` for single-output operations.
 
-    Returns:
+    Returns
+    -------
+    str
         Canonical fingerprint string for this parameterized operation.
     """
     param_group_barcode = f"{layer_type}_{'_'.join(sorted(indiv_param_barcodes))}"
+    if output_index is not None:
+        param_group_barcode += f"_outindex{output_index}"
     return param_group_barcode
 
 

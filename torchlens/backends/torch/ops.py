@@ -1442,6 +1442,7 @@ def _build_shared_fields_dict(
         fields_dict["kwargs_template"] = None
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
+    fields_dict["multi_output_role"] = None
 
     # Grad info
     fields_dict["grad"] = None
@@ -1592,8 +1593,8 @@ def log_function_output_tensors_exhaustive(
         func_call_id,
     )
 
-    if getattr(self, "intervention_ready", False):
-        out_iter = list(_walk_output_tensors_with_paths(out_orig))
+    out_iter = list(_walk_output_tensors_with_paths(out_orig))
+    if out_iter:
         autograd_saved_stats = _get_autograd_saved_stats_by_output_entries(out_iter)
     else:
         out_iter = [(out, (), None) for out in ensure_iterable(out_orig)]
@@ -2148,7 +2149,12 @@ def _log_output_tensor_info(
         # Parameterized ops: equivalence is defined by the exact set of parameters
         # used, combined with the operation type.  E.g., two conv2d calls using the
         # same weight+bias tensors are the same layer on different ops.
-        equivalence_class = _make_raw_param_group_barcode(indiv_param_barcodes, layer_type)
+        output_index = i if fields_dict["is_part_of_iterable_output"] else None
+        equivalence_class = _make_raw_param_group_barcode(
+            indiv_param_barcodes,
+            layer_type,
+            output_index=output_index,
+        )
         base_equivalence_class = equivalence_class
         self.layers_with_params[equivalence_class].append(_label_raw)
         fields_dict["call_index"] = len(self.layers_with_params[equivalence_class])
