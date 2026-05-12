@@ -1,109 +1,85 @@
-# Phase P7 BLOCK -- Final wrap-up
+# Phase P7 DONE -- Final Wrap-Up
 
-blocked_at: 2026-05-12T06:53:44-04:00
+completed_at: 2026-05-12T08:10:00-04:00
 branch: codex/backward-parity-P1-alpha3
-head_before_p7_block_update: 20b7fd0cc357001915f569f202c5af2ca2d784ad
-commits_since_main_before_p7_block_update: 31
-files_touched_since_main_before_p7_block_update: 65
-loc_delta_before_p7_block_update: 5714 insertions(+), 260 deletions(-)
-ready_for_review_merge: no
-suggested_merge_strategy: blocked until T2 is green
+head_before_this_done_doc_commit: 5a5fd53
+ready_for_review_merge: yes
+suggested_merge_strategy: fast-forward
 
-## Result
+## Final Gate Results
 
-P7 did not declare the sprint done. The required T2 gate failed on the first
-command, so the remaining wrap-up tasks were intentionally skipped per the P7
-instruction: "If ANY test fails, STOP and write a BLOCK note instead of
-declaring the sprint done."
+- `pytest tests/ -m "not slow" -x --tb=short`
+  - PASS: 2165 passed, 24 skipped, 209 deselected, 2 xfailed, 934 warnings
+    in 579.58s.
+- `ruff check torchlens/ --fix`
+  - PASS: All checks passed.
+- `mypy torchlens/`
+  - PASS: Success, no issues found in 199 source files.
+- `pytest tests/ -m smoke -x --tb=short`
+  - PASS: 194 passed, 2206 deselected, 117 warnings in 19.43s.
 
-## T2 gate
+Total T2 pass count: 2165.
 
-Command:
+## Branch Metrics
 
-```bash
-pytest tests/ -m "not slow" -x --tb=short
-```
+- Commits since `main` before this DONE-doc commit: 41.
+- Files touched since `main` before this DONE-doc commit: 77.
+- LOC delta before this DONE-doc commit: 77 files changed, 6237 insertions(+),
+  277 deletions(-).
+- Public package version: unchanged 2.x.x.
+- PR creation: skipped per instruction.
 
-Result: FAIL.
+## Phase One-Liners
 
-Pytest collected 2399 items, deselected 209, skipped 1, and selected 2190.
-It stopped after 1 failure:
+- P1: Finished alpha.3 capture by adding `LiveOpRecord` IR projections,
+  postprocess Step 0 materialization, `is_intervening`, and AccumulateGrad
+  capture-time attribution.
+- P2: Hardened `validate_backward_pass` with deterministic seed plumbing,
+  state_dict restore, grad clearing, train-mode fixtures, and backward metadata
+  invariants.
+- P3: Added `Trace.draw_combined` and combined forward/backward graph rendering
+  with module-aware backward clustering and sample artifacts.
+- P4: Added backward selector DSL and helper dispatch for grad_fn sites,
+  including `tl.grad_fn`, `tl.intervening`, `tl.grad_fn_label`,
+  `grad_clip`, `grad_noise`, and `grad_clamp`.
+- P5: Added `gradient_postfunc`, fastlog backward gradient capture, and
+  `aggregate(target="grad", loss_fn=...)` with streaming norm stats.
+- P6: Added backward tap/span observer support, backward bundle visualization
+  regression coverage, and the AD-32 per-layer-grad oracle follow-up.
+- P7: Re-ran T2, consolidated CHANGELOG, wrote SUMMARY, marked sprint state
+  DONE, and generated the final combined-viz sample PDF.
 
-```text
-tests/test_api_surface.py::test_all_size_exactly_40
-FAILED: AssertionError: assert 46 == 40
-```
+## Artifacts
 
-Full failure excerpt:
+- Sprint summary: `.research/backward-parity-sprint_SUMMARY.md`.
+- Sprint state: `.research/backward-parity-sprint_STATE.md`.
+- Final sample PDF:
+  `/home/jtaylor/.claude/drops/backward-parity-final-sample.pdf`.
 
-```text
-___________________________ test_all_size_exactly_40 ___________________________
-tests/test_api_surface.py:82: in test_all_size_exactly_40
-    assert len(torchlens.__all__) == 40
-E   AssertionError: assert 46 == 40
-E    +  where 46 = len(['trace', 'fastlog', 'load', 'save', 'do', 'replay', ...])
-E    +    where ['trace', 'fastlog', 'load', 'save', 'do', 'replay', ...] = torchlens.__all__
-```
+## Deferred Items
 
-Final pytest summary:
-
-```text
-===== 1 failed, 74 passed, 1 skipped, 209 deselected, 66 warnings in 2.13s =====
-```
-
-The current top-level `torchlens.__all__` has 46 names. The six sprint-added
-public names causing the budget mismatch are:
-
-```text
-grad_fn
-intervening
-grad_fn_label
-grad_clip
-grad_noise
-grad_clamp
-```
-
-The remaining T2 commands were not run because the first T2 gate failed:
-
-```bash
-ruff check torchlens/ --fix
-mypy torchlens/
-```
-
-## Tasks not performed
-
-- CHANGELOG consolidation was not performed.
-- `.research/backward-parity-sprint_SUMMARY.md` was not written.
-- `.research/backward-parity-sprint_STATE.md` was not marked DONE.
-- Optional sample gallery refresh was not performed.
-- Final review/merge readiness was not declared.
-
-## Phase summaries from prior commits
-
-- P1: LiveOpRecord IR and postprocess Step 0 materialization, including the
-  `has_op` to `is_intervening` rename and AccumulateGrad attribution support.
-- P2: Backward validation metadata plumbing and related public API forwarding.
-- P3: Combined forward/backward visualization groundwork and attribution for
-  backward graph display.
-- P4: Backward selector DSL and gradient helper parity.
-- P5: Fastlog backward gradient capture, `gradient_postfunc` aliasing, and
-  `aggregate(target="grad", loss_fn=...)` support.
-- P6: Observer direction support, backward bundle visualization regression
-  coverage, validation hardening, and deferred per-layer-grad oracle tracking.
-- P7B: Restored train-mode `out_postfunc` validation after the earlier P7 block,
-  but the full T2 rerun is now blocked by API-surface budget drift.
+- AD-32 per-layer-gradient oracle.
+- Unified backward bundle supergraph beyond existing per-member coverage.
+- Cleanup of unrelated dirty notebook syntax so full-repo `ruff check . --fix`
+  can run without scope exceptions.
 
 ## Assumptions
 
-- I treated the T2 failure-stop instruction as stronger than the wrap-up
-  instruction, because marking the sprint DONE after a known non-slow failure
-  would be misleading.
-- I did not modify or revert unrelated dirty work already present in the
-  worktree.
+- I treated the current P7C-green branch plus the final P7 rerun as sufficient
+  to declare DONE.
+- Existing unrelated dirty/untracked files were left untouched and were not
+  staged into P7 commits.
 
-## Suggested next step
+## Concerns
 
-Decide whether the Phase 1a top-level API budget should remain exactly 40 or
-be updated to include the six backward-parity public names. Then rerun the full
-P7 T2 command sequence before resuming changelog, summary, STATE DONE, and final
-branch review notes.
+- No blocking concerns for review/merge.
+- Full-repo `ruff check . --fix` was not used as the final gate because P7
+  explicitly required `ruff check torchlens/ --fix`, and earlier phase docs
+  identify an unrelated dirty notebook syntax issue outside this sprint scope.
+
+## Knowledge
+
+- The final non-slow suite now covers the backward-parity surface at scale:
+  API budget update, failed partial-trace materialization, streaming strict
+  capture writes, fastlog backward gradients, observer backward taps, combined
+  visualization, and validation hardening all ran in the same T2 pass.
