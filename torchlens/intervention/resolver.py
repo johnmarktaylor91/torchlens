@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 import importlib
 import operator
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 import warnings
 
 import torch
@@ -17,16 +17,29 @@ from .errors import (
     SiteAmbiguityError,
     SiteResolutionError,
 )
-from .selectors import BaseSelector, CompositeSelector, NotSelector, in_module
+from .selectors import (
+    BaseSelector,
+    CompositeSelector,
+    NotSelector,
+    _classify_selector_direction,
+    in_module,
+)
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 
 if TYPE_CHECKING:
     import pandas as pd
 
+    from torchlens.data_classes.grad_fn_log import GradFnLog
+    from torchlens.data_classes.layer_log import LayerLog
     from torchlens.data_classes.op_log import OpLog
     from torchlens.data_classes.model_log import Trace
 
 SelectorInput = BaseSelector | TargetSpec | FrozenTargetSpec | str
+if TYPE_CHECKING:
+    Site: TypeAlias = OpLog | LayerLog | GradFnLog
+else:
+    Site: TypeAlias = Any
+DIRECTION_AGNOSTIC_KINDS = frozenset({"label", "in_module", "module", "contains", "predicate"})
 
 
 def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionRegistryKey:
@@ -115,7 +128,7 @@ def resolve_function_registry_key(key: FunctionRegistryKey) -> Callable[..., Any
 class SiteTable:
     """Result of resolving a selector; ordered, indexable, dataframe-convertible."""
 
-    _sites: tuple["OpLog", ...]
+    _sites: tuple[Site, ...]
     query: Any | None = None
 
     def __len__(self) -> int:
@@ -129,7 +142,7 @@ class SiteTable:
 
         return len(self._sites)
 
-    def __iter__(self) -> Iterator["OpLog"]:
+    def __iter__(self) -> Iterator[Site]:
         """Iterate through resolved sites in execution order.
 
         Returns
@@ -140,7 +153,7 @@ class SiteTable:
 
         return iter(self._sites)
 
-    def __getitem__(self, idx: int | slice) -> "OpLog | SiteTable":
+    def __getitem__(self, idx: int | slice) -> "Site | SiteTable":
         """Return one site or a sliced site table.
 
         Parameters
@@ -178,7 +191,7 @@ class SiteTable:
         prefix = ", ".join(labels[:3])
         return f"SiteTable({count} sites: {prefix}, ... {labels[-1]})"
 
-    def where(self, predicate: Callable[["OpLog"], bool]) -> "SiteTable":
+    def where(self, predicate: Callable[[Site], bool]) -> "SiteTable":
         """Filter the table with a predicate.
 
         Parameters
@@ -194,7 +207,7 @@ class SiteTable:
 
         return SiteTable(tuple(site for site in self._sites if predicate(site)), query=self.query)
 
-    def first(self) -> "OpLog":
+    def first(self) -> Site:
         """Return the first resolved site.
 
         Returns
@@ -221,7 +234,16 @@ class SiteTable:
             Stable layer labels.
         """
 
-        return tuple(str(site.layer_label) for site in self._sites)
+        return tuple(
+            str(
+                getattr(
+                    site,
+                    "layer_label",
+                    getattr(site, "label", "<unknown>"),
+                )
+            )
+            for site in self._sites
+        )
 
     def to_dataframe(self) -> "pd.DataFrame":
         """Return a pandas table describing resolved sites.
@@ -240,16 +262,16 @@ class SiteTable:
 
         rows = [
             {
-                "layer_label": site.layer_label,
-                "layer_label_w_pass": site.layer_label_w_pass,
-                "layer_label_no_pass": site.layer_label_no_pass,
-                "call_index": site.call_index,
-                "compute_index": site.compute_index,
-                "capture_index": site.capture_index,
-                "func_name": site.func_name,
-                "module": site.module,
-                "modules": site.modules,
-                "output_of_module_calls": site.output_of_module_calls,
+                "layer_label": getattr(site, "layer_label", getattr(site, "label", None)),
+                "layer_label_w_pass": getattr(site, "layer_label_w_pass", None),
+                "layer_label_no_pass": getattr(site, "layer_label_no_pass", None),
+                "call_index": getattr(site, "call_index", None),
+                "compute_index": getattr(site, "compute_index", None),
+                "capture_index": getattr(site, "capture_index", None),
+                "func_name": getattr(site, "func_name", getattr(site, "name", None)),
+                "module": getattr(site, "module", None),
+                "modules": getattr(site, "modules", ()),
+                "output_of_module_calls": getattr(site, "output_of_module_calls", ()),
             }
             for site in self._sites
         ]
@@ -299,8 +321,10 @@ def resolve_sites(
             "tl.func(...), or another typed selector."
         )
 
-    sites = tuple(_iter_layer_ops(log))
-    matched = _resolve_unchecked(sites, query, strict=strict)
+    selector = _normalize_query(query)
+    direction = _selector_resolution_direction(selector)
+    sites = tuple(_iter_sites(log, direction))
+    matched = _resolve_unchecked(sites, selector, strict=strict)
     if not matched:
         raise SiteResolutionError(
             f"selector {query!r} matched 0 sites. Use log.find_sites(...) to discover labels."
@@ -345,7 +369,26 @@ def find_sites(
         Ordered table of resolved sites.
     """
 
-    return resolve_sites(log, query, strict=strict, max_fanout=max_fanout)
+    if max_fanout is None:
+        raise SiteResolutionError("max_fanout=None is not supported; pass an explicit integer.")
+    if max_fanout < 1:
+        raise SiteAmbiguityError("max_fanout must be at least 1.")
+    if strict and isinstance(query, str):
+        raise SiteResolutionError(
+            "Bare strings are non-portable in strict mode; use tl.label(...), "
+            "tl.func(...), or another typed selector."
+        )
+
+    selector = _normalize_query(query)
+    direction = _selector_resolution_direction(selector)
+    sites = tuple(_iter_sites(log, direction))
+    matched = _resolve_unchecked(sites, selector, strict=strict)
+    if len(matched) > max_fanout:
+        raise SiteAmbiguityError(
+            f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
+            "Pass a larger max_fanout explicitly or use a narrower selector."
+        )
+    return SiteTable(matched, query=query)
 
 
 def _iter_layer_ops(log: "Trace") -> Sequence["OpLog"]:
@@ -372,12 +415,35 @@ def _iter_layer_ops(log: "Trace") -> Sequence["OpLog"]:
     return log.layer_list
 
 
+def _iter_sites(log: "Trace", direction: Literal["forward", "backward"]) -> Sequence[Site]:
+    """Return candidate sites for the requested graph direction.
+
+    Parameters
+    ----------
+    log:
+        Model log to inspect.
+    direction:
+        Site universe to return.
+
+    Returns
+    -------
+    Sequence[Site]
+        Forward op sites or backward grad_fn sites.
+    """
+
+    if direction == "forward":
+        return _iter_layer_ops(log)
+    if not getattr(log, "has_backward_pass", False):
+        raise SiteResolutionError("Backward selectors require log_backward() to run first.")
+    return tuple(log.grad_fn_logs.values())
+
+
 def _resolve_unchecked(
-    sites: Sequence["OpLog"],
+    sites: Sequence[Site],
     query: SelectorInput,
     *,
     strict: bool,
-) -> tuple["OpLog", ...]:
+) -> tuple[Site, ...]:
     """Resolve without zero/multi fanout validation.
 
     Parameters
@@ -406,34 +472,187 @@ def _resolve_unchecked(
 
     if kind == "and" and isinstance(selector, CompositeSelector):
         left, right = selector.selectors
-        left_sites = set(_resolve_unchecked(sites, left, strict=strict))
-        right_sites = set(_resolve_unchecked(sites, right, strict=strict))
-        return tuple(site for site in sites if site in left_sites and site in right_sites)
+        left_site_ids = {id(site) for site in _resolve_unchecked(sites, left, strict=strict)}
+        right_site_ids = {id(site) for site in _resolve_unchecked(sites, right, strict=strict)}
+        return tuple(
+            site for site in sites if id(site) in left_site_ids and id(site) in right_site_ids
+        )
     if kind == "or" and isinstance(selector, CompositeSelector):
         left, right = selector.selectors
-        left_sites = set(_resolve_unchecked(sites, left, strict=strict))
-        right_sites = set(_resolve_unchecked(sites, right, strict=strict))
-        return tuple(site for site in sites if site in left_sites or site in right_sites)
+        left_site_ids = {id(site) for site in _resolve_unchecked(sites, left, strict=strict)}
+        right_site_ids = {id(site) for site in _resolve_unchecked(sites, right, strict=strict)}
+        return tuple(
+            site for site in sites if id(site) in left_site_ids or id(site) in right_site_ids
+        )
     if kind == "not" and isinstance(selector, NotSelector):
-        excluded_sites = set(_resolve_unchecked(sites, selector.selector, strict=strict))
-        return tuple(site for site in sites if site not in excluded_sites)
+        excluded_site_ids = {
+            id(site) for site in _resolve_unchecked(sites, selector.selector, strict=strict)
+        }
+        return tuple(site for site in sites if id(site) not in excluded_site_ids)
 
     if kind == "label":
-        return tuple(site for site in sites if _label_matches(site, str(value)))
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "func":
-        return tuple(site for site in sites if site.func_name == value)
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "module":
-        return tuple(site for site in sites if _module_output_matches(site, str(value)))
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "contains":
-        lowered = str(value).lower()
-        return tuple(site for site in sites if lowered in str(site.layer_label).lower())
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "in_module":
-        return tuple(site for site in sites if bool(in_module(site, str(value))))
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "predicate":
-        predicate, _name_hint = _predicate_payload(value)
-        return tuple(site for site in sites if predicate(site))
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
+    if kind in {"grad_fn", "intervening", "grad_fn_label"}:
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
 
     raise SiteResolutionError(f"Unsupported selector kind {kind!r}.")
+
+
+def _selector_resolution_direction(query: SelectorInput) -> Literal["forward", "backward"]:
+    """Pick the resolver search universe for a selector query.
+
+    Parameters
+    ----------
+    query:
+        Selector query to inspect recursively.
+
+    Returns
+    -------
+    Literal["forward", "backward"]
+        Direction whose site universe should be searched.
+    """
+
+    selector = _normalize_query(query)
+
+    def _walk(sel: BaseSelector) -> tuple[bool, bool]:
+        """Return whether a selector tree contains backward or forward selectors."""
+
+        if isinstance(sel, CompositeSelector):
+            has_back = False
+            has_forward = False
+            for child in sel.selectors:
+                child_selector = _normalize_query(child)
+                child_back, child_forward = _walk(child_selector)
+                has_back = has_back or child_back
+                has_forward = has_forward or child_forward
+            return has_back, has_forward
+        if isinstance(sel, NotSelector):
+            return _walk(_normalize_query(sel.selector))
+        direction = _classify_selector_direction(sel)
+        return direction == "backward", direction == "forward"
+
+    has_backward, has_forward = _walk(selector)
+    if has_backward:
+        return "backward"
+    if has_forward:
+        return "forward"
+    return "forward"
+
+
+def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
+    """Return whether one site matches a simple selector kind.
+
+    Parameters
+    ----------
+    site:
+        Candidate forward or backward site.
+    kind:
+        Selector kind.
+    value:
+        Selector payload.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches.
+    """
+
+    from torchlens.data_classes.grad_fn_log import GradFnLog
+
+    if isinstance(site, GradFnLog):
+        if kind in DIRECTION_AGNOSTIC_KINDS:
+            if site.op is None:
+                return False
+            return _resolve_site_kind(site.op, kind, value)
+        return _resolve_grad_fn_kind(site, kind, value)
+
+    if kind == "label":
+        return _label_matches(site, str(value))
+    if kind == "func":
+        return site.func_name == value
+    if kind == "module":
+        return _module_output_matches(site, str(value))
+    if kind == "contains":
+        return str(value).lower() in str(site.layer_label).lower()
+    if kind == "in_module":
+        return bool(in_module(site, str(value)))
+    if kind == "predicate":
+        predicate, _name_hint = _predicate_payload(value)
+        return bool(predicate(site))
+    return False
+
+
+def _resolve_grad_fn_kind(site: "GradFnLog", kind: str, value: Any) -> bool:
+    """Return whether one grad_fn site matches a backward-only selector.
+
+    Parameters
+    ----------
+    site:
+        Candidate grad_fn log.
+    kind:
+        Backward selector kind.
+    value:
+        Selector payload.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches.
+    """
+
+    if kind == "intervening":
+        return site.op is None or bool(site.is_intervening)
+    if kind == "grad_fn_label":
+        return site.label == str(value)
+    if kind == "grad_fn":
+        payload = value if isinstance(value, dict) else {}
+        grad_fn_type = payload.get("grad_fn_type")
+        label_pattern = payload.get("grad_fn_label_pattern")
+        is_custom = payload.get("is_custom")
+        if grad_fn_type is not None and not _grad_fn_type_matches(site, str(grad_fn_type)):
+            return False
+        if label_pattern is not None and str(label_pattern) not in site.label:
+            return False
+        if is_custom is not None and bool(site.is_custom) is not bool(is_custom):
+            return False
+        return True
+    return False
+
+
+def _grad_fn_type_matches(site: "GradFnLog", requested: str) -> bool:
+    """Return whether a grad_fn type matches user spelling flexibly.
+
+    Parameters
+    ----------
+    site:
+        Candidate grad_fn log.
+    requested:
+        Requested type string.
+
+    Returns
+    -------
+    bool
+        Whether class name or normalized type matches.
+    """
+
+    lowered = requested.lower()
+    normalized = lowered.removesuffix("backward0").removesuffix("backward")
+    candidates = {
+        site.name.lower(),
+        site.grad_fn_type.lower(),
+        site.label.lower(),
+    }
+    return lowered in candidates or normalized in candidates
 
 
 def _normalize_query(query: SelectorInput) -> BaseSelector:
@@ -490,7 +709,7 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         Selector matching the target spec.
     """
 
-    from .selectors import contains, func, label, module, where
+    from .selectors import contains, func, grad_fn, grad_fn_label, intervening, label, module, where
 
     if kind == "label":
         return label(str(value))
@@ -508,13 +727,24 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
             return selector
     if kind == "predicate" and callable(value):
         return where(value, name_hint=metadata.get("name_hint"))
+    if kind == "grad_fn":
+        payload = dict(value)
+        return grad_fn(
+            payload.get("grad_fn_type"),
+            label=payload.get("grad_fn_label_pattern"),
+            is_custom=payload.get("is_custom"),
+        )
+    if kind == "intervening":
+        return intervening()
+    if kind == "grad_fn_label":
+        return grad_fn_label(str(value))
     if kind == "not":
         nested = _normalize_query(value)
         return ~nested
     raise SiteResolutionError(f"Unsupported target spec selector kind {kind!r}.")
 
 
-def _label_matches(site: "OpLog", label: str) -> bool:
+def _label_matches(site: Any, label: str) -> bool:
     """Return whether a layer-pass record has a requested label.
 
     Parameters
@@ -531,18 +761,18 @@ def _label_matches(site: "OpLog", label: str) -> bool:
     """
 
     candidate_labels = (
-        site.layer_label,
-        site.layer_label_w_pass,
-        site.layer_label_no_pass,
-        site.layer_label_short,
-        site.layer_label_w_pass_short,
-        site.layer_label_no_pass_short,
-        site._layer_label_raw,
+        getattr(site, "layer_label", None),
+        getattr(site, "layer_label_w_pass", None),
+        getattr(site, "layer_label_no_pass", None),
+        getattr(site, "layer_label_short", None),
+        getattr(site, "layer_label_w_pass_short", None),
+        getattr(site, "layer_label_no_pass_short", None),
+        getattr(site, "_layer_label_raw", None),
     )
-    return label in candidate_labels or label in site.lookup_keys
+    return label in candidate_labels or label in getattr(site, "lookup_keys", ())
 
 
-def _module_output_matches(site: "OpLog", address: str) -> bool:
+def _module_output_matches(site: Any, address: str) -> bool:
     """Return whether a layer pass is the output boundary for a module.
 
     Parameters
@@ -582,7 +812,7 @@ def _module_label_matches(module_pass: str, address: str) -> bool:
     return module_pass == address or module_address == address
 
 
-def _predicate_payload(value: Any) -> tuple[Callable[["OpLog"], bool], str | None]:
+def _predicate_payload(value: Any) -> tuple[Callable[[Any], bool], str | None]:
     """Validate and unpack a predicate selector payload.
 
     Parameters
@@ -610,4 +840,4 @@ def _predicate_payload(value: Any) -> tuple[Callable[["OpLog"], bool], str | Non
     raise SiteResolutionError("tl.where(...) requires a callable predicate.")
 
 
-__all__ = ["SiteTable", "find_sites", "resolve_sites"]
+__all__ = ["SiteTable", "_selector_resolution_direction", "find_sites", "resolve_sites"]

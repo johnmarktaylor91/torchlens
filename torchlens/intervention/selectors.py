@@ -18,6 +18,9 @@ SelectorKind: TypeAlias = Literal[
     "and",
     "or",
     "not",
+    "grad_fn",
+    "intervening",
+    "grad_fn_label",
 ]
 
 
@@ -42,6 +45,7 @@ class BaseSelector:
             Intersection selector.
         """
 
+        _check_composition(self, other)
         return CompositeSelector("and", (self, other))
 
     def __or__(self, other: SelectorLike) -> "CompositeSelector":
@@ -58,6 +62,7 @@ class BaseSelector:
             Union selector.
         """
 
+        _check_composition(self, other)
         return CompositeSelector("or", (self, other))
 
     def __invert__(self) -> "NotSelector":
@@ -312,6 +317,85 @@ class InModuleSelector(BaseSelector):
 
 
 @dataclass(frozen=True, repr=False)
+class GradFnSelector(BaseSelector):
+    """Backward-only selector against grad_fn type, label pattern, or custom flag."""
+
+    grad_fn_type: str | None = None
+    grad_fn_label_pattern: str | None = None
+    is_custom: bool | None = None
+    direction: Literal["backward"] = "backward"
+
+    def __init__(
+        self,
+        grad_fn_type: str | type[Any] | None = None,
+        *,
+        label: str | None = None,
+        is_custom: bool | None = None,
+    ) -> None:
+        """Create a grad_fn selector.
+
+        Parameters
+        ----------
+        grad_fn_type:
+            Autograd class name or normalized grad_fn type to match.
+        label:
+            Substring to match against the grad_fn label.
+        is_custom:
+            Optional custom-autograd predicate.
+        """
+
+        if grad_fn_type is not None and not isinstance(grad_fn_type, str):
+            grad_fn_type = grad_fn_type.__name__
+        payload = {
+            "grad_fn_type": grad_fn_type,
+            "grad_fn_label_pattern": label,
+            "is_custom": is_custom,
+        }
+        object.__setattr__(self, "selector_kind", "grad_fn")
+        object.__setattr__(self, "selector_value", payload)
+        object.__setattr__(self, "grad_fn_type", grad_fn_type)
+        object.__setattr__(self, "grad_fn_label_pattern", label)
+        object.__setattr__(self, "is_custom", is_custom)
+        object.__setattr__(self, "direction", "backward")
+
+
+@dataclass(frozen=True, repr=False)
+class InterveningSelector(BaseSelector):
+    """Backward-only selector matching grad_fns with no paired forward op."""
+
+    direction: Literal["backward"] = "backward"
+
+    def __init__(self) -> None:
+        """Create an intervening-grad_fn selector."""
+
+        object.__setattr__(self, "selector_kind", "intervening")
+        object.__setattr__(self, "selector_value", None)
+        object.__setattr__(self, "direction", "backward")
+
+
+@dataclass(frozen=True, repr=False)
+class GradFnLabelSelector(BaseSelector):
+    """Backward-only selector matching a grad_fn label exactly."""
+
+    grad_fn_label: str
+    direction: Literal["backward"] = "backward"
+
+    def __init__(self, name: str) -> None:
+        """Create an exact grad_fn label selector.
+
+        Parameters
+        ----------
+        name:
+            GradFnLog label to match.
+        """
+
+        object.__setattr__(self, "selector_kind", "grad_fn_label")
+        object.__setattr__(self, "selector_value", name)
+        object.__setattr__(self, "grad_fn_label", name)
+        object.__setattr__(self, "direction", "backward")
+
+
+@dataclass(frozen=True, repr=False)
 class CompositeSelector(BaseSelector):
     """Selector composed with ``&`` or ``|``.
 
@@ -516,6 +600,61 @@ def where(predicate: Callable[[Any], bool], *, name_hint: str | None = None) -> 
     return WhereSelector(predicate, name_hint=name_hint)
 
 
+def grad_fn(
+    type: str | type[Any] | None = None,
+    *,
+    label: str | None = None,
+    is_custom: bool | None = None,
+) -> GradFnSelector:
+    """Create a backward grad_fn selector.
+
+    Parameters
+    ----------
+    type:
+        Autograd class name or normalized grad_fn type to match.
+    label:
+        Substring to match against the grad_fn label.
+    is_custom:
+        Optional custom-autograd predicate.
+
+    Returns
+    -------
+    GradFnSelector
+        Immutable selector.
+    """
+
+    return GradFnSelector(type, label=label, is_custom=is_custom)
+
+
+def intervening() -> InterveningSelector:
+    """Create a selector for grad_fns without a paired forward op.
+
+    Returns
+    -------
+    InterveningSelector
+        Immutable selector.
+    """
+
+    return InterveningSelector()
+
+
+def grad_fn_label(name: str) -> GradFnLabelSelector:
+    """Create an exact grad_fn-label selector.
+
+    Parameters
+    ----------
+    name:
+        GradFnLog label to match.
+
+    Returns
+    -------
+    GradFnLabelSelector
+        Immutable selector.
+    """
+
+    return GradFnLabelSelector(name)
+
+
 @overload
 def in_module(address_or_layer: str) -> InModuleSelector:
     """Create a module-containment selector.
@@ -599,12 +738,90 @@ def _module_pass_matches(module_pass: str, address: str) -> bool:
     return module_pass == address or module_address == address
 
 
+def _classify_selector_direction(
+    sel: SelectorLike,
+) -> Literal["forward", "backward"] | None:
+    """Return the selector's graph-direction taxonomy bucket.
+
+    Parameters
+    ----------
+    sel:
+        Selector to classify.
+
+    Returns
+    -------
+    Literal["forward", "backward"] | None
+        Explicit graph direction, or None for direction-agnostic selectors.
+    """
+
+    from .errors import UnclassifiedSelectorError
+
+    if isinstance(sel, TargetSpec):
+        kind = sel.selector_kind
+        if kind in {"grad_fn", "intervening", "grad_fn_label"}:
+            return "backward"
+        if kind == "func":
+            return "forward"
+        if kind in {"label", "module", "contains", "predicate", "in_module", "and", "or", "not"}:
+            return None
+    if isinstance(sel, (GradFnSelector, InterveningSelector, GradFnLabelSelector)):
+        return "backward"
+    if isinstance(sel, FuncSelector):
+        return "forward"
+    if isinstance(
+        sel,
+        (
+            LabelSelector,
+            ModuleSelector,
+            ContainsSelector,
+            WhereSelector,
+            InModuleSelector,
+            CompositeSelector,
+            NotSelector,
+        ),
+    ):
+        return None
+    raise UnclassifiedSelectorError(
+        f"{type(sel).__name__} has no direction classification; add an explicit bucket."
+    )
+
+
+def _check_composition(a: SelectorLike, b: SelectorLike) -> None:
+    """Validate that two selectors can be composed.
+
+    Parameters
+    ----------
+    a:
+        Left selector.
+    b:
+        Right selector.
+
+    Returns
+    -------
+    None
+        Raises when composition is invalid.
+    """
+
+    from .errors import SelectorCompositionError
+
+    a_dir = _classify_selector_direction(a)
+    b_dir = _classify_selector_direction(b)
+    if a_dir is not None and b_dir is not None and a_dir != b_dir:
+        raise SelectorCompositionError(
+            "Cross-graph composition not supported: a forward selector and a backward "
+            "selector cannot be combined. Use separate forward and backward hook sites."
+        )
+
+
 __all__ = [
     "BaseSelector",
     "CompositeSelector",
     "ContainsSelector",
     "FuncSelector",
+    "GradFnLabelSelector",
+    "GradFnSelector",
     "InModuleSelector",
+    "InterveningSelector",
     "LabelSelector",
     "ModuleSelector",
     "NotSelector",
@@ -612,7 +829,10 @@ __all__ = [
     "WhereSelector",
     "contains",
     "func",
+    "grad_fn",
+    "grad_fn_label",
     "in_module",
+    "intervening",
     "label",
     "module",
     "where",

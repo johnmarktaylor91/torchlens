@@ -199,6 +199,14 @@ class SiteResolutionError(ConfigurationError, ValueError):
     """Raised when future selector resolution cannot identify requested sites."""
 
 
+class SelectorCompositionError(SiteResolutionError):
+    """Raised when selectors from incompatible graph directions are composed."""
+
+
+class UnclassifiedSelectorError(SiteResolutionError):
+    """Raised when a selector is missing an explicit direction taxonomy bucket."""
+
+
 class SiteAmbiguityError(SiteResolutionError):
     """Raised when a site query resolves too many sites for the surface."""
 
@@ -237,6 +245,10 @@ class HookValueError(InterventionError, ValueError):
 
 class HookSiteCoverageError(SiteResolutionError):
     """Raised when hook normalization cannot associate a hook with any site."""
+
+
+class HelperMountError(HookSiteCoverageError):
+    """Raised when a helper is mounted on an incompatible selector universe."""
 
 
 class LiveModeLabelError(SiteResolutionError):
@@ -282,6 +294,7 @@ __all__ = [
     "EngineDispatchError",
     "GraphShapeMismatchError",
     "HookSignatureError",
+    "HelperMountError",
     "HookSiteCoverageError",
     "HookValueError",
     "InterventionReadyConflictError",
@@ -297,10 +310,12 @@ __all__ = [
     "Severity",
     "SiteAmbiguityError",
     "SiteResolutionError",
+    "SelectorCompositionError",
     "SpecMutationError",
     "SpecPortabilityError",
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
     "TorchLensInterventionError",
     "TorchLensInterventionWarning",
+    "UnclassifiedSelectorError",
 ]
