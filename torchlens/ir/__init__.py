@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .backward import BackwardSidecar
-from .buffer import CaptureEvents
+from .buffer import CaptureEvents, LiveOpRecord, live_record_for_label, register_live_event
 from .events import (
     ArgTemplateRef,
     BlobRef,
@@ -43,6 +43,7 @@ __all__ = [
     "FunctionEventInput",
     "InterventionState",
     "InterventionTemplateRef",
+    "LiveOpRecord",
     "ModuleEvent",
     "ModuleFrame",
     "OpEvent",
@@ -54,4 +55,6 @@ __all__ = [
     "ReservedLabel",
     "TensorRef",
     "TraceBuildState",
+    "live_record_for_label",
+    "register_live_event",
 ]

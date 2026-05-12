@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+import weakref
 
 from .events import ConditionalEvent, ModuleEvent, OpEvent
 from .predicate import RecordContext
 from .refs import ParamRef, ReservedLabel
+
+if TYPE_CHECKING:
+    import torch
+
+    from .intervention import FireResult
 
 
 @dataclass(slots=False)
@@ -23,14 +30,24 @@ class CaptureEvents:
     func_call_id_counter: int = 0
     recent_events: deque[RecordContext] = field(default_factory=deque)
     backend_session: object | None = None
+    live_by_raw_label: dict[str, "LiveOpRecord"] = field(default_factory=dict)
+    op_event_by_label_raw: dict[str, OpEvent] = field(default_factory=dict)
+    parent_op_label_raws: dict[str, list[str]] = field(default_factory=dict)
+    child_op_label_raws: dict[str, list[str]] = field(default_factory=dict)
+    parent_param_label_raws: dict[str, list[str]] = field(default_factory=dict)
+    output_variations_by_label_raw: dict[str, list[tuple[Any, ...]]] = field(default_factory=dict)
+    replacement_template_by_label_raw: dict[str, str] = field(default_factory=dict)
+    module_stack_by_label_raw: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def append(self, event: OpEvent) -> None:
         """Append a single operation event."""
         self.op_events.append(event)
+        self.op_event_by_label_raw[event.label_raw] = event
 
     def extend(self, events: tuple[OpEvent, ...] | list[OpEvent]) -> None:
         """Append multiple operation events in order."""
-        self.op_events.extend(events)
+        for event in events:
+            self.append(event)
 
     def reserve_label(self, layer_type: str) -> ReservedLabel:
         """Reserve the next raw label for a single output site."""
@@ -61,3 +78,88 @@ class CaptureEvents:
             )
         self.raw_layer_type_counter[layer_type] = type_counter
         return tuple(labels)
+
+
+@dataclass(slots=True)
+class LiveOpRecord:
+    """Mutable capture-time projection for one raw op label.
+
+    Parameters
+    ----------
+    event
+        Capture event for this operation, if emitted.
+    fields
+        Mutable pre-postprocess field mapping used by live capture consumers.
+    tensor_ref
+        Weak reference to the live output tensor, when weak-referenceable.
+    t_args
+        Positional call arguments used for activation saving.
+    t_kwargs
+        Keyword call arguments used for activation saving.
+    fire_results
+        Intervention hook results recorded for this operation.
+    """
+
+    event: OpEvent | None
+    fields: dict[str, Any]
+    tensor_ref: "weakref.ReferenceType[torch.Tensor] | None"
+    t_args: tuple[Any, ...]
+    t_kwargs: dict[str, Any]
+    fire_results: "tuple[FireResult, ...]" = ()
+
+
+def register_live_event(trace: Any, event: OpEvent, live_record: LiveOpRecord) -> None:
+    """Register an event and its live projection on a trace.
+
+    Parameters
+    ----------
+    trace
+        Active trace receiving capture events.
+    event
+        Operation event emitted for the new raw label.
+    live_record
+        Mutable live projection for capture-time consumers.
+
+    Returns
+    -------
+    None
+        Mutates ``trace.capture_events``.
+    """
+
+    events = getattr(trace, "capture_events", None)
+    if events is None:
+        events = CaptureEvents()
+        trace.capture_events = events
+    live_record.event = event
+    events.append(event)
+    events.live_by_raw_label[event.label_raw] = live_record
+
+
+def live_record_for_label(trace: Any, label_raw: str) -> LiveOpRecord:
+    """Return the live capture projection for a raw label.
+
+    Parameters
+    ----------
+    trace
+        Active trace.
+    label_raw
+        Raw operation label.
+
+    Returns
+    -------
+    LiveOpRecord
+        Live projection for ``label_raw``.
+    """
+
+    events = getattr(trace, "capture_events", None)
+    if events is not None and label_raw in events.live_by_raw_label:
+        return events.live_by_raw_label[label_raw]
+    legacy_log = trace._raw_layer_dict[label_raw]
+    return LiveOpRecord(
+        event=getattr(events, "op_event_by_label_raw", {}).get(label_raw),
+        fields=legacy_log.__dict__,
+        tensor_ref=None,
+        t_args=(),
+        t_kwargs={},
+        fire_results=(),
+    )
