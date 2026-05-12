@@ -44,6 +44,7 @@ Deferred items are listed at the end instead of promoted as final API.
 - `root_trace`: Root Trace of a fork tree; `None` on the root itself.
 - `run_state`: Enum-like state indicator describing whether the Trace is pristine, rerun, appended, or directly modified.
 - `io_format_version`: Portable file format version used for save/load compatibility.
+- `_backend_name` (?): String tag identifying the capture backend, e.g. `"torch"` or `"mlx"`. Survives portable save/load. Underscore prefix indicates private; promotion to `backend_name` is a candidate for the rename pass.
 - `FIELD_DEFAULTS`: Class-level defaults applied at initialization and cleanup.
 - `FIELD_FORK_POLICY`: Class-level per-field policy for `fork()`.
 - `FIELD_SAVE_POLICY`: Class-level per-field policy for portable save/load.
@@ -149,6 +150,11 @@ Example: `trace.layers["conv2d_1_2"]` returns the Layer; `trace.ops["conv2d_1_2:
 - `model_source_location`: Combined `model_source_file:model_source_line` editor jump string.
 - `ledger`: Audit trail of fork, replay, rerun, and direct-write operations.
 - `last_run_ctx`: Inspectable context from the most recent replay or rerun operation.
+- `is_appended`: True when this Trace currently holds appended chunks. Cleared on non-append `rerun()`; preserved across `replace_run_state_from`.
+- `append_history`: List of per-append provenance dicts recording inputs, hashes, and metadata for each `rerun(append=True)` chunk.
+- `_append_sequence_id` (?): Monotonic id incremented on each append. Cleared on non-append rerun, preserved by `replace_run_state_from`. Underscore-prefixed but `FieldPolicy.KEEP` for save.
+- `_grad_fn_param_refs` (?): `dict[str, str]` mapping AccumulateGrad grad_fn labels to parameter addresses. Built at capture; `FieldPolicy.KEEP`. Used by visualization to annotate AccumulateGrad nodes with the parameter they accumulate into.
+- `_param_log_by_pid` (?): `dict[int, str]` mapping `id(param)` to parameter address at capture time. `FieldPolicy.DROP` (capture-time only). Used by backward capture to attribute grad_fns to parameter sinks.
 ### Capture Config
 - `save_raw_activations`: Whether raw untransformed activation tensors are saved.
 - `save_raw_gradients`: Whether raw untransformed gradient tensors are saved.
@@ -290,6 +296,7 @@ Intervention method names are intentionally not promoted as final here; the audi
 - `autograd_saved_memory_str`: Human-readable form of `autograd_saved_memory`.
 - `num_autograd_saved_tensors`: Number of tensors PyTorch autograd retained for this Op.
 - `multi_output_index`: 0-based position when this Op came from a multi-output call; `None` otherwise.
+- `multi_output_role` (?): Optional semantic role tag for this Op's position in a multi-output container (e.g., tuple element name or dict key). `None` when not from a multi-output call or when no role label was captured.
 - `is_multi_output`: True when `multi_output_index` is not `None`.
 ### Per-Op Config and Saved State
 - `output_device`: Device where saved tensors for this Op were placed.
@@ -560,6 +567,8 @@ These entries follow the single-Op passthrough rule: they read naturally on one-
 - `num_layers`: Number of Layers or Ops associated with this call.
 - `input_layers`: Pass-qualified input Layer labels for this call.
 - `output_layers`: Pass-qualified output Layer labels for this call.
+- `outputs`: List of `OpLog` records that are the actual outputs of this call. Stored alongside `output_layers` because the OpLog list captures structural information (container path, multi-output role) that string labels alone cannot.
+- `output_structure`: `ContainerSpec | None` describing the shape of the call's return container. Used by intervention rerun to rebuild tuple/dict/dataclass outputs.
 - `forward_args`: Positional arguments passed to `forward`.
 - `forward_kwargs`: Keyword arguments passed to `forward`.
 - `forward_args_summary`: Human-readable summary of forward positional arguments.
@@ -567,7 +576,7 @@ These entries follow the single-Op passthrough rule: they read naturally on one-
 - `call_parent`: Parent ModuleCall label in the dynamic call tree.
 - `call_children`: Child ModuleCall labels in the dynamic call tree.
 ### ModuleCall Output Passthroughs
-These properties resolve through the output Layers/Ops. Singular forms require exactly one output; plural forms return lists.
+These properties resolve through the output Layers/Ops. Singular forms require exactly one output and raise `MultiOutputModuleError` on multi-output calls; plural forms return lists in container-path order.
 - `out` / `outs`: Saved output tensor or output tensors.
 - `out_shape` / `out_shapes`: Output shape or shapes.
 - `out_dtype` / `out_dtypes`: Output dtype or dtypes.
@@ -655,6 +664,8 @@ The address tree is the static `nn.Module` registration hierarchy; the call tree
 - `num_layers`: Number of aggregate Layers inside this Module.
 - `input_layers`: Aggregate union of input Layers across this Module's calls.
 - `output_layers`: Aggregate union of output Layers across this Module's calls.
+- `outputs`: Aggregate list of `OpLog` outputs across this Module's calls.
+- `output_structure`: `ContainerSpec | None` for single-call Modules; reads through to the call's `output_structure`.
 ### Module Forward Args
 - `forward_args`: Positional args for a single-call Module; raises for multi-call Modules.
 - `forward_kwargs`: Keyword args for a single-call Module; raises for multi-call Modules.
@@ -803,7 +814,8 @@ These fields are best-effort introspection data; built-in PyTorch grad-fns may h
 - `has_co_parents`: True when this GradFn has co-parents.
 - `op_label`: Stable Op label corresponding to this GradFn, if one exists.
 - `op`: Op corresponding to `op_label`, if one exists.
-- `is_intervening`: True when a grad-fn node has no corresponding forward op.
+- `is_intervening`: True when a grad-fn node has no corresponding forward op. Replaces the legacy `has_op` field (now a deprecated property returning `not is_intervening`).
+- `has_op` (deprecated property): True when `op` is not None. Issues `DeprecationWarning`; prefer `not grad_fn.is_intervening`.
 ### GradFn Calls
 - `num_calls`: Number of times this GradFn hook fired.
 - `calls`: Scoped `GradFnCallAccessor` for this GradFn's calls.
@@ -919,6 +931,181 @@ SuperOp and SuperLayer are cross-member graph entities; plural tensor-map names 
 - Module aggregate rule: Module fields describe all calls unless explicitly documented as single-call passthrough.
 - ModuleCall rule: ModuleCall fields describe one invocation only.
 - GradFn aggregate rule: GradFn fields describe one autograd node; GradFnCall fields describe each hook firing.
+## Function and method signatures
+This section lists the signatures of the main public callables. Parameter names
+follow current implementation; some are explicitly slated for renaming and are
+flagged. Keyword-only arguments appear after the `*` marker, matching Python
+syntax.
+### Top-level capture
+- `tl.trace(model, input_args, input_kwargs=None, *, layers_to_save="all", transform=None, output_transform=None, layer_visualizers=None, save_visualizations=False, save_raw_input="small", save_raw_output="small", batch_render="auto", keep_unsaved_layers=False, keep_orphans=False, output_device="cpu", out_transform=None, grad_transform=None, gradient_postfunc=None, save_raw_outs=True, save_raw_grads=True, mark_layer_depths=False, detach_saved_activations=True, save_arg_values=True, save_grads=False, grads_to_save=None, save_code_context=True, save_rng_states=False, save_outs_to=None, keep_outs_in_memory=True, save_grads_to=None, keep_grads_in_memory=True, intervention_ready=False, hooks=None, unwrap_when_done=False, verbose=False, source_context_lines=2, compute_input_output_distances=True, recurrence_detection=True, capture=None, save=None, visualization=None, streaming=None, train_mode=False, name=None, cache=False, cache_dir=None, module_filter=None, stop_after=None, raise_on_nan=False, ...)`: Run a forward pass with capture and return a Trace. Parameters prefixed `vis_*` (e.g. `vis_outpath`, `vis_fileformat`, `vis_node_mode`, `vis_save_only`, `vis_direction`, `vis_graph_overrides`, `vis_edge_overrides`, `vis_grad_edge_overrides`, `vis_module_overrides`, `vis_node_placement`, `vis_renderer`, `vis_theme`, `vis_intervention_mode`, `vis_show_cone`, `vis_call_depth`, `vis_buffers`, `vis_mode`, `vis_opt`) are accepted but slated to drop the prefix; rename target deferred. Legacy aliases also accepted: `view`, `depth`, `renderer`, `layout`, `node_style`, `out_postfunc`. `gradient_postfunc` is a silent alias for `grad_transform` (the rename pass should pick one). MLX models dispatch to `MLXBackend`, which hard-rejects `intervention_ready=True`, pre-attached `hooks`, and `save_grads=True`.
+- `tl.peek(model, x, layer, stop_after=None)`: Return the saved out for one layer. Convenience over `trace()`.
+- `tl.extract(model, x, layers)`: Return saved outs for many layers. `layers` is an iterable of lookups or a `{user_label: lookup}` mapping.
+- `tl.batched_extract(model, stimuli, layers, batch_size=32, device=None, output_dir=None, postfunc=None, progress=True)`: Extract outs from a batched stimulus set.
+- `tl.fastlog.record(model, input_args, input_kwargs=None, *, keep_op=None, keep_module=None, default_op=MISSING, default_module=MISSING, history_size=8, include_source_events=False, max_predicate_failures=32, on_predicate_error="auto", streaming=None, return_output=False, postprocess="none", random_seed=None, out_transform=None, save_raw_outs=True, train_mode=False)`: Predicate-driven sparse capture, returns a `Recording`. If a predicate calls `tl.halt(reason)`, the recording stops at that pass; `Recording.halted`, `Recording.halt_reason`, and `Recording.halts_by_pass` capture the state.
+- `tl.fastlog.halt(reason="")`: Raise `HaltSignal` to halt the active fastlog recording at this predicate call site. Returns `NoReturn`.
+- `tl.fastlog.HaltSignal(BaseException)`: Signal class raised by `halt`. Inherits from `BaseException` so it bypasses generic `except Exception:` handlers in user predicates.
+- `tl.fastlog.Recorder.__enter__() -> Recorder`: Begin a fastlog rollout context. `Recorder.log_backward(loss, *, keep_grad=None, default_grad=None, retain_graph=None, create_graph=False)` runs backward for the active recorder and retains selected gradients. Returns the live `Recording`.
+- `Recording.log_backward(loss, *, keep_grad=None, default_grad=None, retain_graph=None, create_graph=False)`: Run backward on the captured forward, retaining selected gradients into `grad_records`. Raises `RecorderStateError` if the recording is halted.
+- `Recording.halted: bool`: True when the recording was stopped by `HaltSignal`.
+- `Recording.halt_reason: str | None`: Reason from the halt call site, or None.
+- `Recording.halts_by_pass: dict[int, str]`: Per-pass halt reasons for multi-pass recordings.
+- `Recording.grad_records: list[GradientRecord]`: Captured gradient records.
+- `Recording.grad_by_pass: dict[int, list[int]]`, `Recording.grad_by_label: dict[str, list[int]]`, `Recording.grad_by_grad_fn_label: dict[str, list[int]]`: Indexes into `grad_records`.
+- `Recording.keep_grad_repr: str | None`: Repr of the `keep_grad` predicate used.
+- `GradientRecord`: One captured backward gradient sample (analogue of `ActivationRecord`).
+- `GradRecordContext`: Predicate context object passed to `keep_grad` callables; mirrors `RecordContext` for the backward graph.
+### Save, load, validation, bundle construction
+- `tl.save(trace, path, *, level="portable", include_outs=True, include_grads=True, include_saved_args=False, include_rng_states=False, strict=True, overwrite=False)`: Persist a Trace to a `.tlspec` directory.
+- `tl.load(path, **kwargs)`: Load a `.tlspec` Trace or Bundle.
+- `tl.validate(model, input_args, input_kwargs=None, *, scope, random_seed=None, verbose=False, validate_metadata=True, loss_fn=None, perturb_saved_grads=False, atol=1e-5, rtol=1e-4, validate_layer_grads=False, layer_grad_atol=None, layer_grad_rtol=None)`: Run validation. `scope` is `"forward"`, `"backward"`, `"saved"`, or `"intervention"`. Backward scope additionally accepts `validate_layer_grads` to also compare module-output gradients (returns aggregated bool); `layer_grad_atol`/`layer_grad_rtol` default to the top-level `atol`/`rtol`. Backward scope state hygiene: state_dict snapshot/restore around capture, deterministic `random_seed` (auto-assigned if None), `model.zero_grad(set_to_none=True)` between stock and candidate runs.
+- `tl.aggregate(model, dataloader, metrics, *, target="out", loss_fn=None)`: Stream outs (or grads) through metric accumulators; `metrics` maps layer label to a streaming statistic. `target="out"` (default) accumulates forward outs; `target="grad"` requires `loss_fn` and accumulates gradients of layer outs via `log.log_backward(loss_fn(output, *batch_tail))`.
+- `tl.bundle(*args, **kwargs)`: Construct a Bundle. Forwards to `Bundle.__init__`.
+### Selectors
+- `tl.label(name)`: Selector matching an exact Layer or Op label.
+- `tl.func(name, *, output=None)`: Selector matching a function name token (e.g. `"relu"`). `output` disambiguates multi-output calls by index or semantic role.
+- `tl.output(target)`: Selector matching by output index or semantic output role; used for multi-output function and module disambiguation. `target` is an int index or string role name.
+- `tl.module(address)`: Selector matching a dotted module address.
+- `tl.contains(substring)`: Selector matching any label containing the substring.
+- `tl.where(predicate, *, name_hint=None)`: Selector wrapping a custom predicate.
+- `tl.in_module(address_or_layer, address=None)`: When called with one argument, returns a selector restricted to a module address. When called with two arguments, returns a `bool` indicating whether the first argument lives inside the named module.
+- `tl.sites(layer_pattern, ops=None, modes=None)`: Build a structured `SiteCollection` for parameter sweeps.
+### Backward selectors
+These selectors match the backward grad-fn graph and compose with direction-agnostic selectors (`label`, `module`, `output`, `contains`, `where`, `in_module`) but cannot be combined with forward-only selectors (`func`).
+- `tl.grad_fn(type=None, *, label=None, is_custom=None)`: Match grad_fns by class name (string or class object), label substring, or custom-autograd flag. `type` is normalized via `__name__` when a class is passed.
+- `tl.intervening()`: Match grad_fns whose `is_intervening` is True (no paired forward op). Used for backward-only nodes such as `AccumulateGrad` parameter sinks.
+- `tl.grad_fn_label(name)`: Match a grad_fn by its exact stable label.
+### Selector composition rules
+- `a & b` (intersection), `a | b` (union), `~a` (negation).
+- Cross-graph composition is rejected by `SelectorCompositionError`: a forward selector (`func`) cannot intersect a backward selector (`grad_fn`, `intervening`, `grad_fn_label`).
+- Direction-agnostic selectors compose freely with either direction.
+- Selectors without a registered direction taxonomy raise `UnclassifiedSelectorError` at composition time.
+### Intervention helpers (all return `HelperSpec`)
+- `tl.zero_ablate(*, force_shape_change=False)`: Replace value with zeros.
+- `tl.mean_ablate(source=None, *, over="self", force_shape_change=False)`: Replace value with a mean over `source`.
+- `tl.resample_ablate(source=None, *, from_=None, seed=None, force_shape_change=False)`: Replace value with a resample.
+- `tl.steer(direction, magnitude=1.0, *, coef=None, feature_axis=None, force_shape_change=False)`: Add a steering vector.
+- `tl.scale(factor, *, force_shape_change=False)`: Multiply by a scalar.
+- `tl.clamp(*, min=None, max=None, force_shape_change=False)`: Clamp values to a range.
+- `tl.noise(std, *, seed=None, force_shape_change=False)`: Add Gaussian noise.
+- `tl.project_onto(direction, *, feature_axis=None, force_shape_change=False)`: Project onto a direction.
+- `tl.project_off(direction, *, feature_axis=None, force_shape_change=False)`: Project orthogonal to a direction.
+- `tl.swap_with(other_label, *, force_shape_change=False)`: Swap activation with another site's saved value.
+- `tl.splice_module(module, *, input="out", output="out", force_shape_change=False)`: Splice an `nn.Module` into the forward pass.
+### Backward intervention helpers (all return `HelperSpec` with `kind="backward"`)
+These helpers operate during a backward pass. Mount-shape metadata: `bwd_hook`/`grad_zero`/`grad_scale` use the tensor-level mount; `grad_clip`/`grad_noise`/`grad_clamp` use `mount_shape="tuple"` and apply to the grad_input tuple at a grad_fn hook.
+- `tl.bwd_hook(fn)`: Wrap a backward callback as a HelperSpec. `fn` first positional arg may be named `g`; keyword-only `hook` argument required.
+- `tl.grad_zero(*, force_shape_change=False)`: Replace a backward gradient tensor with zeros.
+- `tl.grad_scale(factor, *, force_shape_change=False)`: Multiply a backward gradient tensor by `factor`.
+- `tl.grad_clip(max_norm, norm_type=2.0)`: Per-tensor norm clipping over a grad_input tuple; uses `torch.linalg.vector_norm`. Mount shape: `tuple`.
+- `tl.grad_noise(std, *, seed=None)`: Add Gaussian noise to each tensor in a grad_input tuple. Mount shape: `tuple`.
+- `tl.grad_clamp(min=None, max=None)`: Elementwise clamp on each tensor in a grad_input tuple. Mount shape: `tuple`. Requires `min`, `max`, or both.
+### Errors raised by intervention helpers and selectors
+- `HelperMountError(HookSiteCoverageError)`: Raised when a helper is mounted on an incompatible selector universe (e.g., forward helper on a backward selector site).
+- `HookSignatureError(ConfigurationError, TypeError)`: Raised when a hook callable does not accept the required signature.
+- `HookValueError(InterventionError, ValueError)`: Raised when a hook returns an invalid replacement value.
+- `HookSiteCoverageError(SiteResolutionError)`: Raised when hook normalization cannot associate a hook with any site.
+- `SelectorCompositionError(SiteResolutionError)`: Raised when forward and backward selectors are composed.
+- `UnclassifiedSelectorError(SiteResolutionError)`: Raised when a selector lacks an explicit direction taxonomy bucket.
+- `AxisAmbiguityError(ConfigurationError, ValueError)`: Raised when a helper cannot infer a feature axis safely.
+- `SpliceModuleDtypeError(CompatibilityError, RuntimeError)`: Raised when `splice_module` returns an unexpected dtype.
+- `SpliceModuleDeviceError(CompatibilityError, RuntimeError)`: Raised when `splice_module` returns a tensor on an unexpected device.
+- `MultiOutputModuleError(ValidationError, ValueError)`: Raised by singular-output access on a multi-output ModuleCall.
+- `AppendMismatchError(ValidationError, ValueError)`: Raised when a chunked append candidate is incompatible with the base log.
+- `AppendStreamingNotSupportedError(ValidationError, ValueError)`: Raised when append rerun would mutate active streamed activation blobs.
+- `AppendBatchDependenceError(ValidationError, ValueError)`: Raised when append cannot prove helper or grad batch independence.
+- `AppendStateValidationWarning(TorchLensInterventionWarning)`: Warning when validators skip fresh checks on stacked appended traces.
+- `BatchNormTrainModeWarning(TorchLensInterventionWarning)`: Warning for append reruns through batch-sensitive train-mode modules.
+### Standalone intervention verbs
+- `tl.do(log, hooks_or_site, value_or_hook=None, *, model=None, x=None, engine=MISSING, confirm_mutation=MISSING, strict=MISSING, intervention=None)`: One-shot intervention call mirroring `Trace.do`.
+- `tl.replay(log, *, strict=MISSING, hooks=MISSING, replay=None)`: Replay saved values without re-executing the model.
+- `tl.replay_from(log, site, *, strict=MISSING, replay=None)`: Replay starting from a site.
+- `tl.rerun(log, model, x=None, *, append=MISSING, strict=MISSING, replay=None, output_transform=None)`: Re-execute the model and update or append Trace state. Pending rename (see baton).
+### Observers
+- `tl.tap(site, *, direction="forward")`: Create a `TapObserver` for a site. `direction` is `"forward"`, `"backward"`, or `"both"`. Backward direction records `grad_input`/`grad_output` snapshots via `record_backward`.
+- `tl.record_span(name, *, direction="both")`: Context manager creating a named observer span scoped to a direction (`"forward"`, `"backward"`, or `"both"`).
+- `TapObserver.records: list[TapRecord]`: Captured observations.
+- `TapObserver.values() -> list[torch.Tensor]`: Detached out snapshots in observation order.
+- `TapObserver.record_backward(grad_input, *, grad_output, grad_fn_log, call_index, run_ctx)`: Backward callback signature for taps with `direction="backward"` or `"both"`.
+- `TapRecord(value, site_label, span_names, timestamp, direction, grad_kind=None, backward_call_index=None)`: One observed tensor value. `direction` is `"forward"` or `"backward"`; `grad_kind` is `"grad_input"` or `"grad_output"` for backward records.
+### Visualization helpers
+- `tl.viz.heatmap(max_size=200)`: Returns a tensor-to-`PIL.Image` callable for `layer_visualizers`.
+- `tl.viz.channel_grid(n=16, max_size=300)`: Returns a per-channel grid visualizer.
+- `tl.viz.histogram(bins=30, width=240, height=160)`: Returns a histogram visualizer.
+- `tl.show_bundle_graph(bundle, vis_outpath="bundle_modelgraph", vis_mode="unrolled", direction="forward", vis_direction="bottomup", vis_graph_overrides=None, vis_node_overrides=None, vis_edge_overrides=None, vis_save_only=False, vis_fileformat="pdf")`: Draw a Bundle graph. `direction` accepts `"forward"`, `"backward"`, `"both"`, or `"overlay"`. The `"backward"` direction is now functional (renders the union of bundle backward graphs).
+- `tl.draw_backward(trace, vis_outpath=MISSING, vis_save_only=MISSING, vis_fileformat=MISSING, vis_direction=MISSING, vis_graph_overrides=MISSING, vis_edge_overrides=MISSING, node_spec_fn=None, collapsed_node_spec_fn=None, node_style=MISSING, vis_node_mode=MISSING, code_panel=False, visualization=None)`: Draw a backward grad-fn graph. Deprecated top-level wrapper; prefer `Trace.draw_backward`.
+- `tl.draw_combined(trace, ...)`: Deprecated top-level wrapper for `Trace.draw_combined`.
+### Bridges
+- `tl.bridge.hf.trace_text(model, text, *, tokenizer=None, chat_template=False, **kwargs)`: Trace a Hugging Face model with raw text input. Auto-resolves the tokenizer and forwards remaining kwargs to `tl.trace`.
+### Trace methods
+- `Trace.backward(loss, **backward_kwargs)`: Run backward from a loss and populate grad fields. Implementation method is `log_backward`; `backward` is the target public name.
+- `Trace.find_layers(query, *, limit=10)`: Return Layer labels matching a query.
+- `Trace.find_sites(query, *, strict=False, max_fanout=8)`: Return intervention sites matching a query. Deferred for naming review (see Deferred items).
+- `Trace.fork(name=None)`: Duplicate the Trace with a fresh intervention spec.
+- `Trace.set(site, value, *, strict=False, confirm_mutation=False)`: Set a site value.
+- `Trace.attach_hooks(hooks_or_site, hook=None, *extra_hooks, strict=False, prepend=False, confirm_mutation=False)`: Attach hooks to one or many sites.
+- `Trace.do(hooks_or_site, value_or_hook=None, *, model=None, x=None, engine=MISSING, confirm_mutation=MISSING, strict=MISSING, intervention=None)`: One-shot intervention application.
+- `Trace.replay(*, strict=MISSING, hooks=MISSING, replay=None)`: Replay saved values without re-executing the model.
+- `Trace.replay_from(site, *, strict=MISSING, replay=None)`: Replay starting from a site.
+- `Trace.rerun(model=None, x=None, *, append=MISSING, strict=MISSING, replay=None, transform=USE_STORED, output_transform=USE_STORED)`: Re-execute and update or append Trace state.
+- `Trace.draw(vis_mode="unrolled", vis_call_depth=1000, vis_outpath="modelgraph", vis_graph_overrides=None, module=None, node_mode="default", node_spec_fn=None, collapsed_node_spec_fn=None, collapse_fn=None, skip_fn=None, vis_edge_overrides=None, vis_grad_edge_overrides=None, vis_module_overrides=None, vis_save_only=False, vis_fileformat="pdf", show_buffer_layers="meaningful", direction="bottomup", vis_node_placement="auto", vis_renderer="graphviz", vis_theme="torchlens", vis_intervention_mode="node_mark", vis_show_cone=True, code_panel=False, node_overlay=None, node_label_fields=None, show_legend=False, font_size=None, dpi=None, for_paper=False, ...)`: Draw the forward graph. `vis_*` parameter rename target deferred.
+- `Trace.draw_backward(vis_outpath="backward_modelgraph", vis_graph_overrides=None, node_spec_fn=None, collapsed_node_spec_fn=None, vis_node_mode="default", vis_edge_overrides=None, vis_save_only=False, vis_fileformat="pdf", vis_direction="topdown", code_panel=False)`: Draw the backward grad-fn graph.
+- `Trace.draw_combined(vis_outpath="combined_modelgraph", vis_graph_overrides=None, node_spec_fn=None, backward_node_spec_fn=None, vis_edge_overrides=None, vis_save_only=False, vis_fileformat="pdf", vis_direction="leftright", vis_mode="unrolled", intervening_cluster="upstream", show_buffer_layers="meaningful")`: Render forward ops and backward grad_fns in a single graph. `intervening_cluster` is `Literal["upstream", "outside", "downstream", "own"]` and controls where backward-only nodes are clustered relative to forward graph.
+- `Trace.log_backward(loss, **backward_kwargs)`: Backward capture implementation method. `Trace.backward(loss)` is the locked public name; `log_backward` remains because validation, observers, and stats internals call it directly.
+- `Trace.replace_run_state_from(new_log)`: Atomically replace this Trace's run state from a freshly-built Trace. Preserves identity fields, intervention spec, ledger, `is_appended`, `_append_sequence_id`, and `append_history`. Used by the intervention rerun engine.
+- `Trace.append_run_state_from(new_log)`: Merge compatible chunk outs from `new_log` into this Trace. Used by append rerun for chunked execution.
+- `Trace.preview_fastlog(predicate=None, keep_op=None, keep_module=None, **kwargs)`: Render a fastlog predicate preview over this graph; uses `torchlens.visualization.fastlog_preview.preview_fastlog`.
+- `Trace.find_sites(query, *, strict=False, max_fanout=8)`: Find intervention sites matching a query. (Naming still deferred pending the Site rethink.)
+- `Trace.resolve_sites(query, *, strict=False, max_fanout=8)`: Resolve intervention sites for a query. (Naming still deferred.)
+- `Trace.summary(level="overview", *, fields=None, mode="auto", show_ops=False, preset=None, columns=None, include_ops=None, max_rows=200, print_to=None, count_fma_as_two=False)`: Return a textual summary.
+- `Trace.save(path, **kwargs)`: Save the Trace; forwards to `tl.save`.
+- `Trace.cleanup()`: Clear circular references and runtime-only heavyweight objects.
+- `Trace.to_pandas() / to_csv(filepath, **kwargs) / to_parquet(filepath, **kwargs) / to_json(filepath, **kwargs)`: Tabular export. The same export quartet exists on Op, Layer, Module, ModuleCall, Param, Buffer, GradFn, GradFnCall, TraceAccessor, SuperOpAccessor, and SuperLayerAccessor.
+### Bundle methods
+- `Bundle(traces=None, *, baseline=None, capacity=None, ...)`: Construct a Bundle. Accepts an iterable of Traces or a name-keyed mapping.
+- `Bundle.add(trace, name=None)`: Add a Trace.
+- `Bundle.remove(name)`: Remove a Trace by name; returns the removed Trace.
+- `Bundle.remove_except(keep)`: Remove every Trace except the named Traces.
+- `Bundle.clear()`: Remove all Traces.
+- `Bundle.fork(name=None)`: Duplicate the Bundle.
+- `Bundle.do(*args, **kwargs)`: Apply intervention-style operations across members. Forwards to per-Trace `do`.
+- `Bundle.attach_hooks(*args, **kwargs)`: Attach hooks across member Traces.
+- `Bundle.replay(**kwargs)`: Replay all member Traces.
+- `Bundle.rerun(model, x=None, **kwargs)`: Rerun all member Traces.
+- `Bundle.save(path, *, level="portable", overwrite=False)`: Save all members to a unified `.tlspec` directory.
+- `Bundle.apply(fn)`: Call `fn(trace)` for each member; returns a name-keyed dict.
+- `Bundle.at(label)`: Resolve a label to the matching Super accessor (`SuperLayer` or `SuperOp`).
+- `Bundle.compare_at(site)`: Stack member tensors at one site.
+- `Bundle.diff_pair(a, b=None)`: Out differences between two members or between two sites.
+- `Bundle.most_changed(baseline=None, *, top_k=10, metric="cosine")`: Rank sites by distance from a baseline. `metric` is `"cosine"`, `"l2"`, or a callable.
+- `Bundle.cluster(*args, **kwargs)`: Placeholder; raises `NotImplementedError`.
+- `Bundle.relationship(a, b)`: Return the recorded relationship between two named Traces.
+- `Bundle.help()`: Return or print a per-member readiness summary.
+### Notes on signatures
+- `MISSING` (and `_USE_STORED_TRANSFORM` for `Trace.rerun`) are sentinels meaning "use the captured default"; users pass concrete values to override.
+- The `to_pandas`/`to_csv`/`to_parquet`/`to_json` quartet is uniform across record classes and accessors. Where individual signatures differ they accept `**kwargs` forwarded to the underlying writer.
+- Parameters slated for renaming (e.g. all `vis_*` draw parameters, `peek -> pluck`, the `replay` verb) appear here under their current names so the rename pass can review them in one place.
+
+## Validation reports
+- `LayerGradReport` (?): Dataclass returned by `validate_backward_pass(..., validate_layer_grads=True)` summarising per-module-output gradient parity. Fields: `mode` (`Literal["module_output"]`), `overall_passed: bool`, `coverage: dict[str, str]` (module-call label -> bucket), `covered_count`, `mismatched_count`, `skipped_no_first_leaf_count`, `skipped_module_less_count`, `skipped_no_grad_count`, `skipped_identity_output_count`, `skipped_root_module_count`, `unexpected_count`, `candidate_grad_count`, `atol`, `rtol`, `mismatched_labels: tuple[str, ...]`, `max_abs_diffs: dict[str, float]`, `max_rel_diffs: dict[str, float]`. `__bool__` returns `overall_passed`.
+- Coverage buckets:
+  - `covered`: candidate grad matched stock grad within tolerance.
+  - `mismatched`: candidate grad differed from stock or shapes disagreed.
+  - `skipped_no_first_leaf`: call has no resolvable first output leaf layer.
+  - `skipped_module_less`: candidate layer has a grad but no module containment (counter only; not stored in `coverage`).
+  - `skipped_no_grad`: candidate or stock side missing a grad for this module-call.
+  - `skipped_identity_output`: stock module output is identity-equivalent to its input; skipped to avoid double-counting.
+  - `skipped_root_module`: the top-level model (address `"self"`); skipped because it has no enclosing module.
+- `MIN_MODULE_OUTPUT_COVERAGE: float = 0.80`: Minimum covered ratio required for `overall_passed`.
+
+## Backend integration
+- `Trace._backend_name` (?): String tag for the capture backend (`"torch"` or `"mlx"`). Survives portable save/load.
+- MLX hard-rejection contract: `MLXBackend.capture_trace(..., save_grads=True)` raises `NotImplementedError`; `intervention_ready=True` raises `NotImplementedError`; pre-attached `hooks` raises `NotImplementedError`; `output_device != "same"` raises `ValueError`; non-default visualization modes raise `ValueError`.
+- MLX wrapped surface (since post-backward megasprint): Conv2d, normalization layers, Embedding, Dropout, MultiHeadAttention, reductions, shape ops, activations. Pinned to `mlx>=0.26,<0.27`.
+
+## Portable save scrub
+- `_io.scrub.scrub_for_save(trace, *, include_outs=True, include_grads=True, include_saved_args=False, include_rng_states=False) -> tuple[dict, list[BlobSpec], list[dict]]`: Scrub a Trace into portable metadata, tensor blob specs, and an unsupported-tensor audit list. Third tuple element collects tensors whose dtype/device combination cannot be serialised (e.g. MLX tensors on save before audit-null conversion).
+- `_io.scrub._ScrubOptions.unsupported_tensor_records: list[dict[str, str]]` (?): Sidecar audit collector populated during scrub.
+
 ## Deferred items
 - `edge_uses`: deferred until EdgeUseRecord's public role is decided.
 - Rolled visualization properties such as `children_per_op`, `parents_per_op`, `child_ops_per_layer`, `parent_ops_per_layer`, `edges_vary_across_ops`, `atomic_module_ops`, and `parent_arg_positions`: deferred to a report/visualization namespace move.
@@ -932,11 +1119,17 @@ SuperOp and SuperLayer are cross-member graph entities; plural tensor-map names 
 - `relationship_evidence`: deferred until rerun relationship reporting is reviewed.
 - `report_values`: deferred and likely unified with `trace_annotations`.
 - `streaming_pass_logs`: deferred to streaming/rerun-append design.
-- `find_sites` and `resolve_sites`: deferred to the integrated intervention `Site` concept survey.
-- `set`, `attach_hooks`, `do`, `clear_hooks`, `remove`, `detach_hooks`, `save_intervention`, and `intervention_spec`: deferred to intervention API review.
-- `replace_run_state_from` and `append_run_state_from`: deferred to streaming/rerun-append review.
-- `preview_fastlog`: deferred to fastlog namespace review.
+- `find_sites` and `resolve_sites`: deferred to the integrated intervention `Site` concept survey. Both methods exist on `Trace` and `tl.intervention.resolve_sites` is publicly exported; the rename pass should confirm the final naming.
+- `set`, `attach_hooks`, `do`, `clear_hooks`, `remove`, `detach_hooks`, `save_intervention`, and `intervention_spec`: deferred to intervention API review. (Most landed live in the 2.16 intervention sprint; the rename pass should review names.)
+- `preview_fastlog`: moved to `tl.fastlog.preview`; top-level `tl.preview_fastlog` is a deprecated alias for one minor cycle. Final naming inside fastlog namespace still deferred.
 - `vis_*` draw parameters: target direction is to drop the prefix, but exact parameter list is deferred.
+- `peek -> pluck`: top-level `tl.peek` rename target. Still deferred; no implementation alias yet.
+- `tl.rerun(append=...)` rename target: still deferred. `append` kwarg accepts `MISSING` sentinel.
+- `replay` / `replay_from` verb rename: still deferred. No `replay` -> X alias in code.
 - Bundle dynamic helpers `aligned_pairs`, `compare`, `delta_map`, `norm_delta`, `output_delta`, and `show_diff`: deferred to Bundle helper redesign.
 - `save_activations` and other workflow-level save kwargs: deferred pending decision on workflow vocabulary versus `out` field vocabulary.
 - Fast-path naming such as `fastlog`: deferred because fast output is intentionally not a full Trace.
+- `multi_output_role` taxonomy: field exists on OpLog but the vocabulary for role tags (tuple-element name vs dict key vs custom role) is not yet fully exercised by tests. Defer final naming until the taxonomy stabilizes.
+- `tl.bridge.hf` extras footprint: only `trace_text` is documented; the rest of the bridge surface (Captum, SHAP, SAE Lens, LIT, profiler) remains under `tl.bridge.*` namespaces with extras-gated imports.
+- `gradient_postfunc` vs `grad_transform`: silent alias landed in alpha.3. Rename pass should pick one canonical name.
+- `_backend_name`, `_grad_fn_param_refs`, `_param_log_by_pid`, `_append_sequence_id`: underscore-prefixed but partially load-bearing for portable save and visualization. Rename pass should decide which to promote (drop underscore) versus keep private.
