@@ -21,6 +21,7 @@ from ..data_classes.model_log import Trace
 from ..ir import CaptureEvents
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
+from ._halt import HaltSignal
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
@@ -30,7 +31,7 @@ from .options import (
     RecordingOptions,
     merge_recording_options,
 )
-from .types import CaptureSpec, GradRecordContext, Recording
+from .types import CaptureSpec, GradRecordContext, Recording, _mark_recording_halted
 
 
 def _rank_prefixed_streaming_options(
@@ -329,6 +330,16 @@ class Recorder:
                     random_seed=self.options.random_seed,
                     postprocess=False,
                 )
+        except HaltSignal as halt_exc:
+            self._capture_events.extend(trace.capture_events.op_events)
+            object.__setattr__(
+                self._state.recording,
+                "n_ops",
+                max(self._state.recording.n_ops, self._next_pass_index),
+            )
+            self._mark_halted_pass(self._next_pass_index, halt_exc)
+            output = None
+            return output
         except Exception as exc:
             self._state.abort_storage(str(exc))
             raise
@@ -341,6 +352,13 @@ class Recorder:
             max(self._state.recording.n_ops, self._next_pass_index),
         )
         return output
+
+    def _mark_halted_pass(self, pass_index: int, halt_exc: HaltSignal) -> None:
+        """Persist halt state for the given pass."""
+
+        if self._state is None:
+            raise RecorderStateError("Recorder.log() requires an active with-block")
+        _mark_recording_halted(self._state.recording, pass_index, halt_exc.reason)
 
     def _reset_state_for_pass(self, *, sample_id: str | int | None) -> None:
         """Reset per-pass predicate state while preserving accumulated events."""
