@@ -41,7 +41,9 @@ if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .model_log import Trace
+    from .op_log import OpLog
     from .param_log import ParamAccessor
+    from ..intervention.types import ContainerSpec
 
 
 class ModuleCallAccessor(Accessor["ModuleCallLog"]):
@@ -158,6 +160,8 @@ class ModuleCallLog:
         "layers": FieldPolicy.KEEP,
         "input_layers": FieldPolicy.KEEP,
         "output_layers": FieldPolicy.KEEP,
+        "outputs": FieldPolicy.KEEP,
+        "output_structure": FieldPolicy.KEEP,
         "forward_args": FieldPolicy.BLOB_RECURSIVE,
         "forward_kwargs": FieldPolicy.BLOB_RECURSIVE,
         "forward_args_summary": FieldPolicy.KEEP,
@@ -176,6 +180,8 @@ class ModuleCallLog:
         layers: List[str],
         input_layers: List[str],
         output_layers: List[str],
+        outputs: list["OpLog"] | None = None,
+        output_structure: "ContainerSpec | None" = None,
         forward_args: tuple[Any, ...] | None = None,
         forward_kwargs: dict[str, Any] | None = None,
         call_parent: Optional[str] = None,
@@ -189,6 +195,8 @@ class ModuleCallLog:
         self.layers = layers  # pass-qualified layer labels
         self.input_layers = input_layers
         self.output_layers = output_layers
+        self.outputs = outputs if outputs is not None else []
+        self.output_structure = output_structure
         self.forward_args = forward_args
         self.forward_kwargs = forward_kwargs
         self.forward_args_summary = ""
@@ -225,6 +233,8 @@ class ModuleCallLog:
         """Return one field from all output layers."""
 
         trace = self._source_trace
+        if self.outputs:
+            return [getattr(output, field_name) for output in self.outputs]
         if trace is None:
             return []
         return [getattr(trace[layer_label], field_name) for layer_label in self.output_layers]
@@ -234,8 +244,11 @@ class ModuleCallLog:
 
         values = self._output_values(field_name)
         if len(values) != 1:
-            raise ValueError(
-                f"ModuleCall '{self.call_label}' has {len(values)} outputs; use plural access."
+            from ..intervention.errors import MultiOutputModuleError
+
+            raise MultiOutputModuleError(
+                f"ModuleCall '{self.call_label}' has {len(values)} outputs; "
+                "use .outs[i] or .outputs[i]."
             )
         return values[0]
 
@@ -316,12 +329,6 @@ class ModuleCallLog:
         """Module-pass input layer labels."""
 
         return self.input_layers
-
-    @property
-    def outputs(self) -> List[str]:
-        """Module-pass output layer labels."""
-
-        return self.output_layers
 
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
@@ -440,6 +447,8 @@ class ModuleCallLog:
                 "forward_args_summary": "",
                 "forward_kwargs_summary": "",
                 "_source_trace_ref": None,
+                "outputs": [],
+                "output_structure": None,
             },
         )
         self.__dict__.update(state)
@@ -746,12 +755,48 @@ class ModuleLog:
         Returns
         -------
         List[str]
-            No-pass output layer labels across module calls.
+            Output layer labels across module calls, preserving multi-output
+            leaves and pass qualification.
         """
+        outputs = self.outputs
+        if outputs:
+            return [output.layer_label for output in outputs]
         labels: list[str] = []
         for call in self.ops.values():
-            labels.extend(label.split(":", 1)[0] for label in call.output_layers)
-        return list(dict.fromkeys(labels))
+            labels.extend(call.output_layers)
+        return labels
+
+    @property
+    def outputs(self) -> list["OpLog"]:
+        """Aggregate output OpLogs across all module calls.
+
+        Returns
+        -------
+        list[OpLog]
+            Output operations in source-emission order within each call and
+            call-index order across calls.
+        """
+
+        outputs: list["OpLog"] = []
+        for call in self.ops.values():
+            outputs.extend(call.outputs)
+        return outputs
+
+    @property
+    def output_structure(self) -> "ContainerSpec | None":
+        """Return the single call's structured output shape when unambiguous.
+
+        Returns
+        -------
+        ContainerSpec | None
+            Output container specification for single-call modules. Multi-call
+            aggregate modules return ``None`` to avoid inventing an additional
+            call-index container dimension.
+        """
+
+        if len(self.ops._dict) != 1:
+            return None
+        return next(iter(self.ops._dict.values())).output_structure
 
     @property
     def forward_args(self) -> tuple[Any, ...] | None:

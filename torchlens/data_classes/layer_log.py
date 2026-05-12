@@ -160,6 +160,7 @@ class LayerLog:
         "num_kwargs": FieldPolicy.KEEP,
         "is_part_of_iterable_output": FieldPolicy.KEEP,
         "multi_output_index": FieldPolicy.KEEP,
+        "multi_output_role": FieldPolicy.KEEP,
         "shape": FieldPolicy.KEEP,
         "transformed_out_shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
@@ -257,6 +258,7 @@ class LayerLog:
         self.num_kwargs = first_pass.num_kwargs
         self.is_part_of_iterable_output = first_pass.is_part_of_iterable_output
         self.multi_output_index = first_pass.multi_output_index
+        self.multi_output_role = first_pass.multi_output_role
 
         # Tensor type (representative from first pass)
         self.shape = first_pass.shape

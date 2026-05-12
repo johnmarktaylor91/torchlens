@@ -101,6 +101,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "transformed_grad_memory": None,
     "func_call_id": None,
     "container_path": (),
+    "multi_output_role": None,
     "intervention_replaced": False,
     "interventions": [],
     "container_spec": None,
@@ -312,6 +313,7 @@ class OpLog:
         "grad_fn_log": FieldPolicy.DROP,
         "is_part_of_iterable_output": FieldPolicy.KEEP,
         "multi_output_index": FieldPolicy.KEEP,
+        "multi_output_role": FieldPolicy.KEEP,
         "container_path": FieldPolicy.KEEP,
         "container_spec": FieldPolicy.KEEP,
         "parent_params": FieldPolicy.KEEP,
@@ -589,6 +591,7 @@ class OpLog:
         self.grad_fn_log = fields_dict["grad_fn_log"]
         self.is_part_of_iterable_output = fields_dict["is_part_of_iterable_output"]
         self.multi_output_index = fields_dict["multi_output_index"]
+        self.multi_output_role = fields_dict["multi_output_role"]
         self.container_path = fields_dict["container_path"]
         self.container_spec = fields_dict["container_spec"]
 

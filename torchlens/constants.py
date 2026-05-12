@@ -277,6 +277,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "grad_fn_log",
     "is_part_of_iterable_output",
     "multi_output_index",
+    "multi_output_role",
     "container_path",
     "container_spec",
     # Param info
@@ -389,6 +390,7 @@ LAYER_LOG_FIELD_ORDER = [
     "num_kwargs",
     "is_part_of_iterable_output",
     "multi_output_index",
+    "multi_output_role",
     # Tensor type (representative from first pass)
     "shape",
     "transformed_out_shape",
@@ -533,6 +535,8 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "num_layers",
     "input_layers",
     "output_layers",
+    "outputs",
+    "output_structure",
     "forward_args_summary",
     "forward_kwargs_summary",
     "forward_args",

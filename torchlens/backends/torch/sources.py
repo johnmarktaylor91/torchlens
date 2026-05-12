@@ -354,6 +354,7 @@ def log_source_tensor_exhaustive(
         "grad_fn_log": None,
         "is_part_of_iterable_output": False,
         "multi_output_index": None,
+        "multi_output_role": None,
         "container_path": (),
         "container_spec": None,
         # Param info:

@@ -33,6 +33,10 @@ from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
 from .._io.manifest import sha256_of_file
 from .._io.streaming import BundleStreamWriter
+from ..data_classes._module_role_hints import (
+    multi_output_role_from_path,
+    role_hints_for_module_class,
+)
 from ..data_classes._summary import format_call_arg
 from ..data_classes.module_log import ModuleLog, ModuleCallLog
 from ..utils.introspection import get_vars_of_type_from_obj
@@ -203,6 +207,12 @@ def _build_root_module_log(
         layers=root_layers,
         input_layers=list(self.input_layers),
         output_layers=list(self.output_layers),
+        outputs=[
+            self.layer_dict_all_keys[label]
+            for label in self.output_layers
+            if label in self.layer_dict_all_keys
+        ],
+        output_structure=_first_output_structure(self, list(self.output_layers)),
         call_parent=None,
         call_children=mbd["top_level_module_ops"][:],
         all_addresses=root_meta.get("all_addresses", ["self"]),
@@ -266,6 +276,62 @@ def _strip_pass_suffix(layer_label: str) -> str:
         Layer label without any pass suffix.
     """
     return layer_label.split(":", 1)[0]
+
+
+def _first_output_structure(self: "Trace", output_layers: list[str]) -> Any | None:
+    """Return the first non-empty container spec for output layers.
+
+    Parameters
+    ----------
+    self:
+        Trace containing the output layer records.
+    output_layers:
+        Pass-qualified layer labels to inspect.
+
+    Returns
+    -------
+    Any | None
+        The first container spec found on the output OpLogs, or ``None``.
+    """
+
+    for layer_label in output_layers:
+        entry = self.layer_dict_all_keys.get(layer_label)
+        if entry is not None and entry.container_spec is not None:
+            return entry.container_spec
+    return None
+
+
+def _assign_output_roles(
+    output_entries: list["OpLog"],
+    *,
+    hints: Any | None,
+) -> None:
+    """Populate semantic multi-output roles on output entries.
+
+    Parameters
+    ----------
+    output_entries:
+        Output OpLogs from one module call.
+    hints:
+        Optional role-hint mapping keyed by primitive output paths.
+    """
+
+    if len(output_entries) <= 1:
+        return
+    for index, output in enumerate(output_entries):
+        if output.multi_output_role is not None:
+            parent_layer = getattr(output, "parent_layer_log", None)
+            if parent_layer is not None:
+                parent_layer.multi_output_role = output.multi_output_role
+            continue
+        output.multi_output_role = multi_output_role_from_path(
+            tuple(output.container_path or ()),
+            output.multi_output_index if output.multi_output_index is not None else index,
+            hints=hints,
+        )
+        parent_layer = getattr(output, "parent_layer_log", None)
+        if parent_layer is not None:
+            parent_layer.multi_output_role = output.multi_output_role
 
 
 def _merge_layer_log_conditional_fields(
@@ -407,6 +473,7 @@ def _build_submodule_call_logs(
     mbd: dict[str, Any],
     _child_to_parent_pass: dict[str, str] | None = None,
     all_addresses: list[str] | None = None,
+    module_class: type[torch.nn.Module] | None = None,
 ) -> tuple[dict[int, "ModuleCallLog"], list[str]]:
     """Build ModuleCallLog objects for all ops of a single submodule.
 
@@ -427,6 +494,7 @@ def _build_submodule_call_logs(
         # Derive input/output layers per pass from OpLog fields
         pass_input_layers = []
         pass_output_layers = []
+        pass_outputs = []
         for layer_label in pass_layers:
             if layer_label in self.layer_dict_all_keys:
                 te = self.layer_dict_all_keys[layer_label]
@@ -434,6 +502,10 @@ def _build_submodule_call_logs(
                     pass_input_layers.append(layer_label)
                 if te.is_submodule_output and call_label in te.output_of_module_calls:
                     pass_output_layers.append(layer_label)
+                    pass_outputs.append(te)
+
+        role_hints = role_hints_for_module_class(module_class)
+        _assign_output_roles(pass_outputs, hints=role_hints)
 
         # Forward args for this pass
         module_forward_args = cast(
@@ -458,6 +530,10 @@ def _build_submodule_call_logs(
             layers=pass_layers,
             input_layers=pass_input_layers,
             output_layers=pass_output_layers,
+            outputs=pass_outputs,
+            output_structure=mbd.get("module_output_structures", {}).get(
+                call_label, _first_output_structure(self, pass_output_layers)
+            ),
             forward_args=fwd_positional,
             forward_kwargs=fwd_kwargs,
             call_parent=call_parent_pass,
@@ -632,6 +708,7 @@ def _build_module_logs(self: "Trace") -> None:
             mbd,
             _child_to_parent_pass,
             all_addresses=all_addresses,
+            module_class=meta.get("cls"),
         )
         call_children_all, call_parent_addr = _resolve_call_hierarchy(ops)
         param_info = _build_module_param_info(self, address, mbd, _buffer_layers_by_module)
