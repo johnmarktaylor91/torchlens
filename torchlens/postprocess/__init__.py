@@ -91,9 +91,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         self.__dict__.get("_defer_streaming_bundle_finalization", False)
         and self.__dict__.get("_out_writer") is not None
     )
-    keep_selective_sink = bool(
-        self.__dict__.get("_out_sink") is not None and getattr(self, "num_saved_ops", 0) == 0
-    )
+    keep_selective_sink = self.__dict__.get("_out_sink") is not None
     field_names = [
         "_build_state",
         "capture_events",

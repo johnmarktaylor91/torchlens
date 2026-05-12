@@ -160,6 +160,12 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
+        "AppendStreamingNotSupportedError",
+        errors.ValidationError,
+        "subclass",
+    ),
+    (
+        "torchlens.intervention.errors",
         "AppendBatchDependenceError",
         errors.ValidationError,
         "subclass",

@@ -82,6 +82,8 @@ from .sites import SiteCollection, SiteSpec, sites
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
+    AppendStateValidationWarning,
+    AppendStreamingNotSupportedError,
     AxisAmbiguityError,
     BaselineUndeterminedError,
     BatchNormTrainModeWarning,
@@ -147,6 +149,8 @@ from .types import (
 __all__ = [
     "AppendBatchDependenceError",
     "AppendMismatchError",
+    "AppendStateValidationWarning",
+    "AppendStreamingNotSupportedError",
     "ArgComponent",
     "AxisAmbiguityError",
     "BaselineUndeterminedError",

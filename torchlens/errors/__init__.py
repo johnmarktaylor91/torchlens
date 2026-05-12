@@ -82,6 +82,10 @@ _LEGACY_EXCEPTION_PATHS = {
     "EngineDispatchError": ("torchlens.intervention.errors", "EngineDispatchError"),
     "ModelMismatchError": ("torchlens.intervention.errors", "ModelMismatchError"),
     "AppendMismatchError": ("torchlens.intervention.errors", "AppendMismatchError"),
+    "AppendStreamingNotSupportedError": (
+        "torchlens.intervention.errors",
+        "AppendStreamingNotSupportedError",
+    ),
     "AppendBatchDependenceError": (
         "torchlens.intervention.errors",
         "AppendBatchDependenceError",

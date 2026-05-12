@@ -15,6 +15,7 @@ from ..options import ReplayOptions, merge_replay_options
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
+    AppendStreamingNotSupportedError,
     BatchNormTrainModeWarning,
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
@@ -151,6 +152,8 @@ def _append_rerun(
     """
 
     del strict
+    if _is_streaming_append_active(log):
+        raise AppendStreamingNotSupportedError(_streaming_append_error_message(log))
     _preflight(log, model, x)
     _preflight_append(log, model)
     _warn_if_direct_writes_will_be_overlaid(log)
@@ -211,6 +214,52 @@ def _append_rerun(
         new_graph_shape_hash=getattr(new_log, "graph_shape_hash", None),
     )
     return log
+
+
+def _is_streaming_append_active(log: "Trace") -> bool:
+    """Return whether append would need to update active streaming state.
+
+    Parameters
+    ----------
+    log:
+        Trace inspected before append capture.
+
+    Returns
+    -------
+    bool
+        True when a bundle writer or out sink is still attached.
+    """
+
+    return (
+        getattr(log, "_out_writer", None) is not None or getattr(log, "_out_sink", None) is not None
+    )
+
+
+def _streaming_append_error_message(log: "Trace") -> str:
+    """Build a descriptive streaming append rejection message.
+
+    Parameters
+    ----------
+    log:
+        Trace whose active streaming handles block append.
+
+    Returns
+    -------
+    str
+        User-facing exception message.
+    """
+
+    details = []
+    if getattr(log, "_out_writer", None) is not None:
+        details.append("bundle_path streaming")
+    if getattr(log, "_out_sink", None) is not None:
+        details.append("out_callback streaming")
+    details_text = ", ".join(details) if details else "streaming"
+    return (
+        f"Trace {getattr(log, 'model_name', None)!r} has active {details_text}; "
+        "rerun(append=True) cannot update streamed activation storage. Save and reload "
+        "the trace before appending, or disable streaming for this capture."
+    )
 
 
 def _preflight_append(log: "Trace", model: nn.Module) -> None:

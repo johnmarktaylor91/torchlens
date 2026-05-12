@@ -183,8 +183,23 @@ class AppendMismatchError(ValidationError, ValueError):
     """Raised when a chunked append candidate is incompatible with the base log."""
 
 
+class AppendStreamingNotSupportedError(ValidationError, ValueError):
+    """Raised when append rerun would need to mutate active streamed activation blobs."""
+
+
 class AppendBatchDependenceError(ValidationError, ValueError):
-    """Raised when append cannot prove helper or grad batch independence."""
+    """Raised when append cannot prove helper or grad batch independence.
+
+    Append rerun stacks a new chunk's saved tensors along batch dimension 0.
+    TorchLens rejects helpers or saved grads without explicit batch-independence
+    metadata because it cannot prove chunked execution matches full-batch
+    execution. Use a batch-independent helper, disable train-mode grad append, or
+    replay chunks manually when this invariant does not hold.
+    """
+
+
+class AppendStateValidationWarning(TorchLensInterventionWarning):
+    """Warning for validators that skip fresh checks on stacked appended traces."""
 
 
 class MultiOutputModuleError(ValidationError, ValueError):
