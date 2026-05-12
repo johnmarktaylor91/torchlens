@@ -155,7 +155,12 @@ def _add_output_layers(
                     actual_output,
                     self.out_postfunc,
                     postfunc_kind="out",
-                    streaming_active=False,
+                    streaming_active=getattr(self, "_out_writer", None) is not None,
+                )
+                output_node._validate_streaming_postfunc_output(
+                    actual_output,
+                    postfunc_kind="out",
+                    streaming_active=getattr(self, "_out_writer", None) is not None,
                 )
             comparison_output = (
                 output_node.out if output_node.out is not None else output_node.transformed_out

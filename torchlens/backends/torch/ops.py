@@ -2308,61 +2308,109 @@ def _save_activation_fields(
         Mutates ``fields_dict``.
     """
 
-    raw_out = safe_copy(t, fields_dict["detach_saved_activations"])
-    if fields_dict["output_device"] not in [str(raw_out.device), "same"]:
-        raw_out = safe_to(raw_out, fields_dict["output_device"])
+    writer = getattr(trace, "_out_writer", None)
+    try:
+        raw_out = safe_copy(t, fields_dict["detach_saved_activations"])
+        if fields_dict["output_device"] not in [str(raw_out.device), "same"]:
+            raw_out = safe_to(raw_out, fields_dict["output_device"])
 
-    fields_dict["shape"] = tuple(raw_out.shape)
-    fields_dict["dtype"] = raw_out.dtype
-    fields_dict["memory"] = get_memory_amount(raw_out)
+        fields_dict["shape"] = tuple(raw_out.shape)
+        fields_dict["dtype"] = raw_out.dtype
+        fields_dict["memory"] = get_memory_amount(raw_out)
 
-    save_raw_outs = getattr(trace, "save_raw_outs", True)
-    store_raw = save_raw_outs or out_postfunc is None
-    if store_raw and not getattr(trace, "save_arg_values", False):
-        hash_cache = getattr(trace, "_out_hash_cache", None)
-        if hash_cache is None:
-            hash_cache = {}
-            setattr(trace, "_out_hash_cache", hash_cache)
-        out_hash = _tensor_content_hash(raw_out)
-        if out_hash in hash_cache:
-            fields_dict["annotations"]["dedup_out_hash"] = out_hash
-            fields_dict["annotations"]["dedup_reference_label"] = hash_cache[out_hash][0]
-            raw_out = hash_cache[out_hash][1]
+        save_raw_outs = getattr(trace, "save_raw_outs", True)
+        store_raw = save_raw_outs or out_postfunc is None
+        if store_raw and not getattr(trace, "save_arg_values", False):
+            hash_cache = getattr(trace, "_out_hash_cache", None)
+            if hash_cache is None:
+                hash_cache = {}
+                setattr(trace, "_out_hash_cache", hash_cache)
+            out_hash = _tensor_content_hash(raw_out)
+            if out_hash in hash_cache:
+                fields_dict["annotations"]["dedup_out_hash"] = out_hash
+                fields_dict["annotations"]["dedup_reference_label"] = hash_cache[out_hash][0]
+                raw_out = hash_cache[out_hash][1]
+            else:
+                hash_cache[out_hash] = (fields_dict["_layer_label_raw"], raw_out)
+        fields_dict["out"] = raw_out if store_raw else None
+        fields_dict["transformed_out"] = None
+        fields_dict["transformed_out_shape"] = None
+        fields_dict["transformed_out_dtype"] = None
+        fields_dict["transformed_out_memory"] = None
+        if out_postfunc is not None:
+            op_log = OpLog(fields_dict)
+            transformed_out = op_log._apply_postfunc(
+                raw_out,
+                out_postfunc,
+                postfunc_kind="out",
+                streaming_active=writer is not None,
+            )
+            op_log._validate_train_mode_postfunc_output(
+                raw_out, transformed_out, postfunc_kind="out"
+            )
+            op_log._validate_streaming_postfunc_output(
+                transformed_out,
+                postfunc_kind="out",
+                streaming_active=writer is not None,
+            )
+            fields_dict["transformed_out"] = transformed_out
+            fields_dict["transformed_out_shape"] = _shape_or_none(transformed_out)
+            fields_dict["transformed_out_dtype"] = _dtype_or_none(transformed_out)
+            fields_dict["transformed_out_memory"] = _memory_or_none(transformed_out)
+        fields_dict["has_saved_outs"] = True
+
+        _stream_activation_fields(trace, fields_dict)
+
+        out_sink = getattr(trace, "_out_sink", None)
+        if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
+            out_sink(fields_dict["_label_raw"], fields_dict["out"])
+
+        if trace.save_arg_values:
+            fields_dict["has_saved_args"] = True
+            fields_dict["saved_args"] = [_recursive_safe_copy(arg) for arg in t_args]
+            fields_dict["saved_kwargs"] = {
+                key: _recursive_safe_copy(value) for key, value in t_kwargs.items()
+            }
         else:
-            hash_cache[out_hash] = (fields_dict["_layer_label_raw"], raw_out)
-    fields_dict["out"] = raw_out if store_raw else None
-    fields_dict["transformed_out"] = None
-    fields_dict["transformed_out_shape"] = None
-    fields_dict["transformed_out_dtype"] = None
-    fields_dict["transformed_out_memory"] = None
-    if out_postfunc is not None:
-        op_log = OpLog(fields_dict)
-        transformed_out = op_log._apply_postfunc(
-            raw_out,
-            out_postfunc,
-            postfunc_kind="out",
-            streaming_active=getattr(trace, "_out_writer", None) is not None,
-        )
-        op_log._validate_train_mode_postfunc_output(raw_out, transformed_out, postfunc_kind="out")
-        fields_dict["transformed_out"] = transformed_out
-        fields_dict["transformed_out_shape"] = _shape_or_none(transformed_out)
-        fields_dict["transformed_out_dtype"] = _dtype_or_none(transformed_out)
-        fields_dict["transformed_out_memory"] = _memory_or_none(transformed_out)
-    fields_dict["has_saved_outs"] = True
+            fields_dict["saved_args"] = None
+            fields_dict["saved_kwargs"] = None
+    except Exception as exc:
+        if writer is not None:
+            writer.abort(f"Failed while saving out for {fields_dict['_label_raw']}: {exc}")
+        raise
 
-    out_sink = getattr(trace, "_out_sink", None)
-    if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
-        out_sink(fields_dict["_label_raw"], fields_dict["out"])
 
-    if trace.save_arg_values:
-        fields_dict["has_saved_args"] = True
-        fields_dict["saved_args"] = [_recursive_safe_copy(arg) for arg in t_args]
-        fields_dict["saved_kwargs"] = {
-            key: _recursive_safe_copy(value) for key, value in t_kwargs.items()
-        }
-    else:
-        fields_dict["saved_args"] = None
-        fields_dict["saved_kwargs"] = None
+def _stream_activation_fields(trace: "Trace", fields_dict: dict[str, Any]) -> None:
+    """Write saved activation tensors during capture when streaming is active.
+
+    Parameters
+    ----------
+    trace:
+        Active trace whose writer receives tensor blobs.
+    fields_dict:
+        Mutable live field mapping for the captured operation.
+
+    Returns
+    -------
+    None
+        Mutates pending blob-id fields when blobs are written.
+    """
+
+    writer = getattr(trace, "_out_writer", None)
+    if writer is None or not getattr(trace, "_in_exhaustive_pass", False):
+        return
+
+    label = fields_dict["_label_raw"]
+    for tensor_field, pending_field, kind in (
+        ("out", "_pending_blob_id", "out"),
+        ("transformed_out", "_pending_transformed_out_blob_id", "transformed_out"),
+    ):
+        tensor = fields_dict.get(tensor_field)
+        if tensor is None:
+            continue
+        blob_id = writer.next_blob_id()
+        fields_dict[pending_field] = blob_id
+        writer.write_blob(blob_id, tensor, kind=kind, label=label)
 
 
 def _make_layer_log_entry(

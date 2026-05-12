@@ -1363,6 +1363,11 @@ class OpLog:
                     self.transformed_out,
                     postfunc_kind="out",
                 )
+                self._validate_streaming_postfunc_output(
+                    self.transformed_out,
+                    postfunc_kind="out",
+                    streaming_active=writer is not None,
+                )
                 self.transformed_out_shape = _shape_or_none(self.transformed_out)
                 self.transformed_out_dtype = _dtype_or_none(self.transformed_out)
                 self.transformed_out_memory = _memory_or_none(self.transformed_out)
@@ -1444,6 +1449,11 @@ class OpLog:
                 raw_grad,
                 self.transformed_grad,
                 postfunc_kind="grad",
+            )
+            self._validate_streaming_postfunc_output(
+                self.transformed_grad,
+                postfunc_kind="grad",
+                streaming_active=writer is not None,
             )
             self.transformed_grad_shape = _shape_or_none(self.transformed_grad)
             self.transformed_grad_dtype = _dtype_or_none(self.transformed_grad)
@@ -1533,6 +1543,72 @@ class OpLog:
                 "graph (grad_fn is None) while train_mode=True. The transformed out "
                 "must remain differentiable."
             )
+
+    def _validate_streaming_postfunc_output(
+        self,
+        output: Any,
+        *,
+        postfunc_kind: str,
+        streaming_active: bool,
+    ) -> None:
+        """Validate transformed tensors before streaming bundle finalization.
+
+        Parameters
+        ----------
+        output:
+            Value returned by the user transform.
+        postfunc_kind:
+            Transform kind, either ``"out"`` or ``"grad"``.
+        streaming_active:
+            Whether a streaming bundle writer is active for this trace.
+
+        Returns
+        -------
+        None
+            Raises if streaming cannot serialize the transformed value.
+
+        Raises
+        ------
+        TorchLensIOError
+            If streaming is active and the transform returns a non-tensor or sparse tensor.
+        """
+
+        if not streaming_active:
+            return
+        if not isinstance(output, torch.Tensor):
+            message = (
+                f"Streaming save requires {postfunc_kind}_postfunc outputs to be "
+                f"torch.Tensor instances, but layer {self._streaming_label} produced "
+                f"{type(output).__name__}."
+            )
+            self._abort_streaming_writer(message)
+            raise TorchLensIOError(message)
+        if output.layout != torch.strided:
+            message = (
+                f"Streaming save does not support sparse {postfunc_kind}_postfunc outputs "
+                f"for layer {self._streaming_label}."
+            )
+            self._abort_streaming_writer(message)
+            raise TorchLensIOError(message)
+
+    def _abort_streaming_writer(self, message: str) -> None:
+        """Abort the active streaming writer when one is attached.
+
+        Parameters
+        ----------
+        message:
+            Reason written to the partial bundle marker.
+
+        Returns
+        -------
+        None
+            Mutates the writer state if present.
+        """
+
+        trace = self.source_trace
+        writer = getattr(trace, "_out_writer", None) if trace is not None else None
+        if writer is not None:
+            writer.abort(message)
 
     def _stream_tensor_blob(
         self,

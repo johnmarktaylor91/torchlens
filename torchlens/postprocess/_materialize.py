@@ -29,9 +29,40 @@ def materialize_log_from_fields(fields_dict: dict[str, object]) -> "OpLog":
     from torchlens.data_classes.buffer_log import BufferLog
     from torchlens.data_classes.op_log import OpLog
 
+    pending_blob_ids = _pop_pending_blob_ids(fields_dict)
     if fields_dict.get("is_buffer"):
         return BufferLog(fields_dict)  # type: ignore[return-value]
-    return OpLog(fields_dict)  # type: ignore[arg-type]
+    op_log = OpLog(fields_dict)  # type: ignore[arg-type]
+    for field_name, blob_id in pending_blob_ids.items():
+        setattr(op_log, field_name, blob_id)
+    return op_log
+
+
+def _pop_pending_blob_ids(fields_dict: dict[str, object]) -> dict[str, object]:
+    """Remove streaming-only pending blob ids before OpLog construction.
+
+    Parameters
+    ----------
+    fields_dict
+        Raw field mapping populated by the backend hot path.
+
+    Returns
+    -------
+    dict[str, object]
+        Pending blob-id values keyed by OpLog attribute name.
+    """
+
+    pending_fields = (
+        "_pending_blob_id",
+        "_pending_transformed_out_blob_id",
+        "_pending_grad_blob_id",
+        "_pending_transformed_grad_blob_id",
+    )
+    return {
+        field_name: fields_dict.pop(field_name)
+        for field_name in pending_fields
+        if field_name in fields_dict
+    }
 
 
 def register_materialized_event(
