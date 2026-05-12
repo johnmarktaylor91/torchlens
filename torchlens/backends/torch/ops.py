@@ -49,6 +49,7 @@ from ..._state import pause_logging
 from ._tl import get_label_list, get_param_meta, get_tensor_label, set_tensor_label
 from . import module_stack as _mstack
 from ...errors import CaptureError
+from ...fastlog._halt import HaltSignal
 from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
@@ -1236,6 +1237,8 @@ def log_function_output_tensors_predicate(
                 transformed_ram_payload=transformed_ram_payload,
                 predicate_matched=spec.save_out or spec.save_metadata,
             )
+        except HaltSignal:
+            raise
         except (TorchLensPostfuncError, TrainingModeConfigError):
             # Postfunc + train-mode validation errors are storage failures and
             # must surface directly to the caller, not be aggregated through

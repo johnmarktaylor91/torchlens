@@ -29,6 +29,7 @@ import torch
 from torch import nn
 
 from ..._errors import TorchLensPostfuncError
+from ...fastlog._halt import HaltSignal
 from ._tl import get_tensor_meta, set_tensor_label
 from ..._training_validation import TrainingModeConfigError
 from ...data_classes.buffer_log import BufferLog
@@ -178,6 +179,8 @@ def log_source_tensor_predicate(
             transformed_ram_payload=transformed_ram_payload,
             predicate_matched=spec.save_out or spec.save_metadata,
         )
+    except HaltSignal:
+        raise
     except (TorchLensPostfuncError, TrainingModeConfigError):
         # Postfunc + train-mode validation errors are storage failures and
         # must surface directly to the caller, not be aggregated through

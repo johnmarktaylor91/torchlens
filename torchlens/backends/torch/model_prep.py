@@ -36,6 +36,7 @@ import torch
 from torch import nn
 
 from ... import _state
+from ...fastlog._halt import HaltSignal
 from ._tl import (
     clear_meta,
     get_buffer_address,
@@ -1289,6 +1290,9 @@ def module_forward_decorator(
                     enter_spec,
                     predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
                 )
+            except HaltSignal:
+                _mstack.pop_frame(state.module_stack, frame)
+                raise
             except Exception as exc:
                 state.handle_predicate_exception(enter_ctx, exc)
             finally:
@@ -1337,6 +1341,8 @@ def module_forward_decorator(
                         exit_spec,
                         predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                     )
+                except HaltSignal:
+                    raise
                 except Exception as exc:
                     state.handle_predicate_exception(exit_ctx, exc)
                 finally:

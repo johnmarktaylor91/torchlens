@@ -39,6 +39,7 @@ from .. import _state
 from ..backends import CaptureBackend
 from ..backends.torch._tl import clear_meta, get_tensor_label
 from ..backends.torch.backend import TorchBackend
+from ..fastlog._halt import HaltSignal
 from ..ir import live_record_for_label
 
 if TYPE_CHECKING:
@@ -623,6 +624,8 @@ def run_and_log_inputs_through_model(
                         enter_spec,
                         predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
                     )
+                except HaltSignal:
+                    raise
                 except Exception as exc:
                     state.handle_predicate_exception(enter_ctx, exc)
                     append_projected_event(
@@ -663,6 +666,8 @@ def run_and_log_inputs_through_model(
                             exit_spec,
                             predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                         )
+                    except HaltSignal:
+                        raise
                     except Exception as exc:
                         state.handle_predicate_exception(exit_ctx, exc)
                         append_projected_event(
@@ -698,6 +703,15 @@ def run_and_log_inputs_through_model(
         _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
         return outputs
+
+    except HaltSignal:
+        _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
+        raw_layer_dict = getattr(self, "_raw_layer_dict", {})
+        for label in list(raw_layer_dict.keys()):
+            entry = raw_layer_dict.get(label)
+            if entry is not None and hasattr(entry, "out") and entry.out is not None:
+                clear_meta(entry.out)
+        raise
 
     except Exception as e:
         # active_logging's __exit__ already turned off the toggle.
