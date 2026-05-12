@@ -30,7 +30,7 @@ import tempfile
 import warnings
 from collections import OrderedDict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, cast
 
 import torch
 from torch import nn
@@ -2227,6 +2227,103 @@ def draw_backward(
         vis_fileformat=file_format,
         vis_direction=direction,
         code_panel=code_panel,
+    )
+
+
+def draw_combined(
+    trace: Trace,
+    vis_outpath: str | MissingType = MISSING,
+    vis_save_only: bool | MissingType = MISSING,
+    vis_fileformat: str | MissingType = MISSING,
+    vis_direction: VisDirectionLiteral | MissingType = MISSING,
+    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
+    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
+    node_spec_fn: Callable[[Any, Any], Any] | None = None,
+    backward_node_spec_fn: Callable[[Any, Any], Any] | None = None,
+    vis_mode: VisModeLiteral = "unrolled",
+    intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
+    show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+    visualization: VisualizationOptions | None = None,
+) -> str:
+    """Render an existing Trace's forward ops and backward grad_fns together.
+
+    Parameters
+    ----------
+    trace:
+        Trace with backward metadata captured by ``trace.log_backward(loss)``
+        or ``trace.recording_backward()``.
+    vis_outpath:
+        Output path for the rendered graph.
+    vis_save_only:
+        If True, save without opening a viewer.
+    vis_fileformat:
+        Output format.
+    vis_direction:
+        Layout direction. Defaults to ``"leftright"`` for combined graphs.
+    vis_graph_overrides:
+        Graphviz graph-level overrides.
+    vis_edge_overrides:
+        Graphviz forward-edge overrides.
+    node_spec_fn:
+        Optional callback receiving ``(layer_log, default_spec)``.
+    backward_node_spec_fn:
+        Optional callback receiving ``(grad_fn_log, default_spec)``.
+    vis_mode:
+        Combined rendering currently supports only ``"unrolled"``.
+    intervening_cluster:
+        Placement mode for grad_fns without a corresponding forward op.
+    show_buffer_layers:
+        Buffer visibility mode for the forward side.
+    visualization:
+        Grouped visualization options. Only output path, save behavior, file
+        format, direction, graph overrides, and edge overrides are used.
+
+    Returns
+    -------
+    str
+        Graphviz DOT source.
+    """
+
+    if visualization is None:
+        container_path = "combined_modelgraph"
+        save_only = False
+        file_format = "pdf"
+        direction: VisDirectionLiteral = "leftright"
+        graph_overrides = None
+        edge_overrides = None
+    else:
+        container_path = visualization.container_path
+        save_only = visualization.save_only
+        file_format = visualization.file_format
+        direction = visualization.direction
+        graph_overrides = visualization.graph_overrides
+        edge_overrides = visualization.edge_overrides
+
+    if vis_outpath is not MISSING:
+        container_path = cast(str, vis_outpath)
+    if vis_save_only is not MISSING:
+        save_only = cast(bool, vis_save_only)
+    if vis_fileformat is not MISSING:
+        file_format = cast(str, vis_fileformat)
+    if vis_direction is not MISSING:
+        direction = cast(VisDirectionLiteral, vis_direction)
+    if vis_graph_overrides is not MISSING:
+        graph_overrides = cast(dict[str, Any] | None, vis_graph_overrides)
+    if vis_edge_overrides is not MISSING:
+        edge_overrides = cast(dict[str, Any] | None, vis_edge_overrides)
+
+    return trace.draw_combined(
+        vis_outpath=container_path,
+        vis_graph_overrides=graph_overrides,
+        node_spec_fn=node_spec_fn,
+        backward_node_spec_fn=backward_node_spec_fn,
+        vis_edge_overrides=edge_overrides,
+        vis_save_only=save_only,
+        vis_fileformat=file_format,
+        vis_direction=direction,
+        vis_mode=vis_mode,
+        intervening_cluster=intervening_cluster,
+        show_buffer_layers=show_buffer_layers,
     )
 
 

@@ -3297,6 +3297,52 @@ class Trace:
             code_panel=code_panel,
         )
 
+    def draw_combined(
+        self,
+        vis_outpath: str = "combined_modelgraph",
+        vis_graph_overrides: Optional[Dict[str, Any]] = None,
+        node_spec_fn: Optional[Callable[..., Any]] = None,
+        backward_node_spec_fn: Optional[Callable[..., Any]] = None,
+        vis_edge_overrides: Optional[Dict[str, Any]] = None,
+        vis_save_only: bool = False,
+        vis_fileformat: str = "pdf",
+        vis_direction: VisDirectionLiteral = "leftright",
+        vis_mode: VisModeLiteral = "unrolled",
+        intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
+        show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+    ) -> str:
+        """Render forward ops and backward grad_fns in one graph.
+
+        Parameters
+        ----------
+        vis_outpath, vis_graph_overrides, node_spec_fn, backward_node_spec_fn, \
+        vis_edge_overrides, vis_save_only, vis_fileformat, vis_direction, \
+        vis_mode, intervening_cluster, show_buffer_layers:
+            Forwarded unchanged to
+            :func:`torchlens.visualization.rendering.render_combined_graph`.
+
+        Returns
+        -------
+        str
+            Graphviz DOT source.
+        """
+        from ..visualization.rendering import render_combined_graph as _impl
+
+        return _impl(
+            self,
+            vis_outpath=vis_outpath,
+            vis_graph_overrides=vis_graph_overrides,
+            node_spec_fn=node_spec_fn,
+            backward_node_spec_fn=backward_node_spec_fn,
+            vis_edge_overrides=vis_edge_overrides,
+            vis_save_only=vis_save_only,
+            vis_fileformat=vis_fileformat,
+            direction=vis_direction,
+            vis_mode=vis_mode,
+            intervening_cluster=intervening_cluster,
+            show_buffer_layers=show_buffer_layers,
+        )
+
     def preview_fastlog(
         self,
         predicate: Optional[Callable[..., Any]] = None,

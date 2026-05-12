@@ -53,6 +53,7 @@ from typing import (
     Tuple,
     Union,
     cast,
+    Literal,
 )
 
 import graphviz
@@ -199,6 +200,7 @@ BackwardNodeSpecFn = Callable[["GradFnLog", NodeSpec], NodeSpec | None]
 CollapsedNodeSpecFn = Callable[["ModuleLog", NodeSpec], NodeSpec | None]
 CollapseFn = Callable[["ModuleLog"], bool]
 SkipFn = Callable[["LayerLog"], bool]
+InterveningClusterMode = Literal["upstream", "outside", "downstream", "own"]
 
 # -- Color palette for node types --
 INPUT_COLOR = "#98FB98"  # Light green
@@ -232,6 +234,37 @@ def _view_rendered_file(filepath: str) -> None:
     """
 
     _open_file_quietly(filepath, announce_headless=True)
+
+
+def _strip_render_extension(vis_outpath: str) -> str:
+    """Return output path without a Graphviz-rendered file extension.
+
+    Parameters
+    ----------
+    vis_outpath:
+        User-provided render output path.
+
+    Returns
+    -------
+    str
+        Path without a recognized render extension.
+    """
+
+    split_outpath = vis_outpath.split(".")
+    if split_outpath[-1] in [
+        "pdf",
+        "png",
+        "jpg",
+        "svg",
+        "jpeg",
+        "bmp",
+        "pic",
+        "tif",
+        "tiff",
+        "dot",
+    ]:
+        return ".".join(split_outpath[:-1])
+    return vis_outpath
 
 
 def _normalize_buffer_visibility(
@@ -936,6 +969,7 @@ def render_backward_graph(
         "labelloc": "t",
         "labeljust": "left",
         "ordering": "out",
+        "compound": "true",
     }
     for arg_name, arg_val in (vis_graph_overrides or {}).items():
         if callable(arg_val):
@@ -1010,6 +1044,173 @@ def render_backward_graph(
     return cast(str, dot.source)
 
 
+def render_combined_graph(
+    self: "Trace",
+    vis_outpath: str = "combined_modelgraph",
+    vis_graph_overrides: Optional[Dict[str, Any]] = None,
+    node_spec_fn: NodeSpecFn | None = None,
+    backward_node_spec_fn: BackwardNodeSpecFn | None = None,
+    vis_edge_overrides: Optional[Dict[str, Any]] = None,
+    vis_save_only: bool = False,
+    vis_fileformat: str = "pdf",
+    direction: VisDirectionLiteral = "leftright",
+    vis_mode: VisModeLiteral = "unrolled",
+    intervening_cluster: InterveningClusterMode = "upstream",
+    show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+) -> str:
+    """Render one Graphviz graph containing forward ops and backward grad_fns.
+
+    Parameters
+    ----------
+    self:
+        Trace containing forward and explicit backward metadata.
+    vis_outpath:
+        Output path for the rendered graph.
+    vis_graph_overrides:
+        Graphviz graph-level overrides.
+    node_spec_fn:
+        Optional callback receiving ``(layer_log, default_spec)`` for forward nodes.
+    backward_node_spec_fn:
+        Optional callback receiving ``(grad_fn_log, default_spec)`` for backward nodes.
+    vis_edge_overrides:
+        Graphviz edge-level overrides applied to forward edges.
+    vis_save_only:
+        If True, save without opening a viewer.
+    vis_fileformat:
+        Output format.
+    direction:
+        Layout direction.
+    vis_mode:
+        Combined rendering currently supports only ``"unrolled"``.
+    intervening_cluster:
+        Placement mode for grad_fns that have no corresponding forward op.
+    show_buffer_layers:
+        Buffer visibility mode for the forward side.
+
+    Returns
+    -------
+    str
+        Graphviz DOT source.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``vis_mode="rolled"`` is requested.
+    ValueError
+        If no explicit backward graph has been captured.
+    """
+
+    if vis_mode == "rolled":
+        raise NotImplementedError("draw_combined does not support vis_mode='rolled' yet.")
+    if vis_mode != "unrolled":
+        raise ValueError("vis_mode must be either 'unrolled' or 'rolled'")
+    if not self.has_backward_pass or not self.grad_fn_logs:
+        raise ValueError("No backward graph is available; call log_backward(loss) first.")
+    if not self._layers_logged:
+        raise ValueError(
+            "Must have all layers logged in order to render the graph; either save all layers,"
+            "set keep_unsaved_layers to True, or use show_model_graph."
+        )
+
+    show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
+    vis_outpath = _strip_render_extension(vis_outpath)
+    rankdir = direction_to_rankdir(direction)
+    overrides = VisualizationOverrides(
+        graph=graphviz_graph_overrides(vis_graph_overrides),
+        edge=vis_edge_overrides or {},
+        grad_edge={},
+        module={},
+    )
+
+    graph_caption = (
+        f"<<B>{self.model_name} combined forward/backward graph</B><br align='left'/>"
+        f"{self.num_tensors} forward nodes, {self.num_grad_fns} grad_fn nodes"
+        f"<br align='left'/>{self.backward_num_calls} backward pass(es)<br align='left'/>>"
+    )
+    dot = graphviz.Digraph(
+        name=f"{self.model_name}_combined",
+        comment="Combined forward and backward graph",
+        format=vis_fileformat,
+    )
+    graph_args = {
+        "rankdir": rankdir,
+        "label": graph_caption,
+        "labelloc": "t",
+        "labeljust": "left",
+        "ordering": "out",
+    }
+    for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
+        graph_args[arg_name] = str(arg_val(self) if callable(arg_val) else arg_val)
+    dot.graph_attr.update(graph_args)
+    dot.node_attr.update({"ordering": "out"})
+    dot.edge_attr.update({"ordering": "out"})
+
+    module_cluster_dict: Dict[str, Any] = defaultdict(
+        lambda: {"edges": [], "nodes": [], "has_input_ancestor": False}
+    )
+    entries_to_plot: dict[str, GraphNode] = dict(self.layer_dict_main_keys)
+    edge_map, skipped_labels = _build_skip_filtered_edge_map(
+        self,
+        entries_to_plot,
+        vis_mode="unrolled",
+        show_buffer_layers=show_buffer_layers,
+        skip_fn=None,
+    )
+    edges_used: Set[tuple[str, str]] = set()
+    collapsed_modules: Set[str] = set()
+    for node in entries_to_plot.values():
+        if node.layer_label in skipped_labels:
+            continue
+        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+            continue
+        _add_node_to_graphviz(
+            self,
+            node,
+            dot,
+            module_cluster_dict,
+            edges_used,
+            "unrolled",
+            collapsed_modules,
+            show_buffer_layers=show_buffer_layers,
+            overrides=overrides,
+            node_spec_fn=node_spec_fn,
+            edge_map=edge_map,
+        )
+
+    _add_combined_backward_nodes(
+        self,
+        module_cluster_dict,
+        dot,
+        backward_node_spec_fn,
+        intervening_cluster,
+    )
+    _add_combined_backward_edges(self, dot)
+    _add_combined_correspondence_edges(self, dot, intervening_cluster)
+    _setup_subgraphs(self, dot, "unrolled", module_cluster_dict, overrides)
+    _setup_combined_special_clusters(dot, module_cluster_dict)
+
+    _RENDER_TIMEOUT = 120
+    source_path = dot.save(vis_outpath)
+    try:
+        rendered_path = f"{vis_outpath}.{vis_fileformat}"
+        cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+        subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+        if not vis_save_only:
+            _view_rendered_file(rendered_path)
+        _vprint(self, f"Combined graph saved to {vis_outpath}.{vis_fileformat}")
+    except subprocess.TimeoutExpired:
+        warnings.warn(
+            f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for combined graph with "
+            f"{self.num_tensors + self.num_grad_fns} nodes. DOT source saved to '{source_path}'."
+        )
+    except subprocess.CalledProcessError as e:
+        warnings.warn(f"Graphviz render failed: {e.stderr.decode()}")
+    finally:
+        if os.path.exists(source_path):
+            os.remove(source_path)
+    return cast(str, dot.source)
+
+
 def _backward_dot_node_name(grad_fn: "GradFnLog") -> str:
     """Return a DOT-safe node name for a grad_fn log.
 
@@ -1044,6 +1245,29 @@ def _add_backward_node_to_graphviz(
         Optional callback receiving ``(grad_fn, default_spec)``.
     """
 
+    node_args = _backward_node_graphviz_args(grad_fn, node_spec_fn)
+    graphviz_graph.node(**node_args)
+
+
+def _backward_node_graphviz_args(
+    grad_fn: "GradFnLog",
+    node_spec_fn: BackwardNodeSpecFn | None,
+) -> dict[str, Any]:
+    """Build Graphviz node arguments for one backward grad_fn.
+
+    Parameters
+    ----------
+    grad_fn:
+        GradFnLog to render.
+    node_spec_fn:
+        Optional callback receiving ``(grad_fn, default_spec)``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Keyword arguments accepted by ``graphviz.Digraph.node``.
+    """
+
     default_spec = NodeSpec(
         lines=_compute_backward_node_lines(grad_fn),
         shape="oval",
@@ -1061,7 +1285,319 @@ def _add_backward_node_to_graphviz(
         spec = default_spec
     node_args = _node_spec_to_graphviz_args(spec)
     node_args["name"] = _backward_dot_node_name(grad_fn)
-    graphviz_graph.node(**node_args)
+    return node_args
+
+
+def _add_combined_backward_nodes(
+    trace: "Trace",
+    module_cluster_dict: Dict[str, Any],
+    graphviz_graph: graphviz.Digraph,
+    node_spec_fn: BackwardNodeSpecFn | None,
+    intervening_cluster: InterveningClusterMode,
+) -> None:
+    """Add backward nodes to the combined graph and module clusters.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing grad_fn metadata.
+    module_cluster_dict:
+        Shared module cluster accumulator.
+    graphviz_graph:
+        Graphviz graph being rendered.
+    node_spec_fn:
+        Optional backward node callback.
+    intervening_cluster:
+        Placement mode for intervening grad_fns.
+    """
+
+    for grad_fn in trace.grad_fns:
+        node_args = _backward_node_graphviz_args(grad_fn, node_spec_fn)
+        module_key = _module_key_for_grad_fn(trace, grad_fn, intervening_cluster)
+        if module_key is None:
+            graphviz_graph.node(**node_args)
+            continue
+        module_cluster_dict[module_key]["nodes"].append(node_args)
+        module_cluster_dict[module_key]["has_input_ancestor"] = True
+
+
+def _add_combined_backward_edges(trace: "Trace", graphviz_graph: graphviz.Digraph) -> None:
+    """Add backward grad_fn edges to a combined graph.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing grad_fn metadata.
+    graphviz_graph:
+        Graphviz graph being rendered.
+    """
+
+    edge_args = {"color": GRADIENT_ARROW_COLOR, "fontcolor": GRADIENT_ARROW_COLOR}
+    visible_ids = set(trace.grad_fn_logs)
+    for grad_fn in trace.grad_fns:
+        tail_name = _backward_dot_node_name(grad_fn)
+        for next_grad_fn_id in grad_fn.next_grad_fn_ids:
+            if next_grad_fn_id not in visible_ids:
+                continue
+            head_name = _backward_dot_node_name(trace.grad_fn_logs[next_grad_fn_id])
+            graphviz_graph.edge(tail_name, head_name, **edge_args)
+
+
+def _add_combined_correspondence_edges(
+    trace: "Trace",
+    graphviz_graph: graphviz.Digraph,
+    intervening_cluster: InterveningClusterMode,
+) -> None:
+    """Add dashed forward-to-backward correspondence edges.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing paired forward and grad_fn metadata.
+    graphviz_graph:
+        Graphviz graph being rendered.
+    intervening_cluster:
+        Placement mode used to infer optional cluster boundary attributes.
+    """
+
+    for grad_fn in trace.grad_fns:
+        if grad_fn.op is None:
+            continue
+        edge_attrs = {
+            "color": GRADIENT_ARROW_COLOR,
+            "fontcolor": GRADIENT_ARROW_COLOR,
+            "style": "dashed",
+            "constraint": "false",
+            "arrowsize": ".6",
+        }
+        module_key = _module_key_for_grad_fn(trace, grad_fn, intervening_cluster)
+        if module_key is not None:
+            cluster_name = f"cluster_{module_key.replace(':', '_pass')}"
+            edge_attrs["ltail"] = cluster_name
+            edge_attrs["lhead"] = cluster_name
+        graphviz_graph.edge(
+            grad_fn.op.layer_label,
+            _backward_dot_node_name(grad_fn),
+            **edge_attrs,
+        )
+
+
+def _setup_combined_special_clusters(
+    graphviz_graph: graphviz.Digraph,
+    module_cluster_dict: Dict[str, Any],
+) -> None:
+    """Render non-module combined graph clusters.
+
+    Parameters
+    ----------
+    graphviz_graph:
+        Graphviz graph being rendered.
+    module_cluster_dict:
+        Shared module cluster accumulator.
+    """
+
+    cluster_data = module_cluster_dict.get("__intervening__")
+    if cluster_data is None:
+        return
+    with graphviz_graph.subgraph(name="cluster___intervening__") as subgraph:
+        subgraph.attr(
+            label="intervening grad_fns",
+            color=GRADIENT_ARROW_COLOR,
+            fontcolor="black",
+            style="dashed",
+        )
+        for node_args in cluster_data.get("nodes", []):
+            subgraph.node(**node_args)
+        for edge_dict in cluster_data.get("edges", []):
+            subgraph.edge(**edge_dict)
+
+
+def _module_key_for_grad_fn(
+    trace: "Trace",
+    grad_fn: "GradFnLog",
+    mode: InterveningClusterMode,
+) -> str | None:
+    """Return the module cluster key for a grad_fn in combined rendering.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing forward, backward, and parameter metadata.
+    grad_fn:
+        GradFnLog to place.
+    mode:
+        Placement mode for intervening grad_fns.
+
+    Returns
+    -------
+    str | None
+        Unrolled module-call key, special cluster key, or None for top level.
+    """
+
+    if grad_fn.op is not None and not grad_fn.is_intervening:
+        return _module_key_for_forward_op(grad_fn.op)
+    if grad_fn.grad_fn_type == "accumulategrad":
+        param_key = _param_module_for_accumulate_grad(trace, grad_fn)
+        if param_key is not None:
+            return param_key
+    if mode == "outside":
+        return None
+    if mode == "own":
+        return "__intervening__"
+    if mode == "upstream":
+        return _infer_intervening_module_upstream(trace, grad_fn)
+    if mode == "downstream":
+        return _infer_intervening_module_downstream(trace, grad_fn)
+    raise ValueError("intervening_cluster must be 'upstream', 'outside', 'downstream', or 'own'.")
+
+
+def _module_key_for_forward_op(op: "LayerLog") -> str | None:
+    """Return the unrolled module cluster key for a forward op.
+
+    Parameters
+    ----------
+    op:
+        Forward operation or layer log associated with a grad_fn.
+
+    Returns
+    -------
+    str | None
+        Module-call key or None for top-level ops.
+    """
+
+    output_modules = list(getattr(op, "output_of_modules", []) or [])
+    if getattr(op, "is_submodule_output", False) and output_modules:
+        output_module = str(output_modules[0])
+        output_calls = list(getattr(op, "output_of_module_calls", []) or [])
+        for output_call in output_calls:
+            if str(output_call).split(":", 1)[0] == output_module:
+                return str(output_call)
+        return f"{output_module}:1"
+    modules = list(getattr(op, "modules", []) or [])
+    if not modules:
+        return None
+    return str(modules[-1])
+
+
+def _param_module_for_accumulate_grad(trace: "Trace", grad_fn: "GradFnLog") -> str | None:
+    """Return an unambiguous owning module for an AccumulateGrad node.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing parameter metadata and grad_fn parameter refs.
+    grad_fn:
+        AccumulateGrad log.
+
+    Returns
+    -------
+    str | None
+        Owning module-call key, or None when attribution is missing or ambiguous.
+    """
+
+    param_address = trace._grad_fn_param_refs.get(grad_fn.label)
+    if param_address is None:
+        return None
+    param_log = trace.params[param_address]
+    if param_log.co_parent_params:
+        return None
+    module_address = param_log.module_address
+    if module_address is None:
+        return None
+    return f"{module_address}:1"
+
+
+def _infer_intervening_module_upstream(trace: "Trace", grad_fn: "GradFnLog") -> str | None:
+    """Infer an intervening grad_fn module from downstream autograd edges.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing grad_fn metadata.
+    grad_fn:
+        Intervening GradFnLog to place.
+
+    Returns
+    -------
+    str | None
+        Inherited module key, if a paired grad_fn is reachable.
+    """
+
+    return _infer_intervening_module_bfs(trace, [grad_fn.grad_fn_id], reverse=False)
+
+
+def _infer_intervening_module_downstream(trace: "Trace", grad_fn: "GradFnLog") -> str | None:
+    """Infer an intervening grad_fn module from reverse autograd edges.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing grad_fn metadata.
+    grad_fn:
+        Intervening GradFnLog to place.
+
+    Returns
+    -------
+    str | None
+        Inherited module key, if a paired grad_fn is reachable.
+    """
+
+    reverse_edges: dict[int, list[int]] = defaultdict(list)
+    for candidate in trace.grad_fns:
+        for next_grad_fn_id in candidate.next_grad_fn_ids:
+            reverse_edges[next_grad_fn_id].append(candidate.grad_fn_id)
+    return _infer_intervening_module_bfs(
+        trace,
+        reverse_edges.get(grad_fn.grad_fn_id, []),
+        reverse=True,
+    )
+
+
+def _infer_intervening_module_bfs(
+    trace: "Trace",
+    start_ids: Iterable[int],
+    *,
+    reverse: bool,
+) -> str | None:
+    """Find the nearest module-anchored grad_fn by breadth-first search.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing grad_fn metadata.
+    start_ids:
+        Initial grad_fn ids to inspect.
+    reverse:
+        Whether traversal uses reverse edges.
+
+    Returns
+    -------
+    str | None
+        Module key for the nearest paired grad_fn, if found.
+    """
+
+    queue = list(start_ids)
+    seen: set[int] = set()
+    reverse_edges: dict[int, list[int]] = defaultdict(list)
+    if reverse:
+        for candidate in trace.grad_fns:
+            for next_grad_fn_id in candidate.next_grad_fn_ids:
+                reverse_edges[next_grad_fn_id].append(candidate.grad_fn_id)
+    while queue:
+        grad_fn_id = queue.pop(0)
+        if grad_fn_id in seen or grad_fn_id not in trace.grad_fn_logs:
+            continue
+        seen.add(grad_fn_id)
+        candidate = trace.grad_fn_logs[grad_fn_id]
+        if candidate.op is not None and not candidate.is_intervening:
+            module_key = _module_key_for_forward_op(candidate.op)
+            if module_key is not None:
+                return module_key
+        if reverse:
+            queue.extend(reverse_edges.get(grad_fn_id, []))
+        else:
+            queue.extend(candidate.next_grad_fn_ids)
+    return None
 
 
 def _compute_backward_node_lines(grad_fn: "GradFnLog") -> list[str]:
@@ -4340,6 +4876,9 @@ def _setup_subgraphs_recurse(
                 else:
                     module_args[arg_name] = str(arg_val)
             s.attr(**module_args)
+            subgraph_nodes = module_edge_dict[subgraph_name].get("nodes", [])
+            for node_args in subgraph_nodes:
+                s.node(**node_args)
             subgraph_edges = module_edge_dict[subgraph_name]["edges"]
             for edge_dict in subgraph_edges:
                 s.edge(**edge_dict)

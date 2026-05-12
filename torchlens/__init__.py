@@ -72,6 +72,7 @@ from .user_funcs import (
     record_kpi_in_graph,
     register_tensor_connection,
     draw_backward as _moved_draw_backward,
+    draw_combined as _moved_draw_combined,
     show_bundle_graph,
     show_model_graph as _moved_show_model_graph,
     summary as _moved_summary,
@@ -733,6 +734,20 @@ def draw_backward(*args: Any, **kwargs: Any) -> Any:
 
     _warn_moved_name("draw_backward", "torchlens.visualization", "draw_backward")
     return _moved_draw_backward(*args, **kwargs)
+
+
+@_functools.wraps(_moved_draw_combined)
+def draw_combined(*args: Any, **kwargs: Any) -> Any:
+    """Deprecated top-level wrapper for ``torchlens.visualization.draw_combined``.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Legacy arguments forwarded unchanged.
+    """
+
+    _warn_moved_name("draw_combined", "torchlens.visualization", "draw_combined")
+    return _moved_draw_combined(*args, **kwargs)
 
 
 def bundle(*args: Any, **kwargs: Any) -> Bundle:
