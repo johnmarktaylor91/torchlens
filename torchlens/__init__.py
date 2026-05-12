@@ -647,13 +647,16 @@ def validate_backward_pass(
     random_seed: int | None = None,
     atol: float = 1e-5,
     rtol: float = 1e-4,
+    validate_layer_grads: bool = False,
+    layer_grad_atol: float | None = None,
+    layer_grad_rtol: float | None = None,
 ) -> bool:
     """Deprecated top-level wrapper for ``torchlens.validation.validate_backward_pass``.
 
     Parameters
     ----------
     model, input_args, input_kwargs, loss_fn, perturb_saved_grads, validate_metadata,
-    random_seed, atol, rtol:
+    random_seed, atol, rtol, validate_layer_grads, layer_grad_atol, layer_grad_rtol:
         Legacy backward validation arguments.
     """
 
@@ -669,6 +672,9 @@ def validate_backward_pass(
         perturb_saved_grads=perturb_saved_grads,
         atol=atol,
         rtol=rtol,
+        validate_layer_grads=validate_layer_grads,
+        layer_grad_atol=layer_grad_atol,
+        layer_grad_rtol=layer_grad_rtol,
     )
 
 

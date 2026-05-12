@@ -96,6 +96,9 @@ def _validate_scope_keywords(
     perturb_saved_grads: bool,
     atol: float,
     rtol: float,
+    validate_layer_grads: bool,
+    layer_grad_atol: float | None,
+    layer_grad_rtol: float | None,
 ) -> None:
     """Validate that backward-only keywords are scoped correctly.
 
@@ -111,6 +114,12 @@ def _validate_scope_keywords(
         Backward absolute tolerance.
     rtol:
         Backward relative tolerance.
+    validate_layer_grads:
+        Backward layer-gradient validation flag.
+    layer_grad_atol:
+        Backward layer-gradient absolute tolerance.
+    layer_grad_rtol:
+        Backward layer-gradient relative tolerance.
     """
 
     if scope == "backward":
@@ -123,6 +132,12 @@ def _validate_scope_keywords(
         _raise_backward_only("atol", scope)
     if rtol != 1e-4:
         _raise_backward_only("rtol", scope)
+    if validate_layer_grads:
+        _raise_backward_only("validate_layer_grads", scope)
+    if layer_grad_atol is not None:
+        _raise_backward_only("layer_grad_atol", scope)
+    if layer_grad_rtol is not None:
+        _raise_backward_only("layer_grad_rtol", scope)
 
 
 def _intervention_report(
@@ -198,6 +213,9 @@ def validate(
     perturb_saved_grads: bool = False,
     atol: float = 1e-5,
     rtol: float = 1e-4,
+    validate_layer_grads: bool = False,
+    layer_grad_atol: float | None = None,
+    layer_grad_rtol: float | None = None,
 ) -> bool:
     """Validate a model/input pair for a requested TorchLens scope.
 
@@ -226,6 +244,12 @@ def validate(
         Backward-only absolute tolerance.
     rtol:
         Backward-only relative tolerance.
+    validate_layer_grads:
+        Backward-only layer-gradient validation flag.
+    layer_grad_atol:
+        Backward-only layer-gradient absolute tolerance.
+    layer_grad_rtol:
+        Backward-only layer-gradient relative tolerance.
 
     Returns
     -------
@@ -243,6 +267,9 @@ def validate(
         perturb_saved_grads=perturb_saved_grads,
         atol=atol,
         rtol=rtol,
+        validate_layer_grads=validate_layer_grads,
+        layer_grad_atol=layer_grad_atol,
+        layer_grad_rtol=layer_grad_rtol,
     )
     if normalized_scope == "backward":
         return validate_backward_pass(
@@ -255,6 +282,9 @@ def validate(
             random_seed=random_seed,
             atol=atol,
             rtol=rtol,
+            validate_layer_grads=validate_layer_grads,
+            layer_grad_atol=layer_grad_atol,
+            layer_grad_rtol=layer_grad_rtol,
         )
 
     from ..user_funcs import validate_forward_pass

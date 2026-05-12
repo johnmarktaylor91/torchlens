@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from collections import OrderedDict
-from typing import Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 import warnings
 
 import torch
@@ -15,6 +15,9 @@ from ..intervention.errors import AppendStateValidationWarning
 from ..utils.arg_handling import normalize_input_args
 from ..utils.display import warn_parallel
 from ..utils.rng import set_random_seed
+
+if TYPE_CHECKING:
+    from ._layer_grad_report import LayerGradReport
 
 
 def _sum_tensors(value: Any) -> torch.Tensor:
@@ -178,6 +181,38 @@ def _restore_training_mode(model: nn.Module, training: bool) -> None:
     model.train(training)
 
 
+def _reconstruct_candidate_output_for_loss(trace: Any) -> Any:
+    """Rebuild the candidate model output passed to a loss function.
+
+    Parameters
+    ----------
+    trace:
+        Candidate TorchLens trace.
+
+    Returns
+    -------
+    Any
+        Single output tensor, rebuilt output container, or flat list fallback.
+    """
+
+    output_layers = [trace[layer_label].out for layer_label in trace.output_layers]
+    if len(output_layers) == 1:
+        return output_layers[0]
+    root_call = None
+    modules = getattr(trace, "modules", None)
+    if modules is not None and "self:1" in modules:
+        root_call = modules["self:1"]
+    output_structure = getattr(root_call, "output_structure", None)
+    if output_structure is None:
+        return output_layers
+    from ..intervention.types import rebuild_container_from_spec
+
+    try:
+        return rebuild_container_from_spec(output_structure, output_layers)
+    except ValueError:
+        return output_layers
+
+
 def _is_appended_trace(value: Any) -> bool:
     """Return whether a value is an appended Trace-like object.
 
@@ -230,6 +265,9 @@ def validate_backward_pass(
     random_seed: int | None = None,
     atol: float = 1e-5,
     rtol: float = 1e-4,
+    validate_layer_grads: bool = False,
+    layer_grad_atol: float | None = None,
+    layer_grad_rtol: float | None = None,
 ) -> bool:
     """Validate TorchLens backward capture against stock autograd parameter grads.
 
@@ -255,6 +293,12 @@ def validate_backward_pass(
         Absolute tolerance for ``torch.allclose``.
     rtol:
         Relative tolerance for ``torch.allclose``.
+    validate_layer_grads:
+        If True, additionally validate per-module-output gradients.
+    layer_grad_atol:
+        Optional absolute tolerance for per-module-output gradients.
+    layer_grad_rtol:
+        Optional relative tolerance for per-module-output gradients.
 
     Returns
     -------
@@ -309,8 +353,7 @@ def validate_backward_pass(
             grads_to_save="all",
             random_seed=random_seed,
         )
-        output_layers = [trace[layer_label].out for layer_label in trace.output_layers]
-        logged_output: Any = output_layers[0] if len(output_layers) == 1 else output_layers
+        logged_output = _reconstruct_candidate_output_for_loss(trace)
         logged_loss = loss_fn(logged_output)
         trace.log_backward(logged_loss)
         if validate_metadata:
@@ -324,7 +367,7 @@ def validate_backward_pass(
 
         if expected_param_grads.keys() != observed_param_grads.keys():
             return False
-        return (
+        params_passed = (
             all(
                 torch.allclose(
                     observed_param_grads[name], expected_param_grads[name], atol=atol, rtol=rtol
@@ -333,9 +376,118 @@ def validate_backward_pass(
             )
             and not perturb_saved_grads
         )
+        if not params_passed:
+            return False
+        if validate_layer_grads:
+            layer_report = _validate_layer_grads(
+                model,
+                input_args,
+                input_kwargs,
+                loss_fn,
+                atol=layer_grad_atol if layer_grad_atol is not None else atol,
+                rtol=layer_grad_rtol if layer_grad_rtol is not None else rtol,
+                random_seed=random_seed,
+            )
+            return bool(layer_report)
+        return True
     finally:
         model.load_state_dict(state_dict)
         _restore_training_mode(model, original_training)
         model.zero_grad(set_to_none=True)
         if trace is not None:
             trace.cleanup()
+
+
+def _validate_layer_grads(
+    model: nn.Module,
+    input_args: Any,
+    input_kwargs: dict[str, Any] | None,
+    loss_fn: Callable[[Any], torch.Tensor],
+    *,
+    atol: float,
+    rtol: float,
+    random_seed: int,
+) -> "LayerGradReport":
+    """Return a PATH E per-module-output gradient validation report.
+
+    Parameters
+    ----------
+    model:
+        Model to validate.
+    input_args:
+        Positional model inputs.
+    input_kwargs:
+        Keyword model inputs.
+    loss_fn:
+        Loss function mapping model output to a scalar tensor.
+    atol:
+        Absolute tolerance for module-output gradient comparison.
+    rtol:
+        Relative tolerance for module-output gradient comparison.
+    random_seed:
+        Fixed RNG seed used for both stock and candidate passes.
+
+    Returns
+    -------
+    LayerGradReport
+        Per-module-output gradient comparison report.
+    """
+
+    from ..user_funcs import trace as trace_fn
+    from ._layer_grad_report import _compare_module_output_grads
+    from ._stock_layer_grads import _stock_layer_grads
+
+    if input_kwargs is None:
+        input_kwargs = {}
+    input_args = normalize_input_args(input_args, model)
+    model_device = next((parameter.device for parameter in model.parameters()), None)
+    state_dict = _clone_state_dict_with_metadata(model)
+    original_training = model.training
+    candidate_trace = None
+
+    try:
+        set_random_seed(random_seed)
+        stock_inputs, stock_kwargs = _prepare_inputs_for_backward(
+            input_args, input_kwargs, model_device
+        )
+        model.zero_grad(set_to_none=True)
+        stock_module_grads, stock_identity_addresses = _stock_layer_grads(
+            model,
+            stock_inputs,
+            stock_kwargs,
+            loss_fn=loss_fn,
+            random_seed=random_seed,
+            state_dict_snapshot=state_dict,
+        )
+
+        model.load_state_dict(state_dict)
+        _restore_training_mode(model, original_training)
+        set_random_seed(random_seed)
+        candidate_inputs, candidate_kwargs = _prepare_inputs_for_backward(
+            input_args, input_kwargs, model_device
+        )
+        model.zero_grad(set_to_none=True)
+        candidate_trace = trace_fn(
+            model,
+            candidate_inputs,
+            input_kwargs=candidate_kwargs,
+            layers_to_save="all",
+            grads_to_save="all",
+            random_seed=random_seed,
+        )
+        candidate_output = _reconstruct_candidate_output_for_loss(candidate_trace)
+        candidate_loss = loss_fn(candidate_output)
+        candidate_trace.log_backward(candidate_loss)
+        return _compare_module_output_grads(
+            candidate_trace,
+            stock_module_grads,
+            stock_identity_addresses,
+            atol=atol,
+            rtol=rtol,
+        )
+    finally:
+        model.load_state_dict(state_dict)
+        _restore_training_mode(model, original_training)
+        model.zero_grad(set_to_none=True)
+        if candidate_trace is not None:
+            candidate_trace.cleanup()

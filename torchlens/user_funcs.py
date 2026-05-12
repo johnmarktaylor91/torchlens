@@ -2768,6 +2768,9 @@ def validate_backward_pass(
     random_seed: int | None = None,
     atol: float = 1e-5,
     rtol: float = 1e-4,
+    validate_layer_grads: bool = False,
+    layer_grad_atol: float | None = None,
+    layer_grad_rtol: float | None = None,
 ) -> bool:
     """Validate first-class backward capture against stock autograd.
 
@@ -2792,6 +2795,12 @@ def validate_backward_pass(
         Absolute allclose tolerance.
     rtol:
         Relative allclose tolerance.
+    validate_layer_grads:
+        If True, also validate per-module-output gradients.
+    layer_grad_atol:
+        Optional layer-gradient absolute tolerance.
+    layer_grad_rtol:
+        Optional layer-gradient relative tolerance.
 
     Returns
     -------
@@ -2810,6 +2819,9 @@ def validate_backward_pass(
         random_seed=random_seed,
         atol=atol,
         rtol=rtol,
+        validate_layer_grads=validate_layer_grads,
+        layer_grad_atol=layer_grad_atol,
+        layer_grad_rtol=layer_grad_rtol,
     )
 
 
