@@ -635,6 +635,8 @@ def validate_backward_pass(
     loss_fn: _Callable[[Any], _torch.Tensor] | None = None,
     *,
     perturb_saved_grads: bool = False,
+    validate_metadata: bool = True,
+    random_seed: int | None = None,
     atol: float = 1e-5,
     rtol: float = 1e-4,
 ) -> bool:
@@ -642,7 +644,8 @@ def validate_backward_pass(
 
     Parameters
     ----------
-    model, input_args, input_kwargs, loss_fn, perturb_saved_grads, atol, rtol:
+    model, input_args, input_kwargs, loss_fn, perturb_saved_grads, validate_metadata,
+    random_seed, atol, rtol:
         Legacy backward validation arguments.
     """
 
@@ -652,6 +655,8 @@ def validate_backward_pass(
         input_args,
         input_kwargs,
         scope="backward",
+        random_seed=random_seed,
+        validate_metadata=validate_metadata,
         loss_fn=loss_fn,
         perturb_saved_grads=perturb_saved_grads,
         atol=atol,

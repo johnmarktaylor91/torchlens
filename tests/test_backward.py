@@ -1,10 +1,16 @@
 """Smoke tests for first-class backward-pass capture."""
 
+from types import MethodType
+from unittest import mock
+
 import torch
 from torch import nn
 import pytest
 
 import torchlens as tl
+import torchlens.validation as tl_validation
+import torchlens.validation.backward as backward_validation
+import torchlens.validation.consolidated as consolidated_validation
 from torchlens.data_classes.grad_fn_log import GradFnLog
 
 
@@ -43,6 +49,86 @@ class _CustomModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run a forward pass."""
         return _DoubleFn.apply(x).sum()
+
+
+class _SquareFunction(torch.autograd.Function):
+    """Custom autograd function with non-trivial gradient."""
+
+    @staticmethod
+    def forward(ctx: torch.autograd.function.FunctionCtx, x: torch.Tensor) -> torch.Tensor:
+        """Square the input tensor."""
+
+        ctx.save_for_backward(x)
+        return x.square()
+
+    @staticmethod
+    def backward(ctx: torch.autograd.function.FunctionCtx, grad: torch.Tensor) -> torch.Tensor:
+        """Return the analytical square gradient."""
+
+        (x,) = ctx.saved_tensors
+        return 2 * x * grad
+
+
+class _CustomParamModel(nn.Module):
+    """Parameterized model that routes through a custom autograd Function."""
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(3, 3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the custom function on a parameterized activation."""
+
+        return _SquareFunction.apply(x @ self.weight).sum()
+
+
+class _WeightTiedModel(nn.Module):
+    """Model that applies one module twice."""
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
+        super().__init__()
+        self.linear = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a shared layer twice."""
+
+        return self.linear(torch.relu(self.linear(x))).sum()
+
+
+class _DropoutBackwardModel(nn.Module):
+    """Dropout model for seeded backward validation."""
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
+        super().__init__()
+        self.dropout = nn.Dropout(0.5)
+        self.linear = nn.Linear(3, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply dropout and a linear layer."""
+
+        return self.linear(self.dropout(x)).sum()
+
+
+class _BatchNormBackwardModel(nn.Module):
+    """BatchNorm model for state restoration checks."""
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
+        super().__init__()
+        self.bn = nn.BatchNorm1d(3)
+        self.linear = nn.Linear(3, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply BatchNorm and a linear layer."""
+
+        return self.linear(self.bn(x)).sum()
 
 
 def _logged_model(
@@ -254,6 +340,178 @@ def test_validate_backward_pass_correct() -> None:
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     assert tl.validate_backward_pass(model, x)
+
+
+def test_validate_backward_pass_random_seed_kwarg_public_wrapper() -> None:
+    """The public backward wrapper forwards ``random_seed`` into the dispatcher."""
+
+    model = _TinyBackwardModel()
+    x = torch.randn(2, 3, requires_grad=True)
+    with mock.patch(
+        "torchlens.validation.consolidated.validate_backward_pass",
+        wraps=consolidated_validation.validate_backward_pass,
+    ) as validator:
+        with pytest.warns(DeprecationWarning):
+            assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert validator.call_args is not None
+    assert validator.call_args.kwargs["random_seed"] == 42
+
+
+def test_validation_validate_backward_pass_random_seed_kwarg_user_funcs_path() -> None:
+    """The validation subpackage path forwards ``random_seed`` to the source validator."""
+
+    model = _TinyBackwardModel()
+    x = torch.randn(2, 3, requires_grad=True)
+    with mock.patch(
+        "torchlens.validation.backward.validate_backward_pass",
+        wraps=backward_validation.validate_backward_pass,
+    ) as validator:
+        assert tl_validation.validate_backward_pass(model, x, random_seed=42)
+    assert validator.call_args is not None
+    assert validator.call_args.kwargs["random_seed"] == 42
+
+
+def test_validate_backward_random_seed_deterministic() -> None:
+    """A fixed seed produces repeatable backward validation outcomes."""
+
+    torch.manual_seed(0)
+    model = _DropoutBackwardModel().train()
+    x = torch.randn(6, 3, requires_grad=True)
+    first = tl.validate_backward_pass(model, x, random_seed=42)
+    second = tl.validate_backward_pass(model, x, random_seed=42)
+    assert first is True
+    assert second is first
+
+
+def test_validate_backward_state_dict_restored_between_passes() -> None:
+    """BatchNorm running stats are restored when validation exits."""
+
+    torch.manual_seed(0)
+    model = _BatchNormBackwardModel().train()
+    x = torch.randn(6, 3, requires_grad=True)
+    running_mean = model.bn.running_mean.detach().clone()
+    running_var = model.bn.running_var.detach().clone()
+
+    assert tl.validate_backward_pass(model, x, random_seed=42)
+
+    assert torch.equal(model.bn.running_mean, running_mean)
+    assert torch.equal(model.bn.running_var, running_var)
+
+
+def test_validate_backward_zero_grad_between_passes() -> None:
+    """Backward validation zeros parameter grads before, between, and after passes."""
+
+    model = _TinyBackwardModel()
+    x = torch.randn(2, 3, requires_grad=True)
+    calls: list[bool | None] = []
+    original_zero_grad = model.zero_grad
+
+    def counted_zero_grad(self: nn.Module, set_to_none: bool | None = True) -> None:
+        """Record zero_grad calls and delegate to the original method."""
+
+        calls.append(set_to_none)
+        original_zero_grad(set_to_none=set_to_none)
+
+    model.zero_grad = MethodType(counted_zero_grad, model)
+    assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert calls == [True, True, True]
+
+
+def test_validate_backward_dropout_train_mode_reproducible() -> None:
+    """Seeded validation handles train-mode Dropout."""
+
+    torch.manual_seed(0)
+    model = _DropoutBackwardModel().train()
+    x = torch.randn(6, 3, requires_grad=True)
+    assert tl.validate_backward_pass(model, x, random_seed=42)
+
+
+def test_validate_backward_batchnorm_train_mode_state_restored() -> None:
+    """Seeded validation handles train-mode BatchNorm without leaking state."""
+
+    torch.manual_seed(0)
+    model = _BatchNormBackwardModel().train()
+    x = torch.randn(6, 3, requires_grad=True)
+    running_mean = model.bn.running_mean.detach().clone()
+    running_var = model.bn.running_var.detach().clone()
+
+    assert tl.validate_backward_pass(model, x, random_seed=42)
+    assert torch.equal(model.bn.running_mean, running_mean)
+    assert torch.equal(model.bn.running_var, running_var)
+
+
+def test_validate_backward_train_mode_audit() -> None:
+    """Backward validation preserves the model train/eval flag."""
+
+    model = _TinyBackwardModel()
+    x = torch.randn(2, 3, requires_grad=True)
+    for training in (True, False):
+        model.train(training)
+        assert tl.validate_backward_pass(model, x, random_seed=42)
+        assert model.training is training
+
+
+def test_validate_backward_multipass_weight_tied() -> None:
+    """Parameter-grad comparison handles a shared module used twice."""
+
+    torch.manual_seed(0)
+    model = _WeightTiedModel()
+    x = torch.randn(2, 3, requires_grad=True)
+    assert tl.validate_backward_pass(model, x, random_seed=42)
+
+
+def test_validate_backward_custom_autograd_function() -> None:
+    """Parameter-grad comparison covers custom autograd.Function nodes."""
+
+    torch.manual_seed(0)
+    model = _CustomParamModel()
+    x = torch.randn(2, 3, requires_grad=True)
+    assert tl.validate_backward_pass(model, x, random_seed=42)
+
+
+def test_validate_backward_hygiene_data_parallel() -> None:
+    """Backward validation unwraps DataParallel wrappers."""
+
+    model = nn.DataParallel(_TinyBackwardModel())
+    model.module.cpu()
+    x = torch.randn(2, 3, requires_grad=True)
+    assert backward_validation.validate_backward_pass(model, x, random_seed=42)
+
+
+def test_validate_backward_hygiene_opaque_wrapper() -> None:
+    """Backward validation rejects opaque TorchScript wrappers."""
+
+    model = torch.jit.trace(_TinyBackwardModel(), torch.randn(2, 3))
+    x = torch.randn(2, 3, requires_grad=True)
+    with pytest.raises(RuntimeError, match="torch.jit"):
+        backward_validation.validate_backward_pass(model, x, random_seed=42)
+
+
+def test_accumulategrad_labels_deterministic_across_captures() -> None:
+    """AccumulateGrad labels are stable across seeded captures."""
+
+    torch.manual_seed(0)
+    model = _TinyBackwardModel()
+    x = torch.randn(2, 3, requires_grad=True)
+    trace1 = tl.trace(model, x, grads_to_save="all", random_seed=42)
+    trace1.log_backward(_output_loss(trace1))
+    labels1 = {
+        grad_fn.label
+        for grad_fn in trace1.grad_fn_logs.values()
+        if grad_fn.grad_fn_type == "accumulategrad"
+    }
+    trace1.cleanup()
+
+    trace2 = tl.trace(model, x, grads_to_save="all", random_seed=42)
+    trace2.log_backward(_output_loss(trace2))
+    labels2 = {
+        grad_fn.label
+        for grad_fn in trace2.grad_fn_logs.values()
+        if grad_fn.grad_fn_type == "accumulategrad"
+    }
+    trace2.cleanup()
+
+    assert labels1 == labels2
 
 
 @pytest.mark.smoke

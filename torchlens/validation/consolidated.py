@@ -245,16 +245,14 @@ def validate(
         rtol=rtol,
     )
     if normalized_scope == "backward":
-        if random_seed is not None:
-            raise TypeError("random_seed only valid for scope='forward' or scope='saved'")
-        if validate_metadata is not True:
-            raise TypeError("validate_metadata only valid for scope='forward' or scope='saved'")
         return validate_backward_pass(
             model,
             input_args,
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
             perturb_saved_grads=perturb_saved_grads,
+            validate_metadata=validate_metadata,
+            random_seed=random_seed,
             atol=atol,
             rtol=rtol,
         )

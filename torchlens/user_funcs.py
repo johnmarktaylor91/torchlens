@@ -2637,6 +2637,8 @@ def validate_backward_pass(
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
     perturb_saved_grads: bool = False,
+    validate_metadata: bool = True,
+    random_seed: int | None = None,
     atol: float = 1e-5,
     rtol: float = 1e-4,
 ) -> bool:
@@ -2655,6 +2657,10 @@ def validate_backward_pass(
         summing all returned tensors.
     perturb_saved_grads:
         If True, perturb a saved grad and require validation to fail.
+    validate_metadata:
+        If True, run metadata invariant checks on the captured backward trace.
+    random_seed:
+        Fixed RNG seed for stock and candidate passes.
     atol:
         Absolute allclose tolerance.
     rtol:
@@ -2673,6 +2679,8 @@ def validate_backward_pass(
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         perturb_saved_grads=perturb_saved_grads,
+        validate_metadata=validate_metadata,
+        random_seed=random_seed,
         atol=atol,
         rtol=rtol,
     )

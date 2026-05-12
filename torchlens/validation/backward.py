@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+import random
+from collections import OrderedDict
+from typing import Any, Callable, cast
 
 import torch
 from torch import nn
+
+from .._robustness import check_model_and_input_variants
+from ..utils.arg_handling import normalize_input_args
+from ..utils.display import warn_parallel
+from ..utils.rng import set_random_seed
 
 
 def _sum_tensors(value: Any) -> torch.Tensor:
@@ -84,6 +91,91 @@ def _param_grads(model: nn.Module) -> dict[str, torch.Tensor]:
     }
 
 
+def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.Tensor]:
+    """Clone a module ``state_dict`` while preserving PyTorch metadata.
+
+    Parameters
+    ----------
+    model:
+        Model whose state should be cloned.
+
+    Returns
+    -------
+    OrderedDict[str, torch.Tensor]
+        Detached tensor clones with PyTorch ``state_dict`` metadata preserved.
+    """
+
+    from ..user_funcs import _clone_state_dict_with_metadata as clone_state_dict
+
+    return clone_state_dict(model)
+
+
+def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
+    """Move nested tensors to ``device`` using the public validator helper.
+
+    Parameters
+    ----------
+    obj:
+        Tensor or nested container.
+    device:
+        Target device.
+
+    Returns
+    -------
+    Any
+        Object with all tensors moved to ``device``.
+    """
+
+    from ..user_funcs import _move_tensors_to_device as move_tensors
+
+    return move_tensors(obj, device)
+
+
+def _prepare_inputs_for_backward(
+    input_args: Any,
+    input_kwargs: dict[str, Any],
+    device: torch.device | None,
+) -> tuple[Any, dict[str, Any]]:
+    """Clone validation inputs and move them to the model device.
+
+    Parameters
+    ----------
+    input_args:
+        Normalized positional model inputs.
+    input_kwargs:
+        Keyword model inputs.
+    device:
+        Target model device, if any parameters exist.
+
+    Returns
+    -------
+    tuple[Any, dict[str, Any]]
+        Cloned positional and keyword inputs.
+    """
+
+    cloned_args = _clone_inputs_with_grad(input_args)
+    cloned_kwargs = cast(dict[str, Any], _clone_inputs_with_grad(input_kwargs))
+    if device is None:
+        return cloned_args, cloned_kwargs
+    return _move_tensors_to_device(cloned_args, device), _move_tensors_to_device(
+        cloned_kwargs, device
+    )
+
+
+def _restore_training_mode(model: nn.Module, training: bool) -> None:
+    """Restore a module's train/eval flag.
+
+    Parameters
+    ----------
+    model:
+        Model whose mode should be restored.
+    training:
+        Original ``model.training`` value.
+    """
+
+    model.train(training)
+
+
 def validate_backward_pass(
     model: nn.Module,
     input_args: Any,
@@ -91,6 +183,8 @@ def validate_backward_pass(
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
     perturb_saved_grads: bool = False,
+    validate_metadata: bool = True,
+    random_seed: int | None = None,
     atol: float = 1e-5,
     rtol: float = 1e-4,
 ) -> bool:
@@ -110,6 +204,10 @@ def validate_backward_pass(
     perturb_saved_grads:
         If True, perturb captured saved grads before comparison; the
         validation should then return False.
+    validate_metadata:
+        If True, run metadata invariant checks on the captured backward trace.
+    random_seed:
+        Fixed RNG seed for stock and candidate passes. Auto-generated if None.
     atol:
         Absolute tolerance for ``torch.allclose``.
     rtol:
@@ -121,48 +219,77 @@ def validate_backward_pass(
         True when captured grads match stock autograd and perturbation is
         not requested.
     """
-    from ..user_funcs import trace as trace_fn
+    from ..user_funcs import _reject_opaque_wrappers, _unwrap_data_parallel, trace as trace_fn
+    from .invariants import check_metadata_invariants
 
+    warn_parallel()
+    _reject_opaque_wrappers(model)
+    model = _unwrap_data_parallel(model)
+    check_model_and_input_variants(model, input_args, input_kwargs)
     if input_kwargs is None:
         input_kwargs = {}
     if loss_fn is None:
         loss_fn = _sum_tensors
+    if random_seed is None:
+        random_seed = random.randint(1, 4294967294)
+    input_args = normalize_input_args(input_args, model)
+    model_device = next((parameter.device for parameter in model.parameters()), None)
+    state_dict = _clone_state_dict_with_metadata(model)
+    original_training = model.training
+    trace = None
 
-    stock_inputs = _clone_inputs_with_grad(input_args)
-    model.zero_grad(set_to_none=True)
-    stock_loss = loss_fn(model(stock_inputs, **input_kwargs))
-    stock_loss.backward()  # type: ignore[no-untyped-call]
-    expected_param_grads = _param_grads(model)
-
-    logged_inputs = _clone_inputs_with_grad(input_args)
-    model.zero_grad(set_to_none=True)
-    trace = trace_fn(
-        model,
-        logged_inputs,
-        input_kwargs=input_kwargs,
-        layers_to_save="all",
-        grads_to_save="all",
-    )
-    output_layers = [trace[layer_label].out for layer_label in trace.output_layers]
-    logged_output: Any = output_layers[0] if len(output_layers) == 1 else output_layers
-    logged_loss = loss_fn(logged_output)
-    trace.log_backward(logged_loss)
-    if perturb_saved_grads:
-        for layer in trace.layer_list:
-            if layer.has_grad and isinstance(layer.grad, torch.Tensor):
-                layer.grad = layer.grad + torch.randn_like(layer.grad)
-                break
-    observed_param_grads = _param_grads(model)
-    trace.cleanup()
-
-    if expected_param_grads.keys() != observed_param_grads.keys():
-        return False
-    return (
-        all(
-            torch.allclose(
-                observed_param_grads[name], expected_param_grads[name], atol=atol, rtol=rtol
-            )
-            for name in expected_param_grads
+    try:
+        set_random_seed(random_seed)
+        stock_inputs, stock_kwargs = _prepare_inputs_for_backward(
+            input_args, input_kwargs, model_device
         )
-        and not perturb_saved_grads
-    )
+        model.zero_grad(set_to_none=True)
+        stock_loss = loss_fn(model(*stock_inputs, **stock_kwargs))
+        stock_loss.backward()  # type: ignore[no-untyped-call]
+        expected_param_grads = _param_grads(model)
+
+        model.load_state_dict(state_dict)
+        _restore_training_mode(model, original_training)
+        set_random_seed(random_seed)
+        logged_inputs, logged_kwargs = _prepare_inputs_for_backward(
+            input_args, input_kwargs, model_device
+        )
+        model.zero_grad(set_to_none=True)
+        trace = trace_fn(
+            model,
+            logged_inputs,
+            input_kwargs=logged_kwargs,
+            layers_to_save="all",
+            grads_to_save="all",
+            random_seed=random_seed,
+        )
+        output_layers = [trace[layer_label].out for layer_label in trace.output_layers]
+        logged_output: Any = output_layers[0] if len(output_layers) == 1 else output_layers
+        logged_loss = loss_fn(logged_output)
+        trace.log_backward(logged_loss)
+        if validate_metadata:
+            check_metadata_invariants(trace)
+        if perturb_saved_grads:
+            for layer in trace.layer_list:
+                if layer.has_grad and isinstance(layer.grad, torch.Tensor):
+                    layer.grad = layer.grad + torch.randn_like(layer.grad)
+                    break
+        observed_param_grads = _param_grads(model)
+
+        if expected_param_grads.keys() != observed_param_grads.keys():
+            return False
+        return (
+            all(
+                torch.allclose(
+                    observed_param_grads[name], expected_param_grads[name], atol=atol, rtol=rtol
+                )
+                for name in expected_param_grads
+            )
+            and not perturb_saved_grads
+        )
+    finally:
+        model.load_state_dict(state_dict)
+        _restore_training_mode(model, original_training)
+        model.zero_grad(set_to_none=True)
+        if trace is not None:
+            trace.cleanup()
