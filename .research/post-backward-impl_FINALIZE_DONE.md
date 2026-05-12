@@ -1,11 +1,11 @@
 # Post-Backward Megasprint Finalize Block
 
-created_at: 2026-05-12T17:08:49-04:00
+created_at: 2026-05-12T17:24:10-04:00
 state: BLOCKED
 branch: codex/post-backward-megasprint
-head_at_block: 02693a3741c1c6dcdeeb15ed656bdf5cd10e62e6
-commits_since_main_at_block: 34
-loc_delta_at_block: 4352 insertions(+), 243 deletions(-)
+head_at_block: 071e9e4fa1997ecd23afca5cedf2eb85956629fd
+commits_since_main_at_block: 36
+loc_delta_at_block: 4358 insertions(+), 242 deletions(-)
 files_touched_at_block: 66
 ready_for_review_merge: no
 suggested_merge_strategy: blocked until full T2 is green
@@ -19,7 +19,7 @@ pytest tests/ -m "not slow" -x --tb=short
 ```
 
 This failed in
-`tests/test_intervention_phase7.py::test_replace_run_state_preserves_relationship_and_spec_fields`.
+`tests/test_io_export.py::test_tabular_exports_round_trip_csv_and_json[module_pass]`.
 The failure is not one of the listed pre-existing blockers. The known notebook ruff syntax
 blocker was not involved because ruff was not reached.
 
@@ -36,25 +36,32 @@ Summary:
 
 ```text
 collected 2465 items / 211 deselected / 2254 selected
-FAILED tests/test_intervention_phase7.py::test_replace_run_state_preserves_relationship_and_spec_fields
-= 1 failed, 912 passed, 6 skipped, 211 deselected, 178 warnings in 168.81s (0:02:48) =
+FAILED tests/test_io_export.py::test_tabular_exports_round_trip_csv_and_json[module_pass]
+= 1 failed, 979 passed, 7 skipped, 211 deselected, 196 warnings in 174.24s (0:02:54) =
 ```
 
 Failure excerpt:
 
 ```text
-________ test_replace_run_state_preserves_relationship_and_spec_fields _________
-tests/test_intervention_phase7.py:284: in test_replace_run_state_preserves_relationship_and_spec_fields
-    assert log.is_appended is True
-E   AssertionError: assert False is True
-E    +  where False = Trace(name='kept', model_class='ReluAdd', layers=4, run_state=PRISTINE).is_appended
+__________ test_tabular_exports_round_trip_csv_and_json[module_pass] ___________
+tests/test_io_export.py:269: in test_tabular_exports_round_trip_csv_and_json
+    surface.to_json(json_path, orient="records")
+torchlens/data_classes/module_log.py:424: in to_json
+    self.to_pandas().to_json(filepath, orient=orient, **kwargs)
+../../anaconda3/envs/py311/lib/python3.11/site-packages/pandas/core/generic.py:2635: in to_json
+    return json.to_json(
+../../anaconda3/envs/py311/lib/python3.11/site-packages/pandas/io/json/_json.py:241: in to_json
+    ).write()
+../../anaconda3/envs/py311/lib/python3.11/site-packages/pandas/io/json/_json.py:292: in write
+    return ujson_dumps(
+E   OverflowError: Maximum recursion level reached
 ```
 
 Likely root cause to investigate:
 
-The test expects `_replace_run_state`-style rerun bookkeeping to preserve the append relationship
-metadata on the retained log. The current branch clears or fails to restore `is_appended` for this
-path, leaving the trace in `run_state=PRISTINE` with `is_appended=False`.
+`ModulePassLog.to_json()` delegates to `self.to_pandas().to_json(...)`. The `module_pass`
+surface now appears to include a recursive or pandas-unserializable object after the recent
+module output changes, causing pandas' JSON writer to overflow while serializing records.
 
 ### ruff check torchlens/ --fix
 
