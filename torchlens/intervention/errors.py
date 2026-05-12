@@ -187,6 +187,10 @@ class AppendBatchDependenceError(ValidationError, ValueError):
     """Raised when append cannot prove helper or grad batch independence."""
 
 
+class MultiOutputModuleError(ValidationError, ValueError):
+    """Raised for ambiguous single-output access on multi-output module calls."""
+
+
 class BatchNormTrainModeWarning(TorchLensInterventionWarning):
     """Warning for append reruns through batch-sensitive train-mode modules."""
 

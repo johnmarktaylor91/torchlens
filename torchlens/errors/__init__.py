@@ -86,6 +86,7 @@ _LEGACY_EXCEPTION_PATHS = {
         "torchlens.intervention.errors",
         "AppendBatchDependenceError",
     ),
+    "MultiOutputModuleError": ("torchlens.intervention.errors", "MultiOutputModuleError"),
     "BatchNormTrainModeWarning": (
         "torchlens.intervention.errors",
         "BatchNormTrainModeWarning",
