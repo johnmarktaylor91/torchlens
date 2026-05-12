@@ -5,7 +5,7 @@ from __future__ import annotations
 import heapq
 import math
 import random
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Protocol
 
 import torch
@@ -93,6 +93,38 @@ class Mean:
         if self._mean is None:
             return math.nan
         return float(self._mean.item())
+
+
+class Norm:
+    """Running mean of per-update tensor norms."""
+
+    def __init__(self, p: float = 2.0, name: str | None = None) -> None:
+        """Initialize the norm accumulator.
+
+        Parameters
+        ----------
+        p:
+            Norm order passed to ``torch.linalg.vector_norm``.
+        name:
+            Optional metric name.
+        """
+
+        self.name = name
+        self.p = float(p)
+        self._mean = Mean()
+
+    def update(self, value: Any) -> None:
+        """Update the running norm mean."""
+
+        tensor = _as_float_tensor(value)
+        if tensor.numel() == 0:
+            return
+        self._mean.update(torch.linalg.vector_norm(tensor, ord=self.p))
+
+    def result(self) -> float:
+        """Return the finalized mean norm."""
+
+        return self._mean.result()
 
 
 class Quantile:
@@ -386,10 +418,44 @@ def _metric_value_from_log(log: Any, metric_name: str) -> Any:
         return matches[0].out
 
 
+def _metric_grad_from_log(log: Any, metric_name: str) -> Any:
+    """Resolve one gradient metric input value from a Trace."""
+
+    if metric_name == "output" and log.output_layers:
+        return log[log.output_layers[-1]].grad
+    try:
+        value = log[metric_name].grad
+    except Exception:
+        matches = [
+            layer
+            for layer in log.layer_list
+            if metric_name in str(layer.layer_label) and layer.has_grad
+        ]
+        if not matches:
+            raise KeyError(f"No saved grad matched metric {metric_name!r}.")
+        value = matches[0].grad
+    if value is None:
+        raise KeyError(f"No saved grad matched metric {metric_name!r}.")
+    return value
+
+
+def _split_batch_for_loss(batch: Any) -> tuple[Any, tuple[Any, ...]]:
+    """Return model input and extra loss arguments from a dataloader batch."""
+
+    if isinstance(batch, tuple) and len(batch) >= 2:
+        return batch[0], tuple(batch[1:])
+    if isinstance(batch, list) and len(batch) >= 2:
+        return batch[0], tuple(batch[1:])
+    return batch, ()
+
+
 def aggregate(
     model: nn.Module,
     dataloader: Iterable[Any],
     metrics: Mapping[str, StreamingStat],
+    *,
+    target: str = "out",
+    loss_fn: Callable[..., torch.Tensor] | None = None,
 ) -> dict[str, Any]:
     """Stream outs through metric accumulators.
 
@@ -401,6 +467,12 @@ def aggregate(
         Iterable of model inputs.
     metrics:
         Mapping from layer selector to streaming statistic.
+    target:
+        ``"out"`` for activation statistics or ``"grad"`` for gradient
+        statistics.
+    loss_fn:
+        Callable used to build a loss from ``(output, *batch_tail)`` when
+        ``target="grad"``.
 
     Returns
     -------
@@ -410,13 +482,35 @@ def aggregate(
 
     from .. import trace
 
+    if target not in {"out", "grad"}:
+        raise ValueError("target must be 'out' or 'grad'")
+    if target == "grad" and loss_fn is None:
+        raise TypeError("aggregate(target='grad') requires loss_fn=")
+    grad_loss_fn = loss_fn
+
     layers = [name for name in metrics if name != "output"]
     capture_layers: str | list[str] = layers if layers else "all"
     for batch in dataloader:
-        log = trace(model, batch, layers_to_save=capture_layers)
+        model_input, loss_args = _split_batch_for_loss(batch)
+        log = trace(
+            model,
+            model_input,
+            layers_to_save=capture_layers,
+            grads_to_save=capture_layers if target == "grad" else None,
+        )
         try:
+            if target == "grad":
+                if grad_loss_fn is None:
+                    raise TypeError("aggregate(target='grad') requires loss_fn=")
+                loss = grad_loss_fn(_metric_value_from_log(log, "output"), *loss_args)
+                log.log_backward(loss)
             for metric_name, stat in metrics.items():
-                stat.update(_metric_value_from_log(log, metric_name))
+                value = (
+                    _metric_grad_from_log(log, metric_name)
+                    if target == "grad"
+                    else _metric_value_from_log(log, metric_name)
+                )
+                stat.update(value)
         finally:
             log.cleanup()
     return {name: stat.result() for name, stat in metrics.items()}
@@ -426,6 +520,7 @@ __all__ = [
     "Aggregator",
     "Covariance",
     "Mean",
+    "Norm",
     "PCA",
     "Quantile",
     "StreamingStat",
