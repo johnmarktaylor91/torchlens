@@ -46,6 +46,8 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_out_recipe_revision",
         "_append_sequence_id",
         "_last_hook_handle_ids",
+        "_grad_fn_param_refs",
+        "_param_log_by_pid",
     }
 
     actual = set(trace.__dict__.keys())
