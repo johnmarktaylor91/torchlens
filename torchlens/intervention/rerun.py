@@ -95,6 +95,9 @@ def rerun(
 
     divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
     log.replace_run_state_from(new_log)
+    log.is_appended = False
+    log._append_sequence_id = 0
+    log.append_history = []
 
     history_record = _build_ledger_record(
         log,
