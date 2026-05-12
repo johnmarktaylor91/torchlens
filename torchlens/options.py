@@ -170,6 +170,7 @@ _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "out_postfunc": "out_transform",
     "out_transform": "out_transform",
     "grad_transform": "grad_transform",
+    "gradient_postfunc": "grad_transform",
     "save_raw_outs": "save_raw_outs",
     "save_raw_grads": "save_raw_grads",
 }
@@ -881,6 +882,7 @@ class SaveOptions:
         bundle_format: str | None | MissingType = MISSING,
         *,
         out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen save option bundle."""
 
@@ -891,6 +893,10 @@ class SaveOptions:
                 )
             warn_deprecated_alias("out_postfunc", "save.out_transform")
             out_transform = out_postfunc
+        if gradient_postfunc is not MISSING:
+            if grad_transform is not MISSING:
+                raise TypeError("kwarg gradient_postfunc aliases grad_transform; do not pass both")
+            grad_transform = gradient_postfunc
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "output_dir": _resolve_option_value("output_dir", output_dir, None, specified_fields),
@@ -1552,6 +1558,7 @@ def merge_save_options(*, save: SaveOptions | None, **flat_values: Any) -> SaveO
             conflict_message=(
                 "conflicting save options: pass either SaveOptions or individual kwargs, not both"
             ),
+            deprecated_flat_names=set(_SAVE_FLAT_TO_GROUP) - {"gradient_postfunc"},
         ),
     )
 

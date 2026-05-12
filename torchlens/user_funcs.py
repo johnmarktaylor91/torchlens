@@ -1194,6 +1194,7 @@ def trace(
     output_device: OutputDeviceLiteral | MissingType = MISSING,
     out_transform: ActivationPostfunc | None | MissingType = MISSING,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     save_raw_outs: bool | MissingType = MISSING,
     save_raw_grads: bool | MissingType = MISSING,
     out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
@@ -1320,6 +1321,7 @@ def trace(
         grad_transform: Optional function applied to each grad before saving. The raw
             grad remains in ``layer.grad`` by default, and the postfunc result is stored
             in ``layer.transformed_grad``.
+        gradient_postfunc: Alias for ``grad_transform``. Passing both names is an error.
         out_postfunc: Deprecated alias for ``out_transform``.
         save_raw_outs: When ``False`` and ``out_transform`` is set, do not retain
             raw out tensors in memory; raw out metadata is still populated.
@@ -1489,6 +1491,10 @@ def trace(
             raise TypeError("kwarg out_postfunc deprecated, use out_transform; do not pass both")
         warn_deprecated_alias("out_postfunc", "out_transform")
         out_transform = out_postfunc
+    if gradient_postfunc is not MISSING:
+        if grad_transform is not MISSING:
+            raise TypeError("kwarg gradient_postfunc aliases grad_transform; do not pass both")
+        grad_transform = gradient_postfunc
 
     capture_options = merge_capture_options(
         capture=capture,
