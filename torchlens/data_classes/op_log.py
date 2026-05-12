@@ -147,6 +147,187 @@ def _memory_or_none(value: Any) -> int | None:
     return get_memory_amount(value) if isinstance(value, torch.Tensor) else None
 
 
+def apply_postfunc(
+    *,
+    label: str | None,
+    tensor: torch.Tensor,
+    postfunc: Callable[..., Any],
+    postfunc_kind: str,
+    streaming_active: bool = False,
+    raw_label: str | None = None,
+    func_name: str | None = None,
+) -> Any:
+    """Apply a user postfunc with logging paused and contextual errors.
+
+    Parameters
+    ----------
+    label:
+        Raw layer label for error context, or ``None`` when unavailable.
+    tensor:
+        Raw tensor passed to the user postfunc.
+    postfunc:
+        Callable applied to ``tensor``.
+    postfunc_kind:
+        Transform kind, either ``"out"`` or ``"grad"``.
+    streaming_active:
+        Whether a streaming bundle writer is active.
+    raw_label:
+        Raw layer label for error context when it differs from ``label``.
+    func_name:
+        Function name for error context.
+
+    Returns
+    -------
+    Any
+        Value returned by ``postfunc``.
+    """
+
+    try:
+        with pause_logging():
+            return postfunc(tensor)
+    except Exception as exc:
+        raise TorchLensPostfuncError(
+            postfunc_error_message(
+                label=label,
+                raw_label=raw_label,
+                func_name=func_name,
+                tensor=tensor,
+                postfunc_kind=postfunc_kind,
+                streaming_active=streaming_active,
+            )
+        ) from exc
+
+
+def postfunc_error_message(
+    *,
+    label: str | None,
+    raw_label: str | None = None,
+    func_name: str | None = None,
+    tensor: torch.Tensor,
+    postfunc_kind: str,
+    streaming_active: bool,
+) -> str:
+    """Build context for an out or grad postfunc failure.
+
+    Parameters
+    ----------
+    label:
+        Raw layer label for error context, or ``None`` when unavailable.
+    raw_label:
+        Raw layer label for error context when it differs from ``label``.
+    func_name:
+        Function name for error context.
+    tensor:
+        Raw tensor passed to the postfunc.
+    postfunc_kind:
+        Transform kind, either ``"out"`` or ``"grad"``.
+    streaming_active:
+        Whether a streaming bundle writer is active.
+
+    Returns
+    -------
+    str
+        Contextual error message.
+    """
+
+    return (
+        f"{postfunc_kind}_postfunc raised for layer {label} "
+        f"(raw={raw_label or label}, func={func_name}, "
+        f"shape={tuple(tensor.shape)}, dtype={tensor.dtype}, "
+        f"streaming_active={streaming_active})."
+    )
+
+
+def validate_train_mode_postfunc_output(
+    *,
+    raw_tensor: torch.Tensor,
+    transformed_tensor: Any,
+    postfunc_kind: str,
+    train_mode: bool,
+    label: str | None = None,
+) -> None:
+    """Validate differentiability requirements for train-mode postfunc outputs.
+
+    Parameters
+    ----------
+    raw_tensor:
+        Raw tensor passed to the postfunc.
+    transformed_tensor:
+        Value returned by the postfunc.
+    postfunc_kind:
+        Transform kind, either ``"out"`` or ``"grad"``.
+    train_mode:
+        Whether TorchLens is preserving autograd graph connectivity.
+    label:
+        Raw layer label for error context, or ``None`` when unavailable.
+
+    Returns
+    -------
+    None
+        Raises if the transformed value violates train-mode requirements.
+    """
+
+    if not train_mode or not raw_tensor.requires_grad:
+        return
+    if not isinstance(transformed_tensor, torch.Tensor):
+        raise TrainingModeConfigError(
+            f"{postfunc_kind}_postfunc must return a torch.Tensor while train_mode=True "
+            f"for layer {label}."
+        )
+    if transformed_tensor.dtype in _NON_GRAD_DTYPES:
+        raise TrainingModeConfigError(
+            f"train_mode=True with non-grad dtype {transformed_tensor.dtype} on layer "
+            f"{label}. Integer and bool dtypes cannot propagate grads."
+        )
+    if transformed_tensor.grad_fn is None:
+        raise TrainingModeConfigError(
+            f"{postfunc_kind}_postfunc returned a tensor disconnected from the autograd "
+            "graph (grad_fn is None) while train_mode=True. The transformed out "
+            "must remain differentiable."
+        )
+
+
+def validate_streaming_postfunc_output(
+    *,
+    transformed_tensor: Any,
+    postfunc_kind: str,
+    streaming_active: bool,
+    label: str | None = None,
+) -> None:
+    """Validate transformed tensors before streaming bundle finalization.
+
+    Parameters
+    ----------
+    transformed_tensor:
+        Value returned by the user transform.
+    postfunc_kind:
+        Transform kind, either ``"out"`` or ``"grad"``.
+    streaming_active:
+        Whether a streaming bundle writer is active for this trace.
+    label:
+        Raw layer label for error context, or ``None`` when unavailable.
+
+    Returns
+    -------
+    None
+        Raises if streaming cannot serialize the transformed value.
+    """
+
+    if not streaming_active:
+        return
+    if not isinstance(transformed_tensor, torch.Tensor):
+        raise TorchLensIOError(
+            f"Streaming save requires {postfunc_kind}_postfunc outputs to be "
+            f"torch.Tensor instances, but layer {label} produced "
+            f"{type(transformed_tensor).__name__}."
+        )
+    if transformed_tensor.layout != torch.strided:
+        raise TorchLensIOError(
+            f"Streaming save does not support sparse {postfunc_kind}_postfunc outputs "
+            f"for layer {label}."
+        )
+
+
 def _set_saved_out_metadata(entry: "OpLog", tensor: torch.Tensor) -> None:
     """Refresh saved output metadata from a replacement tensor.
 
@@ -1490,17 +1671,15 @@ class OpLog:
     ) -> Any:
         """Apply a user postfunc with logging paused and rich error context."""
 
-        try:
-            with pause_logging():
-                return postfunc(tensor)
-        except Exception as exc:
-            raise TorchLensPostfuncError(
-                self._postfunc_error_message(
-                    postfunc_kind=postfunc_kind,
-                    tensor=tensor,
-                    streaming_active=streaming_active,
-                )
-            ) from exc
+        return apply_postfunc(
+            label=self._streaming_label,
+            raw_label=self._layer_label_raw,
+            func_name=self.func_name,
+            tensor=tensor,
+            postfunc=postfunc,
+            postfunc_kind=postfunc_kind,
+            streaming_active=streaming_active,
+        )
 
     def _postfunc_error_message(
         self,
@@ -1511,11 +1690,13 @@ class OpLog:
     ) -> str:
         """Build context for an out or grad postfunc failure."""
 
-        return (
-            f"{postfunc_kind}_postfunc raised for layer {self._streaming_label} "
-            f"(raw={self._layer_label_raw}, func={self.func_name}, "
-            f"shape={tuple(tensor.shape)}, dtype={tensor.dtype}, "
-            f"streaming_active={streaming_active})."
+        return postfunc_error_message(
+            label=self._streaming_label,
+            raw_label=self._layer_label_raw,
+            func_name=self.func_name,
+            tensor=tensor,
+            postfunc_kind=postfunc_kind,
+            streaming_active=streaming_active,
         )
 
     def _validate_train_mode_postfunc_output(
@@ -1528,24 +1709,13 @@ class OpLog:
         """Validate differentiability requirements for train-mode postfunc outputs."""
 
         trace = self.source_trace
-        if not getattr(trace, "train_mode", False) or not raw_tensor.requires_grad:
-            return
-        if not isinstance(output, torch.Tensor):
-            raise TrainingModeConfigError(
-                f"{postfunc_kind}_postfunc must return a torch.Tensor while train_mode=True "
-                f"for layer {self._streaming_label}."
-            )
-        if output.dtype in _NON_GRAD_DTYPES:
-            raise TrainingModeConfigError(
-                f"train_mode=True with non-grad dtype {output.dtype} on layer "
-                f"{self._streaming_label}. Integer and bool dtypes cannot propagate grads."
-            )
-        if output.grad_fn is None:
-            raise TrainingModeConfigError(
-                f"{postfunc_kind}_postfunc returned a tensor disconnected from the autograd "
-                "graph (grad_fn is None) while train_mode=True. The transformed out "
-                "must remain differentiable."
-            )
+        validate_train_mode_postfunc_output(
+            raw_tensor=raw_tensor,
+            transformed_tensor=output,
+            postfunc_kind=postfunc_kind,
+            train_mode=getattr(trace, "train_mode", False),
+            label=self._streaming_label,
+        )
 
     def _validate_streaming_postfunc_output(
         self,
@@ -1576,23 +1746,16 @@ class OpLog:
             If streaming is active and the transform returns a non-tensor or sparse tensor.
         """
 
-        if not streaming_active:
-            return
-        if not isinstance(output, torch.Tensor):
-            message = (
-                f"Streaming save requires {postfunc_kind}_postfunc outputs to be "
-                f"torch.Tensor instances, but layer {self._streaming_label} produced "
-                f"{type(output).__name__}."
+        try:
+            validate_streaming_postfunc_output(
+                transformed_tensor=output,
+                postfunc_kind=postfunc_kind,
+                streaming_active=streaming_active,
+                label=self._streaming_label,
             )
-            self._abort_streaming_writer(message)
-            raise TorchLensIOError(message)
-        if output.layout != torch.strided:
-            message = (
-                f"Streaming save does not support sparse {postfunc_kind}_postfunc outputs "
-                f"for layer {self._streaming_label}."
-            )
-            self._abort_streaming_writer(message)
-            raise TorchLensIOError(message)
+        except TorchLensIOError as exc:
+            self._abort_streaming_writer(str(exc))
+            raise
 
     def _abort_streaming_writer(self, message: str) -> None:
         """Abort the active streaming writer when one is attached.

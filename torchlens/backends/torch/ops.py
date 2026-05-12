@@ -56,6 +56,7 @@ from ...utils.introspection import (
 from ...utils.tensor_utils import get_memory_amount, safe_copy, safe_to, tensor_nanequal
 from ...utils.collections import index_nested, ensure_iterable
 from ...capture.flops import compute_backward_flops, compute_forward_flops
+from ...capture.projections import LiveOpView
 from ...data_classes.op_log import (
     OpLog,
     _dtype_or_none,
@@ -63,6 +64,9 @@ from ...data_classes.op_log import (
     _recursive_safe_copy,
     _shape_or_none,
     _tensor_content_hash,
+    apply_postfunc,
+    validate_streaming_postfunc_output,
+    validate_train_mode_postfunc_output,
 )
 from ...ir.events import (
     ArgTemplateRef,
@@ -811,7 +815,9 @@ def _build_edge_use_records(
                 arg_kind="positional",
                 arg_path=_arg_location_to_path(location),
                 view_or_copy="unknown",
-                parent_func_call_id=getattr(self[parent_label], "func_call_id", None),
+                parent_func_call_id=live_record_for_label(self, parent_label).fields.get(
+                    "func_call_id"
+                ),
                 child_func_call_id=child_func_call_id,
             )
         )
@@ -823,7 +829,9 @@ def _build_edge_use_records(
                 arg_kind="keyword",
                 arg_path=_arg_location_to_path(location),
                 view_or_copy="unknown",
-                parent_func_call_id=getattr(self[parent_label], "func_call_id", None),
+                parent_func_call_id=live_record_for_label(self, parent_label).fields.get(
+                    "func_call_id"
+                ),
                 child_func_call_id=child_func_call_id,
             )
         )
@@ -1265,7 +1273,9 @@ def _build_graph_relationship_fields(
     parent_arg_positions = _locate_parent_tensors_in_args(self, parent_layer_entries, args, kwargs)
     input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_layer_entries)
     internal_parent_layer_labels = [
-        label for label in parent_layer_labels if self[label].has_internal_source_ancestor
+        label
+        for label in parent_layer_labels
+        if live_record_for_label(self, label).fields["has_internal_source_ancestor"]
     ]
 
     fields_dict["parents"] = parent_layer_labels
@@ -1420,7 +1430,10 @@ def _build_shared_fields_dict(
     non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
     parent_layer_labels = get_label_list(arg_tensors)
-    parent_layer_entries = [self[label] for label in parent_layer_labels]
+    parent_layer_entries = [
+        cast(OpLog, LiveOpView(self, live_record_for_label(self, label)))
+        for label in parent_layer_labels
+    ]
 
     fields_dict: dict[str, Any] = {}
 
@@ -1659,7 +1672,13 @@ def log_function_output_tensors_exhaustive(
             t_kwargs=kwarg_copies,
             out_postfunc=self.out_postfunc,
         )
-        new_layer_entry = self[fields_dict_onetensor["_label_raw"]]
+        new_layer_entry = cast(
+            OpLog,
+            LiveOpView(
+                self,
+                live_record_for_label(self, fields_dict_onetensor["_label_raw"]),
+            ),
+        )
         new_tensor_label = new_layer_entry._label_raw
         _update_tensor_family_links(self, new_layer_entry)
 
@@ -2344,20 +2363,27 @@ def _save_activation_fields(
         fields_dict["transformed_out_dtype"] = None
         fields_dict["transformed_out_memory"] = None
         if out_postfunc is not None:
-            op_log = OpLog(fields_dict)
-            transformed_out = op_log._apply_postfunc(
-                raw_out,
-                out_postfunc,
+            transformed_out = apply_postfunc(
+                label=fields_dict.get("_layer_label_raw"),
+                raw_label=fields_dict.get("_label_raw"),
+                func_name=fields_dict.get("func_name"),
+                tensor=raw_out,
+                postfunc=out_postfunc,
                 postfunc_kind="out",
                 streaming_active=writer is not None,
             )
-            op_log._validate_train_mode_postfunc_output(
-                raw_out, transformed_out, postfunc_kind="out"
+            validate_train_mode_postfunc_output(
+                raw_tensor=raw_out,
+                transformed_tensor=transformed_out,
+                postfunc_kind="out",
+                train_mode=fields_dict.get("train_mode", getattr(trace, "train_mode", False)),
+                label=fields_dict.get("_layer_label_raw"),
             )
-            op_log._validate_streaming_postfunc_output(
-                transformed_out,
+            validate_streaming_postfunc_output(
+                transformed_tensor=transformed_out,
                 postfunc_kind="out",
                 streaming_active=writer is not None,
+                label=fields_dict.get("_layer_label_raw"),
             )
             fields_dict["transformed_out"] = transformed_out
             fields_dict["transformed_out_shape"] = _shape_or_none(transformed_out)
