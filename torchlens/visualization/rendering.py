@@ -4747,6 +4747,8 @@ def _setup_subgraphs(
             ``{"edges": [...], "has_input_ancestor": bool}``.
         overrides: Graphviz attribute overrides for module subgraphs.
     """
+    if "self" not in self.modules:
+        return
     if vis_mode == "unrolled":
         module_submodule_dict = defaultdict(list)
         for call_label, mpl in self.modules._pass_dict.items():

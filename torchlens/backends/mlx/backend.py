@@ -401,6 +401,7 @@ class MLXBackend:
             return trace
         finally:
             self.cleanup_model_session(trace, model)
+            self.unwrap(model)
 
     def emit_mlx_operation(
         self,
@@ -435,20 +436,7 @@ class MLXBackend:
             capture_index=capture_index,
             type_index=type_counts[op_name],
         )
-        trace.layer_list.append(op_log)
-        trace.layer_dict_main_keys[label] = op_log
-        trace.layer_dict_all_keys[label] = op_log
-        trace.layer_dict_all_keys[op_log.layer_label_w_pass] = op_log
-        trace.op_labels.append(op_log.layer_label_w_pass)
-        trace.layer_labels.append(label)
-        trace.layer_num_calls[label] = 1
-        trace._lookup_keys_to_layer_num_dict[label] = capture_index
-        trace._layer_num_to_lookup_keys_dict[capture_index].append(label)
-        layer_log = LayerLog(op_log)
-        layer_log.ops[1] = op_log
-        layer_log.call_labels.append(op_log.layer_label_w_pass)
-        op_log.parent_layer_log = layer_log
-        trace.layer_logs[label] = layer_log
+        self._register_op_log(trace, op_log)
         for parent_label in parents:
             parent = trace.layer_dict_all_keys.get(parent_label)
             if parent is not None and label not in parent.children:
@@ -489,14 +477,48 @@ class MLXBackend:
         return [input_args]
 
     def _label_source_arrays(self, trace: Trace, args: list[Any], kwargs: dict[Any, Any]) -> None:
-        """Label MLX input arrays so parent edges can be inferred."""
+        """Emit resolvable input op logs for MLX source arrays."""
 
         for index, arg in enumerate(args):
             if self.is_tensor(arg):
-                self.tensor_store.set_label(arg, f"input.arg_{index}")
+                label = f"input.arg_{index}"
+                self.tensor_store.set_label(arg, label)
+                self._register_op_log(
+                    trace,
+                    self._build_op_log(
+                        trace=trace,
+                        label=label,
+                        op_name="input",
+                        func=None,
+                        args=(),
+                        kwargs={},
+                        output=arg,
+                        parents=[],
+                        capture_index=len(trace.layer_list),
+                        type_index=index + 1,
+                        is_input=True,
+                    ),
+                )
         for key, value in kwargs.items():
             if self.is_tensor(value):
-                self.tensor_store.set_label(value, f"input.{key}")
+                label = f"input.{key}"
+                self.tensor_store.set_label(value, label)
+                self._register_op_log(
+                    trace,
+                    self._build_op_log(
+                        trace=trace,
+                        label=label,
+                        op_name="input",
+                        func=None,
+                        args=(),
+                        kwargs={},
+                        output=value,
+                        parents=[],
+                        capture_index=len(trace.layer_list),
+                        type_index=len(trace.layer_list) + 1,
+                        is_input=True,
+                    ),
+                )
 
     def _mark_outputs(self, trace: Trace, output: object) -> None:
         """Mark final output-parent operations for an MLX trace."""
@@ -537,6 +559,7 @@ class MLXBackend:
         parents: list[str],
         capture_index: int,
         type_index: int,
+        is_input: bool = False,
     ) -> OpLog:
         """Build a minimal but structurally valid ``OpLog`` for MLX."""
 
@@ -611,7 +634,7 @@ class MLXBackend:
                 "root_ancestors": [],
                 "children": [],
                 "has_children": False,
-                "is_input": False,
+                "is_input": is_input,
                 "has_input_ancestor": any(parent.startswith("input.") for parent in parents),
                 "input_ancestors": [parent for parent in parents if parent.startswith("input.")],
                 "min_distance_from_input": 0 if not parents else 1,
@@ -621,7 +644,9 @@ class MLXBackend:
                 "is_final_output": False,
                 "has_output_descendant": False,
                 "output_descendants": [],
-                "io_role": "I" if any(parent.startswith("input.") for parent in parents) else "",
+                "io_role": "I"
+                if is_input or any(parent.startswith("input.") for parent in parents)
+                else "",
                 "is_buffer": False,
                 "is_internal_source": False,
                 "has_internal_source_ancestor": False,
@@ -657,6 +682,34 @@ class MLXBackend:
         )
         op_fields = {field_name: fields[field_name] for field_name in LAYER_PASS_LOG_FIELD_ORDER}
         return OpLog(op_fields)
+
+    def _register_op_log(self, trace: Trace, op_log: OpLog) -> None:
+        """Register an MLX op log on all trace lookup structures.
+
+        Parameters
+        ----------
+        trace:
+            Trace receiving the op log.
+        op_log:
+            Operation log to register.
+        """
+
+        capture_index = len(trace.layer_list)
+        label = op_log.layer_label
+        trace.layer_list.append(op_log)
+        trace.layer_dict_main_keys[label] = op_log
+        trace.layer_dict_all_keys[label] = op_log
+        trace.layer_dict_all_keys[op_log.layer_label_w_pass] = op_log
+        trace.op_labels.append(op_log.layer_label_w_pass)
+        trace.layer_labels.append(label)
+        trace.layer_num_calls[label] = 1
+        trace._lookup_keys_to_layer_num_dict[label] = capture_index
+        trace._layer_num_to_lookup_keys_dict[capture_index].append(label)
+        layer_log = LayerLog(op_log)
+        layer_log.ops[1] = op_log
+        layer_log.call_labels.append(op_log.layer_label_w_pass)
+        op_log.parent_layer_log = layer_log
+        trace.layer_logs[label] = layer_log
 
     def _parent_labels(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[str]:
         """Return unique parent labels found in MLX operation inputs."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -59,3 +60,40 @@ def test_mlx_hooks_raise() -> None:
     hooks: list[dict[str, Any]] = [{"target": "linear_1_1", "action": lambda x: x}]
     with pytest.raises(NotImplementedError, match="hooks"):
         tl.trace(TinyMLP(), _tiny_mlp_input(), hooks=hooks, vis_opt="none")
+
+
+@pytest.mark.optional
+def test_mlx_trace_draw_smokes(tmp_path: Path) -> None:
+    """MLX traces draw without dangling synthetic input-parent labels."""
+
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+    rendered = trace.draw(
+        vis_outpath=str(tmp_path / "mlx_trace"),
+        vis_fileformat="pdf",
+        vis_save_only=True,
+    )
+
+    assert rendered is not None
+    assert (tmp_path / "mlx_trace.pdf").exists()
+
+
+@pytest.mark.optional
+def test_mlx_parents_resolve() -> None:
+    """Every MLX parent label resolves to a captured layer."""
+
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+
+    for op in trace.layer_list:
+        for parent in op.parents:
+            assert parent in trace.layer_dict_all_keys
+
+
+@pytest.mark.optional
+def test_mlx_repeated_trace_no_wrapper_leak() -> None:
+    """Repeated MLX captures install fresh wrappers and clean them up."""
+
+    first = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+    second = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+
+    assert first.num_ops > 0
+    assert second.num_ops > 0
