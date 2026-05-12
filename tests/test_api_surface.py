@@ -27,6 +27,9 @@ TARGET_ALL = [
     "Bundle",
     "label",
     "func",
+    "grad_fn",
+    "intervening",
+    "grad_fn_label",
     "module",
     "contains",
     "where",
@@ -43,6 +46,9 @@ TARGET_ALL = [
     "swap_with",
     "zero_ablate",
     "bwd_hook",
+    "grad_clip",
+    "grad_noise",
+    "grad_clamp",
     "grad_scale",
     "grad_zero",
     "tap",
@@ -76,10 +82,16 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_40() -> None:
-    """Top-level ``__all__`` should contain exactly the Phase 1a budget."""
+def test_all_size_exactly_46() -> None:
+    """Top-level ``__all__`` should contain exactly the post-backward-parity budget.
 
-    assert len(torchlens.__all__) == 40
+    Phase 1a budget was 40; backward-parity sprint added 6 public names
+    (`grad_clip`, `grad_noise`, `grad_clamp`, `grad_fn`, `intervening`,
+    `grad_fn_label`). Surface explicitly expanded per AD-7 selector DSL parity
+    and helper inventory expansion (P4 of backward-parity sprint).
+    """
+
+    assert len(torchlens.__all__) == 46
     assert torchlens.__all__ == TARGET_ALL
 
 
