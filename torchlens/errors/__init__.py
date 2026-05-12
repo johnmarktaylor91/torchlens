@@ -90,6 +90,10 @@ _LEGACY_EXCEPTION_PATHS = {
         "torchlens.intervention.errors",
         "AppendBatchDependenceError",
     ),
+    "AppendStateValidationWarning": (
+        "torchlens.intervention.errors",
+        "AppendStateValidationWarning",
+    ),
     "MultiOutputModuleError": ("torchlens.intervention.errors", "MultiOutputModuleError"),
     "BatchNormTrainModeWarning": (
         "torchlens.intervention.errors",

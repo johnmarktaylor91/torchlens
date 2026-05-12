@@ -172,6 +172,12 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ),
     (
         "torchlens.intervention.errors",
+        "AppendStateValidationWarning",
+        errors.TorchLensWarning,
+        "subclass",
+    ),
+    (
+        "torchlens.intervention.errors",
         "BatchNormTrainModeWarning",
         errors.TorchLensWarning,
         "subclass",

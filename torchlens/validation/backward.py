@@ -5,11 +5,13 @@ from __future__ import annotations
 import random
 from collections import OrderedDict
 from typing import Any, Callable, cast
+import warnings
 
 import torch
 from torch import nn
 
 from .._robustness import check_model_and_input_variants
+from ..intervention.errors import AppendStateValidationWarning
 from ..utils.arg_handling import normalize_input_args
 from ..utils.display import warn_parallel
 from ..utils.rng import set_random_seed
@@ -176,6 +178,47 @@ def _restore_training_mode(model: nn.Module, training: bool) -> None:
     model.train(training)
 
 
+def _is_appended_trace(value: Any) -> bool:
+    """Return whether a value is an appended Trace-like object.
+
+    Parameters
+    ----------
+    value:
+        Object passed to the backward validator.
+
+    Returns
+    -------
+    bool
+        True only for objects carrying the appended Trace state marker.
+    """
+
+    return bool(getattr(value, "is_appended", False))
+
+
+def _warn_and_skip_appended_trace_validation(trace: Any) -> bool:
+    """Warn that stacked traces cannot be freshly revalidated.
+
+    Parameters
+    ----------
+    trace:
+        Appended Trace-like object supplied to validation.
+
+    Returns
+    -------
+    bool
+        Always True because saved stacked activations are treated as authoritative.
+    """
+
+    warnings.warn(
+        "validate_backward_pass received a stacked appended trace; fresh backward "
+        "re-derivation for appended traces is not supported, so saved grads are "
+        "treated as authoritative.",
+        AppendStateValidationWarning,
+        stacklevel=2,
+    )
+    return True
+
+
 def validate_backward_pass(
     model: nn.Module,
     input_args: Any,
@@ -221,6 +264,9 @@ def validate_backward_pass(
     """
     from ..user_funcs import _reject_opaque_wrappers, _unwrap_data_parallel, trace as trace_fn
     from .invariants import check_metadata_invariants
+
+    if _is_appended_trace(model):
+        return _warn_and_skip_appended_trace_validation(model)
 
     warn_parallel()
     _reject_opaque_wrappers(model)
