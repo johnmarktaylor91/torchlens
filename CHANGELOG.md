@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased — capture-pipeline-unification sprint (2026-05-11)
+## Unreleased
 
 ### Architecture
 
@@ -19,10 +19,11 @@
   `_module_build_data`, `_mod_entered`, etc. no longer exist on a
   post-capture `Trace`. They live transiently on a postprocess-local
   `TraceBuildState` and are discarded.
-- **P1 alpha.3 capture finish**: PyTorch capture now records live
+- **Backward-parity + alpha.3 sprint**: PyTorch capture now records live
   `LiveOpRecord` projections during forward and materializes final `OpLog`
-  objects in postprocess Step 0. Backward grad-fn metadata now uses
-  `is_intervening`, and tensor backward hook naming is explicit.
+  objects in postprocess Step 0. Backward metadata now uses
+  `is_intervening`, with capture-time AccumulateGrad attribution maps for
+  parameter-owning backward nodes.
 
 ### Behavior changes (CHECK YOUR CODE)
 
@@ -43,25 +44,6 @@
 
 ### New features
 
-- **Backward intervention parity (P4)**: added grad_fn selector DSL
-  (`tl.grad_fn`, `tl.intervening`, `tl.grad_fn_label`), live grad_fn
-  backward helper dispatch, and tuple-shaped gradient helpers
-  (`tl.grad_clip`, `tl.grad_noise`, `tl.grad_clamp`). Backward replay remains
-  intentionally unsupported.
-- **Combined forward/backward visualization**: `Trace.draw_combined(...)`,
-  `torchlens.visualization.draw_combined(...)`, and the legacy top-level
-  `torchlens.draw_combined(...)` render forward ops alongside captured
-  backward `grad_fn` nodes with dashed correspondence edges and module-aware
-  backward clustering.
-- **Backward validator hardening**: `validate_backward_pass` now accepts
-  `random_seed` and `validate_metadata`, restores model state between stock and
-  TorchLens passes, clears grads before/between/after validation, and checks
-  backward grad-fn metadata invariants.
-- **Backward observer parity**: `tl.tap(..., direction=...)` now supports
-  backward gradient observation and both-direction recording. `TapRecord`
-  includes direction, gradient kind, and one-based backward call index metadata.
-  Bundle backward graph rendering has regression coverage for the existing
-  per-member visualization path.
 - **`tl.fastlog.record(..., predicate=...)`**: predicate is now a
   first-class parameter on the unified entry point as well as fastlog.
   The intervention selector DSL (`tl.func`, `tl.module`, `tl.label`,
@@ -73,11 +55,40 @@
   Lazy-safe metadata extraction; batched `mx.eval` at end-of-forward.
   `mx.compile`-wrapped models, MLX backward capture, and MLX RNG replay
   are not yet supported.
+- **Backward validation parity**: `validate_backward_pass` now accepts
+  `random_seed` and `validate_metadata`, restores model state between stock and
+  TorchLens passes, clears grads before/between/after validation, and checks
+  backward grad-fn metadata invariants. Per AD-32, a per-layer-gradient oracle
+  remains deferred to a follow-up sprint; the shipped validator hardens
+  parameter-gradient parity.
+- **Combined forward/backward visualization**: `Trace.draw_combined(...)`,
+  `torchlens.visualization.draw_combined(...)`, and legacy
+  `torchlens.draw_combined(...)` render forward ops alongside captured
+  backward `grad_fn` nodes with dashed correspondence edges, module-aware
+  backward clustering, and bundle backward visualization regression coverage.
+- **Backward intervention parity**: added grad_fn selector DSL
+  (`tl.grad_fn`, `tl.intervening`, `tl.grad_fn_label`), live grad_fn backward
+  helper dispatch, and tuple-shaped gradient helpers (`tl.grad_clip`,
+  `tl.grad_noise`, `tl.grad_clamp`). Backward replay remains intentionally
+  unsupported.
+- **Backward gradient transformation and capture**: `gradient_postfunc` is now
+  a silent alias for `grad_transform`; `Recording.log_backward(...)` and
+  `Recorder.log_backward(...)` capture fastlog backward gradients with
+  predicate-mode forward-to-backward attribution.
+- **Gradient statistics**: `aggregate(..., target="grad", loss_fn=...)`
+  supports backward-gradient aggregation and includes streaming norm
+  statistics.
+- **Backward observer parity**: `tl.tap(..., direction=...)` supports backward
+  gradient observation and both-direction recording. `record_span(...)` accepts
+  the same direction support, and `TapRecord` includes direction, gradient kind,
+  and one-based backward call index metadata.
 
 ### Public API surface
 
-- `torchlens.__all__` unchanged (40 names).
-- All public symbols (`tl.trace`, `tl.fastlog.*`, intervention API,
+- `torchlens.__all__` now includes backward selector/helper additions
+  (`grad_fn`, `intervening`, `grad_fn_label`, `grad_clip`, `grad_noise`,
+  `grad_clamp`).
+- Existing public symbols (`tl.trace`, `tl.fastlog.*`, intervention API,
   `Trace.summary`, `Trace.fork`, `Trace.rerun`, etc.) byte-identical.
 - Public package version: 2.x.x. No major bump.
 
