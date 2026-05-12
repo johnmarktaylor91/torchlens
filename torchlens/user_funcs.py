@@ -51,6 +51,7 @@ from ._literals import (
     VisRendererLiteral,
 )
 from .backends.torch._tl import get_tensor_label
+from .ir import live_record_for_label
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
 from .types import ActivationPostfunc, GradientPostfunc
@@ -335,14 +336,38 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
     if parent_label is None or child_label is None:
         raise ValueError("Both tensors must have TorchLens labels before registering an edge.")
     trace.manual_tensor_connections.append((parent_label, child_label))
-    if parent_label in trace._raw_layer_dict and child_label in trace._raw_layer_dict:
-        parent_entry = trace._raw_layer_dict[parent_label]
-        child_entry = trace._raw_layer_dict[child_label]
-        if child_label not in parent_entry.children:
-            parent_entry.children.append(child_label)
-            parent_entry.has_children = True
-        if parent_label not in child_entry.parents:
-            child_entry.parents.append(parent_label)
+    _register_live_tensor_connection(trace, parent_label, child_label)
+
+
+def _register_live_tensor_connection(
+    trace: Trace,
+    parent_label: str,
+    child_label: str,
+) -> None:
+    """Register a parent-child edge on live capture records.
+
+    Parameters
+    ----------
+    trace:
+        Active trace receiving the manual edge.
+    parent_label:
+        Raw label for the parent tensor operation.
+    child_label:
+        Raw label for the child tensor operation.
+
+    Returns
+    -------
+    None
+        Mutates the live parent and child field mappings.
+    """
+
+    parent_fields = live_record_for_label(trace, parent_label).fields
+    child_fields = live_record_for_label(trace, child_label).fields
+    if child_label not in parent_fields["children"]:
+        parent_fields["children"].append(child_label)
+        parent_fields["has_children"] = True
+    if parent_label not in child_fields["parents"]:
+        child_fields["parents"].append(parent_label)
 
 
 def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.Tensor]:
