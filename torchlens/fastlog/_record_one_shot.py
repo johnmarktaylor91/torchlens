@@ -9,10 +9,10 @@ from torch import nn
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .._training_validation import reject_compiled_model
 from ..options import StreamingOptions
-from ..types import ActivationPostfunc
+from ..types import ActivationPostfunc, GradientPostfunc
 from ._recorder import Recorder
 from ._validation import validate_postprocess
-from .options import PredicateErrorMode, PredicateFn
+from .options import GradPredicateFn, PredicateErrorMode, PredicateFn
 from .types import CaptureSpec, Recording
 
 
@@ -35,8 +35,13 @@ def record(
     random_seed: int | None = None,
     out_transform: ActivationPostfunc | None = None,
     save_raw_outs: bool = True,
+    keep_grad: GradPredicateFn | bool | CaptureSpec | None = None,
+    default_grad: bool | CaptureSpec | MissingType = MISSING,
+    grad_transform: GradientPostfunc | None = None,
+    save_raw_grads: bool = True,
     train_mode: bool = False,
     out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+    gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
 ) -> Recording | tuple[Any, Recording]:
     """Record one model forward pass with fastlog predicates.
 
@@ -93,6 +98,11 @@ def record(
         random_seed=random_seed,
         out_transform=out_transform,
         save_raw_outs=save_raw_outs,
+        keep_grad=keep_grad,
+        default_grad=default_grad,
+        grad_transform=grad_transform,
+        save_raw_grads=save_raw_grads,
+        gradient_postfunc=gradient_postfunc,
         train_mode=train_mode,
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import torch
 
@@ -10,7 +10,7 @@ from .._errors import TorchLensPostfuncError
 from .._state import pause_logging
 from .._training_validation import TrainingModeConfigError
 from ..utils.tensor_utils import safe_copy
-from .exceptions import PredicateError
+from .exceptions import InvalidStorageError, PredicateError
 from .types import CaptureSpec, RecordContext, StorageIntent
 
 if TYPE_CHECKING:
@@ -45,7 +45,8 @@ def _resolve_storage(
     *,
     out_postfunc: "ActivationPostfunc | None" = None,
     save_raw_outs: bool = True,
-    ctx: RecordContext | None = None,
+    ctx: Any | None = None,
+    kind: Literal["activation", "grad"] = "activation",
 ) -> tuple[
     torch.Tensor | None,
     torch.Tensor | None,
@@ -89,7 +90,10 @@ def _resolve_storage(
     """
 
     if spec.keep_grad and intent.on_disk and not intent.in_ram:
-        raise PredicateError("keep_grad=True is not valid for disk-only fastlog storage")
+        message = f"keep_grad=True is not valid for disk-only fastlog {kind} storage"
+        if kind == "grad":
+            raise InvalidStorageError(message)
+        raise PredicateError(message)
     if spec.keep_grad and (tensor.dtype in _INTEGER_DTYPES or spec.dtype in _INTEGER_DTYPES):
         raise PredicateError("keep_grad=True is not valid for integer or bool tensors")
 
@@ -142,7 +146,7 @@ def _invoke_postfunc(
     tensor: torch.Tensor,
     postfunc: Callable[[torch.Tensor], torch.Tensor],
     *,
-    ctx: RecordContext | None,
+    ctx: Any | None,
     spec: CaptureSpec,
     intent: StorageIntent,
     target: str,
@@ -165,7 +169,7 @@ def _invoke_postfunc(
 
 def _postfunc_error_message(
     *,
-    ctx: RecordContext | None,
+    ctx: Any | None,
     spec: CaptureSpec,
     intent: StorageIntent,
     target: str,

@@ -25,6 +25,7 @@ _LEGACY_EXCEPTION_PATHS = {
     ),
     "TrainingModeConfigError": ("torchlens._training_validation", "TrainingModeConfigError"),
     "RecordingConfigError": ("torchlens.fastlog.exceptions", "RecordingConfigError"),
+    "InvalidStorageError": ("torchlens.fastlog.exceptions", "InvalidStorageError"),
     "RecorderStateError": ("torchlens.fastlog.exceptions", "RecorderStateError"),
     "RecoveryError": ("torchlens.fastlog.exceptions", "RecoveryError"),
     "BundleNotFinalizedError": ("torchlens.fastlog.exceptions", "BundleNotFinalizedError"),

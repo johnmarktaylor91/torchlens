@@ -25,6 +25,7 @@ from .storage_ram import RamStorageBackend
 from .types import (
     ActivationRecord,
     CaptureSpec,
+    GradRecordContext,
     ModuleStackFrame,
     RecordContext,
     Recording,
@@ -124,7 +125,8 @@ class DiskStorageBackend:
         intent: StorageIntent,
         *,
         options: RecordingOptions,
-        ctx: "RecordContext | None" = None,
+        ctx: "RecordContext | GradRecordContext | None" = None,
+        kind: str = "activation",
     ) -> tuple[
         torch.Tensor | None,
         torch.Tensor | None,
@@ -154,13 +156,16 @@ class DiskStorageBackend:
             transformed_disk_payload)``. Any element may be ``None``.
         """
 
+        transform = options.grad_transform if kind == "grad" else options.out_transform
+        save_raw = options.save_raw_grads if kind == "grad" else options.save_raw_outs
         return _resolve_storage(
             tensor,
             spec,
             intent,
-            out_postfunc=options.out_transform,
-            save_raw_outs=options.save_raw_outs,
+            out_postfunc=transform,
+            save_raw_outs=save_raw,
             ctx=ctx,
+            kind="grad" if kind == "grad" else "activation",
         )
 
     def finalize(self) -> None:

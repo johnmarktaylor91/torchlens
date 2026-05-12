@@ -1215,6 +1215,8 @@ def log_function_output_tensors_predicate(
             sample_id=state.sample_id,
         )
         try:
+            if out.grad_fn is not None:
+                state.grad_fn_to_context[out.grad_fn] = ctx
             spec = _evaluate_keep_op(ctx, state.options)
             ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
             append_projected_event(

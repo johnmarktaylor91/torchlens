@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from ..fastlog.exceptions import PredicateError
@@ -79,6 +80,16 @@ def _evaluate_keep_op(ctx: RecordContext, options: "RecordingOptions") -> Captur
         result = None
     else:
         result = options.keep_op(ctx)
+        if (
+            result is False
+            and ctx.kind == "op"
+            and ctx.layer_type is not None
+            and ctx.type_index is not None
+        ):
+            alias_ctx = replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}")
+            result = options.keep_op(alias_ctx)
+            if result is not False:
+                ctx = alias_ctx
     return _normalize_capture_decision(result, ctx, options.default_op)
 
 

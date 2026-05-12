@@ -14,6 +14,10 @@ class RecordingConfigError(ConfigurationError, ValueError):
     """Raised when fastlog options are internally inconsistent."""
 
 
+class InvalidStorageError(RecordingConfigError):
+    """Raised when a selected fastlog payload cannot use the configured storage."""
+
+
 class RecorderStateError(CaptureError, RuntimeError):
     """Raised when a recorder is used outside its valid lifecycle."""
 

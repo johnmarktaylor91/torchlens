@@ -7,11 +7,12 @@ from typing import Any, Callable, Final, Literal, Mapping
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ..options import StreamingOptions
-from ..types import ActivationPostfunc
-from .types import CaptureSpec, RecordContext
+from ..types import ActivationPostfunc, GradientPostfunc
+from .types import CaptureSpec, GradRecordContext, RecordContext
 
 CaptureDecision = bool | CaptureSpec | None
 PredicateFn = Callable[[RecordContext], CaptureDecision]
+GradPredicateFn = Callable[[GradRecordContext], CaptureDecision]
 PredicateErrorMode = Literal["auto", "accumulate", "fail-fast"]
 
 _RECORDING_FIELDS: Final[tuple[str, ...]] = (
@@ -27,6 +28,10 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "random_seed",
     "out_transform",
     "save_raw_outs",
+    "keep_grad",
+    "default_grad",
+    "grad_transform",
+    "save_raw_grads",
 )
 
 
@@ -60,6 +65,10 @@ class RecordingOptions:
     random_seed: int | None = None
     out_transform: ActivationPostfunc | None = None
     save_raw_outs: bool = True
+    keep_grad: GradPredicateFn | bool | CaptureSpec | None = None
+    default_grad: bool | CaptureSpec = False
+    grad_transform: GradientPostfunc | None = None
+    save_raw_grads: bool = True
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -81,8 +90,13 @@ class RecordingOptions:
         random_seed: int | None | MissingType = MISSING,
         out_transform: ActivationPostfunc | None | MissingType = MISSING,
         save_raw_outs: bool | MissingType = MISSING,
+        keep_grad: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
+        default_grad: bool | CaptureSpec | MissingType = MISSING,
+        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
         *,
         out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
@@ -93,6 +107,10 @@ class RecordingOptions:
                 )
             warn_deprecated_alias("out_postfunc", "out_transform")
             out_transform = out_postfunc
+        if gradient_postfunc is not MISSING:
+            if grad_transform is not MISSING:
+                raise TypeError("kwarg gradient_postfunc aliases grad_transform; do not pass both")
+            grad_transform = gradient_postfunc
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "keep_op": _resolve_recording_option("keep_op", keep_op, None, specified_fields),
@@ -126,6 +144,16 @@ class RecordingOptions:
             ),
             "save_raw_outs": _resolve_recording_option(
                 "save_raw_outs", save_raw_outs, True, specified_fields
+            ),
+            "keep_grad": _resolve_recording_option("keep_grad", keep_grad, None, specified_fields),
+            "default_grad": _resolve_recording_option(
+                "default_grad", default_grad, False, specified_fields
+            ),
+            "grad_transform": _resolve_recording_option(
+                "grad_transform", grad_transform, None, specified_fields
+            ),
+            "save_raw_grads": _resolve_recording_option(
+                "save_raw_grads", save_raw_grads, True, specified_fields
             ),
         }
         _validate_recording_values(values)
@@ -174,6 +202,10 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     on_predicate_error = values["on_predicate_error"]
     out_transform = values["out_transform"]
     save_raw_outs = values["save_raw_outs"]
+    keep_grad = values["keep_grad"]
+    default_grad = values["default_grad"]
+    grad_transform = values["grad_transform"]
+    save_raw_grads = values["save_raw_grads"]
     if not isinstance(history_size, int) or not 0 <= history_size <= 1024:
         raise ValueError("history_size must be an integer in [0, 1024]")
     if not isinstance(max_predicate_failures, int) or max_predicate_failures < 0:
@@ -184,6 +216,18 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
         raise ValueError("out_transform must be callable or None")
     if not isinstance(save_raw_outs, bool):
         raise ValueError("save_raw_outs must be a bool")
+    if (
+        keep_grad is not None
+        and not isinstance(keep_grad, (bool, CaptureSpec))
+        and not callable(keep_grad)
+    ):
+        raise ValueError("keep_grad must be callable, bool, CaptureSpec, or None")
+    if not isinstance(default_grad, (bool, CaptureSpec)):
+        raise ValueError("default_grad must be bool or CaptureSpec")
+    if grad_transform is not None and not callable(grad_transform):
+        raise ValueError("grad_transform must be callable or None")
+    if not isinstance(save_raw_grads, bool):
+        raise ValueError("save_raw_grads must be a bool")
 
 
 def merge_recording_options(
@@ -201,7 +245,12 @@ def merge_recording_options(
     random_seed: int | None | MissingType = MISSING,
     out_transform: ActivationPostfunc | None | MissingType = MISSING,
     save_raw_outs: bool | MissingType = MISSING,
+    keep_grad: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
+    default_grad: bool | CaptureSpec | MissingType = MISSING,
+    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    save_raw_grads: bool | MissingType = MISSING,
     out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+    gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
 ) -> RecordingOptions:
     """Merge flat recording kwargs into a grouped options object."""
 
@@ -210,6 +259,10 @@ def merge_recording_options(
             raise TypeError("kwarg out_postfunc deprecated, use out_transform; do not pass both")
         warn_deprecated_alias("out_postfunc", "out_transform")
         out_transform = out_postfunc
+    if gradient_postfunc is not MISSING:
+        if grad_transform is not MISSING:
+            raise TypeError("kwarg gradient_postfunc aliases grad_transform; do not pass both")
+        grad_transform = gradient_postfunc
     base_values = recording.as_dict() if recording is not None else RecordingOptions().as_dict()
     specified_fields = (
         set(recording._specified_fields) if recording is not None else set()  # noqa: SLF001
@@ -227,6 +280,10 @@ def merge_recording_options(
         "random_seed": random_seed,
         "out_transform": out_transform,
         "save_raw_outs": save_raw_outs,
+        "keep_grad": keep_grad,
+        "default_grad": default_grad,
+        "grad_transform": grad_transform,
+        "save_raw_grads": save_raw_grads,
     }
     for field_name, value in incoming.items():
         if value is MISSING:

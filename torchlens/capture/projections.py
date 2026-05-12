@@ -18,6 +18,7 @@ from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import (
     ActivationRecord,
     CaptureSpec,
+    GradRecordContext,
     ModuleStackFrame,
     PredicateFailure,
     RecordContext,
@@ -44,6 +45,35 @@ if TYPE_CHECKING:
 _active_recording_state: "RecordingState | None" = None
 
 
+class _GradFnContextMap:
+    """Map autograd nodes to record contexts with weak keys when supported."""
+
+    def __init__(self) -> None:
+        """Initialize weak-key and object-key fallback storage."""
+
+        self._weak: weakref.WeakKeyDictionary[Any, RecordContext] = weakref.WeakKeyDictionary()
+        self._strong: dict[Any, RecordContext] = {}
+
+    def __setitem__(self, key: Any, value: RecordContext) -> None:
+        """Store a context by grad_fn object."""
+
+        try:
+            self._weak[key] = value
+        except TypeError:
+            self._strong[key] = value
+
+    def get(self, key: Any, default: RecordContext | None = None) -> RecordContext | None:
+        """Return the context for a grad_fn object, if present."""
+
+        try:
+            value = self._weak.get(key)
+        except TypeError:
+            value = None
+        if value is not None:
+            return value
+        return self._strong.get(key, default)
+
+
 class _StorageBackend(Protocol):
     """Protocol implemented by fastlog storage backends."""
 
@@ -57,7 +87,8 @@ class _StorageBackend(Protocol):
         intent: StorageIntent,
         *,
         options: "RecordingOptions",
-        ctx: RecordContext | None,
+        ctx: RecordContext | GradRecordContext | None,
+        kind: str = "activation",
     ) -> tuple[
         torch.Tensor | None,
         torch.Tensor | None,
@@ -106,8 +137,12 @@ def _empty_recording(options: "RecordingOptions") -> Recording:
         keep_op_repr=repr(options.keep_op) if options.keep_op is not None else None,
         keep_module_repr=repr(options.keep_module) if options.keep_module is not None else None,
         history_size=options.history_size,
+        keep_grad_repr=repr(options.keep_grad) if options.keep_grad is not None else None,
         _out_transform_repr=(
             repr(options.out_transform) if options.out_transform is not None else None
+        ),
+        _grad_transform_repr=(
+            repr(options.grad_transform) if options.grad_transform is not None else None
         ),
     )
 
@@ -132,6 +167,7 @@ class RecordingState:
     all_contexts: list[RecordContext] = field(default_factory=list)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
+    grad_fn_to_context: _GradFnContextMap = field(default_factory=_GradFnContextMap)
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -167,7 +203,8 @@ class RecordingState:
         tensor: torch.Tensor,
         spec: CaptureSpec,
         *,
-        ctx: RecordContext | None = None,
+        ctx: RecordContext | GradRecordContext | None = None,
+        kind: str = "activation",
     ) -> tuple[
         torch.Tensor | None,
         torch.Tensor | None,
@@ -184,6 +221,7 @@ class RecordingState:
             self.storage_intent,
             options=self.options,
             ctx=ctx,
+            kind=kind,
         )
 
     def finalize_storage(self) -> None:

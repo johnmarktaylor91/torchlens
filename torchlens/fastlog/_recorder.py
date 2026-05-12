@@ -20,11 +20,17 @@ from ..capture.projections import (
 from ..data_classes.model_log import Trace
 from ..ir import CaptureEvents
 from ..options import StreamingOptions
-from ..types import ActivationPostfunc
+from ..types import ActivationPostfunc, GradientPostfunc
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
-from .options import PredicateErrorMode, PredicateFn, RecordingOptions, merge_recording_options
-from .types import CaptureSpec, Recording
+from .options import (
+    GradPredicateFn,
+    PredicateErrorMode,
+    PredicateFn,
+    RecordingOptions,
+    merge_recording_options,
+)
+from .types import CaptureSpec, GradRecordContext, Recording
 
 
 def _rank_prefixed_streaming_options(
@@ -144,8 +150,13 @@ class Recorder:
         random_seed: int | None | MissingType = MISSING,
         out_transform: ActivationPostfunc | None | MissingType = MISSING,
         save_raw_outs: bool | MissingType = MISSING,
+        keep_grad: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
+        default_grad: bool | CaptureSpec | MissingType = MISSING,
+        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
         train_mode: bool = False,
         out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
+        gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -204,6 +215,11 @@ class Recorder:
             random_seed=random_seed,
             out_transform=out_transform,
             save_raw_outs=save_raw_outs,
+            keep_grad=keep_grad,
+            default_grad=default_grad,
+            grad_transform=grad_transform,
+            save_raw_grads=save_raw_grads,
+            gradient_postfunc=gradient_postfunc,
         )
         validate_recording_options(self.options)
         self._state: RecordingState | None = None
@@ -220,6 +236,7 @@ class Recorder:
             raise RecorderStateError("Recorder cannot be re-entered")
         recording = _empty_recording(self.options)
         self._state = RecordingState(options=self.options, recording=recording)
+        object.__setattr__(recording, "_recording_state", self._state)
         self._capture_events = CaptureEvents()
         self._entered = True
         return self
@@ -240,6 +257,7 @@ class Recorder:
             session = type("_FastlogCaptureSession", (), {})()
             session.capture_events = self._capture_events
             session._fastlog_recording = self._state.recording
+            session.recording_state = self._state
             self._recording = Recording.from_capture_events(session)
         else:
             self._state.abort_storage(str(exc_value))
@@ -336,6 +354,28 @@ class Recorder:
         self._state.pass_index = self._next_pass_index
         self._state.event_index = 0
         self._state.compute_index = 0
+
+    def log_backward(
+        self,
+        loss: torch.Tensor,
+        *,
+        keep_grad: (GradPredicateFn | bool | CaptureSpec | None) = None,
+        default_grad: bool | CaptureSpec | None = None,
+        retain_graph: bool | None = None,
+        create_graph: bool = False,
+    ) -> Recording:
+        """Run backward for the active recorder and retain selected gradients."""
+
+        if not self._entered or self._exited or self._state is None:
+            raise RecorderStateError("Recorder.log_backward() requires an active with-block")
+        self._state.recording.log_backward(
+            loss,
+            keep_grad=keep_grad,
+            default_grad=default_grad,
+            retain_graph=retain_graph,
+            create_graph=create_graph,
+        )
+        return self._state.recording
 
     @property
     def recording(self) -> Recording:

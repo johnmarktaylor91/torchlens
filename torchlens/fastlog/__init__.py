@@ -6,6 +6,7 @@ from .cleanup import cleanup_partial
 from .dry_run import dry_run
 from .exceptions import (
     BundleNotFinalizedError,
+    InvalidStorageError,
     PredicateError,
     RecorderStateError,
     RecordingConfigError,
@@ -17,6 +18,8 @@ from .recover import load, recover
 from .types import (
     ActivationRecord,
     CaptureSpec,
+    GradientRecord,
+    GradRecordContext,
     ModuleStackFrame,
     RecordContext,
     Recording,
@@ -28,6 +31,9 @@ __all__ = [
     "ActivationRecord",
     "BundleNotFinalizedError",
     "CaptureSpec",
+    "GradientRecord",
+    "GradRecordContext",
+    "InvalidStorageError",
     "ModuleStackFrame",
     "PredicateError",
     "Recorder",

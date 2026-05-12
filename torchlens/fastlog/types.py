@@ -6,11 +6,22 @@ import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import torch
 
 from ..ir.predicate import EventKind, ModuleStackFrame, RecordContext
+
+if TYPE_CHECKING:
+    from ..capture.projections import RecordingState
+
+
+def _public_fastlog_layer_label(ctx: RecordContext) -> str:
+    """Return a compact public label for a predicate-mode operation context."""
+
+    if ctx.kind == "op" and ctx.layer_type is not None and ctx.type_index is not None:
+        return f"{ctx.layer_type}_{ctx.type_index}"
+    return ctx.label
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +91,65 @@ class ActivationRecord:
     """
 
     ctx: RecordContext
+    spec: CaptureSpec
+    ram_payload: torch.Tensor | None = None
+    disk_payload: torch.Tensor | None = None
+    transformed_ram_payload: torch.Tensor | None = None
+    transformed_disk_payload: torch.Tensor | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    recorded_at: float = field(default_factory=time.time)
+
+
+@dataclass(frozen=True, slots=True)
+class GradRecordContext:
+    """Predicate input schema for one fastlog backward gradient event.
+
+    Parameters
+    ----------
+    grad_fn_label:
+        Label assigned to the autograd node during the backward walk.
+    layer_label:
+        Forward fastlog label joined by ``grad_fn`` identity, when available.
+    op_label:
+        Alias of the joined forward operation label for selector parity.
+    module_stack:
+        Forward module stack captured for the joined operation.
+    has_forward_op:
+        Whether this backward node corresponds to a predicate-mode forward op.
+    is_intervening:
+        Whether this backward node has no joined forward op.
+    """
+
+    grad_fn_label: str
+    grad_fn_name: str
+    grad_fn_type: str
+    backward_call_index: int
+    grad_kind: Literal["grad_input", "grad_output"]
+    grad_input_index: int | None = None
+    grad_output_index: int | None = None
+    layer_label: str | None = None
+    op_label: str | None = None
+    module_stack: tuple[Any, ...] = ()
+    has_forward_op: bool = False
+    is_intervening: bool = True
+    pass_index: int | None = None
+    event_index: int | None = None
+    shape: tuple[int, ...] | None = None
+    dtype: torch.dtype | None = None
+    tensor_device: torch.device | None = None
+
+    @property
+    def label(self) -> str:
+        """Return the gradient event label used by predicate callables."""
+
+        return self.layer_label or self.grad_fn_label
+
+
+@dataclass(frozen=True, slots=True)
+class GradientRecord:
+    """One retained fastlog gradient event."""
+
+    ctx: GradRecordContext
     spec: CaptureSpec
     ram_payload: torch.Tensor | None = None
     disk_payload: torch.Tensor | None = None
@@ -203,12 +273,19 @@ class Recording:
     keep_op_repr: str | None
     keep_module_repr: str | None
     history_size: int
+    grad_records: list[GradientRecord] = field(default_factory=list)
+    grad_by_pass: dict[int, list[int]] = field(default_factory=dict)
+    grad_by_label: dict[str, list[int]] = field(default_factory=dict)
+    grad_by_grad_fn_label: dict[str, list[int]] = field(default_factory=dict)
+    keep_grad_repr: str | None = None
+    _grad_transform_repr: str | None = None
     _out_transform_repr: str | None = None
     recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
     _capture_events: Any | None = field(default=None, repr=False, compare=False)
     _records_built: bool = field(default=True, repr=False, compare=False)
     _recording_trace: RecordingTrace | None = field(default=None, repr=False, compare=False)
+    _recording_state: Any | None = field(default=None, repr=False, compare=False)
 
     def __getattribute__(self, name: str) -> Any:
         """Populate lazy record projections when ``records`` is read."""
@@ -236,6 +313,7 @@ class Recording:
 
         base = session._fastlog_recording
         object.__setattr__(base, "_capture_events", session.capture_events)
+        object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
         object.__setattr__(base, "_records_built", bool(base.records))
         object.__setattr__(base, "_recording_trace", None)
         return base
@@ -313,6 +391,68 @@ class Recording:
 
         return self._out_transform_repr
 
+    @property
+    def grad_transform_repr(self) -> str | None:
+        """Canonical repr for the gradient transform callable."""
+
+        return self._grad_transform_repr
+
+    def add_grad_record(self, record: GradientRecord) -> None:
+        """Append one retained gradient record and update indexes."""
+
+        index = len(self.grad_records)
+        self.grad_records.append(record)
+        if record.ctx.pass_index is not None:
+            self.grad_by_pass.setdefault(record.ctx.pass_index, []).append(index)
+        if record.ctx.layer_label is not None:
+            self.grad_by_label.setdefault(record.ctx.layer_label, []).append(index)
+        self.grad_by_label.setdefault(record.ctx.label, []).append(index)
+        self.grad_by_grad_fn_label.setdefault(record.ctx.grad_fn_label, []).append(index)
+
+    def log_backward(
+        self,
+        loss: torch.Tensor,
+        *,
+        keep_grad: Callable[[GradRecordContext], CaptureDecision]
+        | bool
+        | CaptureSpec
+        | None = None,
+        default_grad: bool | CaptureSpec | None = None,
+        retain_graph: bool | None = None,
+        create_graph: bool = False,
+    ) -> "Recording":
+        """Run ``loss.backward`` while capturing selected fastlog gradients.
+
+        Parameters
+        ----------
+        loss:
+            Loss tensor whose autograd graph should be walked.
+        keep_grad:
+            Optional per-gradient predicate overriding the recording default.
+        default_grad:
+            Default capture decision when no predicate is configured.
+        retain_graph:
+            Forwarded to ``Tensor.backward``.
+        create_graph:
+            Forwarded to ``Tensor.backward``.
+
+        Returns
+        -------
+        Recording
+            This recording, mutated with gradient records.
+        """
+
+        from ..backends.torch.backward import log_recording_backward
+
+        return log_recording_backward(
+            self,
+            loss,
+            keep_grad=keep_grad,
+            default_grad=default_grad,
+            retain_graph=retain_graph,
+            create_graph=create_graph,
+        )
+
     def __getitem__(self, key: int | str) -> ActivationRecord | list[ActivationRecord]:
         """Return records by integer index or raw/final label."""
 
@@ -368,7 +508,10 @@ class Recording:
     def summary(self) -> str:
         """Return a concise human-readable recording summary."""
 
-        return f"Recording(n_ops={self.n_ops}, n_records={len(self)})"
+        return (
+            f"Recording(n_ops={self.n_ops}, n_records={len(self)}, "
+            f"n_grad_records={len(self.grad_records)})"
+        )
 
     def enrich(self, steps: list[str] | str) -> "Recording":
         """Return a new recording with requested incremental enrichments.
@@ -388,3 +531,55 @@ class Recording:
         from ..postprocess.incremental import enrich_recording
 
         return enrich_recording(self, steps)
+
+
+def build_grad_record_context(
+    recording_state: "RecordingState",
+    grad_fn: Any,
+    grad: torch.Tensor | None,
+    *,
+    grad_fn_label: str,
+    grad_kind: Literal["grad_input", "grad_output"],
+    backward_call_index: int,
+    grad_input_index: int | None = None,
+    grad_output_index: int | None = None,
+) -> GradRecordContext:
+    """Build a fastlog gradient context from a backward node and optional join."""
+
+    forward_ctx = recording_state.grad_fn_to_context.get(grad_fn)
+    shape = tuple(grad.shape) if grad is not None else None
+    dtype = grad.dtype if grad is not None else None
+    tensor_device = grad.device if grad is not None else None
+    grad_fn_type = type(grad_fn).__name__.removesuffix("Backward0").lower()
+    if forward_ctx is None:
+        return GradRecordContext(
+            grad_fn_label=grad_fn_label,
+            grad_fn_name=type(grad_fn).__name__,
+            grad_fn_type=grad_fn_type,
+            backward_call_index=backward_call_index,
+            grad_kind=grad_kind,
+            grad_input_index=grad_input_index,
+            grad_output_index=grad_output_index,
+            shape=shape,
+            dtype=dtype,
+            tensor_device=tensor_device,
+        )
+    return GradRecordContext(
+        grad_fn_label=grad_fn_label,
+        grad_fn_name=type(grad_fn).__name__,
+        grad_fn_type=grad_fn_type,
+        backward_call_index=backward_call_index,
+        grad_kind=grad_kind,
+        grad_input_index=grad_input_index,
+        grad_output_index=grad_output_index,
+        layer_label=_public_fastlog_layer_label(forward_ctx),
+        op_label=_public_fastlog_layer_label(forward_ctx),
+        module_stack=forward_ctx.module_stack,
+        has_forward_op=True,
+        is_intervening=False,
+        pass_index=forward_ctx.pass_index,
+        event_index=forward_ctx.event_index,
+        shape=shape,
+        dtype=dtype,
+        tensor_device=tensor_device,
+    )

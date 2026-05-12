@@ -6,7 +6,14 @@ import torch
 
 from ._storage_resolver import _resolve_storage
 from .options import RecordingOptions
-from .types import ActivationRecord, CaptureSpec, RecordContext, Recording, StorageIntent
+from .types import (
+    ActivationRecord,
+    CaptureSpec,
+    GradRecordContext,
+    RecordContext,
+    Recording,
+    StorageIntent,
+)
 
 
 class RamStorageBackend:
@@ -30,7 +37,8 @@ class RamStorageBackend:
         intent: StorageIntent,
         *,
         options: RecordingOptions,
-        ctx: RecordContext | None,
+        ctx: RecordContext | GradRecordContext | None,
+        kind: str = "activation",
     ) -> tuple[
         torch.Tensor | None,
         torch.Tensor | None,
@@ -60,13 +68,16 @@ class RamStorageBackend:
             backend), transformed RAM payload, and transformed disk payload.
         """
 
+        transform = options.grad_transform if kind == "grad" else options.out_transform
+        save_raw = options.save_raw_grads if kind == "grad" else options.save_raw_outs
         return _resolve_storage(
             tensor,
             spec,
             intent,
-            out_postfunc=options.out_transform,
-            save_raw_outs=options.save_raw_outs,
+            out_postfunc=transform,
+            save_raw_outs=save_raw,
             ctx=ctx,
+            kind="grad" if kind == "grad" else "activation",
         )
 
     def append(self, record: ActivationRecord) -> None:
