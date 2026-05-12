@@ -31,6 +31,7 @@ TARGET_ALL = [
     "intervening",
     "grad_fn_label",
     "module",
+    "output",
     "contains",
     "where",
     "in_module",
@@ -82,16 +83,16 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_46() -> None:
-    """Top-level ``__all__`` should contain exactly the post-backward-parity budget.
+def test_all_size_exactly_47() -> None:
+    """Top-level ``__all__`` should contain exactly the post-backward-megasprint budget.
 
-    Phase 1a budget was 40; backward-parity sprint added 6 public names
-    (`grad_clip`, `grad_noise`, `grad_clamp`, `grad_fn`, `intervening`,
-    `grad_fn_label`). Surface explicitly expanded per AD-7 selector DSL parity
-    and helper inventory expansion (P4 of backward-parity sprint).
+    Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
+    grad_clamp, grad_fn, intervening, grad_fn_label) = 46; post-backward
+    megasprint P1 added `output` (multi-output module selector disambiguation
+    per AD-7 / F-Multi) = 47.
     """
 
-    assert len(torchlens.__all__) == 46
+    assert len(torchlens.__all__) == 47
     assert torchlens.__all__ == TARGET_ALL
 
 
