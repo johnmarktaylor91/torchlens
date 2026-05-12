@@ -53,10 +53,17 @@ from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
 )
-from ...utils.tensor_utils import get_memory_amount, safe_copy, tensor_nanequal
+from ...utils.tensor_utils import get_memory_amount, safe_copy, safe_to, tensor_nanequal
 from ...utils.collections import index_nested, ensure_iterable
 from ...capture.flops import compute_backward_flops, compute_forward_flops
-from ...data_classes.op_log import OpLog
+from ...data_classes.op_log import (
+    OpLog,
+    _dtype_or_none,
+    _memory_or_none,
+    _recursive_safe_copy,
+    _shape_or_none,
+    _tensor_content_hash,
+)
 from ...ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
@@ -65,7 +72,7 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir import LiveOpRecord
+from ...ir import LiveOpRecord, live_record_for_label
 from ...ir.intervention import FireResult
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -117,7 +124,6 @@ from ...capture.projections import (
 )
 from ...fastlog.types import ActivationRecord, CaptureSpec
 from ...capture.salient_args import extract_salient_args
-from ...postprocess._materialize import materialize_log_from_fields, register_materialized_event
 
 if TYPE_CHECKING:
     from ...data_classes.model_log import Trace
@@ -1524,19 +1530,19 @@ def _tag_tensor_and_track_variations(
         _add_backward_hook(self, out, out_label)
 
     for parent_label in new_layer_entry.parents:
-        parent = self[parent_label]
-        if parent.has_saved_outs and self.save_arg_values:
+        parent = live_record_for_label(self, parent_label).fields
+        if parent["has_saved_outs"] and self.save_arg_values:
             parent_tensor_contents = _get_parent_contents(
                 parent_label,
                 arg_copies,
                 kwarg_copies,
                 new_layer_entry.parent_arg_positions,
             )
-            if not tensor_nanequal(parent_tensor_contents, parent.out):
-                parent.output_versions_per_child[new_layer_entry._label_raw] = (
+            if not tensor_nanequal(parent_tensor_contents, parent["out"]):
+                parent["output_versions_per_child"][new_layer_entry._label_raw] = (
                     parent_tensor_contents
                 )
-                parent.has_output_variations = True
+                parent["has_output_variations"] = True
 
 
 def log_function_output_tensors_exhaustive(
@@ -2269,6 +2275,88 @@ def _log_output_tensor_info(
         fields_dict["internal_source_ancestors"] = {_label_raw}
 
 
+def _save_activation_fields(
+    trace: "Trace",
+    fields_dict: dict[str, Any],
+    t: torch.Tensor,
+    t_args: tuple[Any, ...],
+    t_kwargs: dict[str, Any],
+    out_postfunc: Callable[..., Any] | None,
+) -> None:
+    """Save activation data directly into a live field dictionary.
+
+    Parameters
+    ----------
+    trace
+        Active trace.
+    fields_dict
+        Mutable live field mapping.
+    t
+        Output tensor to save.
+    t_args
+        Positional function arguments.
+    t_kwargs
+        Keyword function arguments.
+    out_postfunc
+        Optional output transform.
+
+    Returns
+    -------
+    None
+        Mutates ``fields_dict``.
+    """
+
+    raw_out = safe_copy(t, fields_dict["detach_saved_activations"])
+    if fields_dict["output_device"] not in [str(raw_out.device), "same"]:
+        raw_out = safe_to(raw_out, fields_dict["output_device"])
+
+    fields_dict["shape"] = tuple(raw_out.shape)
+    fields_dict["dtype"] = raw_out.dtype
+    fields_dict["memory"] = get_memory_amount(raw_out)
+
+    save_raw_outs = getattr(trace, "save_raw_outs", True)
+    store_raw = save_raw_outs or out_postfunc is None
+    if store_raw and not getattr(trace, "save_arg_values", False):
+        hash_cache = getattr(trace, "_out_hash_cache", None)
+        if hash_cache is None:
+            hash_cache = {}
+            setattr(trace, "_out_hash_cache", hash_cache)
+        out_hash = _tensor_content_hash(raw_out)
+        if out_hash in hash_cache:
+            fields_dict["annotations"]["dedup_out_hash"] = out_hash
+            fields_dict["annotations"]["dedup_reference_label"] = hash_cache[out_hash][0]
+            raw_out = hash_cache[out_hash][1]
+        else:
+            hash_cache[out_hash] = (fields_dict["_layer_label_raw"], raw_out)
+    fields_dict["out"] = raw_out if store_raw else None
+    fields_dict["transformed_out"] = None
+    fields_dict["transformed_out_shape"] = None
+    fields_dict["transformed_out_dtype"] = None
+    fields_dict["transformed_out_memory"] = None
+    if out_postfunc is not None:
+        with pause_logging():
+            transformed_out = out_postfunc(raw_out)
+        fields_dict["transformed_out"] = transformed_out
+        fields_dict["transformed_out_shape"] = _shape_or_none(transformed_out)
+        fields_dict["transformed_out_dtype"] = _dtype_or_none(transformed_out)
+        fields_dict["transformed_out_memory"] = _memory_or_none(transformed_out)
+    fields_dict["has_saved_outs"] = True
+
+    out_sink = getattr(trace, "_out_sink", None)
+    if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
+        out_sink(fields_dict["_label_raw"], fields_dict["out"])
+
+    if trace.save_arg_values:
+        fields_dict["has_saved_args"] = True
+        fields_dict["saved_args"] = [_recursive_safe_copy(arg) for arg in t_args]
+        fields_dict["saved_kwargs"] = {
+            key: _recursive_safe_copy(value) for key, value in t_kwargs.items()
+        }
+    else:
+        fields_dict["saved_args"] = None
+        fields_dict["saved_kwargs"] = None
+
+
 def _make_layer_log_entry(
     self: "Trace",
     t: torch.Tensor,
@@ -2276,7 +2364,7 @@ def _make_layer_log_entry(
     t_args: tuple[Any, ...] | None = None,
     t_kwargs: dict[str, Any] | None = None,
     out_postfunc: Callable[..., Any] | None = None,
-) -> OpLog:
+) -> Any:
     """Create a OpLog (or BufferLog) entry and register it in Trace.
 
     Instantiates the appropriate log class from ``fields_dict``, conditionally
@@ -2296,7 +2384,17 @@ def _make_layer_log_entry(
         t_kwargs = {}
 
     fire_results = tuple(fields_dict.pop("fire_results", ()))
-    new_entry = materialize_log_from_fields(fields_dict)
+    live_record = LiveOpRecord(
+        event=None,
+        fields=fields_dict,
+        tensor_ref=weakref.ref(t),
+        t_args=t_args,
+        t_kwargs=t_kwargs,
+        fire_results=fire_results,
+    )
+    from ...capture.projections import LiveOpView
+
+    new_entry = LiveOpView(self, live_record)
     keep_by_predicate = True
     module_filter = getattr(self, "module_filter", None)
     if module_filter is not None:
@@ -2305,28 +2403,13 @@ def _make_layer_log_entry(
     if keep_by_predicate and (
         (layer_nums_to_save == "all") or (new_entry.capture_index in layer_nums_to_save)
     ):
-        new_entry.save_activation(
-            t,
-            t_args,
-            t_kwargs,
-            self.save_arg_values,
-            out_postfunc,
-        )
+        _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, out_postfunc)
         self.ops_with_saved_outs.append(new_entry._label_raw)
     op_event = _op_event_from_log(fields_dict, t, fire_results)
-    register_materialized_event(
-        self,
-        op_event,
-        new_entry,
-        LiveOpRecord(
-            event=op_event,
-            fields=new_entry.__dict__,
-            tensor_ref=weakref.ref(t),
-            t_args=t_args,
-            t_kwargs=t_kwargs,
-            fire_results=fire_results,
-        ),
-    )
+    live_record.event = op_event
+    from ...ir import register_live_event
+
+    register_live_event(self, op_event, live_record)
     _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry

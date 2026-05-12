@@ -71,7 +71,7 @@ def register_materialized_event(
 
 
 def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
-    """Clear capture event payloads after live build-state registration.
+    """Materialize capture events into raw build-state logs.
 
     Parameters
     ----------
@@ -83,12 +83,21 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     Returns
     -------
     None
-        Destructively consumes event lists after postprocess no longer needs them.
+        Populates raw trace lookup structures and destructively consumes event lists.
     """
+
+    for event in events.op_events:
+        live_record = events.live_by_raw_label.get(event.label_raw)
+        if live_record is None:
+            continue
+        op_log = materialize_log_from_fields(live_record.fields)
+        _register_raw_log(trace, event, op_log)
 
     events.op_events.clear()
     events.module_events.clear()
     events.conditional_events.clear()
+    events.live_by_raw_label.clear()
+    events.op_event_by_label_raw.clear()
 
 
 def _register_raw_log(trace: "Trace", event: OpEvent, op_log: "OpLog") -> None:

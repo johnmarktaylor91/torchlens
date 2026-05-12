@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
+from ...ir import live_record_for_label
 from ...data_classes.op_log import OpLog
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 
@@ -228,10 +229,10 @@ def _update_tensor_family_links(self: "Trace", entry_to_update: OpLog) -> None:
 
     # Parent → Child (bidirectional: child already knows its parents from fields_dict).
     for parent_tensor_label in parent_tensor_labels:
-        parent_tensor = self[parent_tensor_label]
-        if tensor_label not in parent_tensor.children:
-            parent_tensor.children.append(tensor_label)
-            parent_tensor.has_children = True
+        parent_tensor = live_record_for_label(self, parent_tensor_label).fields
+        if tensor_label not in parent_tensor["children"]:
+            parent_tensor["children"].append(tensor_label)
+            parent_tensor["has_children"] = True
 
 
 def _process_parent_param_ops(

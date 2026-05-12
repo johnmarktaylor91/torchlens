@@ -24,15 +24,17 @@ import numpy as np
 
 if TYPE_CHECKING:
     from .model_log import Trace
+    from ..capture.projections import LiveOpView
 
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op_log import OpLog
+from ..capture.projections import LiveOpView
 from ..intervention.errors import SiteAmbiguityError
 from ..intervention.selectors import BaseSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec
 
 
-def _getitem_during_pass(self: "Trace", ix: Any) -> OpLog:
+def _getitem_during_pass(self: "Trace", ix: Any) -> OpLog | LiveOpView:
     """Fetches an item when the pass is unfinished, only based on its raw barcode.
 
     Args:
@@ -41,10 +43,14 @@ def _getitem_during_pass(self: "Trace", ix: Any) -> OpLog:
     Returns:
         Tensor log entry object with info about specified layer.
     """
+    capture_events = getattr(self, "capture_events", None)
+    if capture_events is not None and ix in capture_events.live_by_raw_label:
+        return LiveOpView(self, capture_events.live_by_raw_label[ix])
     if ix in self._raw_layer_dict:
         return self._raw_layer_dict[ix]
-    else:
-        raise ValueError(f"{ix} not found in the Trace object.")
+    raise ValueError(
+        f"{ix!r} is not a known raw label during this forward pass; final labels are not yet built."
+    )
 
 
 def _getitem_after_pass(self: "Trace", ix: Any) -> Any:

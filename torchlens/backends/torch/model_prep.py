@@ -750,8 +750,11 @@ def _record_module_entry_metadata(
             # module-forward wrapper has already handled the replaced module's
             # exit, so the first recoverable point may be the next downstream
             # module entry.
+            capture_events = getattr(trace, "capture_events", None)
             parent_labels = (
-                trace._raw_layer_labels_list[-1:] if trace._raw_layer_labels_list else []
+                [capture_events.op_events[-1].label_raw]
+                if capture_events is not None and capture_events.op_events
+                else trace._raw_layer_labels_list[-1:]
             )
             _ensure_module_output_tensor_logged(trace, t, module, parent_labels)
             label = get_tensor_label(t)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import traceback
+import weakref
 from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import contextmanager
@@ -37,6 +38,8 @@ from ..ir.semantics import BackendSemantics, CapturePolicy
 
 if TYPE_CHECKING:
     from ..fastlog.options import RecordingOptions
+    from ..data_classes.model_log import Trace
+    from ..ir import LiveOpRecord
 
 _active_recording_state: "RecordingState | None" = None
 
@@ -582,6 +585,104 @@ def append_projected_event(
             predicate_matched=predicate_matched,
         )
     )
+
+
+class LiveOpViewFieldNotYetWritten(AttributeError):
+    """Raised when a live op view field is populated only by postprocess."""
+
+
+_OPLOG_FIELDS_KNOWN_LATE = frozenset(
+    {
+        "final_out",
+        "layer_label",
+        "layer_label_short",
+        "layer_label_w_pass",
+        "layer_label_w_pass_short",
+        "layer_label_no_pass",
+        "layer_label_no_pass_short",
+    }
+)
+
+
+class LiveOpView:
+    """Read-only OpLog-shaped adapter over a capture-time live record."""
+
+    __slots__ = ("_trace_ref", "_record")
+
+    def __init__(self, trace: "Trace", record: "LiveOpRecord") -> None:
+        """Initialize the live view.
+
+        Parameters
+        ----------
+        trace
+            Active trace that owns the live record.
+        record
+            Live operation record to expose.
+        """
+
+        object.__setattr__(self, "_trace_ref", weakref.ref(trace))
+        object.__setattr__(self, "_record", record)
+
+    @property
+    def _trace(self) -> "Trace":
+        """Return the owning trace while it is still alive.
+
+        Returns
+        -------
+        Trace
+            Active trace.
+        """
+
+        trace = object.__getattribute__(self, "_trace_ref")()
+        if trace is None:
+            raise RuntimeError(
+                "LiveOpView outlived its Trace (capture context ended); this view is invalid."
+            )
+        return trace
+
+    def __getattr__(self, name: str) -> Any:
+        """Return a live field value.
+
+        Parameters
+        ----------
+        name
+            Field name to read.
+
+        Returns
+        -------
+        Any
+            Current live field value.
+        """
+
+        record = object.__getattribute__(self, "_record")
+        if name in record.fields:
+            return record.fields[name]
+        if hasattr(record, name):
+            return getattr(record, name)
+        if name in _OPLOG_FIELDS_KNOWN_LATE:
+            raise LiveOpViewFieldNotYetWritten(
+                f"LiveOpView.{name!r} is populated by postprocess Step 0; "
+                "it is not available inside a forward-time callback."
+            )
+        raise AttributeError(f"LiveOpView has no attribute {name!r}.")
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Reject direct mutation of live views.
+
+        Parameters
+        ----------
+        name
+            Field name.
+        value
+            Ignored attempted value.
+
+        Returns
+        -------
+        None
+            This method always raises.
+        """
+
+        raise AttributeError(f"LiveOpView is read-only mid-forward; cannot set {name}")
 
 
 def activation_record_from_event(event: OpEvent) -> ActivationRecord | None:

@@ -39,6 +39,7 @@ from .. import _state
 from ..backends import CaptureBackend
 from ..backends.torch._tl import clear_meta, get_tensor_label
 from ..backends.torch.backend import TorchBackend
+from ..ir import live_record_for_label
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -432,7 +433,7 @@ def _extract_and_mark_outputs(
             continue
         if self.capture_mode == "exhaustive":
             self.output_layers.append(_label_raw)
-            self._raw_layer_dict[_label_raw].is_output_parent = True
+            live_record_for_label(self, _label_raw).fields["is_output_parent"] = True
 
     return output_tensors, output_tensor_addresses
 
