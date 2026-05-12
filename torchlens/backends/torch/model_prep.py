@@ -327,6 +327,9 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     original value is always saved to ``_tl.requires_grad_before_capture`` and restored during
     ``_cleanup_model_session``.
     """
+    if not hasattr(trace, "_param_log_by_pid"):
+        raise AttributeError("Trace._param_log_by_pid must be initialized before param logging.")
+
     optimized_param_ids: set[int] = set()
     if optimizer is not None:
         for group in optimizer.param_groups:
@@ -386,6 +389,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             param_log._param_ref = param
             param_logs[param_address] = param_log
 
+    trace._param_log_by_pid = param_id_to_address
     trace.param_logs = ParamAccessor(param_logs)
 
 

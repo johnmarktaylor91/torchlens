@@ -302,6 +302,11 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             trace.grad_fn_order.append(grad_fn_id)
         else:
             grad_fn_log.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
+        if _is_accumulate_grad(grad_fn):
+            param = getattr(grad_fn, "variable", None)
+            param_address = trace._param_log_by_pid.get(id(param)) if param is not None else None
+            if param_address is not None:
+                trace._grad_fn_param_refs[grad_fn_log.label] = param_address
         if layer_label is not None:
             layer = trace[layer_label]
             layer.grad_fn_log = grad_fn_log
@@ -312,6 +317,24 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
         except RuntimeError:
             continue
     return handles
+
+
+def _is_accumulate_grad(grad_fn: Any) -> bool:
+    """Return whether an autograd node is an AccumulateGrad leaf.
+
+    Parameters
+    ----------
+    grad_fn
+        Autograd node to inspect.
+
+    Returns
+    -------
+    bool
+        True when ``grad_fn`` is an AccumulateGrad node.
+    """
+
+    accumulate_grad_cls = getattr(getattr(torch._C, "_functions", object()), "AccumulateGrad", ())
+    return type(grad_fn).__name__ == "AccumulateGrad" or isinstance(grad_fn, accumulate_grad_cls)
 
 
 def _clear_forward_grad_fn_refs(trace: Any) -> None:

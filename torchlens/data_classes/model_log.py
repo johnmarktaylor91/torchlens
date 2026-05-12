@@ -869,6 +869,8 @@ class Trace:
         "has_backward_pass": FieldPolicy.KEEP,
         "grad_fn_logs": FieldPolicy.KEEP,
         "grad_fn_order": FieldPolicy.KEEP,
+        "_grad_fn_param_refs": FieldPolicy.KEEP,
+        "_param_log_by_pid": FieldPolicy.DROP,
         "backward_root_grad_fn_id": FieldPolicy.KEEP,
         "backward_num_calls": FieldPolicy.KEEP,
         "backward_peak_memory": FieldPolicy.KEEP,
@@ -1133,6 +1135,8 @@ class Trace:
         self.has_backward_pass: bool = False
         self.grad_fn_logs: Dict[int, GradFnLog] = OrderedDict()
         self.grad_fn_order: List[int] = []
+        self._grad_fn_param_refs: dict[str, str] = {}
+        self._param_log_by_pid: dict[int, str] = {}
         self.backward_root_grad_fn_id: int | None = None
         self.backward_num_calls: int = 0
         self.backward_peak_memory: int = 0
@@ -4035,6 +4039,7 @@ class Trace:
         """
         for param_log in self.param_logs:
             param_log.release_param_ref()
+        self._param_log_by_pid = {}
 
     def _postprocess(
         self,

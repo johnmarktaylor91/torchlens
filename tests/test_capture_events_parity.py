@@ -324,6 +324,8 @@ def _drop_capture_scratch(trace: Any) -> None:
         "_module_containment_engine",
         "_exhaustive_module_stack",
         "_grad_fn_strong_refs",
+        "_grad_fn_param_refs",
+        "_param_log_by_pid",
         "_in_exhaustive_pass",
         "_pending_live_fire_records",
         "_output_container_specs_by_raw_label",
@@ -449,3 +451,25 @@ def test_tensor_equal_handles_bool_int_nan_dtypes() -> None:
     assert not _tensor_equal(
         torch.tensor([1], dtype=torch.int32), torch.tensor([1], dtype=torch.int64)
     )
+
+
+def test_param_log_by_pid_populated_in_create_session_param_logs() -> None:
+    """Param pid lookup values point at real ParamLog addresses."""
+
+    model = nn.Linear(3, 2)
+    x = torch.randn(1, 3)
+    trace = tl.trace(model, x, vis_opt="none", random_seed=123)
+    assert trace._param_log_by_pid
+    assert set(trace._param_log_by_pid.values()) <= set(trace.param_logs.keys())
+
+
+def test_walk_detects_accumulategrad_via_type_name() -> None:
+    """Backward walk records AccumulateGrad parameter attribution by grad-fn label."""
+
+    model = nn.Linear(3, 1)
+    x = torch.randn(2, 3)
+    trace = tl.trace(model, x, vis_opt="none", random_seed=123, save_grads=True)
+    loss = trace[trace.output_layers[0]].out.sum()
+    trace.log_backward(loss)
+    assert trace._grad_fn_param_refs
+    assert set(trace._grad_fn_param_refs.values()) <= set(trace.param_logs.keys())
