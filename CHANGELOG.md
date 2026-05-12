@@ -57,6 +57,11 @@
   `random_seed` and `validate_metadata`, restores model state between stock and
   TorchLens passes, clears grads before/between/after validation, and checks
   backward grad-fn metadata invariants.
+- **Backward observer parity**: `tl.tap(..., direction=...)` now supports
+  backward gradient observation and both-direction recording. `TapRecord`
+  includes direction, gradient kind, and one-based backward call index metadata.
+  Bundle backward graph rendering has regression coverage for the existing
+  per-member visualization path.
 - **`tl.fastlog.record(..., predicate=...)`**: predicate is now a
   first-class parameter on the unified entry point as well as fastlog.
   The intervention selector DSL (`tl.func`, `tl.module`, `tl.label`,
