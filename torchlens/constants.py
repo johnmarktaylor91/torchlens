@@ -614,7 +614,7 @@ GRAD_FN_LOG_FIELD_ORDER = [
     "grad_fn_total_num",
     "module_path",
     "is_custom",
-    "has_op",
+    "is_intervening",
     "op",
     "next_grad_fn_ids",
     "ops",

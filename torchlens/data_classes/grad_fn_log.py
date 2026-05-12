@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, Union
+import warnings
 
 import torch
 
@@ -125,7 +126,7 @@ class GradFnLog:
         "grad_fn_type": FieldPolicy.KEEP,
         "grad_fn_type_num": FieldPolicy.KEEP,
         "grad_fn_total_num": FieldPolicy.KEEP,
-        "has_op": FieldPolicy.KEEP,
+        "is_intervening": FieldPolicy.KEEP,
         "op": FieldPolicy.KEEP,
         "next_grad_fn_ids": FieldPolicy.KEEP,
         "ops": FieldPolicy.KEEP,
@@ -139,7 +140,7 @@ class GradFnLog:
     grad_fn_type: str
     grad_fn_type_num: int
     grad_fn_total_num: int
-    has_op: bool = True
+    is_intervening: bool = True
     op: "LayerLog | None" = None
     next_grad_fn_ids: list[int] = field(default_factory=list)
     ops: dict[int, GradFnCallLog] | GradFnCallAccessor = field(default_factory=dict)
@@ -168,8 +169,29 @@ class GradFnLog:
                 "ops": {},
             },
         )
+        if "has_op" in state:
+            legacy_has_op = state.pop("has_op")
+            if "is_intervening" not in state:
+                state["is_intervening"] = bool(legacy_has_op)
         self.__dict__.update(state)
         self.__post_init__()
+
+    @property
+    def has_op(self) -> bool:
+        """Return whether this grad_fn has a corresponding forward op.
+
+        Returns
+        -------
+        bool
+            True when ``op`` is not None.
+        """
+
+        warnings.warn(
+            "GradFnLog.has_op is deprecated; use not grad_fn.is_intervening instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return not self.is_intervening
 
     @property
     def num_calls(self) -> int:
@@ -334,7 +356,7 @@ class GradFnAccessor(Accessor[GradFnLog]):
             return "GradFnAccessor({})"
         items = [
             f"  '{grad_fn.label}': {grad_fn.name} "
-            f"(ops={grad_fn.num_calls}, intervening={grad_fn.has_op})"
+            f"(ops={grad_fn.num_calls}, intervening={grad_fn.is_intervening})"
             for grad_fn in self._list
         ]
         return f"GradFnAccessor({len(self)} grad_fns):\n" + "\n".join(items)

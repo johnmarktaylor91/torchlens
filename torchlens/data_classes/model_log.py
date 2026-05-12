@@ -2981,7 +2981,7 @@ class Trace:
     @property
     def num_grad_fns_without_op(self) -> int:
         """Number of grad_fn nodes without a corresponding forward LayerLog."""
-        return sum(1 for grad_fn in self.grad_fn_logs.values() if grad_fn.has_op)
+        return sum(1 for grad_fn in self.grad_fn_logs.values() if grad_fn.is_intervening)
 
     # ********************************************
     # ******** Public Convenience Methods ********

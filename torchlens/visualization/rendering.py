@@ -1079,7 +1079,7 @@ def _compute_backward_node_lines(grad_fn: "GradFnLog") -> list[str]:
     """
 
     title = grad_fn.label
-    if grad_fn.has_op:
+    if grad_fn.is_intervening:
         title = f"[i] {title}"
     if grad_fn.is_custom:
         title = f"{title} [custom]"

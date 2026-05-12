@@ -803,7 +803,7 @@ These fields are best-effort introspection data; built-in PyTorch grad-fns may h
 - `has_co_parents`: True when this GradFn has co-parents.
 - `op_label`: Stable Op label corresponding to this GradFn, if one exists.
 - `op`: Op corresponding to `op_label`, if one exists.
-- `has_op`: True when `op_label is not None`.
+- `is_intervening`: True when a grad-fn node has no corresponding forward op.
 ### GradFn Calls
 - `num_calls`: Number of times this GradFn hook fired.
 - `calls`: Scoped `GradFnCallAccessor` for this GradFn's calls.

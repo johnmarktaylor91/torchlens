@@ -5,6 +5,7 @@ from torch import nn
 import pytest
 
 import torchlens as tl
+from torchlens.data_classes.grad_fn_log import GradFnLog
 
 
 class _TinyBackwardModel(nn.Module):
@@ -98,7 +99,25 @@ def test_backward_graph_walk_includes_intervening_grad_fns() -> None:
     """The backward DAG includes grad_fns without forward LayerLog matches."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    assert any(grad_fn.has_op for grad_fn in trace.grad_fn_logs.values())
+    assert any(grad_fn.is_intervening for grad_fn in trace.grad_fn_logs.values())
+
+
+def test_has_op_deprecation_property() -> None:
+    """Legacy has_op access warns and returns the inverse of is_intervening."""
+
+    grad_fn = GradFnLog(
+        grad_fn_id=1,
+        name="AddBackward0",
+        module_path="torch.autograd",
+        is_custom=False,
+        label="addbackward0_1_1",
+        grad_fn_type="addbackward0",
+        grad_fn_type_num=1,
+        grad_fn_total_num=1,
+        is_intervening=False,
+    )
+    with pytest.warns(DeprecationWarning):
+        assert grad_fn.has_op is True
 
 
 @pytest.mark.smoke

@@ -294,7 +294,7 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 grad_fn_total_num=grad_fn_total_num,
                 module_path=type(grad_fn).__module__,
                 is_custom=_grad_fn_is_custom(grad_fn),
-                has_op=layer_label is None,
+                is_intervening=layer_label is None,
                 op=op,
                 next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
             )
