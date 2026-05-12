@@ -41,6 +41,14 @@ def rebuild_trace_accessors(
     for module_log in module_dict.values():
         module_log._source_trace = trace
         module_log._buffer_accessor = None
+        for module_call in module_log.ops._dict.values():
+            module_call._source_trace = trace
+            if not module_call.outputs:
+                module_call.outputs = [
+                    trace.layer_dict_all_keys[label]
+                    for label in module_call.output_layers
+                    if label in trace.layer_dict_all_keys
+                ]
 
     trace._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
 
