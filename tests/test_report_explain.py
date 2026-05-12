@@ -53,15 +53,15 @@ def _captured_log() -> tl.Trace:
 def test_report_namespace_is_not_top_level_all() -> None:
     """``tl.report.explain`` should be reachable without expanding ``tl.__all__``.
 
-    Phase 1a budget was 40; backward-parity added 6 top-level names:
-    ``grad_clip``, ``grad_noise``, ``grad_clamp``, ``grad_fn``, ``intervening``,
-    and ``grad_fn_label``.
+    Phase 1a budget was 40; backward-parity added 6 top-level names, and
+    post-backward P1 added ``output`` for multi-output module selector
+    disambiguation.
     """
 
     assert hasattr(tl.report, "explain")
     assert "report" not in tl.__all__
     assert "explain" not in tl.__all__
-    assert len(tl.__all__) == 46
+    assert len(tl.__all__) == 47
 
 
 def test_explain_returns_sensible_string_for_each_audience() -> None:
