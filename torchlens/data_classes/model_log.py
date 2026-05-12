@@ -215,6 +215,7 @@ def _init_module_hierarchy_data() -> dict[str, Any]:
         "module_call_index_tensors": defaultdict(lambda: 0),
         "module_layers": defaultdict(list),
         "module_pass_layers": defaultdict(list),
+        "module_output_structures": {},
         "module_layer_argnames": defaultdict(list),
         "module_training_modes": {},
     }

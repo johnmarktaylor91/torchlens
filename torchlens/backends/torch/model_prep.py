@@ -57,6 +57,7 @@ from ._tl import (
 from ...data_classes.param_log import ParamAccessor, ParamLog
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.module_log import HookInfo
+from ...data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
 from ...ir import live_record_for_label
 from ...utils.tensor_utils import get_memory_amount
 from ...utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
@@ -957,6 +958,7 @@ def _ensure_module_output_tensor_logged(
             "grad_fn_log": None,
             "is_part_of_iterable_output": False,
             "multi_output_index": None,
+            "multi_output_role": None,
             "container_path": (),
             "container_spec": None,
             "parent_params": [],
@@ -1133,8 +1135,20 @@ def _record_module_exit_metadata(
     mod_id = id(module)
     module_call_index = trace._mod_call_index[mod_id]
     trace._mod_call_labels[mod_id].pop()
-    output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
-    for t in output_tensors:
+    from .ops import _walk_output_tensors_with_paths
+
+    output_entries = list(_walk_output_tensors_with_paths(out))
+    output_tensors = [entry[0] for entry in output_entries]
+    if not output_tensors:
+        output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
+        output_entries = [(tensor, (), None) for tensor in output_tensors]
+    role_hints = role_hints_for_module(module)
+    module_call_label = f"{address}:{module_call_index}"
+    if output_entries:
+        trace._module_build_data.setdefault("module_output_structures", {})[module_call_label] = (
+            output_entries[0][2]
+        )
+    for output_index, (t, container_path, _container_spec) in enumerate(output_entries):
         # nn.Identity modules and pass-through tensors (output is same object
         # as input) need _decorated_identity() to create a distinct log entry
         # so the graph correctly shows the module boundary.
@@ -1157,6 +1171,12 @@ def _record_module_exit_metadata(
         layer_entry["is_atomic_module_op"] = _is_bottom_level_submodule_exit(trace, t, module)
         layer_entry["output_of_modules"].append(address)
         layer_entry["output_of_module_calls"].append((address, module_call_index))
+        if len(output_entries) > 1:
+            layer_entry["multi_output_role"] = multi_output_role_from_path(
+                container_path,
+                output_index,
+                hints=role_hints,
+            )
         trace._mod_exited[mod_id].append(tensor_label)
 
 
