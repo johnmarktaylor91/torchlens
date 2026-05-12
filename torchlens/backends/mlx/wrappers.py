@@ -97,7 +97,10 @@ def _wrap_attr(owner: object, name: str, backend: object, op_name: str) -> None:
         return
     _ORIGINALS[key] = original
 
-    @functools.wraps(original)
+    @functools.wraps(
+        original,
+        assigned=("__module__", "__name__", "__doc__", "__annotations__"),
+    )
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         """Call an MLX function and emit an op event when logging is active."""
 

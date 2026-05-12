@@ -9,6 +9,7 @@ from contextlib import AbstractContextManager, contextmanager
 from typing import Any, Callable, cast
 
 from ... import _state
+from ...constants import LAYER_PASS_LOG_FIELD_ORDER
 from ...data_classes.layer_log import LayerLog
 from ...data_classes.model_log import Trace
 from ...data_classes.op_log import OpLog, _LAYER_PASS_LOG_DEFAULT_FILL
@@ -654,7 +655,8 @@ class MLXBackend:
                 "func_config": {},
             }
         )
-        return OpLog(fields)
+        op_fields = {field_name: fields[field_name] for field_name in LAYER_PASS_LOG_FIELD_ORDER}
+        return OpLog(op_fields)
 
     def _parent_labels(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[str]:
         """Return unique parent labels found in MLX operation inputs."""

@@ -783,6 +783,7 @@ class Trace:
         "_out_recipe_revision": FieldPolicy.KEEP,
         "_append_sequence_id": FieldPolicy.KEEP,
         "_last_hook_handle_ids": FieldPolicy.DROP,
+        "_initial_hook_plan": FieldPolicy.DROP,
         "run_state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,

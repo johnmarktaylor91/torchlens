@@ -127,8 +127,6 @@ def _is_mlx_module_instance(model: object) -> bool:
         ``True`` if MLX is installed and ``model`` is an ``mlx.nn.Module``.
     """
 
-    if not type(model).__module__.startswith("mlx."):
-        return False
     try:
         import mlx.nn as mlx_nn
     except ImportError:
