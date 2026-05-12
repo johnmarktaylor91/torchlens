@@ -31,6 +31,10 @@
   output as a distinct `OpLog` in `ModuleLog.outputs` /
   `ModuleCallLog.outputs`. `module.output_layers` no longer collapses those
   outputs, and ambiguous `module.out` access raises `MultiOutputModuleError`.
+- **Module-pass tabular export**: `ModuleCallLog.to_pandas()` now exports
+  `outputs` as layer-label lists and `output_structure` as a string summary,
+  avoiding recursive `OpLog` / `ContainerSpec` objects in CSV, JSON, and
+  Parquet surfaces.
 - **`PartialTrace.raw_layers`**: now returns `tuple[OpEvent, ...]` instead
   of `tuple[OpLog, ...]`. Recovery-path API; rarely-used.
 - **`Trace.orphan_logs: tuple[OpLog, ...]`** added (orphan access without
@@ -92,6 +96,8 @@
 - `torchlens.__all__` now includes backward selector/helper additions
   (`grad_fn`, `intervening`, `grad_fn_label`, `grad_clip`, `grad_noise`,
   `grad_clamp`).
+- `torchlens.__all__` also includes `output` for multi-output module selector
+  disambiguation; the post-backward top-level budget is 47 names.
 - Existing public symbols (`tl.trace`, `tl.fastlog.*`, intervention API,
   `Trace.summary`, `Trace.fork`, `Trace.rerun`, etc.) byte-identical.
 - Public package version: 2.x.x. No major bump.
