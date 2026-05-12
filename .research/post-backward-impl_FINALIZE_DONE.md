@@ -1,14 +1,14 @@
 # Post-Backward Megasprint Finalize Block
 
-created_at: 2026-05-12T16:55:14-04:00
+created_at: 2026-05-12T17:08:49-04:00
 state: BLOCKED
 branch: codex/post-backward-megasprint
-head_at_block: b611fe7f4eeb68ac6635da5c3816b8535cdda712
-commits_since_main_at_block: 32
-loc_delta_at_block: 4279 insertions(+), 243 deletions(-)
-files_touched_at_block: 61
+head_at_block: 02693a3741c1c6dcdeeb15ed656bdf5cd10e62e6
+commits_since_main_at_block: 34
+loc_delta_at_block: 4352 insertions(+), 243 deletions(-)
+files_touched_at_block: 66
 ready_for_review_merge: no
-suggested_merge_strategy: blocked until T2 is green
+suggested_merge_strategy: blocked until full T2 is green
 
 ## Block Reason
 
@@ -18,7 +18,8 @@ The full T2 sweep stopped on the first command:
 pytest tests/ -m "not slow" -x --tb=short
 ```
 
-This failed in `tests/test_capture_events_parity.py::test_pickle_byte_equal_pre_m6[tiny_mlp]`.
+This failed in
+`tests/test_intervention_phase7.py::test_replace_run_state_preserves_relationship_and_spec_fields`.
 The failure is not one of the listed pre-existing blockers. The known notebook ruff syntax
 blocker was not involved because ruff was not reached.
 
@@ -35,25 +36,25 @@ Summary:
 
 ```text
 collected 2465 items / 211 deselected / 2254 selected
-FAILED tests/test_capture_events_parity.py::test_pickle_byte_equal_pre_m6[tiny_mlp]
-==== 1 failed, 284 passed, 1 skipped, 211 deselected, 97 warnings in 20.23s ====
+FAILED tests/test_intervention_phase7.py::test_replace_run_state_preserves_relationship_and_spec_fields
+= 1 failed, 912 passed, 6 skipped, 211 deselected, 178 warnings in 168.81s (0:02:48) =
 ```
 
 Failure excerpt:
 
 ```text
-___________________ test_pickle_byte_equal_pre_m6[tiny_mlp] ____________________
-tests/test_capture_events_parity.py:430: in test_pickle_byte_equal_pre_m6
-    pytest.fail(f"Trace pickle differs for {model_name}: {diffs[:5]!r}")
-E   Failed: Trace pickle differs for tiny_mlp: ["trace.layer_dict_main_keys['input_1'].parent_layer_log: keys ['multi_output_role']", "trace.layer_dict_main_keys['input_1'].parent_layer_log: keys differ ['multi_output_role']", "trace.layer_dict_main_keys['linear_1_1'].parent_layer_log: keys differ ['multi_output_role']", "trace.layer_dict_main_keys['linear_2_3'].parent_layer_log: keys differ ['multi_output_role']", "trace.layer_dict_main_keys['linear_3_5'].parent_layer_log: keys differ ['multi_output_role']"]
+________ test_replace_run_state_preserves_relationship_and_spec_fields _________
+tests/test_intervention_phase7.py:284: in test_replace_run_state_preserves_relationship_and_spec_fields
+    assert log.is_appended is True
+E   AssertionError: assert False is True
+E    +  where False = Trace(name='kept', model_class='ReluAdd', layers=4, run_state=PRISTINE).is_appended
 ```
 
 Likely root cause to investigate:
 
-`multi_output_role` is present on materialized `LayerLog` records in one side of the
-pre-M6 pickle parity comparison but absent on the other side. The parity fixture or the
-capture/materialization path needs to be updated so both compared traces serialize the same
-field set.
+The test expects `_replace_run_state`-style rerun bookkeeping to preserve the append relationship
+metadata on the retained log. The current branch clears or fails to restore `is_appended` for this
+path, leaving the trace in `run_state=PRISTINE` with `is_appended=False`.
 
 ### ruff check torchlens/ --fix
 
