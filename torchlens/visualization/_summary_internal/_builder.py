@@ -157,7 +157,7 @@ def format_model_repr(trace: "Trace") -> str:
     if not trace._tracing_finished:
         return (
             f"Trace(name={getattr(trace, 'name', None)!r}, "
-            f"model_class={trace.model_name!r}, layers={len(trace._raw_layer_dict)}, "
+            f"model_class={trace.model_name!r}, layers={_live_op_count(trace)}, "
             f"run_state={run_state})"
         )
 
@@ -166,6 +166,26 @@ def format_model_repr(trace: "Trace") -> str:
         f"model_class={trace.model_name!r}, layers={len(trace.layer_logs)}, "
         f"run_state={run_state})"
     )
+
+
+def _live_op_count(trace: "Trace") -> int:
+    """Return live op-event count when capture events are present.
+
+    Parameters
+    ----------
+    trace:
+        Trace to inspect.
+
+    Returns
+    -------
+    int
+        Number of live operation events or raw logs.
+    """
+
+    events = getattr(trace, "capture_events", None)
+    if events is not None and getattr(events, "op_events", None) is not None:
+        return len(events.op_events)
+    return len(trace._raw_layer_dict)
 
 
 def format_discoverability_summary(trace: "Trace") -> str:
@@ -761,21 +781,10 @@ def _render_in_progress_summary(
     lines = [
         f"Model: {trace.model_name}",
         "Status: pass in progress; postprocessing has not finished yet.",
-        f"Ops logged so far: {len(trace._raw_layer_dict)}",
+        f"Ops logged so far: {_live_op_count(trace)}",
     ]
-    if show_ops and trace._raw_layer_dict:
-        rows = []
-        for raw_label in trace._raw_layer_labels_list:
-            entry = trace._raw_layer_dict[raw_label]
-            row = {
-                "name": str(
-                    getattr(entry, "_layer_label_raw", None)
-                    or getattr(entry, "_label_raw", raw_label)
-                ),
-                "shape": _shape_str(getattr(entry, "shape", None)),
-                "dtype": _dtype_str(getattr(entry, "dtype", None)),
-            }
-            rows.append(row)
+    rows = _live_op_rows(trace)
+    if show_ops and rows:
         display_fields = [field for field in fields if field in {"name", "shape", "dtype"}] or [
             "name",
             "shape",
@@ -789,6 +798,57 @@ def _render_in_progress_summary(
             ]
         )
     return "\n".join(lines)
+
+
+def _live_op_rows(trace: "Trace") -> list[dict[str, str]]:
+    """Return display rows for live operation records.
+
+    Parameters
+    ----------
+    trace:
+        Trace to inspect.
+
+    Returns
+    -------
+    list[dict[str, str]]
+        Rows containing operation name, shape, and dtype strings.
+    """
+
+    events = getattr(trace, "capture_events", None)
+    if events is not None and getattr(events, "op_events", None) is not None:
+        rows = []
+        for event in events.op_events:
+            record = events.live_by_raw_label.get(event.label_raw)
+            fields = record.fields if record is not None else {}
+            rows.append(
+                {
+                    "name": str(
+                        fields.get("_layer_label_raw")
+                        or fields.get("_label_raw")
+                        or event.label_raw
+                    ),
+                    "shape": _shape_str(fields.get("shape")),
+                    "dtype": _dtype_str(fields.get("dtype")),
+                }
+            )
+        return rows
+
+    if getattr(trace, "_raw_layer_dict", None):
+        rows = []
+        for raw_label in trace._raw_layer_labels_list:
+            entry = trace._raw_layer_dict[raw_label]
+            rows.append(
+                {
+                    "name": str(
+                        getattr(entry, "_layer_label_raw", None)
+                        or getattr(entry, "_label_raw", raw_label)
+                    ),
+                    "shape": _shape_str(getattr(entry, "shape", None)),
+                    "dtype": _dtype_str(getattr(entry, "dtype", None)),
+                }
+            )
+        return rows
+    return []
 
 
 def _render_finished_summary(

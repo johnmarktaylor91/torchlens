@@ -684,7 +684,7 @@ def run_and_log_inputs_through_model(
         _vprint(
             self,
             f"Forward pass complete ({self.forward_duration:.2f}s, "
-            f"{len(self._raw_layer_dict)} raw operations)",
+            f"{len(self.capture_events.op_events)} raw operations)",
         )
 
         if not postprocess:
@@ -695,7 +695,7 @@ def run_and_log_inputs_through_model(
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs)
 
         backend.cleanup_model_session(self, (model, input_tensors))
-        _vprint(self, f"Postprocessing {len(self._raw_layer_dict)} operations...")
+        _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
         self._postprocess(output_tensors, output_tensor_addresses)
         return outputs
 
