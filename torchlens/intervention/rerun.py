@@ -484,7 +484,9 @@ def _validate_append_grad_pair(
         return
     if not grads_supported:
         raise AppendBatchDependenceError(
-            "append grad concatenation requires helper-specific opt-in"
+            "append grad concatenation requires a batch-independent helper with "
+            "supports_append_grads=True; use such a helper, disable train_mode grad "
+            "append, or replay chunks manually"
         )
     for field_name in grad_fields:
         _validate_append_tensor_pair(old_layer, new_layer, field_name)
