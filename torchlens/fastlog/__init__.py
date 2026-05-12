@@ -1,5 +1,6 @@
 """Lightweight predicate-recording namespace for TorchLens."""
 
+from ._halt import HaltSignal, halt
 from ._record_one_shot import record
 from ._recorder import Recorder
 from .cleanup import cleanup_partial
@@ -33,6 +34,7 @@ __all__ = [
     "CaptureSpec",
     "GradientRecord",
     "GradRecordContext",
+    "HaltSignal",
     "InvalidStorageError",
     "ModuleStackFrame",
     "PredicateError",
@@ -47,6 +49,7 @@ __all__ = [
     "RecoveryError",
     "cleanup_partial",
     "dry_run",
+    "halt",
     "load",
     "preview",
     "recover",
