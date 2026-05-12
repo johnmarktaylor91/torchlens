@@ -13,12 +13,20 @@ from typing import Any, Literal, TypeAlias, cast
 import torch
 
 from .errors import (
+    HelperMountError,
     HookSignatureError,
     HookSiteCoverageError,
     LiveModeLabelError,
     SiteResolutionError,
 )
-from .selectors import BaseSelector, CompositeSelector, NotSelector, SelectorLike, in_module
+from .selectors import (
+    BaseSelector,
+    CompositeSelector,
+    NotSelector,
+    SelectorLike,
+    _classify_selector_direction,
+    in_module,
+)
 from .types import HelperSpec, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec
 
 HookTiming: TypeAlias = Literal["pre", "post"]
@@ -202,6 +210,7 @@ def normalize_hook_plan(
     for order, (site_target, hook_like) in enumerate(pairs):
         helper_spec = hook_like if isinstance(hook_like, HelperSpec) else None
         direction: HookDirection = helper_spec.kind if helper_spec is not None else "forward"
+        _validate_helper_mount(site_target, helper_spec)
         normalized_callable = normalize_hook(hook_like, direction=direction)
         entries.append(
             NormalizedHookEntry(
@@ -469,7 +478,7 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
         Selector equivalent to the target spec.
     """
 
-    from .selectors import contains, func, label, module, where
+    from .selectors import contains, func, grad_fn, grad_fn_label, intervening, label, module, where
 
     if target.selector_kind == "label":
         return label(str(target.selector_value))
@@ -487,9 +496,111 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
             return selector
     if target.selector_kind == "predicate" and callable(target.selector_value):
         return where(target.selector_value, name_hint=target.metadata.get("name_hint"))
+    if target.selector_kind == "grad_fn":
+        payload = dict(target.selector_value or {})
+        return grad_fn(
+            payload.get("grad_fn_type"),
+            label=payload.get("grad_fn_label_pattern"),
+            is_custom=payload.get("is_custom"),
+        )
+    if target.selector_kind == "intervening":
+        return intervening()
+    if target.selector_kind == "grad_fn_label":
+        return grad_fn_label(str(target.selector_value))
     if target.selector_kind == "not":
         return ~_normalize_live_selector(target.selector_value)
     raise SiteResolutionError(f"Unsupported live hook selector kind {target.selector_kind!r}.")
+
+
+def live_backward_selector_matches(
+    selector_like: Any,
+    grad_fn_log: Any,
+    call_index: int,
+) -> bool:
+    """Return whether a selector can match one grad_fn callback site.
+
+    Parameters
+    ----------
+    selector_like:
+        Selector or target spec from a normalized hook entry.
+    grad_fn_log:
+        GradFnLog receiving a backward hook callback.
+    call_index:
+        One-based callback index.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches this backward site.
+    """
+
+    del call_index
+    from .resolver import _resolve_unchecked
+
+    selector = _normalize_live_selector(selector_like)
+    return bool(_resolve_unchecked((grad_fn_log,), selector, strict=False))
+
+
+def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> None:
+    """Validate helper/selector mount compatibility at attach time.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like site target.
+    helper_spec:
+        Helper spec, if the hook came from a built-in helper.
+
+    Returns
+    -------
+    None
+        Raises for incompatible helper mount shapes.
+    """
+
+    if helper_spec is None:
+        return
+    helper_metadata = dict(helper_spec.metadata)
+    mount_shape = helper_metadata.get("mount_shape", "tensor")
+    selector = _normalize_live_selector(site_target)
+    selector_direction = _selector_direction_recursive(selector)
+    if mount_shape == "tuple" and selector_direction != "backward":
+        raise HelperMountError(
+            f"{helper_spec.name} is a grad_fn helper and must be mounted on a backward selector."
+        )
+    if mount_shape == "tensor" and selector_direction == "backward":
+        raise HelperMountError(
+            f"{helper_spec.name} is a tensor-gradient helper and cannot mount on grad_fn sites."
+        )
+    if helper_metadata.get("requires_grad_output") and selector_direction == "backward":
+        raise HelperMountError(
+            f"{helper_spec.name} requires grad_output and cannot mount on AccumulateGrad prehooks."
+        )
+
+
+def _selector_direction_recursive(selector: BaseSelector) -> HookDirection | None:
+    """Return explicit selector direction for a selector tree, if any.
+
+    Parameters
+    ----------
+    selector:
+        Selector tree to inspect.
+
+    Returns
+    -------
+    HookDirection | None
+        Explicit forward/backward direction, or None.
+    """
+
+    if isinstance(selector, CompositeSelector):
+        found: HookDirection | None = None
+        for child in selector.selectors:
+            child_dir = _selector_direction_recursive(_normalize_live_selector(child))
+            if child_dir is not None:
+                found = child_dir
+        return found
+    if isinstance(selector, NotSelector):
+        return _selector_direction_recursive(_normalize_live_selector(selector.selector))
+    return _classify_selector_direction(selector)
 
 
 def _live_selector_matches_unchecked(selector: BaseSelector, site: Any) -> bool:
@@ -867,6 +978,10 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
     if not has_positional and not has_var_positional:
         noun = "grad" if direction == "backward" else "out"
         raise HookSignatureError(f"hook must accept a first positional {noun} argument")
+    if direction == "backward" and (
+        {"grad_output", "grad_fn_log", "call_index", "run_ctx"} & set(signature.parameters)
+    ):
+        return
     if hook_param is None and not has_var_keyword:
         raise HookSignatureError("hook must accept required keyword-only argument 'hook'")
     if hook_param is not None and hook_param.kind is not inspect.Parameter.KEYWORD_ONLY:
@@ -908,6 +1023,7 @@ __all__ = [
     "make_hook_context",
     "make_live_site_proxy",
     "live_selector_matches_site",
+    "live_backward_selector_matches",
     "normalize_hook",
     "normalize_hook_plan",
 ]

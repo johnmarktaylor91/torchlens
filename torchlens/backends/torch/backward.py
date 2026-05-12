@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import re
 import time
+import weakref
 from collections import deque
 from typing import Any, Callable, Iterator
 
@@ -134,7 +135,12 @@ def _grad_fn_label_parts(
     return type_num, total_num, label
 
 
-def _make_grad_fn_hook(trace: Any, grad_fn_id: int) -> Callable[..., None]:
+def _make_grad_fn_hook(
+    trace: Any,
+    grad_fn_id: int,
+    *,
+    is_accumulate_grad: bool = False,
+) -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
     """Build a runtime hook for one autograd grad_fn.
 
     Parameters
@@ -143,27 +149,79 @@ def _make_grad_fn_hook(trace: Any, grad_fn_id: int) -> Callable[..., None]:
         Trace whose flat backward fields should receive runtime data.
     grad_fn_id:
         ``id()`` of the hooked grad_fn.
+    is_accumulate_grad:
+        Whether this hook is attached to an AccumulateGrad node.
 
     Returns
     -------
-    Callable[..., None]
+    Callable[..., tuple[torch.Tensor | None, ...] | None]
         Hook compatible with ``grad_fn.register_hook``.
     """
 
-    def hook(*hook_args: Any) -> None:
-        grad_fn_log = trace.grad_fn_logs.get(grad_fn_id)
+    trace_ref = weakref.ref(trace)
+
+    def hook(*hook_args: Any) -> tuple[torch.Tensor | None, ...] | None:
+        live_trace = trace_ref()
+        if live_trace is None:
+            return None
+        grad_fn_log = live_trace.grad_fn_logs.get(grad_fn_id)
         if grad_fn_log is None:
-            return
+            return None
         grad_inputs = hook_args[0] if len(hook_args) >= 1 else None
         grad_outputs = hook_args[1] if len(hook_args) >= 2 else None
         layer_label = grad_fn_log.op.layer_label if grad_fn_log.op is not None else None
-        if not _selected_for_grad_save(trace, layer_label):
-            grad_inputs = None
-            grad_outputs = None
+        stored_grad_inputs = grad_inputs
+        stored_grad_outputs = grad_outputs
+        if not _selected_for_grad_save(live_trace, layer_label):
+            stored_grad_inputs = None
+            stored_grad_outputs = None
         with pause_logging():
-            grad_fn_log._log_call(grad_inputs, grad_outputs, time.time())
+            grad_fn_log._log_call(stored_grad_inputs, stored_grad_outputs, time.time())
+        call_index = len(grad_fn_log.ops)
+        if is_accumulate_grad:
+            return None
+        from ...intervention.runtime import _apply_live_backward_hooks
+
+        return _apply_live_backward_hooks(grad_inputs, grad_outputs, grad_fn_log, call_index)
 
     return hook
+
+
+def _make_grad_fn_prehook(
+    trace: Any,
+    grad_fn_id: int,
+) -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
+    """Build an AccumulateGrad prehook for mutating incoming gradients.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose backward hook plan should dispatch.
+    grad_fn_id:
+        ``id()`` of the hooked grad_fn.
+
+    Returns
+    -------
+    Callable[..., tuple[torch.Tensor | None, ...] | None]
+        Hook compatible with ``grad_fn.register_prehook``.
+    """
+
+    trace_ref = weakref.ref(trace)
+
+    def prehook(*hook_args: Any) -> tuple[torch.Tensor | None, ...] | None:
+        live_trace = trace_ref()
+        if live_trace is None:
+            return None
+        grad_fn_log = live_trace.grad_fn_logs.get(grad_fn_id)
+        if grad_fn_log is None:
+            return None
+        grad_inputs = hook_args[0] if len(hook_args) >= 1 else ()
+        call_index = len(grad_fn_log.ops) + 1
+        from ...intervention.runtime import _apply_live_backward_prehooks
+
+        return _apply_live_backward_prehooks(grad_inputs, grad_fn_log, call_index)
+
+    return prehook
 
 
 def _memory_snapshot(device: torch.device) -> tuple[str, int]:
@@ -302,7 +360,8 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             trace.grad_fn_order.append(grad_fn_id)
         else:
             grad_fn_log.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
-        if _is_accumulate_grad(grad_fn):
+        is_accumulate_grad = _is_accumulate_grad(grad_fn)
+        if is_accumulate_grad:
             param = getattr(grad_fn, "variable", None)
             param_address = trace._param_log_by_pid.get(id(param)) if param is not None else None
             if param_address is not None:
@@ -313,7 +372,17 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             if hasattr(layer, "parent_layer_log"):
                 layer.parent_layer_log.grad_fn_log = grad_fn_log
         try:
-            handles.append(grad_fn.register_hook(_make_grad_fn_hook(trace, grad_fn_id)))
+            handles.append(
+                grad_fn.register_hook(
+                    _make_grad_fn_hook(
+                        trace,
+                        grad_fn_id,
+                        is_accumulate_grad=is_accumulate_grad,
+                    )
+                )
+            )
+            if is_accumulate_grad:
+                handles.append(grad_fn.register_prehook(_make_grad_fn_prehook(trace, grad_fn_id)))
         except RuntimeError:
             continue
     return handles
@@ -373,6 +442,15 @@ def _run_backward_with_capture(
     Any
         Return value from ``backward_callable``.
     """
+    from ... import _state
+    from ...intervention.hooks import normalize_hooks_from_spec
+
+    previous_trace = _state._active_trace
+    previous_plan = _state._active_hook_plan
+    previous_spec = _state._active_intervention_spec
+    _state._active_trace = trace
+    _state._active_intervention_spec = getattr(trace, "_intervention_spec", None)
+    _state._active_hook_plan = normalize_hooks_from_spec(_state._active_intervention_spec)
     handles = _walk_and_hook_backward_graph(trace, loss)
     backend, before = _reset_peak_memory(loss.device)
     try:
@@ -382,6 +460,9 @@ def _run_backward_with_capture(
             with contextlib.suppress(Exception):
                 handle.remove()
         _clear_forward_grad_fn_refs(trace)
+        _state._active_trace = previous_trace
+        _state._active_hook_plan = previous_plan
+        _state._active_intervention_spec = previous_spec
     _backend, after = _memory_snapshot(loss.device)
     trace.backward_memory_backend = backend
     trace.backward_peak_memory += max(0, after - before)

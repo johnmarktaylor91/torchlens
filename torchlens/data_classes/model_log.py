@@ -2154,6 +2154,13 @@ class Trace:
             Raises when the site cannot resolve.
         """
 
+        from ..intervention.resolver import _selector_resolution_direction
+
+        try:
+            if _selector_resolution_direction(site) == "backward":
+                return
+        except Exception:
+            pass
         max_fanout = max(1, len(self.layer_list))
         self.resolve_sites(site, strict=strict, max_fanout=max_fanout)
 

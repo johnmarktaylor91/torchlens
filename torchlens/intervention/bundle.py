@@ -576,7 +576,7 @@ class Bundle:
         for name, log in self._members.items():
             try:
                 table = resolve_sites(log, site, max_fanout=1)
-                layer_members[name] = table.first()
+                layer_members[name] = cast("OpLog", table.first())
             except Exception as exc:  # noqa: BLE001 - rewrapped with member context
                 failures[name] = str(exc)
         if failures:

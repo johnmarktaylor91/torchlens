@@ -14,7 +14,13 @@ from .._state import pause_logging
 from ..backends.torch._tl import copy_replacement_meta
 from ..ir.intervention import FireResult
 from .errors import HookSignatureError, HookValueError
-from .hooks import HookContext, NormalizedHookEntry, make_hook_context, live_selector_matches_site
+from .hooks import (
+    HookContext,
+    NormalizedHookEntry,
+    live_backward_selector_matches,
+    live_selector_matches_site,
+    make_hook_context,
+)
 from .types import FireRecord
 
 
@@ -336,6 +342,147 @@ def _apply_live_hooks(
     return current_out, tuple(fire_results)
 
 
+def _apply_live_backward_hooks(
+    grad_input: tuple[torch.Tensor | None, ...] | None,
+    grad_output: tuple[torch.Tensor | None, ...] | None,
+    grad_fn_log: Any,
+    call_index: int,
+) -> tuple[torch.Tensor | None, ...] | None:
+    """Apply active grad_fn post-hook helpers.
+
+    Parameters
+    ----------
+    grad_input:
+        Current autograd grad_input tuple.
+    grad_output:
+        Autograd grad_output tuple.
+    grad_fn_log:
+        GradFnLog site for selector matching.
+    call_index:
+        One-based grad_fn call index.
+
+    Returns
+    -------
+    tuple[torch.Tensor | None, ...] | None
+        Mutated grad_input tuple, or None when no helper mutates it.
+    """
+
+    hook_plan = _state._active_hook_plan
+    if not hook_plan or grad_input is None:
+        return None
+
+    current = grad_input
+    mutated = False
+    for entry in hook_plan:
+        normalized_entry = _coerce_hook_entry(entry)
+        if normalized_entry.metadata.get("direction", "forward") != "backward":
+            continue
+        if not live_backward_selector_matches(
+            normalized_entry.site_target, grad_fn_log, call_index
+        ):
+            continue
+        with HOOK_REENTRANCY_GUARD:
+            with pause_logging():
+                result = normalized_entry.normalized_callable(
+                    current,
+                    grad_output=grad_output,
+                    grad_fn_log=grad_fn_log,
+                    call_index=call_index,
+                    run_ctx=_live_run_ctx(),
+                )
+        if result is not None:
+            current = _validate_grad_tuple(result, current, grad_fn_log=grad_fn_log)
+            mutated = True
+    return current if mutated else None
+
+
+def _apply_live_backward_prehooks(
+    grad_input: tuple[torch.Tensor | None, ...],
+    grad_fn_log: Any,
+    call_index: int,
+) -> tuple[torch.Tensor | None, ...] | None:
+    """Apply active AccumulateGrad prehook helpers.
+
+    Parameters
+    ----------
+    grad_input:
+        Current autograd prehook grad_input tuple.
+    grad_fn_log:
+        GradFnLog site for selector matching.
+    call_index:
+        One-based grad_fn call index expected for the matching post-hook.
+
+    Returns
+    -------
+    tuple[torch.Tensor | None, ...] | None
+        Mutated grad_input tuple, or None when no helper mutates it.
+    """
+
+    hook_plan = _state._active_hook_plan
+    if not hook_plan:
+        return None
+
+    current = grad_input
+    mutated = False
+    for entry in hook_plan:
+        normalized_entry = _coerce_hook_entry(entry)
+        if normalized_entry.metadata.get("direction", "forward") != "backward":
+            continue
+        if not live_backward_selector_matches(
+            normalized_entry.site_target, grad_fn_log, call_index
+        ):
+            continue
+        with HOOK_REENTRANCY_GUARD:
+            with pause_logging():
+                result = normalized_entry.normalized_callable(
+                    current,
+                    grad_output=None,
+                    grad_fn_log=grad_fn_log,
+                    call_index=call_index,
+                    run_ctx=_live_run_ctx(),
+                )
+        if result is not None:
+            current = _validate_grad_tuple(result, current, grad_fn_log=grad_fn_log)
+            mutated = True
+    return current if mutated else None
+
+
+def _validate_grad_tuple(
+    result: Any,
+    reference: tuple[torch.Tensor | None, ...],
+    *,
+    grad_fn_log: Any,
+) -> tuple[torch.Tensor | None, ...]:
+    """Validate a grad_fn helper return tuple.
+
+    Parameters
+    ----------
+    result:
+        Helper return value.
+    reference:
+        Original grad tuple.
+    grad_fn_log:
+        GradFnLog used in diagnostics.
+
+    Returns
+    -------
+    tuple[torch.Tensor | None, ...]
+        Validated tuple.
+    """
+
+    if not isinstance(result, tuple):
+        raise HookValueError(
+            f"backward helper at {getattr(grad_fn_log, 'label', '<unknown>')} returned "
+            f"{type(result).__name__}; expected tuple or None"
+        )
+    if len(result) != len(reference):
+        raise HookValueError(
+            f"backward helper at {getattr(grad_fn_log, 'label', '<unknown>')} returned "
+            f"{len(result)} gradients; expected {len(reference)}"
+        )
+    return result
+
+
 def _coerce_hook_entry(entry: Any) -> NormalizedHookEntry:
     """Return a normalized hook entry or raise a deterministic type error.
 
@@ -492,6 +639,8 @@ __all__ = [
     "HOOK_REENTRANCY_GUARD",
     "_HookReentrancyGuard",
     "_apply_live_hooks",
+    "_apply_live_backward_hooks",
+    "_apply_live_backward_prehooks",
     "_execute_hook",
     "active_intervention_context",
     "do",

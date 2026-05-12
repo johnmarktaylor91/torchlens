@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace as dataclass_replace
 from html import escape
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..data_classes.layer_log import LayerLog
@@ -202,7 +202,10 @@ def intervention_sites_for_log(trace: "Trace") -> list["OpLog"]:
     for target in targets:
         table = resolve_sites(trace, target, max_fanout=max(1, len(trace.layer_list)))
         for site in table:
-            by_label.setdefault(site.layer_label, site)
+            forward_site = getattr(site, "op", site)
+            layer_label = getattr(forward_site, "layer_label", None)
+            if layer_label is not None:
+                by_label.setdefault(layer_label, cast("OpLog", forward_site))
     execution_order = {
         layer.layer_label: index for index, layer in enumerate(getattr(trace, "layer_list", ()))
     }
