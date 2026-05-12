@@ -43,6 +43,11 @@
 
 ### New features
 
+- **Combined forward/backward visualization**: `Trace.draw_combined(...)`,
+  `torchlens.visualization.draw_combined(...)`, and the legacy top-level
+  `torchlens.draw_combined(...)` render forward ops alongside captured
+  backward `grad_fn` nodes with dashed correspondence edges and module-aware
+  backward clustering.
 - **Backward validator hardening**: `validate_backward_pass` now accepts
   `random_seed` and `validate_metadata`, restores model state between stock and
   TorchLens passes, clears grads before/between/after validation, and checks
