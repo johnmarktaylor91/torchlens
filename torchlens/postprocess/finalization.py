@@ -1041,7 +1041,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
 
     from .._io.scrub import scrub_for_save
 
-    scrubbed_state, blob_specs = scrub_for_save(
+    scrubbed_state, blob_specs, unsupported_tensor_records = scrub_for_save(
         self,
         include_outs=True,
         include_grads=self.save_grads,
@@ -1055,7 +1055,9 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
         writer=writer,
     )
     final_path = writer.finalize(
-        scrubbed_state=scrubbed_state, blob_specs=blob_specs, unsupported=[]
+        scrubbed_state=scrubbed_state,
+        blob_specs=blob_specs,
+        unsupported=unsupported_tensor_records,
     )
     setattr(self, "_source_bundle_path", Path(final_path))
     setattr(

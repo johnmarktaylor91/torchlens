@@ -97,3 +97,22 @@ def test_mlx_repeated_trace_no_wrapper_leak() -> None:
 
     assert first.num_ops > 0
     assert second.num_ops > 0
+
+
+@pytest.mark.optional
+def test_mlx_save_load_audit_only(tmp_path: Path) -> None:
+    """MLX traces save/load with array payloads nulled as unsupported records."""
+
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+    bundle_path = tmp_path / "mlx-audit.tlspec"
+
+    tl.save(trace, bundle_path)
+    loaded = tl.load(bundle_path)
+    manifest = tl.io.inspect_tlspec(bundle_path)
+
+    assert loaded._backend_name == "mlx"
+    assert manifest["unsupported_tensors"]
+    assert all(
+        record["reason"] == "mlx_array_audit_null" for record in manifest["unsupported_tensors"]
+    )
+    assert all(op.out is None for op in loaded.layer_list)

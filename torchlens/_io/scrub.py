@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
 import torch
@@ -38,6 +38,7 @@ class _ScrubOptions:
     include_grads: bool
     include_saved_args: bool
     include_rng_states: bool
+    unsupported_tensor_records: list[dict[str, str]] = field(default_factory=list)
 
 
 def scrub_for_save(
@@ -47,7 +48,7 @@ def scrub_for_save(
     include_grads: bool = True,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
-) -> tuple[dict[str, Any], list[BlobSpec]]:
+) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
 
     Parameters
@@ -67,9 +68,9 @@ def scrub_for_save(
 
     Returns
     -------
-    tuple[dict[str, Any], list[BlobSpec]]
+    tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]
         Scrubbed top-level state dict plus a list of blob specs
-        ``(blob_id, tensor, kind, label)``.
+        ``(blob_id, tensor, kind, label)`` and unsupported tensor audit records.
     """
 
     options = _ScrubOptions(
@@ -100,7 +101,7 @@ def scrub_for_save(
         )
     else:
         scrubbed_state["_io_module_accessor_state"] = None
-    return scrubbed_state, blob_specs
+    return scrubbed_state, blob_specs, options.unsupported_tensor_records
 
 
 def _scrub_value(
@@ -229,12 +230,15 @@ def _scrub_field(
     if policy == FieldPolicy.STRINGIFY:
         return _stringify_value(field_value)
     if policy == FieldPolicy.BLOB:
-        return _blobify_tensor_field(owner, field_name, field_value, blob_specs, blob_counter)
+        return _blobify_tensor_field(
+            owner, field_name, field_value, blob_specs, blob_counter, options
+        )
     if policy == FieldPolicy.BLOB_RECURSIVE:
         return _blobify_recursive_value(
             owner=owner,
             field_name=field_name,
             value=field_value,
+            options=options,
             memo=memo,
             blob_specs=blob_specs,
             blob_counter=blob_counter,
@@ -351,10 +355,22 @@ def _blobify_tensor_field(
     field_value: Any,
     blob_specs: list[BlobSpec],
     blob_counter: list[int],
+    options: _ScrubOptions,
 ) -> Any:
     """Replace a tensor field with a ``BlobRef`` and record its blob spec."""
 
     if field_value is None:
+        return None
+    if _is_mlx_array(field_value):
+        options.unsupported_tensor_records.append(
+            {
+                "owner_type": type(owner).__name__,
+                "owner_label": _blob_label_for_owner(owner),
+                "field": field_name,
+                "kind": _blob_kind_for_field(owner, field_name),
+                "reason": "mlx_array_audit_null",
+            }
+        )
         return None
     if not isinstance(field_value, torch.Tensor):
         raise TorchLensIOError(
@@ -373,6 +389,7 @@ def _blobify_recursive_value(
     owner: Any,
     field_name: str,
     value: Any,
+    options: _ScrubOptions,
     memo: dict[int, Any],
     blob_specs: list[BlobSpec],
     blob_counter: list[int],
@@ -382,13 +399,14 @@ def _blobify_recursive_value(
     if isinstance(value, BlobRef):
         return value
     if isinstance(value, torch.Tensor):
-        return _blobify_tensor_field(owner, field_name, value, blob_specs, blob_counter)
+        return _blobify_tensor_field(owner, field_name, value, blob_specs, blob_counter, options)
     if isinstance(value, list):
         return [
             _blobify_recursive_value(
                 owner=owner,
                 field_name=field_name,
                 value=item,
+                options=options,
                 memo=memo,
                 blob_specs=blob_specs,
                 blob_counter=blob_counter,
@@ -401,6 +419,7 @@ def _blobify_recursive_value(
                 owner=owner,
                 field_name=field_name,
                 value=item,
+                options=options,
                 memo=memo,
                 blob_specs=blob_specs,
                 blob_counter=blob_counter,
@@ -415,6 +434,7 @@ def _blobify_recursive_value(
                     owner=owner,
                     field_name=field_name,
                     value=item,
+                    options=options,
                     memo=memo,
                     blob_specs=blob_specs,
                     blob_counter=blob_counter,
@@ -428,6 +448,7 @@ def _blobify_recursive_value(
                 owner=owner,
                 field_name=field_name,
                 value=item,
+                options=options,
                 memo=memo,
                 blob_specs=blob_specs,
                 blob_counter=blob_counter,
@@ -440,6 +461,7 @@ def _blobify_recursive_value(
                 owner=owner,
                 field_name=field_name,
                 value=item,
+                options=options,
                 memo=memo,
                 blob_specs=blob_specs,
                 blob_counter=blob_counter,
@@ -452,6 +474,7 @@ def _blobify_recursive_value(
                 owner=owner,
                 field_name=field_name,
                 value=item,
+                options=options,
                 memo=memo,
                 blob_specs=blob_specs,
                 blob_counter=blob_counter,
@@ -461,10 +484,19 @@ def _blobify_recursive_value(
 
     spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
     if spec is not None:
-        return _scrub_value(
-            value, _ScrubOptions(True, True, True, True), memo, blob_specs, blob_counter
-        )
+        return _scrub_value(value, options, memo, blob_specs, blob_counter)
     return _stringify_value(value)
+
+
+def _is_mlx_array(value: Any) -> bool:
+    """Return whether ``value`` is an MLX array without requiring MLX."""
+
+    try:
+        import mlx.core as mx
+    except ImportError:
+        return False
+    array_type = getattr(mx, "array", None)
+    return array_type is not None and isinstance(value, array_type)
 
 
 def _stringify_value(value: Any) -> str:

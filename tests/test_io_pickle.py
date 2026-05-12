@@ -78,13 +78,14 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     """Scrubbed portable state should rehydrate modules, buffers, and blobs."""
 
     live_log = _build_live_log()
-    scrubbed_state, blob_specs = scrub_for_save(
+    scrubbed_state, blob_specs, unsupported_tensor_records = scrub_for_save(
         live_log,
         include_outs=True,
         include_grads=False,
         include_saved_args=True,
         include_rng_states=True,
     )
+    assert unsupported_tensor_records == []
     manifest = _write_manifest(tmp_path, blob_specs)
 
     roundtripped_state = pickle.loads(pickle.dumps(scrubbed_state))

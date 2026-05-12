@@ -206,7 +206,7 @@ def save(
         tmp_path.mkdir()
         (tmp_path / "blobs").mkdir()
 
-        scrubbed_state, blob_specs = _scrub_trace_for_bundle(
+        scrubbed_state, blob_specs, scrub_unsupported_tensors = _scrub_trace_for_bundle(
             trace,
             include_outs=include_outs,
             include_grads=include_grads,
@@ -232,7 +232,7 @@ def save(
         )
 
         tensor_entries: list[TensorEntry] = []
-        unsupported_tensors: list[dict[str, str]] = []
+        unsupported_tensors: list[dict[str, str]] = list(scrub_unsupported_tensors)
         skipped_blob_ids: set[str] = set()
 
         for blob_id, tensor, kind, label in blob_specs:
@@ -760,7 +760,7 @@ def _scrub_trace_for_bundle(
     include_grads: bool,
     include_saved_args: bool,
     include_rng_states: bool,
-) -> tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]]]:
+) -> tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]], list[dict[str, str]]]:
     """Scrub a model log while excluding transient load-only private attrs.
 
     Parameters
@@ -778,8 +778,8 @@ def _scrub_trace_for_bundle(
 
     Returns
     -------
-    tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]]]
-        Scrubbed metadata and blob specs.
+    tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]], list[dict[str, str]]]
+        Scrubbed metadata, blob specs, and unsupported tensor audit records.
     """
 
     transient_attrs = {}
