@@ -43,6 +43,11 @@
 
 ### New features
 
+- **Backward intervention parity (P4)**: added grad_fn selector DSL
+  (`tl.grad_fn`, `tl.intervening`, `tl.grad_fn_label`), live grad_fn
+  backward helper dispatch, and tuple-shaped gradient helpers
+  (`tl.grad_clip`, `tl.grad_noise`, `tl.grad_clamp`). Backward replay remains
+  intentionally unsupported.
 - **Combined forward/backward visualization**: `Trace.draw_combined(...)`,
   `torchlens.visualization.draw_combined(...)`, and the legacy top-level
   `torchlens.draw_combined(...)` render forward ops alongside captured
