@@ -43,6 +43,10 @@
 
 ### New features
 
+- **Backward validator hardening**: `validate_backward_pass` now accepts
+  `random_seed` and `validate_metadata`, restores model state between stock and
+  TorchLens passes, clears grads before/between/after validation, and checks
+  backward grad-fn metadata invariants.
 - **`tl.fastlog.record(..., predicate=...)`**: predicate is now a
   first-class parameter on the unified entry point as well as fastlog.
   The intervention selector DSL (`tl.func`, `tl.module`, `tl.label`,
