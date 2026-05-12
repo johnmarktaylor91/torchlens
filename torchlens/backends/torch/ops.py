@@ -36,6 +36,7 @@ import copy
 import dataclasses
 import time
 import warnings
+import weakref
 from collections import defaultdict
 from collections.abc import Callable
 from math import prod
@@ -64,6 +65,7 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
+from ...ir import LiveOpRecord
 from ...ir.intervention import FireResult
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -2312,7 +2314,19 @@ def _make_layer_log_entry(
         )
         self.ops_with_saved_outs.append(new_entry._label_raw)
     op_event = _op_event_from_log(fields_dict, t, fire_results)
-    register_materialized_event(self, op_event, new_entry)
+    register_materialized_event(
+        self,
+        op_event,
+        new_entry,
+        LiveOpRecord(
+            event=op_event,
+            fields=new_entry.__dict__,
+            tensor_ref=weakref.ref(t),
+            t_args=t_args,
+            t_kwargs=t_kwargs,
+            fire_results=fire_results,
+        ),
+    )
     _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry

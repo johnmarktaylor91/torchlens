@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from torchlens.ir import CaptureEvents
+from torchlens.ir import CaptureEvents, LiveOpRecord
 from torchlens.ir.events import OpEvent
 
 if TYPE_CHECKING:
@@ -34,7 +34,12 @@ def materialize_log_from_fields(fields_dict: dict[str, object]) -> "OpLog":
     return OpLog(fields_dict)  # type: ignore[arg-type]
 
 
-def register_materialized_event(trace: "Trace", event: OpEvent, op_log: "OpLog") -> None:
+def register_materialized_event(
+    trace: "Trace",
+    event: OpEvent,
+    op_log: "OpLog",
+    live_record: LiveOpRecord | None = None,
+) -> None:
     """Append an event and expose its live log to in-flight hooks.
 
     Parameters
@@ -45,6 +50,8 @@ def register_materialized_event(trace: "Trace", event: OpEvent, op_log: "OpLog")
         Operation event emitted for the new log.
     op_log
         Live operation log registered in the transient build state.
+    live_record
+        Optional mutable capture-time projection for this operation.
 
     Returns
     -------
@@ -57,6 +64,9 @@ def register_materialized_event(trace: "Trace", event: OpEvent, op_log: "OpLog")
         events = CaptureEvents()
         trace.capture_events = events
     events.append(event)
+    if live_record is not None:
+        live_record.event = event
+        events.live_by_raw_label[event.label_raw] = live_record
     _register_raw_log(trace, event, op_log)
 
 
