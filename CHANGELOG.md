@@ -19,6 +19,10 @@
   `_module_build_data`, `_mod_entered`, etc. no longer exist on a
   post-capture `Trace`. They live transiently on a postprocess-local
   `TraceBuildState` and are discarded.
+- **P1 alpha.3 capture finish**: PyTorch capture now records live
+  `LiveOpRecord` projections during forward and materializes final `OpLog`
+  objects in postprocess Step 0. Backward grad-fn metadata now uses
+  `is_intervening`, and tensor backward hook naming is explicit.
 
 ### Behavior changes (CHECK YOUR CODE)
 
