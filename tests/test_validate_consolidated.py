@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest import mock
 
 import pytest
 import torch
 
 import torchlens as tl
+import torchlens.validation.consolidated as consolidated_validation
 from torchlens.validation.consolidated import InterventionValidationReport
 
 
@@ -83,6 +85,50 @@ def test_validate_backward_scope(model_and_input: tuple[TinyModel, torch.Tensor]
         return output.sum()
 
     assert tl.validate(model, x, scope="backward", loss_fn=loss_fn)
+
+
+def test_scope_backward_with_metadata(model_and_input: tuple[TinyModel, torch.Tensor]) -> None:
+    """Backward scope forwards default validate_metadata=True."""
+
+    model, x = model_and_input
+    with mock.patch(
+        "torchlens.validation.consolidated.validate_backward_pass",
+        wraps=consolidated_validation.validate_backward_pass,
+    ) as validator:
+        assert tl.validate(model, x, scope="backward")
+    assert validator.call_args is not None
+    assert validator.call_args.kwargs["validate_metadata"] is True
+
+
+def test_scope_backward_with_metadata_forwards_false(
+    model_and_input: tuple[TinyModel, torch.Tensor],
+) -> None:
+    """Backward scope accepts and forwards validate_metadata=False."""
+
+    model, x = model_and_input
+    with mock.patch(
+        "torchlens.validation.consolidated.validate_backward_pass",
+        wraps=consolidated_validation.validate_backward_pass,
+    ) as validator:
+        assert tl.validate(model, x, scope="backward", validate_metadata=False)
+    assert validator.call_args is not None
+    assert validator.call_args.kwargs["validate_metadata"] is False
+
+
+def test_validate_scope_backward_random_seed(
+    model_and_input: tuple[TinyModel, torch.Tensor],
+) -> None:
+    """Backward scope accepts and forwards random_seed."""
+
+    model, x = model_and_input
+    with mock.patch(
+        "torchlens.validation.consolidated.validate_backward_pass",
+        wraps=consolidated_validation.validate_backward_pass,
+    ) as validator:
+        assert tl.validate(model, x, scope="backward", random_seed=42)
+    assert validator.call_args is not None
+    assert validator.call_args.kwargs["random_seed"] == 42
+    assert tl.validate(model, x, scope="backward", random_seed=42)
 
 
 def test_validate_intervention_scope_returns_report(

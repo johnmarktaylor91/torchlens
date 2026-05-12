@@ -129,6 +129,7 @@ def check_metadata_invariants(trace: "Trace") -> bool:
     _check_module_containment_logic(trace)  # Q
     _check_lookup_key_consistency(trace)  # R
     check_func_call_id_invariant(trace)  # S
+    _check_backward_graph_invariants(trace)  # T
     return True
 
 
@@ -195,6 +196,97 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
                 f"func_call_id {func_call_id} spans incompatible pass labels",
             )
     return InvariantResult(name=name, passed=True)
+
+
+def _check_backward_graph_invariants(trace: "Trace") -> None:
+    """Check T: backward grad-fn metadata consistency.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed model log to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If backward metadata is internally inconsistent.
+    """
+
+    name = "backward_graph_invariants"
+    if not trace.grad_fn_logs:
+        return
+
+    grad_fn_ids = set(trace.grad_fn_logs)
+    order_ids = set(trace.grad_fn_order)
+    if not order_ids <= grad_fn_ids:
+        missing = sorted(order_ids - grad_fn_ids)
+        raise MetadataInvariantError(name, f"grad_fn_order contains unknown ids {missing!r}")
+
+    root_id = trace.backward_root_grad_fn_id
+    if root_id is not None and root_id not in trace.grad_fn_logs:
+        raise MetadataInvariantError(
+            name,
+            f"backward_root_grad_fn_id {root_id!r} is not present in grad_fn_logs",
+        )
+
+    layer_labels = set(trace.layer_labels)
+    for grad_fn_id, grad_fn_log in trace.grad_fn_logs.items():
+        if grad_fn_log.is_intervening != (grad_fn_log.op is None):
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_log.label} has inconsistent is_intervening/op fields",
+            )
+        if grad_fn_log.op is not None and grad_fn_log.op.layer_label not in layer_labels:
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_log.label} points to missing layer {grad_fn_log.op.layer_label!r}",
+            )
+        if grad_fn_log.grad_fn_id != grad_fn_id:
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_log.label} stored id {grad_fn_log.grad_fn_id!r} under {grad_fn_id!r}",
+            )
+
+    for layer in trace.layer_list:
+        grad_fn_log = layer.grad_fn_log
+        if grad_fn_log is None:
+            continue
+        if grad_fn_log.grad_fn_id not in trace.grad_fn_logs:
+            raise MetadataInvariantError(
+                name,
+                f"Layer {layer.layer_label} points to missing grad_fn id "
+                f"{grad_fn_log.grad_fn_id!r}",
+            )
+        if trace.grad_fn_logs[grad_fn_log.grad_fn_id] is not grad_fn_log:
+            raise MetadataInvariantError(
+                name,
+                f"Layer {layer.layer_label} grad_fn_log does not round-trip by id",
+            )
+        if grad_fn_log.op is None or grad_fn_log.op.layer_label != layer.layer_label:
+            raise MetadataInvariantError(
+                name,
+                f"Layer {layer.layer_label} grad_fn backpointer does not point to the layer",
+            )
+
+    expected_saved_grad_labels = {
+        layer.layer_label for layer in trace.layer_list if layer.grad is not None
+    }
+    if set(trace.ops_with_saved_grads) != expected_saved_grad_labels:
+        raise MetadataInvariantError(
+            name,
+            "ops_with_saved_grads does not match layers with saved grad tensors",
+        )
+
+    max_call_index = 0
+    for grad_fn_log in trace.grad_fn_logs.values():
+        if grad_fn_log.ops:
+            max_call_index = max(max_call_index, max(grad_fn_log.ops))
+    if max_call_index > trace.backward_num_calls:
+        raise MetadataInvariantError(
+            name,
+            f"backward_num_calls={trace.backward_num_calls} is less than max grad_fn call "
+            f"index {max_call_index}",
+        )
 
 
 def _is_func_call_id_exempt(layer: "OpLog") -> bool:

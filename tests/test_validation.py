@@ -345,6 +345,17 @@ def _make_clean_log():
     return trace_fn(model, torch.randn(2, 5), random_seed=42)
 
 
+def _make_backward_log() -> Trace:
+    """Return a Trace with backward metadata for a simple FF model."""
+    from torchlens import trace as trace_fn
+
+    model = _SimpleFF()
+    x = torch.randn(2, 5, requires_grad=True)
+    log = trace_fn(model, x, grads_to_save="all", random_seed=42)
+    log.log_backward(log[log.output_layers[0]].out.sum())
+    return log
+
+
 def test_clean_log_ops_all_invariants():
     """An uncorrupted Trace ops all invariant checks."""
     log = _make_clean_log()
@@ -356,6 +367,57 @@ def test_clean_log_ops_as_method():
     """check_metadata_invariants works as a bound method on Trace."""
     log = _make_clean_log()
     assert log.check_metadata_invariants() is True
+    log.cleanup()
+
+
+def test_backward_invariants_simple_mlp() -> None:
+    """Backward metadata invariants pass on a clean backward trace."""
+
+    log = _make_backward_log()
+    assert check_metadata_invariants(log) is True
+    log.cleanup()
+
+
+def test_backward_invariants_with_intervening() -> None:
+    """Backward metadata invariants allow intervening grad_fns."""
+
+    log = _make_backward_log()
+    assert any(grad_fn.is_intervening for grad_fn in log.grad_fn_logs.values())
+    assert check_metadata_invariants(log) is True
+    log.cleanup()
+
+
+def test_bad_grad_fn_order_raises() -> None:
+    """Unknown grad_fn ids in grad_fn_order raise an invariant error."""
+
+    log = _make_backward_log()
+    log.grad_fn_order.append(-1)
+    with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
+        check_metadata_invariants(log)
+    log.cleanup()
+
+
+def test_bad_backward_root_grad_fn_id_raises() -> None:
+    """An unknown backward root id raises an invariant error."""
+
+    log = _make_backward_log()
+    log.backward_root_grad_fn_id = -1
+    with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
+        check_metadata_invariants(log)
+    log.cleanup()
+
+
+def test_bad_layer_grad_fn_backpointer_raises() -> None:
+    """A mismatched layer-to-grad_fn backpointer raises an invariant error."""
+
+    log = _make_backward_log()
+    for layer in log.layer_list:
+        if layer.grad_fn_log is not None:
+            layer.grad_fn_log.op = None
+            layer.grad_fn_log.is_intervening = True
+            break
+    with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
+        check_metadata_invariants(log)
     log.cleanup()
 
 
