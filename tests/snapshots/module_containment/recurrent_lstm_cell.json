@@ -8,10 +8,12 @@
     ],
     [
       "lstmcell_1_3:1",
-      "lstmcell_1_3:2",
       "lstmcell_1_3:3",
+      "lstmcell_1_3:5"
+    ],
+    [
+      "lstmcell_1_3:2",
       "lstmcell_1_3:4",
-      "lstmcell_1_3:5",
       "lstmcell_1_3:6"
     ],
     [
@@ -305,7 +307,12 @@
       "num_params_frozen": 0,
       "num_params_trainable": 1664,
       "output_layers": [
-        "lstmcell_1_3"
+        "lstmcell_1_3:1",
+        "lstmcell_1_3:2",
+        "lstmcell_1_3:3",
+        "lstmcell_1_3:4",
+        "lstmcell_1_3:5",
+        "lstmcell_1_3:6"
       ]
     },
     {

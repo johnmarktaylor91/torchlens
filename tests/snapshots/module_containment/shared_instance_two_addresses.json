@@ -193,7 +193,8 @@
       "num_params_frozen": 0,
       "num_params_trainable": 20,
       "output_layers": [
-        "linear_1_1"
+        "linear_1_1:1",
+        "linear_1_1:2"
       ]
     }
   ],
