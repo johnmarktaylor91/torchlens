@@ -139,7 +139,14 @@ def _module_call_log_to_row(module_call_log: "ModuleCallLog") -> Dict[str, Any]:
     Dict[str, Any]
         Mapping from canonical field name to exported value.
     """
-    return {field: getattr(module_call_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
+    row = {field: getattr(module_call_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
+    row["outputs"] = [output.layer_label for output in module_call_log.outputs]
+    row["output_structure"] = (
+        repr(module_call_log.output_structure)
+        if module_call_log.output_structure is not None
+        else None
+    )
+    return row
 
 
 class ModuleCallLog:
