@@ -30,6 +30,9 @@ from .bundle import Bundle
 from .helpers import (
     bwd_hook,
     clamp,
+    grad_clamp,
+    grad_clip,
+    grad_noise,
     grad_scale,
     grad_zero,
     mean_ablate,
@@ -63,7 +66,17 @@ from .save import (
     load_intervention_spec,
     save_intervention,
 )
-from .selectors import contains, func, in_module, label, module, where
+from .selectors import (
+    contains,
+    func,
+    grad_fn,
+    grad_fn_label,
+    in_module,
+    intervening,
+    label,
+    module,
+    where,
+)
 from .sites import SiteCollection, SiteSpec, sites
 from .errors import (
     AppendBatchDependenceError,
@@ -81,6 +94,7 @@ from .errors import (
     EngineDispatchError,
     GraphShapeMismatchError,
     HookSignatureError,
+    HelperMountError,
     HookSiteCoverageError,
     HookValueError,
     InterventionReadyConflictError,
@@ -94,10 +108,12 @@ from .errors import (
     ReplayPreconditionError,
     SiteAmbiguityError,
     SiteResolutionError,
+    SelectorCompositionError,
     SpecMutationError,
     SpecPortabilityError,
     SpliceModuleDeviceError,
     SpliceModuleDtypeError,
+    UnclassifiedSelectorError,
 )
 from .types import (
     ArgComponent,
@@ -155,6 +171,7 @@ __all__ = [
     "HFKey",
     "HelperSpec",
     "HookSignatureError",
+    "HelperMountError",
     "HookHandle",
     "HookContext",
     "HookSiteCoverageError",
@@ -178,6 +195,7 @@ __all__ = [
     "ParentRef",
     "SiteAmbiguityError",
     "SiteResolutionError",
+    "SelectorCompositionError",
     "SpecCompat",
     "SpecMutationError",
     "SpecPortabilityError",
@@ -209,9 +227,15 @@ __all__ = [
     "cosine_distance",
     "do",
     "func",
+    "grad_clamp",
+    "grad_clip",
+    "grad_fn",
+    "grad_fn_label",
+    "grad_noise",
     "grad_scale",
     "grad_zero",
     "in_module",
+    "intervening",
     "label",
     "load_intervention_spec",
     "make_hook_context",
@@ -238,5 +262,6 @@ __all__ = [
     "steer",
     "swap_with",
     "where",
+    "UnclassifiedSelectorError",
     "zero_ablate",
 ]

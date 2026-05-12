@@ -762,6 +762,176 @@ def grad_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec
     )
 
 
+def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
+    """Create a grad_fn helper that clips each grad_input tensor norm.
+
+    Parameters
+    ----------
+    max_norm:
+        Maximum per-tensor norm.
+    norm_type:
+        Norm order passed to ``torch.linalg.vector_norm``.
+
+    Returns
+    -------
+    HelperSpec
+        Built-in backward grad_fn helper spec.
+    """
+
+    def factory() -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
+        """Return the runtime grad_fn hook for clipping gradients."""
+
+        def _hook(
+            grad_input: tuple[torch.Tensor | None, ...],
+            *,
+            grad_output: tuple[torch.Tensor | None, ...] | None,
+            grad_fn_log: Any,
+            call_index: int,
+            run_ctx: dict[str, Any],
+        ) -> tuple[torch.Tensor | None, ...] | None:
+            """Clip each tensor in a grad_input tuple."""
+
+            del grad_output, grad_fn_log, call_index, run_ctx
+            clipped: list[torch.Tensor | None] = []
+            changed = False
+            for grad in grad_input:
+                if grad is None:
+                    clipped.append(None)
+                    continue
+                norm = torch.linalg.vector_norm(grad, ord=norm_type)
+                if norm > max_norm:
+                    scale_value = max_norm / (norm + torch.finfo(grad.dtype).eps)
+                    clipped.append(grad * scale_value)
+                    changed = True
+                else:
+                    clipped.append(grad)
+            return tuple(clipped) if changed else None
+
+        return _hook
+
+    return _helper_spec(
+        "grad_clip",
+        args=(max_norm,),
+        kwargs={"norm_type": norm_type},
+        kind="backward",
+        factory=factory,
+        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
+        batch_independent=False,
+        compatible_with_append=False,
+    )
+
+
+def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
+    """Create a grad_fn helper that adds Gaussian noise to grad_input tensors.
+
+    Parameters
+    ----------
+    std:
+        Noise standard deviation.
+    seed:
+        Optional hook-local seed.
+
+    Returns
+    -------
+    HelperSpec
+        Built-in backward grad_fn helper spec.
+    """
+
+    def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
+        """Return the runtime grad_fn hook for noisy gradients."""
+
+        generator = _make_generator(seed)
+
+        def _hook(
+            grad_input: tuple[torch.Tensor | None, ...],
+            *,
+            grad_output: tuple[torch.Tensor | None, ...] | None,
+            grad_fn_log: Any,
+            call_index: int,
+            run_ctx: dict[str, Any],
+        ) -> tuple[torch.Tensor | None, ...]:
+            """Add Gaussian noise to each tensor in a grad_input tuple."""
+
+            del grad_output, grad_fn_log, call_index
+            noisy: list[torch.Tensor | None] = []
+            for grad in grad_input:
+                if grad is None:
+                    noisy.append(None)
+                    continue
+                if seed is None:
+                    run_ctx.setdefault("ledger_notes", []).append("grad_noise used unseeded RNG")
+                    sample = torch.randn(grad.shape, device=grad.device, dtype=grad.dtype)
+                else:
+                    sample = torch.randn(grad.shape, generator=generator, dtype=grad.dtype).to(
+                        grad.device
+                    )
+                noisy.append(grad + sample * std)
+            return tuple(noisy)
+
+        return _hook
+
+    return _helper_spec(
+        "grad_noise",
+        args=(std,),
+        kwargs={"seed": seed},
+        kind="backward",
+        factory=factory,
+        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
+        batch_independent=False,
+        compatible_with_append=False,
+    )
+
+
+def grad_clamp(min: float | None = None, max: float | None = None) -> HelperSpec:
+    """Create a grad_fn helper that clamps grad_input tensors elementwise.
+
+    Parameters
+    ----------
+    min:
+        Optional lower bound.
+    max:
+        Optional upper bound.
+
+    Returns
+    -------
+    HelperSpec
+        Built-in backward grad_fn helper spec.
+    """
+
+    if min is None and max is None:
+        raise HookValueError("grad_clamp requires min, max, or both")
+
+    def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
+        """Return the runtime grad_fn hook for clamping gradients."""
+
+        def _hook(
+            grad_input: tuple[torch.Tensor | None, ...],
+            *,
+            grad_output: tuple[torch.Tensor | None, ...] | None,
+            grad_fn_log: Any,
+            call_index: int,
+            run_ctx: dict[str, Any],
+        ) -> tuple[torch.Tensor | None, ...]:
+            """Clamp each tensor in a grad_input tuple."""
+
+            del grad_output, grad_fn_log, call_index, run_ctx
+            return tuple(
+                None if grad is None else torch.clamp(grad, min=min, max=max) for grad in grad_input
+            )
+
+        return _hook
+
+    return _helper_spec(
+        "grad_clamp",
+        kwargs={"min": min, "max": max},
+        kind="backward",
+        factory=factory,
+        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
+        batch_independent=False,
+        compatible_with_append=False,
+    )
+
+
 def _helper_spec(
     helper_name: str,
     *,
@@ -870,6 +1040,9 @@ def helper_from_serialized(
         "swap_with": swap_with,
         "splice_module": splice_module,
         "bwd_hook": bwd_hook,
+        "grad_clamp": grad_clamp,
+        "grad_clip": grad_clip,
+        "grad_noise": grad_noise,
         "grad_zero": grad_zero,
         "grad_scale": grad_scale,
     }
@@ -1050,6 +1223,9 @@ __all__ = [
     "bwd_hook",
     "clamp",
     "grad_scale",
+    "grad_clamp",
+    "grad_clip",
+    "grad_noise",
     "grad_zero",
     "helper_from_serialized",
     "mean_ablate",
