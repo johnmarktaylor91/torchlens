@@ -3,3 +3,4 @@
 .research/docs-plan-megasprint_PLAN.md filter=lfs diff=lfs merge=lfs -text
 .research/docs-plan-megasprint_PLAN_v33.md filter=lfs diff=lfs merge=lfs -text
 .research/docs-plan-megasprint_PLAN_v34.md filter=lfs diff=lfs merge=lfs -text
+.research/docs-plan-megasprint_PLAN_v35.md filter=lfs diff=lfs merge=lfs -text
