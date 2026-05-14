@@ -76,16 +76,16 @@ def _package_version(package: str) -> str | None:
 
 
 def _git_sha() -> str | None:
-    """Return the current git SHA.
+    """Return the current short git SHA.
 
     Returns
     -------
     str | None
-        Git SHA when available.
+        Short git SHA when available.
     """
 
     try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        return subprocess.check_output(["git", "rev-parse", "--short=7", "HEAD"], text=True).strip()
     except (OSError, subprocess.CalledProcessError):
         return None
 
@@ -286,6 +286,44 @@ def _select_fastlog_names(model: torch.nn.Module, x: Any, fraction: float) -> se
     return selected
 
 
+def _saved_activation_count(trace: Any) -> int:
+    """Return the number of ops with retained activation tensors.
+
+    Parameters
+    ----------
+    trace:
+        TorchLens Trace-like object.
+
+    Returns
+    -------
+    int
+        Number of operation logs whose activation tensor is still present.
+    """
+
+    return sum(1 for label in trace.op_labels if getattr(trace[label], "out", None) is not None)
+
+
+def _record_no_save_invariant(trace: Any, state: dict[str, Any]) -> None:
+    """Record no-save invariant metadata for a TorchLens trace.
+
+    Parameters
+    ----------
+    trace:
+        TorchLens Trace-like object.
+    state:
+        Mutable operation metadata.
+    """
+
+    saved_activation_count = _saved_activation_count(trace)
+    state["no_save_layers_to_save"] = "[]"
+    state["no_save_num_ops"] = getattr(trace, "num_ops", None)
+    state["no_save_num_saved_ops"] = getattr(trace, "num_saved_ops", None)
+    state["no_save_saved_activation_count"] = saved_activation_count
+    state["no_save_invariant_passed"] = (
+        getattr(trace, "num_saved_ops", None) == 0 and saved_activation_count == 0
+    )
+
+
 def _operation(
     operation: str,
     model: torch.nn.Module,
@@ -339,6 +377,13 @@ def _operation(
 
         _prime_target_model(model, x, device)
         return lambda: tl.log_forward_pass(model, x, vis_opt="none")
+    if operation == "trace_no_save":
+        import torchlens as tl
+
+        _prime_target_model(model, x, device)
+        trace = tl.log_forward_pass(model, x, vis_opt="none", layers_to_save=[])
+        _record_no_save_invariant(trace, state)
+        return lambda: tl.log_forward_pass(model, x, vis_opt="none", layers_to_save=[])
     if operation == "tl_trace_intervention_ready":
         import torchlens as tl
 
@@ -350,11 +395,31 @@ def _operation(
         trace = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
         state["rerun_policy"] = "steady_state"
         return lambda: trace.rerun(model, x)
+    if operation == "rerun_no_save":
+        import torchlens as tl
+
+        trace = tl.log_forward_pass(model, x, vis_opt="none", layers_to_save=[])
+        _record_no_save_invariant(trace, state)
+        state["rerun_policy"] = "steady_state_new_inputs_not_interventions"
+        return lambda: trace.rerun(model, x)
     if operation == "fastlog_module":
         import torchlens as tl
 
         _prime_target_model(model, x, device)
         return lambda: tl.fastlog.record(model, x, default_op=False, default_module=True)
+    if operation == "fastlog_zero":
+        import torchlens as tl
+
+        _prime_target_model(model, x, device)
+        state["fastlog_zero_policy"] = "keep_op=False, keep_module=False"
+        return lambda: tl.fastlog.record(
+            model,
+            x,
+            keep_op=lambda ctx: False,
+            keep_module=lambda ctx: False,
+            default_op=False,
+            default_module=False,
+        )
     if operation == "fastlog_op_10":
         import torchlens as tl
 

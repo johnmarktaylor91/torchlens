@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -40,6 +41,11 @@ CORE_OPS = [
     "fastlog_op_50",
     "fastlog_all",
 ]
+NO_SAVE_OPS = [
+    "trace_no_save",
+    "rerun_no_save",
+    "fastlog_zero",
+]
 PEER_OPS = [
     "peer_manual_hooks",
     "peer_context_hooks",
@@ -49,6 +55,9 @@ PEER_OPS = [
 HOOKED_OPS = [
     "raw_forward",
     "tl_trace",
+    "trace_no_save",
+    "rerun_no_save",
+    "fastlog_zero",
     "peer_transformer_lens",
 ]
 HEADLINE_MEMORY_OPS = {
@@ -61,6 +70,9 @@ HEADLINE_MEMORY_OPS = {
     "tl_trace_intervention_ready",
     "tl_rerun",
     "fastlog_module",
+    "trace_no_save",
+    "rerun_no_save",
+    "fastlog_zero",
 }
 AUX_OPS = ["aux_validate", "aux_compat_report", "aux_save", "aux_load"]
 OP_LABELS = {
@@ -72,9 +84,12 @@ OP_LABELS = {
     "global_wrap_dummy": "global-wrap-on-dummy startup",
     "first_capture_target": "first-capture-of-target-model startup",
     "tl_trace": "TL Trace, every-op capture",
+    "trace_no_save": "TL Trace, metadata only (no saved outs)",
     "tl_trace_intervention_ready": "TL Trace, intervention_ready=True",
     "tl_rerun": "Trace.rerun(model, x)",
+    "rerun_no_save": "Trace.rerun(model, x), no saved outs",
     "fastlog_module": "fastlog module-boundary metadata",
+    "fastlog_zero": "fastlog zero-retention predicates",
     "fastlog_op_10": "fastlog 10% op selectivity",
     "fastlog_op_50": "fastlog 50% op selectivity",
     "fastlog_all": "fastlog all-op/all-module",
@@ -88,6 +103,7 @@ OP_LABELS = {
     "peer_transformer_lens": "TransformerLens run_with_cache",
     "peer_nnsight": "nnsight trace",
 }
+LONG_HEX_RE = re.compile(r"\b[0-9a-fA-F]{32,}\b")
 
 
 def _version(package: str) -> str | None:
@@ -110,6 +126,23 @@ def _version(package: str) -> str | None:
         return None
 
 
+def _redact_subprocess_tail(text: str) -> str:
+    """Redact long hex strings from subprocess output tails.
+
+    Parameters
+    ----------
+    text:
+        Captured subprocess output.
+
+    Returns
+    -------
+    str
+        Output with high-entropy hashes replaced.
+    """
+
+    return LONG_HEX_RE.sub("<hex-redacted>", text)
+
+
 def _cuda_core_models() -> list[str]:
     """Return model names applicable to CUDA.
 
@@ -122,13 +155,43 @@ def _cuda_core_models() -> list[str]:
     return ["tinynet", "resnet18", "gpt2_hf"]
 
 
-def _matrix(smoke: bool) -> list[tuple[str, str, str, str]]:
+def _benchmark_models(include_hooked: bool) -> list[tuple[str, str]]:
+    """Return benchmark model/device cells.
+
+    Parameters
+    ----------
+    include_hooked:
+        Whether to include HookedTransformer GPT-2 cells.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Model/device pairs.
+    """
+
+    models = [
+        ("tinynet", "cpu"),
+        ("resnet18", "cpu"),
+        ("gpt2_hf", "cpu"),
+        ("small_lstm", "cpu"),
+    ]
+    devices = available_devices()
+    if "cuda" in devices:
+        models.extend((model, "cuda") for model in _cuda_core_models())
+    if include_hooked:
+        models.extend(("gpt2_hooked", device) for device in devices)
+    return models
+
+
+def _matrix(smoke: bool, addendum_no_save: bool = False) -> list[tuple[str, str, str, str]]:
     """Build the subprocess matrix.
 
     Parameters
     ----------
     smoke:
         Whether to run the TinyNet CPU smoke subset.
+    addendum_no_save:
+        Whether to run only the wrapper-only no-save addendum rows.
 
     Returns
     -------
@@ -136,7 +199,10 @@ def _matrix(smoke: bool) -> list[tuple[str, str, str, str]]:
         Tuples of ``(operation, model, device, pass_type)``.
     """
 
-    if smoke:
+    if addendum_no_save:
+        models = _benchmark_models(include_hooked=True)
+        ops = NO_SAVE_OPS
+    elif smoke:
         models = [("tinynet", "cpu")]
         ops = [
             "raw_forward",
@@ -153,22 +219,15 @@ def _matrix(smoke: bool) -> list[tuple[str, str, str, str]]:
             "aux_load",
         ]
     else:
-        models = [
-            ("tinynet", "cpu"),
-            ("resnet18", "cpu"),
-            ("gpt2_hf", "cpu"),
-            ("small_lstm", "cpu"),
-        ]
-        if "cuda" in available_devices():
-            models.extend((model, "cuda") for model in _cuda_core_models())
-        ops = CORE_OPS + PEER_OPS
+        models = _benchmark_models(include_hooked=False)
+        ops = CORE_OPS + NO_SAVE_OPS + PEER_OPS
     cells: list[tuple[str, str, str, str]] = []
     for model, device in models:
         for op in ops:
             cells.append((op, model, device, "timing"))
             if op in HEADLINE_MEMORY_OPS or smoke:
                 cells.append((op, model, device, "memory"))
-    if not smoke:
+    if not smoke and not addendum_no_save:
         aux_models = [("tinynet", "cpu"), ("resnet18", "cpu")]
         if "cuda" in available_devices():
             aux_models.append(("resnet18", "cuda"))
@@ -273,8 +332,8 @@ def _run_cell(
             "error": "runner did not write JSON",
         }
     payload["returncode"] = completed.returncode
-    payload["stdout_tail"] = completed.stdout[-4000:]
-    payload["stderr_tail"] = completed.stderr[-4000:]
+    payload["stdout_tail"] = _redact_subprocess_tail(completed.stdout[-4000:])
+    payload["stderr_tail"] = _redact_subprocess_tail(completed.stderr[-4000:])
     payload["elapsed_s"] = time.perf_counter() - start
     return payload
 
@@ -379,6 +438,47 @@ def _memory(row: dict[str, Any], key: str) -> Any:
     return row.get("passes", {}).get("memory", {}).get("memory", {}).get(key)
 
 
+def _ratio(value: float | None, baseline: float | None) -> float | None:
+    """Return a nullable ratio.
+
+    Parameters
+    ----------
+    value:
+        Numerator value.
+    baseline:
+        Denominator value.
+
+    Returns
+    -------
+    float | None
+        Ratio or ``None`` when unavailable.
+    """
+
+    if value is None or baseline in {None, 0}:
+        return None
+    return value / baseline
+
+
+def _fmt_ratio(value: float | None) -> str:
+    """Format a nullable overhead ratio.
+
+    Parameters
+    ----------
+    value:
+        Ratio value.
+
+    Returns
+    -------
+    str
+        Markdown-ready ratio.
+    """
+
+    if value is None:
+        return "N/A"
+    overhead_pct = (value - 1.0) * 100.0
+    return f"{value:.2f}x ({overhead_pct:+.0f}%)"
+
+
 def _table(rows: list[dict[str, Any]]) -> list[str]:
     """Build a benchmark markdown table.
 
@@ -418,6 +518,139 @@ def _table(rows: list[dict[str, Any]]) -> list[str]:
             + " |"
         )
     return lines
+
+
+def _wrapper_only_table(cell_rows: list[dict[str, Any]]) -> list[str]:
+    """Build a side-by-side wrapper-only overhead table for one cell.
+
+    Parameters
+    ----------
+    cell_rows:
+        Merged rows for one model/device cell.
+
+    Returns
+    -------
+    list[str]
+        Markdown table lines.
+    """
+
+    by_op = {row["operation"]: row for row in cell_rows}
+    raw_ms = _timing(by_op.get("raw_forward", {}), "median_ms")
+    lines = [
+        "| Operation | median_ms | vs raw forward | no-save invariant | Status |",
+        "|---|---:|---:|---|---|",
+    ]
+    for operation in ["raw_forward", "trace_no_save", "rerun_no_save", "fastlog_zero"]:
+        row = by_op.get(operation)
+        if row is None:
+            lines.append(f"| {OP_LABELS[operation]} | N/A | N/A | N/A | missing |")
+            continue
+        median_ms = _timing(row, "median_ms")
+        status = row.get("status", "ok")
+        note = status if status == "ok" else f"{status}: {row.get('skip_reason', '')}"
+        invariant = row.get("metadata", {}).get("no_save_invariant_passed")
+        invariant_text = "N/A" if invariant is None else str(invariant)
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    row["label"],
+                    _fmt(median_ms),
+                    _fmt_ratio(_ratio(median_ms, raw_ms)),
+                    invariant_text,
+                    note,
+                ]
+            )
+            + " |"
+        )
+    return lines
+
+
+def _wrapper_only_narrative(rows: list[dict[str, Any]]) -> str:
+    """Build a concise wrapper-only overhead narrative.
+
+    Parameters
+    ----------
+    rows:
+        Merged benchmark rows.
+
+    Returns
+    -------
+    str
+        Narrative paragraph.
+    """
+
+    grouped: dict[tuple[str, str], dict[str, dict[str, Any]]] = defaultdict(dict)
+    for row in rows:
+        grouped[(row["model"], row["device"])][row["operation"]] = row
+    fragments: list[str] = []
+    for (model, device), by_op in sorted(grouped.items()):
+        raw_ms = _timing(by_op.get("raw_forward", {}), "median_ms")
+        if raw_ms is None:
+            continue
+        trace_ratio = _ratio(_timing(by_op.get("trace_no_save", {}), "median_ms"), raw_ms)
+        rerun_ratio = _ratio(_timing(by_op.get("rerun_no_save", {}), "median_ms"), raw_ms)
+        fastlog_ratio = _ratio(_timing(by_op.get("fastlog_zero", {}), "median_ms"), raw_ms)
+        if trace_ratio is None and rerun_ratio is None and fastlog_ratio is None:
+            continue
+        fragments.append(
+            f"{model}/{device}: trace {_fmt_ratio(trace_ratio)}, "
+            f"rerun {_fmt_ratio(rerun_ratio)}, fastlog {_fmt_ratio(fastlog_ratio)}"
+        )
+    if not fragments:
+        return "No wrapper-only rows were available for interpretation."
+    return (
+        "With tensor retention disabled, these rows isolate wrapper dispatch and metadata "
+        "bookkeeping from activation-copy cost; Trace.rerun is for new inputs, not "
+        "interventions. Ratios versus raw forward are " + "; ".join(fragments) + "."
+    )
+
+
+def _wrapper_only_headline(rows: list[dict[str, Any]]) -> str:
+    """Build the factual headline for the wrapper-only section.
+
+    Parameters
+    ----------
+    rows:
+        Merged benchmark rows.
+
+    Returns
+    -------
+    str
+        Markdown paragraph.
+    """
+
+    by_key = {(row["model"], row["device"], row["operation"]): row for row in rows}
+    typical_key = ("resnet18", "cpu")
+    raw = by_key.get((*typical_key, "raw_forward"))
+    full = by_key.get((*typical_key, "tl_trace"))
+    trace_no_save = by_key.get((*typical_key, "trace_no_save"))
+    fastlog_zero = by_key.get((*typical_key, "fastlog_zero"))
+    raw_ms = _timing(raw or {}, "median_ms")
+    full_ms = _timing(full or {}, "median_ms")
+    trace_no_save_ms = _timing(trace_no_save or {}, "median_ms")
+    fastlog_zero_ms = _timing(fastlog_zero or {}, "median_ms")
+    trace_ratio = _ratio(trace_no_save_ms, raw_ms)
+    full_ratio = _ratio(full_ms, raw_ms)
+    fastlog_ratio = _ratio(fastlog_zero_ms, raw_ms)
+    if trace_ratio is None or full_ratio is None:
+        return (
+            "Headline insight: the no-save rows separate TorchLens wrapper and metadata "
+            "overhead from tensor data the user chose to capture. `layers_to_save=[]` is "
+            "the verified metadata-only Trace path, and `fastlog_zero` retains no op or "
+            "module records."
+        )
+    reduction = 1.0 - (trace_no_save_ms / full_ms) if full_ms else None
+    reduction_text = "N/A" if reduction is None else f"{reduction * 100.0:.0f}%"
+    return (
+        "Headline insight: on ResNet-18 CPU, Trace metadata-only capture is "
+        f"{_fmt_ratio(trace_ratio)} versus raw forward, compared with full Trace at "
+        f"{_fmt_ratio(full_ratio)}; disabling saved tensors cuts median Trace time by "
+        f"{reduction_text}. `fastlog_zero` is {_fmt_ratio(fastlog_ratio)}. These data "
+        "separate wrapper/metadata overhead from tensor data the user chose to capture, "
+        "but they do not support treating all remaining full-Trace cost as tensor-copy "
+        "cost."
+    )
 
 
 def _check_rerun_tolerance(
@@ -468,6 +701,56 @@ def _check_rerun_tolerance(
     return {"passed": all(check["passed"] for check in checks), "checks": checks}
 
 
+def _merge_addendum_payload(
+    payload: dict[str, Any], addendum_wall_clock_s: float
+) -> dict[str, Any]:
+    """Merge newly run addendum rows into the canonical results payload.
+
+    Parameters
+    ----------
+    payload:
+        Payload containing only the newly run addendum cells and rows.
+    addendum_wall_clock_s:
+        Wall-clock seconds spent on the addendum run.
+
+    Returns
+    -------
+    dict[str, Any]
+        Canonical payload with addendum rows replacing any prior rows with the same keys.
+    """
+
+    if not RESULT_JSON.exists():
+        return payload
+    existing = json.loads(RESULT_JSON.read_text())
+    cell_by_key = {
+        (cell["model"], cell["device"], cell["operation"], cell["pass_type"]): cell
+        for cell in existing.get("cells", [])
+    }
+    for cell in payload["cells"]:
+        cell_by_key[(cell["model"], cell["device"], cell["operation"], cell["pass_type"])] = cell
+    row_by_key = {
+        (row["model"], row["device"], row["operation"]): row for row in existing.get("rows", [])
+    }
+    for row in payload["rows"]:
+        row_by_key[(row["model"], row["device"], row["operation"])] = row
+    existing["cells"] = list(cell_by_key.values())
+    existing["rows"] = list(row_by_key.values())
+    existing["status"] = (
+        "ok"
+        if all(cell.get("status") in {"ok", "skipped"} for cell in existing["cells"])
+        else "partial"
+    )
+    existing["wall_clock_s"] = existing.get("wall_clock_s", 0.0) + addendum_wall_clock_s
+    existing["environment"] = payload["environment"]
+    notes = list(existing.get("post_run_notes") or [])
+    notes.append(
+        f"No-save wrapper-only addendum run appended on 2026-05-14; "
+        f"addendum wall clock {_fmt(addendum_wall_clock_s, 1)} s."
+    )
+    existing["post_run_notes"] = notes
+    return existing
+
+
 def _write_report(payload: dict[str, Any]) -> None:
     """Write the Markdown benchmark report.
 
@@ -511,6 +794,18 @@ def _write_report(payload: dict[str, Any]) -> None:
     for (model, device), cell_rows in sorted(grouped.items()):
         lines.extend([f"### {model} / {device}", ""])
         lines.extend(_table(cell_rows))
+        lines.append("")
+    no_save_rows = [row for row in rows if row["operation"] in NO_SAVE_OPS]
+    if no_save_rows:
+        lines.extend(["## Wrapper-only overhead (no-save variants)", ""])
+        lines.append(_wrapper_only_headline(rows))
+        lines.append("")
+        for (model, device), cell_rows in sorted(grouped.items()):
+            if any(row["operation"] in NO_SAVE_OPS for row in cell_rows):
+                lines.extend([f"### {model} / {device}", ""])
+                lines.extend(_wrapper_only_table(cell_rows))
+                lines.append("")
+        lines.append(_wrapper_only_narrative(rows))
         lines.append("")
     peer_rows = [
         row
@@ -561,6 +856,7 @@ def _write_report(payload: dict[str, Any]) -> None:
             "- Sub-ms operations can legitimately show 0.0 MB USS delta because allocators reuse pages.",
             "- TorchLens Trace captures every tensor-producing torch operation; peer hook rows capture module boundaries only.",
             "- HF GPT-2 and HookedTransformer GPT-2 are separate model implementations and should not be compared row-by-row.",
+            "- No-save Trace rows use `layers_to_save=[]`, which records metadata for every op but saves no activation tensors.",
             "",
             "## Rerun Tolerance",
             "",
@@ -611,6 +907,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--smoke", action="store_true", help="Run TinyNet CPU smoke subset")
     parser.add_argument("--rerun", action="store_true", help="Run an immediate second timing pass")
+    parser.add_argument(
+        "--addendum-no-save",
+        action="store_true",
+        help="Run only no-save wrapper-overhead rows and merge them into existing results",
+    )
     parser.add_argument("--samples", type=int, default=50)
     parser.add_argument("--timeout", type=int, default=900)
     return parser.parse_args()
@@ -623,7 +924,7 @@ def main() -> None:
     start = time.perf_counter()
     CELL_DIR.mkdir(parents=True, exist_ok=True)
     cells: list[dict[str, Any]] = []
-    matrix = _matrix(args.smoke)
+    matrix = _matrix(args.smoke, args.addendum_no_save)
     for index, (operation, model, device, pass_type) in enumerate(matrix, start=1):
         print(f"[{index}/{len(matrix)}] {model}/{device}/{operation}/{pass_type}", flush=True)
         cells.append(
@@ -656,7 +957,10 @@ def main() -> None:
                 )
             )
         rerun_tolerance = _check_rerun_tolerance(rows, _merge_passes(rerun_cells))
-    hooked_smoke = _hooked_smoke(args.timeout) if not args.smoke else None
+    hooked_smoke = (
+        _hooked_smoke(args.timeout) if not args.smoke and not args.addendum_no_save else None
+    )
+    addendum_wall_clock_s = time.perf_counter() - start
     payload = {
         "schema_version": 1,
         "date": "2026-05-14",
@@ -664,7 +968,7 @@ def main() -> None:
         if all(cell.get("status") in {"ok", "skipped"} for cell in cells)
         else "partial",
         "smoke": args.smoke,
-        "wall_clock_s": time.perf_counter() - start,
+        "wall_clock_s": addendum_wall_clock_s,
         "environment": {
             "torch": torch.__version__,
             "cuda_available": torch.cuda.is_available(),
@@ -686,6 +990,8 @@ def main() -> None:
         "hooked_transformer_smoke": hooked_smoke,
         "rerun_tolerance": rerun_tolerance,
     }
+    if args.addendum_no_save:
+        payload = _merge_addendum_payload(payload, addendum_wall_clock_s)
     RESULT_JSON.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     _write_report(payload)
     print(f"Wrote {RESULT_JSON}")
