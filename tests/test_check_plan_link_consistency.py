@@ -77,3 +77,45 @@ def test_historical_s2_6_line_range_is_ignored() -> None:
     errors = find_invalid_s2_6_citations(lines)
 
     assert errors == []
+
+
+def test_s12_1_s2_6_line_range_is_active_and_rejected() -> None:
+    """§12.1 active prose is still checked before the §12.3 history boundary."""
+
+    lines = _v33_like_plan("1166-1184")
+    lines.extend(
+        [
+            "",
+            "## §12 Merge notes",
+            "",
+            "### §12.1 Disagreement table",
+            "",
+            "The §2.6 comparison table at plan lines 1172-1191 had a stale range.",
+            "",
+            "### §12.3 Round 1 critique integration log",
+        ]
+    )
+
+    errors = find_invalid_s2_6_citations(lines)
+
+    assert [error.message for error in errors] == ["range 1172-1191 misses first §2.6 data row"]
+
+
+def test_s12_5_s2_6_line_range_is_historical_and_ignored() -> None:
+    """§12.N audit logs where N >= 3 can preserve stale historical ranges."""
+
+    lines = _v33_like_plan("1166-1184")
+    lines.extend(
+        [
+            "",
+            "## §12 Merge notes",
+            "",
+            "### §12.5 Round 3 critique integration log",
+            "",
+            "The §2.6 comparison table at plan lines 1172-1191 had a stale range.",
+        ]
+    )
+
+    errors = find_invalid_s2_6_citations(lines)
+
+    assert errors == []

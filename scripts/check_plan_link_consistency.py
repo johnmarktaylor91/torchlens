@@ -74,7 +74,8 @@ def _history_line_numbers(lines: list[str]) -> set[int]:
     Returns
     -------
     set[int]
-        One-indexed line numbers under a ``§12`` heading.
+        One-indexed line numbers at or after the first ``### §12.3``
+        round-integration-log heading.
     """
 
     history_lines: set[int] = set()
@@ -82,7 +83,7 @@ def _history_line_numbers(lines: list[str]) -> set[int]:
     for index, line in enumerate(lines, start=1):
         if line.startswith("## Appendix A"):
             in_history = False
-        elif re.match(r"^#{2,3} §12(?:\.|\s)", line):
+        elif re.match(r"^### §12\.(?:[3-9]|\d{2,})\s+Round", line):
             in_history = True
         if in_history:
             history_lines.add(index)
