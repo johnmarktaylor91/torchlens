@@ -4018,12 +4018,6 @@ class Trace:
         -------
         Any
             Model-ready rerun input.
-
-        Raises
-        ------
-        RuntimeError
-            If a likely raw text input is supplied after loading a trace whose
-            transform callable was intentionally not serialized.
         """
 
         stored_transform = getattr(self, "_transform", None)
@@ -4033,16 +4027,6 @@ class Trace:
             return user_input
         if callable(transform):
             return transform(user_input)
-        if (
-            transform is _USE_STORED_TRANSFORM
-            and stored_transform is None
-            and isinstance(user_input, str)
-        ):
-            raise RuntimeError(
-                "This Trace was loaded without a stored transform. "
-                "Pass `transform=callable` explicitly or call rerun with "
-                "an already-transformed model input."
-            )
         return user_input
 
     def _resolve_rerun_output_transform(

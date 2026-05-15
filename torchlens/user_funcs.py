@@ -38,6 +38,7 @@ from tqdm import tqdm
 
 from ._deprecations import MISSING, MissingType, resolve_renamed_kwarg, warn_deprecated_alias
 from ._errors import TorchLensPostfuncError
+from ._input_coerce import _coerce_input_args
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
 from ._literals import (
@@ -1584,6 +1585,8 @@ def trace(
         else:
             input_args = transformed_input
             input_kwargs = None
+    else:
+        input_args = _coerce_input_args(model, input_args)
 
     check_model_and_input_variants(model, input_args, input_kwargs)
     save_options = merge_save_options(
@@ -1999,6 +2002,7 @@ def summary(
     model = _unwrap_data_parallel(model)
     if input_kwargs is None:
         input_kwargs = {}
+    input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
     trace = _run_model_and_save_specified_outs(
@@ -2109,6 +2113,7 @@ def show_model_graph(
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
+    input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
     if recurrence_detection is MISSING:
@@ -2700,6 +2705,7 @@ def validate_forward_pass(
     warn_parallel()
     _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)
+    input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)
     # Fix a random seed so both the ground-truth run and the logged run see
     # identical randomness (critical for models with dropout, etc.).

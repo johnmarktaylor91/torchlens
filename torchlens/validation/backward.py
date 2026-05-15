@@ -10,6 +10,7 @@ import warnings
 import torch
 from torch import nn
 
+from .._input_coerce import _coerce_input_args
 from .._robustness import check_model_and_input_variants
 from ..intervention.errors import AppendStateValidationWarning
 from ..utils.arg_handling import normalize_input_args
@@ -315,6 +316,7 @@ def validate_backward_pass(
     warn_parallel()
     _reject_opaque_wrappers(model)
     model = _unwrap_data_parallel(model)
+    input_args = _coerce_input_args(model, input_args)
     check_model_and_input_variants(model, input_args, input_kwargs)
     if input_kwargs is None:
         input_kwargs = {}

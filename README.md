@@ -154,6 +154,24 @@ The main function of *TorchLens* is `log_forward_pass`: when called on a model a
 forward pass on the model and returns a ModelHistory object containing the intermediate layer activations and
 accompanying metadata, along with a visual representation of every operation that occurred during the forward pass:
 
+### Quick capture
+
+For text models, TorchLens can now use duck-typed preprocessing methods attached to the model. Tensor inputs still
+work exactly as before, but common interpreter workflows can pass raw text directly:
+
+```python
+# Before (still works)
+import torchlens as tl
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+log = tl.log_forward_pass(model, tokenizer("Hello world", return_tensors="pt").input_ids)
+
+# After (with model.tokenizer attached, or HookedTransformer)
+model.tokenizer = tokenizer
+log = tl.log_forward_pass(model, "Hello world")
+```
+
 ```python
 import torch
 import torchvision

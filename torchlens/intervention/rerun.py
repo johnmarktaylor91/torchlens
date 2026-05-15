@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from .._deprecations import MISSING, MissingType
+from .._input_coerce import _coerce_input_args
 from .._run_state import RunState
 from ..options import ReplayOptions, merge_replay_options
 from .errors import (
@@ -659,6 +660,7 @@ def _capture_with_active_spec(
     )
 
     model = _unwrap_data_parallel(model)
+    x = _coerce_input_args(model, x)
     check_model_and_input_variants(model, x, {})
     return _run_model_and_save_specified_outs(
         model=model,

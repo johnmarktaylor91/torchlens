@@ -7,6 +7,7 @@ from typing import Any, cast
 from torch import nn
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
+from .._input_coerce import _coerce_input_args
 from .._training_validation import reject_compiled_model
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
@@ -79,6 +80,7 @@ def record(
 
     reject_compiled_model(model, api_name="torchlens.fastlog.record")
     validate_postprocess(postprocess)
+    input_args = _coerce_input_args(model, input_args)
     if out_postfunc is not MISSING:
         if out_transform is not None:
             raise TypeError("kwarg out_postfunc deprecated, use out_transform; do not pass both")
