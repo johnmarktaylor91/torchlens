@@ -56,7 +56,7 @@ def test_user_pre_hook_does_not_see_module_frame() -> None:
 
     handle = model.child.linear.register_forward_pre_hook(pre_hook)
     try:
-        tl.trace(model, torch.randn(2, 4), vis_opt="none")
+        tl.trace(model, torch.randn(2, 4))
     finally:
         handle.remove()
 
@@ -80,7 +80,7 @@ def test_user_forward_hook_replacement_logged() -> None:
 
     handle = relu.register_forward_hook(replace_with_half)
     try:
-        trace = tl.trace(model, torch.randn(2, 4), vis_opt="none")
+        trace = tl.trace(model, torch.randn(2, 4))
     finally:
         handle.remove()
 

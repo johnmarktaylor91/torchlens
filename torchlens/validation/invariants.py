@@ -173,7 +173,7 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
         reference = group[0]
         expected_signature = _func_call_group_signature(reference)
         container_paths = []
-        call_indexs = set()
+        pass_indices = set()
         no_call_labels = set()
         for layer in group:
             if _func_call_group_signature(layer) != expected_signature:
@@ -188,9 +188,9 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
                     f"func_call_id {func_call_id} has duplicate container_path {container_path!r}",
                 )
             container_paths.append(container_path)
-            call_indexs.add(layer.call_index)
+            pass_indices.add(layer.pass_index)
             no_call_labels.add(layer.layer_label_no_pass)
-        if len(call_indexs) > 1 and len(no_call_labels) > 1:
+        if len(pass_indices) > 1 and len(no_call_labels) > 1:
             raise MetadataInvariantError(
                 name,
                 f"func_call_id {func_call_id} spans incompatible pass labels",
@@ -591,7 +591,7 @@ def _check_op_log_fields(ml: "Trace") -> None:
 
     Validates:
     - Saved tensor shape/dtype match actual out (when saved).
-    - Pass numbering: call_index >= 1, num_calls >= call_index.
+    - Pass numbering: pass_index >= 1, num_passes >= pass_index.
     - Computational layers have callable func and non-empty func_name.
     - compute_index >= 1 for non-input/non-buffer layers.
     - module_call_depth matches len(modules).
@@ -617,12 +617,12 @@ def _check_op_log_fields(ml: "Trace") -> None:
                 )
 
         # Pass numbering
-        if lpl.call_index < 1:
-            raise MetadataInvariantError(name, f"Layer {label}: call_index={lpl.call_index} < 1")
-        if lpl.num_calls < lpl.call_index:
+        if lpl.pass_index < 1:
+            raise MetadataInvariantError(name, f"Layer {label}: pass_index={lpl.pass_index} < 1")
+        if lpl.num_passes < lpl.pass_index:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: num_calls={lpl.num_calls} < call_index={lpl.call_index}",
+                f"Layer {label}: num_passes={lpl.num_passes} < pass_index={lpl.pass_index}",
             )
 
         # Function applied (non-input, non-buffer, non-output layers)
@@ -654,7 +654,7 @@ def _check_op_log_fields(ml: "Trace") -> None:
             )
 
         # Label format: pass-qualified label has ":" iff multi-pass
-        if lpl.num_calls > 1 and ":" not in lpl.layer_label_w_pass:
+        if lpl.num_passes > 1 and ":" not in lpl.layer_label_w_pass:
             raise MetadataInvariantError(
                 name,
                 f"Layer {label}: multi-pass but layer_label_w_pass="
@@ -701,7 +701,7 @@ def _check_recurrence_invariants(ml: "Trace") -> None:
 
     # Per-layer pass consistency: layer_num_calls is keyed by no-pass labels.
     # Validate that each key exists in layer_labels, and that the
-    # recorded count matches the actual Layer.num_calls.
+    # recorded count matches the actual Layer.num_passes.
     no_call_labels = set(ml.layer_labels)
     for label_key, num_calls in ml.layer_num_calls.items():
         if label_key not in no_call_labels:
@@ -710,16 +710,16 @@ def _check_recurrence_invariants(ml: "Trace") -> None:
                 f"layer_num_calls key '{label_key}' not in layer_labels",
             )
         if label_key in ml.layer_logs:
-            actual = ml.layer_logs[label_key].num_calls
+            actual = ml.layer_logs[label_key].num_passes
             if num_calls != actual:
                 raise MetadataInvariantError(
                     name,
-                    f"layer_num_calls['{label_key}']={num_calls} != Layer.num_calls={actual}",
+                    f"layer_num_calls['{label_key}']={num_calls} != Layer.num_passes={actual}",
                 )
 
     # For top-level (no-pass) layer_logs, verify pass dict consistency
     for no_call_label, ll in ml.layer_logs.items():
-        expected_keys = set(range(1, ll.num_calls + 1))
+        expected_keys = set(range(1, ll.num_passes + 1))
         actual_keys = set(ll.ops.keys())
         if actual_keys != expected_keys:
             raise MetadataInvariantError(
@@ -1209,7 +1209,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
     for parent_layer in ml.layer_list:
         for child_label in parent_layer.children:
             child_layer = ml[child_label]
-            if parent_layer.call_index != child_layer.call_index:
+            if parent_layer.pass_index != child_layer.pass_index:
                 continue
             if parent_layer.conditional_branch_stack == child_layer.conditional_branch_stack:
                 continue
@@ -1416,7 +1416,7 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
                 f"Layer key '{ll_label}' != Layer.layer_label='{ll.layer_label}'",
             )
 
-        expected_keys = set(range(1, ll.num_calls + 1))
+        expected_keys = set(range(1, ll.num_passes + 1))
         actual_keys = set(ll.ops.keys())
         if actual_keys != expected_keys:
             raise MetadataInvariantError(
@@ -1425,10 +1425,10 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
             )
 
         for call_index, lpl in ll.ops.items():
-            if lpl.call_index != call_index:
+            if lpl.pass_index != call_index:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{ll_label}' pass key={call_index} but Op.call_index={lpl.call_index}",
+                    f"Layer '{ll_label}' pass key={call_index} but Op.pass_index={lpl.pass_index}",
                 )
             if lpl.layer_label_no_pass != ll.layer_label:
                 raise MetadataInvariantError(
@@ -1552,7 +1552,7 @@ def _check_module_hierarchy(ml: "Trace") -> None:
       modules, where aliases may diverge from the primary path).
     - Container modules (ModuleList) that were never called may not have
       ModuleLogs -- skip rather than error.
-    - Pass dict keys are contiguous {1..N} and match num_calls.
+    - Pass dict keys are contiguous {1..N} and match num_passes.
     - call_parent and call_children reference valid modules.
     """
     name = "module_hierarchy"
@@ -1881,7 +1881,7 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
     - Symmetry: all members agree on the same group.
     - All members share: layer_label_no_pass, equivalence_class,
       func_name (for computational layers).
-    - num_calls == len(recurrent_ops).
+    - num_passes == len(recurrent_ops).
     - Pass numbering within group is contiguous {1..N}.
 
     Validates cross-layer:
@@ -1969,23 +1969,23 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
                         f"func='{member.func_name}'",
                     )
 
-        # num_calls == len(recurrent_ops)
-        if lpl.num_calls != len(slo):
+        # num_passes == len(recurrent_ops)
+        if lpl.num_passes != len(slo):
             raise MetadataInvariantError(
                 name,
-                f"Layer '{lpl.layer_label}': num_calls={lpl.num_calls} "
+                f"Layer '{lpl.layer_label}': num_passes={lpl.num_passes} "
                 f"!= len(recurrent_ops)={len(slo)}",
             )
 
         # Pass numbering: unique {1..N}
         group_key = frozenset(slo)
         if group_key not in groups_seen:
-            call_indexs = []
+            pass_indices = []
             for member_label in slo:
                 member = ml[member_label]
-                call_indexs.append(member.call_index)
+                pass_indices.append(member.pass_index)
             expected = set(range(1, len(slo) + 1))
-            actual = set(call_indexs)
+            actual = set(pass_indices)
             if actual != expected:
                 raise MetadataInvariantError(
                     name,

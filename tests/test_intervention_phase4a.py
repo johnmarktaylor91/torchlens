@@ -58,7 +58,7 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
     model = _TinyInterventionModel()
     x = torch.randn(2, 3)
 
-    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, intervention_ready=True)
 
     assert log.intervention_ready is True
     assert log.model_id == id(model)
@@ -78,7 +78,6 @@ def test_intervention_ready_rejects_nonempty_layers_to_save_list() -> None:
         tl.trace(
             _TinyInterventionModel(),
             torch.randn(2, 3),
-            vis_opt="none",
             intervention_ready=True,
             layers_to_save=["relu"],
         )
@@ -91,13 +90,11 @@ def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
     tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
     tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
         layers_to_save=[],
     )
@@ -110,7 +107,6 @@ def test_func_call_id_is_assigned_and_shared_for_multi_output_calls() -> None:
     log = tl.trace(
         _MultiOutputModel(),
         torch.randn(4, 5),
-        vis_opt="none",
         intervention_ready=True,
     )
 

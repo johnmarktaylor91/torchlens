@@ -76,7 +76,7 @@ long as the sign convention is named and used consistently.
 The TorchLens intervention API is the preferred path when you want selectors,
 fire records, replay, rerun, or saved intervention specs. Raw
 `nn.Module.register_forward_hook` also works during `tl.trace()` /
-`tl.log_forward_pass()` when you need module-local PyTorch behavior:
+`tl.trace()` when you need module-local PyTorch behavior:
 
 ```python
 def halve_relu(module, args, output):
@@ -84,7 +84,7 @@ def halve_relu(module, args, output):
 
 handle = model.relu.register_forward_hook(halve_relu)
 try:
-    log = tl.trace(model, x, vis_opt="none")
+    log = tl.trace(model, x)
 finally:
     handle.remove()
 ```

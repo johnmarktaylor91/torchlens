@@ -133,8 +133,8 @@ def _group_by_shared_params(self: "Trace") -> None:
     without the expensive isomorphic subgraph expansion (Phases 2-3).
 
     Operations without parameters remain as individual single-pass layers.
-    Sets ``_layer_label_raw``, ``recurrent_ops``, ``call_index``,
-    and ``num_calls`` on each Op.
+    Sets ``_layer_label_raw``, ``recurrent_ops``, ``pass_index``,
+    and ``num_passes`` on each Op.
     """
     param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     for label in self._raw_layer_labels_list:
@@ -153,7 +153,7 @@ def _group_by_shared_params(self: "Trace") -> None:
             for label in members:
                 self[label]._layer_label_raw = leader_raw
 
-    # Rebuild recurrent_ops, call_index, num_calls from _layer_label_raw.
+    # Rebuild recurrent_ops, pass_index, num_passes from _layer_label_raw.
     _rebuild_pass_assignments(self)
 
 
@@ -242,8 +242,8 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
 
     HOW IT WORKS: Groups all tensors by their current ``_layer_label_raw`` (the
     authoritative group key set by ``_finalize_layer_assignments``), sorts each
-    group by realtime order, and rebuilds ``recurrent_ops``, ``call_index``,
-    and ``num_calls`` from scratch. O(n), runs once.
+    group by realtime order, and rebuilds ``recurrent_ops``, ``pass_index``,
+    and ``num_passes`` from scratch. O(n), runs once.
     """
     groups: dict[str, list[str]] = defaultdict(list)
     for entry in self:
@@ -256,8 +256,8 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
         for pass_index, member_label in enumerate(members_sorted):
             member = self[member_label]
             member.recurrent_ops = members_sorted
-            member.call_index = pass_index + 1
-            member.num_calls = len(members_sorted)
+            member.pass_index = pass_index + 1
+            member.num_passes = len(members_sorted)
 
 
 def _expand_isomorphic_subgraphs(self: "Trace", node: Op) -> None:
@@ -703,8 +703,8 @@ def _finalize_layer_assignments(
     assignment is skipped. This prevents later expansion rounds from fragmenting
     groups established by earlier rounds.
 
-    For each accepted group, sets _layer_label_raw, recurrent_ops, call_index,
-    num_calls, and unifies equivalence_class to the canonical
+    For each accepted group, sets _layer_label_raw, recurrent_ops, pass_index,
+    num_passes, and unifies equivalence_class to the canonical
     (first node's) type.
 
     Args:
@@ -730,8 +730,8 @@ def _finalize_layer_assignments(
             node = self[node_label]
             node._layer_label_raw = layer_label
             node.recurrent_ops = layer_nodes
-            node.call_index = pass_index + 1
-            node.num_calls = len(layer_nodes)
+            node.pass_index = pass_index + 1
+            node.num_passes = len(layer_nodes)
             node.equivalence_class = canonical_equiv_type
 
 

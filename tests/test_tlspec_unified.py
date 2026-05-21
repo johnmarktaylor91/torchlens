@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.types import InterventionSpec
-from torchlens.options import CaptureOptions, VisualizationOptions
+from torchlens.options import CaptureOptions
 from torchlens.validation import validate_tlspec
 
 
@@ -65,7 +65,6 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
             layers_to_save="all",
             random_seed=0,
         ),
-        visualization=VisualizationOptions(view="none"),
     )
 
 

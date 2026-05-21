@@ -25,7 +25,7 @@ def _memory(tensor: torch.Tensor) -> int:
     return int(tensor.nelement() * tensor.element_size())
 
 
-def autograd_saved_memory(model: nn.Module, input_shape: tuple[int, ...]) -> int:
+def autograd_memory(model: nn.Module, input_shape: tuple[int, ...]) -> int:
     """Estimate autograd-saved bytes from parameters and one input shape.
 
     Parameters
@@ -79,4 +79,4 @@ def grad_fn_memory_cost(grad_fn: Any) -> int:
     return total
 
 
-__all__ = ["autograd_saved_memory", "grad_fn_memory_cost"]
+__all__ = ["autograd_memory", "grad_fn_memory_cost"]

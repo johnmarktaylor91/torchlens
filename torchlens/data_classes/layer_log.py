@@ -145,7 +145,7 @@ class Layer:
         "layer_type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
         "trace_index": FieldPolicy.KEEP,
-        "num_calls": FieldPolicy.KEEP,
+        "num_passes": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "func": FieldPolicy.DROP,
         "func_name": FieldPolicy.KEEP,
@@ -170,8 +170,9 @@ class Layer:
         "memory": FieldPolicy.KEEP,
         "transformed_out_memory": FieldPolicy.KEEP,
         "transformed_out": FieldPolicy.BLOB,
-        "autograd_saved_memory": FieldPolicy.KEEP,
-        "num_autograd_saved_tensors": FieldPolicy.KEEP,
+        "autograd_memory": FieldPolicy.KEEP,
+        "total_autograd_memory": FieldPolicy.KEEP,
+        "num_autograd_tensors": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
         "out_postfunc": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
@@ -190,7 +191,7 @@ class Layer:
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
-        "param_memory": FieldPolicy.KEEP,
+        "total_param_memory": FieldPolicy.KEEP,
         "func_config": FieldPolicy.BLOB_RECURSIVE,
         "equivalence_class": FieldPolicy.KEEP,
         "equivalent_ops": FieldPolicy.KEEP,
@@ -239,7 +240,7 @@ class Layer:
         self.layer_type = first_pass.layer_type
         self.type_index = first_pass.type_index
         self.trace_index = first_pass.trace_index
-        self.num_calls = first_pass.num_calls
+        self.num_passes = first_pass.num_passes
         # Store as weakref to break circular reference (Trace -> layer_logs -> Layer -> Trace).
         _sml = first_pass.source_trace
         self._source_trace_ref: weakref.ReferenceType["Trace"] | None = (
@@ -271,8 +272,9 @@ class Layer:
         self.transformed_out_dtype = first_pass.transformed_out_dtype
         self.memory = first_pass.memory
         self.transformed_out_memory = first_pass.transformed_out_memory
-        self.autograd_saved_memory: Optional[int] = first_pass.autograd_saved_memory
-        self.num_autograd_saved_tensors: Optional[int] = first_pass.num_autograd_saved_tensors
+        self.autograd_memory: Optional[int] = first_pass.autograd_memory
+        self.total_autograd_memory: Optional[int] = first_pass.autograd_memory
+        self.num_autograd_tensors: Optional[int] = first_pass.num_autograd_tensors
 
         # Config
         self.output_device = first_pass.output_device
@@ -296,7 +298,7 @@ class Layer:
         self.num_params = first_pass.num_params
         self.num_params_trainable = first_pass.num_params_trainable
         self.num_params_frozen = first_pass.num_params_frozen
-        self.param_memory = first_pass.param_memory
+        self.total_param_memory = first_pass.param_memory
 
         # Function config
         self.func_config = first_pass.func_config
@@ -413,7 +415,7 @@ class Layer:
         return human_readable_size(self.memory)
 
     @property
-    def param_memory_str(self) -> str:
+    def total_param_memory_str(self) -> str:
         """Return the parameter tensor size in human-readable units.
 
         Returns
@@ -421,7 +423,29 @@ class Layer:
         str
             Human-readable parameter memory amount.
         """
-        return human_readable_size(self.param_memory)
+        return human_readable_size(self.total_param_memory)
+
+    @property
+    def autograd_memory_str(self) -> str:
+        """Return representative autograd tensor memory in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable representative autograd tensor memory amount.
+        """
+        return human_readable_size(self.autograd_memory)
+
+    @property
+    def total_autograd_memory_str(self) -> str:
+        """Return total autograd tensor memory in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable total autograd tensor memory amount.
+        """
+        return human_readable_size(self.total_autograd_memory)
 
     @property
     def source_trace(self) -> "Trace":
@@ -464,8 +488,9 @@ class Layer:
             defaults={
                 "_source_trace_ref": None,
                 "annotations": {},
-                "autograd_saved_memory": None,
-                "num_autograd_saved_tensors": None,
+                "autograd_memory": None,
+                "total_autograd_memory": None,
+                "num_autograd_tensors": None,
                 "transformed_out": None,
                 "transformed_out_shape": None,
                 "transformed_out_dtype": None,
@@ -493,9 +518,9 @@ class Layer:
         if a @property raises AttributeError, Python silently treats
         the attribute as missing and falls through to __getattr__.
         """
-        if self.num_calls > 1:
+        if self.num_passes > 1:
             raise ValueError(
-                f"Layer '{self.layer_label}' has {self.num_calls} ops. "
+                f"Layer '{self.layer_label}' has {self.num_passes} ops. "
                 f"Access '{field_name}' on a specific pass: "
                 f"log['{self.layer_label}'].ops[1].{field_name}"
             )
@@ -630,7 +655,7 @@ class Layer:
         return cast(int, self._single_pass_or_error("compute_index"))
 
     @property
-    def call_index(self) -> int:
+    def pass_index(self) -> int:
         """Return the pass number for a single-pass layer.
 
         Returns
@@ -638,7 +663,7 @@ class Layer:
         int
             Pass number from the only pass.
         """
-        return cast(int, self._single_pass_or_error("call_index"))
+        return cast(int, self._single_pass_or_error("pass_index"))
 
     @property
     def capture_index(self) -> int:
@@ -907,12 +932,12 @@ class Layer:
     @property
     def edges_vary_across_ops(self) -> bool:
         """Whether graph edges differ across ops."""
-        if self.num_calls <= 1:
+        if self.num_passes <= 1:
             return False
         all_pass_lists = list(self.child_ops_per_layer.values()) + list(
             self.parent_ops_per_layer.values()
         )
-        return any(len(ops) < self.num_calls for ops in all_pass_lists)
+        return any(len(ops) < self.num_passes for ops in all_pass_lists)
 
     @property
     def leaf_module_ops(self) -> set[Any]:
@@ -930,7 +955,7 @@ class Layer:
         For single-pass layers, delegates to ops[1].
         For multi-pass, merges arg locs using set-union of no-pass labels.
         """
-        if self.num_calls == 1:
+        if self.num_passes == 1:
             return cast(dict[str, dict[Any, str]], self.ops[1].parent_arg_positions)
         from collections import defaultdict
 
@@ -960,6 +985,11 @@ class Layer:
         ``self.__dict__`` access.
         """
         if name.startswith("_"):
+            raise AttributeError(name)
+        if name in {
+            "param_memory",
+            "param_memory_str",
+        }:
             raise AttributeError(name)
         ops = self.__dict__.get("ops")
         if ops and len(ops) == 1 and 1 in ops:
@@ -1166,8 +1196,8 @@ class Layer:
         if not self._tracing_finished:
             return f"Layer({self.layer_label}) (pass not finished)"
         s = f"Layer {self.layer_label}:"
-        if self.num_calls > 1:
-            s += f" ({self.num_calls} ops)"
+        if self.num_passes > 1:
+            s += f" ({self.num_passes} ops)"
         s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.memory_str}"
         if not self.is_input:
             s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_class_name})"
@@ -1180,12 +1210,12 @@ class Layer:
             params_shapes_str = ", ".join(str(ps) for ps in self.param_shapes)
             s += (
                 f"\n\tParams: {params_shapes_str}; "
-                f"{self.num_params} total ({self.param_memory_str})"
+                f"{self.num_params} total ({self.total_param_memory_str})"
             )
         s += "\n\tRelated Layers:"
         s += f"\n\t\t- parents: {', '.join(self.parents) or 'none'}"
         s += f"\n\t\t- children: {', '.join(self.children) or 'none'}"
-        if self.num_calls > 1:
+        if self.num_passes > 1:
             s += f"\n\tPasses: {', '.join(self.call_labels)}"
         return s
 
@@ -1193,7 +1223,7 @@ class Layer:
         return self.__str__()
 
     def __len__(self) -> int:
-        return cast(int, self.num_calls)
+        return cast(int, self.num_passes)
 
 
 class LayerAccessor(Accessor[Union["Layer", "Op"]]):
@@ -1345,7 +1375,7 @@ class LayerAccessor(Accessor[Union["Layer", "Op"]]):
             items.append(
                 f"  '{ll.layer_label}': {ll.func_name or 'input'} "
                 f"(shape={list(ll.shape) if ll.shape else '?'}, "
-                f"ops={ll.num_calls})"
+                f"ops={ll.num_passes})"
             )
         inner = "\n".join(items)
         return f"LayerAccessor({len(self)} layers):\n{inner}"
@@ -1369,7 +1399,7 @@ class LayerAccessor(Accessor[Union["Layer", "Op"]]):
                     "shape": ll.shape,
                     "dtype": ll.dtype,
                     "memory_str": ll.memory_str,
-                    "num_calls": ll.num_calls,
+                    "num_passes": ll.num_passes,
                     "num_params": ll.num_params,
                     "module": ll.module,
                     "is_input": ll.is_input,

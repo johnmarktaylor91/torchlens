@@ -337,8 +337,8 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
 
     writer.add_scalar(f"{prefix}/num_layers", len(getattr(log, "layer_list", [])), step)
     writer.add_scalar(
-        f"{prefix}/total_out_memory",
-        int(getattr(log, "total_out_memory", 0) or 0),
+        f"{prefix}/total_activation_memory",
+        int(getattr(log, "total_activation_memory", 0) or 0),
         step,
     )
     writer.add_text(f"{prefix}/model_class_name", str(getattr(log, "model_class_name", "")), step)
@@ -795,7 +795,7 @@ def _summary_metrics(log: Any) -> dict[str, int]:
     return {
         "num_layers": len(getattr(log, "layer_list", [])),
         "num_saved_ops": int(getattr(log, "num_saved_ops", 0) or 0),
-        "total_out_memory": int(getattr(log, "total_out_memory", 0) or 0),
+        "total_activation_memory": int(getattr(log, "total_activation_memory", 0) or 0),
     }
 
 

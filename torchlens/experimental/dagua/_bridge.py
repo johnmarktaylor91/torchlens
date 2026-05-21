@@ -24,7 +24,7 @@ COMMUTATIVE_FUNCS = {"add", "mul", "cat", "eq", "ne"}
 MODELLOG_FIELD_USAGE: dict[str, str] = {
     "model_class_name": "Graph caption title.",
     "num_tensors": "Graph caption tensor count.",
-    "total_out_memory": "Graph caption out-memory summary.",
+    "total_activation_memory": "Graph caption out-memory summary.",
     "num_param_tensors": "Caption metadata for model scale.",
     "num_params": "Graph caption parameter summary.",
     "num_params_trainable": "Graph caption trainable/frozen breakdown.",
@@ -187,18 +187,18 @@ def build_torchlens_caption(trace: Any) -> str:
     if num_params == 0:
         params_line = "0 params"
     elif frozen == 0:
-        params_line = f"{num_params:,} params (all trainable, {human_readable_size(getattr(trace, 'param_memory', 0) or 0)})"
+        params_line = f"{num_params:,} params (all trainable, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
     elif trainable == 0:
-        params_line = f"{num_params:,} params (all frozen, {human_readable_size(getattr(trace, 'param_memory', 0) or 0)})"
+        params_line = f"{num_params:,} params (all frozen, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
     else:
         params_line = (
             f"{num_params:,} params "
-            f"({trainable:,}/{num_params:,} trainable, {human_readable_size(getattr(trace, 'param_memory', 0) or 0)})"
+            f"({trainable:,}/{num_params:,} trainable, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
         )
     return (
         f"{getattr(trace, 'model_class_name', 'TorchLens model')}\n"
         f"{getattr(trace, 'num_tensors', 0)} tensors total "
-        f"({human_readable_size(getattr(trace, 'total_out_memory', 0) or 0)})\n"
+        f"({human_readable_size(getattr(trace, 'total_activation_memory', 0) or 0)})\n"
         f"{params_line}"
     )
 

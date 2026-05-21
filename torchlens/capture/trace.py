@@ -145,7 +145,7 @@ def save_new_outs(
         # save_new_outs since child tensor variations aren't recaptured.
         layer_log_entry.output_versions_per_child = {}
 
-    # Reset per-pass bookkeeping fields.  Graph-level totals (total_out_memory,
+    # Reset per-pass bookkeeping fields.  Graph-level totals (total_activation_memory,
     # num_tensors) are NOT reset — they describe the static graph structure.
     self.ops_with_saved_outs = []
     self.ops_with_saved_grads = []
@@ -153,7 +153,7 @@ def save_new_outs(
     self.has_grads = False
     self.unlogged_ops = []
     self.num_saved_ops = 0
-    self.saved_out_memory = 0
+    self.saved_activation_memory = 0
     self.total_gradient_memory = 0
     self.saved_gradient_memory = 0
     self.func_calls_duration = 0  # #87: reset timing

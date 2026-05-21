@@ -70,7 +70,7 @@ class _DummyLog:
         self.verbose = False
         self.layer_logs: dict[str, Any] = {}
         self.num_saved_ops = 0
-        self.total_out_memory_str = "0 B"
+        self.total_activation_memory_str = "0 B"
         self.render_calls: list[dict[str, Any]] = []
         self.cleaned_up = False
 
@@ -532,10 +532,9 @@ def test_visualization_options_group_supports_every_field(
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        tl.trace(
+        tl.visualization.show_model_graph(
             _TinyModel(),
             _tiny_input(),
-            capture=CaptureOptions(layers_to_save=None),
             visualization=VisualizationOptions(**option_kwargs),
         )
 

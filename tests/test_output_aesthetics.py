@@ -377,10 +377,10 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if log.is_recurrent and len(log.layer_logs) > 0:
         out.write(_section("D.1 Layer (multi-pass)", level=3))
         for ll in log.layer_logs.values():
-            if ll.num_calls > 1:
+            if ll.num_passes > 1:
                 out.write(
                     _capture(
-                        f"repr(layer_log) — {ll.layer_label} ({ll.num_calls} ops)",
+                        f"repr(layer_log) — {ll.layer_label} ({ll.num_passes} ops)",
                         repr(ll),
                     )
                 )
@@ -444,7 +444,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         out.write(_section("F.3 Layer field dump (multi-pass)", level=3))
         ll_for_dump = None
         for ll in log.layer_logs.values():
-            if ll.num_calls > 1:
+            if ll.num_passes > 1:
                 ll_for_dump = ll
                 break
         if ll_for_dump is None:
@@ -1065,10 +1065,10 @@ def _build_latex_report() -> str:
         # D.1 Layer (multi-pass)
         if log.is_recurrent and len(log.layer_logs) > 0:
             for ll in log.layer_logs.values():
-                if ll.num_calls > 1:
+                if ll.num_passes > 1:
                     doc.write(
                         _verbatim_box(
-                            f"D.1 Layer — {ll.layer_label} ({ll.num_calls} ops)",
+                            f"D.1 Layer — {ll.layer_label} ({ll.num_passes} ops)",
                             repr(ll),
                         )
                     )
@@ -1556,7 +1556,6 @@ class TestVisualizationBugfixes:
         log = trace_fn(
             ReluAdd(),
             torch.randn(2, 3),
-            vis_opt="none",
             intervention_ready=True,
         )
         log.set(func("relu"), torch.zeros(2, 3))

@@ -180,8 +180,8 @@ class TorchBackend:
         return BackendSemantics(
             grad_fn_id=id(grad_fn) if grad_fn is not None else None,
             grad_fn_class_name=type(grad_fn).__name__ if grad_fn is not None else None,
-            autograd_saved_memory=saved_memory,
-            num_autograd_saved_tensors=saved_count,
+            autograd_memory=saved_memory,
+            num_autograd_tensors=saved_count,
             mutates_inputs=mutates_inputs,
             bytes_delta_at_call=0,
             bytes_peak_at_call=0,

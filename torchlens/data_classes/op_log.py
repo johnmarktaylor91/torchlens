@@ -6,7 +6,7 @@ its parents/children in the computation graph, module containment,
 parameter usage, timing, RNG state, and more.
 
 For recurrent models, the same "layer" may execute multiple times; each
-execution is a separate Op with a distinct ``call_index``.  The
+execution is a separate Op with a distinct ``pass_index``.  The
 aggregate view across ops is provided by :class:`Layer`.
 
 Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
@@ -86,8 +86,8 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_pending_grad_blob_id": None,
     "_pending_transformed_grad_blob_id": None,
     "annotations": {},
-    "autograd_saved_memory": None,
-    "num_autograd_saved_tensors": None,
+    "autograd_memory": None,
+    "num_autograd_tensors": None,
     "bytes_delta_at_call": None,
     "bytes_peak_at_call": None,
     "transformed_out": None,
@@ -431,8 +431,8 @@ class Op:
         "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
         "trace_index": FieldPolicy.KEEP,
-        "call_index": FieldPolicy.KEEP,
-        "num_calls": FieldPolicy.KEEP,
+        "pass_index": FieldPolicy.KEEP,
+        "num_passes": FieldPolicy.KEEP,
         "lookup_keys": FieldPolicy.KEEP,
         "out": FieldPolicy.BLOB,
         "transformed_out": FieldPolicy.BLOB,
@@ -455,8 +455,8 @@ class Op:
         "memory": FieldPolicy.KEEP,
         "transformed_out_memory": FieldPolicy.KEEP,
         "visualizer_path": FieldPolicy.KEEP,
-        "autograd_saved_memory": FieldPolicy.KEEP,
-        "num_autograd_saved_tensors": FieldPolicy.KEEP,
+        "autograd_memory": FieldPolicy.KEEP,
+        "num_autograd_tensors": FieldPolicy.KEEP,
         "bytes_delta_at_call": FieldPolicy.KEEP,
         "bytes_peak_at_call": FieldPolicy.KEEP,
         "has_output_variations": FieldPolicy.KEEP,
@@ -700,8 +700,8 @@ class Op:
         self.type = fields_dict["type"]
         self.type_index = fields_dict["type_index"]
         self.trace_index = fields_dict["trace_index"]
-        self.call_index = fields_dict["call_index"]
-        self.num_calls = fields_dict["num_calls"]
+        self.pass_index = fields_dict["pass_index"]
+        self.num_passes = fields_dict["num_passes"]
         self.lookup_keys = fields_dict["lookup_keys"]
 
         # Saved tensor info:
@@ -726,8 +726,8 @@ class Op:
         self.memory = fields_dict["memory"]
         self.transformed_out_memory = fields_dict["transformed_out_memory"]
         self.visualizer_path: str | None = fields_dict["visualizer_path"]
-        self.autograd_saved_memory: Optional[int] = fields_dict["autograd_saved_memory"]
-        self.num_autograd_saved_tensors: Optional[int] = fields_dict["num_autograd_saved_tensors"]
+        self.autograd_memory: Optional[int] = fields_dict["autograd_memory"]
+        self.num_autograd_tensors: Optional[int] = fields_dict["num_autograd_tensors"]
         self.bytes_delta_at_call: Optional[int] = fields_dict["bytes_delta_at_call"]
         self.bytes_peak_at_call: Optional[int] = fields_dict["bytes_peak_at_call"]
 
@@ -1085,6 +1085,17 @@ class Op:
             Human-readable parameter memory amount.
         """
         return human_readable_size(self.param_memory)
+
+    @property
+    def autograd_memory_str(self) -> str:
+        """Return autograd tensor memory in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable autograd tensor memory amount.
+        """
+        return human_readable_size(self.autograd_memory)
 
     @property
     def _streaming_label(self) -> str:
@@ -1904,7 +1915,7 @@ class Op:
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
         s = f"Tensor {self._label_raw} (layer {self._layer_label_raw}) (PASS NOT FINISHED):"
-        s += f"\n\tPass: {self.call_index}"
+        s += f"\n\tPass: {self.pass_index}"
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
         s += f"\n\tComputed from params: {self.uses_params}"
         s += f"\n\tComputed in modules: {self.modules}"
@@ -1934,8 +1945,8 @@ class Op:
 
     def _str_after_pass(self) -> str:
         """Return a human-readable summary of this tensor entry after the forward pass has completed."""
-        if self.num_calls > 1:
-            pass_str = f" (pass {self.call_index}/{self.num_calls}), "
+        if self.num_passes > 1:
+            pass_str = f" (pass {self.pass_index}/{self.num_passes}), "
         else:
             pass_str = ", "
         sml = self.source_trace

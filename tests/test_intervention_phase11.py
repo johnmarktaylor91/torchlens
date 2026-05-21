@@ -30,7 +30,7 @@ def _interventions() -> tl.Trace:
     """
 
     x = torch.randn(2, 3)
-    log = tl.trace(_ReluAdd(), x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(_ReluAdd(), x, intervention_ready=True)
     log.set(tl.func("relu"), torch.zeros(2, 3))
     return log
 
@@ -40,14 +40,10 @@ def test_trace_show_accepts_intervention_options() -> None:
 
     log = _interventions()
     try:
-        assert log.show(vis_opt="none", vis_intervention_mode="node_mark") is None
-        assert (
-            log.show(vis_opt="none", vis_intervention_mode="node_mark", vis_show_cone=True) is None
-        )
-        assert (
-            log.show(vis_opt="none", vis_intervention_mode="node_mark", vis_show_cone=False) is None
-        )
-        assert log.show(vis_opt="none", vis_intervention_mode="as_node") is None
+        assert log.show(vis_intervention_mode="node_mark") is None
+        assert log.show(vis_intervention_mode="node_mark", vis_show_cone=True) is None
+        assert log.show(vis_intervention_mode="node_mark", vis_show_cone=False) is None
+        assert log.show(vis_intervention_mode="as_node") is None
     finally:
         log.cleanup()
 
@@ -98,14 +94,14 @@ def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) ->
         log.cleanup()
 
 
-def test_bundle_show_accepts_vis_opt_none() -> None:
-    """``Bundle.show`` accepts render kwargs and skips on ``vis_opt='none'``."""
+def test_bundle_show_accepts_vis_mode_none() -> None:
+    """``Bundle.show`` accepts render kwargs and skips on ``vis_mode='none'``."""
 
     log = _interventions()
-    clean = tl.trace(_ReluAdd(), torch.randn(2, 3), vis_opt="none")
+    clean = tl.trace(_ReluAdd(), torch.randn(2, 3))
     try:
         bundle = tl.bundle({"intervened": log, "clean": clean})
-        assert bundle.show(vis_opt="none") == {"intervened": None, "clean": None}
+        assert bundle.show(vis_mode="none") == {"intervened": None, "clean": None}
     finally:
         log.cleanup()
         clean.cleanup()

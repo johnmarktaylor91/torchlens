@@ -162,7 +162,7 @@ def _prune_final_unsaved_layers(self: "Trace") -> None:
         self.layer_labels.append(layer_entry.layer_label)
         self.layer_labels.append(layer_entry.layer_label_no_pass)
         self.op_labels.append(layer_entry.layer_label_w_pass)
-        self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_calls
+        self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_passes
     self._layers_logged = self.num_saved_ops == len(self.layer_list)
     self._layers_saved = self.num_saved_ops == len(self.layer_list)
 
@@ -184,7 +184,9 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
         and not getattr(layer_entry, "is_orphan", False)
     ]
     self.num_saved_ops = len(saved_layers)
-    self.saved_out_memory = sum(getattr(layer_entry, "memory", 0) for layer_entry in saved_layers)
+    self.saved_activation_memory = sum(
+        getattr(layer_entry, "memory", 0) for layer_entry in saved_layers
+    )
     self.ops_with_saved_outs = [layer_entry.layer_label for layer_entry in saved_layers]
 
 

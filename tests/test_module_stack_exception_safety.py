@@ -60,12 +60,12 @@ def test_exception_unwinds_module_stack() -> None:
 
     model = Outer()
     with pytest.raises(RuntimeError, match="intentional"):
-        tl.trace(model, torch.randn(2, 4), vis_opt="none")
+        tl.trace(model, torch.randn(2, 4))
 
     assert _state._logging_enabled is False
     assert _state._active_trace is None
 
-    trace = tl.trace(Outer(NonRaisingChild()), torch.randn(2, 4), vis_opt="none")
+    trace = tl.trace(Outer(NonRaisingChild()), torch.randn(2, 4))
     linear_ops = [op for op in trace.layer_list if "linear" in op.layer_label]
     assert linear_ops, "expected at least one linear op"
     module_calls = {str(getattr(op, "module", "")) for op in linear_ops}

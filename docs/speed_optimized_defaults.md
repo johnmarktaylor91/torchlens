@@ -12,7 +12,6 @@ from torchlens.options import CaptureOptions
 log = tl.trace(
     model,
     x,
-    vis_opt="none",
     capture=CaptureOptions(
         layers_to_save=["linear_1_1"],
         keep_unsaved_layers=True,
@@ -25,7 +24,7 @@ Use these defaults when speed matters:
 
 | Setting | Speed-oriented value | Why |
 | --- | --- | --- |
-| Visualization | `vis_opt="none"` | Avoid Graphviz/ELK rendering while collecting data. |
+| Visualization | Omit `Trace.draw()` | Avoid Graphviz/ELK rendering while collecting data. |
 | Saved layers | Specific labels/selectors | Saves activation payloads only where needed. |
 | Unsaved metadata | `keep_unsaved_layers=True` | Keeps graph context while avoiding unnecessary tensor copies. |
 | Source context | `save_source_context=False` | Keeps file/line identity but avoids source-text loading. |

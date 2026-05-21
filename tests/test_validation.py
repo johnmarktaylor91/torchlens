@@ -577,7 +577,7 @@ def test_corruption_loop_detection_slo_asymmetry():
     log = _make_recurrent_log()
     # Find a multi-pass layer and corrupt one member's slo list
     for lpl in log.layer_list:
-        if lpl.num_calls > 1:
+        if lpl.num_passes > 1:
             # Remove one member from slo
             lpl.recurrent_ops = [lpl.layer_label]
             break
@@ -589,7 +589,7 @@ def test_corruption_loop_detection_slo_asymmetry():
 def test_corruption_loop_detection_ops_total():
     """Mismatched num_calls vs len(recurrent_ops) triggers error."""
     log = _make_clean_log()
-    log.layer_list[0].num_calls = 99
+    log.layer_list[0].num_passes = 99
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()

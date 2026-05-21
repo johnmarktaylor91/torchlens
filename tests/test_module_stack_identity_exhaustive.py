@@ -29,7 +29,7 @@ def test_identity_module_stack_frame_visible() -> None:
 
     torch.manual_seed(0)
     model = IdentityChild()
-    trace = tl.trace(model, torch.randn(2, 4), vis_opt="none")
+    trace = tl.trace(model, torch.randn(2, 4))
     identity_ops = [op for op in trace.layer_list if "identity" in op.layer_label]
     assert identity_ops, "expected at least one identity-tagged op"
     for op in identity_ops:

@@ -176,8 +176,8 @@ def _build_ir_instances() -> dict[str, object]:
     backend_semantics = BackendSemantics(
         grad_fn_id=None,
         grad_fn_class_name=None,
-        autograd_saved_memory=None,
-        num_autograd_saved_tensors=None,
+        autograd_memory=None,
+        num_autograd_tensors=None,
         mutates_inputs=(),
         bytes_delta_at_call=None,
         bytes_peak_at_call=None,

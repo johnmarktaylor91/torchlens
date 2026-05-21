@@ -109,8 +109,8 @@
 | `tl.LayerLog.out` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.out_postfunc` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.out_transform` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
-| `tl.LayerLog.autograd_saved_memory` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
-| `tl.LayerLog.num_autograd_saved_tensors` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
+| `tl.LayerLog.autograd_memory` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
+| `tl.LayerLog.num_autograd_tensors` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.buffer_address` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.buffer_parent` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.saved_args` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
@@ -187,14 +187,14 @@
 | `tl.LayerLog.num_params_frozen` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.num_params` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.num_params_trainable` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
-| `tl.LayerLog.num_calls` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
+| `tl.LayerLog.num_passes` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.num_pos_args` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.equivalence_class` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.compute_index` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.output_device` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.params` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
-| `tl.LayerLog.param_memory` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
-| `tl.LayerLog.param_memory_str` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
+| `tl.LayerLog.total_param_memory` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
+| `tl.LayerLog.total_param_memory_str` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.parent_arg_positions` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.parents` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.parents_per_pass` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
@@ -203,7 +203,7 @@
 | `tl.LayerLog.param_shapes` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.parent_ops_per_layer` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.call_labels` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
-| `tl.LayerLog.call_index` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
+| `tl.LayerLog.pass_index` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.ops` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.save_grads` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
 | `tl.LayerLog.bool_value` | class_member | 07_layerlog_anatomy.ipynb | 07_layerlog_anatomy.ipynb | - |
@@ -234,8 +234,8 @@
 | `tl.OpLog.out_postfunc` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.out_transform` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.has_saved_args` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
-| `tl.OpLog.autograd_saved_memory` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
-| `tl.OpLog.num_autograd_saved_tensors` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
+| `tl.OpLog.autograd_memory` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
+| `tl.OpLog.num_autograd_tensors` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.terminal_conditional_id` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.conditional_context_kind` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.is_terminal_conditional_bool` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
@@ -361,7 +361,7 @@
 | `tl.OpLog.num_params_frozen` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.num_params` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.num_params_trainable` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
-| `tl.OpLog.num_calls` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
+| `tl.OpLog.num_passes` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.num_pos_args` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.equivalence_class` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.compute_index` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
@@ -378,7 +378,7 @@
 | `tl.OpLog.parent_param_ops` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.param_shapes` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.parent_params` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
-| `tl.OpLog.call_index` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
+| `tl.OpLog.pass_index` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.ops` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.recurrent_ops` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
 | `tl.OpLog.root_ancestors` | class_member | 08_layerpasslog_anatomy.ipynb | 08_layerpasslog_anatomy.ipynb | - |
@@ -568,8 +568,8 @@
 | `tl.Trace.save_raw_grads` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.save_rng_states` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.save_code_context` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.saved_out_memory` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.saved_out_memory_str` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.saved_activation_memory` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.saved_activation_memory_str` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.set` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.show` | class_member | 05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb | 05_visualization_basics.ipynb, 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.draw_backward` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
@@ -589,9 +589,9 @@
 | `tl.Trace.to_json` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.to_pandas` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.to_parquet` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.total_out_memory` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.total_out_memory_str` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.autograd_saved_memory` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.total_activation_memory` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.total_activation_memory_str` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.autograd_memory` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.total_flops` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.total_flops_backward` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.total_flops_forward` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
@@ -602,8 +602,8 @@
 | `tl.Trace.num_param_tensors` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.num_params` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.num_params_frozen` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.param_memory` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
-| `tl.Trace.param_memory_str` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.total_param_memory` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
+| `tl.Trace.total_param_memory_str` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.num_params_trainable` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.train_mode` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
 | `tl.Trace.uncalled_modules` | class_member | 06_modellog_anatomy.ipynb | 06_modellog_anatomy.ipynb | - |
@@ -937,7 +937,7 @@
 | `tl.fastlog.recover` | submodule | 16_visualization_advanced.ipynb | 16_visualization_advanced.ipynb | - |
 | `tl.func` | top_level | 17_intervention_helpers.ipynb | 17_intervention_helpers.ipynb | - |
 | `tl.grad` | submodule | 00_install_and_smoke.ipynb | 00_install_and_smoke.ipynb | - |
-| `tl.grad.autograd_saved_memory` | submodule | 26_perf_and_scaling.ipynb | 26_perf_and_scaling.ipynb | - |
+| `tl.grad.autograd_memory` | submodule | 26_perf_and_scaling.ipynb | 26_perf_and_scaling.ipynb | - |
 | `tl.grad.grad_fn_memory_cost` | submodule | 26_perf_and_scaling.ipynb | 26_perf_and_scaling.ipynb | - |
 | `tl.grad_scale` | top_level | 17_intervention_helpers.ipynb | 17_intervention_helpers.ipynb | - |
 | `tl.grad_zero` | top_level | 17_intervention_helpers.ipynb | 17_intervention_helpers.ipynb | - |

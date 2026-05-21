@@ -84,7 +84,7 @@ def phase2_log() -> tl.Trace:
 
     torch.manual_seed(0)
     model = _Phase2Model()
-    return tl.trace(model, torch.randn(2, 3), vis_opt="none")
+    return tl.trace(model, torch.randn(2, 3))
 
 
 @pytest.mark.smoke

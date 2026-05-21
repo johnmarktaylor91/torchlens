@@ -1000,7 +1000,7 @@ def _build_overview_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str
         f"Params: {_int_with_commas(trace.num_params)} unique; trainable: "
         f"{_int_with_commas(trace.num_params_trainable)}",
         f"Ops: {trace.num_ops} total",
-        f"Saved outs: {human_readable_size(trace.saved_out_memory)}",
+        f"Saved outs: {human_readable_size(trace.saved_activation_memory)}",
         f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}  "
         f"MACs: {_human_flops(trace.total_macs_forward)}",
         "FLOP convention: counts use the captured TorchLens convention; "
@@ -1073,8 +1073,8 @@ def _build_memory_rows(
             }
         )
     footer_lines = [
-        f"Tracked tensor volume: {human_readable_size(trace.total_out_memory)}",
-        f"Saved outs: {human_readable_size(trace.saved_out_memory)}",
+        f"Tracked tensor volume: {human_readable_size(trace.total_activation_memory)}",
+        f"Saved outs: {human_readable_size(trace.saved_activation_memory)}",
         "Live forward-memory peak: not tracked in Trace",
     ]
     return rows, footer_lines

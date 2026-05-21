@@ -85,7 +85,7 @@ def _bad_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
 def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     """Default captures populate baseline fields and skip intervention-only data."""
 
-    log = tl.trace(_TinyShiftModel(), torch.randn(2, 3), vis_opt="none")
+    log = tl.trace(_TinyShiftModel(), torch.randn(2, 3))
 
     assert log.intervention_ready is False
     assert log.run_state is RunState.PRISTINE
@@ -118,13 +118,11 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     baseline_log = tl.trace(
         baseline_model,
         x,
-        vis_opt="none",
         intervention_ready=False,
     )
     ready_log = tl.trace(
         ready_model,
         x,
-        vis_opt="none",
         intervention_ready=True,
     )
 
@@ -147,7 +145,6 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
         tl.trace(
             model,
             torch.randn(2, 3),
-            vis_opt="none",
             intervention_ready=True,
             hooks={tl.func("relu"): _bad_hook},
         )
@@ -156,7 +153,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
     assert _state._active_trace is None
     assert _state._active_hook_plan is None
 
-    followup_log = tl.trace(model, torch.randn(2, 3), vis_opt="none")
+    followup_log = tl.trace(model, torch.randn(2, 3))
 
     assert followup_log.intervention_ready is False
     assert followup_log.run_state is RunState.PRISTINE
@@ -171,7 +168,6 @@ def test_live_hook_exception_resets_reentrancy_depth() -> None:
         tl.trace(
             _TinyReluModel(),
             torch.randn(2, 3),
-            vis_opt="none",
             intervention_ready=True,
             hooks={tl.func("relu"): _bad_hook},
         )

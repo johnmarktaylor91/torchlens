@@ -66,7 +66,6 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     log = tl.trace(
         model,
         x,
-        vis_opt="none",
         save_arg_values=True,
         out_postfunc=lambda t: t.float().mean(),
     )
@@ -98,7 +97,7 @@ def test_failed_capture_cleans_partial_outputs_buffers_and_params() -> None:
     original_requires_grad = {name: p.requires_grad for name, p in model.named_parameters()}
 
     with pytest.raises(RuntimeError) as exc_info:
-        tl.trace(model, x, vis_opt="none")
+        tl.trace(model, x)
 
     partial = getattr(exc_info.value, "partial_log", None)
     assert isinstance(partial, PartialTrace)

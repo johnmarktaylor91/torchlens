@@ -88,7 +88,6 @@ def test_intervention_api_replaces_op_output_preserves_graph() -> None:
     log = tl.trace(
         model,
         torch.randn(3, 4),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.func("relu"): _zero_hook},
     )
@@ -119,7 +118,7 @@ def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:
 
     handle = model.relu.register_forward_hook(raw_hook)
     try:
-        log = tl.trace(model, torch.randn(3, 4), vis_opt="none")
+        log = tl.trace(model, torch.randn(3, 4))
     finally:
         handle.remove()
 
@@ -138,7 +137,6 @@ def test_chain_of_interventions_preserves_graph() -> None:
     log = tl.trace(
         model,
         torch.randn(3, 4),
-        vis_opt="none",
         intervention_ready=True,
         hooks={
             tl.func("relu"): _zero_hook,
@@ -162,7 +160,6 @@ def test_quantization_sensitivity_pattern() -> None:
     log = tl.trace(
         _HookedMlp(),
         torch.randn(3, 4),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.func("sigmoid"): _quantize_dequantize_hook},
     )

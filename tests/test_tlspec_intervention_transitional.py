@@ -13,7 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.save import load_intervention_spec as legacy_load_intervention_spec
 from torchlens.intervention.types import InterventionSpec
-from torchlens.options import CaptureOptions, VisualizationOptions
+from torchlens.options import CaptureOptions
 
 
 class _ReluModel(nn.Module):
@@ -51,7 +51,6 @@ def _interventions() -> tl.Trace:
         _ReluModel(),
         x,
         capture=CaptureOptions(intervention_ready=True, random_seed=0),
-        visualization=VisualizationOptions(view="none"),
     )
     log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     return log

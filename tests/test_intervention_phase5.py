@@ -136,19 +136,16 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     log1 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
     log2 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
     log3 = tl.trace(
         _DifferentGraphModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
 
@@ -164,7 +161,6 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
 
@@ -189,7 +185,6 @@ def test_keep_unsaved_layers_false_preserves_replay_call_group_siblings() -> Non
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         layers_to_save="output",
         keep_unsaved_layers=False,
         intervention_ready=True,
@@ -208,7 +203,6 @@ def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
     log = tl.trace(
         _RecurrentReluModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
 
@@ -224,7 +218,6 @@ def test_func_call_id_invariant_catches_duplicate_container_paths() -> None:
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
@@ -244,7 +237,6 @@ def test__address_normalized_strips_pass_qualifiers() -> None:
     log = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
     linear_layers = [layer for layer in log.layer_list if layer.module is not None]

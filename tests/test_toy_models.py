@@ -1104,7 +1104,7 @@ def test_nested_param_free_loops(default_input1):
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.func_name == "sin":
-            sin_pass_counts.add(entry.num_calls)
+            sin_pass_counts.add(entry.num_passes)
     assert sin_pass_counts == {12}, (
         f"sin ops fragmented into groups with pass counts {sin_pass_counts}, expected {{12}}"
     )
@@ -1324,7 +1324,7 @@ def test_sequential_param_free_loops(default_input1):
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.func_name == "sin":
-            sin_groups.add(entry.num_calls)
+            sin_groups.add(entry.num_passes)
     assert sin_groups == {3}, f"Sequential sin loops should each have 3 ops, got {sin_groups}"
     show_model_graph(
         model,

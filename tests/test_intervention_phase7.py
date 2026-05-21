@@ -116,7 +116,7 @@ def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
         Captured log.
     """
 
-    return tl.trace(model, x, vis_opt="none", intervention_ready=True)
+    return tl.trace(model, x, intervention_ready=True)
 
 
 @pytest.mark.smoke

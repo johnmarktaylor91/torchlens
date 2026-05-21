@@ -356,8 +356,8 @@ def _merge_layer_log_conditional_fields(
         layer_log.conditional_branch_stack_ops[stack_signature] = []
 
     signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
-    if pass_log.call_index not in signature_ops:
-        signature_ops.append(pass_log.call_index)
+    if pass_log.pass_index not in signature_ops:
+        signature_ops.append(pass_log.pass_index)
         signature_ops.sort()
 
     for conditional_id, branch_children in pass_log.conditional_arm_children.items():
@@ -869,12 +869,12 @@ def _build_layer_logs(self: "Trace") -> None:
             if pass_log.is_atomic_module_op:
                 layer_log.is_atomic_module_op = True
 
-        layer_log.ops[pass_log.call_index] = pass_log
+        layer_log.ops[pass_log.pass_index] = pass_log
         layer_log.call_labels.append(pass_log.layer_label)
         pass_log.parent_layer_log = layer_log
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 
-    autograd_saved_memory = 0
+    autograd_memory = 0
     has_autograd_saved_value = False
     for layer_log in layer_logs.values():
         for pass_log in layer_log.ops.values():
@@ -885,26 +885,28 @@ def _build_layer_logs(self: "Trace") -> None:
             if linked_labels:
                 pass_log.annotations["tied_parameter_notation"] = linked_labels
         pass_autograd_bytes = [
-            pass_log.autograd_saved_memory
+            pass_log.autograd_memory
             for pass_log in layer_log.ops.values()
-            if pass_log.autograd_saved_memory is not None
+            if pass_log.autograd_memory is not None
         ]
         pass_autograd_tensor_counts = [
-            pass_log.num_autograd_saved_tensors
+            pass_log.num_autograd_tensors
             for pass_log in layer_log.ops.values()
-            if pass_log.num_autograd_saved_tensors is not None
+            if pass_log.num_autograd_tensors is not None
         ]
         if pass_autograd_bytes:
-            layer_log.autograd_saved_memory = sum(pass_autograd_bytes)
-            layer_log.num_autograd_saved_tensors = sum(pass_autograd_tensor_counts)
-            autograd_saved_memory += layer_log.autograd_saved_memory
+            layer_log.autograd_memory = sum(pass_autograd_bytes)
+            layer_log.total_autograd_memory = layer_log.autograd_memory
+            layer_log.num_autograd_tensors = sum(pass_autograd_tensor_counts)
+            autograd_memory += layer_log.autograd_memory
             has_autograd_saved_value = True
         else:
-            layer_log.autograd_saved_memory = None
-            layer_log.num_autograd_saved_tensors = None
+            layer_log.autograd_memory = None
+            layer_log.total_autograd_memory = None
+            layer_log.num_autograd_tensors = None
         _rebuild_layer_log_conditional_views(layer_log)
 
-    self.autograd_saved_memory = autograd_saved_memory if has_autograd_saved_value else None
+    self.total_autograd_memory = autograd_memory if has_autograd_saved_value else None
     self.layer_logs = layer_logs
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)

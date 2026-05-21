@@ -206,11 +206,11 @@ def _module_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[ModuleFrame
             address=address,
             address_normalized=None,
             module_type="",
-            call_index=call_index,
+            call_index=pass_index,
             fx_qualpath=None,
             entry_argnames=(),
         )
-        for address, call_index in fields_dict["modules"]
+        for address, pass_index in fields_dict["modules"]
     )
 
 
@@ -366,8 +366,8 @@ def _op_event_from_log(
         backend_semantics=BackendSemantics(
             grad_fn_id=fields_dict["grad_fn_id"],
             grad_fn_class_name=fields_dict["grad_fn_class_name"],
-            autograd_saved_memory=fields_dict["autograd_saved_memory"],
-            num_autograd_saved_tensors=fields_dict["num_autograd_saved_tensors"],
+            autograd_memory=fields_dict["autograd_memory"],
+            num_autograd_tensors=fields_dict["num_autograd_tensors"],
             mutates_inputs=(0,) if fields_dict["is_inplace"] else (),
             bytes_delta_at_call=fields_dict["bytes_delta_at_call"],
             bytes_peak_at_call=fields_dict["bytes_peak_at_call"],
@@ -1863,8 +1863,8 @@ def log_function_output_tensors_fast(
         orig_layer_entry.dtype = out.dtype
         orig_layer_entry.memory = get_memory_amount(out)
         (
-            orig_layer_entry.autograd_saved_memory,
-            orig_layer_entry.num_autograd_saved_tensors,
+            orig_layer_entry.autograd_memory,
+            orig_layer_entry.num_autograd_tensors,
         ) = _get_autograd_saved_stats_for_tensor(out)
         orig_layer_entry.bytes_delta_at_call = 0
         orig_layer_entry.bytes_peak_at_call = 0
@@ -2028,8 +2028,8 @@ def _get_autograd_saved_stats_by_output(
     Returns
     -------
     dict
-        Mapping from output index to ``(autograd_saved_memory,
-        num_autograd_saved_tensors)``. Non-tensor outputs and tensors without
+        Mapping from output index to ``(autograd_memory,
+        num_autograd_tensors)``. Non-tensor outputs and tensors without
         ``grad_fn`` are omitted and handled by callers as ``None`` values.
     """
     stats_by_index: dict[int, tuple[int | None, int | None]] = {}
@@ -2117,7 +2117,7 @@ def _get_autograd_saved_stats_for_tensor(
     Returns
     -------
     tuple
-        ``(autograd_saved_memory, num_autograd_saved_tensors)``. Both values
+        ``(autograd_memory, num_autograd_tensors)``. Both values
         are ``None`` when no grad_fn exists.
     """
     if tensor.grad_fn is None:
@@ -2180,7 +2180,7 @@ def _log_output_tensor_info(
         )
         base_equivalence_class = equivalence_class
         self.layers_with_params[equivalence_class].append(_label_raw)
-        fields_dict["call_index"] = len(self.layers_with_params[equivalence_class])
+        fields_dict["pass_index"] = len(self.layers_with_params[equivalence_class])
         equivalence_class = _append_module_suffix_to_equivalence_class(
             equivalence_class, fields_dict["modules"]
         )
@@ -2188,14 +2188,14 @@ def _log_output_tensor_info(
     else:
         # Non-parameterized ops: equivalence is a hash of the operation type,
         # non-tensor args, output index, and containing module.  Each unique
-        # non-param operation is seen only once (call_index=1).
+        # non-param operation is seen only once (pass_index=1).
         equivalence_class = _get_equivalence_class(args, kwargs, i, layer_type, fields_dict)
         base_equivalence_class = equivalence_class
         equivalence_class = _append_module_suffix_to_equivalence_class(
             equivalence_class, fields_dict["modules"]
         )
         fields_dict["equivalence_class"] = equivalence_class
-        fields_dict["call_index"] = 1
+        fields_dict["pass_index"] = 1
 
     # equivalent_ops is a DIRECT reference to the Trace-level set —
     # all entries sharing this equivalence type point to the same set object.
@@ -2256,7 +2256,7 @@ def _log_output_tensor_info(
     fields_dict["type"] = layer_type
     fields_dict["_layer_label_raw"] = _label_raw
     fields_dict["type_index"] = type_index
-    fields_dict["num_calls"] = 1
+    fields_dict["num_passes"] = 1
     fields_dict["lookup_keys"] = []
 
     # Saved tensor info
@@ -2281,8 +2281,8 @@ def _log_output_tensor_info(
     fields_dict["bytes_delta_at_call"] = 0
     fields_dict["bytes_peak_at_call"] = 0
     (
-        fields_dict["autograd_saved_memory"],
-        fields_dict["num_autograd_saved_tensors"],
+        fields_dict["autograd_memory"],
+        fields_dict["num_autograd_tensors"],
     ) = autograd_saved_stats
 
     # FLOPs computation

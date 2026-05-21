@@ -11,7 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.types import HelperSpec, InterventionSpec
-from torchlens.options import CaptureOptions, VisualizationOptions
+from torchlens.options import CaptureOptions
 from torchlens.validation import check_spec_compat
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "tlspec_v2_16"
@@ -151,7 +151,6 @@ def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.Trace:
             layers_to_save="all",
             random_seed=0,
         ),
-        visualization=VisualizationOptions(view="none"),
     )
 
 
@@ -174,7 +173,6 @@ def _capture_transformer(seed: int) -> tl.Trace:
         model,
         x,
         capture=CaptureOptions(layers_to_save="all", random_seed=0),
-        visualization=VisualizationOptions(view="none"),
     )
 
 

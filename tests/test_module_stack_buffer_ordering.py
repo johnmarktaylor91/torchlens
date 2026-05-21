@@ -54,7 +54,7 @@ def test_dynamic_buffer_module_attribution() -> None:
 
     torch.manual_seed(0)
     model = BufferParent()
-    trace = tl.trace(model, torch.randn(2, 4), vis_opt="none")
+    trace = tl.trace(model, torch.randn(2, 4))
 
     creation_ops = [op for op in trace.layer_list if op.func_name == "ones"]
     assert creation_ops, "expected the dynamic buffer creation op to be captured"

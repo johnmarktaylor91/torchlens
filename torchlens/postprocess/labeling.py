@@ -62,8 +62,8 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     layer_total_counter = 1  # Sequential counter for non-input/buffer/output layers.
     for tensor_log_entry in self:
         layer_type = tensor_log_entry.layer_type
-        call_index = tensor_log_entry.call_index
-        if call_index == 1:
+        pass_index = tensor_log_entry.pass_index
+        if pass_index == 1:
             # First pass: assign new type_num and total_num.
             type_index = layer_type_counter[layer_type]
             layer_type_counter[layer_type] += 1
@@ -88,16 +88,16 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
 
         if layer_type not in ["input", "output", "buffer"]:
             tensor_log_entry.layer_label_w_pass = (
-                f"{layer_type}_{type_index}_{trace_index}:{call_index}"
+                f"{layer_type}_{type_index}_{trace_index}:{pass_index}"
             )
             tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}_{trace_index}"
         else:
-            tensor_log_entry.layer_label_w_pass = f"{layer_type}_{type_index}:{call_index}"
+            tensor_log_entry.layer_label_w_pass = f"{layer_type}_{type_index}:{pass_index}"
             tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}"
 
-        tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{type_index}:{call_index}"
+        tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{type_index}:{pass_index}"
         tensor_log_entry.layer_label_no_pass_short = f"{layer_type}_{type_index}"
-        if tensor_log_entry.num_calls == 1:
+        if tensor_log_entry.num_passes == 1:
             tensor_log_entry.layer_label = tensor_log_entry.layer_label_no_pass
             tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_no_pass_short
         else:
@@ -162,7 +162,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
             layer_entry.atomic_module_call = submodule_pass_nice_name
 
         # Tally the tensor sizes:
-        self.total_out_memory += layer_entry.memory
+        self.total_activation_memory += layer_entry.memory
 
         # Tally the parameter sizes:
         if layer_entry.layer_label_no_pass not in unique_layers_seen:  # only count params once
@@ -172,7 +172,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
             self.num_params_trainable += layer_entry.num_params_trainable
             self.num_params_frozen += layer_entry.num_params_frozen
             self.num_param_tensors += layer_entry.num_param_tensors
-            self.param_memory += layer_entry.param_memory
+            self.total_param_memory += layer_entry.param_memory
             # Tally for modules, too.
             for module_name, _ in layer_entry.modules:
                 mbd["module_nparams"][module_name] += layer_entry.num_params
@@ -581,9 +581,9 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
             self.layer_labels.append(layer_entry.layer_label)
             self.layer_labels.append(layer_entry.layer_label_no_pass)
             self.op_labels.append(layer_entry.layer_label_w_pass)
-            self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_calls
+            self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_passes
             if layer_entry.has_saved_outs:
-                self.saved_out_memory += layer_entry.memory
+                self.saved_activation_memory += layer_entry.memory
             i += 1
         else:
             layers_to_remove.append(layer_entry)
@@ -740,7 +740,7 @@ def _add_lookup_keys_for_layer_entry(
     ]
 
     # If just one pass, also allow indexing by pass label.
-    if layer_entry.num_calls == 1:
+    if layer_entry.num_passes == 1:
         lookup_keys_for_tensor.extend(
             [layer_entry.layer_label_w_pass, layer_entry.layer_label_w_pass_short]
         )

@@ -70,7 +70,6 @@ def _capture_log() -> Trace:
     return tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
-        vis_opt="none",
         intervention_ready=True,
     )
 
@@ -134,7 +133,6 @@ def test_run_state_transitions() -> None:
     live = tl.trace(
         _LifecycleModel(),
         torch.tensor([[-1.0, 2.0, 3.0]]),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.func("relu"): _zero_hook},
     )

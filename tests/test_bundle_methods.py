@@ -67,13 +67,11 @@ def _capture_pair(seed: int, offset: float) -> tl.Bundle:
     baseline = tl.trace(
         baseline_model,
         x,
-        vis_opt="none",
         intervention_ready=True,
     )
     changed = tl.trace(
         changed_model,
         x,
-        vis_opt="none",
         intervention_ready=True,
     )
     return tl.bundle({"baseline": baseline, "changed": changed}, baseline="baseline")

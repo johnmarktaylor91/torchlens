@@ -109,7 +109,6 @@ def test_live_func_hook_replaces_returned_and_saved_out() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.func("relu"): _zero_hook},
     )
@@ -134,7 +133,6 @@ def test_live_label_error_for_finalized_style_label() -> None:
         tl.trace(
             _ReluReturnModel(),
             torch.randn(2, 3),
-            vis_opt="none",
             intervention_ready=True,
             hooks={tl.label("relu_4_27:2"): _identity_hook},
         )
@@ -147,7 +145,6 @@ def test_module_selector_matches_capture_time_module_context() -> None:
     log = tl.trace(
         _LinearModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.module("linear"): _zero_hook},
     )
@@ -166,7 +163,6 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
     raw_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
     raw_label = next(
@@ -176,21 +172,18 @@ def test_raw_label_where_and_in_module_selectors_work_at_capture_time() -> None:
     label_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.label(raw_label): _zero_hook},
     )
     where_log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.where(lambda p: p.func_name == "relu"): _zero_hook},
     )
     in_module_log = tl.trace(
         _LinearModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.in_module("linear"): _zero_hook},
     )
@@ -207,7 +200,6 @@ def test_no_hooks_preserves_pristine_run_state() -> None:
     log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
     )
 
@@ -221,7 +213,6 @@ def test_live_replacement_metadata_matches_saved_out() -> None:
     log = tl.trace(
         _ReluReturnModel(),
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
         hooks={tl.func("relu"): _zero_hook},
     )

@@ -668,19 +668,19 @@ def draw(
     if self.num_params == 0:
         params_detail = "0 params"
     elif self.num_params_frozen == 0:
-        params_detail = f"{self.num_params} params (all trainable, {self.param_memory_str})"
+        params_detail = f"{self.num_params} params (all trainable, {self.total_param_memory_str})"
     elif self.num_params_trainable == 0:
-        params_detail = f"{self.num_params} params (all frozen, {self.param_memory_str})"
+        params_detail = f"{self.num_params} params (all frozen, {self.total_param_memory_str})"
     else:
         params_detail = (
             f"{self.num_params} params "
             f"({self.num_params_trainable}/{self.num_params} trainable, "
-            f"{self.param_memory_str})"
+            f"{self.total_param_memory_str})"
         )
 
     graph_caption = (
         f"<<B>{self.model_class_name}</B><br align='left'/>{self.num_tensors} "
-        f"tensors total ({self.total_out_memory_str})"
+        f"tensors total ({self.total_activation_memory_str})"
         f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
     if getattr(self, "_has_direct_writes", False):
@@ -3086,7 +3086,7 @@ def _get_node_address_shape_color(
         node_color = "black"
     elif node.is_buffer:
         if (self.buffer_num_calls[source_node.address] == 1) or (
-            isinstance(source_node, Layer) and node.num_calls > 1
+            isinstance(source_node, Layer) and node.num_passes > 1
         ):
             address = source_node.address
         else:
@@ -3329,10 +3329,10 @@ def compute_default_node_lines(
             selected_lines.append(overlay)
         return selected_lines
 
-    if (layer_log.num_calls > 1) and (vis_mode == "unrolled"):
-        call_label = f":{layer_log.call_index}"
-    elif (layer_log.num_calls > 1) and (vis_mode == "rolled"):
-        call_label = f" (x{layer_log.num_calls})"
+    if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
+        call_label = f":{layer_log.pass_index}"
+    elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
+        call_label = f" (x{layer_log.num_passes})"
     else:
         call_label = ""
 
@@ -3415,7 +3415,7 @@ def _compute_selected_node_lines(
                 str(
                     getattr(layer_log, "call_index", 1)
                     if vis_mode == "unrolled"
-                    else getattr(layer_log, "num_calls", 1)
+                    else getattr(layer_log, "num_passes", 1)
                 )
             )
         elif field_name == "flops":
@@ -3439,10 +3439,10 @@ def _make_node_label(
     """
     # Pass info:
 
-    if (node.num_calls > 1) and (vis_mode == "unrolled"):
-        call_label = f":{node.call_index}"
-    elif (node.num_calls > 1) and (vis_mode == "rolled"):
-        call_label = f" (x{node.num_calls})"
+    if (node.num_passes > 1) and (vis_mode == "unrolled"):
+        call_label = f":{node.pass_index}"
+    elif (node.num_passes > 1) and (vis_mode == "rolled"):
+        call_label = f" (x{node.num_passes})"
     else:
         call_label = ""
 

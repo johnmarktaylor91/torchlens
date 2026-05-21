@@ -286,8 +286,8 @@ def log_source_tensor_exhaustive(
         "type": layer_type,
         "type_index": type_index,
         "trace_index": None,
-        "call_index": 1,
-        "num_calls": 1,
+        "pass_index": 1,
+        "num_passes": 1,
         "lookup_keys": [],
         # Saved tensor info:
         "out": None,
@@ -311,8 +311,8 @@ def log_source_tensor_exhaustive(
         "memory": memory,
         "transformed_out_memory": None,
         "visualizer_path": None,
-        "autograd_saved_memory": None,
-        "num_autograd_saved_tensors": None,
+        "autograd_memory": None,
+        "num_autograd_tensors": None,
         "bytes_delta_at_call": 0,
         "bytes_peak_at_call": 0,
         # Child tensor variation tracking

@@ -1225,8 +1225,6 @@ def trace(
     batch_render: str | MissingType = MISSING,
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
     save_raw_output: str | bool | MissingType = MISSING,
-    layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType = MISSING,
-    save_visualizations: bool | MissingType = MISSING,
     keep_unsaved_layers: bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -1243,29 +1241,6 @@ def trace(
     grads_to_save: str | list[Any] | None | MissingType = MISSING,
     save_code_context: bool | MissingType = MISSING,
     save_rng_states: bool | MissingType = MISSING,
-    vis_opt: Any | MissingType = MISSING,
-    view: VisModeLiteral | MissingType = MISSING,
-    depth: int | MissingType = MISSING,
-    renderer: VisRendererLiteral | MissingType = MISSING,
-    layout: VisNodePlacementLiteral | MissingType = MISSING,
-    node_style: VisNodeModeLiteral | MissingType = MISSING,
-    vis_mode: VisModeLiteral | MissingType = MISSING,
-    vis_call_depth: int | MissingType = MISSING,
-    vis_outpath: str | MissingType = MISSING,
-    vis_save_only: bool | MissingType = MISSING,
-    vis_fileformat: str | MissingType = MISSING,
-    vis_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
-    vis_direction: VisDirectionLiteral | MissingType = MISSING,
-    vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
-    vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
-    vis_node_placement: VisNodePlacementLiteral | MissingType = MISSING,
-    vis_renderer: VisRendererLiteral | MissingType = MISSING,
-    vis_theme: str | MissingType = MISSING,
-    vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
-    vis_show_cone: bool | MissingType = MISSING,
     random_seed: int | None | MissingType = MISSING,
     num_context_lines: int | MissingType = MISSING,
     optimizer: Any | MissingType = MISSING,
@@ -1283,7 +1258,6 @@ def trace(
     recurrence_detection: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
     save: SaveOptions | None = None,
-    visualization: VisualizationOptions | None = None,
     streaming: StreamingOptions | None = None,
     train_mode: bool | MissingType = MISSING,
     name: str | None | MissingType = MISSING,
@@ -1337,11 +1311,6 @@ def trace(
             ``Trace.raw_output`` and does not affect the computational graph.
         save_raw_output: Raw output save policy for portable bundles:
             ``"small"`` (default), ``True``, or ``False``.
-        layer_visualizers: Optional mapping from site selectors to callables that render
-            saved layer outs as PIL images or HTML strings. Selector keys accept the same
-            vocabulary as ``find_sites``.
-        save_visualizations: If True, copy rendered visualizer PNG files into portable
-            bundles. Defaults to False.
         layers_to_save: Which layers to save outs for (see above).
         keep_unsaved_layers: If False, layers without saved outs are removed from
             the returned Trace (they still exist during processing). When
@@ -1387,30 +1356,6 @@ def trace(
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
-        vis_opt: Deprecated alias for ``vis_mode``.
-        vis_mode: Deprecated alias for ``visualization.mode``.
-        vis_call_depth: Deprecated alias for ``visualization.max_module_depth``.
-        vis_outpath: Deprecated alias for ``visualization.container_path``.
-        vis_save_only: Deprecated alias for ``visualization.save_only``.
-        vis_fileformat: Deprecated alias for ``visualization.file_format``.
-        vis_buffers: Deprecated alias for ``visualization.show_buffers``.
-            Accepts ``"never"``, ``"meaningful"``, or ``"always"``. Legacy
-            bools are deprecated but supported: ``True`` maps to ``"always"``
-            and ``False`` maps to ``"never"``.
-        vis_direction: Deprecated alias for ``visualization.direction``.
-        vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
-        vis_node_mode: Deprecated alias for ``visualization.node_mode``.
-        vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
-        vis_grad_edge_overrides: Deprecated alias for
-            ``visualization.grad_edge_overrides``.
-        vis_module_overrides: Deprecated alias for ``visualization.module_overrides``.
-        vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
-            ``"elk"`` remains accepted as an internal backend escape hatch;
-            public API callers should prefer ``"auto"``.
-        vis_renderer: Deprecated alias for ``visualization.renderer``. The
-            ``"dagua"`` renderer is experimental and requires
-            ``from torchlens.experimental import dagua`` before use.
-        vis_theme: Deprecated alias for ``visualization.theme``.
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Deprecated alias for ``source_context_lines``.
         optimizer: Optional optimizer to annotate which params are being optimized.
@@ -1441,8 +1386,6 @@ def trace(
             about 1M operations and postprocessing speed matters; the False path skips
             the expensive expansion step and only groups operations that share the same
             parameters.
-        visualization: Grouped visualization options. When omitted,
-            ``trace`` defaults to ``VisualizationOptions(mode="none")``.
         streaming: Grouped streaming-save options.
         train_mode: If True, validate training-compatible settings and keep saved
             outs attached to autograd.
@@ -1492,8 +1435,8 @@ def trace(
             batch_render=batch_render,
             output_transform=output_transform,
             save_raw_output=save_raw_output,
-            layer_visualizers=layer_visualizers,
-            save_visualizations=save_visualizations,
+            layer_visualizers=MISSING,
+            save_visualizations=MISSING,
             keep_unsaved_layers=keep_unsaved_layers,
             keep_orphans=keep_orphans,
             output_device=output_device,
@@ -1513,7 +1456,7 @@ def trace(
             hooks=hooks,
             capture=capture,
             save=save,
-            visualization=visualization,
+            visualization=None,
             train_mode=train_mode,
             name=name,
             module_filter=module_filter,
@@ -1544,8 +1487,8 @@ def trace(
         batch_render=batch_render,
         output_transform=output_transform,
         save_raw_output=save_raw_output,
-        layer_visualizers=layer_visualizers,
-        save_visualizations=save_visualizations,
+        layer_visualizers=MISSING,
+        save_visualizations=MISSING,
         keep_unsaved_layers=keep_unsaved_layers,
         keep_orphans=keep_orphans,
         output_device=output_device,
@@ -1596,34 +1539,6 @@ def trace(
         save_raw_outs=save_raw_outs,
         save_raw_grads=save_raw_grads,
     )
-    if vis_opt is not MISSING:
-        vis_mode = vis_opt
-    visualization_options = merge_visualization_options(
-        function_default_mode="none",
-        visualization=visualization,
-        view=view,
-        depth=depth,
-        renderer=renderer,
-        layout=layout,
-        node_style=node_style,
-        vis_mode=vis_mode,
-        vis_call_depth=vis_call_depth,
-        vis_outpath=vis_outpath,
-        vis_save_only=vis_save_only,
-        vis_fileformat=vis_fileformat,
-        vis_buffers=vis_buffers,
-        vis_direction=vis_direction,
-        vis_graph_overrides=vis_graph_overrides,
-        vis_node_mode=vis_node_mode,
-        vis_edge_overrides=vis_edge_overrides,
-        vis_grad_edge_overrides=vis_grad_edge_overrides,
-        vis_module_overrides=vis_module_overrides,
-        vis_node_placement=vis_node_placement,
-        vis_renderer=vis_renderer,
-        vis_theme=vis_theme,
-        vis_intervention_mode=vis_intervention_mode,
-        vis_show_cone=vis_show_cone,
-    )
     streaming_options = merge_streaming_options(
         streaming=streaming,
         save_outs_to=save_outs_to,
@@ -1672,9 +1587,6 @@ def trace(
     keep_grads_in_memory_value = (
         True if isinstance(keep_grads_in_memory, MissingType) else keep_grads_in_memory
     )
-
-    if visualization_options.mode not in ["none", "rolled", "unrolled"]:
-        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     if output_device not in ["same", "cpu", "cuda"]:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
@@ -1909,15 +1821,11 @@ def trace(
         trace,
         f"Done: {len(trace.layer_logs)} layers, "
         f"{trace.num_saved_ops} saved, "
-        f"{trace.total_out_memory_str}",
+        f"{trace.total_activation_memory_str}",
     )
 
     if layer_visualizers_value:
         _render_layer_visualizers(trace, layer_visualizers_value)
-
-    # Visualize if desired.
-    if visualization_options.mode != "none":
-        trace.draw(**visualization_to_render_kwargs(visualization_options))
 
     if unwrap_when_done:
         from .backends.torch.wrappers import unwrap_torch

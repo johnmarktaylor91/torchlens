@@ -20,7 +20,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
     "trace": [
         "layer_label",
         "layer_type",
-        "call_index",
+        "pass_index",
         "func_name",
         "is_input",
         "is_output",
@@ -29,7 +29,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "layer_label",
         "layer_type",
         "func_name",
-        "num_calls",
+        "num_passes",
         "is_input",
         "is_output",
     ],
@@ -39,17 +39,17 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "call_depth",
         "num_params",
         "num_layers",
-        "num_calls",
+        "num_passes",
     ],
     "module_log": [
         "layer_label",
         "layer_type",
-        "call_index",
+        "pass_index",
         "func_name",
     ],
     "module_pass": [
         "address",
-        "call_index",
+        "pass_index",
         "call_label",
         "num_layers",
         "forward_args_summary",
@@ -65,7 +65,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
     "buffers": [
         "address",
         "name",
-        "call_index",
+        "pass_index",
         "has_saved_outs",
     ],
 }

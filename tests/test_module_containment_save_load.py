@@ -45,7 +45,7 @@ def test_round_trip_save_load_preserves_module_containment(tmp_path: Path) -> No
     """Save a v3 trace, load it, and confirm module containment survives."""
 
     model, x = _simple_model_and_input()
-    trace = tl.trace(model, x, vis_opt="none")
+    trace = tl.trace(model, x)
     bundle_path = tmp_path / "test_bundle.tlspec"
 
     tl.save(trace, bundle_path)
@@ -60,7 +60,7 @@ def test_legacy_pickle_load_drops_thread_fields() -> None:
     """Load a v2 Op state and confirm legacy thread fields are dropped."""
 
     model, x = _simple_model_and_input()
-    trace = tl.trace(model, x, vis_opt="none")
+    trace = tl.trace(model, x)
     op = next(iter(trace.layer_list))
     state = op.__getstate__()
     state["io_format_version"] = 2
@@ -84,7 +84,7 @@ def test_legacy_pickle_load_emits_one_deprecation_warning() -> None:
     """Loading multiple legacy OpLogs emits one deprecation warning per process."""
 
     model, x = _simple_model_and_input()
-    trace = tl.trace(model, x, vis_opt="none")
+    trace = tl.trace(model, x)
     op = next(iter(trace.layer_list))
     legacy_pickles = []
     for _ in range(3):

@@ -310,11 +310,11 @@ def test_unsupported_string_error_message() -> None:
         _coerce_input(model, "hello")
 
 
-def test_log_forward_pass_with_attached_tokenizer_string() -> None:
+def test_trace_with_attached_tokenizer_string() -> None:
     """End-to-end capture accepts raw text when a tokenizer is attached."""
 
     model = TokenEmbeddingModel()
-    trace = tl.log_forward_pass(model, "hello world", vis_opt="none")
+    trace = tl.trace(model, "hello world")
     try:
         assert len(trace.layer_list) > 0
         assert model.tokenizer_calls == [("hello world", "pt")]
@@ -335,7 +335,7 @@ def test_trace_rerun_with_attached_tokenizer_string() -> None:
     """Trace rerun accepts new raw text input when a tokenizer is attached."""
 
     model = TokenEmbeddingModel()
-    trace = tl.log_forward_pass(model, "hello world", vis_opt="none", intervention_ready=True)
+    trace = tl.trace(model, "hello world", intervention_ready=True)
     try:
         trace.rerun("goodbye")
         assert model.tokenizer_calls == [("hello world", "pt"), ("goodbye", "pt")]
@@ -344,7 +344,7 @@ def test_trace_rerun_with_attached_tokenizer_string() -> None:
 
 
 @pytest.mark.slow
-def test_log_forward_pass_with_transformerlens_gpt2_string_if_available() -> None:
+def test_trace_with_transformerlens_gpt2_string_if_available() -> None:
     """End-to-end TransformerLens GPT-2 capture accepts raw text when locally available."""
 
     hooked_transformer = pytest.importorskip("transformer_lens").HookedTransformer
@@ -359,14 +359,14 @@ def test_log_forward_pass_with_transformerlens_gpt2_string_if_available() -> Non
     except Exception as exc:
         pytest.skip(f"TransformerLens GPT-2 weights/tokenizer are not available locally: {exc}")
 
-    trace = tl.log_forward_pass(model, "hello world", vis_opt="none", layers_to_save=None)
+    trace = tl.trace(model, "hello world", layers_to_save=None)
     try:
         assert len(trace.layer_list) > 0
     finally:
         trace.cleanup()
 
 
-def test_log_forward_pass_with_pil_image_and_attached_processor() -> None:
+def test_trace_with_pil_image_and_attached_processor() -> None:
     """End-to-end capture accepts a PIL image when an image processor is attached."""
 
     pil_image = pytest.importorskip("PIL.Image")
@@ -418,7 +418,7 @@ def test_log_forward_pass_with_pil_image_and_attached_processor() -> None:
             return self.conv(pixel_values)
 
     model = TinyVisionModel()
-    trace = tl.log_forward_pass(model, pil_image.new("RGB", (8, 8)), vis_opt="none")
+    trace = tl.trace(model, pil_image.new("RGB", (8, 8)))
     try:
         assert len(trace.layer_list) > 0
         assert model.processor_calls == 1

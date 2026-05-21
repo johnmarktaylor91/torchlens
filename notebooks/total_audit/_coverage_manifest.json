@@ -419,11 +419,11 @@
       },
       {
         "kind": "field",
-        "name": "autograd_saved_memory"
+        "name": "autograd_memory"
       },
       {
         "kind": "field",
-        "name": "num_autograd_saved_tensors"
+        "name": "num_autograd_tensors"
       },
       {
         "kind": "field",
@@ -917,11 +917,11 @@
       },
       {
         "kind": "field",
-        "name": "autograd_saved_memory"
+        "name": "autograd_memory"
       },
       {
         "kind": "field",
-        "name": "num_autograd_saved_tensors"
+        "name": "num_autograd_tensors"
       },
       {
         "kind": "field",
@@ -2251,11 +2251,11 @@
       },
       {
         "kind": "field",
-        "name": "saved_out_memory"
+        "name": "saved_activation_memory"
       },
       {
         "kind": "property",
-        "name": "saved_out_memory_str"
+        "name": "saved_activation_memory_str"
       },
       {
         "kind": "method",
@@ -2335,15 +2335,15 @@
       },
       {
         "kind": "field",
-        "name": "total_out_memory"
+        "name": "total_activation_memory"
       },
       {
         "kind": "property",
-        "name": "total_out_memory_str"
+        "name": "total_activation_memory_str"
       },
       {
         "kind": "field",
-        "name": "autograd_saved_memory"
+        "name": "autograd_memory"
       },
       {
         "kind": "property",
@@ -3379,7 +3379,7 @@
     },
     "grad": {
       "names": [
-        "autograd_saved_memory",
+        "autograd_memory",
         "grad_fn_memory_cost"
       ],
       "source": "__all__"

@@ -213,7 +213,7 @@ def _find_multi_pass_linear_layer(trace: Trace) -> Layer:
     matching_layers = [
         layer
         for layer in trace.layer_logs.values()
-        if layer.func_name == "linear" and layer.num_calls > 1
+        if layer.func_name == "linear" and layer.num_passes > 1
     ]
     assert len(matching_layers) == 1
     return matching_layers[0]

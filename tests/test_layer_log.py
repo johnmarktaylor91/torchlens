@@ -64,7 +64,7 @@ class TestLayerLogConstruction:
     def test_single_pass_layer_has_one_pass(self, simple_log):
         """Non-recurrent model: every Layer has exactly one pass."""
         for layer_log in simple_log.layer_logs.values():
-            assert layer_log.num_calls == 1
+            assert layer_log.num_passes == 1
             assert len(layer_log.ops) == 1
             assert 1 in layer_log.ops
 
@@ -145,15 +145,15 @@ class TestMultiPassLayerLog:
         """The repeated fc layer should have 2 ops."""
         multi_pass_found = False
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_calls > 1:
+            if layer_log.num_passes > 1:
                 multi_pass_found = True
-                assert len(layer_log.ops) == layer_log.num_calls
+                assert len(layer_log.ops) == layer_log.num_passes
         assert multi_pass_found, "Expected at least one multi-pass layer in recurrent model"
 
     def test_multi_pass_tensor_contents_raises(self, recurrent_log):
         """Accessing per-pass field on multi-pass Layer raises ValueError."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_calls > 1:
+            if layer_log.num_passes > 1:
                 with pytest.raises(ValueError, match="has .* ops"):
                     _ = layer_log.out
                 break
@@ -161,7 +161,7 @@ class TestMultiPassLayerLog:
     def test_multi_pass_getattr_raises(self, recurrent_log):
         """__getattr__ fallback raises for multi-pass layers."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_calls > 1:
+            if layer_log.num_passes > 1:
                 with pytest.raises(AttributeError):
                     _ = layer_log.func_autocast_state
                 break
@@ -169,7 +169,7 @@ class TestMultiPassLayerLog:
     def test_multi_pass_aggregate_graph_union(self, recurrent_log):
         """Aggregate graph properties are unions across ops."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_calls > 1 and layer_log.has_children:
+            if layer_log.num_passes > 1 and layer_log.has_children:
                 # Verify children is a union
                 all_children = set()
                 for pass_log in layer_log.ops.values():
@@ -181,7 +181,7 @@ class TestMultiPassLayerLog:
     def test_getitem_returns_layer_log_for_multi_pass(self, recurrent_log):
         """log['label'] returns Layer for multi-pass layers."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_calls > 1:
+            if layer_log.num_passes > 1:
                 result = recurrent_log[layer_log.layer_label]
                 assert isinstance(result, Layer)
                 assert result is layer_log
@@ -190,8 +190,8 @@ class TestMultiPassLayerLog:
     def test_getitem_pass_notation_returns_pass_log(self, recurrent_log):
         """log['label:2'] still returns Op."""
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_calls > 1:
-                for call_index, pass_log in layer_log.ops.items():
+            if layer_log.num_passes > 1:
+                for pass_index, pass_log in layer_log.ops.items():
                     result = recurrent_log[pass_log.layer_label]
                     assert isinstance(result, Op)
                 break
@@ -199,7 +199,7 @@ class TestMultiPassLayerLog:
     def test_call_labels_populated(self, recurrent_log):
         """call_labels list contains the w-pass labels of each pass."""
         for layer_log in recurrent_log.layer_logs.values():
-            assert len(layer_log.call_labels) == layer_log.num_calls
+            assert len(layer_log.call_labels) == layer_log.num_passes
             for i, call_label in enumerate(layer_log.call_labels, 1):
                 assert layer_log.ops[i].layer_label == call_label
 
@@ -218,7 +218,7 @@ class TestLayerLogDisplay:
 
     def test_str_multi_pass(self, recurrent_log):
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.num_calls > 1:
+            if layer_log.num_passes > 1:
                 s = str(layer_log)
                 assert "ops" in s.lower()
                 break

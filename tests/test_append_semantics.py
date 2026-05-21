@@ -62,7 +62,7 @@ def test_is_appended_resets_on_non_append_rerun() -> None:
     """A replacement rerun clears previous append state."""
 
     model = _AppendSemanticsModel().eval()
-    trace = tl.trace(model, torch.randn(2, 3), vis_opt="none", intervention_ready=True)
+    trace = tl.trace(model, torch.randn(2, 3), intervention_ready=True)
     trace.rerun(model, torch.randn(1, 3), append=True)
 
     assert trace.is_appended is True
@@ -80,7 +80,7 @@ def test_repeated_appends_increment_sequence_id_and_history() -> None:
     """Repeated append reruns increment sequence ids and keep provenance."""
 
     model = _AppendSemanticsModel().eval()
-    trace = tl.trace(model, torch.randn(2, 3), vis_opt="none", intervention_ready=True)
+    trace = tl.trace(model, torch.randn(2, 3), intervention_ready=True)
 
     trace.rerun(model, torch.randn(1, 3), append=True)
     trace.rerun(model, torch.randn(3, 3), append=True)
@@ -96,7 +96,7 @@ def test_intervention_save_append_state_consistency(tmp_path: Path) -> None:
     """Saved intervention metadata mirrors in-memory append state."""
 
     model = _AppendSemanticsModel().eval()
-    trace = tl.trace(model, torch.randn(2, 3), vis_opt="none", intervention_ready=True)
+    trace = tl.trace(model, torch.randn(2, 3), intervention_ready=True)
     trace.rerun(model, torch.randn(1, 3), append=True)
 
     spec_path = tmp_path / "append_state.tlspec"
@@ -117,7 +117,6 @@ def test_append_train_mode_no_helper_grad_message() -> None:
     trace = tl.trace(
         model,
         torch.randn(2, 3),
-        vis_opt="none",
         intervention_ready=True,
         save_grads=True,
         train_mode=True,

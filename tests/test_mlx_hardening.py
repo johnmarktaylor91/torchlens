@@ -98,7 +98,7 @@ def test_mlx_intervention_ready_raises() -> None:
     """MLX capture rejects intervention metadata requests explicitly."""
 
     with pytest.raises(NotImplementedError, match="intervention_ready"):
-        tl.trace(TinyMLP(), _tiny_mlp_input(), intervention_ready=True, vis_opt="none")
+        tl.trace(TinyMLP(), _tiny_mlp_input(), intervention_ready=True)
 
 
 @pytest.mark.optional
@@ -106,7 +106,7 @@ def test_mlx_save_grads_raises() -> None:
     """MLX capture rejects backward-gradient capture explicitly."""
 
     with pytest.raises(NotImplementedError, match="backward capture"):
-        tl.trace(TinyMLP(), _tiny_mlp_input(), save_grads=True, vis_opt="none")
+        tl.trace(TinyMLP(), _tiny_mlp_input(), save_grads=True)
 
 
 @pytest.mark.optional
@@ -115,14 +115,14 @@ def test_mlx_hooks_raise() -> None:
 
     hooks: list[dict[str, Any]] = [{"target": "linear_1_1", "action": lambda x: x}]
     with pytest.raises(NotImplementedError, match="hooks"):
-        tl.trace(TinyMLP(), _tiny_mlp_input(), hooks=hooks, vis_opt="none")
+        tl.trace(TinyMLP(), _tiny_mlp_input(), hooks=hooks)
 
 
 @pytest.mark.optional
 def test_mlx_trace_draw_smokes(tmp_path: Path) -> None:
     """MLX traces draw without dangling synthetic input-parent labels."""
 
-    trace = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     rendered = trace.draw(
         vis_outpath=str(tmp_path / "mlx_trace"),
         vis_fileformat="pdf",
@@ -137,7 +137,7 @@ def test_mlx_trace_draw_smokes(tmp_path: Path) -> None:
 def test_mlx_parents_resolve() -> None:
     """Every MLX parent label resolves to a captured layer."""
 
-    trace = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input())
 
     for op in trace.layer_list:
         for parent in op.parents:
@@ -148,8 +148,8 @@ def test_mlx_parents_resolve() -> None:
 def test_mlx_repeated_trace_no_wrapper_leak() -> None:
     """Repeated MLX captures install fresh wrappers and clean them up."""
 
-    first = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
-    second = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+    first = tl.trace(TinyMLP(), _tiny_mlp_input())
+    second = tl.trace(TinyMLP(), _tiny_mlp_input())
 
     assert first.num_ops > 0
     assert second.num_ops > 0
@@ -159,7 +159,7 @@ def test_mlx_repeated_trace_no_wrapper_leak() -> None:
 def test_mlx_save_load_audit_only(tmp_path: Path) -> None:
     """MLX traces save/load with array payloads nulled as unsupported records."""
 
-    trace = tl.trace(TinyMLP(), _tiny_mlp_input(), vis_opt="none")
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     bundle_path = tmp_path / "mlx-audit.tlspec"
 
     tl.save(trace, bundle_path)
@@ -178,7 +178,7 @@ def test_mlx_save_load_audit_only(tmp_path: Path) -> None:
 def test_mlx_cnn_captures_conv2d() -> None:
     """MLX Conv2d calls are wrapped and appear in the captured trace."""
 
-    trace = tl.trace(TinyCNN(), mx.random.normal((1, 8, 8, 3)), vis_opt="none")
+    trace = tl.trace(TinyCNN(), mx.random.normal((1, 8, 8, 3)))
 
     _assert_captured(trace, "conv2d")
 
@@ -187,7 +187,7 @@ def test_mlx_cnn_captures_conv2d() -> None:
 def test_mlx_layernorm_wraps_and_captures() -> None:
     """MLX LayerNorm calls are wrapped and appear in the captured trace."""
 
-    trace = tl.trace(TinyNorm(), _tiny_mlp_input(), vis_opt="none")
+    trace = tl.trace(TinyNorm(), _tiny_mlp_input())
 
     _assert_captured(trace, "layernorm")
 
@@ -196,6 +196,6 @@ def test_mlx_layernorm_wraps_and_captures() -> None:
 def test_mlx_attention_wraps_and_captures() -> None:
     """MLX attention calls are wrapped and appear in the captured trace."""
 
-    trace = tl.trace(TinyAttention(), mx.random.normal((1, 3, 8)), vis_opt="none")
+    trace = tl.trace(TinyAttention(), mx.random.normal((1, 3, 8)))
 
     _assert_captured(trace, "multiheadattention")

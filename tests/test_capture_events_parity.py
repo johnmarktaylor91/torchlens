@@ -401,7 +401,6 @@ def test_pickle_byte_equal_pre_m6(
     trace = tl.trace(
         model,
         x,
-        vis_opt="none",
         random_seed=123,
         layers_to_save=None,
         save_rng_states=False,
@@ -458,7 +457,7 @@ def test_param_log_by_pid_populated_in_create_session_param_logs() -> None:
 
     model = nn.Linear(3, 2)
     x = torch.randn(1, 3)
-    trace = tl.trace(model, x, vis_opt="none", random_seed=123)
+    trace = tl.trace(model, x, random_seed=123)
     assert trace._param_log_by_pid
     assert set(trace._param_log_by_pid.values()) <= set(trace.param_logs.keys())
 
@@ -468,7 +467,7 @@ def test_walk_detects_accumulategrad_via_type_name() -> None:
 
     model = nn.Linear(3, 1)
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, vis_opt="none", random_seed=123, save_grads=True)
+    trace = tl.trace(model, x, random_seed=123, save_grads=True)
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     assert trace._grad_fn_param_refs

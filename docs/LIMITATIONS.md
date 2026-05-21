@@ -28,7 +28,7 @@ If you hit a case we haven't listed, please
 
 | Context | What TorchLens does today | Workaround |
 |---|---|---|
-| **Nested `log_forward_pass`** (hook/postfunc calls log again) | `RuntimeError` at inner entry | Use `pause_logging()` before the inner call, or run the inner log afterwards on the outer's sub-model |
+| **Nested `trace`** (hook/postfunc calls log again) | `RuntimeError` at inner entry | Use `pause_logging()` before the inner call, or run the inner log afterwards on the outer's sub-model |
 | **`torch.compile(model)`** | `RuntimeError` with pointer to this page | Log the un-compiled model |
 | **`torch.jit.script` / `torch.jit.trace`** | `RuntimeError` at entry | Log the un-scripted / un-traced Python module |
 | **`torch.export.ExportedProgram`** | `RuntimeError` at entry | Log the source `nn.Module` before exporting |
@@ -56,7 +56,7 @@ dynamo backend, our Python-level function wrappers are either inlined out of
 existence (inductor) or called on flattened IR tensors whose metadata won't
 match the user-visible graph.
 
-``log_forward_pass`` detects ``OptimizedModule`` up front and raises a clear
+``trace`` detects ``OptimizedModule`` up front and raises a clear
 error. **Workaround**: log the model before applying ``torch.compile``.
 
 ### `torch.jit.script` / `torch.jit.trace` — not supported (raises)
@@ -65,13 +65,13 @@ A ``torch.jit.ScriptModule`` runs its forward on the TorchScript interpreter
 instead of Python. TorchLens's decorated wrappers are Python objects, so they
 never see the calls.
 
-``log_forward_pass`` detects ``torch.jit.ScriptModule`` and raises.
+``trace`` detects ``torch.jit.ScriptModule`` and raises.
 **Workaround**: log the Python ``nn.Module`` before scripting or tracing.
 
 ### `torch.export.ExportedProgram` — not supported (raises)
 
 ``torch.export`` produces a serialisable IR; it is not a callable
-``nn.Module`` and cannot be re-executed in Python. ``log_forward_pass``
+``nn.Module`` and cannot be re-executed in Python. ``trace``
 detects ``ExportedProgram`` and raises.
 
 **Workaround**: log the source ``nn.Module`` before exporting.
@@ -90,7 +90,7 @@ detection's parameter-sharing heuristic.
 ### Meta tensors, sparse tensors, symbolic shapes — pre-flight raise
 
 Detected by ``torchlens._robustness.check_model_and_input_variants`` at
-the top of ``log_forward_pass``. Each raises
+the top of ``trace``. Each raises
 ``UnsupportedTensorVariantError`` with a bullet-listed message. Rationale:
 
 - **Meta** tensors have no backing storage, so activation saving returns
@@ -129,22 +129,22 @@ log.
 
 ### Multi-process / `DataLoader` workers — raises
 
-``log_forward_pass`` calls ``warn_parallel()`` early: if
+``trace`` calls ``warn_parallel()`` early: if
 ``multiprocessing.current_process().name != "MainProcess"``, it raises.
 TorchLens's global toggle state and ordered tensor counters are not
 safe under concurrent access.
 
-**Workaround**: run ``log_forward_pass`` in the main process only.
+**Workaround**: run ``trace`` in the main process only.
 
-### Nested `log_forward_pass` — raises
+### Nested `trace` — raises
 
 ``active_logging()`` raises ``RuntimeError`` on re-entry rather than
 silently overwriting ``_active_model_log`` (which would corrupt the
 outer log mid-pass). The realistic trigger is a user forward-hook or
-activation callback that calls ``log_forward_pass`` on a sub-model.
+activation callback that calls ``trace`` on a sub-model.
 
 **Workaround**: if you genuinely need to capture a sub-model's forward,
-either (a) run ``log_forward_pass`` on the sub-model *outside* the outer
+either (a) run ``trace`` on the sub-model *outside* the outer
 pass, or (b) wrap the inner call in ``torchlens.pause_logging()`` so the
 outer's toggle is suspended.
 

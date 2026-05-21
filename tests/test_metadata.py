@@ -103,10 +103,10 @@ def test_tensor_info_fields(small_input):
     mh = trace_fn(model, small_input)
     assert isinstance(mh.num_tensors, int)
     assert mh.num_tensors > 0
-    assert isinstance(mh.total_out_memory, (int, float))
-    assert mh.total_out_memory > 0
-    assert isinstance(mh.total_out_memory_str, str)
-    assert len(mh.total_out_memory_str) > 0
+    assert isinstance(mh.total_activation_memory, (int, float))
+    assert mh.total_activation_memory > 0
+    assert isinstance(mh.total_activation_memory_str, str)
+    assert len(mh.total_activation_memory_str) > 0
 
 
 def test_param_info_fields(small_input):
@@ -185,7 +185,7 @@ def test_label_fields(small_input):
     entry = mh[0]
     assert isinstance(entry.layer_label, str)
     assert isinstance(entry.layer_type, str)
-    assert isinstance(entry.call_index, int)
+    assert isinstance(entry.pass_index, int)
     assert isinstance(entry.lookup_keys, list)
     assert len(entry.lookup_keys) > 0
 
@@ -376,13 +376,13 @@ def test_distances_with_flag(small_input):
 # =============================================================================
 
 
-def test_recurrent_call_indexbers(input_2d):
+def test_recurrent_pass_indexbers(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
     found_multi_pass = any(
-        op.call_index > 1 for layer in mh.layer_logs.values() for op in layer.ops.values()
+        op.pass_index > 1 for layer in mh.layer_logs.values() for op in layer.ops.values()
     )
-    assert found_multi_pass, "Recurrent model should have layers with call_index > 1"
+    assert found_multi_pass, "Recurrent model should have layers with pass_index > 1"
 
 
 def test_recurrent_layer_ops_total(input_2d):
@@ -391,7 +391,7 @@ def test_recurrent_layer_ops_total(input_2d):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.num_calls > 1:
+        if entry.num_passes > 1:
             found = True
             break
     assert found, "Recurrent model should have layers with ops_total > 1"

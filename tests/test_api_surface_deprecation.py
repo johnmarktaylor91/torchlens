@@ -184,7 +184,6 @@ def test_show_model_graph_legacy_kwargs(
             vis_outpath=str(outpath),
             vis_save_only=True,
             vis_fileformat="svg",
-            visualization=None,
         )
     assert result is None
 

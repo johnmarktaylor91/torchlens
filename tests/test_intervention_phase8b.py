@@ -113,7 +113,6 @@ def _capture(
     log = tl.trace(
         ReluLinear() if model is None else model,
         capture_x,
-        vis_opt="none",
         intervention_ready=True,
     )
     return log, capture_x

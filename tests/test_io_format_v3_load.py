@@ -36,7 +36,7 @@ def test_save_load_roundtrip_v4(tmp_path: Path) -> None:
     """Save a v4 Trace, reload it, and confirm capture scratch stays absent."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    trace = tl.trace(model, torch.randn(2, 4), vis_opt="none")
+    trace = tl.trace(model, torch.randn(2, 4))
     path = tmp_path / "roundtrip.tlspec"
 
     tl.save(trace, path)

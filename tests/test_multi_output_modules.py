@@ -209,7 +209,7 @@ def _lstm_trace() -> Any:
         TorchLens trace for the LSTM fixture.
     """
 
-    return tl.log_forward_pass(LSTMModel(), torch.randn(7, 4, 5), vis_opt="none")
+    return tl.trace(LSTMModel(), torch.randn(7, 4, 5))
 
 
 @pytest.mark.smoke
@@ -248,7 +248,7 @@ def test_lstm_module_out_raises_specific_error() -> None:
 def test_gru_two_outputs_distinct_equivalence_classes() -> None:
     """GRU parameterized outputs get distinct equivalence classes."""
 
-    trace = tl.log_forward_pass(GRUModel(), torch.randn(7, 4, 5), vis_opt="none")
+    trace = tl.trace(GRUModel(), torch.randn(7, 4, 5))
     outputs = trace.modules["gru"].outputs
     assert len(outputs) == 2
     assert len({output.equivalence_class for output in outputs}) == 2
@@ -258,7 +258,7 @@ def test_gru_two_outputs_distinct_equivalence_classes() -> None:
 def test_bilstm_outputs_preserve_single_call_structure() -> None:
     """Bidirectional LSTM outputs are multi-output, not multi-pass."""
 
-    trace = tl.log_forward_pass(BiLSTMModel(), torch.randn(4, 10, 8), vis_opt="none")
+    trace = tl.trace(BiLSTMModel(), torch.randn(4, 10, 8))
     lstm = trace.modules["lstm"]
     assert lstm.num_calls == 1
     assert len(lstm.outputs) == 3
@@ -270,7 +270,7 @@ def test_mha_attention_outputs_are_selectable() -> None:
     """MultiheadAttention output roles distinguish weights from activations."""
 
     x = [torch.randn(7, 4, 16), torch.randn(7, 4, 16), torch.randn(7, 4, 16)]
-    trace = tl.log_forward_pass(MHAModel(), x, vis_opt="none")
+    trace = tl.trace(MHAModel(), x)
     outputs = trace.modules["mha"].outputs
     assert [output.multi_output_role for output in outputs] == [
         "attn_output",
@@ -283,7 +283,7 @@ def test_mha_attention_outputs_are_selectable() -> None:
 def test_dict_module_outputs_keyed_by_dict_keys() -> None:
     """Dict-returning modules preserve key order and role names."""
 
-    trace = tl.log_forward_pass(DictWrapper(), torch.randn(3, 4), vis_opt="none")
+    trace = tl.trace(DictWrapper(), torch.randn(3, 4))
     inner = trace.modules["inner"]
     assert [output.multi_output_role for output in inner.outputs] == ["logits", "hidden"]
     assert inner.output_structure is not None

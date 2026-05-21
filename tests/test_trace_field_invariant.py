@@ -19,7 +19,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
     """
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    trace = tl.trace(model, torch.randn(2, 4), vis_opt="none")
+    trace = tl.trace(model, torch.randn(2, 4))
 
     allowed_runtime_useful = {
         "_buffer_accessor",

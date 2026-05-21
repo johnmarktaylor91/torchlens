@@ -375,7 +375,7 @@ def _attribute_branches_forward(
                         conditional_id,
                         branch_kind,
                     )
-                ].append(parent_layer.call_index)
+                ].append(parent_layer.pass_index)
 
     self.conditional_arm_entry_edges = dict(conditional_arm_entry_edges)
     self.conditional_edge_call_indices = dict(conditional_edge_call_indices)

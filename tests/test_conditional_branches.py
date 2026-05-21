@@ -1571,7 +1571,7 @@ def test_looped_if_alternating_model_has_exactly_two_signatures() -> None:
     linear_layer = _find_only_layer_log(
         trace,
         "linear",
-        lambda layer_log: layer_log.num_calls > 1,
+        lambda layer_log: layer_log.num_passes > 1,
     )
 
     assert linear_layer.conditional_role_stacks == [
@@ -1592,7 +1592,7 @@ def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
     linear_layer = _find_only_layer_log(
         trace,
         "linear",
-        lambda layer_log: layer_log.num_calls > 1,
+        lambda layer_log: layer_log.num_passes > 1,
     )
 
     assert linear_layer.is_in_conditional_body is True

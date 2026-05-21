@@ -187,10 +187,10 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += "\n\tTensor info:"
     s += (
-        f"\n\t\t- {self.num_tensors} total tensors ({self.total_out_memory_str}) "
+        f"\n\t\t- {self.num_tensors} total tensors ({self.total_activation_memory_str}) "
         f"computed in forward pass."
     )
-    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_out_memory_str}) with saved outs."
+    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory_str}) with saved outs."
     nonfinite = self.first_nonfinite()
     if not nonfinite.startswith("No non-finite"):
         s += f"\n\t\t- NaN/Inf: {nonfinite}"
@@ -199,7 +199,7 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += (
         f"\n\tParameters: {self.num_layers_with_params} parameter operations ({self.num_params} params total; "
-        f"{self.param_memory_str})"
+        f"{self.total_param_memory_str})"
     )
     s += "\n\tFLOP convention: MACs are reported as FLOPs // 2."
 
@@ -217,10 +217,10 @@ def _str_after_pass(self: "Trace") -> str:
         s += " (* means layer has saved outs):"
     for layer_ind, layer_entry in enumerate(self.layer_list):
         layer_barcode = layer_entry.layer_label
-        call_index = layer_entry.call_index
-        total_ops = layer_entry.num_calls
+        pass_index = layer_entry.pass_index
+        total_ops = layer_entry.num_passes
         if total_ops > 1:
-            pass_str = f" ({call_index}/{total_ops} ops)"
+            pass_str = f" ({pass_index}/{total_ops} ops)"
         else:
             pass_str = ""
 

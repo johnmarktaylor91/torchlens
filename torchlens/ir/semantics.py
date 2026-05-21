@@ -11,8 +11,8 @@ class BackendSemantics:
 
     grad_fn_id: int | None
     grad_fn_class_name: str | None
-    autograd_saved_memory: int | None
-    num_autograd_saved_tensors: int | None
+    autograd_memory: int | None
+    num_autograd_tensors: int | None
     mutates_inputs: tuple[int, ...]
     bytes_delta_at_call: int | None
     bytes_peak_at_call: int | None

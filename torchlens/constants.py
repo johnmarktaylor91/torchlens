@@ -156,11 +156,11 @@ MODEL_LOG_FIELD_ORDER = [
     "orphan_ops",
     "orphan_logs",
     # Tensor info:
-    "total_out_memory",
+    "total_activation_memory",
     "total_gradient_memory",
-    "autograd_saved_memory",
+    "total_autograd_memory",
     "num_saved_ops",
-    "saved_out_memory",
+    "saved_activation_memory",
     "saved_gradient_memory",
     # Param info
     "param_logs",
@@ -169,7 +169,7 @@ MODEL_LOG_FIELD_ORDER = [
     "num_params",
     "num_params_trainable",
     "num_params_frozen",
-    "param_memory",
+    "total_param_memory",
     "total_param_gradient_memory",
     "forward_peak_memory",
     # Time elapsed
@@ -191,7 +191,7 @@ MODEL_LOG_FIELD_ORDER = [
 
 LAYER_PASS_LOG_FIELD_ORDER = [
     # Per-pass data for a single layer execution.  One Op exists for
-    # each (layer, call_index) pair.  Fields capture the tensor produced, the
+    # each (layer, pass_index) pair.  Fields capture the tensor produced, the
     # function that created it, graph connectivity, module context, and more.
     #
     # General info
@@ -212,8 +212,8 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "type",
     "type_index",
     "trace_index",
-    "call_index",
-    "num_calls",
+    "pass_index",
+    "num_passes",
     "lookup_keys",
     # Saved tensor info
     "out",
@@ -239,8 +239,8 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "bytes_delta_at_call",
     "bytes_peak_at_call",
     "transformed_out",
-    "autograd_saved_memory",
-    "num_autograd_saved_tensors",
+    "autograd_memory",
+    "num_autograd_tensors",
     # Child tensor variation tracking
     "has_output_variations",
     "output_versions_per_child",
@@ -378,7 +378,7 @@ LAYER_LOG_FIELD_ORDER = [
     "layer_type",
     "type_index",
     "trace_index",
-    "num_calls",
+    "num_passes",
     "source_trace",
     # Function identity
     "func",
@@ -405,8 +405,9 @@ LAYER_LOG_FIELD_ORDER = [
     "memory",
     "transformed_out_memory",
     "transformed_out",
-    "autograd_saved_memory",
-    "num_autograd_saved_tensors",
+    "autograd_memory",
+    "total_autograd_memory",
+    "num_autograd_tensors",
     # Config
     "output_device",
     "out_postfunc",
@@ -428,7 +429,7 @@ LAYER_LOG_FIELD_ORDER = [
     "num_params",
     "num_params_trainable",
     "num_params_frozen",
-    "param_memory",
+    "total_param_memory",
     # Equivalence
     "equivalence_class",
     "equivalent_ops",

@@ -795,7 +795,6 @@ def load_intervention_spec(*args: Any, **kwargs: Any) -> Any:
 
 
 trace = _trace
-log_forward_pass = _trace
 
 
 __all__ = [

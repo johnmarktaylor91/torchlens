@@ -47,7 +47,7 @@ def _captured_log() -> tl.Trace:
         Captured log for ``TinyReportModel``.
     """
 
-    return tl.trace(TinyReportModel(), torch.tensor([[2.0, 3.0]]), vis_opt="none")
+    return tl.trace(TinyReportModel(), torch.tensor([[2.0, 3.0]]))
 
 
 def test_report_namespace_is_not_top_level_all() -> None:

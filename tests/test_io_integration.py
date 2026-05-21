@@ -167,7 +167,7 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     assert len(parquet_df) == len(exported_df)
     assert parquet_df["layer_label"].tolist() == exported_df["layer_label"].tolist()
     assert parquet_df["layer_type"].tolist() == exported_df["layer_type"].tolist()
-    assert parquet_df["call_index"].tolist() == exported_df["call_index"].tolist()
+    assert parquet_df["pass_index"].tolist() == exported_df["pass_index"].tolist()
 
 
 def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:

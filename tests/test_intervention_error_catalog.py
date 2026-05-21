@@ -189,7 +189,6 @@ def _capture(model: torch.nn.Module | None = None, x: torch.Tensor | None = None
     return tl.trace(
         _ReluAdd() if model is None else model,
         torch.tensor([[-1.0, 2.0, 3.0]]) if x is None else x,
-        vis_opt="none",
         intervention_ready=True,
     )
 

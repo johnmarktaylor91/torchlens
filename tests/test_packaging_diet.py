@@ -43,7 +43,7 @@ def _make_log() -> tl.Trace:
         Completed log for a tiny model.
     """
 
-    return tl.trace(_TinyModel(), torch.randn(1, 3), vis_opt="none")
+    return tl.trace(_TinyModel(), torch.randn(1, 3))
 
 
 def test_core_import_capture_and_show_without_optional_tabular_or_notebook_use() -> None:
@@ -52,7 +52,7 @@ def test_core_import_capture_and_show_without_optional_tabular_or_notebook_use()
     log = _make_log()
 
     assert len(log.layer_list) > 0
-    assert log.show(vis_opt="none") is None
+    assert log.show(vis_mode="none") is None
 
 
 def test_to_pandas_succeeds_when_tabular_extra_is_available() -> None:

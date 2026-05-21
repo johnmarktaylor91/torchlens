@@ -78,9 +78,9 @@ def _single_layer_log_for_pass(trace: Trace, pass_log: Op) -> Layer:
 def _sum_layer_autograd_bytes(trace: Trace) -> Optional[int]:
     """Sum non-None layer-level autograd byte values."""
     values = [
-        layer.autograd_saved_memory
+        layer.autograd_memory
         for layer in trace.layer_logs.values()
-        if layer.autograd_saved_memory is not None
+        if layer.autograd_memory is not None
     ]
     if not values:
         return None
@@ -88,7 +88,7 @@ def _sum_layer_autograd_bytes(trace: Trace) -> Optional[int]:
 
 
 @pytest.mark.smoke
-def test_autograd_saved_memory_basic_shape_model() -> None:
+def test_autograd_memory_basic_shape_model() -> None:
     """Linear and ReLU ops should report autograd saved tensor memory."""
     trace = _log_sequential(requires_grad=True)
 
@@ -97,17 +97,17 @@ def test_autograd_saved_memory_basic_shape_model() -> None:
 
     assert linear_ops
     assert relu_ops
-    assert all(layer.autograd_saved_memory is not None for layer in linear_ops)
-    assert all(layer.autograd_saved_memory > 0 for layer in linear_ops)
-    assert all(layer.num_autograd_saved_tensors is not None for layer in linear_ops)
-    assert all(layer.num_autograd_saved_tensors > 0 for layer in linear_ops)
-    assert relu_ops[0].autograd_saved_memory is not None
-    assert relu_ops[0].autograd_saved_memory >= 0
-    assert relu_ops[0].num_autograd_saved_tensors is not None
-    assert relu_ops[0].num_autograd_saved_tensors >= 0
+    assert all(layer.autograd_memory is not None for layer in linear_ops)
+    assert all(layer.autograd_memory > 0 for layer in linear_ops)
+    assert all(layer.num_autograd_tensors is not None for layer in linear_ops)
+    assert all(layer.num_autograd_tensors > 0 for layer in linear_ops)
+    assert relu_ops[0].autograd_memory is not None
+    assert relu_ops[0].autograd_memory >= 0
+    assert relu_ops[0].num_autograd_tensors is not None
+    assert relu_ops[0].num_autograd_tensors >= 0
 
 
-def test_add_op_reports_zero_autograd_saved_memory() -> None:
+def test_add_op_reports_zero_autograd_memory() -> None:
     """Add should have a grad_fn but save no tensors for backward."""
     model = TinyAddModel()
     x = torch.ones(2, 3, requires_grad=True)
@@ -116,10 +116,10 @@ def test_add_op_reports_zero_autograd_saved_memory() -> None:
     add_pass = next(layer for layer in trace.layer_list if layer.layer_type == "add")
 
     assert add_pass.grad_fn_id is not None
-    assert add_pass.autograd_saved_memory == 0
-    assert add_pass.num_autograd_saved_tensors == 0
-    assert trace.layer_logs[add_pass.layer_label_no_pass].autograd_saved_memory == 0
-    assert trace.autograd_saved_memory == 0
+    assert add_pass.autograd_memory == 0
+    assert add_pass.num_autograd_tensors == 0
+    assert trace.layer_logs[add_pass.layer_label_no_pass].autograd_memory == 0
+    assert trace.autograd_memory == 0
 
 
 def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
@@ -131,11 +131,11 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     with torch.no_grad():
         trace = tl.trace(model, x, layers_to_save="all", random_seed=0)
 
-    assert all(layer.autograd_saved_memory is None for layer in trace.layer_list)
-    assert all(layer.num_autograd_saved_tensors is None for layer in trace.layer_list)
-    assert all(layer.autograd_saved_memory is None for layer in trace.layer_logs.values())
-    assert all(layer.num_autograd_saved_tensors is None for layer in trace.layer_logs.values())
-    assert trace.autograd_saved_memory is None
+    assert all(layer.autograd_memory is None for layer in trace.layer_list)
+    assert all(layer.num_autograd_tensors is None for layer in trace.layer_list)
+    assert all(layer.autograd_memory is None for layer in trace.layer_logs.values())
+    assert all(layer.num_autograd_tensors is None for layer in trace.layer_logs.values())
+    assert trace.autograd_memory is None
 
 
 def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
@@ -147,10 +147,10 @@ def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
     x = torch.randn(4, 10, requires_grad=False)
     trace = tl.trace(model, x, layers_to_save="all", random_seed=0, train_mode=True)
 
-    assert all(layer.autograd_saved_memory is None for layer in _non_source_ops(trace))
-    assert all(layer.num_autograd_saved_tensors is None for layer in _non_source_ops(trace))
-    assert all(layer.autograd_saved_memory is None for layer in trace.layer_logs.values())
-    assert trace.autograd_saved_memory is None
+    assert all(layer.autograd_memory is None for layer in _non_source_ops(trace))
+    assert all(layer.num_autograd_tensors is None for layer in _non_source_ops(trace))
+    assert all(layer.autograd_memory is None for layer in trace.layer_logs.values())
+    assert trace.autograd_memory is None
 
 
 def test_layer_log_autograd_saved_rollup_matches_pass_values() -> None:
@@ -159,15 +159,15 @@ def test_layer_log_autograd_saved_rollup_matches_pass_values() -> None:
 
     for pass_log in _non_source_ops(trace):
         layer_log = _single_layer_log_for_pass(trace, pass_log)
-        assert layer_log.autograd_saved_memory == pass_log.autograd_saved_memory
-        assert layer_log.num_autograd_saved_tensors == pass_log.num_autograd_saved_tensors
+        assert layer_log.autograd_memory == pass_log.autograd_memory
+        assert layer_log.num_autograd_tensors == pass_log.num_autograd_tensors
 
 
 def test_trace_autograd_saved_rollup_matches_layer_values() -> None:
     """Trace total should equal the sum of non-None layer-level values."""
     trace = _log_sequential(requires_grad=True)
 
-    assert trace.autograd_saved_memory == _sum_layer_autograd_bytes(trace)
+    assert trace.autograd_memory == _sum_layer_autograd_bytes(trace)
 
 
 def test_custom_autograd_function_saved_tensor_bytes() -> None:
@@ -176,25 +176,25 @@ def test_custom_autograd_function_saved_tensor_bytes() -> None:
     output = SaveInputFunction.apply(x)
     expected_bytes = x.numel() * x.element_size()
 
-    autograd_saved_memory, num_autograd_saved_tensors = _get_autograd_saved_stats_for_tensor(output)
+    autograd_memory, num_autograd_tensors = _get_autograd_saved_stats_for_tensor(output)
 
-    assert autograd_saved_memory == expected_bytes
-    assert num_autograd_saved_tensors == 1
+    assert autograd_memory == expected_bytes
+    assert num_autograd_tensors == 1
 
 
 def test_autograd_saved_fields_roundtrip_through_bundle_save_load(tmp_path: Path) -> None:
     """Autograd saved byte fields should survive portable bundle save/load."""
     trace = _log_sequential(requires_grad=True)
-    bundle_path = tmp_path / "autograd_saved_memory.tl"
+    bundle_path = tmp_path / "autograd_memory.tl"
 
     tl.save(trace, bundle_path)
     loaded = tl.load(bundle_path)
 
-    assert loaded.autograd_saved_memory == trace.autograd_saved_memory
+    assert loaded.autograd_memory == trace.autograd_memory
     for original_layer, loaded_layer in zip(trace.layer_list, loaded.layer_list):
-        assert loaded_layer.autograd_saved_memory == original_layer.autograd_saved_memory
-        assert loaded_layer.num_autograd_saved_tensors == original_layer.num_autograd_saved_tensors
+        assert loaded_layer.autograd_memory == original_layer.autograd_memory
+        assert loaded_layer.num_autograd_tensors == original_layer.num_autograd_tensors
     for label, original_layer in trace.layer_logs.items():
         loaded_layer = loaded.layer_logs[label]
-        assert loaded_layer.autograd_saved_memory == original_layer.autograd_saved_memory
-        assert loaded_layer.num_autograd_saved_tensors == original_layer.num_autograd_saved_tensors
+        assert loaded_layer.autograd_memory == original_layer.autograd_memory
+        assert loaded_layer.num_autograd_tensors == original_layer.num_autograd_tensors

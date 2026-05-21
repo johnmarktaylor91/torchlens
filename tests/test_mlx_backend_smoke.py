@@ -34,7 +34,7 @@ def test_mlx_linear_mlp_smoke() -> None:
 
     model = MLP()
     x = mx.random.normal((2, 4))
-    log = tl.trace(model, x, vis_opt="none")
+    log = tl.trace(model, x)
 
     assert log.num_ops > 0
     assert log.has_backward_pass is False

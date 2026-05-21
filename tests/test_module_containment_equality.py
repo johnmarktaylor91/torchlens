@@ -89,7 +89,7 @@ def test_module_containment_snapshot(builder: FixtureBuilder) -> None:
         else None
     )
     try:
-        trace = tl.trace(model, input_args, vis_opt="none", capture=capture)
+        trace = tl.trace(model, input_args, capture=capture)
     finally:
         if hook_handle is not None:
             hook_handle.remove()

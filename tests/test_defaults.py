@@ -24,7 +24,7 @@ class _DummyLog:
         self.render_calls: list[dict[str, Any]] = []
         self.summary_calls: list[dict[str, Any]] = []
         self.summary_result = "summary output"
-        self.total_out_memory_str = "0 B"
+        self.total_activation_memory_str = "0 B"
         self.validate_calls: list[dict[str, Any]] = []
         self.verbose = False
 
@@ -181,7 +181,7 @@ def test_trace_defaults_are_stable(
 def test_trace_accepts_explicit_opt_in_overrides(
     stubbed_runner: tuple[list[dict[str, Any]], list[_DummyLog]],
 ) -> None:
-    """Callers should still be able to opt into the non-default behaviors."""
+    """Callers should still be able to opt into capture-only non-default behaviors."""
 
     captured_calls, dummy_logs = stubbed_runner
 
@@ -193,7 +193,6 @@ def test_trace_accepts_explicit_opt_in_overrides(
         compute_input_output_distances=True,
         save_code_context=True,
         recurrence_detection=False,
-        visualization=VisualizationOptions(mode="rolled"),
     )
 
     assert result is dummy_logs[-1]
@@ -201,7 +200,7 @@ def test_trace_accepts_explicit_opt_in_overrides(
     assert captured_calls[-1]["mark_layer_depths"] is True
     assert captured_calls[-1]["save_code_context"] is True
     assert captured_calls[-1]["recurrence_detection"] is False
-    assert dummy_logs[-1].render_calls[-1]["vis_mode"] == "rolled"
+    assert dummy_logs[-1].render_calls == []
 
 
 def test_show_model_graph_defaults_are_stable(

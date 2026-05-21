@@ -828,11 +828,11 @@ class Trace:
         "_saved_grads_set": FieldPolicy.DROP,
         "layers_with_params": FieldPolicy.KEEP,
         "equivalent_ops": FieldPolicy.KEEP,
-        "total_out_memory": FieldPolicy.KEEP,
+        "total_activation_memory": FieldPolicy.KEEP,
         "total_gradient_memory": FieldPolicy.KEEP,
-        "autograd_saved_memory": FieldPolicy.KEEP,
+        "total_autograd_memory": FieldPolicy.KEEP,
         "num_saved_ops": FieldPolicy.KEEP,
-        "saved_out_memory": FieldPolicy.KEEP,
+        "saved_activation_memory": FieldPolicy.KEEP,
         "saved_gradient_memory": FieldPolicy.KEEP,
         "param_logs": FieldPolicy.KEEP,
         "num_param_tensors": FieldPolicy.KEEP,
@@ -840,7 +840,7 @@ class Trace:
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
-        "param_memory": FieldPolicy.KEEP,
+        "total_param_memory": FieldPolicy.KEEP,
         "total_param_gradient_memory": FieldPolicy.KEEP,
         "forward_peak_memory": FieldPolicy.KEEP,
         "_raw" + "_layer_dict": FieldPolicy.DROP,
@@ -1117,11 +1117,11 @@ class Trace:
         self.equivalent_ops: Dict[str, set[str]] = defaultdict(set)
 
         # Aggregate tensor statistics (computed during postprocessing):
-        self.total_out_memory: int = 0
+        self.total_activation_memory: int = 0
         self.total_gradient_memory: int = 0
-        self.autograd_saved_memory: Optional[int] = None
+        self.total_autograd_memory: Optional[int] = None
         self.num_saved_ops: int = 0  # layers with has_saved_outs=True
-        self.saved_out_memory: int = 0
+        self.saved_activation_memory: int = 0
         self.saved_gradient_memory: int = 0
 
         # Param info:
@@ -1131,7 +1131,7 @@ class Trace:
         self.num_params: int = 0
         self.num_params_trainable: int = 0
         self.num_params_frozen: int = 0
-        self.param_memory: int = 0
+        self.total_param_memory: int = 0
         self.total_param_gradient_memory: int = 0
         self.forward_peak_memory: int = 0
 
@@ -2357,7 +2357,7 @@ class Trace:
                 "backward_num_calls": 0,
                 "backward_peak_memory": 0,
                 "backward_memory_backend": "unknown",
-                "autograd_saved_memory": None,
+                "total_autograd_memory": None,
                 "_buffer_accessor": None,
                 "_module_logs": None,
                 "_module" + "_build_data": None,
@@ -2827,9 +2827,9 @@ class Trace:
         return len(self)
 
     @property
-    def total_out_memory_str(self) -> str:
+    def total_activation_memory_str(self) -> str:
         """Human-readable total tensor size."""
-        return human_readable_size(self.total_out_memory)
+        return human_readable_size(self.total_activation_memory)
 
     @property
     def total_gradient_memory_str(self) -> str:
@@ -2838,9 +2838,15 @@ class Trace:
         return human_readable_size(self.total_gradient_memory)
 
     @property
-    def saved_out_memory_str(self) -> str:
+    def total_autograd_memory_str(self) -> str:
+        """Human-readable total autograd tensor size."""
+
+        return human_readable_size(self.total_autograd_memory)
+
+    @property
+    def saved_activation_memory_str(self) -> str:
         """Human-readable saved tensor size."""
-        return human_readable_size(self.saved_out_memory)
+        return human_readable_size(self.saved_activation_memory)
 
     @property
     def saved_gradient_memory_str(self) -> str:
@@ -2881,7 +2887,7 @@ class Trace:
     # skipped, so the totals may undercount.
 
     @property
-    def param_memory_str(self) -> str:
+    def total_param_memory_str(self) -> str:
         """Return total parameter memory in human-readable units.
 
         Returns
@@ -2889,7 +2895,7 @@ class Trace:
         str
             Human-readable total parameter memory amount.
         """
-        return human_readable_size(self.param_memory)
+        return human_readable_size(self.total_param_memory)
 
     @property
     def total_flops_forward(self) -> int:
@@ -3060,12 +3066,19 @@ class Trace:
 
     def draw(
         self,
+        vis_opt: VisModeLiteral | MissingType = MISSING,
+        view: VisModeLiteral | MissingType = MISSING,
+        depth: int | MissingType = MISSING,
+        renderer: VisRendererLiteral | MissingType = MISSING,
+        layout: VisNodePlacementLiteral | MissingType = MISSING,
+        node_style: VisNodeModeLiteral | MissingType = MISSING,
         vis_mode: VisModeLiteral = "unrolled",
         vis_call_depth: int = 1000,
         vis_outpath: str = "modelgraph",
         vis_graph_overrides: Optional[Dict[str, Any]] = None,
         module: "Module | str | None" = None,
         node_mode: VisNodeModeLiteral = "default",
+        vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
         node_spec_fn: Optional[Callable[..., Any]] = None,
         collapsed_node_spec_fn: Optional[Callable[..., Any]] = None,
         collapse_fn: Optional[Callable[..., Any]] = None,
@@ -3075,7 +3088,9 @@ class Trace:
         vis_module_overrides: Optional[Dict[str, Any]] = None,
         vis_save_only: bool = False,
         vis_fileformat: str = "pdf",
+        vis_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
         show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+        vis_direction: VisDirectionLiteral | MissingType = MISSING,
         direction: VisDirectionLiteral = "bottomup",
         vis_node_placement: VisNodePlacementLiteral = "auto",
         vis_renderer: VisRendererLiteral = "graphviz",
@@ -3112,6 +3127,25 @@ class Trace:
             when ``return_graph=True``.
         """
         from ..visualization.rendering import draw as _impl
+
+        if vis_opt is not MISSING:
+            vis_mode = cast(VisModeLiteral, vis_opt)
+        if view is not MISSING:
+            vis_mode = cast(VisModeLiteral, view)
+        if depth is not MISSING:
+            vis_call_depth = cast(int, depth)
+        if renderer is not MISSING:
+            vis_renderer = cast(VisRendererLiteral, renderer)
+        if layout is not MISSING:
+            vis_node_placement = cast(VisNodePlacementLiteral, layout)
+        if node_style is not MISSING:
+            node_mode = cast(VisNodeModeLiteral, node_style)
+        if vis_node_mode is not MISSING:
+            node_mode = cast(VisNodeModeLiteral, vis_node_mode)
+        if vis_buffers is not MISSING:
+            show_buffer_layers = cast(BufferVisibilityLiteral | bool, vis_buffers)
+        if vis_direction is not MISSING:
+            direction = cast(VisDirectionLiteral, vis_direction)
 
         return _impl(
             self,
@@ -3202,7 +3236,7 @@ class Trace:
             pass_entries = [self[label]]
         frames = [
             {
-                "pass": int(getattr(entry, "call_index", index + 1) or index + 1),
+                "pass": int(getattr(entry, "pass_index", index + 1) or index + 1),
                 "label": str(getattr(entry, "layer_label", base_label)),
                 "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
                 "memory": str(getattr(entry, "memory_str", "")),
@@ -3623,8 +3657,8 @@ class Trace:
             "layer_type",
             "type_index",
             "trace_index",
-            "num_calls",
-            "call_index",
+            "num_passes",
+            "pass_index",
             "compute_index",
             "shape",
             "dtype",
@@ -3680,8 +3714,8 @@ class Trace:
         fields_to_change_type = {
             "type_index": int,
             "trace_index": int,
-            "num_calls": int,
-            "call_index": int,
+            "num_passes": int,
+            "pass_index": int,
             "compute_index": int,
             "is_inplace": bool,
             "is_input": bool,

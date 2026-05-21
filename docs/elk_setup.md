@@ -22,7 +22,7 @@ If your project uses a local `node_modules` directory, run commands from the rep
 ## Usage
 
 ```python
-log = tl.trace(model, x, vis_opt="none")
+log = tl.trace(model, x)
 log.render_graph(vis_renderer="elk", vis_outpath="graph", vis_fileformat="svg")
 ```
 
