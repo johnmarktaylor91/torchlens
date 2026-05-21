@@ -1,6 +1,1175 @@
 # Task & Bug Tracker
 
+## Architectural endpoint (JMT 2026-05-15)
+
+> "Configurable capture + postprocess + output, all on one substrate. Pay only for what you use."
+
+The destination architecture is a single capture path with orthogonal configuration axes (capture predicates, retention level, postprocess stages, output type). Every TL capability collapses into a position on these axes; no parallel implementations.
+
+**Orthogonal axes:**
+- **Capture**: which ops fire wrappers (always all), what predicate retains them, what ctx fields get built (lazy)
+- **Retention**: tensor save mode (none / reference / copy), metadata depth (event-only / event+graph-position / full)
+- **Postprocess**: which stages run (none / graph build / labels / intervention DAG / viz prep / all)
+- **Output**: Recording (raw events) / PartialTrace (some stages) / Trace (all stages)
+
+**Why this is the elegant endpoint, not a local maximum:**
+1. Factoring is orthogonal — new capabilities are knobs on existing axes, not new code paths
+2. "Pay only for what you use" is provably stable — future optimizations preserve it; future features work with it
+3. Survives feature accretion without tangling — architectural property, not a discipline
+
+**Architectural story for docs:**
+> TorchLens captures eager-mode tensor execution through a single configurable substrate. Every capability — sparse capture, full Trace, halt, intervention, validation — is a configuration of one underlying machine, not a parallel implementation. Backends (PyTorch today, MLX today, JAX and others future) plug in via a small adapter protocol; everything above the adapter is framework-agnostic. Feature additions do not slow the core path: there is only one core path to protect, and it works across any tensor framework that wraps ops.
+
+This frames the future of the project. Every refactor / sprint should ask: does this move us toward or away from the single configurable substrate + pluggable backend?
+
+**Backend-agnostic layering (JMT 2026-05-15):**
+
+```
+User API (tl.trace) → Capture orchestrator → Backend protocol → {Torch, MLX, future JAX}
+                                                              → Event stream (framework-agnostic)
+                                                              → Postprocess pipeline (framework-agnostic)
+                                                              → Output (Recording / Trace, framework-agnostic)
+```
+
+Backend protocol is small: `install_wrappers()`, `prime_model(model)`, `emit_event(kind, ctx)`, `teardown()`. Each backend is ~200 LOC of adapter rather than a parallel capture implementation.
+
+**The differentiator claim this earns:** every peer interp tool is PyTorch-only. TorchLens via the adapter protocol becomes "eager-mode capture across any tensor framework." JAX adoption among interp researchers is real; "TorchLens for JAX" without a new library is a story no peer can tell.
+
+**Combined sprint estimate (unification + backend-adapter refactor):** ~2-3 weeks. The two pieces are tightly coupled — when refactoring to unify trace+fastlog, you're already touching the layers that need to become backend-pluggable. Worth doing as one cohesive architectural reset post-launch.
+
+## Performance north star
+
+JMT 2026-05-14: **"Any op you want, as fast as you need — even faster than raw forward when you halt early."**
+
+Two beats:
+1. **Substrate breadth claim**: any op (not just module outputs), barely slower than raw forward for steady-state capture. Earned by lazy fastlog ctx + smart wrapper paths.
+2. **Early-halt claim**: `tl.fastlog.halt()` lets you abort the forward pass after grabbing what you wanted. For deep models with target activation in early layers, TL can be **fractional-x raw forward** — strictly faster than running the whole model. No peer ships this.
+
+This is the acceptance criterion for the perf sprints below. It's also the docs comparison soundbite that flips the apparent perf weakness ("TL captures more, looks slower") into the actual selling point ("TL captures more, can be faster when you opt to halt").
+
+Every perf-relevant PR should answer: "does this move us closer to that north star?"
+
+Current state (perf benchmark 2026-05-14, commit `3409c25`):
+- fastlog_zero / fastlog_module-only (steady-state, no halt): target 2-5x raw; currently ~15-30x on GPU transformers
+- Trace capture full-save (steady-state): ~100-300x raw (acceptable; user is opting into data work)
+- rerun (new inputs): currently ~same as full capture; target ~5-10x raw
+- **fastlog + halt at early layer: NOT YET BENCHMARKED.** Expected fractional-x raw on deep models. This is the strongest single perf story TL has.
+
+### Follow-up benchmark: `fastlog_halt_early`
+
+Add early-halt rows to the perf suite once the in-flight no-save addendum lands. For each model, benchmark fastlog capture + halt at three depths: ~25% / ~50% / ~75% through the model. Expected: 25%-depth halt should run in ~1/4 of raw forward time, demonstrating sub-baseline TL performance.
+
+Models where this matters most: deep ones (ResNet-18, GPT-2, GPT-2 HookedTransformer). LSTM less interesting (recurrent, all layers fire per timestep).
+
+Headline number for docs: "TL fastlog + halt at layer N runs in X ms vs Y ms for raw forward — N/M of the time." That's a flag-planting comparison row peer tools cannot match.
+
+Filed 2026-05-14 from JMT spotting the halt-implies-sub-baseline-perf insight during benchmark review.
+
 ## Active Tasks
+
+### Harmonize scoped accessors to 0-based integer indexing + short/long label form support
+
+Locked 2026-05-21 during rename pass. Currently `Layer.ops[N]`, `Module.calls[N]`, `GradFn.calls[N]` use 1-based pass/call-index keying. Should be 0-based positional (Python list-like). The 1-based semantic indices stay on the record fields (`op.pass_index`, etc.) and in label formats.
+
+Also: label-based lookup should accept BOTH short (`conv2d_2:1`) and long (`conv2d_2_3:1`) Layer-label forms, resolving to the same Op when unambiguous.
+
+**Files to update:**
+- `torchlens/data_classes/_accessor_base.py` — base Accessor `__getitem__` to use 0-based positional integer indexing (currently uses direct dict lookup; need to convert int → sorted-by-key positional)
+- `torchlens/data_classes/layer_log.py:71-79` (`OpAccessor` scoped) — change integer handling to 0-based positional; update docstring
+- `torchlens/data_classes/module_log.py:69` (`ModuleCallAccessor` scoped) — same fix
+- `torchlens/data_classes/grad_fn_log.py:46` (`GradFnCallAccessor` scoped) — same fix
+- `torchlens/data_classes/_lookup_keys.py` — add short-form label resolution alongside long-form
+
+**Tests required:**
+- `layer.ops[0]` returns first pass (was `layer.ops[1]`)
+- `layer.ops[-1]` returns last pass
+- `len(layer.ops)` matches `layer.num_passes`
+- Iteration order matches pass order
+- Both `layer.ops["conv2d_2:1"]` and `layer.ops["conv2d_2_3:1"]` return same Op
+- Same checks on `Module.calls`, `GradFn.calls`
+
+**Migration note:** Existing user code doing `layer.ops[1]` for first pass breaks. Pre-launch hard-break is acceptable; will surface in docs/changelog.
+
+Filed 2026-05-21. Implementation lands with the rename sprint.
+
+### Unify buffer layer-vs-op treatment with other boundary types
+
+Currently buffer-side has asymmetric coverage compared to other boundary types (input, output, internal source/sink):
+
+| Boundary type | Layer accessor | Op accessor | Layer count | Op count |
+|---|---|---|---|---|
+| Input | ✓ | ✓ | ✓ | ✓ |
+| Output | ✓ | ✓ | ✓ | ✓ |
+| Internal source | ✓ | ✓ | ✓ | ✓ |
+| Internal sink | ✓ | ✓ | ✓ | ✓ |
+| **Buffer** | ✓ (`buffer_layers`) | ✗ (deferred) | ✓ (`num_buffer_layers`) | ✗ (deferred) |
+
+The Op-side accessors for buffers are deferred to Buffer Option B (the persistent-entity refactor). But there's a deeper conceptual issue: currently `Buffer(Op)` IS an Op subclass that mixes layer and op semantics — there's no clean separation between "this is a buffer position in the equivalence-class graph" (layer-level) and "this is one buffer-read/buffer-overwrite event" (op-level).
+
+The Buffer Option B proposal at `.project-context/buffer_refactor_proposal.md` addresses this by:
+- Promoting `Buffer` to a persistent entity (sibling of Module/Param)
+- Buffer-source and buffer-sink as Op SUBTYPES (via flags, not subclass)
+- Then `buffer_source_ops`, `buffer_sink_ops` accessors fall out naturally
+- And `Trace.num_buffer_source_ops`, `Trace.num_buffer_sink_ops` paralleling internal_source/sink
+
+This todo is the specific cross-reference: when Buffer Option B work happens, make sure the layer-vs-op axis lands cleanly with parity to the other boundary types' surfaces. Don't ship Buffer Option B without that parity check.
+
+Filed 2026-05-21 during count parity completion lock. Cross-reference: see `buffer_refactor_proposal.md` and the existing "Buffer revamp" todo entry for the full proposal.
+
+### Principled exposure of runtime PyTorch handles across TL records
+
+Current state: only `Op.grad_fn_handle` exposes a runtime PyTorch instance publicly. Module / Param / Buffer have internal weakrefs (`_source_module_ref`, `_param_ref`, etc.) but no public handle. Justified by access asymmetry — users have the runtime model object for most cases; only grad_fns aren't easily reachable.
+
+**Decide post-launch:** should we expose runtime handles uniformly?
+
+| Hypothetical | What |
+|---|---|
+| `Module.handle` | Live `nn.Module` subclass instance (weakref) |
+| `Param.handle` | Live `nn.Parameter` instance |
+| `Buffer.handle` | Live buffer tensor |
+
+**Naming convention is already established:** `_handle` suffix = exposed runtime instance. Adding would slot in cleanly.
+
+**Use case for adding:** portable-loaded captures (no user model object), API-uniform debugging surfaces, certain low-level introspection workflows.
+
+**Cost:** weakref management complexity per class; API surface bloat for what's currently a rare use case.
+
+**Subtlety to address: `Param.grad` semantic.** Currently `Op.grad` is the captured SNAPSHOT (immutable post-capture); `Param.grad` is the LIVE `nn.Parameter.grad` tensor (mutable; changes with each backward call). Same field name, different semantics. The naming doesn't telegraph the live-vs-snapshot distinction. Options:
+- Rename `Param.grad` → `Param.live_grad` for explicit live indicator
+- Stay with `Param.grad` and rely on docstring/docs to explain
+- Adopt `_live` suffix as a convention for runtime-mutable queries (parallel to `_handle` for runtime instance refs)
+- Possibly extend to other locations where TL exposes live runtime state vs snapshots
+
+The `_live` convention (if adopted) would parallel `_handle` — `_live` for runtime-mutable tensor queries, `_handle` for runtime instance refs, bare names for TL snapshots / records. Worth designing during the same pass that decides whether to expose runtime handles broadly.
+
+Filed 2026-05-21 during glossary v3 rename pass. Post-launch design decision; not blocking rename sprint.
+
+### Auto-suppress grad_fn creation when backward_ready=False (part of backward-pass sprint)
+
+JMT's "charm": only spawn grad_fns if wanted. Currently `backward_ready=False` means TL doesn't HOOK grad_fns, but PyTorch may still CREATE them (based on input `requires_grad` state). Wasteful for inference-only capture.
+
+**Proposed:** when `backward_ready=False` AND user hasn't requested any backward-related capture (`save_gradients=False`, no intervention spec with grad hooks, etc.), wrap the user's forward in `torch.no_grad()` internally. PyTorch then skips grad_fn creation entirely. Saves:
+- The C++ autograd-machinery cost during forward
+- Autograd memory (no `saved_tensors` from forward ops)
+- Cleanup overhead
+
+**Implementation:** small — capture machinery already wraps `model.forward(x)`; adding a conditional `torch.no_grad()` context is a one-liner change.
+
+**Flag options to consider:**
+- Implicit: when `backward_ready=False`, auto-suppress. Opinionated default.
+- Explicit: `suppress_autograd=True` kwarg. User opts in.
+- Implicit with override: auto-suppress when `backward_ready=False`; `suppress_autograd=False` lets user keep grad_fns for some other purpose (e.g., custom hooks unrelated to TL's backward path).
+
+I'd lean implicit-with-override — match user intent in the common inference case, escape hatch available.
+
+**Validation matrix to consider:** what other capture-config flags interact with this? `intervention_ready`, `save_gradients`, etc. — should they auto-disable suppression?
+
+Filed 2026-05-21 during glossary v3 rename pass. Part of unified backward-pass sprint. Small implementation but design discussion needed on the flag interaction matrix.
+
+### Higher-order gradient support (part of backward-pass sprint)
+
+TorchLens currently has PARTIAL support for higher-order gradients (Hessian-style, MAML, adversarial via backward-of-backward, etc.). The data structures can accommodate them; the capture machinery does NOT auto-instrument them.
+
+**What works today:**
+- Standard backward (first-order grads) — fully captured
+- Gradient accumulation across multiple `loss.backward()` calls — fully captured (multiple GradFnCalls per GradFn)
+- `loss.backward(create_graph=True)` itself runs fine — PyTorch handles it, TL captures the first-order firings
+
+**What doesn't work:**
+- Autograd nodes CREATED by the first backward (the gradient-computation graph when `create_graph=True`) are NOT hooked by TL
+- Second-order backward firings on those new nodes go uncaptured
+- `torch.autograd.grad()` calls that create new autograd nodes are similarly not instrumented
+- Hessian / Jacobian computations, MAML, second-order optimization — partially captured
+
+**Root cause:**
+TL registers hooks on grad_fns AT FORWARD CAPTURE TIME (when each Op is recorded). For higher-order, the first backward creates NEW grad_fns that TL never sees at forward-capture. Second backward fires those new hooks without TL knowing.
+
+**What would need to change:**
+1. After first backward (when `create_graph=True`), traverse the resulting gradient chain to find the newly-created autograd nodes
+2. Register hooks on those new grad_fns
+3. Capture their firings as GradFnCall records when the second backward triggers them
+
+Non-trivial — needs post-first-backward graph walking + hook installation. Plus design questions:
+- How do second-order GradFns relate to first-order GradFns in the record graph? (Are they linked? Separate cluster? Children of the first-order grad_fns?)
+- How do they label? (`addmm_back_back_1_5`? Or `addmm_back^2_1_5`? Some convention for "backward of backward.")
+- Do they get their own `step_index` axis, or share with first-order?
+- Do users typically want full Hessian-level capture, or just sampled second-order? (Storage cost matters.)
+
+**Data structures already cover most of it.** GradFn class is general; could hold higher-order nodes. GradFnCall is general; could hold higher-order firings. The label / record-relationship design is the open question.
+
+**Priority:** post-2.0; advanced users; not blocking the rename sprint. Folds into the unified backward-pass sprint (alongside backward-pass deep-dive, BackwardPass first-class records, recurrent-loop semantics).
+
+Filed 2026-05-21 during glossary v3 rename pass.
+
+### Backward call-site code context (part of backward-pass sprint)
+
+For tracking "from where in user code was `loss.backward()` triggered?" — capture Python call stack at backward invocation as part of the per-event entry in `state_history` (one entry per `loss.backward()` call). Should NOT be a per-GradFnCall field (backward hooks fire from PyTorch's autograd engine; the stack at hook-fire time is uniformly uninformative).
+
+Proposed: `state_history[N].backward_call_context` (Python call stack at the moment `trace.backward(loss)` was invoked, as `FuncCallLocation`). Only present for backward-engine entries.
+
+Filed 2026-05-21 during glossary v3 rename pass. Folds into the unified backward-pass-untangling sprint (below). Not blocking the rename sprint.
+
+### Backward labeling + recurrent-loop semantics (part of the backward-pass unified sprint)
+
+**Filed 2026-05-21.** Surfaced during glossary v3 rename pass. Genuinely thorny; needs design work; coordinate with the broader backward-pass deep-dive (below).
+
+**Three intertwined concerns:**
+
+**1. Recurrent forward loops produce distinct grad_fn Python objects — TorchLens currently appears to MERGE them.**
+
+PyTorch creates a new grad_fn instance for each forward pass through a recurrent layer. A 3-pass recurrent `conv2d_1_5` produces 3 distinct grad_fn Python objects. The current label-construction code uses `layer.trace_index` (per-Layer, not per-Op) for `total_num`, suggesting TorchLens MERGES recurrent grad_fns into one GradFn per Layer equivalence class.
+
+JMT's preferred direction: **treat each grad_fn object as its own GradFn record** (3 separate records for 3 recurrent forward passes). Because they ARE genuinely distinct Python objects in PyTorch; merging obscures the underlying autograd structure.
+
+Consequences if we go this direction:
+- GradFn labels need to be unique per forward pass. Could use Op-label style with `:N` for forward pass index: `addmm_back_1_5:1`, `:2`, `:3` — one per pass
+- GradFnCall labels then get `:M` appended for backward firings: `addmm_back_1_5:1:1` (1st pass's grad_fn, 1st firing) — verbose but unambiguous
+- OR keep label structure but disambiguate differently (e.g., embed pass index in the type/step suffix)
+
+Hard because: confuses users who expected GradFn ↔ Layer to be a simpler 1-to-1 in recurrent cases. Need clear docs.
+
+**2. Two type_index construction schemes inside one class.**
+
+Currently `_grad_fn_label_parts` (`backward.py:100-135`):
+- `has_op=True` → mirror forward Layer's `type_index` and `step_index` (visual correspondence with forward labels)
+- `has_op=False` → separate per-type counter + discovery order
+
+The visual correspondence is convenient but creates two code paths and state-dependent index semantics. Cleaner alternative: always per-type counter + discovery order; forward correspondence retrievable via `grad_fn.op.label` (one-hop resolver).
+
+Discussion needed on whether visual correspondence is worth the complexity.
+
+**3. Function name introspection robustness for grad_fn classes.**
+
+`grad_fn.__class__.__name__` is the source. Generally robust:
+- ✓ PyTorch built-ins (always have class names; normalize for version-suffix stability)
+- ✓ Custom autograd.Function subclasses
+- ✗ Lambda Functions (rare; `__name__ = "<lambda>"`)
+- Edge: decorator-wrapped Functions (mostly OK; `__name__` from wrapper class)
+
+Worth verifying normalization layer handles edge cases gracefully (doesn't crash on `<lambda>`).
+
+**Recommendation: address all three in one unified backward-pass-untangling sprint.**
+
+Coordinate with:
+- "Backward pass handling deep-dive — does loss.backward() spawn GradFn logs?" (below)
+- "Promote backward passes to first-class `BackwardPass` records" (post-2.0 follow-on)
+
+These three areas interact heavily. The backward subsystem deserves a dedicated sprint, not piecemeal fixes.
+
+### Backward pass handling deep-dive — does loss.backward() spawn GradFn logs?
+
+Open architectural question: when a user calls `trace.backward(loss)`:
+- Are GradFn records created at that point (from the live autograd graph)?
+- Or were they already created during capture (forward time) and `backward()` just populates them?
+- How are multiple backward calls handled (re-entrant `backward(loss)` after first)?
+- What's the relationship between `GradFn` records and the live `tensor.grad_fn` chain?
+
+Related questions for the same review:
+- Where do GradFnCall records get instantiated? At hook-firing time? Pre-allocated?
+- How do `has_op` (paired forward Op) and orphan grad_fns (no forward op) interact with backward triggering?
+- Multi-backward case: should each backward call get its own root + per-call event records? (Earlier filed: `BackwardPass` first-class records — this is the design needed.)
+- Backward pass lifecycle on the `Trace.state` enum — what transitions happen?
+
+Filed 2026-05-21. Needs design review of capture/intervention/backward.py logic. Post-launch; not blocking rename sprint.
+
+### Full treatment of container classes (multi-output return shapes)
+
+ContainerSpec, container_path, multi_output_type, multi_output_name, TupleIndex, DictKey, NamedField, DataclassField, HFKey — the multi-output container surface is rich and currently spread across multiple records.
+
+Items to address in a focused review:
+- Are the type-classes (TupleIndex, DictKey, NamedField, etc.) public API? Naming consistency.
+- Is `ContainerSpec` documented as a public type? Should it have a stable schema?
+- How do nested containers (`tuple` of `dict` of `list`) get represented? Worked examples needed.
+- Are HF-specific keys (`HFKey`) appropriately scoped, or generalize to "object-with-dict-style-access"?
+- How do containers interact with intervention API — can you swap a tensor inside a tuple output?
+- Saved arg templates for module forward args — do they use the same container machinery?
+
+Filed 2026-05-21. Post-launch design pass; medium scope. The multi-output naming surface (`out` / `outs` / `multi_output_*` / `container_path`) was touched in this rename sprint; the next pass is the structural review.
+
+### Review intervention records handling
+
+The intervention surface in TorchLens (selectors, sites, hooks, helpers, intervention_spec, fork/replay/rerun) was largely deferred from the rename sprint per the existing deltas ("Intervention method names are intentionally not promoted as final here; the audit deferred them to the integrated `Site` concept review").
+
+Items to address:
+- `Op.interventions` — what does this store? Per-Op intervention records?
+- `Trace.intervention_spec` — is this a stable public type?
+- `Site` concept review — site labels, site resolution, site dispatch
+- `attach_hooks`, `do`, `set` method naming
+- Intervention storage save/load semantics
+- Bundle-level intervention coordination
+- Whether `Op.interventions` should be label-list or resolved-records (per the locked filter-list convention)
+
+Filed 2026-05-21. Post-launch design pass. The intervention API is a big surface and deserves dedicated review separate from the names-only sprint.
+
+### Audit gradient memory accounting — Op-side vs GradFnCall-side overlap
+
+`Trace.total_gradient_memory` currently counts ONLY Op-level gradients (`Layer.grad_memory` summed across layers — see `backends/torch/tensor_tracking.py:107-108`). GradFnCall-side gradient storage (`grad_inputs`, `grad_outputs` on each GradFnCall record) is NOT included in this total — invisible to the Trace-level "how much memory does gradient capture cost?" answer.
+
+**Three potential issues:**
+
+1. **Hidden memory.** GradFnCall storage can be substantial (per-call snapshots; many calls; both inputs and outputs). Not visible in `total_gradient_memory`.
+
+2. **Redundant storage when has_op=True.** For grad_fns with a corresponding forward Op, `GradFnCall.grad_outputs` is typically the same tensor data as `Op.grad`. Saving both is redundant. (Differences: multi-backward case where `Op.grad` accumulates while GradFnCall snapshots per-call; has_op=False case where GradFnCall is the only record.)
+
+3. **Mismatch between predicate and reality.** `has_saved_gradient` on Op covers Op-side; `GradFnCall.is_saved` covers GradFnCall-side. No unified predicate for "is there any gradient saved for this position."
+
+**Three fix options:**
+
+- **A. Documentation only:** clarify `total_gradient_memory` as Op-level only; add `total_grad_fn_call_memory` field for the other side. Visible but not deduplicated.
+- **B. Unified `total_backward_memory`:** sum Op-level + GradFnCall-level (with sub-totals). Most accurate "cost of backward" answer.
+- **C. Audit + dedupe at capture time:** add `save_grad_fn_call_grads` flag (default off when has_op=True for single-backward; on when needed). Avoids redundant storage. Then totals account cleanly without double-counting.
+
+**Recommendation:** Option C is architecturally cleanest (eliminate the redundancy at source); Option A is the minimum (make the accounting visible). Probably do BOTH — A first for clarity, then C for actual storage reduction.
+
+Filed 2026-05-21 during glossary v3 rename pass. Audit + design call needed before rename sprint touches this area.
+
+### Post-2.0 TorchLens-2.0 follow-on items (filed 2026-05-21)
+
+These came up during the rename-sprint walkthrough; all post-rename-sprint and post-2.0-launch. Listed together to keep the launch surface bounded; revisit individually after rollout + docs sprint lands.
+
+**a. Buffer revamp (Option B).**
+Already filed at `.project-context/buffer_refactor_proposal.md` — promote Buffer from `Buffer(Op)` subclass to first-class persistent entity (Param-parallel), with buffer-source/buffer-sink Ops as subtypes. ~1-2 week sprint of its own. See proposal file for full spec.
+
+**b. Attribute-bloat cleanup — consider more sub-config classes.**
+Decided NOT to add Op/Layer sub-config objects pre-launch (only ~5 fields per scope; below the bloat threshold). Trace.capture_config namespace migration is already deferred in the v3 deltas. Post-launch: re-audit ALL classes for "is this attribute count a problem?" — Op has ~70 fields; some natural clusters (function-call cluster, output-tensor cluster, output-gradient cluster, etc.) might earn sub-config dataclasses. Decide per-cluster only when a clear sub-object naming + boundary is evident.
+
+**c. Convenience fields for Op/Layer INPUTS (currently output-focused).**
+Op fields default to OUTPUT (locked convention). But users often want input-side info too — input shapes, input dtypes, input memory aggregate. Currently accessible via `op.parents` (label list) + per-parent Op lookup. Convenience fields like `Op.input_shapes`, `Op.input_dtypes`, `Op.input_memory_total` (`@property` derivations) would be ergonomic for inspection. Discussion topic: which inputs do users actually want, what's the right level of derivation, do these conflict with the OUTPUT convention. Defer until use cases mature.
+
+**d. First-class BackwardPass records.**
+Already filed earlier in this todos file as "Promote backward passes to first-class BackwardPass records." Keep filed; this is the dedicated-classes story for backward passes.
+
+**e. Dedicated While-loop / data-dependent iteration handling.**
+TorchLens currently doesn't have a first-class concept for data-dependent loops (while loops with run-time-determined iteration counts). Different from recurrence-detection (which handles repeated SAME-INPUT-SHAPED iterations). Need to scope: what does dedicated handling look like? A `Loop` record class? An iteration-counter field? Defer for design exploration.
+
+**f. Fastlog refactor / unification with Trace.**
+Already filed as "Unified fastlog + main-trace save-selection treatment" earlier in this todos file. Post-launch: do the actual unification work — fastlog vs trace API parity story, predicate API consolidation, `fastlog` naming decision, internal structural sharing where possible.
+
+**g. Revisit `cleanup` treatment.**
+`Trace.cleanup()` exists ("Clear circular references and runtime-only heavyweight objects"). Naming and surface unclear post-rename — does it parallel `release_param_ref()` / `release_buffer_ref()`? Should it be `release_runtime_refs()`? Are there per-class cleanup methods? Revisit holistically.
+
+**i. Variable-name introspection for saved tensors.**
+For a saved Op output, capture the variable name used in the source code (e.g., a tensor saved as `t = relu(x)` would have `var_name = "t"`). Already in deltas as "Variable name introspection (`Op.var_names`): deferred (possible future feature)." Re-evaluate viability post-launch — implementation likely uses AST inspection of the forward() source; non-trivial; possibly not viable for all callsites.
+
+**j. Dynamic-branch organization (conditionals tree).**
+Beyond the current `Conditional` / `ConditionalArm` machinery — a higher-level "dynamic branches tree" of all data-dependent paths in a model. Would let users ask "what conditionals fired across this Trace?" / "what's the branching topology?" Could be a `Trace.branch_tree` accessor returning a structured tree. Defer for design.
+
+**k. Op-as-multiple-args-of-child (e.g., `y = x + x`).**
+When an Op's output is passed as MULTIPLE args to a child Op (e.g., `add(x, x)`), the data model probably needs to handle this cleanly — current parents list might dedupe, losing the "passed twice" info. Visualization should mark this (double edge? multi-arrow notation?). Audit current behavior, decide on the correct data + visual representation.
+
+**l. Visualization for multi-version outputs (when `has_output_variations` is True).**
+When an Op's output was modified in-place between children, the children see different tensor versions. Currently captured in data (`out_versions_by_child`) but unclear if visualization marks this. Should be a visual cue (color, annotation, branching) so users notice. Defer to vis sprint.
+
+**m. `num_modules` on Trace — total submodule count for the model.**
+Trace lacks a top-level count of how many distinct `nn.Module` instances live in the source model. Should be a Trace field (probably property) returning the number of registered submodules. Name TBD (`num_modules` is candidate; could alternatively be `num_submodules` if "modules" reads ambiguously). Easy add but want to decide naming carefully alongside other `num_*` fields. Defer until rename sprint settles.
+
+**n. Module descendant call count + call-depth-from-beneath.**
+On `Module` (and possibly `ModuleCall`): expose `num_descendant_calls` (total nested ModuleCalls underneath this Module/ModuleCall, arbitrary depth) and `call_depth_from_beneath` (how many call layers deep the deepest descendant call is). Useful for visualization (deciding nesting box rendering), debugging, and "how complex is this submodule" introspection. Name workshop pending. Useful sibling: a `Trace`-level convenience too.
+
+**o. Op vs Module parity for `args_summary` / `kwargs_summary` / `args_template` / `kwargs_template`.**
+Op has the full quartet documented (positional + kwargs, summary + structural template). Module/ModuleCall currently has `forward_args_summary` only — confirm whether `forward_kwargs_summary`, `forward_args_template`, `forward_kwargs_template` exist or should be added for parity. If they exist already with different names, normalize. Audit during impl sprint; lock final field set.
+
+**p. Unified handles/references sprint — Param handles + all other runtime PyTorch object handles.**
+Several Trace records currently store `_object_id` Python ids for ground-truth identity but lack the actual handle. Spans: Param, Buffer, Module, the underlying torch tensor on the source side, GradFn objects (the `torch.autograd.Function` `grad_fn` instance), hook handles, optimizer references. Today this is sprinkled ad hoc. Sprint should define the principled exposure: which records expose `.handle` (or `.torch_obj`) and how lifetime/staleness is handled. Already partially filed as "Principled exposure of runtime PyTorch handles" earlier in this file; this addendum specifically adds Param handles to that sprint's scope.
+
+**q. Cross-class consistency sprint — labels vs object references everywhere.**
+The Reference Form Convention (4 principles, locked 2026-05-21) should be enforced in one comprehensive pass post-rename. Sweep ALL inter-record fields across ALL classes (Trace, Op, Layer, Module, ModuleCall, Param, Buffer, GradFn, GradFnCall, Bundle, Super[T], ConditionalRecord, ConditionalArm) and verify each follows the convention: (1) portability dictates storage form, (2) tensors/callables/handles as objects, (3) frequent-ref bare-label + `_label` + resolver property, (4) bare label lists for plurals (with the paired-plural-resolver exception for genuinely-different entities). Output: an audit table marking each field as compliant or non-compliant. Likely a few stragglers — the rename sprint catches the obvious ones, but a dedicated sweep catches the long tail. Should run after rename sprint settles.
+
+### Supergraph naming / structure cleanup (post-launch)
+
+`bundle.supergraph` is the cross-trace alignment engine — internal-ish. `Supergraph` and `SupergraphNode` classes live in `torchlens/intervention/_topology/` (underscore-prefixed = internal), are NOT in `torchlens.__init__`, NOT imported outside `_topology/`. The field `bundle.supergraph` is public but advanced/diagnostic use only.
+
+Can defer to post-launch. The high-traffic Bundle surface (Super[T] family, comparison helpers) is what matters for the rollout/docs sprint.
+
+Items to revisit later:
+- Should `Supergraph` get a `__getitem__` for label lookup of nodes?
+- Should `SupergraphNode.layer_refs` follow Principle 3 with `_label` + @property resolver?
+- Should `Bundle.supergraph` be `@property` (lazy build) or stored field?
+- Should `Supergraph` ever be public? (Probably stay internal; users go through Bundle methods.)
+- Naming sanity check on `SupergraphNode.fingerprint` (tuple of `module_path`, `func_name`) — clear enough?
+- Alignment with the v3 naming conventions (drop `_log` etc.) — `SupergraphNode.layer_refs` value type is currently `LayerLog`; sync to renamed `Layer` type post-rename-sprint
+
+Filed 2026-05-21 during glossary v3 rename pass. Park until after rename sprint + 2.0 launch.
+
+### Promote backward passes to first-class `BackwardPass` records (parallels ModuleCall / GradFnCall)
+
+Filed 2026-05-21 as Level 3 follow-up to the `backward_root_grad_fn_id` → `backward_root_grad_fn_ids` rename (locked the lightweight plural fix in v3; this is the heavier architectural improvement).
+
+**Trigger to revisit:** when users start wanting richer per-backward-pass metadata (loss value, duration, status, grad outputs summary, etc.). If they just want the root grad-fn id, the current plural-list approach suffices.
+
+**Proposed surface:**
+
+New `BackwardPass` record class (sibling of ModuleCall / GradFnCall):
+- `BackwardPass.root_grad_fn_id`: runtime `id()` of the root grad-fn
+- `BackwardPass.loss_value`: the loss tensor passed (optional capture, gated by flag)
+- `BackwardPass.timestamp`: when the backward was invoked
+- `BackwardPass.duration_s`: how long the backward took
+- `BackwardPass.call_index`: 1-based invocation index (parallels ModuleCall.call_index)
+- `BackwardPass.ordinal_index`: 0-based position in `trace.backward_passes`
+- `BackwardPass.engine`: backward engine identifier
+- `BackwardPass.status`: success / failure / partial
+- `BackwardPass.grad_fn_calls`: ordered list of GradFnCall labels fired during this backward
+
+On Trace:
+- `Trace.backward_passes`: Accessor for BackwardPass records (parallels `module_calls`, `grad_fn_calls`)
+- `Trace.num_backward_passes`: already exists
+- `Trace.last_backward_pass` (`@property`): convenience for the most recent
+
+On rename / migration:
+- `Trace.backward_root_grad_fn_ids` (Level 1 lock) becomes derivable: `[bp.root_grad_fn_id for bp in trace.backward_passes]`
+- `Trace.last_backward_root_grad_fn_id` becomes `trace.last_backward_pass.root_grad_fn_id`
+- Could remove the list fields once BackwardPass lands, or keep as deprecation shims
+
+**Cost:** new record class, accessor, ordinal indexing cascade. Moderate sprint scope. Coordinate with whatever backward-API maturation work is in flight at that point.
+
+Not blocking the rename sprint; post-2.0 architectural improvement.
+
+### Rename `replace_state_from` / `append_state_from` — current names confusing
+
+JMT flagged 2026-05-21: `Trace.replace_state_from(new_log)` and `Trace.append_state_from(new_log)` read awkwardly. "State from" parses ambiguously (English: "replace state, originating from X"; method: "replace MY state using X as source"). The word "state" is also overloaded — could mean `Trace.state` (the enum) or "the Trace's overall captured state."
+
+Current entries:
+- `Trace.replace_state_from(new_log)`: Atomically replace this Trace's run state from a freshly-built Trace.
+- `Trace.append_state_from(new_log)`: Merge compatible chunk outs from `new_log` into this Trace.
+
+Candidate cleaner names (pick during rename-sprint revisit):
+- `replace_from(other)`, `append_from(other)` — drop "state"; simpler
+- `swap_state(other)`, `extend_state(other)` — direct verbs
+- `commit_from(other, mode="replace"|"append")` — single method, mode arg; "commit" implies atomicity
+- `adopt_from(other)`, `extend_with(other)` — adoption metaphor
+
+Also worth resolving: are these methods user-facing or internal-only? If internal, prefix with `_` and they vanish from the public API surface. If user-facing, the name needs to be obvious.
+
+Filed 2026-05-21 during glossary v3 rename pass. Low priority; current names work, just confusing.
+
+### Unified fastlog + main-trace save-selection treatment (consolidate predicate API)
+
+Capture-config has three save-selection fields (`layers_to_save`, `gradients_to_save`, `module_filter`) plus a parallel predicate-first API in `tl.fastlog.record()` (`keep_op`, `keep_module`, `default_op`, `default_module`). Both surfaces select what to save, with different APIs and different semantics around "selector list vs predicate callable."
+
+Open items to resolve together:
+1. **`module_filter` → `save_predicate` rename** (already deferred in v3 deltas; verify and lock during this treatment)
+2. **Unify `layers_to_save` accepted forms.** Today probably accepts `"all"`, list of labels, selectors, callable. Document the full surface and decide if all forms stay or if some are deprecated.
+3. **Decide fastlog↔trace API parity story.** Should main `tl.trace()` accept `keep_op` / `keep_module` predicates directly (currently only fastlog)? Or should fastlog adopt `layers_to_save` style (currently only trace)? Pick one canonical form, or document the case-by-case rationale.
+4. **`fastlog` naming.** Deltas already note this rename is deferred. Pick during the treatment.
+
+Filed 2026-05-21 during glossary v3 rename pass. Park until post-rename. The v3 surface for capture-config save-selection fields stays as-is in the meantime.
+
+### Recursive params accessor on Module (PyTorch parity gap)
+
+Currently `Module.params` returns only directly-owned Params (this Module's address only). PyTorch's `nn.Module.parameters()` defaults to RECURSIVE (this module + all address-based sub-modules). TorchLens lacks the recursive equivalent.
+
+**Proposed addition:**
+```python
+module.params              # existing — directly-owned Params (this Module's address only)
+module.recursive_params    # NEW — Params recursively through this Module + all address-based sub-Modules
+```
+
+Plus companion count fields for parity:
+- `module.num_recursive_params`
+- `module.num_recursive_params_trainable`
+- `module.num_recursive_params_frozen`
+- `module.num_recursive_param_tensors`
+- `module.num_recursive_param_tensors_trainable`
+- `module.num_recursive_param_tensors_frozen`
+- `module.recursive_param_addresses` (label list)
+
+**Scope semantic clarification:**
+- "Recursive" means **address-based** (static `nn.Module` tree) — matching PyTorch's `parameters(recurse=True)` semantic
+- Different from "dynamic call-tree recursive" (params used by ModuleCalls beneath this one in the dynamic call tree) — defer unless demand surfaces
+
+**Why useful:**
+- PyTorch parity — common workflow is "give me all params under this module"
+- Avoids the verbose `[p for child in module.address_descendants for p in trace.modules[child].params]` comprehension
+- Filtering/inspection workflows ("which params are trainable under this transformer block?")
+
+**Naming alternatives weighed:**
+- `recursive_params` — explicit; matches PyTorch's `recurse` kwarg vocabulary
+- `descendant_params` — clear; "descendant" matches the address-tree framing
+- `all_params` — concise but ambiguous (all WHICH params?)
+- `params_subtree` — implies subtree but verbose
+
+Lean `recursive_params` for PyTorch idiom alignment.
+
+Filed 2026-05-21 during glossary v3 rename pass. Post-documentation-sprint addition; not blocking the rename or 2.0 launch. Small implementation work (address-tree walk + recursive collection).
+
+### Call-tree fetching/display on Trace/Module/ModuleCall
+
+Currently the call tree is accessible only one-hop at a time (`ModuleCall.call_parent`, `call_children`). Reconstructing the full subtree requires manual recursion. Should be a first-class accessor + display method.
+
+**Proposed programmatic accessor (structured data):**
+```python
+trace.call_tree              # full call tree from root → leaves; nested CallTreeNode object
+module.call_tree             # subtree rooted at this Module (across all its calls; aggregate view)
+module_call.call_tree        # subtree rooted at this specific call (per-invocation view)
+```
+
+Data structure options:
+- A. Recursive `CallTreeNode` dataclass: `node.call` (ModuleCall) + `node.children` (list of CallTreeNode)
+- B. Flat `dict[call_label, list[child_labels]]` — simpler but loses tree-walking convenience
+- C. Networkx-style DiGraph — heavyweight; integrates with viz tools
+
+Lean (A) — clean Python iteration; minimal external dependencies.
+
+**Proposed display method:**
+```python
+trace.show_call_tree()       # prints indented tree to stdout (or file via kwarg)
+module.show_call_tree()      # subtree rendered
+module_call.show_call_tree() # subtree rooted at this call
+
+# Output style:
+# encoder.block.0:1
+# ├── encoder.block.0.attention:1
+# │   ├── encoder.block.0.attention.qkv_proj:1
+# │   ├── encoder.block.0.attention.softmax:1
+# │   └── encoder.block.0.attention.out_proj:1
+# ├── encoder.block.0.layer_norm:1
+# └── encoder.block.0.feedforward:1
+```
+
+Tree-drawing characters via standard tree-rendering (matches `tree` command idiom).
+
+**Configuration:**
+- `max_depth` kwarg — limit display depth
+- `include_atomic` kwarg — show/hide atomic-module leaves
+- `show_call_index` — toggle `:N` suffix display
+- Output-to-file via `file` kwarg (paralleling `print()`)
+
+**Use cases:**
+- Debugging: "what got called inside this module during forward?"
+- Inspection: quick model-structure overview from REPL/notebook
+- Documentation: generate call-tree text for issue reports
+
+**Why valuable:**
+- Tree-structured data should have tree-walking + tree-display methods (standard library design)
+- Bridge between `trace.draw()` (heavy visual graph) and per-call inspection
+- One-line REPL convenience for `print(trace.show_call_tree())`-style debugging
+
+**Naming alternatives weighed:**
+- `call_tree` (data) + `show_call_tree()` (display) — proposed
+- `dynamic_call_tree` (data) — disambiguates from static address tree; verbose
+- `module_call_tree` — same; verbose
+- `print_call_tree()` — alternative to `show_call_tree()`; both work
+
+Lean `call_tree` + `show_call_tree()` — bare names; receiver class disambiguates from address tree (`Module.address_children` is the static-tree analog).
+
+Filed 2026-05-21 during glossary v3 rename pass. Post-documentation-sprint addition; not blocking. Medium-small implementation work (recursive tree-walking + tree-rendering display).
+
+### Module-scope memory aggregate naming — three quantities need disambiguating field family
+
+Module/ModuleCall have THREE distinct legitimate "memory" quantities that current v3 naming doesn't cleanly disambiguate:
+
+| Quantity | Meaning | Example value |
+|---|---|---|
+| A. Output memory | Bytes of tensor(s) returned by `forward()` | 4MB for one transformer block output |
+| B. Internal aggregate | Sum of memory across all internal ops in the call | 60MB for the same block (all intermediates) |
+| C. Cross-call aggregate | Sum of A or B across multiple calls of the same Module | varies |
+
+**Current v3 state:**
+- `Module.activation_memory` (and `ModuleCall.activation_memory`) means Quantity A (output) — lives in Output Passthroughs section
+- No Quantity B field at Module scope (users compute manually via comprehension)
+- Naming a hypothetical `Module.total_activation_memory` is ambiguous — could plausibly mean B or C
+
+**Three naming proposals (deferred decision):**
+
+- **Option 1:** Rename output → `out_memory`; use `total_activation_memory` for internal aggregate. Breaks Layer parallel where `Layer.activation_memory` IS output.
+- **Option 2 (minimum disruption):** Keep `activation_memory` as output; add `total_internal_activation_memory` for B. Verbose name; "total_internal" reads clunky.
+- **Option 3 (principled refactor):** TWO prefix families — `out_*` for output cluster (`out_memory`, `out_gradient_memory`, etc.), `internal_*` for cost cluster (`internal_activation_memory`, `internal_gradient_memory`, etc.). Plus `total_X` for cross-call. Renames `activation_memory` → `out_memory` etc. throughout.
+
+**My lean: Option 3 long-term (cleanest semantic split), Option 2 minimal-disruption near-term.**
+
+This affects related fields too:
+- `gradient_memory` — same three-quantity problem
+- `autograd_memory` — only Quantity B makes sense (autograd is internal); but field naming convention needs to be consistent
+- `transformed_activation_memory` — also has output-vs-internal axis
+
+Use case for Quantity B (internal): profiling — "how much memory did this transformer block use total?" Currently requires comprehension; should be one-shot field.
+
+Filed 2026-05-21 during glossary v3 rename pass. Post-launch refactor; significant cascade. Coordinate with `Trace.capture_config` namespace migration (also deferred — both touch the broader memory/capture surface).
+
+### Comprehensive review of Trace.capture_config surface
+
+The capture-config field cluster on Trace has grown to 20+ flags and accumulated tech debt. Needs a holistic review separate from individual field renames.
+
+**Current capture-config-style fields on Trace (in v3):**
+
+Save-related:
+- `save_raw_activations`, `save_raw_gradients`, `save_gradients`, `save_arg_values`, `save_arg_templates`, `save_rng_states`, `save_code_context`
+
+Selection-related (locked as "unified fastlog treatment" todo):
+- `layers_to_save`, `gradients_to_save`, `module_filter` (rename to `save_predicate` pending)
+
+Mode/state:
+- `backward_ready`, `intervention_ready`, `intervention_spec`, `capture_mode`, `detach_saved_activations`, `recurrence_detection`
+
+Behavioral flags:
+- `emit_nvtx`, `mark_layer_depths`, `raise_on_nan`, `verbose`
+
+Output handling:
+- `output_device`
+
+Transforms (callables):
+- `activation_transform`, `gradient_transform`
+
+**Items to address:**
+
+1. **`Trace.capture_config` namespace migration** (already deferred in v3 deltas) — move all 20+ flags into a `Trace.capture_config` dataclass. `trace.capture_config.save_raw_activations` instead of `trace.save_raw_activations`. Cleans up Trace's top-level surface dramatically.
+
+2. **Categorization within capture_config** — does the dataclass have sub-clusters (save, selection, mode, behavior)? Or flat?
+
+3. **Naming consistency audit across all flags** — e.g., why `save_raw_activations` vs `save_arg_values` (different verb style)? Why `recurrence_detection` (bare noun) vs `save_gradients` (verb-noun)?
+
+4. **`emit_nvtx` documentation tweak** — add explanatory note ("NVTX = NVIDIA Tools Extension; ranges show up in Nsight profilers"). Matches PyTorch's `torch.autograd.profiler.emit_nvtx` API; don't rename, but make docs self-contained.
+
+5. **`capture_mode` enum values** — what are the possible values? Make sure they're documented and named consistently.
+
+6. **`module_filter` → `save_predicate` rename** (deferred in v3 deltas; unify with fastlog predicate API per separate todo).
+
+7. **Defaults audit** — for each flag, what's the default? Is the default the "least surprising" or "most useful"? Documented?
+
+8. **save_arg_values vs save_arg_templates** — these are paired (heavy vs light). Could they be one field with a tri-state (`off | template | full`)?
+
+9. **Per-Op overrides** — some Op fields are config carry-overs (output_device, activation_transform, gradient_transform). Are they consistently documented as such?
+
+10. **Validation interactions** — capture_config flags interact with backward, intervention, save policies. Is the validation matrix documented anywhere?
+
+Filed 2026-05-21 during glossary v3 rename pass. Post-launch design pass. Coordinate with the fastlog unification todo (predicate API consolidation) and the `Trace.capture_config` namespace migration (already deferred).
+
+### Audit function-argument-name introspection (Op.arg_names + companions)
+
+Op fields `arg_names`, `num_args_total`, `num_pos_args`, `num_kwargs`, plus the saved-args templates (`args_template`, `kwargs_template`) and the new `args_summary` / `kwargs_summary`, all rely on TorchLens being able to introspect the captured function's signature and map positional args to names.
+
+**Open question: how bulletproof is this?**
+
+Sources of fragility:
+1. **C++-implemented torch functions** (most of `torch.*`) — `inspect.signature(func)` often returns empty/incomplete signatures for C++ ops. TorchLens probably has hardcoded fallback specs (the `FUNC_ARG_SPECS` table referenced in earlier bug fixes — `ARG-KWARGS-MISSING`). What's its coverage today? Which torch ops fall through?
+
+2. **Custom autograd Functions** — `torch.autograd.Function` subclasses have user-defined `forward()` signatures. Should be introspectable but might have edge cases.
+
+3. **Lambdas / partial functions** — `functools.partial`, lambdas, and similar callable wrappers may not expose argument names cleanly.
+
+4. **Variadic args** — `*args` / `**kwargs` patterns; how does TorchLens record these in `arg_names` / `non_tensor_pos_args` etc.?
+
+5. **Method-vs-function** — bound methods, `self` handling, instance methods on tensors vs free functions.
+
+6. **`functorch` / `torch.func` transforms** — `vmap`, `grad`, etc. wrap functions; do they preserve introspection?
+
+7. **MLX backend** — MLX functions have their own signature characteristics; does the introspection machinery handle MLX-side correctly?
+
+**Items to audit:**
+- Coverage of `FUNC_ARG_SPECS` static table — what's in, what's out, how exhaustive?
+- Failure modes — when introspection fails, what does Op.arg_names contain? Empty list? None? Best-effort guesses?
+- Are the failures user-visible? Silent? Logged?
+- Cross-reference to known bug `ARG-KWARGS-MISSING` (per the Phase 14 cleanup) — is that fully resolved or are there lingering edge cases?
+- Test coverage — are there tests for argument-name introspection across major torch op families?
+
+**Knock-on effects of fragile introspection:**
+- `args_summary` quality degrades when arg names are missing (falls back to positional indices?)
+- `args_template` / `kwargs_template` storage depends on slot-mapping by arg name — failures here could break replay
+- `module_entry_arg_keys` similarly relies on arg names
+
+**Filed 2026-05-21.** Stability/completeness audit. Not blocking the rename sprint (names stay the same regardless of introspection quality), but a real area to harden before the 2.0 launch and the documentation push.
+
+### Revisit emit_nvtx documentation + naming
+
+Minor follow-up: `Trace.emit_nvtx` is currently a bare flag. The naming matches `torch.autograd.profiler.emit_nvtx` (PyTorch idiom) — recommended to keep. But the docstring needs expansion so users who don't know NVTX can read the v3 glossary entry and understand:
+
+> "NVTX = NVIDIA Tools Extension — a CUDA profiling annotation library. When True, TorchLens wraps captured ops with NVTX range markers so they show up labeled in NVIDIA profilers (Nsight Systems, Nsight Compute). Default OFF; enable when profiling on CUDA. Adds small per-op overhead."
+
+Filed 2026-05-21 during glossary v3 rename pass. Tiny tweak; can land in same pass as the capture_config review or earlier.
+
+### Revisit `ordinal_index` as universal trace-level index field name
+
+Currently `ordinal_index` is the universal field name for "0-based position in the trace-level accessor" — appears on Op, Layer, Module, ModuleCall, Param, Buffer, GradFn, GradFnCall, Conditional (etc.). JMT noted some lingering doubt about whether this is the best name; flagging for post-launch revisit.
+
+**Concerns / alternative names to weigh:**
+- `ordinal_index` (current) — "ordinal" is mathematically loaded (often "ordinal numbers" in math/logic), might not telegraph "position in trace-level accessor" clearly
+- `trace_position` — explicit about scope (trace-level) and intent (position)
+- `trace_index` — was the name on GradFn before we renamed to `step_index` for symmetry with Op; using "trace_index" universally would conflict with GradFn.step_index semantic
+- `global_index` — explicit about global vs scoped, less mathy
+- `position` (bare) — bare scope-derived; relies on context, might be ambiguous
+- `index_in_trace` — verbose but unambiguous
+
+**Use cases the field serves:**
+- Round-trip lookup: `trace.ops[op.ordinal_index] is op`
+- Iteration in canonical order
+- Per-record stable position for cross-references
+
+**What's load-bearing:**
+- 0-based (Pythonic indexing)
+- Uniform across all per-record classes (single name family)
+- "Position in the trace-level accessor" semantic
+
+**Post-launch decision:** Audit which alternative reads most naturally for users. The current "ordinal_index" is functional but JMT's hesitation suggests it could be clearer. Possibly rename to `trace_position` or similar; would cascade to ~8 classes.
+
+Filed 2026-05-21 during rename sprint planning. Cosmetic rename only; behavioral semantic stays the same. Post-launch.
+
+### Examine state / state_history / last_run holistically — lifecycle surface review
+
+Three closely-related fields make up the Trace lifecycle surface, but their design is fragmented and may have redundancy / inconsistency. Audit them together to ensure they form a coherent system.
+
+**The three fields:**
+
+1. **`Trace.state`** — Enum-like `TraceState` value: `PRISTINE`, `SPEC_STALE`, `REPLAY_PROPAGATED`, `RERUN_PROPAGATED` (likely needs rename to `FORWARD_PROPAGATED` per the pencil notes), `LIVE_CAPTURED`, `DIRECT_WRITE_DIRTY`, `APPENDED`. Single snapshot of the Trace's current lifecycle position.
+
+2. **`Trace.state_history`** — Append-only log of lifecycle state changes (fork, replay, rerun, direct-write). Each entry: `(timestamp, transition_type, payload)`.
+
+3. **`Trace.last_run`** — Dict summary of the most recent replay/rerun/append operation (engine, timing, intervention spec revision, flags, divergence info, hash before/after). Renamed from `last_run_ctx`.
+
+**Open questions:**
+
+- **Redundancy between `last_run` and `state_history[-1]`:** are these the same data, or do they differ in fields? If equivalent, `last_run` could become a `@property` returning `state_history[-1]`. If they differ, both stay but the difference needs documenting. Original earlier-filed todo "Verify `Trace.last_run` is redundant with `Trace.state_history[-1]`; possibly collapse" is now subsumed by this broader audit.
+
+- **Consistency of state enum values:** `RERUN_PROPAGATED` likely needs renaming to `FORWARD_PROPAGATED` if the broader `rerun` → `forward` rename lands.
+
+- **Coverage of state transitions:** does every operation that modifies a Trace push an entry to `state_history`? Are there silent modifications that bypass the log?
+
+- **state_history schema:** is it a stable public schema (users can query it programmatically)? Or is it diagnostic-only?
+
+- **Timing fields in state_history vs Trace-level aggregates:** state_history has per-event timestamps; `backward_durations` etc. (locked this session) are aggregates. Is the per-event data the source of truth, and aggregates are derived? Or both stored separately?
+
+- **Naming of `last_run`:** is "run" the right word? An entry in state_history represents one "operation" or "transition" — not all are "runs" (e.g., direct-write isn't a run). Maybe `last_operation` / `last_transition` / `last_state_change`?
+
+- **Public-vs-internal:** are `state` / `state_history` / `last_run` all part of the user-facing public API, or are some diagnostic-only?
+
+- **Cleanup behavior:** does `Trace.cleanup()` clear state_history? Should it?
+
+- **Multi-backward case:** with `backward_durations` (list, recently locked) and `BackwardPass` records (future todo), how does the backward-pass-lifecycle interact with state/state_history?
+
+**Recommendation when revisiting:** treat state / state_history / last_run as ONE design problem. Don't fix one in isolation — the relationships are load-bearing.
+
+Filed 2026-05-21 during rename sprint planning. Replaces the earlier narrower "Verify last_run redundancy" todo. Post-launch design pass.
+
+### Universal accessor behavior audit — ALL accessors across the package
+
+This consolidates the harmonized accessor rules. Audit every Accessor class and ensure ALL of them follow the uniform behavior locked during the rename sprint.
+
+**Universal accessor rules (locked):**
+
+1. **Type-strict.** Every accessor ALWAYS returns its own class type. No "for convenience" overlaps (e.g., `trace.layers[op_label]` returns Layer, not Op — strips `:N` to find parent).
+
+2. **0-based positional integer indexing.** `accessor[N]` is Python-list-like. `accessor[-1]` works. `len(accessor)`, iteration in canonical order, etc.
+
+3. **Short and long label forms accepted — FULLY INTERCHANGEABLE.** For Op-like labels, ALL FOUR forms must resolve to the same Op (when unambiguous):
+   - `conv2d_2` — short, bare (no step_index, no pass_index) — resolves to Layer; or to Op for single-pass case
+   - `conv2d_2_3` — long, bare (includes step_index) — resolves to Layer; or to Op for single-pass case
+   - `conv2d_2:1` — short, pass-qualified — resolves to Op
+   - `conv2d_2_3:1` — long, pass-qualified — resolves to Op
+
+   This interchangeability is CRITICAL for users. The locked convention is that users should not have to remember which form to type — both short and long, both pass-qualified and bare, all work as inputs to ANY label-accepting accessor. The accessor implementation must:
+   - Build alternate-form lookup keys for every Op/Layer (alternate short and long forms automatically registered)
+   - Resolve any of the four forms to the same target object
+   - Same applies to ModuleCall (`encoder.block` ↔ `encoder.block:1` for single-call)
+   - Same applies to GradFn (`addmm_back_1_5` ↔ `addmm_back_1_5:1` for single-call)
+
+   **Tests required:** every accessor verified to accept all four forms; same object returned regardless of form; alias-form lookup is part of CI.
+
+4. **Bidirectional bare/qualified resolution:**
+   - **Aggregate accessors** (`trace.layers`, `trace.modules`, `trace.grad_fns`): accept bare aggregate identifier OR per-event-qualified label (strips `:N` to find aggregate).
+   - **Per-event accessors** (`trace.ops`, `trace.module_calls`, `trace.grad_fn_calls`): accept per-event-qualified label directly. For SINGLE-X aggregates, also accept bare aggregate identifier → unique per-event record. For multi-X, raise with guidance.
+
+5. **Scoped accessors** (`layer.ops`, `module.calls`, `grad_fn.calls`): bare parent identifier accepted for single-X case (e.g., `layer.ops["conv2d_1_2"]` returns unique Op for single-pass Layer).
+
+6. **Super[X] member accessors** (`super_layer.members`): supports `[str]` (trace name) AND `[int]` (0-based positional in Bundle member order).
+
+7. **Bundle accessors** (`bundle.ops`, `bundle.layers`, etc. returning Super[X]): same bidirectional rule as Trace-level — return Super[X] versions instead of single-class records.
+
+8. **Bundle universal accessor** (`bundle.at[X]` AND `bundle.at(X)`): square OR round brackets accepted; universal Super[X] resolution order.
+
+**Accessors to audit + verify:**
+
+Trace-level:
+- `trace.layers`, `trace.ops`, `trace.modules`, `trace.module_calls`, `trace.params`, `trace.buffers`, `trace.grad_fns`, `trace.grad_fn_calls`
+- Filter Accessors: `compute_ops`, `compute_layers`, `saved_*` (8 fields), `orphans`, `input_layers`, `output_layers`, `buffer_layers`, `internal_source_*`, `internal_sink_*`, `layers_with_params`
+- `trace.conditionals` (ConditionalAccessor)
+
+Scoped:
+- `Layer.ops`, `Module.calls`, `GradFn.calls`
+- `Module.params`, `Layer.params`, `Op.params`
+
+Bundle:
+- `bundle.traces` (TraceAccessor)
+- `bundle.ops`, `bundle.layers`, `bundle.modules`, `bundle.module_calls`, `bundle.params`, `bundle.buffers`, `bundle.grad_fns`, `bundle.grad_fn_calls`
+- `bundle.at[X]` universal
+
+Super[X]:
+- `super_X.members` (on every Super[X] class)
+
+Universal:
+- `trace[X]` (universal accessor)
+- `bundle[X]` (member lookup; or universal? — verify which behavior locked)
+
+**Test surface required:**
+For each accessor: int positional (including negative), str label (all accepted forms — bare, qualified, short, long), wrong-type returns clear KeyError with disambiguation suggestions, fuzzy-match suggestions via existing `_lookup_keys.py` machinery extended uniformly.
+
+**Implementation files likely affected:**
+- `torchlens/data_classes/_accessor_base.py` (base Accessor)
+- `torchlens/data_classes/_lookup_keys.py` (fuzzy match)
+- Per-class accessor implementations in `layer_log.py`, `module_log.py`, `grad_fn_log.py`, `param_log.py`, `buffer_log.py`
+- `torchlens/intervention/_super/_accessor_base.py` (Super[X] accessor base)
+- `torchlens/intervention/bundle.py` (Bundle accessor + at)
+- `torchlens/data_classes/model_log.py` (Trace `__getitem__`)
+
+Filed 2026-05-21 during rename sprint planning. Lands with the strict-type-accessor implementation work. Critical for users — once locked, must apply uniformly or surprise behavior emerges.
+
+### Strict-type explicit accessors on Trace (`trace.layers` always Layer, `trace.ops` always Op)
+
+Universal `trace[X]` accessor locked 2026-05-21 covers cross-type convenience lookup. As a corollary, explicit class accessors should be type-strict — no "Layer accessor returns Op for convenience" surprises. Specifically:
+
+- `trace.layers[X]` ALWAYS returns Layer. If `X` is a pass-qualified Op label (`conv2d_1_2:1`), strip the `:N` and return the Layer at `conv2d_1_2`. (Equivalent to using the bare Layer label.)
+- `trace.ops[X]` ALWAYS returns Op. If `X` is a bare Layer label (`conv2d_1_2`) and the Layer has ONE Op, return that Op (single-pass passthrough). If the Layer has multiple Ops and `X` is bare, raise `AmbiguousOpLookupError` with guidance ("Layer has N passes; use pass-qualified label like `conv2d_1_2:1`").
+
+Apply same rule to `trace.modules`, `trace.module_calls`, `trace.params`, `trace.buffers`, `trace.grad_fns`, `trace.grad_fn_calls` — each returns its own class type only. Cross-class lookup is the universal accessor's job.
+
+Rename-sprint locks the SPEC; this todo tracks the implementation:
+1. Remove the "for convenience" fallback from `LayerAccessor.__getitem__`
+2. Add single-pass passthrough to `OpAccessor.__getitem__` (bare Layer label → Op if single-pass)
+3. Add ambiguous-lookup error class
+4. Tests: type assertions on returns + ambiguity raise
+
+Filed 2026-05-21 during glossary v3 rename pass. Lands with the universal-accessor implementation work.
+
+### Kill `streaming_pass_logs` / `num_streamed_ops` / `streamed_trace()` (redundant with Bundle)
+
+Pre-launch removal. The streaming-pass surface is a pre-Bundle hack that survived: a utility iterates inputs, captures one Trace per input, stashes the list on the first Trace as `streaming_pass_logs: List[Trace]` with companion count `num_streamed_ops`. Bundle handles this use case cleanly (named members, Super* alignment, proper container management).
+
+**Remove:**
+- `Trace.streaming_pass_logs` field
+- `Trace.num_streamed_ops` field (also referenced as `num_streamed_passes` in glossary — both names mismatched between code and docs)
+- `streamed_trace()` utility (`torchlens/utils/__init__.py:645-669`)
+- All field-policy entries referencing `streaming_pass_logs` (constants.py, model_log.py)
+
+**Migration for users (hard break, pre-launch acceptable):**
+```python
+# Was:
+result = streamed_trace(model, inputs_iter)
+for tr in result.streaming_pass_logs:
+    ...
+
+# Becomes:
+bundle = tl.bundle(*[tl.trace(model, x) for x in inputs_iter])
+for tr in bundle.traces.values():
+    ...
+```
+
+Optional thin helper to consider as part of removal: `tl.bundle_inputs(model, inputs_iter, **kwargs)` returns a Bundle directly. Three-line implementation; can add later if a user asks.
+
+**KEEP separately: activation streaming during capture.** Different concept — saves activations to disk/callback as they're produced (for memory-constrained capture of big models). Surfaces: `bundle_path` streaming, `out_callback` sinks, `_is_streaming_append_active` check in rerun.py. **JMT flagged 2026-05-21 to REVIEW the activation-streaming surface separately later — important and stays.** Don't conflate with this removal.
+
+Filed 2026-05-21 during glossary v3 rename pass. Add to rename-sprint "Removed" list in deltas when locked.
+
+### Benchmark addendum: zero-retention TL variant (apples-to-apples wrapper overhead)
+
+Current perf suite (commit `3409c25`) compares raw forward vs TL Trace, which conflates wrapper-dispatch overhead with tensor-save cost. The fair "TL tax" measurement is wrappers-on + zero retention. Add a new operation `fastlog_zero` to `benchmarks/perf_runner.py`:
+
+```python
+return lambda: tl.fastlog.record(
+    model, x,
+    keep_op=lambda ctx: False,
+    keep_module=lambda ctx: False,
+    default_op=False,
+    default_module=False,
+)
+```
+
+Wrappers fire, predicates return False, nothing stored. This is the pure-dispatch-tax floor. Run across the same matrix (TinyNet/ResNet-18/GPT-2-HF/GPT-2-HookedTransformer/SmallLSTM x CPU+CUDA), 50 samples + memory pass. ~30 min run.
+
+**Expected docs payoff:** the wrapper tax should be much lower than the full-Trace number — maybe 1.5-5x over baseline rather than 100-300x. That flips the comparison story from "TL is 300x slower" to "TL adds ~3x wrapper overhead; every additional cost is data you asked to capture." Much more honest and flattering frame for power-user docs.
+
+JMT filed 2026-05-14 after reviewing initial benchmark results. Not blocking; small follow-up to the perf sprint.
+
+### Perf sprint: leaner `Trace.rerun` (purpose = capture on new inputs)
+
+**Correction 2026-05-14:** `Trace.rerun(model, x)` is for re-capturing on BRAND-NEW inputs `x`, not for re-applying interventions on the same input. The fast-replay-on-cached-input path is `Trace.replay()`. Earlier sketch confused the two.
+
+Current `rerun` calls `_capture_with_active_spec` at `torchlens/intervention/rerun.py:84` — a full fresh capture pipeline. Re-allocates Trace metadata fields, re-builds graph-shape structure, re-saves every layer's activation.
+
+Since `x` is genuinely new, the forward math MUST execute. But several things shouldn't have to:
+
+1. **Topology-hash short-circuit:** if the new run produces the same `graph_shape_hash` as the prior Trace, skip metadata-tree reconstruction. Just refresh activation tensors in place. (Hash already computed for divergence detection at `torchlens/intervention/rerun.py:80`.)
+2. **Skip re-saving for layers user opted out of:** if the original Trace was captured with `layers_to_save=[...]` (subset), rerun should respect the same scope rather than saving everything.
+3. **Reuse prepared-model state:** `_prepare_model_once` is already cached, but the per-call setup inside the capture pipeline could be lighter when the model has been seen before.
+4. **Append-mode rerun is already supported** (`append=True`); standard rerun is what needs the lean path.
+
+**Expected gain:** rerun ≈ baseline_forward + wrapper_overhead + (user-requested save cost). For a no-save scope, that's roughly the zero-retention fastlog floor. For a partial-save scope, intermediate. Should land 5-50x over baseline depending on save scope rather than the current ~200x.
+
+**Estimate:** 1-2 days. Impl in `torchlens/intervention/rerun.py` + new helpers for topology-hash fast path. Tests for: same-topology fast path, divergent-topology falls back to full rebuild, append-mode unchanged, `layers_to_save` scope respected.
+
+Filed 2026-05-14 from JMT review of perf benchmark results. Real perf opportunity surfaced by the new suite.
+
+### Docs sprint addendum: `docs/performance.md` page for "I want fast activation pulling"
+
+The 2026-05-14 perf benchmarks (commits `3409c25` + `30dc452`) surface concrete numbers that power users will want when deciding HOW to use TorchLens. The docs plan v36 currently puts perf claims in the README hero + comparison pages but has no dedicated "performance guide" page. Add one.
+
+**Audience:** power users who have read the comparison table, seen TL is slower per-op than vanilla hooks, and want to know "how do I get the speed I need for my workflow."
+
+**Target page:** `docs/performance.md` (or `docs/guides/performance.md`). ~300-500 lines. Linked from:
+- README power-user routing section (alongside cookbook/tutorials links)
+- Every `docs/comparisons/vs_*.md` page footer ("worried about perf? see docs/performance.md")
+- Cookbook recipes that pull activations
+- `docs/for-ai-agents.md` (the agent-coder doc) — agents need this decision tree fast
+
+**Content outline:**
+
+1. **Decision tree** ("which TL mode should I use?")
+   - "I want one activation from one layer, fast as possible" -> `fastlog.record(...) + tl.fastlog.halt()`. Sub-1x raw forward on deep models.
+   - "I want all module outputs, peer-tool equivalent" -> `fastlog.record(default_module=True, default_op=False)`. ~5x raw forward.
+   - "I want every-op metadata, no tensors saved" -> `log_forward_pass(layers_to_save=[], vis_opt='none')`. Wrapper overhead floor.
+   - "I want everything, full inspect+intervene+viz" -> `log_forward_pass(intervention_ready=True)`. Substrate mode; pay the data cost.
+   - "I want to capture once, swap inputs N times" -> capture + `Trace.rerun(model, x_2)` per input. Same cost as fresh capture per call but writes into existing Trace.
+   - "I want to apply an intervention without recomputing" -> `Trace.replay(...)`. ~20x raw forward (cached state).
+
+2. **The benchmark table** (from `benchmarks/perf_results_2026-05-14.md`). Headline rows only, per-model summarized. Link to full report.
+
+3. **The "halt-early" superpower section.** Highlighted callout: TL can be FASTER than raw forward when you only need an early activation. Worked example with code + measured timing.
+
+4. **Knob reference:**
+   - `intervention_ready` (cost vs functionality)
+   - `vis_opt` (cost vs viz output)
+   - `layers_to_save` (scope control)
+   - `module_filter`
+   - `fastlog` predicates
+   - Future: `save_mode="reference"` once that ships from the perf sprint (link to changelog)
+
+5. **When NOT to reach for TorchLens:**
+   - "I only ever need the final logits" -> just run the model
+   - "I work exclusively on HuggingFace transformer families and want named hooks" -> TransformerLens is more ergonomic
+   - "I need attribution methods" -> captum
+   - Honest concession-style framing per the comparison-page convention.
+
+6. **Architectural note** explaining WHY TL has the overhead it has (wrapper-per-op as the substrate trade) so engineers understand the design, not just the numbers.
+
+**Estimate:** ~3-4h to author once the benchmark numbers are committed. Should land at Phase 1.1 (alongside README) since power users hit it from day one, not Phase 4. Update plan Phase 1 task list to include this page.
+
+Filed 2026-05-14 from JMT pointing out that power-user perf guidance needs a concentrated docs surface.
+
+### Ergonomic: string input to `log_forward_pass` (auto-tokenize)
+
+Allow `tl.log_forward_pass(model, "Hello world")` to auto-tokenize when the model exposes a tokenizer. Matches TransformerLens UX; lowers cognitive friction for the dominant interp workflow; doesn't leak HF into core.
+
+**Duck-typed dispatch (no HF dependency in core):**
+
+```python
+def log_forward_pass(model, x, **kwargs):
+    if isinstance(x, str):
+        if hasattr(model, "to_tokens"):
+            x = model.to_tokens(x)              # TransformerLens
+        elif hasattr(model, "tokenizer"):
+            x = model.tokenizer(x, return_tensors="pt").input_ids
+        else:
+            raise TypeError(
+                "String input requires model.to_tokens(...) or model.tokenizer(...). "
+                "For HuggingFace models, attach a tokenizer: "
+                "model.tokenizer = AutoTokenizer.from_pretrained(...)"
+            )
+    return _existing_log_forward_pass(model, x, **kwargs)
+```
+
+Handle: single string, list[str] (batch passthrough to same path), helpful error otherwise.
+
+**Apply to all entry points that take an input:** `log_forward_pass`, `trace` (if separate), `fastlog.record`, `Trace.rerun` (since rerun is for new inputs, string should work there too).
+
+**Scope:** ~50 LOC + tests covering HookedTransformer, HF model with attached tokenizer, plain nn.Module raises helpful error, batched list[str], existing tensor input still works unchanged.
+
+**Symmetric extension (optional v2):** vision models via duck-typed `model.processor` for PIL/numpy image inputs. Lower ROI; defer unless asked.
+
+**Docs payoff:** README quickstart + flex notebook + Phase 4 comparison pages all become significantly cleaner. The "before/after" of demo code is dramatic.
+
+**Priority:** Pre-launch. Should land alongside docs Phase 1 since it makes README and flex notebook code substantially shorter. Easy enough to slot in during Phase 0.
+
+Filed 2026-05-15 from JMT proposing this as a TransformerLens-style ergonomic.
+
+### Investigate: `rerun_no_save` slower than `rerun` (benchmark anomaly)
+
+Perf benchmark addendum (commit `30dc452`) shows `Trace.rerun(model, x), no saved outs` runs slower than the with-save baseline across every cell:
+- GPT-2-HF CPU: rerun 2984ms vs rerun_no_save 5725ms (~1.9x worse)
+- ResNet-18 CPU: rerun 841ms vs rerun_no_save 2053ms (~2.4x worse)
+- GPT-2-Hooked CUDA: rerun 3286ms vs rerun_no_save 6611ms (~2.0x worse)
+- ResNet-18 CUDA: rerun 913ms vs rerun_no_save 860ms (~0.94x, only cell where no-save is faster)
+
+Expected: rerun_no_save should be cheaper than rerun-with-save (fewer tensor copies). Observed: consistently slower.
+
+Likely causes:
+- Codex impl quirk in how `rerun_no_save` sets up the originating Trace (different code path triggers extra setup per call)
+- `layers_to_save=[]` semantics may force a no-op-save path that's actually more expensive than the default-save path (counter-intuitive but possible if the empty-list case lacks an early-exit optimization)
+- Memory-pass artifact: the 10 untimed runs in memory pass might be hitting a slow path that's measured
+
+Action: read `benchmarks/perf_runner.py` `rerun_no_save` impl; check whether the originating Trace setup differs from the with-save case in unexpected ways. Possibly an actual TL perf bug in the no-save Trace setup path worth fixing.
+
+Filed 2026-05-14 from perf addendum results. Not urgent but interesting.
+
+### Perf sprint: zero-copy `save_mode="reference"` for activations
+
+Current Trace save path does `.detach().clone()` (or `.detach().cpu()`) per saved tensor. For models with large activations (GPT-2 hidden states), the clone is the dominant fraction of save cost.
+
+**Proposal:** add `save_mode` option (or `clone_saved_tensors: bool` flag) to `log_forward_pass` / `fastlog.record`:
+- `save_mode="copy"` (default, current behavior; safe)
+- `save_mode="reference"` (new): `.detach()` only, store tensor as-is, NO clone
+- `save_mode="view"` (new, optional): keep autograd graph alive too — enables backprop through saved Trace tensors as if they were live model intermediates; useful for attribution-method wrappers
+- `save_mode="cpu_async"` (future): pinned-memory async copy; overlaps with next GPU op
+
+**Contract for "reference" mode:**
+- Saved tensors are LIVE references to model intermediates
+- Mutating them in-place invalidates the Trace
+- Loud warning on first use per session
+- Documented anti-patterns: don't run more forward passes with the same Trace held; don't use in-place ops on retrieved activations
+
+**Risks to audit:**
+1. Torch internal in-place ops (fused BN, fused activations in HF transformers) — verify which intermediates are mutated; document or restrict
+2. GPU memory retention — references hold allocator pool; for deep models on small GPUs, may push past limits where copy mode would have been fine
+3. Autograd graph survival — `.detach()` should break grad-fn, but verify no surprise retention
+
+**Where it pays off:**
+Read-only interpretability workflows (saliency, SAE feature extraction, activation inspection) never mutate saved tensors. These are the dominant use cases. Reference mode is the right default for them.
+
+**Acceptance:** new benchmark row `trace_save_reference` runs 30-60% faster than `trace_save_copy` on GPT-2-HF CUDA; reference-mode Trace activations are bit-identical to copy-mode results after capture; in-place mutation triggers warning; no autograd memory leak in tests.
+
+**Estimate:** 1-2 days. Touches `torchlens/backends/torch/...` save path + a clear API surface + tests + docs.
+
+Filed 2026-05-14 from JMT spotting that the clone cost is independent of the wrapper-dispatch cost and is independently optimizable.
+
+### Perf sprint: lazy fastlog ctx (only compute what predicate needs)
+
+Current fastlog wrapper EAGERLY constructs the full ctx on every op:
+- func_name, kind (cheap, always eager)
+- source_location (expensive: `inspect.stack()` / frame walk, ~10-50us)
+- module_address (~5us module-stack walk)
+- args/kwargs refs (~1us dict/list construction)
+- counter bookkeeping (~100ns)
+
+If the user's predicate only touches `ctx.func_name`, the wrapper has done 50-100x the work it needed to.
+
+**Fix: lazy ctx attributes.** Make `source_location`, `module_address`, `args_summary` into `@cached_property` or equivalent. Predicates that only read `func_name`/`kind` trigger zero expensive computation. Predicates that need more, or storage paths that need more, force materialization only on access.
+
+**Constraint:** per-type counters (`relu_1_3` numbering) MUST still tick on every op — TL invariant for deterministic labeling. Counter cost is negligible.
+
+**Expected gain:** ~50-70% reduction in per-op wrapper cost for the common predicate-on-func_name case. Translates to fastlog_zero landing at 2-5x raw forward instead of 15-30x on GPU transformer models (per benchmark surface).
+
+**Estimate:** half-day to a day. Touches `torchlens/fastlog/_record_one_shot.py` ctx construction + `Recorder` consumers + all in-tree predicate examples.
+
+**Risk:** medium. Need test coverage that lazy fields produce identical results when forced; need to verify all storage-path consumers tolerate lazy access.
+
+**Acceptance:** new benchmark row "fastlog_zero, predicate touches only func_name" runs <5x raw forward on GPT-2-HF CUDA; existing fastlog tests pass; recorded events bit-identical to eager-ctx baseline.
+
+Filed 2026-05-14 from JMT spotting the architectural slack during perf review.
+
+### Sharpen comparison-page concessions before Phase 4 docs sprint
+
+Concession paragraphs in `docs/comparisons/vs_*.md` were drafted too modestly in the v36 frozen plan. Specific corrections to apply when Phase 4 writes the pages:
+
+- **vs_transformerlens.md**: TL "readable hook names" advantage shrinks dramatically because TorchLens has QKV tags + module-indexed access (`log["attention_1.q"]`). The real concession is just "if you already type `blocks.5.attn.hook_pattern` from muscle memory, TL's literal string match is what you want" — onboarding-style preference, not a capability gap. Tighten the concession sentence accordingly.
+- **vs_captum.md**: "captum has attribution methods we don't" is a packaging difference, not a capability one. TorchLens already exposes gradients + activations + modules — all the substrate needed for IG/LRP/GradCAM/DeepLift. Could ship `torchlens.attribution.*` wrappers later. Honest concession is "captum has 6 years of tuned implementations + paper-validated hyperparameters", not "they can do something we can't." Consider adding attribution wrappers as a separate sprint after docs.
+- **vs_torchexplorer.md**: TorchLens `Trace.draw(format="svg")` (verify this works) gives browser-native `<title>` hover. torchexplorer's real edge narrows to **full pan/zoom + clickable-node→tensor-inspector in one canvas**, not "any hover at all." Rewrite concession to that scope.
+
+Filed 2026-05-13 from JMT pushback during plan freeze. Not blocking Phase 4 dispatch — corrections happen inside the comparison-page authoring tasks themselves.
+
+### Power-user docs section opener: "universal interpretability substrate"
+
+When Phase 4.3 / Phase 2 dispatches the power-user cookbook + reference section, lead with the substrate framing — this reframes the project from "another viz tool" into "the layer everything else builds on" and converts perceived overengineering (36-round-reviewed docs, parameter-grad parity validation, etc.) from "excessive" to "load-bearing for what builds on top."
+
+**Draft opener (workshop at authoring time):**
+
+> TorchLens is a universal interpretability substrate. Wrap every PyTorch op once at session start; the wrappers don't care what architecture sits on top. New architecture lands tomorrow — Mamba, RWKV, RetNet, the next thing — TorchLens captures it day one, no library update needed. That's what "universal" buys you, and it's why the validation infrastructure is the way it is: a substrate has to be load-bearing for whatever gets built on it.
+
+**Two beats this opener carries that the rest of the section can lean on:**
+
+1. **Architecture-scaling claim.** TL hooks *ops*, not *patterns*. Every peer tool has had to chase architectures (TransformerLens shipping `HookedMamba`, `HookedRWKV`, etc. as explicit work). TL shipped once and kept working. This is genuinely under-marketed and is a strong differentiator for the "I work on novel models" crowd — exactly the Anthropic-adjacent interp researcher persona the docs target.
+
+2. **Validation-as-feature reframing.** Once you call it a substrate, the parameter-grad parity oracle, module-output gradient validation, `tl.validate(scope=...)`, `tl.compat.report` — all of that stops looking like perfectionism and starts looking like appropriate engineering for "the layer everyone trusts." Substrate credibility = validation infrastructure. Lean into it.
+
+**Tone:** confident, not breathless. Anchor every claim on a concrete primitive (`tl.validate`, `tl.compat.report`, etc.) so it doesn't read as marketing.
+
+Filed 2026-05-13 from JMT.
+
+
+### Ship `torchlens.attribution.*` (post-docs sprint)
+
+Attribution methods compute per-input-feature relevance scores from activations + gradients. TorchLens already has every primitive; this sprint just packages the standard recipes as thin wrappers. Flips the vs_captum comparison row from "use captum for IG/LRP" to "TorchLens ships native attribution; bridge to captum for long-tail methods."
+
+**Tier 1 (easy, ~1h each, ~50 lines):**
+- `torchlens.attribution.saliency(model, x, target)` — `grad(out[target], x)`, optionally × input.
+- `torchlens.attribution.integrated_gradients(model, x, target, baseline=None, n_steps=50)` — trapezoid-sum of gradients along baseline→x path; uses Bundle for the batched interpolation.
+- `torchlens.attribution.smooth_grad(model, x, target, n_samples=50, noise_std=0.1)` — mean of grads over noisy copies; uses replay.
+- `torchlens.attribution.grad_cam(model, x, target, target_layer)` — ReLU(Σ α_k · A_k) at a chosen conv layer; uses selectors.
+
+**Tier 2 (medium, ~half-day each):**
+- DeepLift — careful chain-rule handling vs a reference baseline.
+
+**Tier 3 (real work, defer or punt):**
+- LRP — per-layer decomposition rules. Punt to `tl.bridge.captum` until/unless someone asks for it natively.
+
+**API shape:** every method returns input-shaped relevance tensor + optional `viz` kwarg producing a saliency-map overlay (matplotlib backend, reuses `torchlens.viz` figure conventions).
+
+**Test plan:** smoke against TinyNet + a 1-layer MLP per method; correctness validated against captum on the same input (within float tolerance) for IG/GradCAM where captum is the ground truth.
+
+**Documentation:** new tutorial `docs/tutorials/13_attribution.md` (or extend tutorial 12); add cookbook recipe per method; vs_captum.md concession rewritten.
+
+Estimate: ~1-2 days of focused work for Tier 1 + DeepLift. Filed 2026-05-13 from JMT pushback on captum concession.
+
+### Sharpen the 50-word elevator pitch ("should sing")
+
+Current pitch at plan §1.2 lines 743-747:
+> TorchLens runs your PyTorch model normally and records every tensor-producing operation -- forward and backward -- into a structured `Trace`. The same selector DSL drives inspection, visualization, save/load, validation, multi-run comparison, and interventions. One model, one line, one rich queryable object.
+
+JMT's note 2026-05-13: "I want it to really sing. The elevator should sound like an answer to prayers." Current version is competent-informational; doesn't telegraph the pain it solves before the reader has read the API.
+
+**Target reader's prior pain:**
+- 50 `register_forward_hook` calls to grab activations, manual cleanup, no persistence
+- Manually tracking which intermediate tensor corresponds to which source line
+- Forward = one API surface; backward = a different one
+- Comparing two model variants = saving tensors to dicts by hand
+- Can't snapshot a run and come back to it tomorrow
+
+**The "answer to prayers" beat is the selector DSL itself.** It's the unifying primitive: one vocabulary for inspection, intervention, viz, comparison, validation. That's what no peer tool gives you. Lead with that, not with the structural description.
+
+**Draft variants to workshop when the README gets written (Phase 1.1):**
+
+Variant A (pain-first):
+> Stop writing hooks. TorchLens runs your model and hands you a queryable `Trace` of every tensor it touched -- forward and backward, named and visualizable. The same selector vocabulary inspects, intervenes, compares, saves, validates. One model, one line, one DSL for everything.
+
+Variant B (capability-led):
+> One selector DSL. Inspection, intervention, visualization, save/load, validation, multi-run diff -- the same vocabulary drives all of them, on forward AND backward. Run your model normally. TorchLens captures every op. You query and manipulate from there.
+
+Variant C (concrete):
+> `log = tl.log_forward_pass(model, x)`. That's it. Now every tensor your model touched is named, queryable, visualizable, intervenable, comparable across runs, savable to disk, and validated against autograd -- through one selector vocabulary. Forward and backward in the same object. Skip the hook-writing tax.
+
+Whichever lands: the pitch MUST lead with "you've been writing hooks, here's what replaces that" rather than "TorchLens has a data structure." Decision deferred to Phase 1.1 when the README author has the README hero figure in front of them.
+
+Filed 2026-05-13 from JMT.
+
+### Promote `docs/glossary.md` from excerpt to exhaustive reference
+
+Plan §10 Phase 5.3 currently ships `docs/glossary.md` as a 150-line "user-facing excerpt of canonical glossary." The canonical glossary at `.project-context/torchlens_glossary.md` is already 1,135 lines and refreshed 2026-05-13, covering every class, attribute, function, argument, kwarg, return type, helper, observer, and convention.
+
+**Action when Phase 5.3 dispatches:** instead of authoring a thin excerpt from scratch, *promote* the canonical glossary to `docs/reference/glossary.md` with a pruning pass. Strip agent-facing-only content (anything referencing `.project-context/`, agent dispatch protocols, retro notes), redact not-yet-shipped target names (e.g. the `Trace.backward` rename target stays out until renamed), and add a short "how to read this" header. Probably lands at ~600-800 lines post-pruning.
+
+This becomes the single searchable exhaustive reference downstream tool builders reach for ("what does `Layer.passes` return?" "how does the Layer-vs-Op accessor rule work?" "what fields does `BufferLog` carry?"). Bumps Phase 5.3 from S to M sizing. Drop the 150-line `file_lines_max` budget on `docs/glossary.md`; replace with the tutorial/cookbook-class 800-line budget.
+
+Filed 2026-05-13 from JMT.
+
+### Ship `docs/for-ai-agents.md` (or `AGENTS.md` for downstream consumers)
+
+Increasingly real audience: LLM coding agents (Claude Code, Codex, Cursor agents, Aider, etc.) that have been asked "use torchlens to do X" in someone else's codebase and need maximum signal-to-noise in minimum tokens. This is the inverse of the repo's existing `CLAUDE.md` (which guides agents working *on* TorchLens); this new doc guides agents working *with* TorchLens.
+
+**Target content (~300-500 lines, high density):**
+- One-paragraph mental model (selectors + Trace + replay/rerun)
+- API quick reference table: all 47 public names, one line each, what they do, signature shape
+- Common pattern templates as complete <30-line snippets: inspect activations / intervene mid-forward / compare two runs / save+load / backward inspection / fastlog sparse capture
+- Anti-patterns table: don't log `torch.compile` / TorchScript / `torch.export`; don't run concurrent captures; don't store opaque callables in `.tlspec`; don't depend on hidden internal tensors of fused kernels
+- Validation recipe: how to use `tl.compat.report(model, x)` + `tl.validate(...)` to confirm what was captured matches what was asked for
+- Decision tree: full Trace vs fastlog Recording; forward-only vs forward+backward; eager vs MLX backend
+- Error-recovery patterns: "if you see X, likely cause is Y" (e.g. "tl_module_address missing on tensor mid-forward = user injected a fresh tensor without going through the intervention API")
+- Verification block at end: a 5-line snippet the agent can run to confirm a TorchLens-based change works
+
+**Format conventions:**
+- Plain prose with code fences, NO clever formatting — agents tokenize markdown literally
+- Every snippet self-contained (imports + model + call + assert) so the agent can copy-paste
+- Cross-link to `docs/glossary.md` for definitions; this doc is the action surface
+
+**Verification:** add the file to `scripts/check_docs_api_truth.py`'s execution sweep so every code block in it runs on every PR — anything that drifts gets caught immediately.
+
+Estimate: ~4-6h for a first draft including snippet verification. Probably authored at Phase 2.6 or as a new Phase 2.7. Could be a notable Anthropic-evaluator signal (the project takes AI-coding-agent usage seriously as a first-class audience).
+
+Filed 2026-05-13 from JMT.
 
 ### Backward validation per-layer-grad oracle (DEFERRED from P6 via AD-32)
 
@@ -15,6 +1184,87 @@ Follow-up sprint should redesign the oracle from scratch. Candidate directions:
 disposable-trace probe followed by state restoration. Do not reuse the deleted
 P6 helper names (`_collect_stock_grads`, `_compare_layer_grads`,
 `CoverageDiagnostic`, etc.) without a fresh design review.
+
+### Hot-path IR-only OpEvent construction (PARTIAL @4afa79c — full rewrite still pending)
+
+**Status update (2026-05-11):** Mini-Sprint α item 3 moved `OpLog`
+construction OUT of `backends/torch/ops.py` (zero `OpLog(` hits there
+now) but capture still materializes a live OpLog because mid-forward
+lookup + backward-hook behavior depend on it. The original Trojan-horse
+pattern from M3 is slightly cleaner but persists in spirit.
+
+Remaining work to fully realize the architectural intent:
+- Refactor mid-forward lookups (`Trace._raw_layer_dict`-style reads
+  during capture) to use the event stream or a lighter projection
+- Refactor backward-hook attachment so it doesn't need a live OpLog
+  mid-capture
+- Move OpLog construction ENTIRELY into `postprocess/_materialize.py:
+  materialize_into_build_state()`
+- Parity gate must stay green byte-for-byte
+
+Estimated remaining: ~4-8h codex once mid-forward consumers are
+audited. Worth scheduling as its own focused sprint rather than
+bundling with other cleanups.
+
+### Mypy accessor typing errors — DONE (Mini-Sprint α item 1 @0f54ba5)
+
+Resolved in commit `0f54ba5`. `mypy torchlens/data_classes/` is now
+clean (16 source files, 0 errors). Codex fixed broader leakage too.
+
+### Golden parity pickle size — DONE (Mini-Sprint α item 2 @0947830)
+
+Resolved in commit `0947830`. Both resnet50 goldens now 131KB (was 765KB).
+Solution: gzip-compressed pickle storage with transparent read/write
+support in the parity test (input shape stayed similar; metadata
+dominates pickle size more than input HW does, so compression was the
+practical fix).
+
+### Fastlog vs bare-forward perf benchmark gap (raised 2026-05-11)
+
+There's no direct benchmark of `tl.fastlog.record(...)` overhead vs bare
+`torch` forward in the repo. Only `benchmarks/intervention_overhead_results.md`
+gives a TinyMLP baseline (bare 57 µs; `log_forward_pass(intervention_ready=False)`
+32.3 ms = 564× slowdown — worst case because the model is tiny).
+
+What we want to know:
+- Per-op overhead for fastlog with all-False predicate (topology-only path)
+- Same on realistic models: TinyMLP, ResNet-50, GPT-2 small, ViT
+- How does the overhead scale with op count? With predicate complexity?
+- Memory ratio (RAM footprint) under sparse-only vs full capture
+
+Belongs in: the capture-pipeline-unification M3/M5 perf gates if not already
+covered, OR a follow-up fastlog perf sprint. Plan §11 currently sets perf
+bars for full capture (ResNet-50 ≤+5%, GPT-2 ≤+7.5%) but doesn't state a
+bar for the fastlog/predicate=False path. Add: "predicate=False on ResNet-50
+must be within Xx of bare forward" (X TBD — start with 2x, tighten with data).
+
+Likely deliverable: add a `bench_fastlog_overhead.py` next to
+`bench_log_forward_pass.py` with the same model set + RAM/disk/RAM-mirror
+modes + variance reporting. Output to a new `benchmarks/fastlog_overhead_results.md`.
+
+### Fastlog API ergonomics review (raised 2026-05-11, post capture-pipeline-unification)
+
+JMT hasn't used the fastlog API yet. After the capture-pipeline-unification
+sprint lands (M1-M8 complete + merged), do a hands-on review of `tl.fastlog`:
+
+- `tl.fastlog.record(model, x, keep_op=...)` ergonomics
+- `Recording` / `RecordingTrace` / `ActivationRecord` access patterns
+- `RecordingTrace.draw()` graph visualization quality
+- `RecordingTrace.timeline_html()` interactive view
+- `RecordingTrace.repredicate(...)` — re-evaluate a different predicate against the stored event stream (probably the killer feature; verify it's discoverable in docs)
+- Predicate composition with intervention selectors (`tl.func`, `tl.module`, `tl.label`, `tl.contains`, `tl.where`, `tl.in_module`)
+- Storage modes (RAM, disk, RAM+disk mirror) — when does each make sense from a user POV?
+- Disk bundle recovery via `tl.fastlog.recover()` — does it work cleanly?
+- `dry_run()` workflow — predicate iteration without payload retention
+
+After hands-on: file friction-points as separate items, possibly bundle
+into a fastlog ergonomics sprint. Particularly relevant once the unified
+pipeline ships (Recording becomes a lazy projection over CaptureEvents
+per AD-1; verify user experience is identical post-refactor).
+
+Decision deferred under AD-1: should fastlog disk format unify into
+`.tlspec` v4 or stay separate? Try the API first; that question may
+become obvious one way or the other after real usage.
 
 ### Intervention API naming sprint leftovers (raised cycle 2 round 7, 2026-04-29)
 
@@ -89,14 +1339,43 @@ would make both reviews harder.
 
 **Estimated effort:** 3-5 days. Net code reduction.
 
-### Capture-path unification: log_forward_pass internally as Recording (raised 2026-04-29)
+### Capture-path unification: log_forward_pass internally as Recording (raised 2026-04-29; reaffirmed 2026-05-15)
 
-**Status:** future architectural cleanup. NOT for the intervention API push.
+**Status:** post-launch wave 2 destination. The arc-of-history endpoint, not a maybe.
 
-Hypothesis: `log_forward_pass` could internally use fastlog's capture
-machinery (Recording-shaped events) and promote to ModelLog during
-postprocessing. Single capture path, divergent endpoints (Recording vs
-ModelLog). Discussed 2026-04-29.
+JMT 2026-05-15 reaffirmed: "the arc of history trends towards unifying here. Just cleaner." Architectural conviction is now explicit — this is where TorchLens is going, the question is when not whether.
+
+**Why it's the destination (vs the original "possibly never" framing):**
+
+1. **Maintenance compounds against you with two paths.** Every fix lands twice; asymmetric fixes are where bugs hide after a few years of capability stacking.
+2. **New capabilities land naturally on both sides post-unification.** `tl.halt()` for Trace, streaming/disk-backed Trace, lazy-promoted Recordings — each becomes a tiny feature instead of a dual-impl project.
+3. **Cleaner mental model for users and downstream tool builders.** "TorchLens captures op events; you choose retention scope (full vs predicate) and output shape (Recording vs Trace)." Single sentence.
+4. **The 2026-05-14 perf benchmark weakened the original 5-30% regression objection.** Dominant costs (wrapper firing, tensor saves) are shared on the unified path. Postprocessing as a flag rather than inline could be a slight win — it lets the postprocess pass batch-process the event stream rather than build structure incrementally.
+
+Hypothesis: `log_forward_pass` becomes "fastlog + keep_all + full_metadata + postprocess." Single capture path, divergent endpoints (Recording vs ModelLog). User-facing API unchanged.
+
+**Design (JMT 2026-05-15, 4-point spec + 2 inherited checks):**
+
+1. **One capture path** — wrapper firing logic is shared; today's fastlog hot path becomes the only hot path.
+2. **Control how much info we capture** — `keep_op`, `keep_module`, `default_op`, `default_module` as the canonical knobs (today's fastlog API). `intervention_ready` and `save_tensors` (or `save_mode`) layer on top.
+3. **Control whether we postprocess** — `postprocess=True` returns a Trace; `postprocess=False` returns a Recording. Same capture; different output shape.
+4. **Capture-time vs postprocess-time filtering distinction.** Capture-time predicates work on op-level info (`ctx.func_name`, args, module address). Postprocess-time filters work on graph-derived labels (`linear_1_1`, layer paths) — the latter requires postprocessing because canonical labels don't exist until the postprocess pass assigns them.
+5. (Inherited) **Backward threads through** — Recording carries backward op events tagged `kind="backward_op"`; postprocess folds them into the same Trace as forward ops.
+6. (Inherited) **Halt + postprocess play nicely** — halt produces a partial-graph Trace through postprocess; no new mechanism.
+
+**Realistic timeline (revised down from original "wave 2 multi-week"):**
+
+| Step | Effort |
+|---|---|
+| Field-model reconciliation (RecordContext ↔ LayerPassLog) | 1 day |
+| Core refactor: log_forward_pass → unified capture + postprocess flag | 1-2 days |
+| Layer-label filter on postprocess pass | ½ day |
+| Backward verification through unified path | ½-1 day |
+| Bundle + Super* + intervention API verification (existing tests should mostly pass) | ½ day |
+| Full test suite + perf benchmark verification (no regression on existing rows) | 1 day |
+| **Total** | **~1 week of focused work** |
+
+Post-launch placement still correct (after docs ship + planted flag); but the engineering is a single contained sprint, not a multi-week wave.
 
 **Wins (real):**
 - Eliminate capture-path drift between log_forward_pass and fastlog —
