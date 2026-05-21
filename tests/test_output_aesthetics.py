@@ -192,17 +192,20 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
     # Pass notation (module_addr:1)
     pass_key = f"{param_module_addr}:1"
-    if pass_key in log.modules:
+    if pass_key in log.module_calls:
         out.write(
-            _capture(f'repr(log.modules["{pass_key}"]) — ModuleCall', repr(log.modules[pass_key]))
+            _capture(
+                f'repr(log.module_calls["{pass_key}"]) — ModuleCall',
+                repr(log.module_calls[pass_key]),
+            )
         )
     else:
-        out.write(f"  # {pass_key} not in modules (single-pass module)\n")
+        out.write(f"  # {pass_key} not in module_calls (single-pass module)\n")
 
     # Direct pass access
     mod = log.modules[param_module_addr]
-    if 1 in mod.ops:
-        out.write(_capture(f'log.modules["{param_module_addr}"].ops[1]', repr(mod.ops[1])))
+    if 0 in mod.ops:
+        out.write(_capture(f'log.modules["{param_module_addr}"].ops[0]', repr(mod.ops[0])))
 
     out.write(_capture("log.modules.to_pandas()", log.modules.to_pandas().to_string()))
     out.write(_capture("log.modules.summary()", log.modules.summary()))
@@ -218,11 +221,11 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     )
                 )
                 # Show ModuleCall for each pass
-                for p in sorted(ml.ops.keys()):
+                for p, module_call in sorted(ml.ops.items()):
                     out.write(
                         _capture(
-                            f'repr(log.modules["{ml.address}"].ops[{p}]) — ModuleCall pass {p}',
-                            repr(ml.ops[p]),
+                            f'repr(log.modules["{ml.address}"].ops[{p - 1}]) — ModuleCall pass {p}',
+                            repr(module_call),
                         )
                     )
                 break
@@ -459,9 +462,9 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(mod_for_dump, f"Module: {mod_for_dump.address}"))
 
     # F.5 ModuleCall
-    if 1 in mod_for_dump.ops:
+    if 0 in mod_for_dump.ops:
         out.write(_section("F.5 ModuleCall field dump", level=3))
-        mpl_for_dump = mod_for_dump.ops[1]
+        mpl_for_dump = mod_for_dump.ops[0]
         out.write(_code(f"ModuleCall: {mpl_for_dump.call_label}"))
         out.write(_field_dump(mpl_for_dump, f"ModuleCall: {mpl_for_dump.call_label}"))
 
@@ -1079,8 +1082,8 @@ def _build_latex_report() -> str:
             for ml in log.modules:
                 if ml.num_calls > 1 and ml.address != "self":
                     ops_text = repr(ml) + "\n\n"
-                    for p in sorted(ml.ops.keys()):
-                        ops_text += f"--- Pass {p} ---\n{repr(ml.ops[p])}\n\n"
+                    for p, module_call in sorted(ml.ops.items()):
+                        ops_text += f"--- Pass {p} ---\n{repr(module_call)}\n\n"
                     doc.write(
                         _verbatim_box(
                             f"B.1 Multi-Pass Module — {ml.address} ({ml.num_calls} ops)",

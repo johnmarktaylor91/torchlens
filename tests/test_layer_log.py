@@ -66,7 +66,7 @@ class TestLayerLogConstruction:
         for layer_log in simple_log.layer_logs.values():
             assert layer_log.num_passes == 1
             assert len(layer_log.ops) == 1
-            assert 1 in layer_log.ops
+            assert 0 in layer_log.ops
 
     def test_back_reference_set(self, simple_log):
         """parent_layer_log is set on each Op."""
@@ -83,25 +83,25 @@ class TestLayerLogConstruction:
 class TestSinglePassDelegation:
     @pytest.mark.smoke
     def test_tensor_contents_delegation(self, simple_log):
-        """out delegates to ops[1] for single-pass."""
+        """out delegates to ops[0] for single-pass."""
         for layer_log in simple_log.layer_logs.values():
-            pass_log = layer_log.ops[1]
+            pass_log = layer_log.ops[0]
             assert layer_log.out is pass_log.out
 
     def test_has_saved_outs_delegation(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
-            pass_log = layer_log.ops[1]
+            pass_log = layer_log.ops[0]
             assert layer_log.has_saved_activation == pass_log.has_saved_activation
 
     def test_compute_index_delegation(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
-            pass_log = layer_log.ops[1]
+            pass_log = layer_log.ops[0]
             assert layer_log.step_index == pass_log.step_index
 
     def test_fallback_getattr_delegation(self, simple_log):
         """__getattr__ fallback delegates arbitrary per-pass fields."""
         for layer_log in simple_log.layer_logs.values():
-            pass_log = layer_log.ops[1]
+            pass_log = layer_log.ops[0]
             # func_autocast_state is per-pass, not an explicit @property
             assert layer_log.func_autocast_state is pass_log.func_autocast_state
 
@@ -119,7 +119,7 @@ class TestAggregateFields:
     def test_aggregate_fields_match_first_pass(self, simple_log):
         """Aggregate fields on Layer match the corresponding first-pass values."""
         for layer_log in simple_log.layer_logs.values():
-            fp = layer_log.ops[1]
+            fp = layer_log.ops[0]
             assert layer_log.layer_type == fp.layer_type
             assert layer_log.func_name == fp.func_name
             assert layer_log.shape == fp.shape
@@ -130,7 +130,7 @@ class TestAggregateFields:
 
     def test_layer_label_is_no_pass(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
-            fp = layer_log.ops[1]
+            fp = layer_log.ops[0]
             assert layer_log.layer_label == fp.layer_label_no_pass
 
 

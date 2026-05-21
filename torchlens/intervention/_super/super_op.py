@@ -115,7 +115,7 @@ class SuperOpAccessor(SuperAccessor["Op", SuperOp]):
         if type(resolved).__name__ == "Op":
             return cast("Op", resolved)
         if type(resolved).__name__ == "Layer" and len(resolved.ops) == 1:
-            return cast("Op", resolved.ops[1])
+            return cast("Op", resolved.ops[0])
         return None
 
 

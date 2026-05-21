@@ -534,6 +534,94 @@ class OrphanAccessor(Accessor[Op]):
         return "orphan"
 
 
+class TraceOpAccessor(Accessor[Op]):
+    """Trace-level accessor for type-strict Op lookups."""
+
+    def __init__(self, ops: Sequence[Op], layer_num_calls: Mapping[str, int]) -> None:
+        """Initialize from ordered Op records.
+
+        Parameters
+        ----------
+        ops:
+            Ordered Op records.
+        layer_num_calls:
+            Mapping from parent Layer label to number of Op passes.
+        """
+
+        super().__init__(OrderedDict((op.layer_label, op) for op in ops), item_list=list(ops))
+        self._layer_num_calls = dict(layer_num_calls)
+
+    def _resolve_substring(self, key: str) -> Op | None:
+        """Resolve exact long/short Op labels or unique bare parent labels."""
+
+        for op in self._list:
+            if key in {
+                op.layer_label,
+                op.layer_label_w_pass,
+                op.layer_label_short,
+                op.layer_label_w_pass_short,
+            }:
+                return op
+        parent_matches = [
+            op for op in self._list if key in {op.layer_label_no_pass, op.layer_label_no_pass_short}
+        ]
+        if len(parent_matches) == 1:
+            return parent_matches[0]
+        if len(parent_matches) > 1:
+            parent_label = parent_matches[0].layer_label_no_pass
+            raise ValueError(
+                f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
+                "integer position or a pass-qualified Op label."
+            )
+        return None
+
+
+class TraceModuleCallAccessor(Accessor[Any]):
+    """Trace-level accessor for type-strict ModuleCall lookups."""
+
+    def __init__(self, calls: Mapping[str, Any]) -> None:
+        """Initialize from call-label keyed ModuleCalls."""
+
+        super().__init__(calls)
+
+    def _resolve_substring(self, key: str) -> Any | None:
+        """Resolve unique bare Module address to its only ModuleCall."""
+
+        parent_matches = [call for call in self._list if key == getattr(call, "address", None)]
+        if len(parent_matches) == 1:
+            return parent_matches[0]
+        if len(parent_matches) > 1:
+            raise ValueError(
+                f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
+                f"position or a call-qualified label like '{key}:1'."
+            )
+        return None
+
+
+class TraceGradFnCallAccessor(Accessor[Any]):
+    """Trace-level accessor for type-strict GradFnCall lookups."""
+
+    def __init__(self, calls: Mapping[str, Any]) -> None:
+        """Initialize from call-label keyed GradFnCalls."""
+
+        super().__init__(calls)
+
+    def _resolve_substring(self, key: str) -> Any | None:
+        """Resolve unique bare GradFn label to its only GradFnCall."""
+
+        parent_matches = [
+            call for call in self._list if key == getattr(call, "grad_fn_label", None)
+        ]
+        if len(parent_matches) == 1:
+            return parent_matches[0]
+        if len(parent_matches) > 1:
+            raise ValueError(
+                f"GradFn '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
+                f"position or a call-qualified label like '{key}:1'."
+            )
+        return None
+
+
 class _CallableList(list[Any]):
     """List that returns a plain list when called.
 
@@ -3130,7 +3218,7 @@ class Trace:
     def ops(self) -> Accessor[Op]:
         """Access per-invocation Op records by label or index."""
 
-        return Accessor(OrderedDict((op.layer_label, op) for op in self.layer_list))
+        return TraceOpAccessor(self.layer_list, self.layer_num_calls)
 
     @property
     def layers(self) -> "LayerAccessor":
@@ -3145,14 +3233,14 @@ class Trace:
         return self._module_logs
 
     @property
-    def module_calls(self) -> Accessor[Any]:
+    def module_calls(self) -> TraceModuleCallAccessor:
         """Access per-invocation ModuleCall records by call label or index."""
 
         calls: OrderedDict[str, Any] = OrderedDict()
         for module in self._module_logs:
             for call in module.calls.values():
                 calls[call.call_label] = call
-        return Accessor(calls)
+        return TraceModuleCallAccessor(calls)
 
     @property
     def num_module_calls(self) -> int:
@@ -3191,14 +3279,14 @@ class Trace:
         return GradFnAccessor(self.grad_fn_logs, self.grad_fn_order)
 
     @property
-    def grad_fn_calls(self) -> Accessor[Any]:
+    def grad_fn_calls(self) -> TraceGradFnCallAccessor:
         """Access per-invocation GradFnCall records by qualified label or index."""
 
         calls: OrderedDict[str, Any] = OrderedDict()
         for grad_fn_handle in self.grad_fns:
             for call_index, call in grad_fn_handle.ops.items():
                 calls[f"{grad_fn_handle.label}:{call_index}"] = call
-        return Accessor(calls)
+        return TraceGradFnCallAccessor(calls)
 
     @property
     def num_grad_fn_calls(self) -> int:
@@ -3210,40 +3298,48 @@ class Trace:
     def saved_ops(self) -> Accessor[Op]:
         """Access Ops with saved activations."""
 
-        return Accessor(
-            OrderedDict((op.layer_label, op) for op in self.layer_list if op.has_saved_activation)
+        return TraceOpAccessor(
+            [op for op in self.layer_list if op.has_saved_activation],
+            self.layer_num_calls,
         )
 
     @property
     def saved_grad_ops(self) -> Accessor[Op]:
         """Access Ops with saved gradients."""
 
-        return Accessor(
-            OrderedDict((op.layer_label, op) for op in self.layer_list if op.has_saved_gradient)
+        return TraceOpAccessor(
+            [op for op in self.layer_list if op.has_saved_gradient],
+            self.layer_num_calls,
         )
 
     @property
     def saved_layers(self) -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved activation."""
 
-        return Accessor(
+        from .layer_log import LayerAccessor
+
+        return LayerAccessor(
             OrderedDict(
                 (label, layer)
                 for label, layer in self.layer_logs.items()
                 if any(op.has_saved_activation for op in layer.ops.values())
-            )
+            ),
+            source_trace=self,
         )
 
     @property
     def saved_grad_layers(self) -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved gradient."""
 
-        return Accessor(
+        from .layer_log import LayerAccessor
+
+        return LayerAccessor(
             OrderedDict(
                 (label, layer)
                 for label, layer in self.layer_logs.items()
                 if any(op.has_saved_gradient for op in layer.ops.values())
-            )
+            ),
+            source_trace=self,
         )
 
     @property
@@ -3253,9 +3349,64 @@ class Trace:
         saved_labels = set(self.saved_ops.keys())
         calls: OrderedDict[str, Any] = OrderedDict()
         for call in self.module_calls:
-            if any(label in saved_labels for label in getattr(call, "layers", [])):
+            if any(label in saved_labels for label in getattr(call, "output_ops", [])):
                 calls[call.call_label] = call
-        return Accessor(calls)
+        return TraceModuleCallAccessor(calls)
+
+    @property
+    def saved_modules(self) -> Accessor[Any]:
+        """Access Modules with at least one saved-activation ModuleCall."""
+
+        saved_addresses = {call.address for call in self.saved_module_calls}
+        return ModuleAccessor(
+            OrderedDict(
+                (module.address, module)
+                for module in self.modules
+                if module.address in saved_addresses
+            )
+        )
+
+    @property
+    def num_saved_modules(self) -> int:
+        """Number of Modules with at least one saved-activation ModuleCall."""
+
+        return len(self.saved_modules)
+
+    @property
+    def saved_grad_module_calls(self) -> Accessor[Any]:
+        """Access ModuleCalls whose outputs include saved gradients."""
+
+        saved_labels = set(self.saved_grad_ops.keys())
+        calls: OrderedDict[str, Any] = OrderedDict()
+        for call in self.module_calls:
+            if any(label in saved_labels for label in getattr(call, "output_ops", [])):
+                calls[call.call_label] = call
+        return TraceModuleCallAccessor(calls)
+
+    @property
+    def saved_grad_modules(self) -> Accessor[Any]:
+        """Access Modules with at least one saved-gradient ModuleCall."""
+
+        saved_addresses = {call.address for call in self.saved_grad_module_calls}
+        return ModuleAccessor(
+            OrderedDict(
+                (module.address, module)
+                for module in self.modules
+                if module.address in saved_addresses
+            )
+        )
+
+    @property
+    def num_saved_grad_module_calls(self) -> int:
+        """Number of ModuleCalls whose outputs include saved gradients."""
+
+        return len(self.saved_grad_module_calls)
+
+    @property
+    def num_saved_grad_modules(self) -> int:
+        """Number of Modules with at least one saved-gradient ModuleCall."""
+
+        return len(self.saved_grad_modules)
 
     @property
     def saved_grad_fn_calls(self) -> Accessor[Any]:
@@ -3268,7 +3419,7 @@ class Trace:
                 or getattr(call, "grad_outputs", None) is not None
             ):
                 calls[label] = call
-        return Accessor(calls)
+        return TraceGradFnCallAccessor(calls)
 
     @property
     def saved_grad_fns(self) -> GradFnAccessor:
@@ -3289,72 +3440,97 @@ class Trace:
     def compute_ops(self) -> Accessor[Op]:
         """Access Ops that are not graph-boundary sentinels."""
 
-        return Accessor(
-            OrderedDict(
-                (op.layer_label, op)
-                for op in self.layer_list
-                if not (
-                    op.is_input
-                    or op.is_output
-                    or op.is_buffer
-                    or op.is_internal_source
-                    or op.is_internal_sink
-                )
-            )
+        return TraceOpAccessor(
+            [op for op in self.layer_list if not (op.is_input or op.is_output or op.is_buffer)],
+            self.layer_num_calls,
         )
 
     @property
     def compute_layers(self) -> Accessor[Layer]:
         """Access Layers whose representative Op is not a boundary sentinel."""
 
-        return Accessor(
+        from .layer_log import LayerAccessor
+
+        return LayerAccessor(
             OrderedDict(
                 (label, layer)
                 for label, layer in self.layer_logs.items()
                 if label in {op.layer_label_no_pass for op in self.compute_ops}
-            )
+            ),
+            source_trace=self,
         )
 
     @property
     def input_ops(self) -> Accessor[Op]:
         """Access flat input-boundary Ops."""
 
-        return Accessor(OrderedDict((label, self[label]) for label in self.input_layers))
+        return TraceOpAccessor([self[label] for label in self.input_layers], self.layer_num_calls)
+
+    @property
+    def num_input_ops(self) -> int:
+        """Number of flat input-boundary Ops."""
+
+        return len(self.input_ops)
 
     @property
     def output_ops(self) -> Accessor[Op]:
         """Access flat output-boundary Ops."""
 
-        return Accessor(OrderedDict((label, self[label]) for label in self.output_layers))
+        return TraceOpAccessor([self[label] for label in self.output_layers], self.layer_num_calls)
+
+    @property
+    def num_output_ops(self) -> int:
+        """Number of flat output-boundary Ops."""
+
+        return len(self.output_ops)
 
     @property
     def internal_source_layers(self) -> Accessor[Layer]:
         """Access Layers representing internal-source positions."""
 
-        return Accessor(
+        from .layer_log import LayerAccessor
+
+        return LayerAccessor(
             OrderedDict(
                 (self[label].layer_label_no_pass, self.layers[self[label].layer_label_no_pass])
                 for label in self.internal_source_ops
-            )
+            ),
+            source_trace=self,
         )
+
+    @property
+    def num_internal_source_layers(self) -> int:
+        """Number of internal-source Layers."""
+
+        return len(self.internal_source_layers)
 
     @property
     def internal_sink_layers(self) -> Accessor[Layer]:
         """Access Layers representing internal-sink positions."""
 
-        return Accessor(
+        from .layer_log import LayerAccessor
+
+        return LayerAccessor(
             OrderedDict(
                 (self[label].layer_label_no_pass, self.layers[self[label].layer_label_no_pass])
                 for label in self.internal_sink_ops
-            )
+            ),
+            source_trace=self,
         )
+
+    @property
+    def num_internal_sink_layers(self) -> int:
+        """Number of internal-sink Layers."""
+
+        return len(self.internal_sink_layers)
 
     @property
     def ops_with_params(self) -> Accessor[Op]:
         """Access Ops that use at least one parameter tensor."""
 
-        return Accessor(
-            OrderedDict((op.layer_label, op) for op in self.layer_list if op.num_params > 0)
+        return TraceOpAccessor(
+            [op for op in self.layer_list if op.num_params > 0],
+            self.layer_num_calls,
         )
 
     @property

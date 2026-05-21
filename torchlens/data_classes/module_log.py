@@ -9,7 +9,7 @@ Three-level hierarchy:
 * **Module** -- aggregate metadata for one ``nn.Module`` across all its
   invocations.  Stores ``layer_labels`` as no-pass labels (e.g.
   ``"conv2d_1_1"``), pointing to aggregate Layer entries.
-  For single-pass modules, per-pass fields are delegated to ``ops[1]``
+  For single-pass modules, per-pass fields are delegated to ``ops[0]``
   via ``_single_pass_or_error()``.
 
 * **ModuleAccessor** -- dict-like accessor returned by ``trace.modules``.
@@ -64,30 +64,36 @@ class ModuleCallAccessor(Accessor["ModuleCall"]):
             Mapping from 1-based call index to ModuleCall.
         """
 
-        super().__init__(calls or {})
+        calls = calls or {}
+        super().__init__(calls, item_list=[call for _, call in sorted(calls.items())])
 
     def __getitem__(self, key: int | str) -> "ModuleCall":
-        """Return a ModuleCall by call index or call label."""
+        """Return a ModuleCall by 0-based position or call label."""
 
         if isinstance(key, int):
-            return self._dict[key]
+            return self._list[key]
         resolved = self._resolve_substring(key)
         if resolved is not None:
             return resolved
         raise KeyError(f"Module call '{key}' not found in scoped calls.")
 
     def __setitem__(self, key: int, value: "ModuleCall") -> None:
-        """Set a ModuleCall by call index."""
+        """Set a ModuleCall by 1-based call index."""
 
         self._dict[key] = value
+        self._list = [call for _, call in sorted(self._dict.items())]
 
     def __contains__(self, key: object) -> bool:
         """Return whether key resolves to a ModuleCall."""
 
         if isinstance(key, int):
-            return key in self._dict
+            return -len(self._list) <= key < len(self._list)
         if isinstance(key, str):
-            return any(key == call.call_label for call in self._dict.values())
+            try:
+                self[key]
+            except (KeyError, ValueError):
+                return False
+            return True
         return False
 
     # This scoped accessor intentionally iterates call-index keys, unlike the generic
@@ -103,10 +109,20 @@ class ModuleCallAccessor(Accessor["ModuleCall"]):
         return self._dict.get(key, default)
 
     def _resolve_substring(self, key: str) -> "ModuleCall | None":
-        """Resolve a ModuleCall by exact call label."""
+        """Resolve a ModuleCall by exact call label or unique parent address."""
+        if len(self._dict) == 1:
+            only_call = next(iter(self._dict.values()))
+            if key == only_call.address:
+                return only_call
         for call in self._dict.values():
             if key == call.call_label:
                 return call
+        parent_matches = [call for call in self._dict.values() if key == call.address]
+        if len(parent_matches) > 1:
+            raise ValueError(
+                f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
+                f"position or a call-qualified label like '{key}:1'."
+            )
         return None
 
 
@@ -641,7 +657,7 @@ class Module:
 
     For single-pass modules, per-pass fields (``input_layers``,
     ``output_layers``, ``forward_args``, ``forward_kwargs``) are accessible
-    directly via ``_single_pass_or_error()`` delegation to ``ops[1]``.
+    directly via ``_single_pass_or_error()`` delegation to ``ops[0]``.
     """
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -991,7 +1007,7 @@ class Module:
     def _single_pass_or_error(self, field_name: str) -> Any:
         """Return a field from the single pass, or raise if the module has multiple ops.
 
-        For modules invoked once, transparently delegates to ops[1].
+        For modules invoked once, transparently delegates to ops[0].
         For multi-pass modules, raises AttributeError directing the user to
         access the field on a specific pass.
         """
@@ -999,11 +1015,11 @@ class Module:
             raise AttributeError(
                 f"Module '{self.address}' has {self.num_calls} ops. "
                 f"Access '{field_name}' on a specific pass: "
-                f"module.ops[1].{field_name}, module.ops[2].{field_name}, etc."
+                f"module.ops[0].{field_name}, module.ops[1].{field_name}, etc."
             )
-        if 1 not in self.ops:
+        if len(self.ops) == 0:
             return None
-        return getattr(self.ops[1], field_name)
+        return getattr(self.ops[0], field_name)
 
     @property
     def input_layers(self) -> List[str]:
@@ -1207,11 +1223,11 @@ class Module:
     def _single_call_or_error(self) -> ModuleCall:
         """Return the only ModuleCall or raise for multi-call modules."""
 
-        if self.num_calls != 1 or 1 not in self.ops:
+        if self.num_calls != 1 or len(self.ops) != 1:
             raise ValueError(
                 f"Module '{self.address}' has {self.num_calls} calls; use module.calls[N]."
             )
-        return self.ops[1]
+        return self.ops[0]
 
     @property
     def calls(self) -> ModuleCallAccessor:
@@ -1515,14 +1531,14 @@ class ModuleAccessor(Accessor["Module"]):
 
     def __getitem__(  # type: ignore[override]
         self, key: Union[int, str]
-    ) -> Union["Module", "ModuleCall"]:
-        """Return a Module or ModuleCall by module-specific lookup rules."""
+    ) -> "Module":
+        """Return a Module by module-specific lookup rules."""
         if key == "":
             key = "self"
         if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
         if isinstance(key, str) and key in self._pass_dict:
-            return self._pass_dict[key]
+            key = self._pass_dict[key].address
         return super().__getitem__(key)
 
     def __contains__(self, key: object) -> bool:

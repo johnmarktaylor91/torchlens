@@ -200,9 +200,9 @@ def _reconstruct_candidate_output_for_loss(trace: Any) -> Any:
     if len(output_layers) == 1:
         return output_layers[0]
     root_call = None
-    modules = getattr(trace, "modules", None)
-    if modules is not None and "self:1" in modules:
-        root_call = modules["self:1"]
+    module_calls = getattr(trace, "module_calls", None)
+    if module_calls is not None and "self:1" in module_calls:
+        root_call = module_calls["self:1"]
     output_structure = getattr(root_call, "output_structure", None)
     if output_structure is None:
         return output_layers

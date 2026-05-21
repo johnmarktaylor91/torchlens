@@ -400,8 +400,7 @@ def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
     )
 
     conditional_entry_children: List[str] = []
-    for call_index in sorted(layer_log.ops):
-        pass_log = layer_log.ops[call_index]
+    for _, pass_log in sorted(layer_log.ops.items()):
         for child_label in pass_log.conditional_entry_children:
             _append_unique_child_label(
                 conditional_entry_children,
@@ -596,7 +595,7 @@ def _resolve_call_hierarchy(
 
     call_parent_addr = None
     if ops:
-        first_pass = ops[1]
+        first_pass = next(iter(ops.values()))
         if first_pass.call_parent and first_pass.call_parent != "self:1":
             call_parent_addr = first_pass.call_parent.split(":")[0]
         elif first_pass.call_parent == "self:1":

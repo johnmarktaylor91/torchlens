@@ -77,13 +77,14 @@ class TestModuleLogBasic:
         ml = log.modules[0]
         assert isinstance(ml, Module)
 
-    def test_access_by_pass_notation(self):
+    def test_call_access_by_pass_notation(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         # All modules have 1 pass in a non-recurrent model
         addresses = [ml.address for ml in log.modules if ml.address != "self"]
         if addresses:
             addr = addresses[0]
-            mpl = log.modules[f"{addr}:1"]
+            assert isinstance(log.modules[f"{addr}:1"], Module)
+            mpl = log.module_calls[f"{addr}:1"]
             assert isinstance(mpl, ModuleCall)
 
     def test_contains(self):
@@ -260,15 +261,16 @@ class TestMultiPassModules:
         model = example_models.RecurrentParamsSimple()
         log = trace_fn(model, input_2d)
         ml = log.modules["fc1"]
+        assert 0 in ml.ops
         assert 1 in ml.ops
-        assert 2 in ml.ops
+        assert isinstance(ml.ops[0], ModuleCall)
         assert isinstance(ml.ops[1], ModuleCall)
-        assert isinstance(ml.ops[2], ModuleCall)
 
     def test_pass_notation_accessor(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         log = trace_fn(model, input_2d)
-        mpl = log.modules["fc1:2"]
+        assert isinstance(log.modules["fc1:2"], Module)
+        mpl = log.module_calls["fc1:2"]
         assert isinstance(mpl, ModuleCall)
         assert mpl.call_index == 2
 

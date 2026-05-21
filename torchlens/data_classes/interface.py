@@ -54,15 +54,15 @@ def _getitem_during_pass(self: "Trace", ix: Any) -> Op | LiveOpView:
 
 
 def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
-    """Multi-key lookup for Trace entries after postprocessing.
+    """Universal lookup for Trace entries after postprocessing.
 
     Lookup cascade:
     1. slice -> list slice of layer_list
-    2. exact match in layer_dict_all_keys (Op by any lookup key)
-    3. exact match in layer_logs (Layer by no-pass label)
-    4. exact match in _module_logs (Module/ModuleCall by address)
-    5. case-insensitive exact match against all of the above
-    6. substring match: unique match returns the layer; ambiguous raises ValueError
+    2. int -> Op by 0-based ordinal position
+    3. string -> ops, module_calls, layers, modules, params, buffers, grad_fns
+    4. alternate Op lookup keys
+    5. case-insensitive exact match against alternate Op lookup keys
+    6. substring match against alternate Op lookup keys
     7. fallback: KeyError with contextual help message
 
     Args:
@@ -88,35 +88,36 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     if isinstance(ix, slice):
         return self.layer_list[ix]  # #78: slice indexing support
 
-    # Step 2: exact match against all lookup keys (pass-qualified, short forms, etc.)
-    if ix in self.layer_dict_all_keys:
-        return self.layer_dict_all_keys[ix]
+    if isinstance(ix, int):
+        try:
+            return self.ops[ix]
+        except IndexError:
+            _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
+            raise
 
-    # Step 3: no-pass label -> aggregate Layer
-    if isinstance(ix, str) and hasattr(self, "layer_logs") and ix in self.layer_logs:
-        return self.layer_logs[ix]
-
-    # Step 4: module address or pass label -> Module/ModuleCall
-    if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
-        return self._module_logs[ix]
-
-    # Step 5: case-insensitive exact match (#23)
     if isinstance(ix, str):
+        for accessor in (
+            self.ops,
+            self.module_calls,
+            self.layers,
+            self.modules,
+            self.params,
+            self.buffers,
+            self.grad_fns,
+        ):
+            try:
+                return accessor[ix]
+            except (AttributeError, KeyError, ValueError, TypeError):
+                pass
+
+        if ix in self.layer_dict_all_keys:
+            return self.layer_dict_all_keys[ix]
+
         lower_ix = ix.lower()
         for key in self.layer_dict_all_keys:
             if str(key).lower() == lower_ix:
                 return self.layer_dict_all_keys[key]
-        if hasattr(self, "layer_logs"):
-            for key in self.layer_logs:
-                if str(key).lower() == lower_ix:
-                    return self.layer_logs[key]
-        if hasattr(self, "_module_logs"):
-            for key in self._module_logs._dict:
-                if key.lower() == lower_ix:
-                    return self._module_logs[key]
 
-    # Step 6: substring match (case-insensitive)
-    if not isinstance(ix, int):
         keys_with_substr = [
             key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
         ]
@@ -298,10 +299,13 @@ def _module_hierarchy_str_recursive(self: "Trace", module_pass: str, level: int)
     printed compactly on one line with ``_format_list_with_line_breaks``.
     """
     s = ""
-    module_call_log = self.modules[module_pass]
+    module_call_log = self.module_calls[module_pass]
     children = module_call_log.call_children
     any_grandchild_modules = any(
-        [len(self.modules[child_call_label].call_children) > 0 for child_call_label in children]
+        [
+            len(self.module_calls[child_call_label].call_children) > 0
+            for child_call_label in children
+        ]
     )
     if any_grandchild_modules or len(children) == 0:
         for submodule_pass in children:

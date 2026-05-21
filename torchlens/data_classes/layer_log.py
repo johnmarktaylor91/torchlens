@@ -6,7 +6,7 @@ common case), every Layer wraps exactly one Op.
 
 **Delegation pattern**: For single-pass layers, per-pass fields (out,
 grad, step_index, etc.) are accessible directly on the Layer
-via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``ops[1]``.
+via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``ops[0]``.
 For multi-pass layers, accessing these fields raises ``ValueError`` (NOT
 ``AttributeError``) directing the user to ``layer_log.ops[N].field``.
 
@@ -63,31 +63,33 @@ class OpAccessor(Accessor["Op"]):
         Parameters
         ----------
         ops:
-            Mapping from 1-based call index to Op.
+            Mapping from 1-based pass index to Op.
         """
 
-        super().__init__(ops or {})
+        ops = ops or {}
+        super().__init__(ops, item_list=[op for _, op in sorted(ops.items())])
 
     def __getitem__(self, key: int | str) -> "Op":
-        """Return an Op by call index or pass-qualified label."""
+        """Return an Op by 0-based position or pass-qualified label."""
 
         if isinstance(key, int):
-            return self._dict[key]
+            return self._list[key]
         resolved = self._resolve_substring(key)
         if resolved is not None:
             return resolved
         raise KeyError(f"Op '{key}' not found in scoped Layer ops.")
 
     def __setitem__(self, key: int, value: "Op") -> None:
-        """Set an Op by call index."""
+        """Set an Op by 1-based pass index."""
 
         self._dict[key] = value
+        self._list = [op for _, op in sorted(self._dict.items())]
 
     def __contains__(self, key: object) -> bool:
         """Return whether key resolves to an Op."""
 
         if isinstance(key, int):
-            return key in self._dict
+            return -len(self._list) <= key < len(self._list)
         if isinstance(key, str):
             try:
                 self[key]
@@ -110,6 +112,15 @@ class OpAccessor(Accessor["Op"]):
 
     def _resolve_substring(self, key: str) -> "Op | None":
         """Resolve Op by any scoped layer-label variant."""
+        if len(self._dict) == 1:
+            only_op = next(iter(self._dict.values()))
+            if key in {
+                only_op.layer_label_no_pass,
+                only_op.layer_label_no_pass_short,
+                only_op.layer_label,
+                only_op.layer_label_short,
+            }:
+                return only_op
         for op_log in self._dict.values():
             if key in {
                 op_log.layer_label,
@@ -120,6 +131,18 @@ class OpAccessor(Accessor["Op"]):
                 op_log.layer_label_no_pass_short,
             }:
                 return op_log
+        parent_matches = [
+            op_log
+            for op_log in self._dict.values()
+            if key in {op_log.layer_label_no_pass, op_log.layer_label_no_pass_short}
+        ]
+        if len(parent_matches) > 1:
+            parent_label = parent_matches[0].layer_label_no_pass
+            raise ValueError(
+                f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
+                "integer position or a pass-qualified label like "
+                f"'{parent_label}:1'."
+            )
         return None
 
 
@@ -135,7 +158,7 @@ class Layer:
 
     For single-pass layers, per-pass fields are accessible directly via
     ``__getattr__`` delegation (e.g. ``layer_log.out`` transparently
-    reads from ``ops[1].out``).
+    reads from ``ops[0].out``).
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -526,9 +549,9 @@ class Layer:
             raise ValueError(
                 f"Layer '{self.layer_label}' has {self.num_passes} ops. "
                 f"Access '{field_name}' on a specific pass: "
-                f"log['{self.layer_label}'].ops[1].{field_name}"
+                f"log['{self.layer_label}'].ops[0].{field_name}"
             )
-        return getattr(self.ops[1], field_name)
+        return getattr(self.ops[0], field_name)
 
     @property
     def out(self) -> Any:
@@ -934,11 +957,11 @@ class Layer:
     def parent_arg_positions(self) -> dict[str, dict[Any, str]]:
         """Merged parent_arg_positions across ops (set-union).
 
-        For single-pass layers, delegates to ops[1].
+        For single-pass layers, delegates to ops[0].
         For multi-pass, merges arg locs using set-union of no-pass labels.
         """
         if self.num_passes == 1:
-            return cast(dict[str, dict[Any, str]], self.ops[1].parent_arg_positions)
+            return cast(dict[str, dict[Any, str]], self.ops[0].parent_arg_positions)
         from collections import defaultdict
 
         result: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
@@ -955,7 +978,7 @@ class Layer:
     # ********************************************
 
     def __getattr__(self, name: str) -> Any:
-        """Fallback attribute lookup: delegates to ops[1] for single-pass layers.
+        """Fallback attribute lookup: delegates to ops[0] for single-pass layers.
 
         Only called when normal attribute lookup has already failed (Python's
         ``__getattr__`` protocol).  For single-pass layers, transparently
@@ -974,9 +997,9 @@ class Layer:
         }:
             raise AttributeError(name)
         ops = self.__dict__.get("ops")
-        if ops and len(ops) == 1 and 1 in ops:
+        if ops and len(ops) == 1:
             try:
-                return getattr(ops[1], name)
+                return getattr(ops[0], name)
             except AttributeError:
                 pass
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
@@ -1208,14 +1231,14 @@ class Layer:
         return cast(int, self.num_passes)
 
 
-class LayerAccessor(Accessor[Union["Layer", "Op"]]):
+class LayerAccessor(Accessor["Layer"]):
     """Dict-like accessor for Layer objects.
 
     Supports indexing by:
     * **layer label** (str) -- exact match against no-pass label.
     * **ordinal index** (int) -- position in execution order.
-    * **pass notation** (str ``"conv2d_1_1:2"``) -- returns the Op
-      for a specific pass of a multi-pass layer.
+    * **pass notation** (str ``"conv2d_1_1:2"``) -- strips the pass
+      suffix and returns the parent Layer.
 
     Available as ``trace.layers``.
     """
@@ -1234,15 +1257,31 @@ class LayerAccessor(Accessor[Union["Layer", "Op"]]):
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(layer_logs, source_ref=source_ref)
 
-    def _resolve_pass_qualified(self, key: str) -> "Op | None":
-        """Resolve ``layer_label:pass`` notation to an Op."""
+    def _resolve_pass_qualified(self, key: str) -> "Layer | None":
+        """Resolve ``layer_label:pass`` notation to the parent Layer."""
         base, _, pass_str = key.rpartition(":")
-        if base in self._dict:
-            try:
-                call_index = int(pass_str)
-                return self._dict[base].ops[call_index]
-            except (ValueError, KeyError):
-                return None
+        try:
+            int(pass_str)
+        except ValueError:
+            return None
+        return self._resolve_substring(base)
+
+    def _resolve_substring(self, key: str) -> "Layer | None":
+        """Resolve exact long or short Layer labels."""
+        if key in self._dict:
+            return self._dict[key]
+        matches = [
+            layer
+            for layer in self._list
+            if key in {layer.layer_label, layer.layer_label_no_pass, layer.layer_label_short}
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise ValueError(
+                f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers. "
+                "Use the full Layer label."
+            )
         return None
 
     def _suggest(self, key: str) -> list[str]:

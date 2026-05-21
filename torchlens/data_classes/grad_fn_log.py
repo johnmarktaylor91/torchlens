@@ -40,29 +40,31 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
             Owning GradFn label used for pass-qualified lookup.
         """
 
-        super().__init__(calls or {})
+        calls = calls or {}
+        super().__init__(calls, item_list=[call for _, call in sorted(calls.items())])
         self._label = label
 
     def __getitem__(self, key: int | str) -> GradFnCall:
-        """Return a GradFnCall by call index or pass-qualified label."""
+        """Return a GradFnCall by 0-based position or pass-qualified label."""
 
         if isinstance(key, int):
-            return self._dict[key]
+            return self._list[key]
         resolved = self._resolve_pass_qualified(key)
         if resolved is not None:
             return resolved
         raise KeyError(f"GradFn call '{key}' not found in scoped calls.")
 
     def __setitem__(self, key: int, value: GradFnCall) -> None:
-        """Set a GradFnCall by call index."""
+        """Set a GradFnCall by 1-based call index."""
 
         self._dict[key] = value
+        self._list = [call for _, call in sorted(self._dict.items())]
 
     def __contains__(self, key: object) -> bool:
         """Return whether key resolves to a GradFnCall."""
 
         if isinstance(key, int):
-            return key in self._dict
+            return -len(self._list) <= key < len(self._list)
         if isinstance(key, str):
             try:
                 self[key]
@@ -87,6 +89,17 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
             except (KeyError, ValueError):
                 return None
         return None
+
+    def _resolve_substring(self, key: str) -> GradFnCall | None:
+        """Resolve a unique bare GradFn label to its only call."""
+        if key != self._label:
+            return None
+        if len(self._dict) == 1:
+            return next(iter(self._dict.values()))
+        raise ValueError(
+            f"GradFn '{key}' has {len(self._dict)} calls. Use a 0-based integer "
+            f"position or a call-qualified label like '{key}:1'."
+        )
 
 
 def _clone_grad_value(value: Any) -> Any:
@@ -394,7 +407,7 @@ class GradFn:
     @property
     def call_labels(self) -> list[str]:
         """Pass-qualified labels for this grad_fn_handle."""
-        return [f"{self.label}:{call_index}" for call_index in self.ops]
+        return [f"{self.label}:{call_index}" for call_index in self.ops.keys()]
 
     @property
     def backward_duration(self) -> float:
@@ -506,18 +519,18 @@ class GradFnAccessor(Accessor[GradFn]):
         super().__init__(grad_fn_dict, item_list=grad_fn_list)
 
     def __getitem__(self, key: int | str) -> GradFn | GradFnCall:  # type: ignore[override]
-        """Return a GradFn or GradFnCall by grad-fn-specific lookup rules."""
+        """Return a GradFn by grad-fn-specific lookup rules."""
         return super().__getitem__(key)
 
-    def _resolve_pass_qualified(self, key: str) -> GradFnCall | None:  # type: ignore[override]
-        """Resolve ``grad_fn_label:pass`` notation to a GradFnCall."""
+    def _resolve_pass_qualified(self, key: str) -> GradFn | None:
+        """Resolve ``grad_fn_label:pass`` notation to the parent GradFn."""
         base, _, pass_str = key.rpartition(":")
+        try:
+            int(pass_str)
+        except ValueError:
+            return None
         if base in self._dict:
-            try:
-                call_index = int(pass_str)
-                return self._dict[base].ops[call_index]
-            except (ValueError, KeyError):
-                return None
+            return self._dict[base]
         return None
 
     def _resolve_substring(self, key: str) -> GradFn | None:

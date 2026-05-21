@@ -4757,7 +4757,7 @@ def _setup_subgraphs(
         module_submodule_dict = defaultdict(list)
         for call_label, mpl in self.modules._pass_dict.items():
             module_submodule_dict[call_label] = list(mpl.call_children)
-        subgraphs = list(self.modules["self"].ops[1].call_children)  # type: ignore[union-attr]
+        subgraphs = list(self.modules["self"].ops[0].call_children)  # type: ignore[union-attr]
     else:
         module_submodule_dict = defaultdict(list)
         for ml in self.modules:

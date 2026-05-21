@@ -113,3 +113,4 @@ DO NOT push. DO NOT open a PR. JMT explicitly said "merge it to local main" and 
 | 6 | 2026-05-21T19:01:06-04:00 | 2026-05-21T19:16:36-04:00 | pending | OK | Module + ModuleCall field locks; deprecated greps clean; import/dataclass probes, ruff, and smoke green |
 | 7 | 2026-05-21T19:16:36-04:00 | 2026-05-21T19:29:16-04:00 | pending | OK | Param + Buffer + GradFn + GradFnCall locks; legacy grep clean; import/dataclass probes, ruff, and smoke green; mypy still has pre-existing unrelated errors |
 | 8 | 2026-05-21T19:29:16-04:00 | 2026-05-21T19:38:46-04:00 | pending | OK | Bundle remove_except/list handling; Super label/member accessor/absent_traces; ConditionalArm bare derived op lists; locked grep, import probe, ruff, and smoke green |
+| 9 | 2026-05-21T19:38:46-04:00 | 2026-05-21T19:54:54-04:00 | pending | OK | Accessor 0-based indexing and strict aggregate/per-event lookup; saved/compute/filter accessors; import, locked grep, ruff, and smoke green |

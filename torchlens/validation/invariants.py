@@ -939,8 +939,7 @@ def _expected_layer_log_child_union(
     """
 
     expected_children_by_cond: dict[int, dict[str, list[str]]] = {}
-    for call_index in sorted(layer_log.ops):
-        pass_log = layer_log.ops[call_index]
+    for call_index, pass_log in sorted(layer_log.ops.items()):
         for conditional_id, branch_children in pass_log.conditional_arm_children.items():
             merged_branch_children = expected_children_by_cond.setdefault(conditional_id, {})
             for branch_kind, child_labels in branch_children.items():
@@ -1271,8 +1270,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
     for layer_log in ml.layer_logs.values():
         expected_stack_order: list[list[tuple[int, str]]] = []
         expected_stack_ops: dict[tuple[tuple[int, str], ...], list[int]] = {}
-        for call_index in sorted(layer_log.ops):
-            pass_log = layer_log.ops[call_index]
+        for call_index, pass_log in sorted(layer_log.ops.items()):
             stack_signature = tuple(pass_log.conditional_branch_stack)
             if stack_signature not in expected_stack_ops:
                 expected_stack_order.append(list(pass_log.conditional_branch_stack))
