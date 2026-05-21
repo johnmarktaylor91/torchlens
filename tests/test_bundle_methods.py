@@ -124,3 +124,28 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
     assert "save" in members
     assert "remove_except" in members
     assert "supergraph" in members
+
+
+def test_bundle_add_remove_accept_single_and_list_forms() -> None:
+    """Bundle add/remove/remove_except normalize single and list member references."""
+
+    source_bundle = _capture_pair(seed=41, offset=0.1)
+    log_a = source_bundle["baseline"]
+    log_b = source_bundle["changed"]
+    log_c = tl.trace(_TinyRelu(offset=0.2), torch.randn(2, 3), intervention_ready=True)
+    bundle = tl.bundle({"a": log_a})
+
+    assert bundle.add(log_b, names="b") is bundle
+    assert bundle.add([log_c], names=["c"]) is bundle
+    assert bundle.names == ["a", "b", "c"]
+
+    assert bundle.remove(log_b) is log_b
+    assert bundle.names == ["a", "c"]
+
+    removed = bundle.remove(["c"])
+    assert removed == [log_c]
+    assert bundle.names == ["a"]
+
+    bundle.add([log_b, log_c], names=["b", "c"])
+    bundle.remove_except([log_a, "c"])
+    assert bundle.names == ["a", "c"]

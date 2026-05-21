@@ -881,15 +881,19 @@ class Bundle:
 
         return "_back_" in label
 
-    def add(self, log: "Trace", name: str | None = None) -> "Bundle":
-        """Add one member log and invalidate the cached supergraph.
+    def add(
+        self,
+        log_or_logs: "Trace | Sequence[Trace]",
+        names: str | Sequence[str] | None = None,
+    ) -> "Bundle":
+        """Add one or more member logs and invalidate the cached supergraph.
 
         Parameters
         ----------
-        log:
-            Model log to add.
-        name:
-            Optional member name.
+        log_or_logs:
+            Model log or logs to add.
+        names:
+            Optional member name or names.
 
         Returns
         -------
@@ -897,41 +901,55 @@ class Bundle:
             This bundle.
         """
 
-        member_name = self._derive_name(log, name=name, index=len(self._members))
-        if member_name in self._members:
-            raise ValueError(f"Bundle member names must be unique; duplicate {member_name!r}.")
-        self._members[member_name] = log
+        logs = self._coerce_trace_list(log_or_logs, arg_name="log_or_logs")
+        member_names = self._coerce_optional_name_list(names, count=len(logs))
+        for index, log in enumerate(logs):
+            member_name = self._derive_name(
+                log,
+                name=member_names[index],
+                index=len(self._members),
+            )
+            if member_name in self._members:
+                raise ValueError(f"Bundle member names must be unique; duplicate {member_name!r}.")
+            self._members[member_name] = log
         self._supergraph = None
         self._enforce_capacity()
         return self
 
-    def remove(self, name: str) -> "Trace":
-        """Remove and return a member by name.
+    def remove(
+        self, name_or_names: str | "Trace" | Sequence[str | "Trace"]
+    ) -> "Trace | list[Trace]":
+        """Remove and return one or more members by name or Trace object.
 
         Parameters
         ----------
-        name:
-            Member name to remove.
+        name_or_names:
+            Member name, Trace object, or a list of either.
 
         Returns
         -------
-        Trace
-            Removed member.
+        Trace | list[Trace]
+            Removed member, or removed members for list input.
         """
 
-        log = self._members.pop(name)
-        if self._baseline_name == name:
-            self._baseline_name = None
+        is_many = self._is_list_like(name_or_names)
+        names = self._coerce_member_name_list(name_or_names)
+        removed: list[Trace] = []
+        for name in names:
+            log = self._members.pop(name)
+            removed.append(log)
+            if self._baseline_name == name:
+                self._baseline_name = None
         self._supergraph = None
-        return log
+        return removed if is_many else removed[0]
 
-    def remove_except(self, keep: list[str]) -> None:
+    def remove_except(self, keep: str | "Trace" | Sequence[str | "Trace"]) -> None:
         """Remove every member whose name is not listed in ``keep``.
 
         Parameters
         ----------
         keep:
-            Member names to retain.
+            Member name, Trace object, or list of either to retain.
 
         Returns
         -------
@@ -939,7 +957,7 @@ class Bundle:
             The bundle is mutated in place.
         """
 
-        keep_set = set(keep)
+        keep_set = set(self._coerce_member_name_list(keep))
         unknown = keep_set - set(self._members)
         if unknown:
             raise KeyError(f"Unknown bundle member(s): {sorted(unknown)}")
@@ -1213,7 +1231,11 @@ class Bundle:
                 view = self.node(site.layer_label)
             except BundleMemberError:
                 continue
-            outs = view.outs
+            outs = {
+                name: getattr(member, "out", None)
+                for name, member in view.members.items()
+                if getattr(member, "has_saved_activation", False)
+            }
             base = outs.get(baseline_name)
             if not isinstance(base, torch.Tensor):
                 continue
@@ -1405,6 +1427,122 @@ class Bundle:
         if duplicate_names:
             raise ValueError(f"Bundle member names must be unique; duplicates: {duplicate_names}")
         return pairs
+
+    @staticmethod
+    def _is_list_like(value: Any) -> bool:
+        """Return whether ``value`` should be treated as a list input.
+
+        Parameters
+        ----------
+        value:
+            Candidate input value.
+
+        Returns
+        -------
+        bool
+            Whether the value is a non-string sequence.
+        """
+
+        return isinstance(value, Sequence) and not isinstance(value, str)
+
+    @classmethod
+    def _coerce_trace_list(
+        cls, value: "Trace | Sequence[Trace]", *, arg_name: str
+    ) -> list["Trace"]:
+        """Normalize a Trace-or-list input to a list.
+
+        Parameters
+        ----------
+        value:
+            Trace or sequence of Traces.
+        arg_name:
+            Argument name for error messages.
+
+        Returns
+        -------
+        list[Trace]
+            Normalized Trace list.
+        """
+
+        values = list(value) if cls._is_list_like(value) else [cast("Trace", value)]
+        for item in values:
+            if isinstance(item, str):
+                raise TypeError(f"{arg_name} must contain Trace objects, not strings.")
+        return cast(list["Trace"], values)
+
+    @classmethod
+    def _coerce_optional_name_list(
+        cls,
+        names: str | Sequence[str] | None,
+        *,
+        count: int,
+    ) -> list[str | None]:
+        """Normalize optional Bundle names to match a log count.
+
+        Parameters
+        ----------
+        names:
+            Optional name or names.
+        count:
+            Number of logs being added.
+
+        Returns
+        -------
+        list[str | None]
+            Per-log names.
+        """
+
+        if names is None:
+            return [None] * count
+        if isinstance(names, str):
+            if count != 1:
+                raise ValueError("A single Bundle name can only be used with one Trace.")
+            return [names]
+        name_list = [str(name) for name in names]
+        if len(name_list) != count:
+            raise ValueError("names length must match added log count.")
+        return name_list
+
+    def _coerce_member_name_list(
+        self,
+        value: str | "Trace" | Sequence[str | "Trace"],
+    ) -> list[str]:
+        """Normalize Bundle member references to member names.
+
+        Parameters
+        ----------
+        value:
+            Member name, Trace object, or sequence of either.
+
+        Returns
+        -------
+        list[str]
+            Resolved member names.
+        """
+
+        values = list(value) if self._is_list_like(value) else [value]
+        return [self._coerce_member_name(item) for item in values]
+
+    def _coerce_member_name(self, value: str | "Trace") -> str:
+        """Resolve one Bundle member reference to a member name.
+
+        Parameters
+        ----------
+        value:
+            Member name or Trace object.
+
+        Returns
+        -------
+        str
+            Resolved member name.
+        """
+
+        if isinstance(value, str):
+            return value
+        for name, member in self._members.items():
+            if member is value:
+                return name
+        raise KeyError("Trace is not a member of this Bundle.")
 
     @staticmethod
     def _dedupe_default_names(pairs: list[tuple[str, "Trace"]]) -> list[tuple[str, "Trace"]]:
@@ -1908,8 +2046,8 @@ def _bundle_delta_map(
     )
     result: dict[str, dict[str, float]] = {}
     supergraph = self.supergraph
-    for node_name in supergraph.topological_order:
-        node = supergraph.nodes[node_name]
+    for graph_node_label in supergraph.topological_order:
+        node = supergraph.nodes[graph_node_label]
         reference_layer = node.layer_refs.get(baseline_name)
         if reference_layer is None:
             continue
@@ -1932,7 +2070,7 @@ def _bundle_delta_map(
                 )
             )
         if values:
-            result[node_name] = values
+            result[graph_node_label] = values
     return result
 
 

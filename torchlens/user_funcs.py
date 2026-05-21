@@ -2291,12 +2291,12 @@ def draw_combined(
     )
 
 
-def _bundle_node_display_label(node_name: str, node: Any, vis_mode: str) -> str:
+def _bundle_node_display_label(graph_node_label: str, node: Any, vis_mode: str) -> str:
     """Return a compact Graphviz label for a bundle supergraph node.
 
     Parameters
     ----------
-    node_name:
+    graph_node_label:
         Canonical supergraph node name.
     node:
         Supergraph node-like object.
@@ -2312,7 +2312,7 @@ def _bundle_node_display_label(node_name: str, node: Any, vis_mode: str) -> str:
     traces = ",".join(getattr(node, "traces", []))
     mode_suffix = " rolled" if vis_mode == "rolled" else ""
     op_type = getattr(node, "op_type", "") or "op"
-    return f"{node_name}\n{op_type}{mode_suffix}\n[{traces}]"
+    return f"{graph_node_label}\n{op_type}{mode_suffix}\n[{traces}]"
 
 
 def _bundle_module_groups(bundle: Any) -> dict[str, list[str]]:
@@ -2330,11 +2330,11 @@ def _bundle_module_groups(bundle: Any) -> dict[str, list[str]]:
     """
 
     groups: dict[str, list[str]] = {}
-    for node_name in bundle.supergraph.topological_order:
-        node = bundle.supergraph.nodes[node_name]
+    for graph_node_label in bundle.supergraph.topological_order:
+        node = bundle.supergraph.nodes[graph_node_label]
         module_path = getattr(node, "module_path", None)
         if module_path:
-            groups.setdefault(str(module_path), []).append(node_name)
+            groups.setdefault(str(module_path), []).append(graph_node_label)
     return groups
 
 
@@ -2391,22 +2391,22 @@ def _add_bundle_forward_nodes(
                     penwidth=compute_module_penwidth(0, 1),
                 )
             )
-            for node_name in node_names:
-                node = bundle.supergraph.nodes[node_name]
-                attrs = merge_node_style(base_style, node_styles, node_name, node)
+            for graph_node_label in node_names:
+                node = bundle.supergraph.nodes[graph_node_label]
+                attrs = merge_node_style(base_style, node_styles, graph_node_label, node)
                 subgraph.node(
-                    f"fwd_{node_name}",
-                    label=_bundle_node_display_label(node_name, node, vis_mode),
+                    f"fwd_{graph_node_label}",
+                    label=_bundle_node_display_label(graph_node_label, node, vis_mode),
                     **attrs,
                 )
-    for node_name in bundle.supergraph.topological_order:
-        if node_name in grouped_nodes:
+    for graph_node_label in bundle.supergraph.topological_order:
+        if graph_node_label in grouped_nodes:
             continue
-        node = bundle.supergraph.nodes[node_name]
-        attrs = merge_node_style(base_style, node_styles, node_name, node)
+        node = bundle.supergraph.nodes[graph_node_label]
+        attrs = merge_node_style(base_style, node_styles, graph_node_label, node)
         dot.node(
-            f"fwd_{node_name}",
-            label=_bundle_node_display_label(node_name, node, vis_mode),
+            f"fwd_{graph_node_label}",
+            label=_bundle_node_display_label(graph_node_label, node, vis_mode),
             **attrs,
         )
 

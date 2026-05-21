@@ -18,7 +18,7 @@ class SuperOp(Super["Op"], _TensorBearing):
 
     def __init__(
         self,
-        node_name: str,
+        label: str,
         node: "SupergraphNode | None" = None,
         bundle_trace_names: list[str] | None = None,
         *,
@@ -29,8 +29,8 @@ class SuperOp(Super["Op"], _TensorBearing):
 
         Parameters
         ----------
-        node_name:
-            Display node name.
+        label:
+            Display label.
         node:
             Optional legacy supergraph node.
         bundle_trace_names:
@@ -57,7 +57,7 @@ class SuperOp(Super["Op"], _TensorBearing):
             resolved_members = {}
             bundle_member_names = []
         super().__init__(
-            node_name,
+            label,
             cast(dict[str, "Op"], resolved_members),
             query=query,
             bundle_member_names=bundle_member_names,
@@ -72,7 +72,7 @@ class SuperOp(Super["Op"], _TensorBearing):
             Representation.
         """
 
-        return f"SuperOp(name={self._node_name!r}, members={list(self._members)!r})"
+        return f"SuperOp(label={self._label!r}, members={list(self._members)!r})"
 
 
 class SuperLayer(SuperOp):

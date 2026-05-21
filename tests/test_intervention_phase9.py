@@ -102,8 +102,8 @@ def test_bundle_construction_shapes_and_member_indexing() -> None:
         tl.bundle([("dup", log_a), ("dup", log_b)])
 
 
-def test_bundle_getitem_returns_modellog_and_nodeview_dicts() -> None:
-    """String indexing returns Trace; node access returns dict-keyed SuperOp fields."""
+def test_bundle_getitem_returns_modellog_and_nodeview_accessor() -> None:
+    """String indexing returns Trace; node access returns SuperOp member accessors."""
 
     log_a = _log()
     log_b = _log()
@@ -113,9 +113,10 @@ def test_bundle_getitem_returns_modellog_and_nodeview_dicts() -> None:
     assert bundle._supergraph is None
 
     node = bundle.node(tl.func("relu"))
-    assert set(node.outs) == {"a", "b"}
-    assert set(node.labels) == {"a", "b"}
     assert set(node.members) == {"a", "b"}
+    assert set(node.traces) == {"a", "b"}
+    assert node.absent_traces == set()
+    assert node.label
     assert bundle._supergraph is not None
 
 

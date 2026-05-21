@@ -277,7 +277,7 @@ def resolve_style_override(
 def merge_node_style(
     base_style: Mapping[str, str],
     node_overrides: Mapping[str, StyleOverride] | None,
-    node_name: str,
+    graph_node_label: str,
     context: Any,
 ) -> dict[str, str]:
     """Return merged Graphviz node style attributes.
@@ -288,7 +288,7 @@ def merge_node_style(
         Default node attributes.
     node_overrides:
         Optional mapping from node names to static or callable overrides.
-    node_name:
+    graph_node_label:
         Node key to look up in ``node_overrides``.
     context:
         Node context passed to callable overrides.
@@ -301,7 +301,7 @@ def merge_node_style(
 
     merged = {str(key): str(value) for key, value in base_style.items()}
     if node_overrides is not None:
-        merged.update(resolve_style_override(node_overrides.get(node_name), context))
+        merged.update(resolve_style_override(node_overrides.get(graph_node_label), context))
     return merged
 
 

@@ -281,14 +281,83 @@ class ConditionalArm:
     """One arm of an if-chain."""
 
     kind: Literal["then", "elif", "else"]
-    evaluation_op_labels: list[str] = field(default_factory=list)
     terminal_bool_op_label: str | None = None
     bool_value_at_run: bool | None = None
     condition_evaluated: bool = False
     evaluation_entry_edge: tuple[str, str] | None = None
-    execution_op_labels: list[str] = field(default_factory=list)
     fired: bool = False
     execution_entry_edge: tuple[str, str] | None = None
+    _trace: Any = field(default=None, repr=False, compare=False)
+    _conditional_id: str | None = field(default=None, repr=False, compare=False)
+    _arm_index: int | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def evaluation_ops(self) -> list[str]:
+        """Return op labels that evaluate this arm's condition.
+
+        Returns
+        -------
+        list[str]
+            Labels for ops with an evaluation role in this arm.
+        """
+
+        return self._role_ops("evaluation")
+
+    @property
+    def execution_ops(self) -> list[str]:
+        """Return op labels that execute this arm's body.
+
+        Returns
+        -------
+        list[str]
+            Labels for ops with a body role in this arm.
+        """
+
+        return self._role_ops("body")
+
+    def _bind(self, trace: Any, conditional_id: str, arm_index: int) -> None:
+        """Bind this arm to its Trace and owning conditional identity.
+
+        Parameters
+        ----------
+        trace:
+            Trace containing the role-bearing ops.
+        conditional_id:
+            Owning Conditional id.
+        arm_index:
+            Position of this arm within ``Conditional.arms``.
+        """
+
+        self._trace = trace
+        self._conditional_id = conditional_id
+        self._arm_index = arm_index
+
+    def _role_ops(self, role: Literal["evaluation", "body"]) -> list[str]:
+        """Return op labels participating in this arm with a given role.
+
+        Parameters
+        ----------
+        role:
+            Conditional role to collect.
+
+        Returns
+        -------
+        list[str]
+            Participating op labels.
+        """
+
+        if self._trace is None or self._conditional_id is None or self._arm_index is None:
+            return []
+        labels: list[str] = []
+        for op in self._trace.layer_list:
+            if any(
+                ref.conditional_id == self._conditional_id
+                and ref.arm_index == self._arm_index
+                and ref.role == role
+                for ref in op.in_conditionals or []
+            ):
+                labels.append(op.layer_label)
+        return labels
 
 
 @dataclass

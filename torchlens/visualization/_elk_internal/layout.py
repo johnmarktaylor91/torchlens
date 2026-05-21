@@ -1054,7 +1054,7 @@ def render_elk_direct(
 
     # ── Phase 1: Collect node styling, module assignments, and edges ──
 
-    # node_name -> {"attrs": {dot attrs}, "elk_id": layer_label}
+    # graph_node_label -> {"attrs": {dot attrs}, "elk_id": layer_label}
     node_data = {}
     # module_key -> [node_names directly in this module (not nested deeper)]
     module_direct_nodes = defaultdict(list)
@@ -1079,10 +1079,12 @@ def render_elk_direct(
             return list(dict.fromkeys(m.split(":")[0] for m in mods))
         return mods
 
-    def _assign_to_hierarchy(node_name: str, mod_keys: list[str], has_ancestor: bool) -> None:
+    def _assign_to_hierarchy(
+        graph_node_label: str, mod_keys: list[str], has_ancestor: bool
+    ) -> None:
         """Place a node into the module tree."""
         if mod_keys:
-            module_direct_nodes[mod_keys[-1]].append(node_name)
+            module_direct_nodes[mod_keys[-1]].append(graph_node_label)
             for i in range(len(mod_keys) - 1):
                 module_child_map[mod_keys[i]].add(mod_keys[i + 1])
             # Propagate has_input_ancestor up
@@ -1090,7 +1092,7 @@ def render_elk_direct(
                 for mk in mod_keys:
                     module_has_ancestor[mk] = True
         else:
-            root_node_names.append(node_name)
+            root_node_names.append(graph_node_label)
 
     for _barcode, node in entries_to_plot.items():
         if node.layer_label in skipped_labels:
@@ -1112,11 +1114,11 @@ def render_elk_direct(
                 continue
             mod_parts = mod_w_pass.rsplit(":", 1)
             mod_addr, call_index = mod_parts
-            node_name = "pass".join(mod_parts) if vis_mode == "unrolled" else mod_addr
+            graph_node_label = "pass".join(mod_parts) if vis_mode == "unrolled" else mod_addr
             elk_id = node.layer_label
 
-            if node_name not in collapsed_set:
-                collapsed_set.add(node_name)
+            if graph_node_label not in collapsed_set:
+                collapsed_set.add(graph_node_label)
                 ml = trace.modules[mod_addr]
                 mod_out = trace[mod_w_pass]
 
@@ -1195,14 +1197,14 @@ def render_elk_direct(
                 if spec.fillcolor is not None and ":" in spec.fillcolor:
                     attrs["gradangle"] = "0"
 
-                node_data[node_name] = {"attrs": attrs, "elk_id": elk_id}
+                node_data[graph_node_label] = {"attrs": attrs, "elk_id": elk_id}
                 mod_keys = _module_keys_for_node(node, True)
-                _assign_to_hierarchy(node_name, mod_keys, has_anc)
+                _assign_to_hierarchy(graph_node_label, mod_keys, has_anc)
 
             node_color = "black"
         else:
             # Regular layer node
-            node_name = node.layer_label.replace(":", "pass")
+            graph_node_label = node.layer_label.replace(":", "pass")
             elk_id = node.layer_label
 
             addr, shape, node_color = _get_node_address_shape_color(trace, node, show_buffer_layers)
@@ -1222,9 +1224,9 @@ def render_elk_direct(
             if spec.fillcolor is not None and ":" in spec.fillcolor:
                 attrs["gradangle"] = "0"
 
-            node_data[node_name] = {"attrs": attrs, "elk_id": elk_id}
+            node_data[graph_node_label] = {"attrs": attrs, "elk_id": elk_id}
             mod_keys = _module_keys_for_node(node, False)
-            _assign_to_hierarchy(node_name, mod_keys, node.has_input_ancestor)
+            _assign_to_hierarchy(graph_node_label, mod_keys, node.has_input_ancestor)
 
         # ── Collect edges (this node -> skip-filtered children) ──
         for render_edge in (edge_map or {}).get(node.layer_label, []):
@@ -1235,7 +1237,7 @@ def render_elk_direct(
 
             # Resolve tail name
             if is_collapsed:
-                tail_name = node_name
+                tail_name = graph_node_label
             else:
                 tail_name = node.layer_label.replace(":", "pass")
 

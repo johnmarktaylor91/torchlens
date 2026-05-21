@@ -110,14 +110,14 @@ def _render_dot(log: Trace, tmp_path: Path, show_buffer_layers: str | bool) -> s
     )
 
 
-def _node_line(dot_source: str, node_name: str) -> str:
+def _node_line(dot_source: str, graph_node_label: str) -> str:
     """Return the DOT line for a node.
 
     Parameters
     ----------
     dot_source:
         DOT source to inspect.
-    node_name:
+    graph_node_label:
         Graphviz node name.
 
     Returns
@@ -126,11 +126,11 @@ def _node_line(dot_source: str, node_name: str) -> str:
         Node definition line.
     """
 
-    prefix = f"\t{node_name} ["
+    prefix = f"\t{graph_node_label} ["
     for line in dot_source.splitlines():
         if line.startswith(prefix):
             return line
-    raise AssertionError(f"Node {node_name!r} was not found in DOT source.")
+    raise AssertionError(f"Node {graph_node_label!r} was not found in DOT source.")
 
 
 def _buffer_node_lines(dot_source: str) -> list[str]:

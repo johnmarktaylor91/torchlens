@@ -953,6 +953,7 @@ def _build_conditional_records(self: "Trace") -> None:
 
     conditionals: list[Conditional] = []
     event_by_id = {event.id: event for event in self.conditional_records}
+    role_labels_by_cond_arm: dict[tuple[str, int, str], list[str]] = {}
     for event in self.conditional_records:
         terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
         conditional_id = f"cond_{terminal_bool_label}"
@@ -982,41 +983,47 @@ def _build_conditional_records(self: "Trace") -> None:
                 bool_value = getattr(self.layer_dict_all_keys[terminal_bool], "bool_value", None)
             arm = ConditionalArm(
                 kind=kind,  # type: ignore[arg-type]
-                evaluation_op_labels=evaluation_labels,
                 terminal_bool_op_label=terminal_bool,
                 bool_value_at_run=bool_value,
                 condition_evaluated=bool(evaluation_labels) or kind == "else",
                 evaluation_entry_edge=(event.bool_layers[0], event.bool_layers[0])
                 if event.bool_layers and kind in {"then", "elif"}
                 else None,
-                execution_op_labels=execution_labels,
                 fired=bool(execution_labels),
                 execution_entry_edge=edge_list[0] if edge_list else None,
             )
+            arm_index = len(arms)
+            role_labels_by_cond_arm[(conditional_id, arm_index, "evaluation")] = evaluation_labels
+            role_labels_by_cond_arm[(conditional_id, arm_index, "body")] = execution_labels
             arms.append(arm)
 
         fired_arm_index = next((index for index, arm in enumerate(arms) if arm.fired), None)
         fired_arm_kind = arms[fired_arm_index].kind if fired_arm_index is not None else None
-        conditionals.append(
-            Conditional(
-                id=conditional_id,
-                arms=arms,
-                fired_arm_index=fired_arm_index,
-                fired_arm_kind=fired_arm_kind,
-                source_file=event.source_file,
-                source_line=event.if_stmt_span[0] if event.if_stmt_span else None,
-            )
+        conditional = Conditional(
+            id=conditional_id,
+            arms=arms,
+            fired_arm_index=fired_arm_index,
+            fired_arm_kind=fired_arm_kind,
+            source_file=event.source_file,
+            source_line=event.if_stmt_span[0] if event.if_stmt_span else None,
         )
+        for arm_index, arm in enumerate(conditional.arms):
+            arm._bind(self, conditional.id, arm_index)
+        conditionals.append(conditional)
 
     for layer in self.layer_list:
         roles = []
         for conditional in conditionals:
             for arm_index, arm in enumerate(conditional.arms):
-                if layer.layer_label in arm.evaluation_op_labels:
+                if layer.layer_label in role_labels_by_cond_arm.get(
+                    (conditional.id, arm_index, "evaluation"), []
+                ):
                     roles.append(
                         ConditionalRoleRef(conditional.id, arm_index, arm.kind, "evaluation")
                     )
-                if layer.layer_label in arm.execution_op_labels:
+                if layer.layer_label in role_labels_by_cond_arm.get(
+                    (conditional.id, arm_index, "body"), []
+                ):
                     roles.append(ConditionalRoleRef(conditional.id, arm_index, arm.kind, "body"))
         layer.in_conditionals = roles
         if (

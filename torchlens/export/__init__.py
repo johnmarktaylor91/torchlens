@@ -753,13 +753,13 @@ def _chrome_trace_diff_events(bundle: Any) -> list[dict[str, Any]]:
                 "args": {"name": member_name},
             }
         )
-    for node_index, node_name in enumerate(bundle.supergraph.topological_order):
-        node = bundle.supergraph.nodes[node_name]
+    for node_index, graph_node_label in enumerate(bundle.supergraph.topological_order):
+        node = bundle.supergraph.nodes[graph_node_label]
         for member_name in getattr(node, "traces", []):
             layer = node.layer_refs.get(member_name)
             events.append(
                 {
-                    "name": node_name,
+                    "name": graph_node_label,
                     "cat": "torchlens.forward",
                     "ph": "X",
                     "pid": pid_by_member[member_name],
@@ -770,7 +770,7 @@ def _chrome_trace_diff_events(bundle: Any) -> list[dict[str, Any]]:
                         "op_type": getattr(node, "op_type", ""),
                         "module_path": getattr(node, "module_path", None),
                         "module_type": getattr(node, "module_type", None),
-                        "delta": deltas.get(node_name, {}).get(member_name),
+                        "delta": deltas.get(graph_node_label, {}).get(member_name),
                         "memory": getattr(layer, "memory", None),
                     },
                 }

@@ -2954,18 +2954,18 @@ def _build_collapsed_module_node(
     # (e.g., "encoder.layer.0pass1").  In rolled mode, all ops share one
     # node (e.g., "encoder.layer.0").
     if vis_mode == "unrolled":
-        node_name = "pass".join(module_tuple)
+        graph_node_label = "pass".join(module_tuple)
         mpl = self.modules[address_w_pass]
         module_num_tensors = mpl.num_layers
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in mpl.ops)
     else:
-        node_name = module_tuple[0]
+        graph_node_label = module_tuple[0]
         module_num_tensors = ml.num_layers
         module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)  # type: ignore[union-attr]
 
     # Deduplicate: multiple layers in the same collapsed module will each
     # trigger this function, but the node should only be added once.
-    if node_name in collapsed_modules:
+    if graph_node_label in collapsed_modules:
         return
 
     if module_num_calls == 1:
@@ -3040,12 +3040,12 @@ def _build_collapsed_module_node(
         spec = mode_spec
 
     node_args = _node_spec_to_graphviz_args(spec)
-    node_args["name"] = node_name
+    node_args["name"] = graph_node_label
     if spec.fillcolor is not None and ":" in spec.fillcolor:
         node_args["gradangle"] = "0"
 
     graphviz_graph.node(**node_args)
-    collapsed_modules.add(node_name)
+    collapsed_modules.add(graph_node_label)
 
 
 def _get_node_address_shape_color(

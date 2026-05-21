@@ -196,11 +196,11 @@ def _layer_to_supergraph_node(bundle: "Bundle") -> dict[str, str]:
     """
 
     lookup: dict[str, str] = {}
-    for node_name, node in bundle.supergraph.nodes.items():
+    for graph_node_label, node in bundle.supergraph.nodes.items():
         for layer in getattr(node, "layer_refs", {}).values():
             label = str(getattr(layer, "layer_label", ""))
             if label:
-                lookup[label] = str(node_name)
+                lookup[label] = str(graph_node_label)
     return lookup
 
 
@@ -363,10 +363,10 @@ def _right_delta_values(
     for left_layer, right_layer in pairs:
         left_label = str(getattr(left_layer, "layer_label", ""))
         right_label = str(getattr(right_layer, "layer_label", ""))
-        node_name = layer_to_node.get(left_label) or layer_to_node.get(right_label)
-        if node_name is None:
+        graph_node_label = layer_to_node.get(left_label) or layer_to_node.get(right_label)
+        if graph_node_label is None:
             continue
-        value = float(delta_map.get(node_name, {}).get(right_name, 0.0))
+        value = float(delta_map.get(graph_node_label, {}).get(right_name, 0.0))
         if value >= 0.0:
             values.append(value)
     return values
@@ -409,8 +409,8 @@ def _select_pairs(
     for index, (left_layer, right_layer) in enumerate(pairs):
         left_label = str(getattr(left_layer, "layer_label", ""))
         right_label = str(getattr(right_layer, "layer_label", ""))
-        node_name = layer_to_node.get(left_label) or layer_to_node.get(right_label)
-        value = float(delta_map.get(str(node_name), {}).get(right_name, 0.0))
+        graph_node_label = layer_to_node.get(left_label) or layer_to_node.get(right_label)
+        value = float(delta_map.get(str(graph_node_label), {}).get(right_name, 0.0))
         scored.append((value, index, (left_layer, right_layer)))
     chosen_indexes = {
         index
@@ -470,8 +470,8 @@ def _add_side_cluster(
         )
         for layer in layers:
             label = str(getattr(layer, "layer_label", "node"))
-            node_name = layer_to_node.get(label, label)
-            value = float(delta_map.get(node_name, {}).get(compared_member_name, 0.0))
+            graph_node_label = layer_to_node.get(label, label)
+            value = float(delta_map.get(graph_node_label, {}).get(compared_member_name, 0.0))
             subgraph.node(
                 _node_id(side, layer),
                 label=_node_label(layer, value),

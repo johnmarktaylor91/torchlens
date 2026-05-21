@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any, Callable, Generic, Literal, TypeVar, cast
 
 import torch
@@ -13,12 +14,117 @@ S = TypeVar("S", bound="Super[Any]")
 _TENSOR_FIELD_LITERAL = Literal["out", "grad"]
 
 
+class SuperMemberAccessor(Generic[T]):
+    """Dict-like accessor for one Super view's represented members."""
+
+    def __init__(self, members: dict[str, T]) -> None:
+        """Initialize the member accessor.
+
+        Parameters
+        ----------
+        members:
+            Resolved objects keyed by bundle member name.
+        """
+
+        self._members = dict(members)
+        self._names = list(members)
+
+    def __getitem__(self, key: int | str) -> T:
+        """Return a represented member by 0-based position or trace name.
+
+        Parameters
+        ----------
+        key:
+            Integer position or bundle member name.
+
+        Returns
+        -------
+        T
+            Resolved member object.
+        """
+
+        if isinstance(key, int):
+            return self._members[self._names[key]]
+        return self._members[key]
+
+    def __contains__(self, key: object) -> bool:
+        """Return whether a trace name is represented.
+
+        Parameters
+        ----------
+        key:
+            Candidate trace name.
+
+        Returns
+        -------
+        bool
+            Whether ``key`` names a represented member.
+        """
+
+        return isinstance(key, str) and key in self._members
+
+    def __iter__(self) -> Iterator[str]:
+        """Iterate represented trace names.
+
+        Returns
+        -------
+        Iterator[str]
+            Iterator over represented trace names.
+        """
+
+        return iter(self._names)
+
+    def __len__(self) -> int:
+        """Return the number of represented members.
+
+        Returns
+        -------
+        int
+            Represented member count.
+        """
+
+        return len(self._members)
+
+    def keys(self) -> list[str]:
+        """Return represented trace names.
+
+        Returns
+        -------
+        list[str]
+            Trace names in bundle order.
+        """
+
+        return list(self._names)
+
+    def values(self) -> list[T]:
+        """Return represented member objects.
+
+        Returns
+        -------
+        list[T]
+            Resolved member objects in bundle order.
+        """
+
+        return [self._members[name] for name in self._names]
+
+    def items(self) -> list[tuple[str, T]]:
+        """Return represented ``(trace_name, member)`` pairs.
+
+        Returns
+        -------
+        list[tuple[str, T]]
+            Member pairs in bundle order.
+        """
+
+        return [(name, self._members[name]) for name in self._names]
+
+
 class Super(Generic[T]):
     """Generic aligned view of one trace object across bundle members."""
 
     def __init__(
         self,
-        node_name: str,
+        label: str,
         members: dict[str, T],
         *,
         query: Any = None,
@@ -28,8 +134,8 @@ class Super(Generic[T]):
 
         Parameters
         ----------
-        node_name:
-            Representative node or label name.
+        label:
+            Representative label.
         members:
             Resolved objects keyed by bundle member name.
         query:
@@ -39,7 +145,7 @@ class Super(Generic[T]):
             alignment gaps and lower ``coverage``.
         """
 
-        self._node_name = node_name
+        self._label = label
         self._query = query
         self._members = dict(members)
         self._bundle_member_names = (
@@ -75,43 +181,28 @@ class Super(Generic[T]):
         return cls(str(first_label), members=members, query=query)
 
     @property
-    def node_name(self) -> str:
-        """Return the representative node name.
+    def label(self) -> str:
+        """Return the representative label.
 
         Returns
         -------
         str
-            Node name.
+            Label.
         """
 
-        return self._node_name
+        return self._label
 
     @property
-    def labels(self) -> dict[str, str]:
-        """Return resolved labels keyed by member name.
-
-        Returns
-        -------
-        dict[str, str]
-            Per-member resolved labels.
-        """
-
-        return {
-            name: str(getattr(member, "label", getattr(member, "layer_label", "")))
-            for name, member in self._members.items()
-        }
-
-    @property
-    def members(self) -> dict[str, T]:
+    def members(self) -> SuperMemberAccessor[T]:
         """Return resolved objects keyed by member name.
 
         Returns
         -------
-        dict[str, T]
-            Per-member resolved objects.
+        SuperMemberAccessor[T]
+            Accessor over represented member objects.
         """
 
-        return dict(self._members)
+        return SuperMemberAccessor(self._members)
 
     @property
     def traces(self) -> set[str]:
@@ -124,6 +215,54 @@ class Super(Generic[T]):
         """
 
         return set(self._members)
+
+    @property
+    def absent_traces(self) -> set[str]:
+        """Return bundle member names not represented by this view.
+
+        Returns
+        -------
+        set[str]
+            Bundle member names where this label did not resolve.
+        """
+
+        return set(self._bundle_member_names) - set(self._members)
+
+    @property
+    def num_traces(self) -> int:
+        """Return the number of represented bundle members.
+
+        Returns
+        -------
+        int
+            Represented member count.
+        """
+
+        return len(self.traces)
+
+    @property
+    def num_absent_traces(self) -> int:
+        """Return the number of bundle members not represented.
+
+        Returns
+        -------
+        int
+            Absent member count.
+        """
+
+        return len(self.absent_traces)
+
+    @property
+    def is_complete_coverage(self) -> bool:
+        """Return whether every bundle member is represented.
+
+        Returns
+        -------
+        bool
+            Whether this label resolved in every bundle member.
+        """
+
+        return not self.absent_traces
 
     @property
     def coverage(self) -> float:
@@ -148,16 +287,14 @@ class Super(Generic[T]):
             Representation.
         """
 
-        return (
-            f"{self.__class__.__name__}(name={self._node_name!r}, members={list(self._members)!r})"
-        )
+        return f"{self.__class__.__name__}(label={self._label!r}, members={list(self._members)!r})"
 
 
 class _TensorBearing:
     """Mixin for Super views whose members expose tensor-like fields."""
 
     _members: dict[str, Any]
-    _node_name: str
+    _label: str
 
     @property
     def op_type(self) -> str:
@@ -209,34 +346,9 @@ class _TensorBearing:
         }
         if len(shapes) > 1:
             raise ValueError(
-                f"Shape mismatch across bundle members at node {self._node_name!r}: "
-                f"{sorted(shapes)}"
+                f"Shape mismatch across bundle members at label {self._label!r}: {sorted(shapes)}"
             )
         return next(iter(shapes), ())
-
-    @property
-    def outs(self) -> dict[str, torch.Tensor | None]:
-        """Return out tensors keyed by member name.
-
-        Returns
-        -------
-        dict[str, torch.Tensor | None]
-            Per-member outs.
-        """
-
-        return self._tensor_dict("out")
-
-    @property
-    def grads(self) -> dict[str, torch.Tensor | None]:
-        """Return grad tensors keyed by member name.
-
-        Returns
-        -------
-        dict[str, torch.Tensor | None]
-            Per-member grads.
-        """
-
-        return self._tensor_dict("grad")
 
     @property
     def out(self) -> torch.Tensor:
@@ -322,7 +434,7 @@ class _TensorBearing:
             tensor for tensor in self._tensor_dict(on).values() if isinstance(tensor, torch.Tensor)
         ]
         if not tensors:
-            raise ValueError(f"No bundle members have stored {on} at node {self._node_name!r}.")
+            raise ValueError(f"No bundle members have stored {on} at label {self._label!r}.")
         shapes = {tuple(tensor.shape) for tensor in tensors}
         if len(shapes) > 1:
             raise ValueError(f"Cannot aggregate tensors with different shapes: {sorted(shapes)}")
@@ -400,7 +512,7 @@ class _TensorBearing:
         ]
         if len(tensors) != len(self._members):
             raise ValueError(
-                f"Cannot stack {field!r} for node {self._node_name!r}: "
+                f"Cannot stack {field!r} for label {self._label!r}: "
                 "not every member has a stored tensor."
             )
         shapes = {tuple(tensor.shape[1:]) if tensor.dim() > 0 else () for tensor in tensors}
