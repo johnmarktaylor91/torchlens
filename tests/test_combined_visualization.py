@@ -138,7 +138,7 @@ def test_draw_combined_intervening_cluster_outside(tmp_path: Path) -> None:
     """The outside mode leaves intervening grad_fns out of module clusters."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
-        grad_fn_handle for grad_fn_handle in trace.grad_fns if grad_fn_handle.is_intervening
+        grad_fn_handle for grad_fn_handle in trace.grad_fns if not grad_fn_handle.has_op
     )
 
     dot = trace.draw_combined(
@@ -156,7 +156,7 @@ def test_draw_combined_intervening_cluster_own_cluster(tmp_path: Path) -> None:
     """The own mode creates the dedicated intervening cluster."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
-        grad_fn_handle for grad_fn_handle in trace.grad_fns if grad_fn_handle.is_intervening
+        grad_fn_handle for grad_fn_handle in trace.grad_fns if not grad_fn_handle.has_op
     )
 
     dot = trace.draw_combined(
@@ -174,7 +174,7 @@ def test_draw_combined_intervening_cluster_inherits() -> None:
     """Upstream and downstream inheritance modes are deterministic."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
-        grad_fn_handle for grad_fn_handle in trace.grad_fns if grad_fn_handle.is_intervening
+        grad_fn_handle for grad_fn_handle in trace.grad_fns if not grad_fn_handle.has_op
     )
 
     upstream = _module_key_for_grad_fn(trace, intervening, "upstream")

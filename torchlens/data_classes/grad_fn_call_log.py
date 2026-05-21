@@ -12,12 +12,30 @@ from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_v
 from ..constants import GRAD_FN_PASS_LOG_FIELD_ORDER
 
 
+def _duration_str(duration: float) -> str:
+    """Return a human-readable duration string.
+
+    Parameters
+    ----------
+    duration:
+        Duration in seconds.
+
+    Returns
+    -------
+    str
+        Duration formatted in milliseconds.
+    """
+
+    return f"{duration * 1000:.3f} ms"
+
+
 @dataclass
 class GradFnCall:
     """Runtime data for one execution of an autograd ``grad_fn_handle`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "call_index": FieldPolicy.KEEP,
+        "grad_fn_label": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
         "time_started": FieldPolicy.KEEP,
@@ -25,6 +43,7 @@ class GradFnCall:
     }
 
     call_index: int
+    grad_fn_label: str = ""
     grad_inputs: Any = None
     grad_outputs: Any = None
     time_started: float | None = None
@@ -44,13 +63,59 @@ class GradFnCall:
         default_fill_state(
             state,
             defaults={
+                "grad_fn_label": "",
                 "grad_inputs": None,
                 "grad_outputs": None,
                 "time_started": None,
                 "time_finished": None,
             },
         )
+        if "duration" in state and "time_started" not in state and "time_finished" not in state:
+            state["time_started"] = 0.0
+            state["time_finished"] = float(state.pop("duration"))
         self.__dict__.update(state)
+
+    @property
+    def call_label(self) -> str:
+        """Return the pass-qualified GradFnCall label.
+
+        Returns
+        -------
+        str
+            GradFn label with the 1-based call index suffix.
+        """
+
+        return (
+            f"{self.grad_fn_label}:{self.call_index}"
+            if self.grad_fn_label
+            else str(self.call_index)
+        )
+
+    @property
+    def backward_duration(self) -> float:
+        """Return the measured backward duration for this call.
+
+        Returns
+        -------
+        float
+            Seconds elapsed between ``time_started`` and ``time_finished``.
+        """
+
+        if self.time_started is None or self.time_finished is None:
+            return 0.0
+        return max(0.0, self.time_finished - self.time_started)
+
+    @property
+    def backward_duration_str(self) -> str:
+        """Return backward duration in human-readable units.
+
+        Returns
+        -------
+        str
+            Human-readable duration.
+        """
+
+        return _duration_str(self.backward_duration)
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this pass as a one-row DataFrame.

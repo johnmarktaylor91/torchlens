@@ -51,7 +51,7 @@ def test_recording_log_backward_grad_fn_id_link() -> None:
     ctx = recording.grad_records[0].ctx
     assert ctx.layer_label == "relu_1"
     assert ctx.has_forward_op is True
-    assert ctx.is_intervening is False
+    assert ctx.has_op is True
 
 
 def test_recording_log_backward_intervening_grad_fn() -> None:
@@ -67,11 +67,11 @@ def test_recording_log_backward_intervening_grad_fn() -> None:
     def keep_intervening(ctx: GradRecordContext) -> CaptureSpec | bool:
         """Keep the first intervening backward node."""
 
-        return CaptureSpec(save_out=False, save_metadata=True) if ctx.is_intervening else False
+        return CaptureSpec(save_out=False, save_metadata=True) if not ctx.has_op else False
 
     recording.log_backward(out.sum(), keep_grad=keep_intervening)
 
-    assert any(record.ctx.is_intervening for record in recording.grad_records)
+    assert any(not record.ctx.has_op for record in recording.grad_records)
 
 
 def test_recording_log_backward_disk_only_rejects_keep_grad(tmp_path: Path) -> None:

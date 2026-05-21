@@ -116,7 +116,8 @@ def _hook_trace() -> tuple[_TraceStub, GradFn]:
         grad_fn_type="relu",
         grad_fn_type_num=1,
         grad_fn_total_num=1,
-        is_intervening=True,
+        step_index=1,
+        has_op=False,
     )
     return _TraceStub({1: grad_fn_handle}), grad_fn_handle
 

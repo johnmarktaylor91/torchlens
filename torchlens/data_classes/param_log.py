@@ -78,6 +78,7 @@ class Param:
         "_param_ref": FieldPolicy.DROP,
         "_source_trace_ref": FieldPolicy.DROP,
         "num_calls": FieldPolicy.KEEP,
+        "used_by_ops": FieldPolicy.KEEP,
         "used_by_layers": FieldPolicy.KEEP,
         "co_parent_params": FieldPolicy.KEEP,
         "_has_grad": FieldPolicy.KEEP,
@@ -125,6 +126,7 @@ class Param:
 
         # Populated during postprocessing:
         self.num_calls: int = 1  # how many forward ops used this param
+        self.used_by_ops: List[str] = []  # op labels that used this param
         self.used_by_layers: List[str] = []  # layer labels that used this param
         self.co_parent_params: List[str] = []  # other param addresses sharing the same tensor
         self._has_grad: bool = False  # one-shot flag: once True, no further checks
@@ -167,6 +169,30 @@ class Param:
         """
 
         return len(self.all_addresses) > 1 or bool(self.co_parent_params)
+
+    @property
+    def num_uses_by_ops(self) -> int:
+        """Return the number of distinct Op usages.
+
+        Returns
+        -------
+        int
+            Count of pass-qualified Op labels in ``used_by_ops``.
+        """
+
+        return len(self.used_by_ops)
+
+    @property
+    def num_uses_by_layers(self) -> int:
+        """Return the number of distinct Layer usages.
+
+        Returns
+        -------
+        int
+            Count of Layer labels in ``used_by_layers``.
+        """
+
+        return len(self.used_by_layers)
 
     @property
     def source_trace(self) -> Any:
@@ -533,3 +559,6 @@ class ParamAccessor(Accessor["Param"]):
             Additional keyword arguments forwarded to ``DataFrame.to_json``.
         """
         self.to_pandas().to_json(filepath, orient=orient, **kwargs)
+
+
+setattr(Param, "co_parent_params", [])

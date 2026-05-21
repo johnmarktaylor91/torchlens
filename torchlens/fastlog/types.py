@@ -116,8 +116,8 @@ class GradRecordContext:
         Forward module stack captured for the joined operation.
     has_forward_op:
         Whether this backward node corresponds to a predicate-mode forward op.
-    is_intervening:
-        Whether this backward node has no joined forward op.
+    has_op:
+        Whether this backward node has a joined forward op.
     """
 
     grad_fn_label: str
@@ -131,7 +131,7 @@ class GradRecordContext:
     op_label: str | None = None
     module_stack: tuple[Any, ...] = ()
     has_forward_op: bool = False
-    is_intervening: bool = True
+    has_op: bool = False
     pass_index: int | None = None
     event_index: int | None = None
     shape: tuple[int, ...] | None = None
@@ -606,7 +606,7 @@ def build_grad_record_context(
         op_label=_public_fastlog_layer_label(forward_ctx),
         module_stack=forward_ctx.module_stack,
         has_forward_op=True,
-        is_intervening=False,
+        has_op=True,
         pass_index=forward_ctx.pass_index,
         event_index=forward_ctx.event_index,
         shape=shape,

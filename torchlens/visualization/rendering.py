@@ -1361,7 +1361,7 @@ def _add_combined_correspondence_edges(
     """
 
     for grad_fn_handle in trace.grad_fns:
-        if grad_fn_handle.op is None:
+        if not grad_fn_handle.has_op:
             continue
         edge_attrs = {
             "color": GRADIENT_ARROW_COLOR,
@@ -1375,11 +1375,13 @@ def _add_combined_correspondence_edges(
             cluster_name = f"cluster_{module_key.replace(':', '_pass')}"
             edge_attrs["ltail"] = cluster_name
             edge_attrs["lhead"] = cluster_name
-        graphviz_graph.edge(
-            grad_fn_handle.op.layer_label,
-            _backward_dot_node_name(grad_fn_handle),
-            **edge_attrs,
-        )
+        op = grad_fn_handle.op
+        if op is not None:
+            graphviz_graph.edge(
+                op.layer_label,
+                _backward_dot_node_name(grad_fn_handle),
+                **edge_attrs,
+            )
 
 
 def _setup_combined_special_clusters(
@@ -1434,8 +1436,9 @@ def _module_key_for_grad_fn(
         Unrolled module-call key, special cluster key, or None for top level.
     """
 
-    if grad_fn_handle.op is not None and not grad_fn_handle.is_intervening:
-        return _module_key_for_forward_op(grad_fn_handle.op)
+    op = grad_fn_handle.op
+    if op is not None:
+        return _module_key_for_forward_op(op)
     if grad_fn_handle.grad_fn_type == "accumulategrad":
         param_key = _param_module_for_accumulate_grad(trace, grad_fn_handle)
         if param_key is not None:
@@ -1589,8 +1592,9 @@ def _infer_intervening_module_bfs(
             continue
         seen.add(grad_fn_object_id)
         candidate = trace.grad_fn_logs[grad_fn_object_id]
-        if candidate.op is not None and not candidate.is_intervening:
-            module_key = _module_key_for_forward_op(candidate.op)
+        candidate_op = candidate.op
+        if candidate_op is not None:
+            module_key = _module_key_for_forward_op(candidate_op)
             if module_key is not None:
                 return module_key
         if reverse:
@@ -1615,7 +1619,7 @@ def _compute_backward_node_lines(grad_fn_handle: "GradFn") -> list[str]:
     """
 
     title = grad_fn_handle.label
-    if grad_fn_handle.is_intervening:
+    if not grad_fn_handle.has_op:
         title = f"[i] {title}"
     if grad_fn_handle.is_custom:
         title = f"{title} [custom]"

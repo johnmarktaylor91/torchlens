@@ -2456,12 +2456,12 @@ class Trace:
             if parent_layer_log is not None:
                 layer_pass.parent_layer_log = parent_layer_log
         for grad_fn_handle in self.grad_fn_logs.values():
-            if isinstance(grad_fn_handle.op, str):
-                grad_fn_handle.op = self.layer_logs.get(grad_fn_handle.op)
+            grad_fn_handle.source_trace = self
             if grad_fn_handle.op is not None:
                 grad_fn_handle.op.grad_fn_handle = grad_fn_handle
-                if hasattr(grad_fn_handle.op, "ops"):
-                    for layer_pass in grad_fn_handle.op.ops.values():
+                op_passes = getattr(grad_fn_handle.op, "ops", None)
+                if op_passes is not None and hasattr(op_passes, "values"):
+                    for layer_pass in op_passes.values():
                         layer_pass.grad_fn_handle = grad_fn_handle
         _state._register_log(self)
 
@@ -3302,9 +3302,7 @@ class Trace:
     @property
     def num_grad_fns_without_op(self) -> int:
         """Number of grad_fn_handle nodes without a corresponding forward Layer."""
-        return sum(
-            1 for grad_fn_handle in self.grad_fn_logs.values() if grad_fn_handle.is_intervening
-        )
+        return sum(1 for grad_fn_handle in self.grad_fn_logs.values() if not grad_fn_handle.has_op)
 
     # ********************************************
     # ******** Public Convenience Methods ********

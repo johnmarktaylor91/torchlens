@@ -76,7 +76,10 @@ class TestParamLogFields:
         assert isinstance(pl.module_class_name, str)
         assert isinstance(pl.barcode, str)
         assert isinstance(pl.num_calls, int)
+        assert isinstance(pl.used_by_ops, list)
         assert isinstance(pl.used_by_layers, list)
+        assert isinstance(pl.num_uses_by_ops, int)
+        assert isinstance(pl.num_uses_by_layers, int)
         assert isinstance(pl.co_parent_params, list)
 
     def test_repr_contains_key_info(self):
@@ -310,14 +313,18 @@ class TestTensorLogEntries:
     def test_populated(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
+            assert len(pl.used_by_ops) > 0
             assert len(pl.used_by_layers) > 0
 
-    def test_points_to_correct_layers(self):
+    def test_points_to_correct_ops_and_layers(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            for label in pl.used_by_layers:
+            for label in pl.used_by_ops:
                 entry = mh[label]
                 assert any(p.address == pl.address for p in entry._param_logs)
+            for label in pl.used_by_layers:
+                entry = mh[label]
+                assert any(any(p.address == pl.address for p in op._param_logs) for op in entry.ops)
 
 
 # ---------------------------------------------------------------------------
@@ -337,14 +344,15 @@ class TestRecurrentParams:
         # fc1 is used 4 times
         pl = mh.params["fc1.weight"]
         assert pl.num_calls >= 2  # should be 4
-        assert len(pl.used_by_layers) >= 2
+        assert len(pl.used_by_ops) >= 2
+        assert len(pl.used_by_layers) >= 1
 
     def test_layer_log_entries_multi_pass(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         mh = trace_fn(model, input_2d)
         pl = mh.params["fc1.weight"]
-        # num_calls equals the number of used_by_layers
-        assert pl.num_calls == len(pl.used_by_layers)
+        # num_calls equals the number of used_by_ops
+        assert pl.num_calls == len(pl.used_by_ops)
         assert pl.num_calls >= 2
 
 

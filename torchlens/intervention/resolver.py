@@ -619,7 +619,7 @@ def _resolve_grad_fn_kind(site: "GradFn", kind: str, value: Any) -> bool:
     """
 
     if kind == "intervening":
-        return site.op is None or bool(site.is_intervening)
+        return not site.has_op
     if kind == "grad_fn_label":
         return site.label == str(value)
     if kind == "grad_fn":
@@ -677,7 +677,7 @@ def _grad_fn_type_matches(site: "GradFn", requested: str) -> bool:
     lowered = requested.lower()
     normalized = lowered.removesuffix("backward0").removesuffix("backward")
     candidates = {
-        site.name.lower(),
+        site.class_name.lower(),
         site.grad_fn_type.lower(),
         site.label.lower(),
     }

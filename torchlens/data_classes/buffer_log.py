@@ -84,6 +84,18 @@ class Buffer(Op):
         return len(self.all_buffer_addresses) > 1
 
     @property
+    def buffer_overwrite_index(self) -> int | None:
+        """Return this buffer's 1-based overwrite index for its address.
+
+        Returns
+        -------
+        int | None
+            Overwrite index, or ``None`` before buffer postprocessing assigns it.
+        """
+
+        return self.buffer_pass
+
+    @property
     def name(self) -> str:
         """Buffer name (last segment of address), e.g. 'running_mean'."""
         addr = self.address

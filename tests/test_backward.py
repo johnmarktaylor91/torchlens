@@ -185,11 +185,11 @@ def test_backward_graph_walk_includes_intervening_grad_fns() -> None:
     """The backward DAG includes grad_fns without forward Layer matches."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    assert any(grad_fn_handle.is_intervening for grad_fn_handle in trace.grad_fn_logs.values())
+    assert any(not grad_fn_handle.has_op for grad_fn_handle in trace.grad_fn_logs.values())
 
 
-def test_has_op_deprecation_property() -> None:
-    """Legacy has_op access warns and returns the inverse of is_intervening."""
+def test_has_op_storage_field() -> None:
+    """GradFn.has_op records whether a forward op was captured."""
 
     grad_fn_handle = GradFn(
         grad_fn_object_id=1,
@@ -200,10 +200,10 @@ def test_has_op_deprecation_property() -> None:
         grad_fn_type="addbackward0",
         grad_fn_type_num=1,
         grad_fn_total_num=1,
-        is_intervening=False,
+        step_index=1,
+        has_op=True,
     )
-    with pytest.warns(DeprecationWarning):
-        assert grad_fn_handle.has_op is True
+    assert grad_fn_handle.has_op is True
 
 
 @pytest.mark.smoke

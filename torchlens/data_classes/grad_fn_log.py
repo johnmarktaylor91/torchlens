@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, Union
-import warnings
+import weakref
 
 import torch
 
@@ -126,10 +126,31 @@ class GradFn:
         "grad_fn_type": FieldPolicy.KEEP,
         "grad_fn_type_num": FieldPolicy.KEEP,
         "grad_fn_total_num": FieldPolicy.KEEP,
-        "is_intervening": FieldPolicy.KEEP,
-        "op": FieldPolicy.KEEP,
+        "step_index": FieldPolicy.KEEP,
+        "has_op": FieldPolicy.KEEP,
+        "op_label": FieldPolicy.KEEP,
         "next_grad_fn_ids": FieldPolicy.KEEP,
+        "parents": FieldPolicy.KEEP,
+        "children": FieldPolicy.KEEP,
+        "siblings": FieldPolicy.KEEP,
+        "co_parents": FieldPolicy.KEEP,
         "ops": FieldPolicy.KEEP,
+        "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
+        "class_source_file": FieldPolicy.KEEP,
+        "class_source_line": FieldPolicy.KEEP,
+        "class_docstring": FieldPolicy.KEEP,
+        "init_source_file": FieldPolicy.KEEP,
+        "init_source_line": FieldPolicy.KEEP,
+        "init_signature": FieldPolicy.KEEP,
+        "init_docstring": FieldPolicy.KEEP,
+        "forward_source_file": FieldPolicy.KEEP,
+        "forward_source_line": FieldPolicy.KEEP,
+        "forward_signature": FieldPolicy.KEEP,
+        "forward_docstring": FieldPolicy.KEEP,
+        "backward_source_file": FieldPolicy.KEEP,
+        "backward_source_line": FieldPolicy.KEEP,
+        "backward_signature": FieldPolicy.KEEP,
+        "backward_docstring": FieldPolicy.KEEP,
     }
 
     grad_fn_object_id: int
@@ -140,16 +161,41 @@ class GradFn:
     grad_fn_type: str
     grad_fn_type_num: int
     grad_fn_total_num: int
-    is_intervening: bool = True
-    op: "Layer | None" = None
+    step_index: int = 0
+    has_op: bool = False
+    op_label: str | None = None
     next_grad_fn_ids: list[int] = field(default_factory=list)
+    parents: list[str] = field(default_factory=list)
+    children: list[str] = field(default_factory=list)
+    siblings: list[str] = field(default_factory=list)
+    co_parents: list[str] = field(default_factory=list)
     ops: dict[int, GradFnCall] | GradFnCallAccessor = field(default_factory=dict)
+    _source_trace_ref: Any = None
+    class_source_file: str | None = None
+    class_source_line: int | None = None
+    class_docstring: str | None = None
+    init_source_file: str | None = None
+    init_source_line: int | None = None
+    init_signature: str | None = None
+    init_docstring: str | None = None
+    forward_source_file: str | None = None
+    forward_source_line: int | None = None
+    forward_signature: str | None = None
+    forward_docstring: str | None = None
+    backward_source_file: str | None = None
+    backward_source_line: int | None = None
+    backward_signature: str | None = None
+    backward_docstring: str | None = None
 
     def __post_init__(self) -> None:
         """Promote call storage to a scoped accessor."""
 
         if not isinstance(self.ops, GradFnCallAccessor):
             self.ops = GradFnCallAccessor(self.ops, self.label)  # type: ignore[assignment]
+        else:
+            self.ops._label = self.label
+        for call in self.ops.values():
+            call.grad_fn_label = self.label
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -165,38 +211,123 @@ class GradFn:
         default_fill_state(
             state,
             defaults={
+                "step_index": state.get("trace_" + "index", state.get("overall_" + "index", 0)),
+                "has_op": not bool(state.get("is_" + "intervening", True)),
+                "op_label": None,
                 "next_grad_fn_ids": [],
+                "parents": [],
+                "children": [],
+                "siblings": [],
+                "co_parents": [],
                 "ops": {},
+                "_source_trace_ref": None,
+                "class_source_file": None,
+                "class_source_line": None,
+                "class_docstring": None,
+                "init_source_file": None,
+                "init_source_line": None,
+                "init_signature": None,
+                "init_docstring": None,
+                "forward_source_file": None,
+                "forward_source_line": None,
+                "forward_signature": None,
+                "forward_docstring": None,
+                "backward_source_file": None,
+                "backward_source_line": None,
+                "backward_signature": None,
+                "backward_docstring": None,
             },
         )
-        if "has_op" in state:
-            legacy_has_op = state.pop("has_op")
-            if "is_intervening" not in state:
-                state["is_intervening"] = bool(legacy_has_op)
+        legacy_op = state.pop("op", None)
+        if legacy_op is not None and state.get("op_label") is None:
+            state["op_label"] = getattr(legacy_op, "layer_label", None)
+        legacy_intervening_key = "is_" + "intervening"
+        if legacy_intervening_key in state:
+            state["has_op"] = not bool(state.pop(legacy_intervening_key))
+        state.pop("trace_" + "index", None)
+        state.pop("overall_" + "index", None)
         self.__dict__.update(state)
         self.__post_init__()
 
     @property
-    def has_op(self) -> bool:
-        """Return whether this grad_fn_handle has a corresponding forward op.
+    def source_trace(self) -> Any:
+        """Return the owning Trace if it is still alive.
 
         Returns
         -------
-        bool
-            True when ``op`` is not None.
+        Any
+            Owning Trace or ``None``.
         """
 
-        warnings.warn(
-            "GradFn.has_op is deprecated; use not grad_fn_handle.is_intervening instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return not self.is_intervening
+        ref = self._source_trace_ref
+        return None if ref is None else ref()
+
+    @source_trace.setter
+    def source_trace(self, value: Any) -> None:
+        """Set the owning Trace weakref.
+
+        Parameters
+        ----------
+        value:
+            Trace object or ``None``.
+        """
+
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    @property
+    def op(self) -> "Layer | None":
+        """Return the forward Op or Layer associated with this GradFn.
+
+        Returns
+        -------
+        Layer | None
+            Resolved forward record, or ``None`` when no corresponding op was captured.
+        """
+
+        if self.op_label is None:
+            return None
+        trace = self.source_trace
+        if trace is None:
+            return None
+        return trace[self.op_label]
 
     @property
     def num_calls(self) -> int:
         """Number of times this grad_fn_handle has executed during captured backward ops."""
         return len(self.ops)
+
+    @property
+    def has_parents(self) -> bool:
+        """Return whether this GradFn has backward parents."""
+
+        return bool(self.parents)
+
+    @property
+    def has_children(self) -> bool:
+        """Return whether this GradFn has backward children."""
+
+        return bool(self.children)
+
+    @property
+    def has_siblings(self) -> bool:
+        """Return whether this GradFn has backward siblings."""
+
+        return bool(self.siblings)
+
+    @property
+    def has_co_parents(self) -> bool:
+        """Return whether this GradFn has backward co-parents."""
+
+        return bool(self.co_parents)
+
+    @property
+    def has_saved_call(self) -> bool:
+        """Return whether this GradFn has any recorded call data."""
+
+        return any(
+            call.grad_inputs is not None or call.grad_outputs is not None
+            for call in self.ops.values()
+        )
 
     @property
     def cls(self) -> type[Any] | None:
@@ -223,21 +354,92 @@ class GradFn:
         return self.label
 
     @property
-    def children(self) -> list[str]:
-        """Return labels of child grad_fn_handle nodes.
+    def class_source_location(self) -> str | None:
+        """Return the grad-fn class source location.
 
         Returns
         -------
-        list[str]
-            Child grad-fn labels when resolvable from stored ids.
+        str | None
+            ``file:line`` location, or ``None`` when unavailable.
         """
 
-        return [str(grad_fn_object_id) for grad_fn_object_id in self.next_grad_fn_ids]
+        if self.class_source_file is None or self.class_source_line is None:
+            return None
+        return f"{self.class_source_file}:{self.class_source_line}"
+
+    @property
+    def init_source_location(self) -> str | None:
+        """Return the grad-fn ``__init__`` source location."""
+
+        if self.init_source_file is None or self.init_source_line is None:
+            return None
+        return f"{self.init_source_file}:{self.init_source_line}"
+
+    @property
+    def forward_source_location(self) -> str | None:
+        """Return the custom autograd ``forward`` source location."""
+
+        if self.forward_source_file is None or self.forward_source_line is None:
+            return None
+        return f"{self.forward_source_file}:{self.forward_source_line}"
+
+    @property
+    def backward_source_location(self) -> str | None:
+        """Return the custom autograd ``backward`` source location."""
+
+        if self.backward_source_file is None or self.backward_source_line is None:
+            return None
+        return f"{self.backward_source_file}:{self.backward_source_line}"
 
     @property
     def call_labels(self) -> list[str]:
         """Pass-qualified labels for this grad_fn_handle."""
         return [f"{self.label}:{call_index}" for call_index in self.ops]
+
+    @property
+    def backward_duration(self) -> float:
+        """Return this GradFn's single-call backward duration.
+
+        Returns
+        -------
+        float
+            Backward duration for the only call.
+
+        Raises
+        ------
+        ValueError
+            If this GradFn has multiple calls.
+        """
+
+        if len(self.ops) != 1:
+            raise ValueError(
+                f"GradFn '{self.label}' has {len(self.ops)} calls. Access "
+                "backward_duration on a specific call or use total_backward_duration."
+            )
+        return next(iter(self.ops.values())).backward_duration
+
+    @property
+    def backward_duration_str(self) -> str:
+        """Return this GradFn's single-call backward duration as text."""
+
+        if len(self.ops) != 1:
+            raise ValueError(
+                f"GradFn '{self.label}' has {len(self.ops)} calls. Access "
+                "backward_duration_str on a specific call or use total_backward_duration_str."
+            )
+        return next(iter(self.ops.values())).backward_duration_str
+
+    @property
+    def total_backward_duration(self) -> float:
+        """Return total backward duration across all calls for this GradFn."""
+
+        return sum(call.backward_duration for call in self.ops.values())
+
+    @property
+    def total_backward_duration_str(self) -> str:
+        """Return total backward duration across all calls as text."""
+
+        return f"{self.total_backward_duration * 1000:.3f} ms"
 
     def _log_call(self, grad_inputs: Any, grad_outputs: Any, timestamp: float) -> None:
         """Append one runtime hook firing to this grad_fn_handle log.
@@ -254,6 +456,7 @@ class GradFn:
         call_index = len(self.ops) + 1
         self.ops[call_index] = GradFnCall(
             call_index=call_index,
+            grad_fn_label=self.label,
             grad_inputs=_clone_grad_value(grad_inputs),
             grad_outputs=_clone_grad_value(grad_outputs),
             time_started=timestamp,
@@ -334,7 +537,7 @@ class GradFnAccessor(Accessor[GradFn]):
             return "GradFnAccessor({})"
         items = [
             f"  '{grad_fn_handle.label}': {grad_fn_handle.class_name} "
-            f"(ops={grad_fn_handle.num_calls}, intervening={grad_fn_handle.is_intervening})"
+            f"(ops={grad_fn_handle.num_calls}, has_op={grad_fn_handle.has_op})"
             for grad_fn_handle in self._list
         ]
         return f"GradFnAccessor({len(self)} grad_fns):\n" + "\n".join(items)

@@ -382,7 +382,7 @@ def test_backward_invariants_with_intervening() -> None:
     """Backward metadata invariants allow intervening grad_fns."""
 
     log = _make_backward_log()
-    assert any(grad_fn_handle.is_intervening for grad_fn_handle in log.grad_fn_logs.values())
+    assert any(not grad_fn_handle.has_op for grad_fn_handle in log.grad_fn_logs.values())
     assert check_metadata_invariants(log) is True
     log.cleanup()
 
@@ -413,8 +413,8 @@ def test_bad_layer_grad_fn_backpointer_raises() -> None:
     log = _make_backward_log()
     for layer in log.layer_list:
         if layer.grad_fn_handle is not None:
-            layer.grad_fn_handle.op = None
-            layer.grad_fn_handle.is_intervening = True
+            layer.grad_fn_handle.op_label = None
+            layer.grad_fn_handle.has_op = False
             break
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)

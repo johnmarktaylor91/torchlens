@@ -232,15 +232,16 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
 
     layer_labels = set(trace.layer_labels)
     for grad_fn_object_id, grad_fn_handle in trace.grad_fn_logs.items():
-        if grad_fn_handle.is_intervening != (grad_fn_handle.op is None):
+        op = grad_fn_handle.op
+        if grad_fn_handle.has_op != (op is not None):
             raise MetadataInvariantError(
                 name,
-                f"{grad_fn_handle.label} has inconsistent is_intervening/op fields",
+                f"{grad_fn_handle.label} has inconsistent has_op/op fields",
             )
-        if grad_fn_handle.op is not None and grad_fn_handle.op.layer_label not in layer_labels:
+        if grad_fn_handle.has_op and op is not None and op.layer_label not in layer_labels:
             raise MetadataInvariantError(
                 name,
-                f"{grad_fn_handle.label} points to missing layer {grad_fn_handle.op.layer_label!r}",
+                f"{grad_fn_handle.label} points to missing layer {op.layer_label!r}",
             )
         if grad_fn_handle.grad_fn_object_id != grad_fn_object_id:
             raise MetadataInvariantError(
@@ -1654,15 +1655,23 @@ def _check_param_xrefs(ml: "Trace") -> None:
     """Check J: Param <-> Layer <-> Module cross-references.
 
     Validates:
+    - Param.used_by_ops labels are valid op labels.
     - Param.used_by_layers labels are valid layer labels.
     - uses_params == True implies _param_logs is non-empty.
     - layers_with_params values are valid layer labels.
     """
     name = "param_xrefs"
     label_set = set(ml.layer_labels)
+    op_label_set = set(ml.op_labels)
     mod_accessor = ml.modules
 
     for param in ml.param_logs:
+        for lbl in param.used_by_ops:
+            if lbl not in op_label_set:
+                raise MetadataInvariantError(
+                    name,
+                    f"Param '{param.address}' used_by_ops contains '{lbl}' not in op_labels",
+                )
         # used_by_layers exist
         for lbl in param.used_by_layers:
             if lbl not in label_set:

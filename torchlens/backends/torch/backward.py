@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import inspect
 import re
 import time
 import weakref
@@ -36,6 +37,88 @@ def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
         return True
     builtin_prefixes = ("torch.autograd", "torch.nn", "torch", "builtins")
     return not class_module.startswith(builtin_prefixes)
+
+
+def _safe_source_file_and_line(obj: Any) -> tuple[str | None, int | None]:
+    """Return source file and first line for an object when introspection works.
+
+    Parameters
+    ----------
+    obj:
+        Object to inspect.
+
+    Returns
+    -------
+    tuple[str | None, int | None]
+        Source file and line, or ``(None, None)`` when unavailable.
+    """
+
+    try:
+        source_file = inspect.getsourcefile(obj) or inspect.getfile(obj)
+        source_line = inspect.getsourcelines(obj)[1]
+    except (OSError, TypeError):
+        return None, None
+    return source_file, source_line
+
+
+def _safe_signature(obj: Any) -> str | None:
+    """Return an inspect signature string when available.
+
+    Parameters
+    ----------
+    obj:
+        Callable object to inspect.
+
+    Returns
+    -------
+    str | None
+        Signature string, or ``None`` when unavailable.
+    """
+
+    try:
+        return str(inspect.signature(obj))
+    except (TypeError, ValueError):
+        return None
+
+
+def _grad_fn_source_metadata(grad_fn_cls: type[Any]) -> dict[str, Any]:
+    """Return best-effort source metadata for a grad-fn class.
+
+    Parameters
+    ----------
+    grad_fn_cls:
+        Runtime class of the autograd grad-fn object.
+
+    Returns
+    -------
+    dict[str, Any]
+        Keyword arguments accepted by ``GradFn`` for source metadata fields.
+    """
+
+    class_source_file, class_source_line = _safe_source_file_and_line(grad_fn_cls)
+    init_method = getattr(grad_fn_cls, "__init__", None)
+    forward_method = getattr(grad_fn_cls, "forward", None)
+    backward_method = getattr(grad_fn_cls, "backward", None)
+    init_source_file, init_source_line = _safe_source_file_and_line(init_method)
+    forward_source_file, forward_source_line = _safe_source_file_and_line(forward_method)
+    backward_source_file, backward_source_line = _safe_source_file_and_line(backward_method)
+    return {
+        "class_source_file": class_source_file,
+        "class_source_line": class_source_line,
+        "class_docstring": grad_fn_cls.__doc__,
+        "init_source_file": init_source_file,
+        "init_source_line": init_source_line,
+        "init_signature": _safe_signature(init_method),
+        "init_docstring": getattr(init_method, "__doc__", None),
+        "forward_source_file": forward_source_file,
+        "forward_source_line": forward_source_line,
+        "forward_signature": _safe_signature(forward_method),
+        "forward_docstring": getattr(forward_method, "__doc__", None),
+        "backward_source_file": backward_source_file,
+        "backward_source_line": backward_source_line,
+        "backward_signature": _safe_signature(backward_method),
+        "backward_docstring": getattr(backward_method, "__doc__", None),
+    }
 
 
 def _iter_next_grad_fns(grad_fn_handle: Any) -> Iterator[Any]:
@@ -79,6 +162,53 @@ def _selected_for_grad_save(trace: Any, layer_label: str | None) -> bool:
     if selection in [None, "none", []]:
         return False
     return trace[layer_label].raw_index in selection
+
+
+def _sync_grad_fn_graph_relations(trace: Any) -> None:
+    """Populate backward-oriented GradFn graph relation labels.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ``grad_fn_logs`` should be synchronized.
+    """
+
+    id_to_label = {
+        grad_fn_object_id: grad_fn.label
+        for grad_fn_object_id, grad_fn in trace.grad_fn_logs.items()
+    }
+    child_map: dict[str, list[str]] = {}
+    parent_map: dict[str, list[str]] = {
+        grad_fn.label: [] for grad_fn in trace.grad_fn_logs.values()
+    }
+
+    for grad_fn in trace.grad_fn_logs.values():
+        children = [
+            id_to_label[next_grad_fn_id]
+            for next_grad_fn_id in grad_fn.next_grad_fn_ids
+            if next_grad_fn_id in id_to_label
+        ]
+        child_map[grad_fn.label] = children
+        for child_label in children:
+            if grad_fn.label not in parent_map[child_label]:
+                parent_map[child_label].append(grad_fn.label)
+
+    for grad_fn in trace.grad_fn_logs.values():
+        grad_fn.children = child_map[grad_fn.label]
+        grad_fn.parents = parent_map[grad_fn.label]
+        sibling_labels: list[str] = []
+        for parent_label in grad_fn.parents:
+            for sibling_label in child_map.get(parent_label, []):
+                if sibling_label != grad_fn.label and sibling_label not in sibling_labels:
+                    sibling_labels.append(sibling_label)
+        grad_fn.siblings = sibling_labels
+
+        co_parent_labels: list[str] = []
+        for child_label in grad_fn.children:
+            for co_parent_label in parent_map.get(child_label, []):
+                if co_parent_label != grad_fn.label and co_parent_label not in co_parent_labels:
+                    co_parent_labels.append(co_parent_label)
+        grad_fn.co_parents = co_parent_labels
 
 
 def _normalize_grad_fn_type(grad_fn_handle: Any) -> str:
@@ -169,7 +299,7 @@ def _make_grad_fn_hook(
             return None
         grad_inputs = hook_args[0] if len(hook_args) >= 1 else None
         grad_outputs = hook_args[1] if len(hook_args) >= 2 else None
-        layer_label = grad_fn_handle.op.layer_label if grad_fn_handle.op is not None else None
+        layer_label = grad_fn_handle.op.layer_label if grad_fn_handle.has_op else None
         stored_grad_inputs = grad_inputs
         stored_grad_outputs = grad_outputs
         if not _selected_for_grad_save(live_trace, layer_label):
@@ -343,7 +473,6 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 type_counter,
                 grad_fn_total_num,
             )
-            op = trace.layers[layer_label] if layer_label is not None else None
             grad_fn_cls = type(grad_fn_handle)
             grad_fn_record = GradFn(
                 grad_fn_object_id=grad_fn_object_id,
@@ -353,15 +482,19 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 grad_fn_type=grad_fn_type,
                 grad_fn_type_num=grad_fn_type_num,
                 grad_fn_total_num=grad_fn_total_num,
+                step_index=grad_fn_total_num,
                 is_custom=_grad_fn_is_custom(grad_fn_handle),
-                is_intervening=layer_label is None,
-                op=op,
+                has_op=layer_label is not None,
+                op_label=layer_label,
                 next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
+                **_grad_fn_source_metadata(grad_fn_cls),
             )
+            grad_fn_record.source_trace = trace
             trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
             trace.grad_fn_order.append(grad_fn_object_id)
         else:
             grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
+            grad_fn_record.source_trace = trace
         is_accumulate_grad = _is_accumulate_grad(grad_fn_handle)
         if is_accumulate_grad:
             param = getattr(grad_fn_handle, "variable", None)
@@ -389,6 +522,7 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 )
         except RuntimeError:
             continue
+    _sync_grad_fn_graph_relations(trace)
     return handles
 
 

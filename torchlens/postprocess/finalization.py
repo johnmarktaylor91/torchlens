@@ -4,8 +4,8 @@ Step 12 (_undecorate_all_saved_tensors): Removes TorchLens tensor metadata from
     all saved tensors and their creation args/kwargs.
 Step 13: torch.cuda.empty_cache() — handled inline in __init__.py.
 Step 14 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
-Step 15 (_finalize_param_logs): Populates Param reverse mappings (used_by_layers,
-    co_parent_params), num_calls, and clears Parameter tensor references.
+Step 15 (_finalize_param_logs): Populates Param reverse mappings (used_by_ops,
+    used_by_layers, co_parent_params), num_calls, and clears Parameter tensor references.
 Step 15.5 (_build_layer_logs): Groups Op entries by layer_label_no_pass to
     create aggregate Layer objects. Static identity fields still use first-pass
     values, while aggregate fields merge across ops, including conditional
@@ -92,25 +92,29 @@ def _log_time_elapsed(self: "Trace") -> None:
 
 
 def _finalize_param_logs(self: "Trace") -> None:
-    """Step 15: Populate Param reverse mappings, linked params, and num_calls.
+    """Step 15: Populate Param reverse mappings, co-parent params, and num_calls.
 
     For each Op with _param_logs:
-    - Adds the layer's label to each Param's used_by_layers list.
+    - Adds the Op label to each Param's used_by_ops list.
+    - Adds the Layer label to each Param's used_by_layers list.
     - Links params that co-occur in the same operation (co_parent_params).
-    - Sets num_calls = max(1, len(used_by_layers)).
+    - Sets num_calls = max(1, len(used_by_ops)).
 
     Then clears actual Parameter tensor references (parent_params) from
     Op entries to reduce memory, while preserving Param._param_ref
     for potential backward() calls by the user.
     """
-    # Build used_by_layers and co_parent_params from Op entries
+    # Build used_by_ops, used_by_layers, and co_parent_params from Op entries
     for layer_entry in self.layer_list:
         if not layer_entry._param_logs:
             continue
         addresses_in_op = [pl.address for pl in layer_entry._param_logs]
         for pl in layer_entry._param_logs:
-            if layer_entry.layer_label not in pl.used_by_layers:
-                pl.used_by_layers.append(layer_entry.layer_label)
+            if layer_entry.layer_label_w_pass not in pl.used_by_ops:
+                pl.used_by_ops.append(layer_entry.layer_label_w_pass)
+            layer_label = layer_entry.layer_label_no_pass or layer_entry.layer_label
+            if layer_label not in pl.used_by_layers:
+                pl.used_by_layers.append(layer_label)
             # Link to other params in the same operation
             for other_addr in addresses_in_op:
                 if other_addr != pl.address and other_addr not in pl.co_parent_params:
@@ -118,7 +122,7 @@ def _finalize_param_logs(self: "Trace") -> None:
 
     # Populate num_calls: how many times this parameter was used in the forward pass
     for pl in self.param_logs:
-        pl.num_calls = max(1, len(pl.used_by_layers))
+        pl.num_calls = max(1, len(pl.used_by_ops))
         pl.source_trace = self
 
     # Param grad metadata is populated lazily via backward hooks in _log_tensor_grad.
