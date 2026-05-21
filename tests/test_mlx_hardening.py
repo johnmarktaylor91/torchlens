@@ -166,7 +166,7 @@ def test_mlx_save_load_audit_only(tmp_path: Path) -> None:
     loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
 
-    assert loaded._backend_name == "mlx"
+    assert loaded.backend == "mlx"
     assert manifest["unsupported_tensors"]
     assert all(
         record["reason"] == "mlx_array_audit_null" for record in manifest["unsupported_tensors"]

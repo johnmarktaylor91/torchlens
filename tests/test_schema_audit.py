@@ -8,7 +8,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._run_state import RunState
+from torchlens._trace_state import TraceState
 from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import Trace
@@ -70,9 +70,9 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
 
     log_a = Trace("a")
     log_b = Trace("b")
-    log_a.ledger.append({"op": "sentinel"})
-    assert log_b.ledger == []
-    assert log_a.run_state is RunState.PRISTINE
+    log_a.state_history.append({"op": "sentinel"})
+    assert log_b.state_history == []
+    assert log_a.state is TraceState.PRISTINE
     assert all(value is Relationship.UNKNOWN for value in log_a.relationship_evidence.values())
 
     pass_a = next(iter(_capture_tiny_log()))
@@ -108,7 +108,7 @@ def test_postprocess_internal_writes_do_not_mark_direct_write_dirty() -> None:
 
     log = _capture_tiny_log()
     assert log._has_direct_writes is False
-    assert log.run_state is RunState.PRISTINE
+    assert log.state is TraceState.PRISTINE
     for layer in log:
         assert hasattr(layer, "func_call_id")
         assert hasattr(layer, "container_path")

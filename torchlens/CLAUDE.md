@@ -29,7 +29,7 @@ Selective `layers_to_save` uses the two-pass strategy: Pass 1 exhaustive metadat
 2 fast out save. Fastlog uses explicit predicate ops instead and does not
 try to build a faithful full graph.
 
-`train_mode=True` is the public opt-in for losses built from saved outs. It keeps
+`backward_ready=True` is the public opt-in for losses built from saved outs. It keeps
 floating tensors graph-connected, preserves user `requires_grad`, and rejects incompatible
 detaching or disk-only out storage.
 
@@ -39,7 +39,7 @@ detaching or disk-only out storage.
 |------|---------|
 | `__init__.py` | Top-level API, 40-name `__all__`, deprecation shims, `peek`/`extract` helpers |
 | `_state.py` | Global logging toggle, active log, decoration maps, prepared-model registry; no torchlens imports |
-| `_run_state.py` | Small runtime state enum exposed through `torchlens.io` |
+| `_trace_state.py` | Small runtime state enum exposed through `torchlens.io` |
 | `_errors.py`, `errors/` | Public and legacy exception classes |
 | `_io/`, `io/` | Portable `.tlspec` save/load, manifest, lazy tensor refs, public I/O helpers |
 | `options.py` | Capture, save, visualization, replay, intervention, and streaming option groups |

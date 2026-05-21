@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import RunState
+from torchlens import TraceState
 from torchlens.intervention.errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -158,17 +158,17 @@ def test_append_success_grows_batch_and_sets_state() -> None:
     model = _LinearRelu()
     model.eval()
     log = _capture(model, torch.randn(2, 3))
-    original_history_len = len(log.ledger)
+    original_history_len = len(log.state_history)
 
     result = log.rerun(model, torch.randn(3, 3), append=True)
 
     assert result is log
     assert log.is_appended is True
     assert log._append_sequence_id == 1
-    assert log.run_state is RunState.APPENDED
-    assert log.last_run_ctx["engine"] == "append"
-    assert log.ledger[-1]["op"] == "append"
-    assert len(log.ledger) == original_history_len + 1
+    assert log.state is TraceState.APPENDED
+    assert log.last_run["engine"] == "append"
+    assert log.state_history[-1]["op"] == "append"
+    assert len(log.state_history) == original_history_len + 1
     assert _first_batch_out(log).shape[0] == 5
 
 
@@ -253,7 +253,7 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     loaded = tl.load(bundle_path)
     assert loaded.is_appended is True
     assert loaded._append_sequence_id == log._append_sequence_id
-    assert loaded.ledger[-1]["op"] == "append"
+    assert loaded.state_history[-1]["op"] == "append"
 
     spec_path = tmp_path / "append.tlspec"
     log.save_intervention(spec_path, level="audit")
@@ -261,4 +261,4 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     append_state = spec.metadata["append_state"]
     assert append_state["is_appended"] is True
     assert append_state["append_sequence_id"] == log._append_sequence_id
-    assert append_state["ledger"][-1]["op"] == "append"
+    assert append_state["state_history"][-1]["op"] == "append"

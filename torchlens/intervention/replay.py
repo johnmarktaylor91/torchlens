@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from .._deprecations import MISSING, MissingType
-from .._run_state import RunState
+from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
 from ..utils.display import progress_bar
 from ..utils.rng import execute_with_restored_rng_autocast
@@ -264,9 +264,9 @@ def _run_replay(
             _check_edge_expectations(member, strict=strict)
 
     _commit_replay_updates(log, pending_updates, pending_records)
-    log.run_state = RunState.REPLAY_PROPAGATED
+    log.state = TraceState.REPLAY_PROPAGATED
     log._out_recipe_revision = getattr(log, "_spec_revision", 0)
-    log.last_run_ctx = {
+    log.last_run = {
         **_ensure_replay_run_ctx(log),
         "engine": "replay",
         "timestamp": started_at,
@@ -1026,9 +1026,9 @@ def _ensure_replay_run_ctx(log: "Trace") -> dict[str, Any]:
         Run context dictionary.
     """
 
-    if not isinstance(getattr(log, "last_run_ctx", None), dict):
-        log.last_run_ctx = {}
-    return cast(dict[str, Any], log.last_run_ctx)
+    if not isinstance(getattr(log, "last_run", None), dict):
+        log.last_run = {}
+    return cast(dict[str, Any], log.last_run)
 
 
 def _hook_name(entry: NormalizedHookEntry) -> str:

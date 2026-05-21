@@ -141,5 +141,5 @@ def test_gradient_postfunc_alias_silent() -> None:
     assert not any("gradient_postfunc" in str(warning.message) for warning in caught)
     assert any(
         torch.equal(trace[label].transformed_grad, torch.zeros_like(trace[label].grad))
-        for label in trace.ops_with_saved_grads
+        for label in trace.saved_grad_ops.keys()
     )

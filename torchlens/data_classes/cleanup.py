@@ -369,9 +369,9 @@ def _scrub_intervention_fields_after_removal(
         else:
             layer_entry.interventions = interventions
 
-    self.ledger = [
+    self.state_history = [
         record
-        for record in getattr(self, "ledger", [])
+        for record in getattr(self, "state_history", [])
         if not _record_mentions_removed_label(record, labels_to_remove)
     ]
     intervention_spec = getattr(self, "_intervention_spec", None)
@@ -461,8 +461,6 @@ _LIST_FIELDS_TO_CLEAN = [
     "internal_source_ops",
     "internal_sink_ops",
     "internally_terminated_bool_ops",
-    "ops_with_saved_outs",
-    "ops_with_saved_grads",
 ]
 
 
@@ -484,8 +482,6 @@ def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
     remove_entry_from_list(self.internal_source_ops, layer_to_remove)
     remove_entry_from_list(self.internal_sink_ops, layer_to_remove)
     remove_entry_from_list(self.internally_terminated_bool_ops, layer_to_remove)
-    remove_entry_from_list(self.ops_with_saved_outs, layer_to_remove)
-    remove_entry_from_list(self.ops_with_saved_grads, layer_to_remove)
 
     _scrub_conditional_fields_after_removal(self, {layer_to_remove}, self)
 
@@ -503,11 +499,11 @@ def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
         if len(tensor_labels) > 0
     }
 
-    for equiv_group, equiv_tensor_labels in self.equivalent_ops.items():
+    for equiv_group, equiv_tensor_labels in self.op_equivalence_classes.items():
         if layer_to_remove in equiv_tensor_labels:
             equiv_tensor_labels.remove(layer_to_remove)
-    self.equivalent_ops = {
+    self.op_equivalence_classes = {
         equiv_group: tensor_labels
-        for equiv_group, tensor_labels in self.equivalent_ops.items()
+        for equiv_group, tensor_labels in self.op_equivalence_classes.items()
         if len(tensor_labels) > 0
     }

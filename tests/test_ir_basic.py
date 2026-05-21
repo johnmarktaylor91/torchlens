@@ -308,7 +308,7 @@ def _build_ir_instances() -> dict[str, object]:
         append_sequence_id=0,
         warned_direct_write=False,
         warned_mutate_in_place=False,
-        last_run_ctx=None,
+        last_run=None,
     )
     trace_build_state = TraceBuildState(
         raw_layer_dict={"linear_1_1_raw": object()},
@@ -323,7 +323,7 @@ def _build_ir_instances() -> dict[str, object]:
         has_backward_pass=False,
         grad_fn_logs={},
         grad_fn_order=(),
-        backward_root_grad_fn_id=None,
+        backward_root_grad_fn_ids=None,
         backward_num_calls=0,
         backward_peak_memory=None,
         backward_memory_backend=None,

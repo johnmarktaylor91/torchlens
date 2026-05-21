@@ -102,7 +102,6 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
                 continue
         if layer_label not in self._saved_grads_set:
             self._saved_grads_set.add(layer_label)
-            self.ops_with_saved_grads.append(layer_label)
         layer.log_tensor_grad(grad)
         self.saved_gradient_memory += layer.grad_memory
         self.total_gradient_memory += layer.grad_memory

@@ -11,7 +11,7 @@ import pytest
 import torch
 import torchlens as tl
 
-from torchlens._io import IO_FORMAT_VERSION, reset_legacy_thread_warning
+from torchlens._io import TLSPEC_VERSION, reset_legacy_thread_warning
 
 
 @pytest.fixture(autouse=True)
@@ -36,9 +36,9 @@ def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
 
 
 def test_io_format_version_is_four() -> None:
-    """M8 bumps ``IO_FORMAT_VERSION`` from 3 to 4."""
+    """M8 bumps ``TLSPEC_VERSION`` from 3 to 4."""
 
-    assert IO_FORMAT_VERSION == 4
+    assert TLSPEC_VERSION == 4
 
 
 def test_round_trip_save_load_preserves_module_containment(tmp_path: Path) -> None:
@@ -63,7 +63,7 @@ def test_legacy_pickle_load_drops_thread_fields() -> None:
     trace = tl.trace(model, x)
     op = next(iter(trace.layer_list))
     state = op.__getstate__()
-    state["io_format_version"] = 2
+    state["tlspec_version"] = 2
     state["_module_boundary_thread_output"] = [("+", "fake_module", 1)]
     state["_module_boundary_threads_inputs"] = {"fake_label": []}
     state["module_entry_exit_threads_inputs"] = {"old_alias": []}
@@ -89,7 +89,7 @@ def test_legacy_pickle_load_emits_one_deprecation_warning() -> None:
     legacy_pickles = []
     for _ in range(3):
         state = op.__getstate__()
-        state["io_format_version"] = 2
+        state["tlspec_version"] = 2
         state["_module_boundary_thread_output"] = [("+", "x", 1)]
         legacy_pickles.append((op, pickle.dumps(state)))
 

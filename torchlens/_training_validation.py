@@ -24,7 +24,7 @@ for _dtype_name in ("uint16", "uint32", "uint64"):
 
 
 class TrainingModeConfigError(ConfigurationError, ValueError):
-    """Raised when ``train_mode=True`` conflicts with capture configuration.
+    """Raised when ``backward_ready=True`` conflicts with capture configuration.
 
     This is the slow/replay sibling of ``tl.fastlog.RecordingConfigError``:
     both are ``ValueError`` subclasses for user configuration mistakes, but
@@ -63,7 +63,7 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
 
     if is_optimized_module:
         raise RuntimeError(
-            f"{api_name} does not support torch.compile'd models in train_mode: "
+            f"{api_name} does not support torch.compile'd models in backward_ready: "
             "dynamo replaces the Python forward with a compiled graph that "
             "byops TorchLens' function wrappers. Call the API on the "
             "original un-compiled model."
@@ -72,7 +72,7 @@ def reject_compiled_model(model: nn.Module, *, api_name: str) -> None:
 
 def validate_training_compatibility(
     *,
-    train_mode: bool,
+    backward_ready: bool,
     streaming: Any,
     detach_saved_activations: bool | None = None,
     save_outs_to: str | Path | None = None,
@@ -82,7 +82,7 @@ def validate_training_compatibility(
 
     Parameters
     ----------
-    train_mode:
+    backward_ready:
         Whether the caller requested training-compatible out retention.
     streaming:
         Streaming options object, or ``None``.
@@ -96,24 +96,24 @@ def validate_training_compatibility(
     Raises
     ------
     TrainingModeConfigError
-        If ``train_mode=True`` conflicts with disk persistence, explicit
+        If ``backward_ready=True`` conflicts with disk persistence, explicit
         detaching, or active inference mode.
     """
 
-    if not train_mode:
+    if not backward_ready:
         return
 
     streaming_bundle_path = getattr(streaming, "bundle_path", None)
     if save_outs_to is not None or streaming_bundle_path is not None:
         raise TrainingModeConfigError(
-            "train_mode=True is not compatible with slow/replay out disk saves"
+            "backward_ready=True is not compatible with slow/replay out disk saves"
         )
     if detach_saved_activations is True:
         raise TrainingModeConfigError(
-            "train_mode=True requires detach_saved_activations=False so grads can propagate"
+            "backward_ready=True requires detach_saved_activations=False so grads can propagate"
         )
     if inference_mode_active is True:
         raise TrainingModeConfigError(
-            "train_mode=True cannot run while PyTorch inference mode is active; "
+            "backward_ready=True cannot run while PyTorch inference mode is active; "
             "inference tensors cannot retain autograd history"
         )

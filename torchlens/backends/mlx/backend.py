@@ -323,7 +323,7 @@ class MLXBackend:
         save_rng_states: bool = False,
         recurrence_detection: bool = True,
         verbose: bool = False,
-        train_mode: bool = False,
+        backward_ready: bool = False,
         name: str | None = None,
         module_filter: object | None = None,
         transform: object | None = None,
@@ -361,7 +361,7 @@ class MLXBackend:
             save_rng_states=save_rng_states,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
-            train_mode=train_mode,
+            backward_ready=backward_ready,
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             transform=cast("Callable[[Any], Any] | None", transform),
@@ -374,7 +374,7 @@ class MLXBackend:
             save_visualizations=save_visualizations,
         )
         trace.trace_label = name
-        trace._backend_name = self.name
+        trace.backend = self.name
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
         trace._pre_forward_rng_states = None
@@ -389,11 +389,11 @@ class MLXBackend:
         args = self._normalize_input_args(input_args)
         kwargs = {} if input_kwargs is None else dict(input_kwargs)
         self._label_source_arrays(trace, args, kwargs)
-        trace.start_time = time.time()
+        trace.capture_start_time = time.time()
         try:
             with self.active_logging(trace):
                 output = cast(Any, model)(*args, **kwargs)
-            trace.forward_duration = time.time() - trace.start_time
+            trace.forward_duration = time.time() - trace.capture_start_time
             trace.raw_output = output_transform(output) if callable(output_transform) else None
             self.finalize_forward_session(trace, trace._ensure_build_state())
             self._mark_outputs(trace, output)
@@ -543,8 +543,8 @@ class MLXBackend:
         trace._layers_saved = True
         trace._tracing_finished = True
         trace.has_backward_pass = False
-        trace.end_time = time.time()
-        trace._backend_name = self.name
+        trace.capture_end_time = time.time()
+        trace.backend = self.name
 
     def _build_op_log(
         self,
@@ -628,7 +628,7 @@ class MLXBackend:
                 "num_params_frozen": 0,
                 "param_memory": 0,
                 "equivalence_class": op_name,
-                "equivalent_ops": set(),
+                "op_equivalence_classes": set(),
                 "recurrent_ops": [],
                 "parents": parents,
                 "parent_arg_positions": list(range(len(parents))),

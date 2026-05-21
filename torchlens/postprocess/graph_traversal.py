@@ -140,7 +140,7 @@ def _add_output_layers(
             f"{str(new_output_node.dtype)}"
         )
         new_output_node.equivalence_class = equiv_type
-        self.equivalent_ops[equiv_type].add(new_output_node._label_raw)
+        self.op_equivalence_classes[equiv_type].add(new_output_node._label_raw)
 
         # Track child tensor variations for output nodes.
         new_output_node.has_output_variations = False

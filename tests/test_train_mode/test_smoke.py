@@ -11,17 +11,17 @@ from .conftest import TwoLayerMlp
 
 @pytest.mark.smoke
 def test_trace_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
-    """trace train_mode keeps saved outs differentiable."""
+    """trace backward_ready keeps saved outs differentiable."""
 
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        train_mode=True,
+        backward_ready=True,
         random_seed=0,
     )
     saved = trace[trace.output_layers[0]].out
 
-    assert trace.train_mode is True
+    assert trace.backward_ready is True
     assert saved.grad_fn is not None
     two_layer_mlp.zero_grad(set_to_none=True)
     saved.sum().backward()
@@ -31,7 +31,7 @@ def test_trace_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
 
 @pytest.mark.smoke
 def test_save_new_outs_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
-    """save_new_outs train_mode override keeps replay outs differentiable."""
+    """save_new_outs backward_ready override keeps replay outs differentiable."""
 
     trace = tl.trace(
         two_layer_mlp,
@@ -42,7 +42,7 @@ def test_save_new_outs_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     trace.save_new_outs(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        train_mode=True,
+        backward_ready=True,
         random_seed=0,
     )
     saved = trace[trace.output_layers[0]].out
@@ -56,12 +56,12 @@ def test_save_new_outs_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
 
 @pytest.mark.smoke
 def test_fastlog_record_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
-    """fastlog record train_mode keeps recorded payloads differentiable."""
+    """fastlog record backward_ready keeps recorded payloads differentiable."""
 
     recording = tl.fastlog.record(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        train_mode=True,
+        backward_ready=True,
     )
     payload = next(record.ram_payload for record in recording if record.ram_payload is not None)
 

@@ -21,7 +21,7 @@ from typing import Any
 import torch
 from packaging.version import InvalidVersion, Version
 
-from . import IO_FORMAT_VERSION, TorchLensIOError
+from . import TLSPEC_VERSION, TorchLensIOError
 from .. import __version__ as TORCHLENS_VERSION
 
 LOGGER = logging.getLogger(__name__)
@@ -147,7 +147,7 @@ class Manifest:
 
     Parameters
     ----------
-    io_format_version:
+    tlspec_version:
         Portable I/O schema version for TorchLens bundle metadata.
     torchlens_version:
         TorchLens runtime version that wrote the bundle.
@@ -175,7 +175,7 @@ class Manifest:
         Best-effort records for tensors skipped under ``strict=False``.
     """
 
-    io_format_version: int
+    tlspec_version: int
     torchlens_version: str
     torch_version: str
     python_version: str
@@ -210,7 +210,7 @@ class Manifest:
         """
 
         required_int_fields = (
-            "io_format_version",
+            "tlspec_version",
             "n_layers",
             "n_out_blobs",
             "n_grad_blobs",
@@ -250,7 +250,7 @@ class Manifest:
 
         unsupported_tensors = _validate_unsupported_tensors(data.get("unsupported_tensors"))
         manifest = cls(
-            io_format_version=data["io_format_version"],
+            tlspec_version=data["tlspec_version"],
             torchlens_version=data["torchlens_version"],
             torch_version=data["torch_version"],
             python_version=data["python_version"],
@@ -388,17 +388,17 @@ def enforce_version_policy(manifest: Manifest) -> None:
         major version.
     """
 
-    if manifest.io_format_version > IO_FORMAT_VERSION:
+    if manifest.tlspec_version > TLSPEC_VERSION:
         raise TorchLensIOError(
-            "Bundle uses io_format_version="
-            f"{manifest.io_format_version}, but this runtime only supports "
-            f"{IO_FORMAT_VERSION}."
+            "Bundle uses tlspec_version="
+            f"{manifest.tlspec_version}, but this runtime only supports "
+            f"{TLSPEC_VERSION}."
         )
-    if manifest.io_format_version < IO_FORMAT_VERSION:
+    if manifest.tlspec_version < TLSPEC_VERSION:
         warnings.warn(
-            "Bundle io_format_version="
-            f"{manifest.io_format_version} is older than runtime "
-            f"io_format_version={IO_FORMAT_VERSION}; missing portable fields may "
+            "Bundle tlspec_version="
+            f"{manifest.tlspec_version} is older than runtime "
+            f"tlspec_version={TLSPEC_VERSION}; missing portable fields may "
             "default-fill during load.",
             DeprecationWarning,
             stacklevel=2,

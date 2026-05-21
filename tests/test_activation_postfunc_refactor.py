@@ -98,7 +98,7 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
         grad_transform=lambda t: t.mean(),
     )
     trace.log_backward(_output_loss(trace))
-    layer = next(trace[label] for label in trace.ops_with_saved_grads)
+    layer = next(trace[label] for label in trace.saved_grad_ops.keys())
 
     assert layer.grad is not None
     assert layer.grad_shape == tuple(layer.grad.shape)
@@ -121,7 +121,7 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
         save_raw_grads=False,
     )
     trace.log_backward(_output_loss(trace))
-    layer = next(trace[label] for label in trace.ops_with_saved_grads)
+    layer = next(trace[label] for label in trace.saved_grad_ops.keys())
 
     assert layer.grad is None
     assert layer.grad_shape is not None
@@ -137,7 +137,7 @@ def test_train_mode_out_postfunc_detach_rejected() -> None:
         tl.trace(
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             out_postfunc=lambda t: t.detach(),
         )
 
@@ -149,7 +149,7 @@ def test_train_mode_out_postfunc_int_rejected() -> None:
         tl.trace(
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             out_postfunc=lambda t: t.to(torch.int64),
         )
 
@@ -160,7 +160,7 @@ def test_train_mode_out_postfunc_connected_ops() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
-        train_mode=True,
+        backward_ready=True,
         out_postfunc=lambda t: t * 2,
     )
 

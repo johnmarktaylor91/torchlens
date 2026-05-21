@@ -10,7 +10,7 @@ from safetensors.torch import save_file
 from torch import nn
 
 from torchlens import Trace, trace as trace_fn
-from torchlens._io import IO_FORMAT_VERSION, TorchLensIOError
+from torchlens._io import TLSPEC_VERSION, TorchLensIOError
 from torchlens._io.rehydrate import rehydrate_trace
 from torchlens._io.scrub import scrub_for_save
 
@@ -71,7 +71,7 @@ def _write_manifest(tmp_path, blob_specs) -> dict[str, object]:
                 "relative_path": relative_path,
             }
         )
-    return {"io_format_version": IO_FORMAT_VERSION, "tensors": tensors}
+    return {"tlspec_version": TLSPEC_VERSION, "tensors": tensors}
 
 
 def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
@@ -123,14 +123,14 @@ def test_trace_setstate_default_fills_pre_sprint_state() -> None:
 
     live_log = _build_live_log()
     old_state = live_log.__getstate__()
-    old_state.pop("io_format_version", None)
+    old_state.pop("tlspec_version", None)
     old_state.pop("_out_transform_repr", None)
 
     restored = Trace.__new__(Trace)
     with pytest.warns(DeprecationWarning):
         restored.__setstate__(old_state)
 
-    assert restored.io_format_version == IO_FORMAT_VERSION
+    assert restored.tlspec_version == TLSPEC_VERSION
     assert restored._out_transform_repr is None
 
 
@@ -139,7 +139,7 @@ def test_trace_setstate_rejects_newer_io_versions() -> None:
 
     live_log = _build_live_log()
     future_state = live_log.__getstate__()
-    future_state["io_format_version"] = IO_FORMAT_VERSION + 1
+    future_state["tlspec_version"] = TLSPEC_VERSION + 1
 
     restored = Trace.__new__(Trace)
     with pytest.raises(TorchLensIOError):

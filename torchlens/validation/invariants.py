@@ -16,7 +16,7 @@ and raises ``MetadataInvariantError`` on the first failure.
   I. Module hierarchy (address parent-child bidirectionality, pass consistency)
   J. Param cross-references (Param -> layer, uses_params flag)
   K. Buffer cross-references (buffer_layers list, Buffer module references)
-  L. Equivalence group symmetry (equivalent_ops labels are valid)
+  L. Equivalence group symmetry (op_equivalence_classes labels are valid)
 
 **Phase 2 -- Semantic invariants:**
   M. Graph ordering (capture_index uniqueness/monotonicity, topological order, no raw labels)
@@ -222,11 +222,12 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
         missing = sorted(order_ids - grad_fn_ids)
         raise MetadataInvariantError(name, f"grad_fn_order contains unknown ids {missing!r}")
 
-    root_id = trace.backward_root_grad_fn_id
-    if root_id is not None and root_id not in trace.grad_fn_logs:
+    root_ids = trace.backward_root_grad_fn_ids
+    missing_root_ids = [root_id for root_id in root_ids if root_id not in trace.grad_fn_logs]
+    if missing_root_ids:
         raise MetadataInvariantError(
             name,
-            f"backward_root_grad_fn_id {root_id!r} is not present in grad_fn_logs",
+            f"backward_root_grad_fn_ids {missing_root_ids!r} are not present in grad_fn_logs",
         )
 
     layer_labels = set(trace.layer_labels)
@@ -268,13 +269,11 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                 f"Layer {layer.layer_label} grad_fn backpointer does not point to the layer",
             )
 
-    expected_saved_grad_labels = {
-        layer.layer_label for layer in trace.layer_list if layer.grad is not None
-    }
-    if set(trace.ops_with_saved_grads) != expected_saved_grad_labels:
+    expected_saved_grad_labels = {layer.layer_label for layer in trace.layer_list if layer.has_grad}
+    if set(trace.saved_grad_ops.keys()) != expected_saved_grad_labels:
         raise MetadataInvariantError(
             name,
-            "ops_with_saved_grads does not match layers with saved grad tensors",
+            "saved_grad_ops does not match layers with saved grad tensors",
         )
 
     max_call_index = 0
@@ -418,12 +417,12 @@ def _check_trace_self_consistency(ml: "Trace") -> None:
         raise MetadataInvariantError(name, "No output layers found")
 
     # Timing
-    if ml.duration < 0:
-        raise MetadataInvariantError(name, f"duration={ml.duration} < 0")
-    if ml.start_time > ml.end_time:
+    if ml.capture_duration < 0:
+        raise MetadataInvariantError(name, f"capture_duration={ml.capture_duration} < 0")
+    if ml.capture_start_time > ml.capture_end_time:
         raise MetadataInvariantError(
             name,
-            f"start_time={ml.start_time} > end_time={ml.end_time}",
+            f"capture_start_time={ml.capture_start_time} > capture_end_time={ml.capture_end_time}",
         )
 
     # Tensor counts
@@ -1751,7 +1750,7 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
 
 
 def _check_equivalence_symmetry(ml: "Trace") -> None:
-    """Check L: equivalent_ops groups reference valid layer labels.
+    """Check L: op_equivalence_classes groups reference valid layer labels.
 
     Validates:
     - Each equivalence set value is actually a set.
@@ -1761,25 +1760,25 @@ def _check_equivalence_symmetry(ml: "Trace") -> None:
     name = "equivalence_symmetry"
     label_set = set(ml.layer_labels)
 
-    # equivalent_ops is keyed by equivalence type descriptors (not layer labels),
+    # op_equivalence_classes is keyed by equivalence type descriptors (not layer labels),
     # with values being sets of layer labels in that equivalence group.
-    for eq_type, equiv_set in ml.equivalent_ops.items():
+    for eq_type, equiv_set in ml.op_equivalence_classes.items():
         if not isinstance(equiv_set, set):
             raise MetadataInvariantError(
                 name,
-                f"equivalent_ops['{eq_type}'] is not a set",
+                f"op_equivalence_classes['{eq_type}'] is not a set",
             )
         for label in equiv_set:
             if label not in label_set:
                 raise MetadataInvariantError(
                     name,
-                    f"equivalent_ops['{eq_type}'] contains '{label}' not in layer_labels",
+                    f"op_equivalence_classes['{eq_type}'] contains '{label}' not in layer_labels",
                 )
 
     # Each layer that appears in any equivalence group should exist.
     # Labels may be no-pass or pass-qualified (for recurrent models).
     all_equiv_labels = set()
-    for equiv_set in ml.equivalent_ops.values():
+    for equiv_set in ml.op_equivalence_classes.values():
         all_equiv_labels.update(equiv_set)
     no_pass_set = set(ml.layer_labels)
     pass_set = set(ml.layer_labels)
@@ -1788,7 +1787,7 @@ def _check_equivalence_symmetry(ml: "Trace") -> None:
     if extra:
         raise MetadataInvariantError(
             name,
-            f"equivalent_ops contains labels not in layer_labels: {extra}",
+            f"op_equivalence_classes contains labels not in layer_labels: {extra}",
         )
 
 
@@ -1888,7 +1887,7 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
     - Parameter sharing rule: layers with same (func_name,
       sorted(_param_barcodes)) must share layer_label_no_pass.
     - Equivalence group consistency: all members of a recurrent_ops
-      group belong to the same Trace.equivalent_ops set.
+      group belong to the same Trace.op_equivalence_classes set.
 
     Note: subgraph-level adjacency (Rule 3 from loop_detection.py) cannot
     be verified post-hoc from metadata alone.
@@ -2016,12 +2015,12 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
 
     # Equivalence group ↔ same_layer consistency: all members of a
     # recurrent_ops group must belong to the same equivalence set.
-    # Note: Trace.equivalent_ops keys use the pre-module-suffix type
+    # Note: Trace.op_equivalence_classes keys use the pre-module-suffix type
     # (from loop_detection), while per-layer equivalence_class has
     # a module suffix appended by control_flow.py. So we check group membership
     # consistency, not exact key matching.
     no_pass_to_equiv_key: dict[str, str] = {}
-    for eq_type, equiv_set in ml.equivalent_ops.items():
+    for eq_type, equiv_set in ml.op_equivalence_classes.items():
         for label in equiv_set:
             no_pass_to_equiv_key[label] = eq_type
 

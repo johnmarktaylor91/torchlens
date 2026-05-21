@@ -8,7 +8,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens import RunState
+from torchlens import TraceState
 from torchlens.intervention.errors import SpecMutationError
 
 
@@ -79,7 +79,7 @@ def test_set_tensor_marks_spec_stale_and_returns_self() -> None:
 
     assert result is log
     assert log._spec_revision == initial_revision + 1
-    assert log.run_state is RunState.SPEC_STALE
+    assert log.state is TraceState.SPEC_STALE
     assert log._out_recipe_revision == initial_revision
     assert len(log._intervention_spec.target_value_specs) == 1
     value_spec = log._intervention_spec.target_value_specs[0]
@@ -124,7 +124,7 @@ def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
 
     assert log.attach_hooks({tl.func("relu"): _identity_hook}) is log
     assert log._spec_revision == initial_revision + 1
-    assert log.run_state is RunState.SPEC_STALE
+    assert log.state is TraceState.SPEC_STALE
     assert len(log._intervention_spec.hook_specs) == 1
 
     assert log.clear_hooks() is log
@@ -208,7 +208,7 @@ def test_rerun_advances_out_recipe_revision_after_set() -> None:
     result = log.rerun(ReluAdd(), x)
 
     assert result is log
-    assert log.run_state is RunState.RERUN_PROPAGATED
+    assert log.state is TraceState.RERUN_PROPAGATED
     assert log._out_recipe_revision == log._spec_revision
     assert log._recipe_is_clean()
 
@@ -225,4 +225,4 @@ def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:
 
     result = log.do({tl.func("relu"): _identity_hook}, confirm_mutation=True)
     assert result is log
-    assert log.run_state is RunState.REPLAY_PROPAGATED
+    assert log.state is TraceState.REPLAY_PROPAGATED

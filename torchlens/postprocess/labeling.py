@@ -275,7 +275,7 @@ _LIST_FIELDS_TO_RENAME = [
     "conditional_entry_children",
     "conditional_then_children",
     "conditional_else_children",
-    "equivalent_ops",
+    "op_equivalence_classes",
     "recurrent_ops",
 ]
 
@@ -816,9 +816,9 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     """Step 10: Rename raw labels to final labels in all Trace-level fields.
 
     Updates list fields (input_layers, output_layers, etc.), dict fields
-    (layers_with_params, equivalent_ops), conditional branch
+    (layers_with_params, op_equivalence_classes), conditional branch
     edges, and module layer argument names. Creates NEW container objects
-    (no shared-set corruption) — see set() constructor in equivalent_ops
+    (no shared-set corruption) — see set() constructor in op_equivalence_classes
     rename.
     """
     list_fields_to_rename = [
@@ -828,8 +828,6 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         "internal_source_ops",
         "internal_sink_ops",
         "internally_terminated_bool_ops",
-        "ops_with_saved_grads",
-        "ops_with_saved_outs",
     ]
     for field in list_fields_to_rename:
         tensor_labels = getattr(self, field)
@@ -847,12 +845,26 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         ]
     self.layers_with_params = new_param_tensors
 
+    saved_layers = [
+        layer_entry
+        for layer_entry in self.layer_list
+        if getattr(layer_entry, "has_saved_outs", False)
+        and not getattr(layer_entry, "is_orphan", False)
+    ]
+    self.num_saved_layers = len({layer_entry.layer_label_no_pass for layer_entry in saved_layers})
+    saved_labels = {layer_entry.layer_label for layer_entry in saved_layers}
+    self.num_saved_module_calls = sum(
+        1
+        for module_call in getattr(self, "module_calls", [])
+        if any(label in saved_labels for label in getattr(module_call, "layers", []))
+    )
+
     new_equiv_operations_tensors: dict[Any, set[str]] = {}
-    for key, equiv_values in self.equivalent_ops.items():
+    for key, equiv_values in self.op_equivalence_classes.items():
         new_equiv_operations_tensors[key] = set(
             [self._raw_to_final_layer_labels[tensor_label] for tensor_label in equiv_values]
         )
-    self.equivalent_ops = new_equiv_operations_tensors
+    self.op_equivalence_classes = new_equiv_operations_tensors
 
     for t, (child, parent) in enumerate(self.conditional_branch_edges):
         new_child, new_parent = (
@@ -893,8 +905,8 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
             for layer_label in conditional_event.bool_layers
         ]
 
-    self.ledger = _rename_label_dataclass(
-        getattr(self, "ledger", []), self._raw_to_final_layer_labels
+    self.state_history = _rename_label_dataclass(
+        getattr(self, "state_history", []), self._raw_to_final_layer_labels
     )
     if getattr(self, "_intervention_spec", None) is not None:
         self._intervention_spec = _rename_label_dataclass(

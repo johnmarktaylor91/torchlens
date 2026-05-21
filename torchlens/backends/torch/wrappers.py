@@ -461,7 +461,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
         trace._current_func_barcode = func_call_barcode
-        start_time = time.time()
+        capture_start_time = time.time()
         _save_rng = getattr(trace, "save_rng_states", False)
         rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
         autocast_state = log_current_autocast_state()
@@ -476,7 +476,7 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         finally:
             _nvtx_range_pop(nvtx_pushed)
         exec_ctx = FuncExecutionContext(
-            time_elapsed=time.time() - start_time,
+            time_elapsed=time.time() - capture_start_time,
             rng_states=rng_states,
             autocast_state=autocast_state,
         )

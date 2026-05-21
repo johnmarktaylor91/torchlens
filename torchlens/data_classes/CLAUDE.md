@@ -66,7 +66,7 @@ use first-pass values; only selected graph/role fields are merged across ops.
 
 ## Autograd Contract
 `Op.save_activation()` is the slow/replay choke point for saved tensor copies.
-`train_mode=True` keeps saved floating tensors graph-connected, rejects contradictory
+`backward_ready=True` keeps saved floating tensors graph-connected, rejects contradictory
 detaching/disk-only configs, and must restore all flags in `finally` paths.
 
 ## Circular References

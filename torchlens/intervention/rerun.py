@@ -11,7 +11,7 @@ from torch import nn
 
 from .._deprecations import MISSING, MissingType
 from .._input_coerce import _coerce_input_args
-from .._run_state import RunState
+from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
 from .errors import (
     AppendBatchDependenceError,
@@ -95,7 +95,7 @@ def rerun(
         )
 
     divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
-    log.replace_run_state_from(new_log)
+    log.replace_state_from(new_log)
     log.is_appended = False
     log._append_sequence_id = 0
     log.append_history = []
@@ -109,8 +109,8 @@ def rerun(
         strict=replay_options.strict,
         divergence_count=divergence_count,
     )
-    log.run_state = RunState.RERUN_PROPAGATED
-    log.last_run_ctx = {
+    log.state = TraceState.RERUN_PROPAGATED
+    log.last_run = {
         "engine": "rerun",
         "timestamp": time.monotonic(),
         "started_at": started_at,
@@ -180,17 +180,17 @@ def _append_rerun(
         )
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
-    log.append_run_state_from(new_log)
+    log.append_state_from(new_log)
     log.is_appended = True
     log._append_sequence_id = int(getattr(log, "_append_sequence_id", 0)) + 1
-    log.run_state = RunState.APPENDED
+    log.state = TraceState.APPENDED
     log._has_direct_writes = False
     log._out_recipe_revision = getattr(log, "_spec_revision", 0)
 
     duration_s = time.monotonic() - started_at
     chunk_size = _batch_size_from_input(x)
     total_batch_size = _first_saved_batch_size(log)
-    log.last_run_ctx = {
+    log.last_run = {
         "engine": "append",
         "timestamp": time.monotonic(),
         "started_at": started_at,
@@ -205,7 +205,7 @@ def _append_rerun(
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": getattr(new_log, "graph_shape_hash", None),
     }
-    log.append_history.append(dict(log.last_run_ctx))
+    log.append_history.append(dict(log.last_run))
     log._record_operation(
         "append",
         engine="append",
@@ -490,7 +490,7 @@ def _validate_append_grad_pair(
     if not grads_supported:
         raise AppendBatchDependenceError(
             "append grad concatenation requires a batch-independent helper with "
-            "supports_append_grads=True; use such a helper, disable train_mode grad "
+            "supports_append_grads=True; use such a helper, disable backward_ready grad "
             "append, or replay chunks manually"
         )
     for field_name in grad_fields:
@@ -688,7 +688,7 @@ def _capture_with_active_spec(
         intervention_spec=intervention_spec,
         normalized_hook_plan=hook_plan,
         verbose=getattr(log, "verbose", False),
-        train_mode=getattr(log, "train_mode", False),
+        backward_ready=getattr(log, "backward_ready", False),
         output_transform=output_transform,
         save_raw_output=getattr(log, "save_raw_output", "small"),
     )

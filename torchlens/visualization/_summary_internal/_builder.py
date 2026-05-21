@@ -153,18 +153,18 @@ def format_model_repr(trace: "Trace") -> str:
     str
         Short two-line representation.
     """
-    run_state = getattr(getattr(trace, "run_state", None), "name", "UNKNOWN")
+    state = getattr(getattr(trace, "state", None), "name", "UNKNOWN")
     if not trace._tracing_finished:
         return (
             f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
             f"model_class_qualname={trace.model_class_name!r}, layers={_live_op_count(trace)}, "
-            f"run_state={run_state})"
+            f"state={state})"
         )
 
     return (
         f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
         f"model_class_qualname={trace.model_class_name!r}, layers={len(trace.layer_logs)}, "
-        f"run_state={run_state})"
+        f"state={state})"
     )
 
 
@@ -213,9 +213,9 @@ def format_discoverability_summary(trace: "Trace") -> str:
         f"  input_shape: {_input_shape_summary(trace)}",
         f"  capture_timestamp: {_capture_timestamp(trace)}",
         f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
-        f"  capture_args_template: {bool(getattr(trace, 'capture_args_template', False))}",
+        f"  save_arg_templates: {bool(getattr(trace, 'save_arg_templates', False))}",
         "Run state:",
-        f"  run_state: {_run_state_name(trace)}",
+        f"  state: {_run_state_name(trace)}",
         f"  direct_write_dirty: {bool(getattr(trace, '_has_direct_writes', False))}",
         f"  append: is_appended={bool(getattr(trace, 'is_appended', False))}, "
         f"sequence_id={getattr(trace, '_append_sequence_id', 0)}",
@@ -281,8 +281,8 @@ def _capture_timestamp(trace: "Trace") -> str:
         Pass start/end timing information.
     """
 
-    pass_start = float(getattr(trace, "start_time", 0.0) or 0.0)
-    pass_end = float(getattr(trace, "end_time", 0.0) or 0.0)
+    pass_start = float(getattr(trace, "capture_start_time", 0.0) or 0.0)
+    pass_end = float(getattr(trace, "capture_end_time", 0.0) or 0.0)
     if pass_start <= 0:
         return "unknown"
     if pass_end > 0:
@@ -304,8 +304,8 @@ def _run_state_name(trace: "Trace") -> str:
         Run-state name or repr.
     """
 
-    run_state = getattr(trace, "run_state", None)
-    return str(getattr(run_state, "name", run_state))
+    state = getattr(trace, "state", None)
+    return str(getattr(state, "name", state))
 
 
 def _stale_spec_status(trace: "Trace") -> str:
@@ -342,7 +342,7 @@ def _last_run_summary(trace: "Trace") -> str:
         Last-run status.
     """
 
-    ctx = getattr(trace, "last_run_ctx", None)
+    ctx = getattr(trace, "last_run", None)
     if not isinstance(ctx, dict) or not ctx:
         return "none"
     engine = ctx.get("engine", "unknown")
@@ -448,7 +448,7 @@ def _recent_operation_lines(trace: "Trace") -> list[str]:
         Indented operation lines.
     """
 
-    history = list(getattr(trace, "ledger", []) or [])
+    history = list(getattr(trace, "state_history", []) or [])
     if not history:
         return ["  none"]
     lines = []

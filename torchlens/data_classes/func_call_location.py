@@ -28,7 +28,7 @@ import inspect
 import linecache
 from typing import Any, Dict, List, Optional, Union
 
-from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from .._source_links import terminal_file_line_link, vscode_file_line_link
 
 # Sentinel object to distinguish "not yet loaded" from an actual None value.
@@ -439,11 +439,11 @@ class FuncCallLocation:
         """Return pickle state with live frame references stripped."""
         state = self.__dict__.copy()
         state["_frame_func_obj"] = None
-        state["io_format_version"] = IO_FORMAT_VERSION
+        state["tlspec_version"] = TLSPEC_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state without reviving frame references."""
-        read_io_format_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__)
         default_fill_state(state, defaults={"_frame_func_obj": None})
         self.__dict__.update(state)

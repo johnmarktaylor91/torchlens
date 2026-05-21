@@ -1828,7 +1828,7 @@ def test_stochastic_depth_layers_to_save():
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # Linear layers should have saved outs
-    linear_layers = [label for label in mh.ops_with_saved_outs if "linear" in label]
+    linear_layers = [label for label in mh.saved_ops.keys() if "linear" in label]
     assert len(linear_layers) > 0, "linear layers should have saved outs"
 
 

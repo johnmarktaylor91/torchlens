@@ -107,3 +107,5 @@ DO NOT push. DO NOT open a PR. JMT explicitly said "merge it to local main" and 
 | 2 | 2026-05-21T17:50:41-04:00 | 2026-05-21T18:08:08-04:00 | f32a68e | OK | 90 files; +464/-370 |
 
 | 3 | 2026-05-21T18:08:08-04:00 | 2026-05-21T18:25:40-04:00 | pending | OK | trace capture-only API, pass vocabulary, total memory prefixes; smoke + ruff green |
+
+| 4 | 2026-05-21T18:25:40-04:00 | 2026-05-21T18:48:05-04:00 | pending | OK | Trace field renames/additions/removals; exact old-name grep clean; import/dataclass probes, ruff, and smoke green |

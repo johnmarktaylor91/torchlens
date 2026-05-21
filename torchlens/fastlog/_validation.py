@@ -85,7 +85,7 @@ def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
         if isinstance(default, CaptureSpec) and default.keep_grad:
             try:
                 validate_training_compatibility(
-                    train_mode=True,
+                    backward_ready=True,
                     streaming=options.streaming,
                     detach_saved_activations=False,
                     inference_mode_active=False,

@@ -409,15 +409,15 @@ class TestGradientTracking:
                 assert entry.grad is not None
                 assert entry.grad_shape is not None
 
-    def test_ops_with_saved_grads_populated(self):
+    def test_saved_grad_ops_populated(self):
         model = _make_simple_model()
         x = _simple_input()
         mh = trace_fn(model, x, save_grads=True)
         output = mh["output_1"].out
         output.sum().backward()
 
-        assert len(mh.ops_with_saved_grads) > 0
-        for label in mh.ops_with_saved_grads:
+        assert len(mh.saved_grad_ops) > 0
+        for label in mh.saved_grad_ops.keys():
             assert mh[label].has_grad is True
 
     def test_grad_shape_matches_param_shape(self):

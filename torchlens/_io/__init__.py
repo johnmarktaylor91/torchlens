@@ -24,14 +24,14 @@ from ..errors._base import CompatibilityError
 
 # v4 drops capture-only scratch fields from portable Trace state after the
 # capture-pipeline-unification sprint (2026-05-11).
-IO_FORMAT_VERSION = 4
+TLSPEC_VERSION = 4
 _LEGACY_THREAD_WARNING_EMITTED: dict[str, bool] = {"flag": False}
 
 
 def _warn_legacy_thread_fields_dropped() -> None:
     """Emit one deprecation warning for legacy thread-replay fields.
 
-    Older TorchLens portable bundles with ``io_format_version <= 2`` carried
+    Older TorchLens portable bundles with ``tlspec_version <= 2`` carried
     private fields removed by the module-containment-refactor sprint. Current
     load code drops those fields and uses the stored ``modules`` field
     directly.
@@ -39,7 +39,7 @@ def _warn_legacy_thread_fields_dropped() -> None:
 
     if not _LEGACY_THREAD_WARNING_EMITTED["flag"]:
         warnings.warn(
-            "Loaded a TorchLens bundle from io_format_version<=2; "
+            "Loaded a TorchLens bundle from tlspec_version<=2; "
             "legacy thread-replay fields were dropped. "
             "Module containment is reconstructed from hook-stack "
             "snapshots in current capture; this load uses the stored "
@@ -78,7 +78,7 @@ class FieldPolicy(str, Enum):
     WEAKREF_STRIP = "weakref_strip"
 
 
-def read_io_format_version(state: dict[str, Any], *, cls_name: str) -> int:
+def read_tlspec_version(state: dict[str, Any], *, cls_name: str) -> int:
     """Validate the serialized I/O format version for one object state.
 
     Parameters
@@ -100,7 +100,7 @@ def read_io_format_version(state: dict[str, Any], *, cls_name: str) -> int:
         is not an integer.
     """
 
-    version = state.pop("io_format_version", None)
+    version = state.pop("tlspec_version", None)
     if version is None:
         warnings.warn(
             f"{cls_name} pickle state predates TorchLens portable I/O versioning; "
@@ -110,13 +110,11 @@ def read_io_format_version(state: dict[str, Any], *, cls_name: str) -> int:
         )
         return 0
     if not isinstance(version, int):
+        raise TorchLensIOError(f"{cls_name} pickle state has invalid tlspec_version={version!r}.")
+    if version > TLSPEC_VERSION:
         raise TorchLensIOError(
-            f"{cls_name} pickle state has invalid io_format_version={version!r}."
-        )
-    if version > IO_FORMAT_VERSION:
-        raise TorchLensIOError(
-            f"{cls_name} pickle state uses io_format_version={version}, "
-            f"but this runtime only supports up to {IO_FORMAT_VERSION}."
+            f"{cls_name} pickle state uses tlspec_version={version}, "
+            f"but this runtime only supports up to {TLSPEC_VERSION}."
         )
     return version
 

@@ -120,7 +120,7 @@ def test_summary_includes_phase13_sections() -> None:
     summary = log.summary()
 
     assert "TorchLens Discoverability Summary" in summary
-    assert "run_state:" in summary
+    assert "state:" in summary
     assert "direct_write_dirty:" in summary
     assert "graph_shape_hash:" in summary
     assert "portability:" in summary

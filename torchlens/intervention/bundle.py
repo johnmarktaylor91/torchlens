@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 
-from .._run_state import RunState
+from .._trace_state import TraceState
 from ._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
 from ._super.super_logs import (
     SuperBufferAccessor,
@@ -1279,12 +1279,12 @@ class Bundle:
                 parts.append("baseline")
             pristine = (
                 getattr(member, "_spec_revision", None) == 0
-                and getattr(member, "run_state", None) is RunState.PRISTINE
+                and getattr(member, "state", None) is TraceState.PRISTINE
             )
             if pristine:
                 parts.append("pristine")
             parts.append(f"intervention_ready={getattr(member, 'intervention_ready', False)}")
-            parts.append(f"run_state={getattr(getattr(member, 'run_state', None), 'name', None)}")
+            parts.append(f"state={getattr(getattr(member, 'state', None), 'name', None)}")
             if getattr(member, "_spec_revision", 0) != 0:
                 parts.append(f"spec_revision={getattr(member, '_spec_revision', 0)}")
             lines.append(f"  - {name}: {', '.join(parts)}")
@@ -1494,7 +1494,7 @@ class Bundle:
             name
             for name, member in self._members.items()
             if getattr(member, "_spec_revision", None) == 0
-            and getattr(member, "run_state", None) is RunState.PRISTINE
+            and getattr(member, "state", None) is TraceState.PRISTINE
         ]
         return candidates[0] if len(candidates) == 1 else None
 
@@ -1705,8 +1705,8 @@ class Bundle:
         right_class = getattr(right, "model_class_qualname", None)
         left_weight = cls._weight_fingerprint(left)
         right_weight = cls._weight_fingerprint(right)
-        left_id = getattr(left, "model_id", None)
-        right_id = getattr(right, "model_id", None)
+        left_id = getattr(left, "model_object_id", None)
+        right_id = getattr(right, "model_object_id", None)
         if (
             left_id is not None
             and left_id == right_id
@@ -1729,8 +1729,8 @@ class Bundle:
 
         left_graph = getattr(left, "graph_shape_hash", None)
         right_graph = getattr(right, "graph_shape_hash", None)
-        left_input = getattr(left, "input_shape_hash", None)
-        right_input = getattr(right, "input_shape_hash", None)
+        left_input = getattr(left, "input_signature_hash", None)
+        right_input = getattr(right, "input_signature_hash", None)
         if left_graph is not None and left_graph == right_graph:
             if left_input is not None and left_input == right_input:
                 return Relationship.SHARED_GRAPH_SAME_INPUT

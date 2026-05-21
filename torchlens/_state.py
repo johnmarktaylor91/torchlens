@@ -250,11 +250,11 @@ def configure_capture_runtime_context(
     hook_plan: Any | None = None,
     intervention_spec: "InterventionSpec | None" = None,
     capture_replay_templates: bool = False,
-    model_id: int | None = None,
+    model_object_id: int | None = None,
     model_class_qualname: str | None = None,
     weight_fingerprint: str | None = None,
-    input_id: int | None = None,
-    input_shape_hash: str | None = None,
+    input_object_id: int | None = None,
+    input_signature_hash: str | None = None,
 ) -> None:
     """Set per-capture intervention runtime context fields.
 
@@ -266,15 +266,15 @@ def configure_capture_runtime_context(
         Active intervention spec placeholder. Mutators land in a later phase.
     capture_replay_templates:
         Whether replay-template capture should be enabled for this run.
-    model_id:
+    model_object_id:
         ``id(model)`` captured at the public API boundary.
     model_class_qualname:
         Model class qualname captured at the public API boundary.
     weight_fingerprint:
         Deterministic model-parameter fingerprint.
-    input_id:
+    input_object_id:
         Input object identity captured at the public API boundary.
-    input_shape_hash:
+    input_signature_hash:
         Deterministic input shape/dtype/device fingerprint.
 
     Returns
@@ -291,11 +291,11 @@ def configure_capture_runtime_context(
     _active_hook_plan = hook_plan
     _active_intervention_spec = intervention_spec
     _capture_replay_templates = capture_replay_templates
-    _relationship_model_id = model_id
+    _relationship_model_id = model_object_id
     _relationship_model_class = model_class_qualname
     _relationship_weight_fingerprint = weight_fingerprint
-    _relationship_input_id = input_id
-    _relationship_input_shape_hash = input_shape_hash
+    _relationship_input_id = input_object_id
+    _relationship_input_shape_hash = input_signature_hash
 
 
 def next_func_call_id() -> int:

@@ -42,7 +42,7 @@ def test_trace_rejects_torch_compile(
         tl.trace(
             compiled_model,
             torch.randn(3, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
         )
 
 
@@ -62,7 +62,7 @@ def test_save_new_outs_rejects_torch_compile(
         trace.save_new_outs(
             compiled_model,
             torch.randn(3, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             random_seed=0,
         )
     trace.cleanup()
@@ -79,5 +79,5 @@ def test_fastlog_record_rejects_torch_compile(
         tl.fastlog.record(
             compiled_model,
             torch.randn(3, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
         )

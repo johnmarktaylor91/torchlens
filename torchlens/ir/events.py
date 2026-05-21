@@ -201,7 +201,7 @@ class InterventionState:
     append_sequence_id: int
     warned_direct_write: bool
     warned_mutate_in_place: bool
-    last_run_ctx: object | None
+    last_run: object | None
 
 
 @dataclass(slots=True)

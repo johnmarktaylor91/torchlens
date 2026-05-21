@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._run_state import RunState
+from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import (
     BaselineUndeterminedError,
     BundleRelationshipError,
@@ -151,12 +151,12 @@ def test_relationship_matrix_gates_node_operations() -> None:
     good = _log(_ReluModel())
     different = _log(_TanhModel())
     for member in (good, different):
-        member.model_id = None
+        member.model_object_id = None
         member.model_class_qualname = None
         member.param_hash_quick = None
         member.param_hash_full = None
         member.graph_shape_hash = None
-        member.input_shape_hash = None
+        member.input_signature_hash = None
     bundle = tl.bundle({"good": good, "different": different})
 
     assert bundle.relationship("good", "different") is Relationship.UNKNOWN
@@ -192,7 +192,7 @@ def test_baseline_auto_detect_and_ambiguity() -> None:
     clean = _log()
     dirty = _log()
     dirty._spec_revision = 1
-    dirty.run_state = RunState.SPEC_STALE
+    dirty.state = TraceState.SPEC_STALE
 
     bundle = tl.bundle({"clean": clean, "dirty": dirty})
     assert bundle.baseline_name == "clean"
@@ -219,7 +219,7 @@ def test_bundle_help_lists_readiness() -> None:
     clean = _log()
     dirty = _log()
     dirty._spec_revision = 1
-    dirty.run_state = RunState.SPEC_STALE
+    dirty.state = TraceState.SPEC_STALE
     bundle = tl.bundle({"clean": clean, "dirty": dirty}, baseline="clean")
 
     text = bundle.help()

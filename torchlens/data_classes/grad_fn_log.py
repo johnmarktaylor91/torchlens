@@ -8,7 +8,7 @@ import warnings
 
 import torch
 
-from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
 from .grad_fn_call_log import GradFnCall
@@ -155,13 +155,13 @@ class GradFn:
         """Return pickle state with an IO format marker."""
 
         state = self.__dict__.copy()
-        state["io_format_version"] = IO_FORMAT_VERSION
+        state["tlspec_version"] = TLSPEC_VERSION
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state and fill fields added in newer versions."""
 
-        read_io_format_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__)
         default_fill_state(
             state,
             defaults={

@@ -1,5 +1,5 @@
 {
-  "io_format_version": 3,
+  "tlspec_version": 3,
   "torchlens_version": "2.17.0",
   "torch_version": "2.8.0+cu128",
   "python_version": "3.11.6",
@@ -104,7 +104,7 @@
     "extra_metadata": {
       "model_class_name": "Sequential",
       "graph_shape_hash": "7217e3c4f38ae64549e0fb7135af07d65f7b720e8c950176bc6fd9cf7a22fc9f",
-      "input_shape_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38"
+      "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38"
     }
   },
   "sites": [

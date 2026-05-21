@@ -165,8 +165,8 @@ def test_log_backward_captures_per_layer_grads() -> None:
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
     assert trace.has_grads
-    assert len(trace.ops_with_saved_grads) > 0
-    assert all(trace[label].grad is not None for label in trace.ops_with_saved_grads)
+    assert len(trace.saved_grad_ops) > 0
+    assert all(trace[label].grad is not None for label in trace.saved_grad_ops.keys())
 
 
 @pytest.mark.smoke
@@ -239,8 +239,8 @@ def test_grads_to_save_default_matches_layers_to_save() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, layers_to_save=["relu"], save_grads=True)
     trace.log_backward(_output_loss(trace))
-    assert trace.ops_with_saved_grads
-    assert all("relu" in label for label in trace.ops_with_saved_grads)
+    assert trace.saved_grad_ops
+    assert all("relu" in label for label in trace.saved_grad_ops.keys())
 
 
 @pytest.mark.smoke
@@ -248,24 +248,24 @@ def test_grads_to_save_independent_override() -> None:
     """grads_to_save can be broader than layers_to_save."""
     _model, _x, trace = _logged_model(layers_to_save="all", grads_to_save=["relu"])
     trace.log_backward(_output_loss(trace))
-    assert trace.ops_with_saved_grads
-    assert all("relu" in label for label in trace.ops_with_saved_grads)
+    assert trace.saved_grad_ops
+    assert all("relu" in label for label in trace.saved_grad_ops.keys())
 
 
 @pytest.mark.smoke
 def test_auto_train_mode_when_backward_opted_in() -> None:
-    """Explicit grads_to_save auto-enables train_mode."""
+    """Explicit grads_to_save auto-enables backward_ready."""
     _model, _x, trace = _logged_model()
-    assert trace.train_mode is True
+    assert trace.backward_ready is True
 
 
 @pytest.mark.smoke
 def test_auto_train_mode_conflict_with_explicit_false() -> None:
-    """Explicit train_mode=False conflicts with backward capture."""
+    """Explicit backward_ready=False conflicts with backward capture."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    with pytest.raises(ValueError, match="requires train_mode=True"):
-        tl.trace(model, x, grads_to_save="all", train_mode=False)
+    with pytest.raises(ValueError, match="requires backward_ready=True"):
+        tl.trace(model, x, grads_to_save="all", backward_ready=False)
 
 
 @pytest.mark.smoke
@@ -285,7 +285,7 @@ def test_grad_transform_applied() -> None:
             trace[label].transformed_grad,
             torch.zeros_like(trace[label].grad),
         )
-        for label in trace.ops_with_saved_grads
+        for label in trace.saved_grad_ops.keys()
     )
 
 
@@ -331,7 +331,7 @@ def test_implicit_hook_firing_preserved() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, save_grads=True)
     _output_loss(trace).backward()
-    assert trace.ops_with_saved_grads
+    assert trace.saved_grad_ops
 
 
 @pytest.mark.smoke

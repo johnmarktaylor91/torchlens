@@ -33,7 +33,7 @@ def test_train_mode_repeated_ops_rss_bounded(two_layer_mlp: TwoLayerMlp) -> None
         trace = tl.trace(
             two_layer_mlp,
             torch.randn(8, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             random_seed=step,
         )
         saved = trace[trace.output_layers[0]].out

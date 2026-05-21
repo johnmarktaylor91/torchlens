@@ -514,10 +514,10 @@ def _live_run_ctx() -> dict[str, Any]:
     trace = _state._active_trace
     if trace is None:
         return {}
-    run_ctx = getattr(trace, "last_run_ctx", None)
+    run_ctx = getattr(trace, "last_run", None)
     if run_ctx is None:
         run_ctx = {"engine": "live", "timestamp": time.monotonic()}
-        trace.last_run_ctx = run_ctx
+        trace.last_run = run_ctx
     else:
         run_ctx.setdefault("engine", "live")
         run_ctx.setdefault("timestamp", time.monotonic())

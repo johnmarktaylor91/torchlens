@@ -1,13 +1,13 @@
 """Run-state ownership for TorchLens intervention execution.
 
 This module intentionally stays outside ``torchlens.intervention`` so
-``torchlens._state`` can import ``RunState`` later without creating a cycle.
+``torchlens._state`` can import ``TraceState`` later without creating a cycle.
 """
 
 from enum import Enum
 
 
-class RunState(Enum):
+class TraceState(Enum):
     """User-visible operational state machine for intervention runs."""
 
     PRISTINE = "pristine"
@@ -19,4 +19,4 @@ class RunState(Enum):
     APPENDED = "appended"
 
 
-__all__ = ["RunState"]
+__all__ = ["TraceState"]

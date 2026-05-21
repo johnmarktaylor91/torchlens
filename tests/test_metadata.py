@@ -135,8 +135,8 @@ def test_module_info_fields(small_input):
 def test_time_fields(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.duration, float)
-    assert mh.duration > 0
+    assert isinstance(mh.capture_duration, float)
+    assert mh.capture_duration > 0
     assert isinstance(mh.setup_duration, float)
     assert isinstance(mh.forward_duration, float)
     assert isinstance(mh.cleanup_duration, float)
@@ -170,8 +170,8 @@ def test_internal_source_ops(small_input):
 def test_equivalent_ops(input_2d):
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
-    assert isinstance(mh.equivalent_ops, dict)
-    assert len(mh.equivalent_ops) > 0
+    assert isinstance(mh.op_equivalence_classes, dict)
+    assert len(mh.op_equivalence_classes) > 0
 
 
 # =============================================================================
@@ -715,11 +715,11 @@ def test_flops_total_positive():
 
 
 def test_flops_by_type():
-    """flops_by_type returns a dict with expected keys."""
+    """flops_by_op_type returns a dict with expected keys."""
     model = nn.Sequential(nn.Linear(10, 20), nn.ReLU())
     x = torch.randn(4, 10)
     mh = trace_fn(model, x)
-    fbt = mh.flops_by_type()
+    fbt = mh.flops_by_op_type()
     assert isinstance(fbt, dict)
     assert len(fbt) > 0
     for layer_type, info in fbt.items():

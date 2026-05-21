@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._run_state import RunState
+from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import LiveModeLabelError
 
 
@@ -115,7 +115,7 @@ def test_live_func_hook_replaces_returned_and_saved_out() -> None:
 
     relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
 
-    assert log.run_state is RunState.LIVE_CAPTURED
+    assert log.state is TraceState.LIVE_CAPTURED
     assert model.latest is not None
     assert relu_layer.out is not None
     assert torch.equal(model.latest, relu_layer.out)
@@ -203,7 +203,7 @@ def test_no_hooks_preserves_pristine_run_state() -> None:
         intervention_ready=True,
     )
 
-    assert log.run_state is RunState.PRISTINE
+    assert log.state is TraceState.PRISTINE
 
 
 @pytest.mark.smoke

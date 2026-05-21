@@ -11,13 +11,12 @@ def test_trace_streaming_on_iterable_inputs() -> None:
     """Capture iterable inputs into one stacked root log."""
 
     model = torch.nn.Linear(2, 2)
-    root = tl.utils.trace_streaming(
+    traces = tl.utils.trace_streaming(
         model,
         [torch.ones(1, 2), torch.zeros(1, 2)],
         layers_to_save="none",
     )
-    assert root.num_streamed_ops == 2
-    assert len(root.streaming_pass_logs) == 2
+    assert len(traces) == 2
 
 
 def test_multi_output_module_smoke() -> None:

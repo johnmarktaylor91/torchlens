@@ -7,12 +7,12 @@ ALLOWED_PICKLE_DIFF_FIELDS: dict[str, frozenset[str]] = {
         {
             "backward_peak_memory",
             "cleanup_duration",
-            "end_time",
+            "capture_end_time",
             "forward_duration",
             "forward_peak_memory",
             "func_calls_duration",
             "setup_duration",
-            "start_time",
+            "capture_start_time",
         }
     ),
     "Op": frozenset(

@@ -401,7 +401,7 @@ def test_bad_backward_root_grad_fn_id_raises() -> None:
     """An unknown backward root id raises an invariant error."""
 
     log = _make_backward_log()
-    log.backward_root_grad_fn_id = -1
+    log.backward_root_grad_fn_ids = -1
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)
     log.cleanup()

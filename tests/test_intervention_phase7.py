@@ -9,7 +9,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens import RunState
+from torchlens import TraceState
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
@@ -126,16 +126,16 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
     original_hash = log.graph_shape_hash
-    original_history_len = len(log.ledger)
+    original_history_len = len(log.state_history)
 
     result = log.rerun(ReluAdd(), x)
 
     assert result is log
-    assert log.run_state is RunState.RERUN_PROPAGATED
+    assert log.state is TraceState.RERUN_PROPAGATED
     assert log.graph_shape_hash == original_hash
-    assert log.last_run_ctx["engine"] == "rerun"
-    assert len(log.ledger) == original_history_len + 1
-    assert log.ledger[-1]["engine"] == "rerun"
+    assert log.last_run["engine"] == "rerun"
+    assert len(log.state_history) == original_history_len + 1
+    assert log.state_history[-1]["engine"] == "rerun"
 
 
 @pytest.mark.smoke
@@ -168,15 +168,15 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
     original_hash = log.graph_shape_hash
     original_labels = tuple(log.layer_labels)
     log.rerun(ReluAdd(), x)
-    history_after_success = list(log.ledger)
+    history_after_success = list(log.state_history)
 
     with pytest.raises(RuntimeError, match="boom"):
         log.rerun(BadModel(), x)
 
-    assert log.run_state is RunState.RERUN_PROPAGATED
+    assert log.state is TraceState.RERUN_PROPAGATED
     assert log.graph_shape_hash == original_hash
     assert tuple(log.layer_labels) == original_labels
-    assert log.ledger == history_after_success
+    assert log.state_history == history_after_success
 
 
 @pytest.mark.smoke
@@ -191,9 +191,9 @@ def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
     log = _capture(ReluAdd(), x)
     original_hash = log.graph_shape_hash
     original_labels = tuple(log.layer_labels)
-    original_ledger = list(log.ledger)
+    original_ledger = list(log.state_history)
     original_output = log[log.output_layers[0]].out.clone()
-    original_run_state = log.run_state
+    original_run_state = log.state
 
     def interrupt_capture(*_: Any, **__: Any) -> tl.Trace:
         """Raise as if the fresh off-side capture was interrupted."""
@@ -205,10 +205,10 @@ def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
     with pytest.raises(KeyboardInterrupt, match="simulated interrupt"):
         log.rerun(ReluAdd(), x)
 
-    assert log.run_state is original_run_state
+    assert log.state is original_run_state
     assert log.graph_shape_hash == original_hash
     assert tuple(log.layer_labels) == original_labels
-    assert log.ledger == original_ledger
+    assert log.state_history == original_ledger
     assert torch.equal(log[log.output_layers[0]].out, original_output)
 
 
@@ -224,7 +224,7 @@ def test_rerun_strict_divergence_raises_before_swap() -> None:
         log.rerun(BranchModel(), negative, strict=True)
 
     assert log.graph_shape_hash == original_hash
-    assert log.run_state is RunState.PRISTINE
+    assert log.state is TraceState.PRISTINE
 
 
 def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
@@ -239,8 +239,8 @@ def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
         log.rerun(BranchModel(), negative)
 
     assert log.graph_shape_hash != original_hash
-    assert log.run_state is RunState.RERUN_PROPAGATED
-    assert log.last_run_ctx["divergence_count"] == 1
+    assert log.state is TraceState.RERUN_PROPAGATED
+    assert log.last_run["divergence_count"] == 1
 
 
 def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
@@ -254,33 +254,33 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     log.trace_label = "kept"
     log.parent_run = "parent-sentinel"  # type: ignore[assignment]
     log._intervention_spec = spec
-    log.ledger = history
+    log.state_history = history
     log._warned_direct_write = True
     log._warned_mutate_in_place = True
-    log.model_id = 123
+    log.model_object_id = 123
     log.model_class_qualname = "kept.Model"
     log.param_hash_quick = "weights-a"
     log.param_hash_full = "weights-full"
-    log.input_id = 456
-    log.input_shape_hash = "input-hash"
+    log.input_object_id = 456
+    log.input_signature_hash = "input-hash"
     log.is_appended = True
     log.relationship_evidence = {"model": Relationship.SAME_OBJECT}
     log._spec_revision = 7
 
-    log.replace_run_state_from(new_log)
+    log.replace_state_from(new_log)
 
     assert log.trace_label == "kept"
     assert log.parent_run == "parent-sentinel"
     assert log._intervention_spec is spec
-    assert log.ledger is history
+    assert log.state_history is history
     assert log._warned_direct_write is True
     assert log._warned_mutate_in_place is True
-    assert log.model_id == 123
+    assert log.model_object_id == 123
     assert log.model_class_qualname == "kept.Model"
     assert log.param_hash_quick == "weights-a"
     assert log.param_hash_full == "weights-full"
-    assert log.input_id == 456
-    assert log.input_shape_hash == "input-hash"
+    assert log.input_object_id == 456
+    assert log.input_signature_hash == "input-hash"
     assert log.is_appended is True
     assert log.relationship_evidence == {"model": Relationship.SAME_OBJECT}
     assert log._spec_revision == 7
@@ -296,7 +296,7 @@ def test_rerun_append_true_dispatches_to_append() -> None:
 
     rerun(log, ReluAdd(), x, append=True)
 
-    assert log.run_state is RunState.APPENDED
+    assert log.state is TraceState.APPENDED
 
 
 def test_rerun_x_none_requires_explicit_input() -> None:

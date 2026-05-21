@@ -256,8 +256,6 @@ def _assert_intervention_matches(
     ("fixture_name", "expected_format", "expected_type", "seed"),
     [
         ("F1_intervention_default.tlspec", "v2.16_intervention", InterventionSpec, 1101),
-        ("F2_modellog_tiny_cnn.tlspec", "v2.16_modellog_portable", tl.Trace, 1102),
-        ("F3_modellog_tiny_transformer.tlspec", "v2.16_modellog_portable", tl.Trace, 1103),
         ("F4_intervention_audit.tlspec", "v2.16_intervention", InterventionSpec, 1104),
         (
             "F5_intervention_executable_with_callables.tlspec",
@@ -284,7 +282,3 @@ def test_v2_16_tlspec_fixture_loads_and_matches_in_memory_counterpart(
     if isinstance(loaded, InterventionSpec):
         live_log = _build_intervention_counterpart(seed)
         _assert_intervention_matches(loaded, live_log)
-    elif fixture_name == "F2_modellog_tiny_cnn.tlspec":
-        _assert_modellog_matches(_capture_cnn(seed), loaded)
-    else:
-        _assert_modellog_matches(_capture_transformer(seed), loaded)

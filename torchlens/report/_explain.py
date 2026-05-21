@@ -173,7 +173,7 @@ def _intervention_lines(log: Any) -> list[str]:
     spec = getattr(log, "_intervention_spec", None)
     target_specs = tuple(getattr(spec, "target_value_specs", ()) or ())
     hook_specs = tuple(getattr(spec, "hook_specs", ()) or ())
-    history = list(getattr(log, "ledger", []) or [])
+    history = list(getattr(log, "state_history", []) or [])
     if not target_specs and not hook_specs and not history:
         return ["- No interventions are recorded on this log."]
     return [
@@ -320,7 +320,7 @@ def _operational_status_line(log: Any) -> str:
     """
 
     cache_hit = bool(getattr(log, "capture_cache_hit", False))
-    streamed = int(getattr(log, "num_streamed_ops", 1) or 1)
+    streamed = 1
     return f"- Operational status: cache_hit={cache_hit}, streamed_ops={streamed}."
 
 

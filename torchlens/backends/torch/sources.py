@@ -139,7 +139,7 @@ def log_source_tensor_predicate(
         pass_index=state.pass_index,
         event_index=state.event_index,
         compute_index=None,
-        time_since_pass_start=time.time() - self.start_time,
+        time_since_pass_start=time.time() - self.capture_start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
     )
@@ -374,7 +374,7 @@ def log_source_tensor_exhaustive(
         "param_memory": 0,
         # Corresponding layer info:
         "equivalence_class": equivalence_class,
-        "equivalent_ops": self.equivalent_ops[base_equivalence_class],
+        "equivalent_ops": self.op_equivalence_classes[base_equivalence_class],
         "recurrent_ops": [],
         # Graph info:
         "parents": [],
@@ -450,7 +450,7 @@ def log_source_tensor_exhaustive(
     set_tensor_label(t, tensor_label)
 
     # Register in Trace-level tracking structures.
-    self.equivalent_ops[base_equivalence_class].add(tensor_label)
+    self.op_equivalence_classes[base_equivalence_class].add(tensor_label)
     if source == "input":
         self.input_layers.append(tensor_label)
     if source == "buffer":
@@ -495,7 +495,6 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
     previous_shape = orig_layer_entry.shape
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     if (layer_nums_to_save == "all") or (orig_layer_entry.capture_index in layer_nums_to_save):
-        self.ops_with_saved_outs.append(orig_layer_entry.layer_label)
         orig_layer_entry.save_activation(t, [], {}, self.save_arg_values, self.out_postfunc)
 
     # Minimal graph consistency validation (#99)

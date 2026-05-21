@@ -13,37 +13,37 @@ from torchlens.fastlog import CaptureSpec, RecordingConfigError
 
 
 def test_train_mode_save_outs_to_path_errors(tmp_path: Path) -> None:
-    """Slow train_mode rejects legacy disk out saves at construction."""
+    """Slow backward_ready rejects legacy disk out saves at construction."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="disk saves"):
         tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             save_outs_to=tmp_path / "bundle.tl",
         )
 
 
 def test_train_mode_streaming_bundle_path_errors(tmp_path: Path) -> None:
-    """Slow/replay train_mode rejects grouped streaming bundle paths."""
+    """Slow/replay backward_ready rejects grouped streaming bundle paths."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="disk saves"):
         tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             streaming=tl.StreamingOptions(bundle_path=tmp_path / "bundle.tl"),
         )
 
 
 def test_train_mode_disk_only_fastlog_errors(tmp_path: Path) -> None:
-    """Fastlog train_mode keeps the existing disk-only RecordingConfigError."""
+    """Fastlog backward_ready keeps the existing disk-only RecordingConfigError."""
 
     with pytest.raises(RecordingConfigError, match="disk-only"):
         tl.fastlog.record(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             streaming=tl.StreamingOptions(
                 bundle_path=tmp_path / "bundle.tlfast",
                 retain_in_memory=False,
@@ -60,18 +60,18 @@ def test_train_mode_inference_mode_wrapped_forward_errors() -> None:
             tl.trace(
                 nn.Linear(4, 2),
                 torch.randn(3, 4, requires_grad=True),
-                train_mode=True,
+                backward_ready=True,
             )
 
 
 def test_train_mode_detach_saved_activations_errors() -> None:
-    """train_mode rejects explicit detaching because the options conflict."""
+    """backward_ready rejects explicit detaching because the options conflict."""
 
     with pytest.raises(ValueError, match="detach_saved_activations=False"):
         tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             detach_saved_activations=True,
         )
 
@@ -83,6 +83,6 @@ def test_train_mode_integer_out_postfunc_rejected() -> None:
         tl.trace(
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
-            train_mode=True,
+            backward_ready=True,
             out_postfunc=lambda tensor: tensor.to(torch.int64),
         )

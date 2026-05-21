@@ -57,7 +57,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "hooks",
     "unwrap_when_done",
     "verbose",
-    "train_mode",
+    "backward_ready",
     "name",
     "cache",
     "cache_dir",
@@ -158,7 +158,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
     "verbose": "verbose",
-    "train_mode": "train_mode",
+    "backward_ready": "backward_ready",
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
@@ -591,7 +591,7 @@ class CaptureOptions:
         Whether Torch functions are unwrapped after this call.
     verbose:
         Whether progress messages are printed.
-    train_mode:
+    backward_ready:
         Whether capture keeps autograd-connected tensors for training workflows.
     name:
         Optional user-facing name for the returned log.
@@ -642,7 +642,7 @@ class CaptureOptions:
     hooks: Any | None = None
     unwrap_when_done: bool = False
     verbose: bool = False
-    train_mode: bool = False
+    backward_ready: bool = False
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
@@ -681,7 +681,7 @@ class CaptureOptions:
         hooks: Any | MissingType = MISSING,
         unwrap_when_done: bool | MissingType = MISSING,
         verbose: bool | MissingType = MISSING,
-        train_mode: bool | MissingType = MISSING,
+        backward_ready: bool | MissingType = MISSING,
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
@@ -786,7 +786,9 @@ class CaptureOptions:
                 "unwrap_when_done", unwrap_when_done, False, specified_fields
             ),
             "verbose": _resolve_option_value("verbose", verbose, False, specified_fields),
-            "train_mode": _resolve_option_value("train_mode", train_mode, False, specified_fields),
+            "backward_ready": _resolve_option_value(
+                "backward_ready", backward_ready, False, specified_fields
+            ),
             "name": _resolve_option_value("name", name, None, specified_fields),
             "cache": _resolve_option_value("cache", cache, False, specified_fields),
             "cache_dir": _resolve_option_value("cache_dir", cache_dir, None, specified_fields),

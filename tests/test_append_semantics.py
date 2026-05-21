@@ -107,7 +107,7 @@ def test_intervention_save_append_state_consistency(tmp_path: Path) -> None:
     assert append_state["is_appended"] is True
     assert append_state["append_sequence_id"] == 1
     assert append_state["append_history"][0]["chunk_size"] == 1
-    assert append_state["ledger"][-1]["op"] == "append"
+    assert append_state["state_history"][-1]["op"] == "append"
 
 
 def test_append_train_mode_no_helper_grad_message() -> None:
@@ -119,7 +119,7 @@ def test_append_train_mode_no_helper_grad_message() -> None:
         torch.randn(2, 3),
         intervention_ready=True,
         save_grads=True,
-        train_mode=True,
+        backward_ready=True,
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 

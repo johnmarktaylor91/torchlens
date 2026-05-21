@@ -145,7 +145,7 @@ def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     x = torch.randn(4, 10, requires_grad=False)
-    trace = tl.trace(model, x, layers_to_save="all", random_seed=0, train_mode=True)
+    trace = tl.trace(model, x, layers_to_save="all", random_seed=0, backward_ready=True)
 
     assert all(layer.autograd_memory is None for layer in _non_source_ops(trace))
     assert all(layer.num_autograd_tensors is None for layer in _non_source_ops(trace))

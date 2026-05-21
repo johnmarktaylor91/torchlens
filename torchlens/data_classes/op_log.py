@@ -44,13 +44,13 @@ import torch
 from .._deprecations import MISSING
 from .._io import (
     FieldPolicy,
-    IO_FORMAT_VERSION,
+    TLSPEC_VERSION,
     TorchLensIOError,
     default_fill_state,
-    read_io_format_version,
+    read_tlspec_version,
 )
 from .._errors import TorchLensPostfuncError
-from .._run_state import RunState
+from .._trace_state import TraceState
 from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import LAYER_PASS_LOG_FIELD_FORK_POLICY
@@ -243,7 +243,7 @@ def validate_train_mode_postfunc_output(
     raw_tensor: torch.Tensor,
     transformed_tensor: Any,
     postfunc_kind: str,
-    train_mode: bool,
+    backward_ready: bool,
     label: str | None = None,
 ) -> None:
     """Validate differentiability requirements for train-mode postfunc outputs.
@@ -256,7 +256,7 @@ def validate_train_mode_postfunc_output(
         Value returned by the postfunc.
     postfunc_kind:
         Transform kind, either ``"out"`` or ``"grad"``.
-    train_mode:
+    backward_ready:
         Whether TorchLens is preserving autograd graph connectivity.
     label:
         Raw layer label for error context, or ``None`` when unavailable.
@@ -267,22 +267,22 @@ def validate_train_mode_postfunc_output(
         Raises if the transformed value violates train-mode requirements.
     """
 
-    if not train_mode or not raw_tensor.requires_grad:
+    if not backward_ready or not raw_tensor.requires_grad:
         return
     if not isinstance(transformed_tensor, torch.Tensor):
         raise TrainingModeConfigError(
-            f"{postfunc_kind}_postfunc must return a torch.Tensor while train_mode=True "
+            f"{postfunc_kind}_postfunc must return a torch.Tensor while backward_ready=True "
             f"for layer {label}."
         )
     if transformed_tensor.dtype in _NON_GRAD_DTYPES:
         raise TrainingModeConfigError(
-            f"train_mode=True with non-grad dtype {transformed_tensor.dtype} on layer "
+            f"backward_ready=True with non-grad dtype {transformed_tensor.dtype} on layer "
             f"{label}. Integer and bool dtypes cannot propagate grads."
         )
     if transformed_tensor.grad_fn is None:
         raise TrainingModeConfigError(
             f"{postfunc_kind}_postfunc returned a tensor disconnected from the autograd "
-            "graph (grad_fn is None) while train_mode=True. The transformed out "
+            "graph (grad_fn is None) while backward_ready=True. The transformed out "
             "must remain differentiable."
         )
 
@@ -611,7 +611,7 @@ class Op:
             trace = owner() if owner is not None else None
             if trace is not None:
                 object.__setattr__(trace, "_has_direct_writes", True)
-                object.__setattr__(trace, "run_state", RunState.DIRECT_WRITE_DIRTY)
+                object.__setattr__(trace, "state", TraceState.DIRECT_WRITE_DIRTY)
                 if not getattr(trace, "_warned_direct_write", False):
                     warnings.warn(
                         "DirectActivationWriteWarning: direct Op out writes "
@@ -1361,12 +1361,12 @@ class Op:
         state["func"] = None
         state["grad_fn"] = None
         state["grad_fn_log"] = None
-        state["io_format_version"] = IO_FORMAT_VERSION
+        state["tlspec_version"] = TLSPEC_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
-        version = read_io_format_version(state, cls_name=type(self).__name__)
+        version = read_tlspec_version(state, cls_name=type(self).__name__)
         legacy_thread_keys = (
             "_module_boundary_thread_output",
             "_module_boundary_threads_inputs",
@@ -1741,7 +1741,7 @@ class Op:
             raw_tensor=raw_tensor,
             transformed_tensor=output,
             postfunc_kind=postfunc_kind,
-            train_mode=getattr(trace, "train_mode", False),
+            backward_ready=getattr(trace, "backward_ready", False),
             label=self._streaming_label,
         )
 

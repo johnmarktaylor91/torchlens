@@ -14,7 +14,7 @@ from torch import nn
 pytest.importorskip("safetensors")
 
 from torchlens import Trace, cleanup_tmp, load, trace as trace_fn, save
-from torchlens._io import IO_FORMAT_VERSION, TorchLensIOError
+from torchlens._io import TLSPEC_VERSION, TorchLensIOError
 from torchlens._io.manifest import Manifest
 
 
@@ -272,19 +272,19 @@ def test_bundle_save_strict_false_records_unsupported_tensors(tmp_path: Path) ->
     [
         (
             "io_format_newer",
-            lambda manifest: manifest.__setitem__("io_format_version", IO_FORMAT_VERSION + 1),
+            lambda manifest: manifest.__setitem__("tlspec_version", TLSPEC_VERSION + 1),
             "raise",
-            str(IO_FORMAT_VERSION + 1),
+            str(TLSPEC_VERSION + 1),
         ),
         (
             "io_format_older",
-            lambda manifest: manifest.__setitem__("io_format_version", IO_FORMAT_VERSION - 1),
+            lambda manifest: manifest.__setitem__("tlspec_version", TLSPEC_VERSION - 1),
             "deprecation_warning",
-            str(IO_FORMAT_VERSION - 1),
+            str(TLSPEC_VERSION - 1),
         ),
         (
             "io_format_equal",
-            lambda manifest: manifest.__setitem__("io_format_version", IO_FORMAT_VERSION),
+            lambda manifest: manifest.__setitem__("tlspec_version", TLSPEC_VERSION),
             "ok",
             None,
         ),

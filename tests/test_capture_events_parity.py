@@ -27,12 +27,12 @@ _EXPECTED_ALLOWLIST = {
         {
             "backward_peak_memory",
             "cleanup_duration",
-            "end_time",
+            "capture_end_time",
             "forward_duration",
             "forward_peak_memory",
             "func_calls_duration",
             "setup_duration",
-            "start_time",
+            "capture_start_time",
         }
     ),
     "Op": frozenset(
@@ -273,20 +273,20 @@ def _make_trace_pickleable(trace: Any) -> None:
     for volatile_field in ("_mod_call_index", "_mod_call_labels", "_mod_entered", "_mod_exited"):
         if hasattr(trace, volatile_field):
             setattr(trace, volatile_field, {})
-    if hasattr(trace, "input_id"):
-        trace.input_id = 0
-    if hasattr(trace, "model_id"):
-        trace.model_id = 0
+    if hasattr(trace, "input_object_id"):
+        trace.input_object_id = 0
+    if hasattr(trace, "model_object_id"):
+        trace.model_object_id = 0
     if hasattr(trace, "_source_code_blob"):
         trace._source_code_blob = {}
     if hasattr(trace, "forward_source_file"):
         trace.forward_source_file = None
     if hasattr(trace, "forward_source_line"):
         trace.forward_source_line = None
-    if hasattr(trace, "model_source_file"):
-        trace.model_source_file = None
-    if hasattr(trace, "model_source_line"):
-        trace.model_source_line = None
+    if hasattr(trace, "class_source_file"):
+        trace.class_source_file = None
+    if hasattr(trace, "class_source_line"):
+        trace.class_source_line = None
     if hasattr(trace, "name"):
         trace.trace_label = "capture_events_parity"
     _drop_capture_scratch(trace)
@@ -340,8 +340,8 @@ def _drop_capture_scratch(trace: Any) -> None:
         trace.__dict__["orphan_logs"] = ()
     if "forward_source_line" in trace.__dict__:
         trace.__dict__["forward_source_line"] = None
-    if "model_source_line" in trace.__dict__:
-        trace.__dict__["model_source_line"] = None
+    if "class_source_line" in trace.__dict__:
+        trace.__dict__["class_source_line"] = None
 
 
 def _read_golden_pickle_bytes(path: Path) -> bytes:

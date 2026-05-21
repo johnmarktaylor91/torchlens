@@ -493,8 +493,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
             out.write(_capture("grad_log.has_grads", grad_log.has_grads))
             out.write(
                 _capture(
-                    "grad_log.ops_with_saved_grads",
-                    grad_log.ops_with_saved_grads,
+                    "grad_log.saved_grad_ops",
+                    grad_log.saved_grad_ops,
                 )
             )
 

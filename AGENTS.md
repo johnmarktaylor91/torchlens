@@ -61,7 +61,7 @@ pytest tests/ -m "not slow" -x --tb=short
    populated in fast mode.
 8. `_pass_finished` is not reset between passes; this is intentional for fast-path lookups.
 9. Portable `.tlspec` public schema is manifest-only; executable callables are not portable.
-10. `train_mode=True` rejects contradictory detaching/disk-save settings and preserves user
+10. `backward_ready=True` rejects contradictory detaching/disk-save settings and preserves user
     `requires_grad` choices.
 
 ## Known Gotchas

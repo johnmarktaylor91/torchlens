@@ -654,9 +654,8 @@ def trace_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any)
 
     Returns
     -------
-    Any
-        First ``Trace`` with ``streaming_pass_logs`` and
-        ``num_streamed_ops`` attributes.
+    tuple[Any, ...]
+        Captured traces, one per input item.
     """
 
     import torchlens
@@ -664,10 +663,7 @@ def trace_streaming(model: nn.Module, inputs_iter: Iterable[Any], **kwargs: Any)
     logs = [torchlens.trace(model, inputs, **kwargs) for inputs in inputs_iter]
     if not logs:
         raise ValueError("inputs_iter must yield at least one input.")
-    root = logs[0]
-    root.streaming_pass_logs = logs
-    root.num_streamed_ops = len(logs)
-    return root
+    return tuple(logs)
 
 
 __all__ = [

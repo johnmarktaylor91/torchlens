@@ -10,7 +10,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens import RunState
+from torchlens import TraceState
 from torchlens.intervention.errors import ControlFlowDivergenceWarning, ReplayPreconditionError
 from torchlens.intervention.replay import cone_of_effect
 
@@ -175,8 +175,8 @@ def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
     relu_site = _first_func(log, "relu")
     assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
     assert not torch.equal(log[log.output_layers[0]].out, original_output)
-    assert log.run_state is RunState.REPLAY_PROPAGATED
-    assert log.last_run_ctx["engine"] == "replay"
+    assert log.state is TraceState.REPLAY_PROPAGATED
+    assert log.last_run["engine"] == "replay"
     assert relu_site.interventions[-1].engine == "replay"
 
 
@@ -193,7 +193,7 @@ def test_replay_failure_rolls_back_partial_out_updates(
         if isinstance(layer.out, torch.Tensor)
     }
     original_records = {layer.layer_label: list(layer.interventions) for layer in log.layer_list}
-    original_state = log.run_state
+    original_state = log.state
     real_execute = replay_mod._execute_replay_func_strict
     execute_count = 0
 
@@ -211,7 +211,7 @@ def test_replay_failure_rolls_back_partial_out_updates(
     with pytest.raises(RuntimeError, match="replay boom"):
         log.replay(hooks={tl.func("relu"): _zero_hook})
 
-    assert log.run_state is original_state
+    assert log.state is original_state
     for layer in log.layer_list:
         if layer.layer_label in original_tensors:
             assert torch.equal(layer.out, original_tensors[layer.layer_label])
@@ -230,8 +230,8 @@ def test_replay_from_preserves_origin_out_and_recomputes_children() -> None:
     log.replay_from(relu_site)
 
     assert torch.equal(relu_site.out, replacement)
-    assert log.run_state is RunState.REPLAY_PROPAGATED
-    assert relu_site.layer_label in log.last_run_ctx["origins"]
+    assert log.state is TraceState.REPLAY_PROPAGATED
+    assert relu_site.layer_label in log.last_run["origins"]
 
 
 def test_cone_of_effect_follows_bfs_children_and_stops_at_outputs() -> None:

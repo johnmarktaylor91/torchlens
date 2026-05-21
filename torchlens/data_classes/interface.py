@@ -156,7 +156,7 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += f"\n\tRandom seed: {self.random_seed}"
     s += (
-        f"\n\tTime elapsed: {np.round(self.duration, 3)}s "
+        f"\n\tTime elapsed: {np.round(self.capture_duration, 3)}s "
         f"({np.round(self.overhead_duration, 3)}s spent logging)"
     )
 

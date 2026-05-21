@@ -7,7 +7,7 @@ import torch
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._run_state import RunState
+from torchlens._trace_state import TraceState
 
 
 class _TinyReluModel(torch.nn.Module):
@@ -88,7 +88,7 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     log = tl.trace(_TinyShiftModel(), torch.randn(2, 3))
 
     assert log.intervention_ready is False
-    assert log.run_state is RunState.PRISTINE
+    assert log.state is TraceState.PRISTINE
     assert log.num_ops == 2
     assert log.layer_list
     assert log.layer_dict_main_keys
@@ -99,7 +99,7 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     assert log.layer_num_calls
     assert log.input_layers == ["input_1"]
     assert log.output_layers == ["output_1"]
-    assert log.ops_with_saved_outs
+    assert log.saved_ops
     assert all(layer.out is not None for layer in log.layer_list)
     assert all(layer.args_template is None for layer in log.layer_list)
     assert all(layer.kwargs_template is None for layer in log.layer_list)
@@ -156,7 +156,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
     followup_log = tl.trace(model, torch.randn(2, 3))
 
     assert followup_log.intervention_ready is False
-    assert followup_log.run_state is RunState.PRISTINE
+    assert followup_log.state is TraceState.PRISTINE
     assert followup_log.layer_list
 
 

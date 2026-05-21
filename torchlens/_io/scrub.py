@@ -16,7 +16,7 @@ from typing import Any, TypeAlias
 
 import torch
 
-from . import BlobRef, FieldPolicy, IO_FORMAT_VERSION, TorchLensIOError
+from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
 from ..data_classes.model_log import Trace
 
 BlobSpec: TypeAlias = tuple[str, torch.Tensor, str, str]
@@ -88,7 +88,7 @@ def scrub_for_save(
         raise TorchLensIOError("Portable scrub expected a scrubbed Trace instance.")
 
     scrubbed_state = dict(scrubbed_model.__dict__)
-    scrubbed_state["io_format_version"] = IO_FORMAT_VERSION
+    scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     module_accessor = getattr(trace, "_module_logs", None)
     if module_accessor is not None:
@@ -175,7 +175,7 @@ def _scrub_value(
         scrubbed_state["_out_transform_repr"] = (
             repr(value.out_postfunc) if value.out_postfunc is not None else None
         )
-        scrubbed_state["io_format_version"] = IO_FORMAT_VERSION
+        scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     scrubbed_obj.__dict__.update(scrubbed_state)
     return scrubbed_obj

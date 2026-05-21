@@ -18,7 +18,7 @@ def test_train_mode_grad_flows_through_saved_tensor() -> None:
         model,
         x,
         keep_op=lambda ctx: ctx.func_name == "linear",
-        train_mode=True,
+        backward_ready=True,
     )
     saved = next(record.ram_payload for record in recording if record.ram_payload is not None)
 

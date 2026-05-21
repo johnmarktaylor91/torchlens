@@ -123,13 +123,13 @@ def _source_io_format_version(
     Returns
     -------
     int
-        Source bundle ``io_format_version``. Falls back to state metadata for
+        Source bundle ``tlspec_version``. Falls back to state metadata for
         plain test fixtures.
     """
 
     if isinstance(manifest, Manifest):
-        return manifest.io_format_version
-    version = manifest.get("io_format_version", state.get("io_format_version", 0))
+        return manifest.tlspec_version
+    version = manifest.get("tlspec_version", state.get("tlspec_version", 0))
     return int(version) if isinstance(version, int) else 0
 
 
@@ -153,7 +153,7 @@ def _normalize_legacy_trace_state(state: dict[str, Any], source_version: int) ->
     state:
         Scrubbed ``Trace`` state loaded from ``metadata.pkl``.
     source_version:
-        Source bundle ``io_format_version``.
+        Source bundle ``tlspec_version``.
 
     Returns
     -------

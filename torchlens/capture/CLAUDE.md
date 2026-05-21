@@ -63,5 +63,5 @@ divergence should fail clearly rather than silently saving mismatched outs.
 
 ## Training Semantics
 Do not introduce bare `.detach()` or `torch.no_grad()` in capture paths. Tensor copy/detach
-behavior is controlled by save options and `train_mode=True`; use `safe_copy()` and existing
+behavior is controlled by save options and `backward_ready=True`; use `safe_copy()` and existing
 storage routing.

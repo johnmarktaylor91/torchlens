@@ -230,14 +230,14 @@ def _append_state_for_json(log: Any) -> dict[str, Any]:
 
     append_records = [
         record
-        for record in getattr(log, "ledger", [])
+        for record in getattr(log, "state_history", [])
         if isinstance(record, dict) and record.get("op") == "append"
     ]
     return {
         "is_appended": bool(getattr(log, "is_appended", False)),
         "append_sequence_id": int(getattr(log, "_append_sequence_id", 0)),
         "append_history": list(getattr(log, "append_history", [])),
-        "ledger": append_records,
+        "state_history": append_records,
     }
 
 

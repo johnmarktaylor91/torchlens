@@ -250,7 +250,7 @@ def _call_dict(call: Any) -> dict[str, Any]:
 
 
 def _equivalence_partition(trace: Any) -> list[list[str]]:
-    """Serialize Trace.equivalent_ops as a deterministic partition.
+    """Serialize Trace.op_equivalence_classes as a deterministic partition.
 
     Parameters
     ----------
@@ -264,7 +264,7 @@ def _equivalence_partition(trace: Any) -> list[list[str]]:
     """
 
     partition = [
-        sorted(str(label) for label in members) for members in trace.equivalent_ops.values()
+        sorted(str(label) for label in members) for members in trace.op_equivalence_classes.values()
     ]
     return sorted(partition)
 

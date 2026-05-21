@@ -274,11 +274,15 @@ def _prepare_model_session(
     trace._exhaustive_module_stack = []
     trace.model_class_name = str(type(model).__name__)
     try:
-        trace.model_source_file = inspect.getfile(type(model))
-        trace.model_source_line = inspect.getsourcelines(type(model))[1]
+        trace.class_source_file = inspect.getfile(type(model))
+        trace.class_source_line = inspect.getsourcelines(type(model))[1]
+        trace.init_source_file = inspect.getfile(type(model).__init__)
+        trace.init_source_line = inspect.getsourcelines(type(model).__init__)[1]
     except (OSError, TypeError):
-        trace.model_source_file = None
-        trace.model_source_line = None
+        trace.class_source_file = None
+        trace.class_source_line = None
+        trace.init_source_file = None
+        trace.init_source_line = None
     try:
         forward_func = model.forward
         trace.forward_source_file = inspect.getsourcefile(forward_func) or inspect.getfile(
@@ -323,9 +327,9 @@ def _prepare_model_session(
 def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:
     """Create ``Param`` objects and prepare parameter grad tracking.
 
-    Outside ``train_mode``, ``requires_grad`` is forced True so that ``grad_fn``
+    Outside ``backward_ready``, ``requires_grad`` is forced True so that ``grad_fn``
     metadata is available on all intermediate tensors during the forward pass.
-    In ``train_mode``, user-authored ``requires_grad`` values are preserved. The
+    In ``backward_ready``, user-authored ``requires_grad`` values are preserved. The
     original value is always saved to ``_tl.requires_grad_before_capture`` and restored during
     ``_cleanup_model_session``.
     """
@@ -363,7 +367,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
 
             # Save original requires_grad before forcing True.
             requires_grad_before = param.requires_grad
-            if not getattr(trace, "train_mode", False):
+            if not getattr(trace, "backward_ready", False):
                 param.requires_grad = True
 
             barcode = make_random_barcode()
@@ -980,7 +984,7 @@ def _ensure_module_output_tensor_logged(
             "num_params_frozen": 0,
             "param_memory": 0,
             "equivalence_class": equivalence_class,
-            "equivalent_ops": trace.equivalent_ops[raw_label],
+            "equivalent_ops": trace.op_equivalence_classes[raw_label],
             "recurrent_ops": [],
             "parents": parent_labels,
             "parent_arg_positions": {"args": {}, "kwargs": {}},
@@ -1043,7 +1047,7 @@ def _ensure_module_output_tensor_logged(
             "func_config": {},
         }
     )
-    trace.equivalent_ops[raw_label].add(raw_label)
+    trace.op_equivalence_classes[raw_label].add(raw_label)
     new_entry = _make_layer_log_entry(trace, tensor, fields_dict, (), {}, trace.out_postfunc)
     for parent_entry in parent_entries:
         parent_entry["children"].append(raw_label)

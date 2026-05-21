@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Uni
 
 import torch
 
-from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 from ._accessor_base import Accessor
@@ -445,12 +445,12 @@ class ModuleCall:
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state annotated with the current I/O format version."""
         state = self.__dict__.copy()
-        state["io_format_version"] = IO_FORMAT_VERSION
+        state["tlspec_version"] = TLSPEC_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state with version-aware default filling."""
-        read_io_format_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__)
         if "address" not in state and "module_address" in state:
             state["address"] = state.pop("module_address")
         if "call_index" not in state and "pass_num" in state:
@@ -707,12 +707,12 @@ class Module:
         state = self.__dict__.copy()
         state["_source_trace_ref"] = None
         state["_buffer_accessor"] = None
-        state["io_format_version"] = IO_FORMAT_VERSION
+        state["tlspec_version"] = TLSPEC_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state without touching disk."""
-        read_io_format_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__)
         default_fill_state(
             state,
             defaults={

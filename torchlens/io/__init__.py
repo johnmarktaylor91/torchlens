@@ -8,7 +8,7 @@ from typing import Any
 
 from .._io import rehydrate_nested
 from .._io.bundle import cleanup_tmp, load, save
-from .._run_state import RunState
+from .._trace_state import TraceState
 from ..intervention.save import save_intervention
 from ..intervention.types import InterventionSpec
 from ..options import suppress_mutate_warnings
@@ -48,7 +48,7 @@ def detect_tlspec_format(path: str | Path) -> str:
     if spec is not None and "format_version" in spec:
         return "v2.16_intervention"
 
-    if manifest is not None and "io_format_version" in manifest:
+    if manifest is not None and "tlspec_version" in manifest:
         return "v2.16_modellog_portable"
     return "unknown"
 
@@ -143,7 +143,7 @@ def load_intervention_spec(path: str | Path) -> InterventionSpec:
 
 
 __all__ = [
-    "RunState",
+    "TraceState",
     "cleanup_tmp",
     "detect_tlspec_format",
     "get_model_metadata",

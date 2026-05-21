@@ -9,7 +9,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens import RunState
+from torchlens import TraceState
 from torchlens.intervention.errors import (
     DirectActivationWriteWarning,
     EngineDispatchError,
@@ -196,7 +196,7 @@ def test_direct_out_write_warns_once_and_marks_dirty() -> None:
     with pytest.warns(DirectActivationWriteWarning):
         relu_pass.out = relu_pass.out
     assert log._has_direct_writes is True
-    assert log.run_state is RunState.DIRECT_WRITE_DIRTY
+    assert log.state is TraceState.DIRECT_WRITE_DIRTY
 
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
@@ -211,9 +211,9 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     replay_log, _ = _capture()
     replay_result = tl.do(replay_log, {tl.func("relu"): _zero_hook}, confirm_mutation=True)
     assert replay_result is replay_log
-    assert replay_log.run_state is RunState.REPLAY_PROPAGATED
-    assert replay_log.ledger[-1]["op"] == "replay"
-    assert any(record["op"] == "do" for record in replay_log.ledger)
+    assert replay_log.state is TraceState.REPLAY_PROPAGATED
+    assert replay_log.state_history[-1]["op"] == "replay"
+    assert any(record["op"] == "do" for record in replay_log.state_history)
 
     rerun_model = ReluLinear()
     rerun_log, x = _capture(rerun_model)
@@ -224,8 +224,8 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
         confirm_mutation=True,
     )
     assert rerun_result is rerun_log
-    assert rerun_log.run_state is RunState.RERUN_PROPAGATED
-    assert rerun_log.ledger[-1]["op"] == "rerun"
+    assert rerun_log.state is TraceState.RERUN_PROPAGATED
+    assert rerun_log.state_history[-1]["op"] == "rerun"
 
     set_only_log, _ = _capture()
     set_only_log.do(
@@ -234,8 +234,8 @@ def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
         engine="set_only",
         confirm_mutation=True,
     )
-    assert set_only_log.run_state is RunState.SPEC_STALE
-    assert set_only_log.ledger[-1]["op"] == "do"
+    assert set_only_log.state is TraceState.SPEC_STALE
+    assert set_only_log.state_history[-1]["op"] == "do"
 
 
 @pytest.mark.smoke
@@ -250,7 +250,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
     with pytest.raises(EngineDispatchError):
         log.do({tl.func("relu"): _zero_hook}, model=ReluLinear(), confirm_mutation=True)
 
-    history_len = len(log.ledger)
+    history_len = len(log.state_history)
     spec_revision = log._spec_revision
     with pytest.raises(ModelMismatchError):
         log.do(
@@ -259,7 +259,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
             x=torch.randn(2, 99),
             confirm_mutation=True,
         )
-    assert len(log.ledger) == history_len
+    assert len(log.state_history) == history_len
     assert log._spec_revision == spec_revision
 
 

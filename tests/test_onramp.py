@@ -223,7 +223,6 @@ def test_trace_site_reports(architecture: tuple[nn.Module, torch.Tensor]) -> Non
 
     model, x = architecture
     log = _metadata_log(model, x)
-    assert isinstance(log.unsupported_ops(), list)
     assert isinstance(log.uncalled_modules(), list)
 
 

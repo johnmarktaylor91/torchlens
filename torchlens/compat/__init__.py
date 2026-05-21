@@ -39,7 +39,7 @@ def __getattr__(name: str) -> ModuleType:
 
 
 def from_huggingface(
-    model_id: str,
+    model_object_id: str,
     *,
     local_files_only: bool = True,
     **kwargs: Any,
@@ -48,7 +48,7 @@ def from_huggingface(
 
     Parameters
     ----------
-    model_id:
+    model_object_id:
         Hugging Face model identifier or local model path.
     local_files_only:
         Whether to restrict loading to the local cache.
@@ -73,7 +73,7 @@ def from_huggingface(
             "Hugging Face loading requires the `hf` extra: install torchlens[hf]."
         ) from exc
 
-    return AutoModel.from_pretrained(model_id, local_files_only=local_files_only, **kwargs)
+    return AutoModel.from_pretrained(model_object_id, local_files_only=local_files_only, **kwargs)
 
 
 def from_timm(model_class_name: str, *, pretrained: bool = False, **kwargs: Any) -> Any:

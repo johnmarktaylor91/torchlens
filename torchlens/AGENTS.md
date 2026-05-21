@@ -6,7 +6,7 @@
 |------|---------|
 | `__init__.py` | Public API exports, moved-name deprecation shims, `peek`, `extract`, `batched_extract`, validation aliases |
 | `_state.py` | Global toggle, active log, decoration maps, prepared model registry; must not import torchlens modules |
-| `_run_state.py` | Runtime state enum surfaced through `torchlens.io` |
+| `_trace_state.py` | Runtime state enum surfaced through `torchlens.io` |
 | `_errors.py`, `_robustness.py`, `_training_validation.py` | Legacy/public error and compatibility helpers |
 | `_literals.py` | Shared literal types for options and modes |
 | `_source_links.py` | Source-link helpers used by reports/visualization |
@@ -42,7 +42,7 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 4. Internal torch ops during capture must be wrapped in `pause_logging()`.
 5. Module suffixes are appended to `equivalence_class` at op creation before loop detection.
 6. `postprocess_fast()` must not call `_build_module_logs()`.
-7. `train_mode=True` must preserve user `requires_grad` and reject detach/disk conflicts.
+7. `backward_ready=True` must preserve user `requires_grad` and reject detach/disk conflicts.
 8. Portable I/O must reject unsafe paths/symlinks and unsupported tensor variants.
 
 ## Newer 2.x Subsystems

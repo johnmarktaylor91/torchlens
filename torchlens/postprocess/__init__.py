@@ -187,7 +187,13 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     self.saved_activation_memory = sum(
         getattr(layer_entry, "memory", 0) for layer_entry in saved_layers
     )
-    self.ops_with_saved_outs = [layer_entry.layer_label for layer_entry in saved_layers]
+    self.num_saved_layers = len({layer_entry.layer_label_no_pass for layer_entry in saved_layers})
+    saved_labels = {layer_entry.layer_label for layer_entry in saved_layers}
+    self.num_saved_module_calls = sum(
+        1
+        for module_call in getattr(self, "module_calls", [])
+        if any(label in saved_labels for label in getattr(module_call, "layers", []))
+    )
 
 
 def postprocess(
@@ -391,8 +397,6 @@ def postprocess_fast(self: "Trace") -> None:
         output_layer.transformed_grad_shape = parent_layer.transformed_grad_shape
         output_layer.transformed_grad_dtype = parent_layer.transformed_grad_dtype
         output_layer.transformed_grad_memory = parent_layer.transformed_grad_memory
-        if output_layer.has_saved_outs:
-            self.ops_with_saved_outs.append(output_layer_label)
     _refresh_fast_saved_summary(self)
     _trim_and_reorder_model_history_fields(self)
     _prune_final_unsaved_layers(self)
@@ -407,7 +411,7 @@ def postprocess_fast(self: "Trace") -> None:
     # Note: _build_module_logs is NOT called here because module structure
     # doesn't change between ops and _module_build_data isn't repopulated
     # in fast mode (Step 9 is skipped). Existing module logs remain valid. (#108)
-    if self.intervention_ready and not getattr(self, "capture_args_template", False):
+    if self.intervention_ready and not getattr(self, "save_arg_templates", False):
         self.intervention_ready = False
     self.graph_shape_hash = compute_graph_shape_hash(self)
     _set_tracing_finished(self)

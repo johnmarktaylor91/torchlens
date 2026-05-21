@@ -317,8 +317,9 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
     # grad_fns (e.g. the output clone wrapper), creating phantom cycles.
     strong_refs = trace.__dict__.setdefault("_backward_gradfn_refs", [])
     strong_refs.append(loss.grad_fn)
-    if trace.backward_root_grad_fn_id is None:
-        trace.backward_root_grad_fn_id = id(loss.grad_fn)
+    root_grad_fn_id = id(loss.grad_fn)
+    if root_grad_fn_id not in trace.backward_root_grad_fn_ids:
+        trace.backward_root_grad_fn_ids.append(root_grad_fn_id)
     trace.has_backward_pass = True
 
     while queue:
@@ -710,6 +711,7 @@ def _run_backward_with_capture(
     ]
     handles = _walk_and_hook_backward_graph(trace, loss)
     backend, before = _reset_peak_memory(loss.device)
+    backward_start_time = time.time()
     try:
         result = backward_callable()
     finally:
@@ -723,6 +725,7 @@ def _run_backward_with_capture(
     _backend, after = _memory_snapshot(loss.device)
     trace.backward_memory_backend = backend
     trace.backward_peak_memory += max(0, after - before)
+    trace.backward_durations.append(time.time() - backward_start_time)
     trace.total_param_gradient_memory = sum(
         param_log.grad_memory for param_log in getattr(trace, "param_logs", [])
     )

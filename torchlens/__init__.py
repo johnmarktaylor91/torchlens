@@ -112,7 +112,7 @@ _MOVED_OBJECTS = {
     "ModuleCall": ("torchlens.types", "ModuleCall"),
     "NodeSpec": ("torchlens.experimental.dagua", "NodeSpec"),
     "Param": ("torchlens.types", "Param"),
-    "RunState": ("torchlens.io", "RunState"),
+    "TraceState": ("torchlens.io", "TraceState"),
     "SaveLevel": ("torchlens.types", "SaveLevel"),
     "SiteTable": ("torchlens.types", "SiteTable"),
     "SpecCompat": ("torchlens.types", "SpecCompat"),
@@ -189,7 +189,7 @@ def __getattr__(name: str) -> Any:
     Raises
     ------
     AttributeError
-        If ``name`` is not part of the deprecation ledger.
+        If ``name`` is not part of the deprecation state_history.
     """
 
     if name in _MOVED_OBJECTS:
@@ -319,7 +319,7 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     matches = [
         label
         for label in trace.layer_labels
-        if lower_pattern in label.lower() and label in trace.ops_with_saved_outs
+        if lower_pattern in label.lower() and label in trace.saved_ops
     ]
     if matches:
         return matches

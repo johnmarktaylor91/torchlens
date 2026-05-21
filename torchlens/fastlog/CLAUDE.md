@@ -49,7 +49,7 @@ Storage is resolved from streaming/recording options:
 - Disk-only when `retain_in_memory=False`, rejecting `keep_grad=True`.
 
 ## Training Semantics
-`train_mode=True` promotes omitted defaults to graph-connected out capture. Explicit
+`backward_ready=True` promotes omitted defaults to graph-connected out capture. Explicit
 defaults still win, but incompatible `keep_grad=False` or disk-only settings raise
 configuration errors. Disk mirrors are detached inspection copies; trainable payloads are RAM
 copies.

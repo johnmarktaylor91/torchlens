@@ -46,12 +46,12 @@ class _StubTrace:
         self.internal_source_ops: List[str] = []
         self.internal_sink_ops: List[str] = []
         self.internally_terminated_bool_ops: List[str] = []
-        self.ops_with_saved_outs: List[str] = []
-        self.ops_with_saved_grads: List[str] = []
+        self.saved_ops: List[str] = []
+        self.saved_grad_ops: List[str] = []
         self._layers_where_internal_branches_merge_with_input: List[str] = []
 
         self.layers_with_params: Dict[str, List[str]] = {}
-        self.equivalent_ops: Dict[str, set] = {}
+        self.op_equivalence_classes: Dict[str, set] = {}
 
         self.conditional_branch_edges = []
         self.conditional_then_entry_edges = []
@@ -152,7 +152,7 @@ def _make_layer_stub(
         conditional_elif_children={},
         conditional_else_children=[],
         conditional_arm_children={},
-        equivalent_ops=set(),
+        op_equivalence_classes=set(),
         recurrent_ops=[],
         parent_arg_positions={"args": {}, "kwargs": {}},
         output_versions_per_child={},

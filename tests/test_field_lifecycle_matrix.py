@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._run_state import RunState
+from torchlens._trace_state import TraceState
 from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import Trace
@@ -110,25 +110,25 @@ def test_construction_done_lifecycle() -> None:
     assert log._has_direct_writes is False
     constructed.out = constructed.out
     assert log._has_direct_writes is True
-    assert log.run_state is RunState.DIRECT_WRITE_DIRTY
+    assert log.state is TraceState.DIRECT_WRITE_DIRTY
 
 
 def test_run_state_transitions() -> None:
-    """RunState transitions follow the allowed intervention lifecycle paths."""
+    """TraceState transitions follow the allowed intervention lifecycle paths."""
 
     stale = _capture_log()
-    assert stale.run_state is RunState.PRISTINE
+    assert stale.state is TraceState.PRISTINE
     stale.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    assert stale.run_state is RunState.SPEC_STALE
+    assert stale.state is TraceState.SPEC_STALE
     stale.replay()
-    assert stale.run_state is RunState.REPLAY_PROPAGATED
+    assert stale.state is TraceState.REPLAY_PROPAGATED
 
     rerun_log = _capture_log()
-    assert rerun_log.run_state is RunState.PRISTINE
+    assert rerun_log.state is TraceState.PRISTINE
     rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    assert rerun_log.run_state is RunState.SPEC_STALE
+    assert rerun_log.state is TraceState.SPEC_STALE
     rerun_log.rerun(_LifecycleModel(), torch.tensor([[-1.0, 2.0, 3.0]]))
-    assert rerun_log.run_state is RunState.RERUN_PROPAGATED
+    assert rerun_log.state is TraceState.RERUN_PROPAGATED
 
     live = tl.trace(
         _LifecycleModel(),
@@ -136,13 +136,13 @@ def test_run_state_transitions() -> None:
         intervention_ready=True,
         hooks={tl.func("relu"): _zero_hook},
     )
-    assert live.run_state is RunState.LIVE_CAPTURED
+    assert live.state is TraceState.LIVE_CAPTURED
 
     appended = _capture_log()
     appended.rerun(_LifecycleModel(), torch.tensor([[0.5, 1.0, 1.5]]), append=True)
-    assert appended.run_state is RunState.APPENDED
+    assert appended.state is TraceState.APPENDED
 
     dirty = _capture_log()
     layer = next(layer for layer in dirty.layer_list if layer.func_name == "relu")
     layer.out = layer.out
-    assert dirty.run_state is RunState.DIRECT_WRITE_DIRTY
+    assert dirty.state is TraceState.DIRECT_WRITE_DIRTY

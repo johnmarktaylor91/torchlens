@@ -27,7 +27,7 @@ OBJECT_ALIAS_CASES = [
     ("ModuleCall", "torchlens.types", "ModuleCall"),
     ("NodeSpec", "torchlens.experimental.dagua", "NodeSpec"),
     ("Param", "torchlens.types", "Param"),
-    ("RunState", "torchlens.io", "RunState"),
+    ("TraceState", "torchlens.io", "TraceState"),
     ("SaveLevel", "torchlens.types", "SaveLevel"),
     ("SiteTable", "torchlens.types", "SiteTable"),
     ("SpecCompat", "torchlens.types", "SpecCompat"),

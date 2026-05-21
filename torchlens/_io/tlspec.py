@@ -608,7 +608,7 @@ def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
     return {
         "model_class_name": _json_str_or_none(getattr(source, "model_class_name", None)),
         "graph_shape_hash": _json_str_or_none(getattr(source, "graph_shape_hash", None)),
-        "input_shape_hash": _json_str_or_none(getattr(source, "input_shape_hash", None)),
+        "input_signature_hash": _json_str_or_none(getattr(source, "input_signature_hash", None)),
     }
 
 

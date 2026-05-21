@@ -43,7 +43,7 @@ class _TraceStub:
 
     grad_fn_logs: dict[int, GradFn]
     _grad_layer_nums_to_save: str = "all"
-    last_run_ctx: dict[str, Any] | None = None
+    last_run: dict[str, Any] | None = None
 
 
 @pytest.fixture(autouse=True)

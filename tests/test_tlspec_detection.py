@@ -33,7 +33,7 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
         ({"tlspec_version": 1, "kind": "intervention"}, None, "v2.0_unified"),
         ({"kind": "intervention", "format_version": "1"}, None, "v2.16_intervention_with_kind"),
         ({"format_version": "1"}, {"format_version": "1"}, "v2.16_intervention"),
-        ({"io_format_version": 2}, None, "v2.16_modellog_portable"),
+        ({"tlspec_version": 2}, None, "v2.16_modellog_portable"),
         ({}, None, "unknown"),
     ],
 )

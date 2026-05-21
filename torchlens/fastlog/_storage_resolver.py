@@ -226,7 +226,7 @@ def _validate_train_mode_transformed(
         )
     if transformed.dtype in _INTEGER_DTYPES:
         raise TrainingModeConfigError(
-            f"train_mode=True with non-grad dtype {transformed.dtype} on fastlog "
+            f"backward_ready=True with non-grad dtype {transformed.dtype} on fastlog "
             f"event {label!r}. Integer and bool dtypes cannot propagate grads. "
             "Adjust out_postfunc to return a floating dtype."
         )

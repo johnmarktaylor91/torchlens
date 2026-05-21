@@ -21,7 +21,7 @@ from typing import Any
 import torch
 from safetensors.torch import save_file
 
-from . import IO_FORMAT_VERSION, TorchLensIOError
+from . import TLSPEC_VERSION, TorchLensIOError
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .._state import pause_logging
@@ -359,7 +359,7 @@ class BundleStreamWriter:
         layer_list = scrubbed_state.get("layer_list", [])
         n_layers = len(layer_list) if isinstance(layer_list, list) else 0
         return Manifest(
-            io_format_version=IO_FORMAT_VERSION,
+            tlspec_version=TLSPEC_VERSION,
             torchlens_version=TORCHLENS_VERSION,
             torch_version=torch.__version__,
             python_version=(

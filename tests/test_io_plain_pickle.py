@@ -114,7 +114,7 @@ def test_old_style_pickle_without_io_format_version_warns_and_remains_usable(
         """
 
         state = original_getstate(self)
-        state.pop("io_format_version", None)
+        state.pop("tlspec_version", None)
         return state
 
     monkeypatch.setattr(Trace, "__getstate__", _legacy_getstate)

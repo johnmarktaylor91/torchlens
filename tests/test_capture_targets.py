@@ -35,7 +35,7 @@ def test_record_kpi_in_graph() -> None:
     """Attach arbitrary KPI metadata during capture."""
 
     log = tl.trace(_KpiModel(), torch.ones(1, 2))
-    assert "loss" in log.trace_annotations
+    assert "loss" in log.annotations
 
 
 def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:

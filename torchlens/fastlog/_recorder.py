@@ -112,22 +112,22 @@ def _resolve_train_mode_default(
     *,
     field_name: str,
     value: bool | CaptureSpec | MissingType,
-    train_mode: bool,
+    backward_ready: bool,
 ) -> bool | CaptureSpec | MissingType:
     """Resolve one default capture option for train-mode sugar."""
 
-    if train_mode and value is MISSING:
+    if backward_ready and value is MISSING:
         return CaptureSpec(keep_grad=True, save_out=True, save_metadata=True)
-    if not train_mode or value is MISSING or value is False:
+    if not backward_ready or value is MISSING or value is False:
         return value
     if value is True:
         raise TrainingModeConfigError(
-            f"train_mode=True conflicts with {field_name}=True because True uses "
+            f"backward_ready=True conflicts with {field_name}=True because True uses "
             "keep_grad=False; use CaptureSpec(keep_grad=True) or omit the default"
         )
     if isinstance(value, CaptureSpec) and not value.keep_grad:
         raise TrainingModeConfigError(
-            f"train_mode=True conflicts with {field_name}=CaptureSpec(keep_grad=False)"
+            f"backward_ready=True conflicts with {field_name}=CaptureSpec(keep_grad=False)"
         )
     return value
 
@@ -155,7 +155,7 @@ class Recorder:
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_grads: bool | MissingType = MISSING,
-        train_mode: bool = False,
+        backward_ready: bool = False,
         out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
         gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     ) -> None:
@@ -178,7 +178,7 @@ class Recorder:
             When ``False`` and ``out_transform`` is set, only the
             transformed payload is retained on the record. Defaults to
             ``True`` to mirror the slow path.
-        train_mode:
+        backward_ready:
             If True, omitted defaults are promoted to ``CaptureSpec(keep_grad=True)``.
         """
 
@@ -187,12 +187,12 @@ class Recorder:
         default_op = _resolve_train_mode_default(
             field_name="default_op",
             value=default_op,
-            train_mode=train_mode,
+            backward_ready=backward_ready,
         )
         default_module = _resolve_train_mode_default(
             field_name="default_module",
             value=default_module,
-            train_mode=train_mode,
+            backward_ready=backward_ready,
         )
         if out_postfunc is not MISSING:
             if out_transform is not MISSING:
@@ -313,7 +313,7 @@ class Recorder:
             out_postfunc=self.options.out_transform,
             save_raw_outs=self.options.save_raw_outs,
             detach_saved_activations=False,
-            train_mode=True,
+            backward_ready=True,
         )
         trace.capture_mode = "predicate"
         trace._fastlog_recording = self._state.recording

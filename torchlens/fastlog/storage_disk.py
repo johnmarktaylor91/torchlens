@@ -14,7 +14,7 @@ from typing import Any, cast
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
-from .._io import IO_FORMAT_VERSION, TorchLensIOError
+from .._io import TLSPEC_VERSION, TorchLensIOError
 from .._io.manifest import Manifest, TensorEntry
 from .._io.streaming import BundleStreamWriter
 from ._indexes import write_label_index, write_pass_index
@@ -407,7 +407,7 @@ def _build_fastlog_manifest(tensor_entries: list[TensorEntry]) -> Manifest:
     """Build a manifest for a finalized fastlog directory bundle."""
 
     return Manifest(
-        io_format_version=IO_FORMAT_VERSION,
+        tlspec_version=TLSPEC_VERSION,
         torchlens_version=TORCHLENS_VERSION,
         torch_version=torch.__version__,
         python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",

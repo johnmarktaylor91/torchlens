@@ -36,7 +36,7 @@ from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 from .._deprecations import MISSING
-from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
+from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..utils.display import human_readable_size
 from ._accessor_base import Accessor
 
@@ -473,12 +473,12 @@ class Layer:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
         state["_source_trace_ref"] = None
-        state["io_format_version"] = IO_FORMAT_VERSION
+        state["tlspec_version"] = TLSPEC_VERSION
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
-        read_io_format_version(state, cls_name=type(self).__name__)
+        read_tlspec_version(state, cls_name=type(self).__name__)
         if "ops" not in state and "passes" in state:
             state["ops"] = state.pop("passes")
         if "call_labels" not in state and "pass_labels" in state:

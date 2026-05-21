@@ -293,12 +293,14 @@ def test_hf_compat_loaders_match_direct_calls(monkeypatch: pytest.MonkeyPatch) -
             """Offline Transformers AutoModel fixture."""
 
             @staticmethod
-            def from_pretrained(model_id: str, *, local_files_only: bool = True) -> nn.Module:
+            def from_pretrained(
+                model_object_id: str, *, local_files_only: bool = True
+            ) -> nn.Module:
                 """Return a fake model for offline cache misses.
 
                 Parameters
                 ----------
-                model_id:
+                model_object_id:
                     Model identifier.
                 local_files_only:
                     Offline loading flag.
@@ -310,7 +312,7 @@ def test_hf_compat_loaders_match_direct_calls(monkeypatch: pytest.MonkeyPatch) -
                 """
 
                 model = nn.Linear(2, 2)
-                model.model_id = model_id  # type: ignore[attr-defined]
+                model.model_object_id = model_object_id  # type: ignore[attr-defined]
                 model.local_files_only = local_files_only  # type: ignore[attr-defined]
                 return model
 

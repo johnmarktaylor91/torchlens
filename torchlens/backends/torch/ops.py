@@ -1219,7 +1219,7 @@ def log_function_output_tensors_predicate(
             pass_index=state.pass_index,
             event_index=state.event_index,
             compute_index=state.compute_index,
-            time_since_pass_start=time.time() - self.start_time,
+            time_since_pass_start=time.time() - self.capture_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
         )
@@ -1447,7 +1447,7 @@ def _build_shared_fields_dict(
     fields_dict["_construction_done"] = False
     fields_dict["interventions"] = []
     should_capture_template = bool(
-        getattr(self, "intervention_ready", False) or getattr(self, "capture_args_template", False)
+        getattr(self, "intervention_ready", False) or getattr(self, "save_arg_templates", False)
     )
     if should_capture_template:
         captured_template = _build_args_template(func, args, kwargs)
@@ -1811,7 +1811,6 @@ def log_function_output_tensors_fast(
         # Save out data if this layer is in the save list.
         layer_nums_to_save = cast(Any, self._layer_nums_to_save)
         if (layer_nums_to_save == "all") or (orig_layer_entry.capture_index in layer_nums_to_save):
-            self.ops_with_saved_outs.append(orig_layer_entry.layer_label)
             orig_layer_entry.save_activation(
                 out,
                 arg_copies,
@@ -2202,10 +2201,10 @@ def _log_output_tensor_info(
     # Defensive: if equivalence_class isn't yet registered (e.g. user-injected
     # tensor through intervention/raw-hook with a fresh hash), create the
     # set on demand rather than crashing with KeyError.
-    if base_equivalence_class not in self.equivalent_ops:
-        self.equivalent_ops[base_equivalence_class] = set()
-    self.equivalent_ops[base_equivalence_class].add(_label_raw)
-    fields_dict["equivalent_ops"] = self.equivalent_ops[base_equivalence_class]
+    if base_equivalence_class not in self.op_equivalence_classes:
+        self.op_equivalence_classes[base_equivalence_class] = set()
+    self.op_equivalence_classes[base_equivalence_class].add(_label_raw)
+    fields_dict["equivalent_ops"] = self.op_equivalence_classes[base_equivalence_class]
 
     # In-place ops return the same tensor object, which already has a raw label.
     fields_dict["is_inplace"] = get_tensor_label(t) is not None
@@ -2384,7 +2383,9 @@ def _save_activation_fields(
                 raw_tensor=raw_out,
                 transformed_tensor=transformed_out,
                 postfunc_kind="out",
-                train_mode=fields_dict.get("train_mode", getattr(trace, "train_mode", False)),
+                backward_ready=fields_dict.get(
+                    "backward_ready", getattr(trace, "backward_ready", False)
+                ),
                 label=fields_dict.get("_layer_label_raw"),
             )
             validate_streaming_postfunc_output(
@@ -2500,7 +2501,6 @@ def _make_layer_log_entry(
         (layer_nums_to_save == "all") or (new_entry.capture_index in layer_nums_to_save)
     ):
         _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, out_postfunc)
-        self.ops_with_saved_outs.append(new_entry._label_raw)
     op_event = _op_event_from_log(fields_dict, t, fire_results)
     live_record.event = op_event
     from ...ir import register_live_event

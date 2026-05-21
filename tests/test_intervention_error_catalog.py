@@ -13,7 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens import RunState
+from torchlens import TraceState
 from torchlens.intervention import errors as terrors
 
 
@@ -312,11 +312,11 @@ def test_axis_a_public_verbs_success_paths() -> None:
     log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     replay_result = log.replay()
     assert replay_result is log
-    assert log.run_state is RunState.REPLAY_PROPAGATED
+    assert log.state is TraceState.REPLAY_PROPAGATED
 
     do_log = _capture()
     do_log.do(tl.func("relu"), torch.ones(1, 3), engine="set_only", confirm_mutation=True)
-    assert do_log.run_state is RunState.SPEC_STALE
+    assert do_log.state is TraceState.SPEC_STALE
 
     fork = do_log.fork("phase14")
     assert fork.parent_run() is do_log
@@ -325,9 +325,9 @@ def test_axis_a_public_verbs_success_paths() -> None:
     x = torch.randn(2, 3)
     rerun_log = _capture(model, x)
     rerun_log.rerun(model, x)
-    assert rerun_log.run_state is RunState.RERUN_PROPAGATED
+    assert rerun_log.state is TraceState.RERUN_PROPAGATED
     rerun_log.rerun(model, torch.randn(1, 3), append=True)
-    assert rerun_log.run_state is RunState.APPENDED
+    assert rerun_log.state is TraceState.APPENDED
 
 
 @pytest.mark.parametrize(

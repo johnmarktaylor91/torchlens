@@ -64,7 +64,7 @@ def save_new_outs(
     layers_to_save: str | list[Any] = "all",
     grads_to_save: str | list[Any] | None = "all",
     random_seed: int | None = None,
-    train_mode: bool | None = None,
+    backward_ready: bool | None = None,
 ) -> None:
     """Re-run the model with new inputs, saving only outs (fast pass).
 
@@ -85,23 +85,23 @@ def save_new_outs(
         layers_to_save: List of layers to save, using any valid lookup keys.
         grads_to_save: List of layers whose grads should be saved.
         random_seed: Which random seed to use for deterministic reproduction.
-        train_mode: Optional replay override. ``None`` inherits the existing
+        backward_ready: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
             tensor detachment for the whole replay.
 
     Returns:
         Nothing; mutates ``self`` in place with new out values.
     """
-    if train_mode is not None:
+    if backward_ready is not None:
         model_detach_saved_activations = self.detach_saved_activations
-        model_train_mode = getattr(self, "train_mode", False)
+        model_train_mode = getattr(self, "backward_ready", False)
         layer_detach_saved_activations = {
             layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
         }
-        target_detach_saved_activations = False if train_mode else self.detach_saved_activations
+        target_detach_saved_activations = False if backward_ready else self.detach_saved_activations
         try:
             self.detach_saved_activations = target_detach_saved_activations
-            self.train_mode = train_mode
+            self.backward_ready = backward_ready
             for layer_log_entry in layer_detach_saved_activations:
                 layer_log_entry.detach_saved_activations = target_detach_saved_activations
             save_new_outs(
@@ -112,11 +112,11 @@ def save_new_outs(
                 layers_to_save=layers_to_save,
                 grads_to_save=grads_to_save,
                 random_seed=random_seed,
-                train_mode=None,
+                backward_ready=None,
             )
         finally:
             self.detach_saved_activations = model_detach_saved_activations
-            self.train_mode = model_train_mode
+            self.backward_ready = model_train_mode
             for layer_log_entry, detach_saved_activations in layer_detach_saved_activations.items():
                 layer_log_entry.detach_saved_activations = detach_saved_activations
         return
@@ -147,8 +147,6 @@ def save_new_outs(
 
     # Reset per-pass bookkeeping fields.  Graph-level totals (total_activation_memory,
     # num_tensors) are NOT reset — they describe the static graph structure.
-    self.ops_with_saved_outs = []
-    self.ops_with_saved_grads = []
     self._saved_grads_set = set()
     self.has_grads = False
     self.unlogged_ops = []
@@ -528,7 +526,7 @@ def run_and_log_inputs_through_model(
         input_kwargs,
     )
 
-    self.start_time = time.time()
+    self.capture_start_time = time.time()
     input_tensors: list[torch.Tensor] = []
 
     try:
@@ -556,7 +554,7 @@ def run_and_log_inputs_through_model(
 
         # Per-session model preparation
         backend.prepare_model_session(self, model)
-        self.setup_duration = time.time() - self.start_time
+        self.setup_duration = time.time() - self.capture_start_time
         _vprint(self, f"Model prepared ({self.setup_duration:.2f}s)")
 
         # Print input summary
@@ -612,7 +610,7 @@ def run_and_log_inputs_through_model(
                     pass_index=state.pass_index,
                     event_index=state.event_index,
                     compute_index=None,
-                    time_since_pass_start=time.time() - self.start_time,
+                    time_since_pass_start=time.time() - self.capture_start_time,
                     include_source_events=state.options.include_source_events,
                     sample_id=state.sample_id,
                 )
@@ -654,7 +652,7 @@ def run_and_log_inputs_through_model(
                         pass_index=state.pass_index,
                         event_index=state.event_index,
                         compute_index=None,
-                        time_since_pass_start=time.time() - self.start_time,
+                        time_since_pass_start=time.time() - self.capture_start_time,
                         include_source_events=state.options.include_source_events,
                         sample_id=state.sample_id,
                     )
@@ -685,7 +683,7 @@ def run_and_log_inputs_through_model(
         output_transform = getattr(self, "_output_transform", None)
         self.raw_output = output_transform(outputs) if output_transform is not None else None
 
-        self.forward_duration = time.time() - self.start_time - self.setup_duration
+        self.forward_duration = time.time() - self.capture_start_time - self.setup_duration
         _vprint(
             self,
             f"Forward pass complete ({self.forward_duration:.2f}s, "
@@ -694,7 +692,7 @@ def run_and_log_inputs_through_model(
 
         if not postprocess:
             backend.cleanup_model_session(self, (model, input_tensors))
-            self.end_time = time.time()
+            self.capture_end_time = time.time()
             return outputs
 
         output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs)

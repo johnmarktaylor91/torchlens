@@ -27,7 +27,7 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 
-from . import BlobRef, FieldPolicy, IO_FORMAT_VERSION, TorchLensIOError
+from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
 from .paths import resolve_bundle_blob_path
@@ -1180,7 +1180,7 @@ def _build_manifest(
     n_grad_blobs = sum(1 for entry in tensor_entries if entry.kind == "grad")
     n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
     return Manifest(
-        io_format_version=IO_FORMAT_VERSION,
+        tlspec_version=TLSPEC_VERSION,
         torchlens_version=TORCHLENS_VERSION,
         torch_version=torch.__version__,
         python_version=(
@@ -1267,9 +1267,10 @@ def _apply_skipped_blobs_to_scrubbed_state(
         grad_labels = [
             layer.layer_label for layer in layer_list if bool(getattr(layer, "has_grad", False))
         ]
-        scrubbed_state["ops_with_saved_outs"] = out_labels
-        scrubbed_state["ops_with_saved_grads"] = grad_labels
         scrubbed_state["num_saved_ops"] = len(out_labels)
+        scrubbed_state["num_saved_layers"] = len(
+            {getattr(layer, "layer_label_no_pass", layer.layer_label) for layer in layer_list}
+        )
         scrubbed_state["saved_activation_memory"] = sum(
             int(getattr(layer, "memory", 0) or 0)
             for layer in layer_list

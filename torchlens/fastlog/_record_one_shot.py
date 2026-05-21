@@ -40,7 +40,7 @@ def record(
     default_grad: bool | CaptureSpec | MissingType = MISSING,
     grad_transform: GradientPostfunc | None = None,
     save_raw_grads: bool = True,
-    train_mode: bool = False,
+    backward_ready: bool = False,
     out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
 ) -> Recording | tuple[Any, Recording]:
@@ -65,7 +65,7 @@ def record(
     save_raw_outs:
         When ``False`` and ``out_transform`` is set, only transformed
         payloads are retained. Defaults to ``True`` to mirror the slow path.
-    train_mode:
+    backward_ready:
         If True, omitted defaults are promoted to keep-grad capture specs.
     return_output:
         Whether to return ``(model_output, recording)``.
@@ -105,7 +105,7 @@ def record(
         grad_transform=grad_transform,
         save_raw_grads=save_raw_grads,
         gradient_postfunc=gradient_postfunc,
-        train_mode=train_mode,
+        backward_ready=backward_ready,
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)
     recording = recorder.recording

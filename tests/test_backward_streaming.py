@@ -74,7 +74,7 @@ def _logged_backward_stream(
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     expected = (
-        {label: trace[label].grad.detach().clone() for label in trace.ops_with_saved_grads}
+        {label: trace[label].grad.detach().clone() for label in trace.saved_grad_ops.keys()}
         if keep_grads_in_memory
         else {}
     )
@@ -92,7 +92,7 @@ def test_log_backward_streams_grads_to_disk(tmp_path: Path) -> None:
     assert bundle_path.exists()
     assert trace.has_backward_pass
     assert any(entry.kind == "grad" for entry in manifest.tensors)
-    assert len(trace.ops_with_saved_grads) > 0
+    assert len(trace.saved_grad_ops) > 0
 
 
 @pytest.mark.smoke
@@ -147,7 +147,7 @@ def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
             layers_to_save="all",
             save_grads=True,
             save_grads_to=tmp_path / "bad.tl",
-            train_mode=True,
+            backward_ready=True,
         )
 
 
@@ -160,7 +160,7 @@ def test_keep_grads_in_memory_false(tmp_path: Path) -> None:
         bundle_path,
         keep_grads_in_memory=False,
     )
-    layer = trace[trace.ops_with_saved_grads[0]]
+    layer = trace[list(trace.saved_grad_ops.keys())[0]]
 
     assert layer.__dict__["grad"] is None
     assert layer.grad_ref is not None
