@@ -100,14 +100,18 @@ class SuperParam(Super["Param"], _TensorBearing):
         """
 
         if field == "grad":
-            value = getattr(member, "grad", None) if getattr(member, "has_grad", False) else None
+            value = (
+                getattr(member, "grad", None)
+                if getattr(member, "has_saved_gradient", False)
+                else None
+            )
             return value if isinstance(value, torch.Tensor) else None
         param = getattr(member, "_param_ref", None)
         return param.detach() if isinstance(param, torch.Tensor) else None
 
 
 class SuperGradFn(Super["GradFn"], _TensorBearing):
-    """Aligned view of a grad_fn label across bundle members."""
+    """Aligned view of a grad_fn_handle label across bundle members."""
 
     def _get_tensor(self, member: Any, field: _TENSOR_FIELD_LITERAL) -> torch.Tensor | None:
         """Return the linked forward op tensor field when available.
@@ -136,7 +140,7 @@ class SuperModuleCall(Super["ModuleCall"]):
 
 
 class SuperGradFnCall(Super["GradFnCall"]):
-    """Aligned view of a grad_fn call label across bundle members."""
+    """Aligned view of a grad_fn_handle call label across bundle members."""
 
 
 class SuperModuleAccessor(SuperAccessor["Module", SuperModule]):
@@ -300,7 +304,7 @@ class SuperGradFnAccessor(SuperAccessor["GradFn", SuperGradFn]):
     """Dict-like Bundle accessor returning SuperGradFn objects."""
 
     def __init__(self, bundle: Any) -> None:
-        """Initialize a grad_fn accessor for ``bundle``.
+        """Initialize a grad_fn_handle accessor for ``bundle``.
 
         Parameters
         ----------
@@ -318,7 +322,7 @@ class SuperGradFnAccessor(SuperAccessor["GradFn", SuperGradFn]):
         trace:
             Bundle member trace.
         label:
-            Candidate grad_fn label.
+            Candidate grad_fn_handle label.
 
         Returns
         -------
@@ -333,7 +337,7 @@ class SuperGradFnAccessor(SuperAccessor["GradFn", SuperGradFn]):
         return cast("GradFn", resolved) if type(resolved).__name__ == "GradFn" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:
-        """Return grad_fn labels from one member trace.
+        """Return grad_fn_handle labels from one member trace.
 
         Parameters
         ----------
@@ -458,8 +462,8 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCall", SuperGradFnCall]):
 
         return [
             str(call_label)
-            for grad_fn in trace.grad_fns
-            for call_label in getattr(grad_fn, "call_labels", [])
+            for grad_fn_handle in trace.grad_fns
+            for call_label in getattr(grad_fn_handle, "call_labels", [])
         ]
 
 

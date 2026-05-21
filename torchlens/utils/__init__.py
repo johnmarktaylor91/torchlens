@@ -627,7 +627,9 @@ def find_executable_save_set(
         entry = trace[layer]
         label = str(getattr(entry, "layer_label_no_pass", getattr(entry, "layer_label", layer)))
         memory = int(
-            getattr(entry, "transformed_out_memory", None) or getattr(entry, "memory", None) or 0
+            getattr(entry, "transformed_activation_memory", None)
+            or getattr(entry, "memory", None)
+            or 0
         )
         candidates.append((memory, label))
 

@@ -172,7 +172,7 @@ def cone_of_effect(trace: "Trace", origins: Iterable["Op"]) -> list["Op"]:
         for child_label in _child_labels(layer):
             if child_label not in visited:
                 frontier.append(child_label)
-        for child_label in getattr(layer, "output_versions_per_child", {}) or {}:
+        for child_label in getattr(layer, "out_versions_by_child", {}) or {}:
             if child_label not in visited:
                 frontier.append(child_label)
 
@@ -417,8 +417,8 @@ def _resolve_arg_component(
         _warn_if_unexpected_parent(pass_log, parent.layer_label, strict=strict)
         if parent.layer_label in overlay:
             return overlay[parent.layer_label]
-        if pass_log.layer_label in (getattr(parent, "output_versions_per_child", {}) or {}):
-            version = parent.output_versions_per_child[pass_log.layer_label]
+        if pass_log.layer_label in (getattr(parent, "out_versions_by_child", {}) or {}):
+            version = parent.out_versions_by_child[pass_log.layer_label]
             if isinstance(version, torch.Tensor):
                 return version
         if isinstance(parent.out, torch.Tensor):
@@ -558,7 +558,7 @@ def _commit_replay_updates(
                 "dtype": site.dtype,
                 "transformed_out_dtype": site.transformed_out_dtype,
                 "memory": site.memory,
-                "transformed_out_memory": site.transformed_out_memory,
+                "transformed_activation_memory": site.transformed_activation_memory,
                 "interventions": list(site.interventions),
             }
             _apply_out_update(site, tensor)
@@ -869,7 +869,7 @@ def _child_labels(site: "Op") -> tuple[str, ...]:
     """
 
     labels = list(getattr(site, "children", ()) or ())
-    labels.extend((getattr(site, "output_versions_per_child", {}) or {}).keys())
+    labels.extend((getattr(site, "out_versions_by_child", {}) or {}).keys())
     return tuple(dict.fromkeys(labels))
 
 

@@ -193,7 +193,7 @@ def _effective_policy(
         return FieldPolicy.DROP
     if field_name in {"grad", "transformed_grad"} and not options.include_grads:
         return FieldPolicy.DROP
-    if field_name in {"saved_args", "saved_kwargs", "output_versions_per_child"}:
+    if field_name in {"saved_args", "saved_kwargs", "out_versions_by_child"}:
         return FieldPolicy.BLOB_RECURSIVE if options.include_saved_args else FieldPolicy.DROP
     if field_name in {"forward_args", "forward_kwargs"}:
         return FieldPolicy.BLOB_RECURSIVE if options.include_saved_args else FieldPolicy.DROP
@@ -525,7 +525,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "transformed_grad"
     if field_name in {"saved_args", "saved_kwargs"}:
         return "captured_arg"
-    if field_name == "output_versions_per_child":
+    if field_name == "out_versions_by_child":
         return "child_version"
     if field_name == "func_rng_states":
         return "rng_state"

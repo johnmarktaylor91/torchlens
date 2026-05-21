@@ -266,8 +266,8 @@ class SiteTable:
                 "layer_label_w_pass": getattr(site, "layer_label_w_pass", None),
                 "layer_label_no_pass": getattr(site, "layer_label_no_pass", None),
                 "call_index": getattr(site, "call_index", None),
-                "compute_index": getattr(site, "compute_index", None),
-                "capture_index": getattr(site, "capture_index", None),
+                "step_index": getattr(site, "step_index", None),
+                "raw_index": getattr(site, "raw_index", None),
                 "func_name": getattr(site, "func_name", getattr(site, "name", None)),
                 "module": getattr(site, "module", None),
                 "modules": getattr(site, "modules", ()),
@@ -428,7 +428,7 @@ def _iter_sites(log: "Trace", direction: Literal["forward", "backward"]) -> Sequ
     Returns
     -------
     Sequence[Site]
-        Forward op sites or backward grad_fn sites.
+        Forward op sites or backward grad_fn_handle sites.
     """
 
     if direction == "forward":
@@ -504,7 +504,7 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "predicate":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
-    if kind in {"grad_fn", "intervening", "grad_fn_label"}:
+    if kind in {"grad_fn_handle", "intervening", "grad_fn_label"}:
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
 
     raise SiteResolutionError(f"Unsupported selector kind {kind!r}.")
@@ -601,12 +601,12 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
 
 
 def _resolve_grad_fn_kind(site: "GradFn", kind: str, value: Any) -> bool:
-    """Return whether one grad_fn site matches a backward-only selector.
+    """Return whether one grad_fn_handle site matches a backward-only selector.
 
     Parameters
     ----------
     site:
-        Candidate grad_fn log.
+        Candidate grad_fn_handle log.
     kind:
         Backward selector kind.
     value:
@@ -655,16 +655,16 @@ def _output_matches(site: Site, value: Any) -> bool:
 
     if isinstance(value, int):
         return getattr(site, "multi_output_index", None) == value
-    return getattr(site, "multi_output_role", None) == str(value)
+    return getattr(site, "multi_output_name", None) == str(value)
 
 
 def _grad_fn_type_matches(site: "GradFn", requested: str) -> bool:
-    """Return whether a grad_fn type matches user spelling flexibly.
+    """Return whether a grad_fn_handle type matches user spelling flexibly.
 
     Parameters
     ----------
     site:
-        Candidate grad_fn log.
+        Candidate grad_fn_handle log.
     requested:
         Requested type string.
 

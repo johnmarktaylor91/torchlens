@@ -301,7 +301,7 @@ def test_validation_arglocs_allow_same_parent_tensor_in_multiple_slots() -> None
     parent = SimpleNamespace(
         layer_label="input_1",
         out=torch.tensor([2.0]),
-        output_versions_per_child={},
+        out_versions_by_child={},
         func_name="input",
     )
     target = SimpleNamespace(
@@ -348,7 +348,7 @@ def test_rolled_forward_graph_supports_grad_arrows(tmp_path: Path) -> None:
     trace = tl.trace(
         _ResidualRecurrentModel(),
         torch.randn(2, 3, requires_grad=True),
-        grads_to_save="all",
+        gradients_to_save="all",
     )
     trace[trace.output_layers[0]].out.backward()
     dot = trace.draw(

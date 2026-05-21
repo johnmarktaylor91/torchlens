@@ -88,7 +88,7 @@ def test_save_new_outs_multiple_calls():
 
     # Still valid after 5 calls
     assert len(log.layer_list) > 0
-    assert log[log.output_layers[0]].has_saved_outs
+    assert log[log.output_layers[0]].has_saved_activation
     log.cleanup()
 
 
@@ -126,7 +126,7 @@ def test_save_new_outs_recurrent():
     assert log.is_recurrent
 
     log.save_new_outs(model, torch.randn(2, 5), random_seed=42)
-    assert log[log.output_layers[0]].has_saved_outs
+    assert log[log.output_layers[0]].has_saved_activation
     log.cleanup()
 
 
@@ -136,7 +136,7 @@ def test_save_new_outs_branching():
     log = trace_fn(model, torch.randn(2, 5), random_seed=42)
 
     log.save_new_outs(model, torch.randn(2, 5), random_seed=42)
-    assert log[log.output_layers[0]].has_saved_outs
+    assert log[log.output_layers[0]].has_saved_activation
     log.cleanup()
 
 
@@ -149,7 +149,7 @@ def test_save_new_outs_layers_to_save():
     first_label = log.layer_labels[0]
     log.save_new_outs(model, torch.randn(2, 5), random_seed=42, layers_to_save=[first_label])
 
-    assert log[first_label].has_saved_outs
+    assert log[first_label].has_saved_activation
     log.cleanup()
 
 
@@ -387,7 +387,7 @@ class TestFastPassBufferOrphan:
         log = trace_fn(model, torch.randn(2, 10), random_seed=42)
         # Should not raise KeyError on fast pass
         log.save_new_outs(model, torch.randn(2, 10), random_seed=42)
-        assert log[log.output_layers[0]].has_saved_outs
+        assert log[log.output_layers[0]].has_saved_activation
         log.cleanup()
 
     def test_shared_buffer_fast_path_3x(self):
@@ -395,7 +395,7 @@ class TestFastPassBufferOrphan:
         log = trace_fn(model, torch.randn(2, 10), random_seed=42)
         for _ in range(3):
             log.save_new_outs(model, torch.randn(2, 10), random_seed=42)
-        assert log[log.output_layers[0]].has_saved_outs
+        assert log[log.output_layers[0]].has_saved_activation
         log.cleanup()
 
 

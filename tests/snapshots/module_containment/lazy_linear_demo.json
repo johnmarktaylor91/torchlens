@@ -30,7 +30,7 @@
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
-      "trace_index": 0
+      "step_index": 0
     },
     {
       "in_submodule": true,
@@ -56,7 +56,7 @@
       "output_of_modules": [
         "0"
       ],
-      "trace_index": 1
+      "step_index": 1
     },
     {
       "in_submodule": true,
@@ -82,7 +82,7 @@
       "output_of_modules": [
         "1"
       ],
-      "trace_index": 2
+      "step_index": 2
     },
     {
       "in_submodule": false,
@@ -105,7 +105,7 @@
       "output_of_modules": [
         "1"
       ],
-      "trace_index": 3
+      "step_index": 3
     }
   ],
   "module_calls": [
@@ -237,7 +237,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "intervention_replaced": false,
-      "is_atomic_module_op": false,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -253,18 +253,18 @@
         "input_1:1"
       ],
       "module": null,
-      "module_entry_argnames": {
+      "module_entry_arg_keys": {
         "0:1": [
           0
         ]
       },
-      "module_ops_entered": [
+      "input_to_module_calls": [
         "0:1"
       ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
-      "trace_index": 0
+      "step_index": 0
     },
     {
       "atomic_module_call": "0:1",
@@ -272,7 +272,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "0.linear",
       "intervention_replaced": false,
-      "is_atomic_module_op": true,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -289,12 +289,12 @@
         "linear_1_1:1"
       ],
       "module": "0:1",
-      "module_entry_argnames": {
+      "module_entry_arg_keys": {
         "1:1": [
           0
         ]
       },
-      "module_ops_entered": [
+      "input_to_module_calls": [
         "1:1"
       ],
       "modules": [
@@ -306,7 +306,7 @@
       "output_of_modules": [
         "0"
       ],
-      "trace_index": 1
+      "step_index": 1
     },
     {
       "atomic_module_call": "1:1",
@@ -314,7 +314,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "1.relu",
       "intervention_replaced": false,
-      "is_atomic_module_op": true,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -331,8 +331,8 @@
         "relu_1_2:1"
       ],
       "module": "1:1",
-      "module_entry_argnames": {},
-      "module_ops_entered": [],
+      "module_entry_arg_keys": {},
+      "input_to_module_calls": [],
       "modules": [
         "1:1"
       ],
@@ -342,7 +342,7 @@
       "output_of_modules": [
         "1"
       ],
-      "trace_index": 2
+      "step_index": 2
     },
     {
       "atomic_module_call": "1:1",
@@ -350,7 +350,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "intervention_replaced": false,
-      "is_atomic_module_op": false,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -368,8 +368,8 @@
         "output_1:1"
       ],
       "module": null,
-      "module_entry_argnames": {},
-      "module_ops_entered": [],
+      "module_entry_arg_keys": {},
+      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [
         "1:1"
@@ -377,7 +377,7 @@
       "output_of_modules": [
         "1"
       ],
-      "trace_index": 3
+      "step_index": 3
     }
   ],
   "trace_summary": {

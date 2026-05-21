@@ -62,7 +62,7 @@ def save_new_outs(
     input_args: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] = "all",
-    grads_to_save: str | list[Any] | None = "all",
+    gradients_to_save: str | list[Any] | None = "all",
     random_seed: int | None = None,
     backward_ready: bool | None = None,
 ) -> None:
@@ -83,7 +83,7 @@ def save_new_outs(
         input_args: Either a single tensor input to the model, or list of input arguments.
         input_kwargs: Dict of keyword arguments to the model.
         layers_to_save: List of layers to save, using any valid lookup keys.
-        grads_to_save: List of layers whose grads should be saved.
+        gradients_to_save: List of layers whose grads should be saved.
         random_seed: Which random seed to use for deterministic reproduction.
         backward_ready: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
@@ -110,7 +110,7 @@ def save_new_outs(
                 input_args=input_args,
                 input_kwargs=input_kwargs,
                 layers_to_save=layers_to_save,
-                grads_to_save=grads_to_save,
+                gradients_to_save=gradients_to_save,
                 random_seed=random_seed,
                 backward_ready=None,
             )
@@ -131,24 +131,24 @@ def save_new_outs(
         layer_log_entry._internal_set("transformed_out", None)
         layer_log_entry.transformed_out_shape = None
         layer_log_entry.transformed_out_dtype = None
-        layer_log_entry.transformed_out_memory = None
-        layer_log_entry.has_saved_outs = False
-        layer_log_entry.has_grad = False
+        layer_log_entry.transformed_activation_memory = None
+        layer_log_entry.has_saved_activation = False
+        layer_log_entry.has_saved_gradient = False
         layer_log_entry._internal_set("grad", None)
         layer_log_entry._internal_set("transformed_grad", None)
         layer_log_entry.transformed_grad_shape = None
         layer_log_entry.transformed_grad_dtype = None
-        layer_log_entry.transformed_grad_memory = None
-        layer_log_entry.has_output_variations = False
-        # Note: output_versions_per_child is cleared and NOT rebuilt in fast pass.
+        layer_log_entry.transformed_gradient_memory = None
+        layer_log_entry.has_out_variations = False
+        # Note: out_versions_by_child is cleared and NOT rebuilt in fast pass.
         # This is a known limitation (#93): validation should not be run after
         # save_new_outs since child tensor variations aren't recaptured.
-        layer_log_entry.output_versions_per_child = {}
+        layer_log_entry.out_versions_by_child = {}
 
     # Reset per-pass bookkeeping fields.  Graph-level totals (total_activation_memory,
     # num_tensors) are NOT reset — they describe the static graph structure.
     self._saved_grads_set = set()
-    self.has_grads = False
+    self.has_gradients = False
     self.unlogged_ops = []
     self.num_saved_ops = 0
     self.saved_activation_memory = 0
@@ -172,7 +172,7 @@ def save_new_outs(
     # Now run and log the new inputs.
     _vprint(self, "Running fast pass (saving requested outs)")
     self._run_and_log_inputs_through_model(
-        model, input_args, input_kwargs, layers_to_save, grads_to_save, random_seed
+        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed
     )
 
 
@@ -197,7 +197,7 @@ def _get_input_arg_names(model: nn.Module, input_args: list[Any]) -> list[str]:
 def _get_op_nums_from_user_labels(
     self: "Trace", which_layers: str | list[str | int] | None
 ) -> list[int] | str:
-    """Resolve user-provided layer identifiers to internal capture_index values.
+    """Resolve user-provided layer identifiers to internal raw_index values.
 
     Supports exact key match, substring match across all lookup keys, and the
     special sentinel ``"all"`` (which ops through as-is).  Returns sorted
@@ -213,7 +213,7 @@ def _get_op_nums_from_user_labels(
     if isinstance(which_layers, BaseSelector):
         return sorted(
             {
-                site.capture_index
+                site.raw_index
                 for site in self.resolve_sites(
                     which_layers,
                     strict=False,
@@ -228,7 +228,7 @@ def _get_op_nums_from_user_labels(
     for layer_key in which_layers:
         if isinstance(layer_key, BaseSelector):
             raw_layer_nums_to_save.update(
-                site.capture_index
+                site.raw_index
                 for site in self.resolve_sites(
                     layer_key,
                     strict=False,
@@ -243,7 +243,7 @@ def _get_op_nums_from_user_labels(
         keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
-                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].capture_index)
+                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].raw_index)
             continue
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
@@ -470,7 +470,7 @@ def run_and_log_inputs_through_model(
     input_args: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[str | int] | None = "all",
-    grads_to_save: str | list[str | int] | None = "all",
+    gradients_to_save: str | list[str | int] | None = "all",
     random_seed: int | None = None,
     postprocess: bool = True,
 ) -> Any:
@@ -503,7 +503,7 @@ def run_and_log_inputs_through_model(
         self._grad_layer_nums_to_save = []
     else:
         self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
-        self._grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grads_to_save)
+        self._grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, gradients_to_save)
 
     # In fast mode, output layers' out are derived from their parents
     # (see postprocess_fast).  If the user requested a subset of layers, we must
@@ -515,7 +515,7 @@ def run_and_log_inputs_through_model(
             output_entry = self[output_label]
             for parent_label in output_entry.parents:
                 parent_entry = self[parent_label]
-                output_parent_nums.add(parent_entry.capture_index)
+                output_parent_nums.add(parent_entry.raw_index)
         if output_parent_nums:
             combined = set(layer_nums_to_save) | output_parent_nums
             self._layer_nums_to_save = sorted(combined)
@@ -609,7 +609,7 @@ def run_and_log_inputs_through_model(
                     op_counts=state.op_counts,
                     pass_index=state.pass_index,
                     event_index=state.event_index,
-                    compute_index=None,
+                    step_index=None,
                     time_since_pass_start=time.time() - self.capture_start_time,
                     include_source_events=state.options.include_source_events,
                     sample_id=state.sample_id,
@@ -651,7 +651,7 @@ def run_and_log_inputs_through_model(
                         op_counts=state.op_counts,
                         pass_index=state.pass_index,
                         event_index=state.event_index,
-                        compute_index=None,
+                        step_index=None,
                         time_since_pass_start=time.time() - self.capture_start_time,
                         include_source_events=state.options.include_source_events,
                         sample_id=state.sample_id,

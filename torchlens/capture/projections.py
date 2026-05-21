@@ -55,7 +55,7 @@ class _GradFnContextMap:
         self._strong: dict[Any, RecordContext] = {}
 
     def __setitem__(self, key: Any, value: RecordContext) -> None:
-        """Store a context by grad_fn object."""
+        """Store a context by grad_fn_handle object."""
 
         try:
             self._weak[key] = value
@@ -63,7 +63,7 @@ class _GradFnContextMap:
             self._strong[key] = value
 
     def get(self, key: Any, default: RecordContext | None = None) -> RecordContext | None:
-        """Return the context for a grad_fn object, if present."""
+        """Return the context for a grad_fn_handle object, if present."""
 
         try:
             value = self._weak.get(key)
@@ -145,7 +145,7 @@ def _empty_recording(options: "RecordingOptions") -> Recording:
             repr(options.out_transform) if options.out_transform is not None else None
         ),
         _grad_transform_repr=(
-            repr(options.grad_transform) if options.grad_transform is not None else None
+            repr(options.gradient_transform) if options.gradient_transform is not None else None
         ),
     )
 
@@ -165,7 +165,7 @@ class RecordingState:
     sample_id: str | int | None = None
     pass_index: int = 0
     event_index: int = 0
-    compute_index: int = 0
+    step_index: int = 0
     no_tensor_capture: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
     storage_intent: StorageIntent = field(init=False)
@@ -362,7 +362,7 @@ def _build_record_context(
     op_counts: Mapping[str, int] | None = None,
     pass_index: int = 0,
     event_index: int = 0,
-    compute_index: int | None = None,
+    step_index: int | None = None,
     time_since_pass_start: float = 0.0,
     include_source_events: bool = False,
     sample_id: str | int | None = None,
@@ -402,10 +402,10 @@ def _build_record_context(
         raw_label=raw_label,
         pass_index=pass_index,
         event_index=event_index,
-        compute_index=compute_index,
+        step_index=step_index,
         layer_type=layer_type,
         type_index=type_index,
-        capture_index=_read_field(data, "capture_index"),
+        raw_index=_read_field(data, "raw_index"),
         func_name=_read_field(data, "func_name"),
         address=_read_field(data, "address"),
         module_type=_read_field(data, "module_type"),
@@ -455,7 +455,7 @@ def _record_context_from_event(event: OpEvent) -> RecordContext:
             "label": event.label_raw,
             "raw_label": event.label_raw,
             "_label_raw": event.label_raw,
-            "capture_index": event.capture_index,
+            "raw_index": event.raw_index,
             "type": event.layer_type,
             "type_index": event.type_index,
             "func_name": event.function.func_name,
@@ -467,8 +467,8 @@ def _record_context_from_event(event: OpEvent) -> RecordContext:
             "output_index": event.output.multi_output_index,
             "is_bottom_level_func": event.is_bottom_level,
         },
-        event_index=event.capture_index,
-        compute_index=event.compute_index,
+        event_index=event.raw_index,
+        step_index=event.step_index,
     )
 
 
@@ -513,9 +513,9 @@ def _event_from_record(
         label_raw=label_raw,
         layer_label_raw=label_raw,
         layer_type=ctx.layer_type or ctx.kind,
-        capture_index=ctx.capture_index or ctx.event_index,
+        raw_index=ctx.raw_index or ctx.event_index,
         type_index=ctx.type_index or 0,
-        compute_index=ctx.compute_index or 0,
+        step_index=ctx.step_index or 0,
         source_trace_id=None,
         tracing_finished=False,
         construction_done=True,
@@ -543,13 +543,13 @@ def _event_from_record(
         output=OutputRef(
             tensor=tensor_ref,
             transformed_tensor=transformed_ref,
-            has_saved_outs=bool(spec.save_out and (ram_payload is not None)),
+            has_saved_activation=bool(spec.save_out and (ram_payload is not None)),
             output_device=str(ctx.tensor_device) if ctx.tensor_device is not None else None,
             out_postfunc=None,
             detach_saved_activations=not spec.keep_grad,
             visualizer_path=None,
             multi_output_index=ctx.output_index,
-            is_part_of_iterable_output=False,
+            in_multi_output=False,
             container_path=(),
             container_spec=None,
             child_versions=(),
@@ -568,7 +568,7 @@ def _event_from_record(
         params=(),
         module_stack=_module_frames_from_record_context(ctx),
         backend_semantics=BackendSemantics(
-            grad_fn_id=None,
+            grad_fn_object_id=None,
             grad_fn_class_name=None,
             autograd_memory=0,
             num_autograd_tensors=0,

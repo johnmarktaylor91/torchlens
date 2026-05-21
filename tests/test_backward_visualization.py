@@ -1,4 +1,4 @@
-"""Smoke tests for backward grad_fn visualization."""
+"""Smoke tests for backward grad_fn_handle visualization."""
 
 from pathlib import Path
 
@@ -75,7 +75,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Model log after backward capture.
     """
 
-    trace = tl.trace(model, x, grads_to_save="all")
+    trace = tl.trace(model, x, gradients_to_save="all")
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
@@ -99,7 +99,7 @@ def test_draw_backward_renders(tmp_path: Path) -> None:
 
 @pytest.mark.smoke
 def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
-    """Backward DOT contains expected grad_fn labels."""
+    """Backward DOT contains expected grad_fn_handle labels."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw_backward(
@@ -178,7 +178,7 @@ def test_draw_backward_errors_without_log_backward() -> None:
     trace = tl.trace(
         _LinearReluModel(),
         torch.randn(2, 3, requires_grad=True),
-        grads_to_save="all",
+        gradients_to_save="all",
     )
 
     with pytest.raises(ValueError, match="call log_backward\\(loss\\) first"):

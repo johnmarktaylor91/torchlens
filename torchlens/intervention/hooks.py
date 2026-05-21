@@ -64,7 +64,7 @@ class HookContext:
         Per resolved ``(site, hook instance)`` scratch dictionary.
     run_ctx:
         Mutable dictionary shared across all hooks in a run.
-    trace_index:
+    step_index:
         Trace index for bundle operations.
     trace_name:
         Trace name for bundle operations.
@@ -80,7 +80,7 @@ class HookContext:
     layer_log: Mapping[str, Any]
     ctx: dict[str, Any]
     run_ctx: dict[str, Any]
-    trace_index: int
+    step_index: int
     trace_name: str
     args: tuple[Any, ...]
     kwargs: Mapping[str, Any]
@@ -104,7 +104,7 @@ def make_hook_context(
     layer_log: Any | None = None,
     ctx: dict[str, Any] | None = None,
     run_ctx: dict[str, Any] | None = None,
-    trace_index: int = 0,
+    step_index: int = 0,
     trace_name: str = "",
     args: Sequence[Any] = (),
     kwargs: Mapping[str, Any] | None = None,
@@ -125,7 +125,7 @@ def make_hook_context(
         Per-hook scratch dictionary. A new dictionary is created when omitted.
     run_ctx:
         Shared run dictionary. A new dictionary is created when omitted.
-    trace_index:
+    step_index:
         Trace index.
     trace_name:
         Trace name.
@@ -147,7 +147,7 @@ def make_hook_context(
         layer_log=MappingProxyType(_snapshot_layer_log(layer_log)),
         ctx={} if ctx is None else ctx,
         run_ctx={} if run_ctx is None else run_ctx,
-        trace_index=trace_index,
+        step_index=step_index,
         trace_name=trace_name,
         args=tuple(args),
         kwargs=MappingProxyType(dict(kwargs or {})),
@@ -572,16 +572,16 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
 
 def live_backward_selector_matches(
     selector_like: Any,
-    grad_fn_log: Any,
+    grad_fn_handle: Any,
     call_index: int,
 ) -> bool:
-    """Return whether a selector can match one grad_fn callback site.
+    """Return whether a selector can match one grad_fn_handle callback site.
 
     Parameters
     ----------
     selector_like:
         Selector or target spec from a normalized hook entry.
-    grad_fn_log:
+    grad_fn_handle:
         GradFn receiving a backward hook callback.
     call_index:
         One-based callback index.
@@ -596,7 +596,7 @@ def live_backward_selector_matches(
     from .resolver import _resolve_unchecked
 
     selector = _normalize_live_selector(selector_like)
-    return bool(_resolve_unchecked((grad_fn_log,), selector, strict=False))
+    return bool(_resolve_unchecked((grad_fn_handle,), selector, strict=False))
 
 
 def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> None:
@@ -624,11 +624,11 @@ def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> 
     selector_direction = _selector_resolution_direction(site_target)
     if mount_shape == "tuple" and selector_direction != "backward":
         raise HelperMountError(
-            f"{helper_spec.name} is a grad_fn helper and must be mounted on a backward selector."
+            f"{helper_spec.name} is a grad_fn_handle helper and must be mounted on a backward selector."
         )
     if mount_shape == "tensor" and selector_direction == "backward":
         raise HelperMountError(
-            f"{helper_spec.name} is a tensor-gradient helper and cannot mount on grad_fn sites."
+            f"{helper_spec.name} is a tensor-gradient helper and cannot mount on grad_fn_handle sites."
         )
     if helper_metadata.get("requires_grad_output") and selector_direction == "backward":
         raise HelperMountError(
@@ -787,7 +787,7 @@ def _live_output_matches(site: Any, value: Any) -> bool:
 
     if isinstance(value, int):
         return getattr(site, "multi_output_index", None) == value
-    return getattr(site, "multi_output_role", None) == str(value)
+    return getattr(site, "multi_output_name", None) == str(value)
 
 
 def _module_label_matches(module_pass: str, address: str) -> bool:
@@ -890,7 +890,7 @@ def make_live_site_proxy(
         layer_label=_layer_label_raw,
         _layer_label_raw=_layer_label_raw,
         _label_raw=_layer_label_raw,
-        capture_index=fields.get("capture_index"),
+        raw_index=fields.get("raw_index"),
         layer_type=layer_type,
         func_name=func_name,
         func_call_id=func_call_id,
@@ -1065,7 +1065,7 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
         noun = "grad" if direction == "backward" else "out"
         raise HookSignatureError(f"hook must accept a first positional {noun} argument")
     if direction == "backward" and (
-        {"grad_output", "grad_fn_log", "call_index", "run_ctx"} & set(signature.parameters)
+        {"grad_output", "grad_fn_handle", "call_index", "run_ctx"} & set(signature.parameters)
     ):
         return
     if hook_param is None and not has_var_keyword:

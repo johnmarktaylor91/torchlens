@@ -221,7 +221,7 @@ def test_lstm_three_outputs_distinct_layers() -> None:
     assert lstm.num_calls == 1
     assert len(lstm.outputs) == 3
     assert len({output.layer_label for output in lstm.outputs}) == 3
-    assert [output.multi_output_role for output in lstm.outputs] == ["output", "h_n", "c_n"]
+    assert [output.multi_output_name for output in lstm.outputs] == ["output", "h_n", "c_n"]
 
 
 def test_lstm_module_call_outputs_and_structure() -> None:
@@ -252,7 +252,7 @@ def test_gru_two_outputs_distinct_equivalence_classes() -> None:
     outputs = trace.modules["gru"].outputs
     assert len(outputs) == 2
     assert len({output.equivalence_class for output in outputs}) == 2
-    assert [output.multi_output_role for output in outputs] == ["output", "h_n"]
+    assert [output.multi_output_name for output in outputs] == ["output", "h_n"]
 
 
 def test_bilstm_outputs_preserve_single_call_structure() -> None:
@@ -272,7 +272,7 @@ def test_mha_attention_outputs_are_selectable() -> None:
     x = [torch.randn(7, 4, 16), torch.randn(7, 4, 16), torch.randn(7, 4, 16)]
     trace = tl.trace(MHAModel(), x)
     outputs = trace.modules["mha"].outputs
-    assert [output.multi_output_role for output in outputs] == [
+    assert [output.multi_output_name for output in outputs] == [
         "attn_output",
         "attn_output_weights",
     ]
@@ -285,7 +285,7 @@ def test_dict_module_outputs_keyed_by_dict_keys() -> None:
 
     trace = tl.trace(DictWrapper(), torch.randn(3, 4))
     inner = trace.modules["inner"]
-    assert [output.multi_output_role for output in inner.outputs] == ["logits", "hidden"]
+    assert [output.multi_output_name for output in inner.outputs] == ["logits", "hidden"]
     assert inner.output_structure is not None
     assert inner.output_structure.kind == "dict"
     assert inner.output_structure.keys == ("logits", "hidden")
@@ -313,7 +313,7 @@ def test_save_load_preserves_module_outputs(tmp_path: Any) -> None:
     loaded = tl.load(path)
     lstm = loaded.modules["lstm"]
     assert len(lstm.outputs) == 3
-    assert [output.multi_output_role for output in lstm.outputs] == ["output", "h_n", "c_n"]
+    assert [output.multi_output_name for output in lstm.outputs] == ["output", "h_n", "c_n"]
     assert lstm.output_structure is not None
     assert [tuple(out.shape) for out in lstm.outs] == [(7, 4, 10), (1, 4, 10), (1, 4, 10)]
 

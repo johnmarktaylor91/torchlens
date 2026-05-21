@@ -411,7 +411,7 @@ def _metric_value_from_log(log: Any, metric_name: str) -> Any:
         matches = [
             layer
             for layer in log.layer_list
-            if metric_name in str(layer.layer_label) and layer.has_saved_outs
+            if metric_name in str(layer.layer_label) and layer.has_saved_activation
         ]
         if not matches:
             raise KeyError(f"No saved out matched metric {metric_name!r}.")
@@ -429,7 +429,7 @@ def _metric_grad_from_log(log: Any, metric_name: str) -> Any:
         matches = [
             layer
             for layer in log.layer_list
-            if metric_name in str(layer.layer_label) and layer.has_grad
+            if metric_name in str(layer.layer_label) and layer.has_saved_gradient
         ]
         if not matches:
             raise KeyError(f"No saved grad matched metric {metric_name!r}.")
@@ -496,7 +496,7 @@ def aggregate(
             model,
             model_input,
             layers_to_save=capture_layers,
-            grads_to_save=capture_layers if target == "grad" else None,
+            gradients_to_save=capture_layers if target == "grad" else None,
         )
         try:
             if target == "grad":

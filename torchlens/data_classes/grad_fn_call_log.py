@@ -1,4 +1,4 @@
-"""Per-pass runtime data for autograd grad_fn nodes."""
+"""Per-pass runtime data for autograd grad_fn_handle nodes."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from ..constants import GRAD_FN_PASS_LOG_FIELD_ORDER
 
 @dataclass
 class GradFnCall:
-    """Runtime data for one execution of an autograd ``grad_fn`` node."""
+    """Runtime data for one execution of an autograd ``grad_fn_handle`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "call_index": FieldPolicy.KEEP,

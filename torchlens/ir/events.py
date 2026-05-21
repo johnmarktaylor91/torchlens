@@ -44,13 +44,13 @@ class OutputRef:
 
     tensor: TensorRef
     transformed_tensor: TensorRef | None
-    has_saved_outs: bool
+    has_saved_activation: bool
     output_device: str | None
     out_postfunc: object | None
     detach_saved_activations: bool
     visualizer_path: str | None
     multi_output_index: int | None
-    is_part_of_iterable_output: bool
+    in_multi_output: bool
     container_path: tuple[object, ...]
     container_spec: ContainerSpec | None
     child_versions: tuple[tuple[str, TensorRef], ...]
@@ -155,9 +155,9 @@ class OpEvent:
     label_raw: str
     layer_label_raw: str
     layer_type: str
-    capture_index: int
+    raw_index: int
     type_index: int
-    compute_index: int
+    step_index: int
     source_trace_id: str | None
     tracing_finished: bool
     construction_done: bool

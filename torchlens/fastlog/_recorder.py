@@ -153,8 +153,8 @@ class Recorder:
         save_raw_outs: bool | MissingType = MISSING,
         keep_grad: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
-        grad_transform: GradientPostfunc | None | MissingType = MISSING,
-        save_raw_grads: bool | MissingType = MISSING,
+        gradient_transform: GradientPostfunc | None | MissingType = MISSING,
+        save_raw_gradients: bool | MissingType = MISSING,
         backward_ready: bool = False,
         out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
         gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
@@ -218,8 +218,8 @@ class Recorder:
             save_raw_outs=save_raw_outs,
             keep_grad=keep_grad,
             default_grad=default_grad,
-            grad_transform=grad_transform,
-            save_raw_grads=save_raw_grads,
+            gradient_transform=gradient_transform,
+            save_raw_gradients=save_raw_gradients,
             gradient_postfunc=gradient_postfunc,
         )
         validate_recording_options(self.options)
@@ -326,7 +326,7 @@ class Recorder:
                     input_args,
                     input_kwargs,
                     layers_to_save=[],
-                    grads_to_save=[],
+                    gradients_to_save=[],
                     random_seed=self.options.random_seed,
                     postprocess=False,
                 )
@@ -371,7 +371,7 @@ class Recorder:
         self._state.sample_id = sample_id
         self._state.pass_index = self._next_pass_index
         self._state.event_index = 0
-        self._state.compute_index = 0
+        self._state.step_index = 0
 
     def log_backward(
         self,

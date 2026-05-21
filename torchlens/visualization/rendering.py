@@ -167,7 +167,7 @@ class BoundaryNode:
     is_buffer: bool = False
     has_input_ancestor: bool = True
     is_final_output: bool = False
-    is_atomic_module_op: bool = False
+    is_atomic_module: bool = False
     output_of_modules: list[str] = field(default_factory=list)
     is_input: bool = False
     is_output: bool = False
@@ -179,7 +179,7 @@ class BoundaryNode:
     num_calls: int = 1
     call_index: int = 1
     type_index: int = 1
-    trace_index: int = 1
+    step_index: int = 1
     shape: tuple[Any, ...] = ()
     memory_str: str = "0 B"
     io_role: str = ""
@@ -209,7 +209,7 @@ PARAMS_NODE_BG_COLOR = "#E6E6E6"  # Generic param (no Param available)
 TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"  # Light gray for trainable params
 FROZEN_PARAMS_BG_COLOR = "#B0B0B0"  # Darker gray for frozen params
 GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
-BACKWARD_NODE_COLOR = "#F2F3FF"  # Very light blue/purple for backward grad_fn nodes
+BACKWARD_NODE_COLOR = "#F2F3FF"  # Very light blue/purple for backward grad_fn_handle nodes
 BACKWARD_NODE_BORDER_COLOR = GRADIENT_ARROW_COLOR
 DEFAULT_BG_COLOR = "white"
 BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
@@ -890,7 +890,7 @@ def render_backward_graph(
     direction: VisDirectionLiteral = "topdown",
     code_panel: CodePanelOption = False,
 ) -> str:
-    """Render the captured backward grad_fn DAG as a Graphviz graph.
+    """Render the captured backward grad_fn_handle DAG as a Graphviz graph.
 
     Intervening grad_fns use a ``[i]`` label prefix. Custom autograd grad_fns
     use a ``[custom]`` label suffix so the two cues compose on the same node.
@@ -904,13 +904,13 @@ def render_backward_graph(
     vis_graph_overrides:
         Graphviz graph-level overrides.
     node_spec_fn:
-        Optional callback receiving ``(grad_fn_log, default_spec)``.
+        Optional callback receiving ``(grad_fn_handle, default_spec)``.
     collapsed_node_spec_fn:
         Accepted for API symmetry with forward visualization. Not applied
         because backward graphs do not render collapsed module nodes.
     vis_node_mode:
         Accepted for API symmetry with forward visualization. Not applied to
-        grad_fn nodes.
+        grad_fn_handle nodes.
     vis_edge_overrides:
         Graphviz edge-level overrides.
     vis_save_only:
@@ -955,12 +955,12 @@ def render_backward_graph(
 
     graph_caption = (
         f"<<B>{self.model_class_name} backward graph</B><br align='left'/>"
-        f"{self.num_grad_fns} grad_fn nodes"
+        f"{self.num_grad_fns} grad_fn_handle nodes"
         f"<br align='left'/>{self.backward_num_calls} backward pass(es)<br align='left'/>>"
     )
     dot = graphviz.Digraph(
         name=f"{self.model_class_name}_backward",
-        comment="Backward grad_fn graph",
+        comment="Backward grad_fn_handle graph",
         format=vis_fileformat,
     )
     graph_args = {
@@ -988,13 +988,13 @@ def render_backward_graph(
     dot.node_attr.update({"ordering": "out"})
     dot.edge_attr.update(edge_args)
 
-    for grad_fn in self.grad_fns:
-        _add_backward_node_to_graphviz(grad_fn, dot, node_spec_fn)
+    for grad_fn_handle in self.grad_fns:
+        _add_backward_node_to_graphviz(grad_fn_handle, dot, node_spec_fn)
 
     visible_ids = set(self.grad_fn_logs)
-    for grad_fn in self.grad_fns:
-        tail_name = _backward_dot_node_name(grad_fn)
-        for next_grad_fn_id in grad_fn.next_grad_fn_ids:
+    for grad_fn_handle in self.grad_fns:
+        tail_name = _backward_dot_node_name(grad_fn_handle)
+        for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
             if next_grad_fn_id not in visible_ids:
                 continue
             head_name = _backward_dot_node_name(self.grad_fn_logs[next_grad_fn_id])
@@ -1032,7 +1032,7 @@ def render_backward_graph(
     except subprocess.TimeoutExpired:
         warnings.warn(
             f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for backward graph with "
-            f"{self.num_grad_fns} grad_fn nodes. DOT source saved to '{source_path}'."
+            f"{self.num_grad_fns} grad_fn_handle nodes. DOT source saved to '{source_path}'."
         )
     except subprocess.CalledProcessError as e:
         warnings.warn(f"Graphviz render failed: {e.stderr.decode()}")
@@ -1071,7 +1071,7 @@ def render_combined_graph(
     node_spec_fn:
         Optional callback receiving ``(layer_log, default_spec)`` for forward nodes.
     backward_node_spec_fn:
-        Optional callback receiving ``(grad_fn_log, default_spec)`` for backward nodes.
+        Optional callback receiving ``(grad_fn_handle, default_spec)`` for backward nodes.
     vis_edge_overrides:
         Graphviz edge-level overrides applied to forward edges.
     vis_save_only:
@@ -1124,7 +1124,7 @@ def render_combined_graph(
 
     graph_caption = (
         f"<<B>{self.model_class_name} combined forward/backward graph</B><br align='left'/>"
-        f"{self.num_tensors} forward nodes, {self.num_grad_fns} grad_fn nodes"
+        f"{self.num_tensors} forward nodes, {self.num_grad_fns} grad_fn_handle nodes"
         f"<br align='left'/>{self.backward_num_calls} backward pass(es)<br align='left'/>>"
     )
     dot = graphviz.Digraph(
@@ -1211,12 +1211,12 @@ def render_combined_graph(
     return cast(str, dot.source)
 
 
-def _backward_dot_node_name(grad_fn: "GradFn") -> str:
-    """Return a DOT-safe node name for a grad_fn log.
+def _backward_dot_node_name(grad_fn_handle: "GradFn") -> str:
+    """Return a DOT-safe node name for a grad_fn_handle log.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         GradFn to name.
 
     Returns
@@ -1225,42 +1225,42 @@ def _backward_dot_node_name(grad_fn: "GradFn") -> str:
         DOT-safe node identifier.
     """
 
-    return f"grad_fn_{grad_fn.grad_fn_id}"
+    return f"grad_fn_{grad_fn_handle.grad_fn_object_id}"
 
 
 def _add_backward_node_to_graphviz(
-    grad_fn: "GradFn",
+    grad_fn_handle: "GradFn",
     graphviz_graph: graphviz.Digraph,
     node_spec_fn: BackwardNodeSpecFn | None,
 ) -> None:
-    """Add one backward grad_fn node to a Graphviz graph.
+    """Add one backward grad_fn_handle node to a Graphviz graph.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         GradFn to render.
     graphviz_graph:
         Graphviz Digraph object.
     node_spec_fn:
-        Optional callback receiving ``(grad_fn, default_spec)``.
+        Optional callback receiving ``(grad_fn_handle, default_spec)``.
     """
 
-    node_args = _backward_node_graphviz_args(grad_fn, node_spec_fn)
+    node_args = _backward_node_graphviz_args(grad_fn_handle, node_spec_fn)
     graphviz_graph.node(**node_args)
 
 
 def _backward_node_graphviz_args(
-    grad_fn: "GradFn",
+    grad_fn_handle: "GradFn",
     node_spec_fn: BackwardNodeSpecFn | None,
 ) -> dict[str, Any]:
-    """Build Graphviz node arguments for one backward grad_fn.
+    """Build Graphviz node arguments for one backward grad_fn_handle.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         GradFn to render.
     node_spec_fn:
-        Optional callback receiving ``(grad_fn, default_spec)``.
+        Optional callback receiving ``(grad_fn_handle, default_spec)``.
 
     Returns
     -------
@@ -1269,7 +1269,7 @@ def _backward_node_graphviz_args(
     """
 
     default_spec = NodeSpec(
-        lines=_compute_backward_node_lines(grad_fn),
+        lines=_compute_backward_node_lines(grad_fn_handle),
         shape="oval",
         fillcolor=BACKWARD_NODE_COLOR,
         fontcolor="black",
@@ -1279,12 +1279,12 @@ def _backward_node_graphviz_args(
         extra_attrs={"ordering": "out"},
     )
     if node_spec_fn is not None:
-        result = node_spec_fn(grad_fn, default_spec)
+        result = node_spec_fn(grad_fn_handle, default_spec)
         spec = default_spec if result is None else result
     else:
         spec = default_spec
     node_args = _node_spec_to_graphviz_args(spec)
-    node_args["name"] = _backward_dot_node_name(grad_fn)
+    node_args["name"] = _backward_dot_node_name(grad_fn_handle)
     return node_args
 
 
@@ -1300,7 +1300,7 @@ def _add_combined_backward_nodes(
     Parameters
     ----------
     trace:
-        Trace containing grad_fn metadata.
+        Trace containing grad_fn_handle metadata.
     module_cluster_dict:
         Shared module cluster accumulator.
     graphviz_graph:
@@ -1311,9 +1311,9 @@ def _add_combined_backward_nodes(
         Placement mode for intervening grad_fns.
     """
 
-    for grad_fn in trace.grad_fns:
-        node_args = _backward_node_graphviz_args(grad_fn, node_spec_fn)
-        module_key = _module_key_for_grad_fn(trace, grad_fn, intervening_cluster)
+    for grad_fn_handle in trace.grad_fns:
+        node_args = _backward_node_graphviz_args(grad_fn_handle, node_spec_fn)
+        module_key = _module_key_for_grad_fn(trace, grad_fn_handle, intervening_cluster)
         if module_key is None:
             graphviz_graph.node(**node_args)
             continue
@@ -1322,21 +1322,21 @@ def _add_combined_backward_nodes(
 
 
 def _add_combined_backward_edges(trace: "Trace", graphviz_graph: graphviz.Digraph) -> None:
-    """Add backward grad_fn edges to a combined graph.
+    """Add backward grad_fn_handle edges to a combined graph.
 
     Parameters
     ----------
     trace:
-        Trace containing grad_fn metadata.
+        Trace containing grad_fn_handle metadata.
     graphviz_graph:
         Graphviz graph being rendered.
     """
 
     edge_args = {"color": GRADIENT_ARROW_COLOR, "fontcolor": GRADIENT_ARROW_COLOR}
     visible_ids = set(trace.grad_fn_logs)
-    for grad_fn in trace.grad_fns:
-        tail_name = _backward_dot_node_name(grad_fn)
-        for next_grad_fn_id in grad_fn.next_grad_fn_ids:
+    for grad_fn_handle in trace.grad_fns:
+        tail_name = _backward_dot_node_name(grad_fn_handle)
+        for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
             if next_grad_fn_id not in visible_ids:
                 continue
             head_name = _backward_dot_node_name(trace.grad_fn_logs[next_grad_fn_id])
@@ -1353,15 +1353,15 @@ def _add_combined_correspondence_edges(
     Parameters
     ----------
     trace:
-        Trace containing paired forward and grad_fn metadata.
+        Trace containing paired forward and grad_fn_handle metadata.
     graphviz_graph:
         Graphviz graph being rendered.
     intervening_cluster:
         Placement mode used to infer optional cluster boundary attributes.
     """
 
-    for grad_fn in trace.grad_fns:
-        if grad_fn.op is None:
+    for grad_fn_handle in trace.grad_fns:
+        if grad_fn_handle.op is None:
             continue
         edge_attrs = {
             "color": GRADIENT_ARROW_COLOR,
@@ -1370,14 +1370,14 @@ def _add_combined_correspondence_edges(
             "constraint": "false",
             "arrowsize": ".6",
         }
-        module_key = _module_key_for_grad_fn(trace, grad_fn, intervening_cluster)
+        module_key = _module_key_for_grad_fn(trace, grad_fn_handle, intervening_cluster)
         if module_key is not None:
             cluster_name = f"cluster_{module_key.replace(':', '_pass')}"
             edge_attrs["ltail"] = cluster_name
             edge_attrs["lhead"] = cluster_name
         graphviz_graph.edge(
-            grad_fn.op.layer_label,
-            _backward_dot_node_name(grad_fn),
+            grad_fn_handle.op.layer_label,
+            _backward_dot_node_name(grad_fn_handle),
             **edge_attrs,
         )
 
@@ -1414,16 +1414,16 @@ def _setup_combined_special_clusters(
 
 def _module_key_for_grad_fn(
     trace: "Trace",
-    grad_fn: "GradFn",
+    grad_fn_handle: "GradFn",
     mode: InterveningClusterMode,
 ) -> str | None:
-    """Return the module cluster key for a grad_fn in combined rendering.
+    """Return the module cluster key for a grad_fn_handle in combined rendering.
 
     Parameters
     ----------
     trace:
         Trace containing forward, backward, and parameter metadata.
-    grad_fn:
+    grad_fn_handle:
         GradFn to place.
     mode:
         Placement mode for intervening grad_fns.
@@ -1434,10 +1434,10 @@ def _module_key_for_grad_fn(
         Unrolled module-call key, special cluster key, or None for top level.
     """
 
-    if grad_fn.op is not None and not grad_fn.is_intervening:
-        return _module_key_for_forward_op(grad_fn.op)
-    if grad_fn.grad_fn_type == "accumulategrad":
-        param_key = _param_module_for_accumulate_grad(trace, grad_fn)
+    if grad_fn_handle.op is not None and not grad_fn_handle.is_intervening:
+        return _module_key_for_forward_op(grad_fn_handle.op)
+    if grad_fn_handle.grad_fn_type == "accumulategrad":
+        param_key = _param_module_for_accumulate_grad(trace, grad_fn_handle)
         if param_key is not None:
             return param_key
     if mode == "outside":
@@ -1445,9 +1445,9 @@ def _module_key_for_grad_fn(
     if mode == "own":
         return "__intervening__"
     if mode == "upstream":
-        return _infer_intervening_module_upstream(trace, grad_fn)
+        return _infer_intervening_module_upstream(trace, grad_fn_handle)
     if mode == "downstream":
-        return _infer_intervening_module_downstream(trace, grad_fn)
+        return _infer_intervening_module_downstream(trace, grad_fn_handle)
     raise ValueError("intervening_cluster must be 'upstream', 'outside', 'downstream', or 'own'.")
 
 
@@ -1457,7 +1457,7 @@ def _module_key_for_forward_op(op: "Layer") -> str | None:
     Parameters
     ----------
     op:
-        Forward operation or layer log associated with a grad_fn.
+        Forward operation or layer log associated with a grad_fn_handle.
 
     Returns
     -------
@@ -1479,14 +1479,14 @@ def _module_key_for_forward_op(op: "Layer") -> str | None:
     return str(modules[-1])
 
 
-def _param_module_for_accumulate_grad(trace: "Trace", grad_fn: "GradFn") -> str | None:
+def _param_module_for_accumulate_grad(trace: "Trace", grad_fn_handle: "GradFn") -> str | None:
     """Return an unambiguous owning module for an AccumulateGrad node.
 
     Parameters
     ----------
     trace:
-        Trace containing parameter metadata and grad_fn parameter refs.
-    grad_fn:
+        Trace containing parameter metadata and grad_fn_handle parameter refs.
+    grad_fn_handle:
         AccumulateGrad log.
 
     Returns
@@ -1495,7 +1495,7 @@ def _param_module_for_accumulate_grad(trace: "Trace", grad_fn: "GradFn") -> str 
         Owning module-call key, or None when attribution is missing or ambiguous.
     """
 
-    param_address = trace._grad_fn_param_refs.get(grad_fn.label)
+    param_address = trace._grad_fn_param_refs.get(grad_fn_handle.label)
     if param_address is None:
         return None
     param_log = trace.params[param_address]
@@ -1507,48 +1507,48 @@ def _param_module_for_accumulate_grad(trace: "Trace", grad_fn: "GradFn") -> str 
     return f"{module_address}:1"
 
 
-def _infer_intervening_module_upstream(trace: "Trace", grad_fn: "GradFn") -> str | None:
-    """Infer an intervening grad_fn module from downstream autograd edges.
+def _infer_intervening_module_upstream(trace: "Trace", grad_fn_handle: "GradFn") -> str | None:
+    """Infer an intervening grad_fn_handle module from downstream autograd edges.
 
     Parameters
     ----------
     trace:
-        Trace containing grad_fn metadata.
-    grad_fn:
+        Trace containing grad_fn_handle metadata.
+    grad_fn_handle:
         Intervening GradFn to place.
 
     Returns
     -------
     str | None
-        Inherited module key, if a paired grad_fn is reachable.
+        Inherited module key, if a paired grad_fn_handle is reachable.
     """
 
-    return _infer_intervening_module_bfs(trace, [grad_fn.grad_fn_id], reverse=False)
+    return _infer_intervening_module_bfs(trace, [grad_fn_handle.grad_fn_object_id], reverse=False)
 
 
-def _infer_intervening_module_downstream(trace: "Trace", grad_fn: "GradFn") -> str | None:
-    """Infer an intervening grad_fn module from reverse autograd edges.
+def _infer_intervening_module_downstream(trace: "Trace", grad_fn_handle: "GradFn") -> str | None:
+    """Infer an intervening grad_fn_handle module from reverse autograd edges.
 
     Parameters
     ----------
     trace:
-        Trace containing grad_fn metadata.
-    grad_fn:
+        Trace containing grad_fn_handle metadata.
+    grad_fn_handle:
         Intervening GradFn to place.
 
     Returns
     -------
     str | None
-        Inherited module key, if a paired grad_fn is reachable.
+        Inherited module key, if a paired grad_fn_handle is reachable.
     """
 
     reverse_edges: dict[int, list[int]] = defaultdict(list)
     for candidate in trace.grad_fns:
         for next_grad_fn_id in candidate.next_grad_fn_ids:
-            reverse_edges[next_grad_fn_id].append(candidate.grad_fn_id)
+            reverse_edges[next_grad_fn_id].append(candidate.grad_fn_object_id)
     return _infer_intervening_module_bfs(
         trace,
-        reverse_edges.get(grad_fn.grad_fn_id, []),
+        reverse_edges.get(grad_fn_handle.grad_fn_object_id, []),
         reverse=True,
     )
 
@@ -1559,21 +1559,21 @@ def _infer_intervening_module_bfs(
     *,
     reverse: bool,
 ) -> str | None:
-    """Find the nearest module-anchored grad_fn by breadth-first search.
+    """Find the nearest module-anchored grad_fn_handle by breadth-first search.
 
     Parameters
     ----------
     trace:
-        Trace containing grad_fn metadata.
+        Trace containing grad_fn_handle metadata.
     start_ids:
-        Initial grad_fn ids to inspect.
+        Initial grad_fn_handle ids to inspect.
     reverse:
         Whether traversal uses reverse edges.
 
     Returns
     -------
     str | None
-        Module key for the nearest paired grad_fn, if found.
+        Module key for the nearest paired grad_fn_handle, if found.
     """
 
     queue = list(start_ids)
@@ -1582,30 +1582,30 @@ def _infer_intervening_module_bfs(
     if reverse:
         for candidate in trace.grad_fns:
             for next_grad_fn_id in candidate.next_grad_fn_ids:
-                reverse_edges[next_grad_fn_id].append(candidate.grad_fn_id)
+                reverse_edges[next_grad_fn_id].append(candidate.grad_fn_object_id)
     while queue:
-        grad_fn_id = queue.pop(0)
-        if grad_fn_id in seen or grad_fn_id not in trace.grad_fn_logs:
+        grad_fn_object_id = queue.pop(0)
+        if grad_fn_object_id in seen or grad_fn_object_id not in trace.grad_fn_logs:
             continue
-        seen.add(grad_fn_id)
-        candidate = trace.grad_fn_logs[grad_fn_id]
+        seen.add(grad_fn_object_id)
+        candidate = trace.grad_fn_logs[grad_fn_object_id]
         if candidate.op is not None and not candidate.is_intervening:
             module_key = _module_key_for_forward_op(candidate.op)
             if module_key is not None:
                 return module_key
         if reverse:
-            queue.extend(reverse_edges.get(grad_fn_id, []))
+            queue.extend(reverse_edges.get(grad_fn_object_id, []))
         else:
             queue.extend(candidate.next_grad_fn_ids)
     return None
 
 
-def _compute_backward_node_lines(grad_fn: "GradFn") -> list[str]:
-    """Build default label rows for a backward grad_fn node.
+def _compute_backward_node_lines(grad_fn_handle: "GradFn") -> list[str]:
+    """Build default label rows for a backward grad_fn_handle node.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         GradFn to render.
 
     Returns
@@ -1614,25 +1614,25 @@ def _compute_backward_node_lines(grad_fn: "GradFn") -> list[str]:
         Plain-text rows for ``NodeSpec.lines``.
     """
 
-    title = grad_fn.label
-    if grad_fn.is_intervening:
+    title = grad_fn_handle.label
+    if grad_fn_handle.is_intervening:
         title = f"[i] {title}"
-    if grad_fn.is_custom:
+    if grad_fn_handle.is_custom:
         title = f"{title} [custom]"
 
     lines = [title]
-    if grad_fn.op is not None:
-        lines.append(f"@{grad_fn.op.layer_label}")
-    lines.append(f"grad {_format_backward_output_shape(grad_fn)}")
+    if grad_fn_handle.op is not None:
+        lines.append(f"@{grad_fn_handle.op.layer_label}")
+    lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
     return lines
 
 
-def _format_backward_output_shape(grad_fn: "GradFn") -> str:
-    """Return the first captured output-grad shape for a grad_fn.
+def _format_backward_output_shape(grad_fn_handle: "GradFn") -> str:
+    """Return the first captured output-grad shape for a grad_fn_handle.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         GradFn to inspect.
 
     Returns
@@ -1642,7 +1642,7 @@ def _format_backward_output_shape(grad_fn: "GradFn") -> str:
         (typical for intervening grad_fns that have no forward counterpart).
     """
 
-    for grad_fn_pass in reversed(list(grad_fn.ops.values())):
+    for grad_fn_pass in reversed(list(grad_fn_handle.ops.values())):
         tensor = _first_tensor_in_obj(grad_fn_pass.grad_outputs)
         if tensor is not None:
             return _format_shape_str(tuple(tensor.shape))
@@ -2243,7 +2243,7 @@ def _collapse_address_for_node(
         return None
 
     modules = list(node.modules)
-    if getattr(node, "is_atomic_module_op", False):
+    if getattr(node, "is_atomic_module", False):
         modules = modules[:-1]
     if not modules:
         return None
@@ -2282,7 +2282,7 @@ def _is_collapsed_module(
 
     Special cases:
     - ``vis_call_depth == 0``: show all layers, never collapse (#94).
-    - ``is_atomic_module_op``: the node represents the output of
+    - ``is_atomic_module``: the node represents the output of
       its innermost module, so its effective nesting depth is one less (it
       visually "belongs" to the parent scope).
 
@@ -2306,7 +2306,7 @@ def _is_collapsed_module(
     node_call_depth = len(node.modules)
     # Bottom-level submodule outputs are rendered at the parent nesting level,
     # not their own, so subtract 1 from their effective depth.
-    if getattr(node, "is_atomic_module_op", False):
+    if getattr(node, "is_atomic_module", False):
         node_call_depth -= 1
 
     if node_call_depth >= vis_call_depth:
@@ -3068,7 +3068,7 @@ def _get_node_address_shape_color(
     else:
         only_non_buffer_layer = False
 
-    if (node.is_atomic_module_op or only_non_buffer_layer) and (len(node.modules) > 0):
+    if (node.is_atomic_module or only_non_buffer_layer) and (len(node.modules) > 0):
         if isinstance(source_node, Op):
             module_pass_exited = node.modules[-1]
             module, _ = module_pass_exited.split(":")
@@ -3339,7 +3339,7 @@ def compute_default_node_lines(
     if layer_log.layer_type in ["input", "output", "buffer"]:
         title = f"{layer_log.layer_type}_{layer_log.type_index}{call_label}"
     else:
-        title = f"{layer_log.layer_type}_{layer_log.type_index}_{layer_log.trace_index}{call_label}"
+        title = f"{layer_log.layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
 
     lines: list[str] = []
     if layer_log.is_terminal_bool:
@@ -3463,7 +3463,7 @@ def _make_node_label(
     if node.layer_type in ["input", "output", "buffer"]:
         node_title = f"<b>{node.layer_type}_{node.type_index}{call_label}</b>"
     else:
-        node_title = f"<b>{node.layer_type}_{node.type_index}_{node.trace_index}{call_label}</b>"
+        node_title = f"<b>{node.layer_type}_{node.type_index}_{node.step_index}{call_label}</b>"
 
     if node.is_terminal_bool:
         label_text = str(node.bool_value).upper()
@@ -3799,9 +3799,9 @@ def _add_edges_for_node(
             child_modules = child_node.modules[:]
             parent_modules = parent_node.modules[:]
             # Adjust for bottom-level submodule outputs (they belong to parent scope).
-            if child_node.is_atomic_module_op:
+            if child_node.is_atomic_module:
                 child_modules = child_modules[:-1]
-            if parent_node.is_atomic_module_op:
+            if parent_node.is_atomic_module:
                 parent_modules = parent_modules[:-1]
             if child_modules[:vis_call_depth] == parent_modules[:vis_call_depth]:
                 continue
@@ -4572,7 +4572,7 @@ def _get_lowest_module_for_two_nodes(
     top-level graph, not any subgraph).
 
     Special handling:
-    - ``is_atomic_module_op`` nodes are adjusted to their parent
+    - ``is_atomic_module`` nodes are adjusted to their parent
       scope (they represent the module's output, rendered one level up).
     - Rolled mode: pass suffixes are stripped from module names so that all
       ops share the same cluster.
@@ -4595,7 +4595,7 @@ def _get_lowest_module_for_two_nodes(
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
-    if node1.is_atomic_module_op:
+    if node1.is_atomic_module:
         node1_nested_modules = node1_modules[:-1]
     else:
         node1_nested_modules = node1_modules[:]
@@ -4608,9 +4608,9 @@ def _get_lowest_module_for_two_nodes(
         return -1  # no submodule contains them both.
 
     if node1 == node2:
-        if node1.is_atomic_module_op and (len(node1_modules) == 1):
+        if node1.is_atomic_module and (len(node1_modules) == 1):
             return -1
-        elif node1.is_atomic_module_op and (len(node1_modules) > 1):
+        elif node1.is_atomic_module and (len(node1_modules) > 1):
             module = node1_modules[-2]
         else:
             module = node1_modules[-1]
@@ -4696,8 +4696,10 @@ def _node_has_grad(layer: Any) -> bool:
 
     ops = getattr(layer, "ops", None)
     if ops is not None and hasattr(ops, "values"):
-        return any(bool(getattr(pass_log, "has_grad", False)) for pass_log in ops.values())
-    return bool(getattr(layer, "has_grad", False))
+        return any(
+            bool(getattr(pass_log, "has_saved_gradient", False)) for pass_log in ops.values()
+        )
+    return bool(getattr(layer, "has_saved_gradient", False))
 
 
 def _grad_node_name(layer: Any) -> str:

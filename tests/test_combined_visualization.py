@@ -84,7 +84,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Trace with backward metadata.
     """
 
-    trace = tl.trace(model, x, grads_to_save="all")
+    trace = tl.trace(model, x, gradients_to_save="all")
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
@@ -125,7 +125,11 @@ def test_draw_combined_top_level_function(tmp_path: Path) -> None:
 def test_draw_combined_module_clusters() -> None:
     """Paired backward nodes are placed in the forward op's module cluster."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
-    addmm = next(grad_fn for grad_fn in trace.grad_fns if grad_fn.grad_fn_type == "addmm")
+    addmm = next(
+        grad_fn_handle
+        for grad_fn_handle in trace.grad_fns
+        if grad_fn_handle.grad_fn_type == "addmm"
+    )
 
     assert _module_key_for_grad_fn(trace, addmm, "upstream") == "fc:1"
 
@@ -133,7 +137,9 @@ def test_draw_combined_module_clusters() -> None:
 def test_draw_combined_intervening_cluster_outside(tmp_path: Path) -> None:
     """The outside mode leaves intervening grad_fns out of module clusters."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
-    intervening = next(grad_fn for grad_fn in trace.grad_fns if grad_fn.is_intervening)
+    intervening = next(
+        grad_fn_handle for grad_fn_handle in trace.grad_fns if grad_fn_handle.is_intervening
+    )
 
     dot = trace.draw_combined(
         vis_outpath=str(tmp_path / "outside"),
@@ -149,7 +155,9 @@ def test_draw_combined_intervening_cluster_outside(tmp_path: Path) -> None:
 def test_draw_combined_intervening_cluster_own_cluster(tmp_path: Path) -> None:
     """The own mode creates the dedicated intervening cluster."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
-    intervening = next(grad_fn for grad_fn in trace.grad_fns if grad_fn.is_intervening)
+    intervening = next(
+        grad_fn_handle for grad_fn_handle in trace.grad_fns if grad_fn_handle.is_intervening
+    )
 
     dot = trace.draw_combined(
         vis_outpath=str(tmp_path / "own"),
@@ -165,7 +173,9 @@ def test_draw_combined_intervening_cluster_own_cluster(tmp_path: Path) -> None:
 def test_draw_combined_intervening_cluster_inherits() -> None:
     """Upstream and downstream inheritance modes are deterministic."""
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
-    intervening = next(grad_fn for grad_fn in trace.grad_fns if grad_fn.is_intervening)
+    intervening = next(
+        grad_fn_handle for grad_fn_handle in trace.grad_fns if grad_fn_handle.is_intervening
+    )
 
     upstream = _module_key_for_grad_fn(trace, intervening, "upstream")
     downstream = _module_key_for_grad_fn(trace, intervening, "downstream")
@@ -178,7 +188,9 @@ def test_draw_combined_accumulategrad_attribution() -> None:
     """AccumulateGrad attribution uses the serialized label-keyed parameter map."""
     trace = _log_backward_model(_SingleParamModel(), torch.randn(2, 3, requires_grad=True))
     accumulate_grad = next(
-        grad_fn for grad_fn in trace.grad_fns if grad_fn.grad_fn_type == "accumulategrad"
+        grad_fn_handle
+        for grad_fn_handle in trace.grad_fns
+        if grad_fn_handle.grad_fn_type == "accumulategrad"
     )
 
     assert _param_module_for_accumulate_grad(trace, accumulate_grad) == "scale:1"
@@ -197,9 +209,9 @@ def test_draw_combined_backward_node_spec_fn_callback(tmp_path: Path) -> None:
     """Combined rendering accepts a separate backward node callback."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    def backward_node_spec_fn(grad_fn: object, default_spec: NodeSpec) -> NodeSpec:
+    def backward_node_spec_fn(grad_fn_handle: object, default_spec: NodeSpec) -> NodeSpec:
         """Tint one backward node."""
-        if getattr(grad_fn, "grad_fn_type", "") == "relu":
+        if getattr(grad_fn_handle, "grad_fn_type", "") == "relu":
             default_spec.fillcolor = "#ABCDEF"
         return default_spec
 

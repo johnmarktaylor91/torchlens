@@ -763,7 +763,7 @@ def grad_scale(factor: float, *, force_shape_change: bool = False) -> HelperSpec
 
 
 def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
-    """Create a grad_fn helper that clips each grad_input tensor norm.
+    """Create a grad_fn_handle helper that clips each grad_input tensor norm.
 
     Parameters
     ----------
@@ -775,23 +775,23 @@ def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
     Returns
     -------
     HelperSpec
-        Built-in backward grad_fn helper spec.
+        Built-in backward grad_fn_handle helper spec.
     """
 
     def factory() -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
-        """Return the runtime grad_fn hook for clipping gradients."""
+        """Return the runtime grad_fn_handle hook for clipping gradients."""
 
         def _hook(
             grad_input: tuple[torch.Tensor | None, ...],
             *,
             grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_log: Any,
+            grad_fn_handle: Any,
             call_index: int,
             run_ctx: dict[str, Any],
         ) -> tuple[torch.Tensor | None, ...] | None:
             """Clip each tensor in a grad_input tuple."""
 
-            del grad_output, grad_fn_log, call_index, run_ctx
+            del grad_output, grad_fn_handle, call_index, run_ctx
             clipped: list[torch.Tensor | None] = []
             changed = False
             for grad in grad_input:
@@ -822,7 +822,7 @@ def grad_clip(max_norm: float, norm_type: float = 2.0) -> HelperSpec:
 
 
 def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
-    """Create a grad_fn helper that adds Gaussian noise to grad_input tensors.
+    """Create a grad_fn_handle helper that adds Gaussian noise to grad_input tensors.
 
     Parameters
     ----------
@@ -834,11 +834,11 @@ def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
     Returns
     -------
     HelperSpec
-        Built-in backward grad_fn helper spec.
+        Built-in backward grad_fn_handle helper spec.
     """
 
     def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
-        """Return the runtime grad_fn hook for noisy gradients."""
+        """Return the runtime grad_fn_handle hook for noisy gradients."""
 
         generator = _make_generator(seed)
 
@@ -846,13 +846,13 @@ def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
             grad_input: tuple[torch.Tensor | None, ...],
             *,
             grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_log: Any,
+            grad_fn_handle: Any,
             call_index: int,
             run_ctx: dict[str, Any],
         ) -> tuple[torch.Tensor | None, ...]:
             """Add Gaussian noise to each tensor in a grad_input tuple."""
 
-            del grad_output, grad_fn_log, call_index
+            del grad_output, grad_fn_handle, call_index
             noisy: list[torch.Tensor | None] = []
             for grad in grad_input:
                 if grad is None:
@@ -883,7 +883,7 @@ def grad_noise(std: float, *, seed: int | None = None) -> HelperSpec:
 
 
 def grad_clamp(min: float | None = None, max: float | None = None) -> HelperSpec:
-    """Create a grad_fn helper that clamps grad_input tensors elementwise.
+    """Create a grad_fn_handle helper that clamps grad_input tensors elementwise.
 
     Parameters
     ----------
@@ -895,26 +895,26 @@ def grad_clamp(min: float | None = None, max: float | None = None) -> HelperSpec
     Returns
     -------
     HelperSpec
-        Built-in backward grad_fn helper spec.
+        Built-in backward grad_fn_handle helper spec.
     """
 
     if min is None and max is None:
         raise HookValueError("grad_clamp requires min, max, or both")
 
     def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
-        """Return the runtime grad_fn hook for clamping gradients."""
+        """Return the runtime grad_fn_handle hook for clamping gradients."""
 
         def _hook(
             grad_input: tuple[torch.Tensor | None, ...],
             *,
             grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_log: Any,
+            grad_fn_handle: Any,
             call_index: int,
             run_ctx: dict[str, Any],
         ) -> tuple[torch.Tensor | None, ...]:
             """Clamp each tensor in a grad_input tuple."""
 
-            del grad_output, grad_fn_log, call_index, run_ctx
+            del grad_output, grad_fn_handle, call_index, run_ctx
             return tuple(
                 None if grad is None else torch.clamp(grad, min=min, max=max) for grad in grad_input
             )

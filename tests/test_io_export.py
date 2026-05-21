@@ -66,7 +66,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "address",
         "name",
         "pass_index",
-        "has_saved_outs",
+        "has_saved_activation",
     ],
 }
 

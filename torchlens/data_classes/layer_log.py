@@ -5,7 +5,7 @@ logical layer across recurrent ops.  For non-recurrent models (the
 common case), every Layer wraps exactly one Op.
 
 **Delegation pattern**: For single-pass layers, per-pass fields (out,
-grad, compute_index, etc.) are accessible directly on the Layer
+grad, step_index, etc.) are accessible directly on the Layer
 via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``ops[1]``.
 For multi-pass layers, accessing these fields raises ``ValueError`` (NOT
 ``AttributeError``) directing the user to ``layer_log.ops[N].field``.
@@ -19,7 +19,7 @@ the user a clear error message.
 When merging multiple ops into one Layer, these aggregate fields are merged:
   - ``has_input_ancestor``: OR across ops
   - ``io_role``: character-level merge of "I", "O", "IO" strings
-  - ``is_atomic_module_op``: OR across ops
+  - ``is_atomic_module``: OR across ops
   - ``is_in_conditional_body``: OR across ops
   - ``conditional_role_stacks`` / ``conditional_branch_stack_ops``:
     unique per-pass stack signatures and their pass numbers
@@ -144,7 +144,9 @@ class Layer:
         "layer_label_short": FieldPolicy.KEEP,
         "layer_type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
-        "trace_index": FieldPolicy.KEEP,
+        "step_index": FieldPolicy.KEEP,
+        "ordinal_index": FieldPolicy.KEEP,
+        "raw_index": FieldPolicy.KEEP,
         "num_passes": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "func": FieldPolicy.DROP,
@@ -153,22 +155,22 @@ class Layer:
         "is_inplace": FieldPolicy.KEEP,
         "grad_fn_class_name": FieldPolicy.KEEP,
         "grad_fn_class_qualname": FieldPolicy.KEEP,
-        "grad_fn_id": FieldPolicy.KEEP,
+        "grad_fn_object_id": FieldPolicy.KEEP,
+        "grad_fn_handle": FieldPolicy.DROP,
         "grad_fn": FieldPolicy.DROP,
-        "grad_fn_log": FieldPolicy.DROP,
         "arg_names": FieldPolicy.KEEP,
         "num_args_total": FieldPolicy.KEEP,
         "num_pos_args": FieldPolicy.KEEP,
         "num_kwargs": FieldPolicy.KEEP,
-        "is_part_of_iterable_output": FieldPolicy.KEEP,
+        "in_multi_output": FieldPolicy.KEEP,
         "multi_output_index": FieldPolicy.KEEP,
-        "multi_output_role": FieldPolicy.KEEP,
+        "multi_output_name": FieldPolicy.KEEP,
         "shape": FieldPolicy.KEEP,
         "transformed_out_shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
         "transformed_out_dtype": FieldPolicy.KEEP,
         "memory": FieldPolicy.KEEP,
-        "transformed_out_memory": FieldPolicy.KEEP,
+        "transformed_activation_memory": FieldPolicy.KEEP,
         "transformed_out": FieldPolicy.BLOB,
         "autograd_memory": FieldPolicy.KEEP,
         "total_autograd_memory": FieldPolicy.KEEP,
@@ -178,11 +180,11 @@ class Layer:
         "annotations": FieldPolicy.KEEP,
         "intervention_replaced": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
-        "save_grads": FieldPolicy.KEEP,
+        "save_gradients": FieldPolicy.KEEP,
         "transformed_grad": FieldPolicy.BLOB,
         "transformed_grad_shape": FieldPolicy.KEEP,
         "transformed_grad_dtype": FieldPolicy.KEEP,
-        "transformed_grad_memory": FieldPolicy.KEEP,
+        "transformed_gradient_memory": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
         "_param_barcodes": FieldPolicy.KEEP,
@@ -223,7 +225,7 @@ class Layer:
         "has_input_ancestor": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
-        "is_atomic_module_op": FieldPolicy.KEEP,
+        "is_atomic_module": FieldPolicy.KEEP,
         "ops": FieldPolicy.KEEP,
         "call_labels": FieldPolicy.KEEP,
     }
@@ -239,7 +241,9 @@ class Layer:
         self.layer_label_short = first_pass.layer_label_no_pass_short
         self.layer_type = first_pass.layer_type
         self.type_index = first_pass.type_index
-        self.trace_index = first_pass.trace_index
+        self.step_index = first_pass.step_index
+        self.ordinal_index = first_pass.ordinal_index
+        self.raw_index = first_pass.raw_index
         self.num_passes = first_pass.num_passes
         # Store as weakref to break circular reference (Trace -> layer_logs -> Layer -> Trace).
         _sml = first_pass.source_trace
@@ -254,16 +258,16 @@ class Layer:
         self.is_inplace = first_pass.is_inplace
         self.grad_fn_class_name = first_pass.grad_fn_class_name
         self.grad_fn_class_qualname = first_pass.grad_fn_class_qualname
-        self.grad_fn_id = first_pass.grad_fn_id
+        self.grad_fn_object_id = first_pass.grad_fn_object_id
+        self.grad_fn_handle = first_pass.grad_fn_handle
         self.grad_fn = first_pass.grad_fn
-        self.grad_fn_log = first_pass.grad_fn_log
         self.arg_names = first_pass.arg_names
         self.num_args_total = first_pass.num_args_total
         self.num_pos_args = first_pass.num_pos_args
         self.num_kwargs = first_pass.num_kwargs
-        self.is_part_of_iterable_output = first_pass.is_part_of_iterable_output
+        self.in_multi_output = first_pass.in_multi_output
         self.multi_output_index = first_pass.multi_output_index
-        self.multi_output_role = first_pass.multi_output_role
+        self.multi_output_name = first_pass.multi_output_name
 
         # Tensor type (representative from first pass)
         self.shape = first_pass.shape
@@ -271,7 +275,7 @@ class Layer:
         self.dtype = first_pass.dtype
         self.transformed_out_dtype = first_pass.transformed_out_dtype
         self.memory = first_pass.memory
-        self.transformed_out_memory = first_pass.transformed_out_memory
+        self.transformed_activation_memory = first_pass.transformed_activation_memory
         self.autograd_memory: Optional[int] = first_pass.autograd_memory
         self.total_autograd_memory: Optional[int] = first_pass.autograd_memory
         self.num_autograd_tensors: Optional[int] = first_pass.num_autograd_tensors
@@ -282,10 +286,10 @@ class Layer:
         self.annotations: Dict[str, Any] = {}
         self.intervention_replaced = first_pass.intervention_replaced
         self.detach_saved_activations = first_pass.detach_saved_activations
-        self.save_grads = first_pass.save_grads
+        self.save_gradients = first_pass.save_gradients
         self.transformed_grad_shape = first_pass.transformed_grad_shape
         self.transformed_grad_dtype = first_pass.transformed_grad_dtype
-        self.transformed_grad_memory = first_pass.transformed_grad_memory
+        self.transformed_gradient_memory = first_pass.transformed_gradient_memory
 
         # FLOPs
         self.flops_forward = first_pass.flops_forward
@@ -333,7 +337,7 @@ class Layer:
         # Fields stored as aggregate for vis compatibility.
         # Initialized from first pass.  For multi-pass layers, _build_layer_logs
         # merges only has_input_ancestor (OR), io_role (char-merge),
-        # and is_atomic_module_op (OR).  All others keep first-pass values.
+        # and is_atomic_module (OR).  All others keep first-pass values.
         self.output_of_modules = first_pass.output_of_modules
         self.output_of_module_calls = first_pass.output_of_module_calls
         self.conditional_entry_children = first_pass.conditional_entry_children
@@ -343,7 +347,7 @@ class Layer:
         self.has_input_ancestor = first_pass.has_input_ancestor
         self.io_role = first_pass.io_role
         self.buffer_pass = first_pass.buffer_pass
-        self.is_atomic_module_op = first_pass.is_atomic_module_op
+        self.is_atomic_module = first_pass.is_atomic_module
 
         # Pass management
         self.ops = OpAccessor()
@@ -494,11 +498,11 @@ class Layer:
                 "transformed_out": None,
                 "transformed_out_shape": None,
                 "transformed_out_dtype": None,
-                "transformed_out_memory": None,
+                "transformed_activation_memory": None,
                 "transformed_grad": None,
                 "transformed_grad_shape": None,
                 "transformed_grad_dtype": None,
-                "transformed_grad_memory": None,
+                "transformed_gradient_memory": None,
             },
         )
         self.__dict__.update(state)
@@ -550,7 +554,7 @@ class Layer:
         return self._single_pass_or_error("transformed_out")
 
     @property
-    def has_saved_outs(self) -> bool:
+    def has_saved_activation(self) -> bool:
         """Return whether the single pass has a saved out.
 
         Returns
@@ -558,7 +562,7 @@ class Layer:
         bool
             ``True`` when an out was saved for the only pass.
         """
-        return cast(bool, self._single_pass_or_error("has_saved_outs"))
+        return cast(bool, self._single_pass_or_error("has_saved_activation"))
 
     @property
     def saved_args(self) -> Any:
@@ -600,7 +604,7 @@ class Layer:
         return self._single_pass_or_error("transformed_grad")
 
     @property
-    def has_grad(self) -> bool:
+    def has_saved_gradient(self) -> bool:
         """Return whether the single pass has a saved grad.
 
         Returns
@@ -608,7 +612,7 @@ class Layer:
         bool
             ``True`` when a grad was saved for the only pass.
         """
-        return cast(bool, self._single_pass_or_error("has_grad"))
+        return cast(bool, self._single_pass_or_error("has_saved_gradient"))
 
     @property
     def code_context(self) -> Any:
@@ -644,17 +648,6 @@ class Layer:
         return self._single_pass_or_error("func_rng_states")
 
     @property
-    def compute_index(self) -> int:
-        """Return the operation number for a single-pass layer.
-
-        Returns
-        -------
-        int
-            Operation number from the only pass.
-        """
-        return cast(int, self._single_pass_or_error("compute_index"))
-
-    @property
     def pass_index(self) -> int:
         """Return the pass number for a single-pass layer.
 
@@ -664,17 +657,6 @@ class Layer:
             Pass number from the only pass.
         """
         return cast(int, self._single_pass_or_error("pass_index"))
-
-    @property
-    def capture_index(self) -> int:
-        """Return the creation-order index for a single-pass layer.
-
-        Returns
-        -------
-        int
-            Creation-order value from the only pass.
-        """
-        return cast(int, self._single_pass_or_error("capture_index"))
 
     @property
     def lookup_keys(self) -> list[str]:
@@ -944,7 +926,7 @@ class Layer:
         """Set of module ops exited across all ops."""
         result = set()
         for pass_log in self.ops.values():
-            if pass_log.is_atomic_module_op:
+            if pass_log.is_atomic_module:
                 result.add(pass_log.atomic_module_call)
         return result
 
@@ -1200,7 +1182,7 @@ class Layer:
             s += f" ({self.num_passes} ops)"
         s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.memory_str}"
         if not self.is_input:
-            s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_class_name})"
+            s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name})"
             if self.func_config:
                 config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
                 s += f"\n\tConfig: {config_str}"

@@ -48,12 +48,12 @@ def autograd_memory(model: nn.Module, input_shape: tuple[int, ...]) -> int:
     return int(param_bytes + input_elements * torch.empty((), dtype=torch.float32).element_size())
 
 
-def grad_fn_memory_cost(grad_fn: Any) -> int:
-    """Estimate memory retained by one autograd grad_fn.
+def grad_fn_memory_cost(grad_fn_handle: Any) -> int:
+    """Estimate memory retained by one autograd grad_fn_handle.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         Autograd function object.
 
     Returns
@@ -62,14 +62,14 @@ def grad_fn_memory_cost(grad_fn: Any) -> int:
         Sum of saved tensor sizes visible through ``_saved_*`` attributes.
     """
 
-    if grad_fn is None:
+    if grad_fn_handle is None:
         return 0
     total = 0
-    for attr_name in dir(grad_fn):
+    for attr_name in dir(grad_fn_handle):
         if not attr_name.startswith("_saved_"):
             continue
         try:
-            value = getattr(grad_fn, attr_name)
+            value = getattr(grad_fn_handle, attr_name)
         except RuntimeError:
             continue
         if isinstance(value, torch.Tensor):

@@ -1,4 +1,4 @@
-"""Backward intervention selector, helper, and grad_fn dispatch tests."""
+"""Backward intervention selector, helper, and grad_fn_handle dispatch tests."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def _trace() -> tuple[_EncoderModel, torch.Tensor, tl.Trace]:
 
     model = _EncoderModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, grads_to_save="all")
+    trace = tl.trace(model, x, gradients_to_save="all")
     return model, x, trace
 
 
@@ -91,24 +91,24 @@ def _first_accumulate_grad(loss: torch.Tensor) -> Any:
     seen: set[int] = set()
     strong_refs: list[Any] = []
     while queue:
-        grad_fn = queue.pop(0)
-        if grad_fn is None or id(grad_fn) in seen:
+        grad_fn_handle = queue.pop(0)
+        if grad_fn_handle is None or id(grad_fn_handle) in seen:
             continue
-        seen.add(id(grad_fn))
-        strong_refs.append(grad_fn)
-        if type(grad_fn).__name__ == "AccumulateGrad":
-            return grad_fn
-        next_fns = [next_fn for next_fn, _idx in getattr(grad_fn, "next_functions", ())]
+        seen.add(id(grad_fn_handle))
+        strong_refs.append(grad_fn_handle)
+        if type(grad_fn_handle).__name__ == "AccumulateGrad":
+            return grad_fn_handle
+        next_fns = [next_fn for next_fn, _idx in getattr(grad_fn_handle, "next_functions", ())]
         strong_refs.extend(next_fn for next_fn in next_fns if next_fn is not None)
         queue.extend(next_fns)
     raise AssertionError("AccumulateGrad not found")
 
 
 def _hook_trace() -> tuple[_TraceStub, GradFn]:
-    """Return a stub trace and grad_fn log for hook-factory tests."""
+    """Return a stub trace and grad_fn_handle log for hook-factory tests."""
 
-    grad_fn_log = GradFn(
-        grad_fn_id=1,
+    grad_fn_handle = GradFn(
+        grad_fn_object_id=1,
         class_name="ReluBackward0",
         class_qualname="torch.autograd.ReluBackward0",
         is_custom=False,
@@ -118,7 +118,7 @@ def _hook_trace() -> tuple[_TraceStub, GradFn]:
         grad_fn_total_num=1,
         is_intervening=True,
     )
-    return _TraceStub({1: grad_fn_log}), grad_fn_log
+    return _TraceStub({1: grad_fn_handle}), grad_fn_handle
 
 
 def test_accumulategrad_post_hook_logs_grad_fn_call() -> None:
@@ -135,7 +135,7 @@ def test_accumulategrad_post_hook_logs_grad_fn_call() -> None:
 def test_accumulategrad_post_hook_skips_helper_dispatch() -> None:
     """AccumulateGrad helpers fire through the prehook only."""
 
-    trace_stub, grad_fn_log = _hook_trace()
+    trace_stub, grad_fn_handle = _hook_trace()
     counter = {"fires": 0}
 
     def factory() -> Any:
@@ -145,13 +145,13 @@ def test_accumulategrad_post_hook_skips_helper_dispatch() -> None:
             grad_input: tuple[torch.Tensor | None, ...],
             *,
             grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_log: GradFn,
+            grad_fn_handle: GradFn,
             call_index: int,
             run_ctx: dict[str, Any],
         ) -> tuple[torch.Tensor | None, ...]:
             """Count helper dispatches."""
 
-            del grad_output, grad_fn_log, call_index, run_ctx
+            del grad_output, grad_fn_handle, call_index, run_ctx
             counter["fires"] += 1
             return grad_input
 
@@ -169,7 +169,7 @@ def test_accumulategrad_post_hook_skips_helper_dispatch() -> None:
     grad = (torch.ones(1),)
     assert pre_hook(grad) == grad
     assert post_hook((), grad) is None
-    assert grad_fn_log.num_calls == 1
+    assert grad_fn_handle.num_calls == 1
     assert counter["fires"] == 1
 
 
@@ -226,19 +226,19 @@ def test_grad_fn_prehook_posthook_call_index_alignment() -> None:
             grad_input: tuple[torch.Tensor | None, ...],
             *,
             grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_log: GradFn,
+            grad_fn_handle: GradFn,
             call_index: int,
             run_ctx: dict[str, Any],
         ) -> tuple[torch.Tensor | None, ...]:
             """Record prehook call index."""
 
-            del grad_output, grad_fn_log, run_ctx
+            del grad_output, grad_fn_handle, run_ctx
             seen.append(call_index)
             return grad_input
 
         return helper
 
-    trace_stub, grad_fn_log = _hook_trace()
+    trace_stub, grad_fn_handle = _hook_trace()
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(type="relu"),
         _helper_spec(
@@ -250,7 +250,7 @@ def test_grad_fn_prehook_posthook_call_index_alignment() -> None:
     pre_hook((torch.ones(1),))
     post_hook((), (torch.ones(1),))
     assert seen == [1]
-    assert grad_fn_log.ops[1].call_index == 1
+    assert grad_fn_handle.ops[1].call_index == 1
 
 
 def test_grad_fn_prehook_posthook_call_index_alignment_multi_fire() -> None:
@@ -271,7 +271,7 @@ def test_grad_fn_prehook_posthook_call_index_alignment_multi_fire() -> None:
 
         return helper
 
-    trace_stub, grad_fn_log = _hook_trace()
+    trace_stub, grad_fn_handle = _hook_trace()
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(type="relu"),
         _helper_spec(
@@ -284,7 +284,7 @@ def test_grad_fn_prehook_posthook_call_index_alignment_multi_fire() -> None:
         pre_hook((torch.ones(1),))
         post_hook((), (torch.ones(1),))
     assert seen == [1, 2, 3]
-    assert tuple(grad_fn_log.ops) == (1, 2, 3)
+    assert tuple(grad_fn_handle.ops) == (1, 2, 3)
 
 
 def test_accumulategrad_post_hook_crashes_on_non_none_return() -> None:
@@ -299,7 +299,7 @@ def test_accumulategrad_post_hook_crashes_on_non_none_return() -> None:
 
 
 def test_grad_clip_on_forward_selector_raises_helpermounterror() -> None:
-    """Tuple-shaped grad_fn helpers cannot mount on forward selectors."""
+    """Tuple-shaped grad_fn_handle helpers cannot mount on forward selectors."""
 
     with pytest.raises(HelperMountError):
         normalize_hook_plan(tl.label("relu_1"), tl.grad_clip(0.5))
@@ -398,7 +398,9 @@ def test_grad_clip_helper_norm_per_node() -> None:
     """grad_clip clips per tensor in the grad_input tuple."""
 
     helper = tl.grad_clip(0.5)()
-    result = helper((torch.ones(4),), grad_output=None, grad_fn_log=None, call_index=1, run_ctx={})
+    result = helper(
+        (torch.ones(4),), grad_output=None, grad_fn_handle=None, call_index=1, run_ctx={}
+    )
     assert result is not None
     assert torch.linalg.vector_norm(result[0]) <= 0.5001
 
@@ -408,7 +410,7 @@ def test_grad_noise_helper_seeded_reproducible() -> None:
 
     helper_a = tl.grad_noise(0.1, seed=7)()
     helper_b = tl.grad_noise(0.1, seed=7)()
-    kwargs = {"grad_output": None, "grad_fn_log": None, "call_index": 1, "run_ctx": {}}
+    kwargs = {"grad_output": None, "grad_fn_handle": None, "call_index": 1, "run_ctx": {}}
     result_a = helper_a((torch.zeros(3),), **kwargs)
     result_b = helper_b((torch.zeros(3),), **kwargs)
     assert torch.equal(result_a[0], result_b[0])
@@ -421,7 +423,7 @@ def test_grad_clamp_helper_elementwise() -> None:
     result = helper(
         (torch.tensor([-2.0, 0.0, 2.0]),),
         grad_output=None,
-        grad_fn_log=None,
+        grad_fn_handle=None,
         call_index=1,
         run_ctx={},
     )

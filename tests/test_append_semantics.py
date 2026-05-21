@@ -118,7 +118,7 @@ def test_append_train_mode_no_helper_grad_message() -> None:
         model,
         torch.randn(2, 3),
         intervention_ready=True,
-        save_grads=True,
+        save_gradients=True,
         backward_ready=True,
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)

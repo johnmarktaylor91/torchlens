@@ -12,8 +12,8 @@ is acceptable because the Trace's lifetime is typically shorter than or
 equal to the model's lifetime.  The ``cleanup()`` method on Trace
 deletes all Param references.
 
-**Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
-grad_memory) is computed lazily on first access via ``_check_param_grad()``.
+**Lazy grad properties**: Gradient metadata (has_saved_gradient, grad_shape, grad_dtype,
+gradient_memory) is computed lazily on first access via ``_check_param_grad()``.
 This allows grads computed after ``trace()`` returns (e.g.
 after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
@@ -252,7 +252,7 @@ class Param:
             self._grad_memory_str = human_readable_size(self._grad_memory)
 
     @property
-    def has_grad(self) -> bool:
+    def has_saved_gradient(self) -> bool:
         """Return whether this parameter currently has a grad stored.
 
         Returns
@@ -263,8 +263,8 @@ class Param:
         self._check_param_grad()
         return self._has_grad
 
-    @has_grad.setter
-    def has_grad(self, value: bool) -> None:
+    @has_saved_gradient.setter
+    def has_saved_gradient(self, value: bool) -> None:
         """Set cached grad-presence status.
 
         Parameters
@@ -321,7 +321,7 @@ class Param:
         self._grad_dtype = value
 
     @property
-    def grad_memory(self) -> int:
+    def gradient_memory(self) -> int:
         """Return the grad tensor size in bytes.
 
         Returns
@@ -332,8 +332,8 @@ class Param:
         self._check_param_grad()
         return self._grad_memory
 
-    @grad_memory.setter
-    def grad_memory(self, value: int) -> None:
+    @gradient_memory.setter
+    def gradient_memory(self, value: int) -> None:
         """Set cached grad tensor size in bytes.
 
         Parameters
@@ -344,7 +344,7 @@ class Param:
         self._grad_memory = value
 
     @property
-    def grad_memory_str(self) -> str:
+    def gradient_memory_str(self) -> str:
         """Return grad tensor size in human-readable units.
 
         Returns
@@ -355,8 +355,8 @@ class Param:
         self._check_param_grad()
         return self._grad_memory_str
 
-    @grad_memory_str.setter
-    def grad_memory_str(self, value: str) -> None:
+    @gradient_memory_str.setter
+    def gradient_memory_str(self, value: str) -> None:
         """Set cached grad tensor size in human-readable units.
 
         Parameters
@@ -375,7 +375,7 @@ class Param:
             f"  dtype: {self.dtype}",
             f"  size: {self.memory_str}",
             f"  {status}",
-            f"  has_grad: {self.has_grad}",
+            f"  has_saved_gradient: {self.has_saved_gradient}",
             f"  module: {self.address} ({self.module_type})",
         ]
         if self.used_by_layers:

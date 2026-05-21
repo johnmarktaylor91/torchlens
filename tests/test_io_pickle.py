@@ -103,7 +103,7 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     assert restored.modules["bn"]._source_trace is restored
     assert restored.buffers["bn.running_mean"].address == "bn.running_mean"
 
-    first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_outs)
+    first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     assert (
         first_saved_layer.parent_layer_log

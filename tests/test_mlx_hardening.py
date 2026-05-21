@@ -106,7 +106,7 @@ def test_mlx_save_grads_raises() -> None:
     """MLX capture rejects backward-gradient capture explicitly."""
 
     with pytest.raises(NotImplementedError, match="backward capture"):
-        tl.trace(TinyMLP(), _tiny_mlp_input(), save_grads=True)
+        tl.trace(TinyMLP(), _tiny_mlp_input(), save_gradients=True)
 
 
 @pytest.mark.optional

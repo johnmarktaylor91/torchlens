@@ -105,7 +105,7 @@ def _build_sparse_out_log() -> Trace:
     """
 
     trace = _build_conv_log()
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_outs)
+    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     first_saved_layer.out = first_saved_layer.out.to_sparse()
     return trace
@@ -121,7 +121,7 @@ def _build_non_tensor_out_log() -> Trace:
     """
 
     trace = _build_conv_log()
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_outs)
+    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
     first_saved_layer.transformed_out = 1.0
     trace.out_postfunc = lambda tensor: float(tensor.mean().item())
     return trace
@@ -229,12 +229,12 @@ def test_bundle_roundtrip_preserves_saved_outs_bit_exactly(tmp_path: Path) -> No
     live_by_label = {
         layer.layer_label: layer.out
         for layer in live_log.layer_list
-        if layer.has_saved_outs and isinstance(layer.out, torch.Tensor)
+        if layer.has_saved_activation and isinstance(layer.out, torch.Tensor)
     }
     restored_by_label = {
         layer.layer_label: layer.out
         for layer in restored.layer_list
-        if layer.has_saved_outs and isinstance(layer.out, torch.Tensor)
+        if layer.has_saved_activation and isinstance(layer.out, torch.Tensor)
     }
 
     assert restored._loaded_from_bundle is True

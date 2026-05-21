@@ -794,17 +794,17 @@ class Trace:
         "recording_kept": FieldPolicy.KEEP,
         "_out_hash_cache": FieldPolicy.DROP,
         "save_arg_values": FieldPolicy.KEEP,
-        "save_grads": FieldPolicy.KEEP,
-        "grads_to_save": FieldPolicy.KEEP,
+        "save_gradients": FieldPolicy.KEEP,
+        "gradients_to_save": FieldPolicy.KEEP,
         "_grad_layer_nums_to_save": FieldPolicy.KEEP,
-        "grad_transform": FieldPolicy.DROP,
+        "gradient_transform": FieldPolicy.DROP,
         "grad_transform_repr": FieldPolicy.KEEP,
-        "save_raw_grads": FieldPolicy.KEEP,
+        "save_raw_gradients": FieldPolicy.KEEP,
         "save_code_context": FieldPolicy.KEEP,
         "save_rng_states": FieldPolicy.KEEP,
         "recurrence_detection": FieldPolicy.KEEP,
         "verbose": FieldPolicy.KEEP,
-        "has_grads": FieldPolicy.KEEP,
+        "has_gradients": FieldPolicy.KEEP,
         "mark_layer_depths": FieldPolicy.KEEP,
         "graph_shape_hash": FieldPolicy.KEEP,
         "_intervention_spec": FieldPolicy.DROP,
@@ -927,14 +927,14 @@ class Trace:
         model_class_name: str,
         output_device: str = "same",
         out_postfunc: Optional[ActivationPostfunc] = None,
-        grad_transform: Optional[GradientPostfunc] = None,
+        gradient_transform: Optional[GradientPostfunc] = None,
         save_raw_outs: bool = True,
-        save_raw_grads: bool = True,
+        save_raw_gradients: bool = True,
         keep_unsaved_layers: bool = True,
         keep_orphans: bool = False,
         save_arg_values: bool = False,
-        save_grads: bool = False,
-        grads_to_save: Any = "all",
+        save_gradients: bool = False,
+        gradients_to_save: Any = "all",
         detach_saved_activations: bool = False,
         mark_layer_depths: bool = True,
         num_context_lines: int = 7,
@@ -962,16 +962,16 @@ class Trace:
             model_class_name: Human-readable name of the model being logged.
             output_device: Device to move saved outs to ("same" keeps original device).
             out_postfunc: Optional function applied to each tensor before saving.
-            grad_transform: Optional function applied to each grad before saving.
+            gradient_transform: Optional function applied to each grad before saving.
             save_raw_outs: Whether raw outs are retained when a postfunc is set.
-            save_raw_grads: Whether raw grads are retained when a postfunc is set.
+            save_raw_gradients: Whether raw grads are retained when a postfunc is set.
             keep_unsaved_layers: If False, layers without saved outs are removed
                 from the final log (but still logged during the pass).
             keep_orphans: If True, orphan island ops remain in raw metadata and
                 are exposed via ``trace.orphans``.
             save_arg_values: Whether to deep-copy each operation's input arguments.
-            save_grads: Whether to register grad hooks for backward pass.
-            grads_to_save: Which layer grads should be saved.
+            save_gradients: Whether to register grad hooks for backward pass.
+            gradients_to_save: Which layer grads should be saved.
             detach_saved_activations: Whether to detach saved tensors from the autograd graph.
             mark_layer_depths: Whether to compute BFS distances from
                 inputs/outputs for each layer.
@@ -1034,9 +1034,11 @@ class Trace:
         self._out_transform_repr = repr(out_postfunc) if out_postfunc is not None else None
         self.save_raw_outs = save_raw_outs
         self.input_annotations: Dict[str, Any] = {}
-        self.grad_transform = grad_transform
-        self.grad_transform_repr = repr(grad_transform) if grad_transform is not None else None
-        self.save_raw_grads = save_raw_grads
+        self.gradient_transform = gradient_transform
+        self.grad_transform_repr = (
+            repr(gradient_transform) if gradient_transform is not None else None
+        )
+        self.save_raw_gradients = save_raw_gradients
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
         self.parent_run: weakref.ReferenceType["Trace"] | None = None
@@ -1068,13 +1070,13 @@ class Trace:
         self.recording_kept: bool = True
         self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
         self.save_arg_values = save_arg_values
-        self.save_grads = save_grads
-        self.grads_to_save = grads_to_save
+        self.save_gradients = save_gradients
+        self.gradients_to_save = gradients_to_save
         self.save_code_context = save_code_context
         self.save_rng_states = save_rng_states
         self.recurrence_detection = recurrence_detection
         self.verbose = verbose
-        self.has_grads = False
+        self.has_gradients = False
         self.mark_layer_depths = mark_layer_depths
         self.graph_shape_hash: str | None = None
         self._intervention_spec: InterventionSpec | None = InterventionSpec()
@@ -1153,7 +1155,7 @@ class Trace:
         self.total_activation_memory: int = 0
         self.total_gradient_memory: int = 0
         self.total_autograd_memory: Optional[int] = None
-        self.num_saved_ops: int = 0  # layers with has_saved_outs=True
+        self.num_saved_ops: int = 0  # layers with has_saved_activation=True
         self.saved_activation_memory: int = 0
         self.saved_gradient_memory: int = 0
         self.num_saved_layers: int = 0
@@ -2347,10 +2349,10 @@ class Trace:
                 "save_visualizations": False,
                 "_visualizer_dir": None,
                 "input_annotations": {},
-                "grad_transform": None,
+                "gradient_transform": None,
                 "grad_transform_repr": None,
-                "save_raw_grads": True,
-                "grads_to_save": "all",
+                "save_raw_gradients": True,
+                "gradients_to_save": "all",
                 "_grad_layer_nums_to_save": [],
                 "has_backward_pass": False,
                 "grad_fn_logs": OrderedDict(),
@@ -2449,14 +2451,14 @@ class Trace:
             parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
             if parent_layer_log is not None:
                 layer_pass.parent_layer_log = parent_layer_log
-        for grad_fn in self.grad_fn_logs.values():
-            if isinstance(grad_fn.op, str):
-                grad_fn.op = self.layer_logs.get(grad_fn.op)
-            if grad_fn.op is not None:
-                grad_fn.op.grad_fn_log = grad_fn
-                if hasattr(grad_fn.op, "ops"):
-                    for layer_pass in grad_fn.op.ops.values():
-                        layer_pass.grad_fn_log = grad_fn
+        for grad_fn_handle in self.grad_fn_logs.values():
+            if isinstance(grad_fn_handle.op, str):
+                grad_fn_handle.op = self.layer_logs.get(grad_fn_handle.op)
+            if grad_fn_handle.op is not None:
+                grad_fn_handle.op.grad_fn_handle = grad_fn_handle
+                if hasattr(grad_fn_handle.op, "ops"):
+                    for layer_pass in grad_fn_handle.op.ops.values():
+                        layer_pass.grad_fn_handle = grad_fn_handle
         _state._register_log(self)
 
     def replace_state_from(self, new_log: "Trace") -> None:
@@ -2532,7 +2534,7 @@ class Trace:
             layer._append_tensor_from(new_layer, "transformed_out")
             self._copy_append_last_chunk_fields(layer, new_layer)
             self._refresh_appended_tensor_metadata(layer)
-        self.has_grads = self.has_grads or new_log.has_grads
+        self.has_gradients = self.has_gradients or new_log.has_gradients
         self.random_seed = new_log.random_seed
         self.input_object_id = new_log.input_object_id
         self.input_signature_hash = new_log.input_signature_hash
@@ -2564,7 +2566,7 @@ class Trace:
             "func_non_tensor_args",
             "is_inplace",
             "grad_fn_class_name",
-            "grad_fn_id",
+            "grad_fn_object_id",
             "interventions",
             "annotations",
         ):
@@ -2620,14 +2622,14 @@ class Trace:
                 "transformed_out",
                 "transformed_out_shape",
                 "transformed_out_dtype",
-                "transformed_out_memory",
+                "transformed_activation_memory",
             ),
-            ("grad", "grad_shape", "grad_dtype", "grad_memory"),
+            ("grad", "grad_shape", "grad_dtype", "gradient_memory"),
             (
                 "transformed_grad",
                 "transformed_grad_shape",
                 "transformed_grad_dtype",
-                "transformed_grad_memory",
+                "transformed_gradient_memory",
             ),
         ):
             value = getattr(layer, tensor_field, None)
@@ -2915,7 +2917,7 @@ class Trace:
 
     @property
     def last_backward_root_grad_fn_id(self) -> int | None:
-        """Most recent backward root grad_fn object id, if any."""
+        """Most recent backward root grad_fn_handle object id, if any."""
 
         if not self.backward_root_grad_fn_ids:
             return None
@@ -3112,7 +3114,7 @@ class Trace:
 
     @property
     def grad_fns(self) -> GradFnAccessor:
-        """Access backward grad_fn metadata by label, index, pass label, or substring."""
+        """Access backward grad_fn_handle metadata by label, index, pass label, or substring."""
         return GradFnAccessor(self.grad_fn_logs, self.grad_fn_order)
 
     @property
@@ -3120,9 +3122,9 @@ class Trace:
         """Access per-invocation GradFnCall records by qualified label or index."""
 
         calls: OrderedDict[str, Any] = OrderedDict()
-        for grad_fn in self.grad_fns:
-            for call_index, call in grad_fn.ops.items():
-                calls[f"{grad_fn.label}:{call_index}"] = call
+        for grad_fn_handle in self.grad_fns:
+            for call_index, call in grad_fn_handle.ops.items():
+                calls[f"{grad_fn_handle.label}:{call_index}"] = call
         return Accessor(calls)
 
     @property
@@ -3136,14 +3138,16 @@ class Trace:
         """Access Ops with saved activations."""
 
         return Accessor(
-            OrderedDict((op.layer_label, op) for op in self.layer_list if op.has_saved_outs)
+            OrderedDict((op.layer_label, op) for op in self.layer_list if op.has_saved_activation)
         )
 
     @property
     def saved_grad_ops(self) -> Accessor[Op]:
         """Access Ops with saved gradients."""
 
-        return Accessor(OrderedDict((op.layer_label, op) for op in self.layer_list if op.has_grad))
+        return Accessor(
+            OrderedDict((op.layer_label, op) for op in self.layer_list if op.has_saved_gradient)
+        )
 
     @property
     def saved_layers(self) -> Accessor[Layer]:
@@ -3153,7 +3157,7 @@ class Trace:
             OrderedDict(
                 (label, layer)
                 for label, layer in self.layer_logs.items()
-                if any(op.has_saved_outs for op in layer.ops.values())
+                if any(op.has_saved_activation for op in layer.ops.values())
             )
         )
 
@@ -3165,7 +3169,7 @@ class Trace:
             OrderedDict(
                 (label, layer)
                 for label, layer in self.layer_logs.items()
-                if any(op.has_grad for op in layer.ops.values())
+                if any(op.has_saved_gradient for op in layer.ops.values())
             )
         )
 
@@ -3198,12 +3202,12 @@ class Trace:
         """Access GradFns containing at least one saved GradFnCall."""
 
         items = OrderedDict(
-            (grad_fn_id, grad_fn)
-            for grad_fn_id, grad_fn in self.grad_fn_logs.items()
+            (grad_fn_object_id, grad_fn_handle)
+            for grad_fn_object_id, grad_fn_handle in self.grad_fn_logs.items()
             if any(
                 getattr(call, "grad_inputs", None) is not None
                 or getattr(call, "grad_outputs", None) is not None
-                for call in grad_fn.ops.values()
+                for call in grad_fn_handle.ops.values()
             )
         )
         return GradFnAccessor(items, list(items))
@@ -3288,13 +3292,15 @@ class Trace:
 
     @property
     def num_grad_fns(self) -> int:
-        """Number of unique autograd grad_fn nodes discovered."""
+        """Number of unique autograd grad_fn_handle nodes discovered."""
         return len(self.grad_fn_logs)
 
     @property
     def num_grad_fns_without_op(self) -> int:
-        """Number of grad_fn nodes without a corresponding forward Layer."""
-        return sum(1 for grad_fn in self.grad_fn_logs.values() if grad_fn.is_intervening)
+        """Number of grad_fn_handle nodes without a corresponding forward Layer."""
+        return sum(
+            1 for grad_fn_handle in self.grad_fn_logs.values() if grad_fn_handle.is_intervening
+        )
 
     # ********************************************
     # ******** Public Convenience Methods ********
@@ -3600,7 +3606,7 @@ class Trace:
         vis_direction: VisDirectionLiteral = "topdown",
         code_panel: "CodePanelOption" = False,
     ) -> str:
-        """Render the captured backward grad_fn graph.
+        """Render the captured backward grad_fn_handle graph.
 
         Parameters
         ----------
@@ -3923,10 +3929,10 @@ class Trace:
             "layer_label_no_pass_short",
             "layer_type",
             "type_index",
-            "trace_index",
+            "step_index",
             "num_passes",
             "pass_index",
-            "compute_index",
+            "step_index",
             "shape",
             "dtype",
             "memory",
@@ -3939,7 +3945,7 @@ class Trace:
             "is_input",
             "is_output",
             "is_buffer",
-            "is_part_of_iterable_output",
+            "in_multi_output",
             "multi_output_index",
             "parents",
             "has_parents",
@@ -3980,15 +3986,14 @@ class Trace:
 
         fields_to_change_type = {
             "type_index": int,
-            "trace_index": int,
+            "step_index": int,
             "num_passes": int,
             "pass_index": int,
-            "compute_index": int,
             "is_inplace": bool,
             "is_input": bool,
             "is_output": bool,
             "is_buffer": bool,
-            "is_part_of_iterable_output": bool,
+            "in_multi_output": bool,
             "has_parents": bool,
             "has_children": bool,
             "has_siblings": bool,
@@ -4103,7 +4108,7 @@ class Trace:
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: str | List[str] = "all",
-        grads_to_save: str | List[str] | None = "all",
+        gradients_to_save: str | List[str] | None = "all",
         random_seed: Optional[int] = None,
         backward_ready: bool | None = None,
     ) -> None:
@@ -4111,7 +4116,7 @@ class Trace:
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, grads_to_save, random_seed, backward_ready:
+        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed, backward_ready:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.save_new_outs`.
         """
@@ -4126,7 +4131,7 @@ class Trace:
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
-            grads_to_save=grads_to_save,
+            gradients_to_save=gradients_to_save,
             random_seed=random_seed,
             backward_ready=backward_ready,
         )
@@ -4436,7 +4441,7 @@ class Trace:
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: Optional[str | List[str | int]] = "all",
-        grads_to_save: Optional[str | List[str | int]] = "all",
+        gradients_to_save: Optional[str | List[str | int]] = "all",
         random_seed: Optional[int] = None,
         postprocess: bool = True,
     ) -> Any:
@@ -4444,7 +4449,7 @@ class Trace:
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, grads_to_save, random_seed:
+        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.run_and_log_inputs_through_model`.
         """
@@ -4456,7 +4461,7 @@ class Trace:
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
-            grads_to_save=grads_to_save,
+            gradients_to_save=gradients_to_save,
             random_seed=random_seed,
             postprocess=postprocess,
         )
@@ -4467,7 +4472,7 @@ class Trace:
         Parameters
         ----------
         loss:
-            Tensor whose ``grad_fn`` roots the backward graph.
+            Tensor whose ``grad_fn_handle`` roots the backward graph.
         **backward_kwargs:
             Keyword arguments forwarded to ``torch.Tensor.backward``.
 
@@ -4488,7 +4493,7 @@ class Trace:
         Parameters
         ----------
         loss:
-            Tensor whose ``grad_fn`` roots the backward graph.
+            Tensor whose ``grad_fn_handle`` roots the backward graph.
         **backward_kwargs:
             Keyword arguments forwarded to ``torch.Tensor.backward``.
 

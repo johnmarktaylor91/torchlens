@@ -43,8 +43,8 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "keep_orphans",
     "output_device",
     "save_arg_values",
-    "save_grads",
-    "grads_to_save",
+    "save_gradients",
+    "gradients_to_save",
     "save_code_context",
     "save_rng_states",
     "random_seed",
@@ -70,9 +70,9 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "output_dir",
     "out_transform",
-    "grad_transform",
+    "gradient_transform",
     "save_raw_outs",
-    "save_raw_grads",
+    "save_raw_gradients",
     "save_level",
     "bundle_format",
 )
@@ -142,8 +142,8 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
     "save_arg_values": "save_arg_values",
-    "save_grads": "save_grads",
-    "grads_to_save": "grads_to_save",
+    "save_gradients": "save_gradients",
+    "gradients_to_save": "gradients_to_save",
     "save_code_context": "save_code_context",
     "save_rng_states": "save_rng_states",
     "random_seed": "random_seed",
@@ -169,10 +169,10 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "out_postfunc": "out_transform",
     "out_transform": "out_transform",
-    "grad_transform": "grad_transform",
-    "gradient_postfunc": "grad_transform",
+    "gradient_transform": "gradient_transform",
+    "gradient_postfunc": "gradient_transform",
     "save_raw_outs": "save_raw_outs",
-    "save_raw_grads": "save_raw_grads",
+    "save_raw_gradients": "save_raw_gradients",
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "view": "view",
@@ -563,9 +563,9 @@ class CaptureOptions:
         Device placement for saved tensors.
     save_arg_values:
         Whether non-tensor function arguments are captured.
-    save_grads:
+    save_gradients:
         Whether backward grads are captured.
-    grads_to_save:
+    gradients_to_save:
         Gradient layer selector; defaults to the out selector when explicitly enabled.
     save_code_context:
         Whether source-text context is captured in addition to source identity.
@@ -628,8 +628,8 @@ class CaptureOptions:
     keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
     save_arg_values: bool = False
-    save_grads: bool = False
-    grads_to_save: str | list[Any] | None = "all"
+    save_gradients: bool = False
+    gradients_to_save: str | list[Any] | None = "all"
     save_code_context: bool = False
     save_rng_states: bool = False
     random_seed: int | None = None
@@ -667,8 +667,8 @@ class CaptureOptions:
         keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
         save_arg_values: bool | MissingType = MISSING,
-        save_grads: bool | MissingType = MISSING,
-        grads_to_save: str | list[Any] | None | MissingType = MISSING,
+        save_gradients: bool | MissingType = MISSING,
+        gradients_to_save: str | list[Any] | None | MissingType = MISSING,
         save_code_context: bool | MissingType = MISSING,
         save_rng_states: bool | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
@@ -749,9 +749,11 @@ class CaptureOptions:
             "save_arg_values": _resolve_option_value(
                 "save_arg_values", save_arg_values, False, specified_fields
             ),
-            "save_grads": _resolve_option_value("save_grads", save_grads, False, specified_fields),
-            "grads_to_save": _resolve_option_value(
-                "grads_to_save", grads_to_save, "all", specified_fields
+            "save_gradients": _resolve_option_value(
+                "save_gradients", save_gradients, False, specified_fields
+            ),
+            "gradients_to_save": _resolve_option_value(
+                "gradients_to_save", gradients_to_save, "all", specified_fields
             ),
             "save_code_context": _resolve_option_value(
                 "save_code_context", save_code_context, False, specified_fields
@@ -846,11 +848,11 @@ class SaveOptions:
         Future save target directory; currently inert during capture.
     out_transform:
         Optional transform applied to each out before storage.
-    grad_transform:
+    gradient_transform:
         Optional transform applied to each grad before storage.
     save_raw_outs:
         Whether raw outs remain available when transformed.
-    save_raw_grads:
+    save_raw_gradients:
         Whether raw grads remain available when transformed.
     save_level:
         Future portable-save level; currently inert during capture.
@@ -866,9 +868,9 @@ class SaveOptions:
 
     output_dir: str | Path | None = None
     out_transform: ActivationPostfunc | None = None
-    grad_transform: GradientPostfunc | None = None
+    gradient_transform: GradientPostfunc | None = None
     save_raw_outs: bool = True
-    save_raw_grads: bool = True
+    save_raw_gradients: bool = True
     save_level: str | None = None
     bundle_format: str | None = None
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
@@ -877,9 +879,9 @@ class SaveOptions:
         self,
         output_dir: str | Path | None | MissingType = MISSING,
         out_transform: ActivationPostfunc | None | MissingType = MISSING,
-        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        gradient_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_outs: bool | MissingType = MISSING,
-        save_raw_grads: bool | MissingType = MISSING,
+        save_raw_gradients: bool | MissingType = MISSING,
         save_level: str | None | MissingType = MISSING,
         bundle_format: str | None | MissingType = MISSING,
         *,
@@ -896,23 +898,25 @@ class SaveOptions:
             warn_deprecated_alias("out_postfunc", "save.out_transform")
             out_transform = out_postfunc
         if gradient_postfunc is not MISSING:
-            if grad_transform is not MISSING:
-                raise TypeError("kwarg gradient_postfunc aliases grad_transform; do not pass both")
-            grad_transform = gradient_postfunc
+            if gradient_transform is not MISSING:
+                raise TypeError(
+                    "kwarg gradient_postfunc aliases gradient_transform; do not pass both"
+                )
+            gradient_transform = gradient_postfunc
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "output_dir": _resolve_option_value("output_dir", output_dir, None, specified_fields),
             "out_transform": _resolve_option_value(
                 "out_transform", out_transform, None, specified_fields
             ),
-            "grad_transform": _resolve_option_value(
-                "grad_transform", grad_transform, None, specified_fields
+            "gradient_transform": _resolve_option_value(
+                "gradient_transform", gradient_transform, None, specified_fields
             ),
             "save_raw_outs": _resolve_option_value(
                 "save_raw_outs", save_raw_outs, True, specified_fields
             ),
-            "save_raw_grads": _resolve_option_value(
-                "save_raw_grads", save_raw_grads, True, specified_fields
+            "save_raw_gradients": _resolve_option_value(
+                "save_raw_gradients", save_raw_gradients, True, specified_fields
             ),
             "save_level": _resolve_option_value("save_level", save_level, None, specified_fields),
             "bundle_format": _resolve_option_value(

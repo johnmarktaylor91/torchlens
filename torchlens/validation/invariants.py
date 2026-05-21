@@ -19,7 +19,7 @@ and raises ``MetadataInvariantError`` on the first failure.
   L. Equivalence group symmetry (op_equivalence_classes labels are valid)
 
 **Phase 2 -- Semantic invariants:**
-  M. Graph ordering (capture_index uniqueness/monotonicity, topological order, no raw labels)
+  M. Graph ordering (raw_index uniqueness/monotonicity, topological order, no raw labels)
   N. Loop detection invariants (recurrent_ops symmetry, func identity, param sharing, pass numbering)
   O. Distance / reachability (min <= max, input/output layer distances == 0, ancestor/descendent consistency)
   P. Graph connectivity (non-input non-buffer layers have parents, orphans removed)
@@ -231,45 +231,47 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
         )
 
     layer_labels = set(trace.layer_labels)
-    for grad_fn_id, grad_fn_log in trace.grad_fn_logs.items():
-        if grad_fn_log.is_intervening != (grad_fn_log.op is None):
+    for grad_fn_object_id, grad_fn_handle in trace.grad_fn_logs.items():
+        if grad_fn_handle.is_intervening != (grad_fn_handle.op is None):
             raise MetadataInvariantError(
                 name,
-                f"{grad_fn_log.label} has inconsistent is_intervening/op fields",
+                f"{grad_fn_handle.label} has inconsistent is_intervening/op fields",
             )
-        if grad_fn_log.op is not None and grad_fn_log.op.layer_label not in layer_labels:
+        if grad_fn_handle.op is not None and grad_fn_handle.op.layer_label not in layer_labels:
             raise MetadataInvariantError(
                 name,
-                f"{grad_fn_log.label} points to missing layer {grad_fn_log.op.layer_label!r}",
+                f"{grad_fn_handle.label} points to missing layer {grad_fn_handle.op.layer_label!r}",
             )
-        if grad_fn_log.grad_fn_id != grad_fn_id:
+        if grad_fn_handle.grad_fn_object_id != grad_fn_object_id:
             raise MetadataInvariantError(
                 name,
-                f"{grad_fn_log.label} stored id {grad_fn_log.grad_fn_id!r} under {grad_fn_id!r}",
+                f"{grad_fn_handle.label} stored id {grad_fn_handle.grad_fn_object_id!r} under {grad_fn_object_id!r}",
             )
 
     for layer in trace.layer_list:
-        grad_fn_log = layer.grad_fn_log
-        if grad_fn_log is None:
+        grad_fn_handle = layer.grad_fn_handle
+        if grad_fn_handle is None:
             continue
-        if grad_fn_log.grad_fn_id not in trace.grad_fn_logs:
+        if grad_fn_handle.grad_fn_object_id not in trace.grad_fn_logs:
             raise MetadataInvariantError(
                 name,
-                f"Layer {layer.layer_label} points to missing grad_fn id "
-                f"{grad_fn_log.grad_fn_id!r}",
+                f"Layer {layer.layer_label} points to missing grad_fn_handle id "
+                f"{grad_fn_handle.grad_fn_object_id!r}",
             )
-        if trace.grad_fn_logs[grad_fn_log.grad_fn_id] is not grad_fn_log:
+        if trace.grad_fn_logs[grad_fn_handle.grad_fn_object_id] is not grad_fn_handle:
             raise MetadataInvariantError(
                 name,
-                f"Layer {layer.layer_label} grad_fn_log does not round-trip by id",
+                f"Layer {layer.layer_label} grad_fn_handle does not round-trip by id",
             )
-        if grad_fn_log.op is None or grad_fn_log.op.layer_label != layer.layer_label:
+        if grad_fn_handle.op is None or grad_fn_handle.op.layer_label != layer.layer_label:
             raise MetadataInvariantError(
                 name,
-                f"Layer {layer.layer_label} grad_fn backpointer does not point to the layer",
+                f"Layer {layer.layer_label} grad_fn_handle backpointer does not point to the layer",
             )
 
-    expected_saved_grad_labels = {layer.layer_label for layer in trace.layer_list if layer.has_grad}
+    expected_saved_grad_labels = {
+        layer.layer_label for layer in trace.layer_list if layer.has_saved_gradient
+    }
     if set(trace.saved_grad_ops.keys()) != expected_saved_grad_labels:
         raise MetadataInvariantError(
             name,
@@ -277,13 +279,13 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
         )
 
     max_call_index = 0
-    for grad_fn_log in trace.grad_fn_logs.values():
-        if grad_fn_log.ops:
-            max_call_index = max(max_call_index, max(grad_fn_log.ops))
+    for grad_fn_handle in trace.grad_fn_logs.values():
+        if grad_fn_handle.ops:
+            max_call_index = max(max_call_index, max(grad_fn_handle.ops))
     if max_call_index > trace.backward_num_calls:
         raise MetadataInvariantError(
             name,
-            f"backward_num_calls={trace.backward_num_calls} is less than max grad_fn call "
+            f"backward_num_calls={trace.backward_num_calls} is less than max grad_fn_handle call "
             f"index {max_call_index}",
         )
 
@@ -499,7 +501,7 @@ def _check_graph_topology(ml: "Trace") -> None:
       Note: has_children excludes output layers (added during postprocessing,
       not during capture when the flag was set).
     - Input layers have no parents.
-    - output_versions_per_child keys are a subset of children.
+    - out_versions_by_child keys are a subset of children.
     """
     name = "graph_topology"
     label_set = set(ml.layer_labels)
@@ -569,14 +571,14 @@ def _check_graph_topology(ml: "Trace") -> None:
                 f"Input layer {label} has parents={lpl.parents}",
             )
 
-        # output_versions_per_child keys subset of children
-        ctv_keys = set(lpl.output_versions_per_child.keys())
+        # out_versions_by_child keys subset of children
+        ctv_keys = set(lpl.out_versions_by_child.keys())
         child_set = set(lpl.children)
         extra = ctv_keys - child_set
         if extra:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: output_versions_per_child has keys not in children: {extra}",
+                f"Layer {label}: out_versions_by_child has keys not in children: {extra}",
             )
 
 
@@ -592,7 +594,7 @@ def _check_op_log_fields(ml: "Trace") -> None:
     - Saved tensor shape/dtype match actual out (when saved).
     - Pass numbering: pass_index >= 1, num_passes >= pass_index.
     - Computational layers have callable func and non-empty func_name.
-    - compute_index >= 1 for non-input/non-buffer layers.
+    - step_index >= 1 for non-input/non-buffer layers.
     - module_call_depth matches len(modules).
     - Label format: pass-qualified label has ':' iff multi-pass; no-pass label never has ':'.
     """
@@ -602,7 +604,7 @@ def _check_op_log_fields(ml: "Trace") -> None:
         label = lpl.layer_label
 
         # Tensor shape/dtype consistency when outs are saved
-        if lpl.has_saved_outs and lpl.out is not None:
+        if lpl.has_saved_activation and lpl.out is not None:
             actual_shape = tuple(lpl.out.shape)
             if lpl.shape != actual_shape:
                 raise MetadataInvariantError(
@@ -631,16 +633,16 @@ def _check_op_log_fields(ml: "Trace") -> None:
             if not lpl.func_name:
                 raise MetadataInvariantError(name, f"Layer {label}: func_name is empty")
 
-        # Operation numbering (input/buffer/output bookkeeping layers have compute_index=0)
+        # Operation numbering (input/buffer/output bookkeeping layers have step_index=0)
         if not (lpl.is_input or lpl.is_buffer or lpl.is_output):
-            if lpl.compute_index is not None and lpl.compute_index < 1:
+            if lpl.step_index is not None and lpl.step_index < 1:
                 raise MetadataInvariantError(
-                    name, f"Layer {label}: compute_index={lpl.compute_index} < 1"
+                    name, f"Layer {label}: step_index={lpl.step_index} < 1"
                 )
-        if lpl.capture_index < 1:
+        if lpl.raw_index < 1:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: capture_index={lpl.capture_index} < 1",
+                f"Layer {label}: raw_index={lpl.raw_index} < 1",
             )
 
         # Module nesting depth
@@ -1804,35 +1806,35 @@ def _check_graph_ordering(ml: "Trace") -> None:
     """Check M: graph ordering invariants.
 
     Validates:
-    - capture_index is unique across all layers and monotonically
+    - raw_index is unique across all layers and monotonically
       increasing in layer_list order.
-    - compute_index is unique among computational layers (non-input, non-buffer,
+    - step_index is unique among computational layers (non-input, non-buffer,
       non-output).
-    - Topological order: every parent's capture_index < child's.
+    - Topological order: every parent's raw_index < child's.
     - No raw labels (``l_\\d+``) survive postprocessing.
     """
     name = "graph_ordering"
 
-    # capture_index uniqueness and monotonicity
+    # raw_index uniqueness and monotonicity
     seen_rt_nums: dict[int, str] = {}
     prev_rt = -1
     for lpl in ml.layer_list:
-        rt = lpl.capture_index
+        rt = lpl.raw_index
         if rt in seen_rt_nums:
             raise MetadataInvariantError(
                 name,
-                f"Duplicate capture_index={rt}: '{seen_rt_nums[rt]}' and '{lpl.layer_label}'",
+                f"Duplicate raw_index={rt}: '{seen_rt_nums[rt]}' and '{lpl.layer_label}'",
             )
         seen_rt_nums[rt] = lpl.layer_label
         if rt <= prev_rt:
             raise MetadataInvariantError(
                 name,
-                f"capture_index not monotonically increasing: "
+                f"raw_index not monotonically increasing: "
                 f"{prev_rt} then {rt} at '{lpl.layer_label}'",
             )
         prev_rt = rt
 
-    # compute_index uniqueness among computational layers
+    # step_index uniqueness among computational layers
     input_set = set(ml.input_layers)
     buffer_set = set(ml.buffer_layers)
     output_set = set(ml.output_layers)
@@ -1841,24 +1843,24 @@ def _check_graph_ordering(ml: "Trace") -> None:
         label = lpl.layer_label
         if label in input_set or label in buffer_set or label in output_set:
             continue
-        op = lpl.compute_index
+        op = lpl.step_index
         if op is not None:
             if op in seen_op_nums:
                 raise MetadataInvariantError(
                     name,
-                    f"Duplicate compute_index={op}: '{seen_op_nums[op]}' and '{label}'",
+                    f"Duplicate step_index={op}: '{seen_op_nums[op]}' and '{label}'",
                 )
             seen_op_nums[op] = label
 
-    # Topological order: parent.capture_index < child.capture_index
-    rt_map = {lpl.layer_label: lpl.capture_index for lpl in ml.layer_list}
+    # Topological order: parent.raw_index < child.raw_index
+    rt_map = {lpl.layer_label: lpl.raw_index for lpl in ml.layer_list}
     for lpl in ml.layer_list:
         for p in lpl.parents:
-            if rt_map.get(p, -1) >= lpl.capture_index:
+            if rt_map.get(p, -1) >= lpl.raw_index:
                 raise MetadataInvariantError(
                     name,
                     f"Topological violation: parent '{p}' (rt={rt_map.get(p)}) "
-                    f">= child '{lpl.layer_label}' (rt={lpl.capture_index})",
+                    f">= child '{lpl.layer_label}' (rt={lpl.raw_index})",
                 )
 
     # No raw labels survive postprocessing

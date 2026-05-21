@@ -87,13 +87,13 @@ def _build_ir_instances() -> dict[str, object]:
     output_ref = OutputRef(
         tensor=tensor_ref,
         transformed_tensor=None,
-        has_saved_outs=True,
+        has_saved_activation=True,
         output_device="cpu",
         out_postfunc=None,
         detach_saved_activations=True,
         visualizer_path=None,
         multi_output_index=None,
-        is_part_of_iterable_output=False,
+        in_multi_output=False,
         container_path=(),
         container_spec=container_spec,
         child_versions=(),
@@ -174,7 +174,7 @@ def _build_ir_instances() -> dict[str, object]:
         call_children=(),
     )
     backend_semantics = BackendSemantics(
-        grad_fn_id=None,
+        grad_fn_object_id=None,
         grad_fn_class_name=None,
         autograd_memory=None,
         num_autograd_tensors=None,
@@ -214,9 +214,9 @@ def _build_ir_instances() -> dict[str, object]:
         label_raw="linear_1_1_raw",
         layer_label_raw="linear_1_1_raw",
         layer_type="linear",
-        capture_index=1,
+        raw_index=1,
         type_index=1,
-        compute_index=1,
+        step_index=1,
         source_trace_id=None,
         tracing_finished=False,
         construction_done=False,
@@ -246,7 +246,7 @@ def _build_ir_instances() -> dict[str, object]:
     reserved_label = ReservedLabel(
         label="linear_1_1_raw",
         label_raw="linear_1_1_raw",
-        capture_index=1,
+        raw_index=1,
         type_index=1,
         layer_type="linear",
         site=("linear_1_1_raw", "linear", 0),
@@ -271,10 +271,10 @@ def _build_ir_instances() -> dict[str, object]:
         raw_label="linear_1_1_raw",
         pass_index=1,
         event_index=1,
-        compute_index=1,
+        step_index=1,
         layer_type="linear",
         type_index=1,
-        capture_index=1,
+        raw_index=1,
         func_name="linear",
         address="layer",
         module_type="Linear",
@@ -457,7 +457,7 @@ def test_capture_events_mutation_and_label_reservation() -> None:
         "linear_1_1_raw",
         "linear_2_2_raw",
     ]
-    assert [label.capture_index for label in labels] == [1, 2]
+    assert [label.raw_index for label in labels] == [1, 2]
     assert [label.type_index for label in labels] == [1, 2]
 
     next_label = events.reserve_label("relu")

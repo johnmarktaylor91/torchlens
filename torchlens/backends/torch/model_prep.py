@@ -12,7 +12,7 @@ This module implements the model preparation pipeline, which has two phases:
   Runs on every ``trace`` call. Populates session-scoped tracking
   dicts on Trace (pass counters, entered/exited labels), captures module
   metadata, forces ``requires_grad=True`` on all parameters (needed for
-  ``grad_fn`` metadata), creates ``Param`` objects, and tags buffer tensors.
+  ``grad_fn_handle`` metadata), creates ``Param`` objects, and tags buffer tensors.
   Session data is GC'd with the Trace — no per-module cleanup needed.
 
 The ``module_forward_decorator`` wraps each submodule's ``forward`` with a
@@ -264,7 +264,7 @@ def _prepare_model_session(
     3. Sets session-scoped Trace dictionaries for module pass counters and
        tensor entry/exit tracking.
     4. Creates ``Param`` objects and forces ``requires_grad=True`` on all
-       parameters (needed so ``grad_fn`` chain is available for metadata).
+       parameters (needed so ``grad_fn_handle`` chain is available for metadata).
     5. Tags buffer tensors with ``_tl.address``.
 
     All session-scoped state is cleaned up by ``_cleanup_model_session``.
@@ -327,7 +327,7 @@ def _prepare_model_session(
 def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:
     """Create ``Param`` objects and prepare parameter grad tracking.
 
-    Outside ``backward_ready``, ``requires_grad`` is forced True so that ``grad_fn``
+    Outside ``backward_ready``, ``requires_grad`` is forced True so that ``grad_fn_handle``
     metadata is available on all intermediate tensors during the forward pass.
     In ``backward_ready``, user-authored ``requires_grad`` values are preserved. The
     original value is always saved to ``_tl.requires_grad_before_capture`` and restored during
@@ -774,11 +774,11 @@ def _record_module_entry_metadata(
         input_tensor_labels.add(label)
         trace._mod_entered[mod_id].append(label)
         layer_entry["modules_entered"].append(address)
-        layer_entry["module_ops_entered"].append(module_call_label)
+        layer_entry["input_to_module_calls"].append(module_call_label)
         # Record which arg position this tensor occupies for this module pass.
         for arg_key, arg_val in itertools.chain(enumerate(args), kwargs.items()):
             if arg_val is t:
-                layer_entry["module_entry_argnames"][
+                layer_entry["module_entry_arg_keys"][
                     f"{module_call_label[0]}:{module_call_label[1]}"
                 ].append(arg_key)
                 trace._module_build_data["module_layer_argnames"][
@@ -808,9 +808,9 @@ def _next_intervention_replacement_label(trace: "Trace") -> tuple[str, int, int]
     layer_type = "interventionreplacement"
     trace._layer_counter += 1
     trace._raw_layer_type_counter[layer_type] += 1
-    capture_index = trace._layer_counter
+    raw_index = trace._layer_counter
     type_index = trace._raw_layer_type_counter[layer_type]
-    return f"{layer_type}_{type_index}_{capture_index}_raw", capture_index, type_index
+    return f"{layer_type}_{type_index}_{raw_index}_raw", raw_index, type_index
 
 
 def _copy_field_value_for_replacement(value: Any) -> Any:
@@ -863,7 +863,7 @@ def _ensure_module_output_tensor_logged(
 
     parent_entries = [live_record_for_label(trace, label).fields for label in parent_labels]
     template_entry = parent_entries[0] if parent_entries else None
-    raw_label, capture_index, type_index = _next_intervention_replacement_label(trace)
+    raw_label, raw_index, type_index = _next_intervention_replacement_label(trace)
     fields_dict = {
         field_name: _copy_field_value_for_replacement(
             template_entry.get(field_name) if template_entry is not None else None
@@ -886,8 +886,8 @@ def _ensure_module_output_tensor_logged(
         {
             "_label_raw": raw_label,
             "_layer_label_raw": raw_label,
-            "capture_index": capture_index,
-            "compute_index": None,
+            "raw_index": raw_index,
+            "step_index": None,
             "source_trace": trace,
             "_tracing_finished": False,
             "_construction_done": False,
@@ -899,13 +899,12 @@ def _ensure_module_output_tensor_logged(
             "layer_label_no_pass_short": None,
             "type": "interventionreplacement",
             "type_index": type_index,
-            "trace_index": None,
             "pass_index": 1,
             "num_passes": 1,
             "lookup_keys": [],
             "out": None,
             "transformed_out": None,
-            "has_saved_outs": False,
+            "has_saved_activation": False,
             "out_postfunc": trace.out_postfunc,
             "annotations": {},
             "interventions": [],
@@ -922,24 +921,24 @@ def _ensure_module_output_tensor_logged(
             "dtype": tensor.dtype,
             "transformed_out_dtype": None,
             "memory": get_memory_amount(tensor),
-            "transformed_out_memory": None,
+            "transformed_activation_memory": None,
             "visualizer_path": None,
             "bytes_delta_at_call": 0,
             "bytes_peak_at_call": 0,
             "autograd_memory": None,
             "num_autograd_tensors": None,
-            "has_output_variations": False,
-            "output_versions_per_child": {},
+            "has_out_variations": False,
+            "out_versions_by_child": {},
             "grad": None,
             "transformed_grad": None,
-            "save_grads": trace.save_grads,
-            "has_grad": False,
+            "save_gradients": trace.save_gradients,
+            "has_saved_gradient": False,
             "grad_shape": None,
             "transformed_grad_shape": None,
             "grad_dtype": None,
             "transformed_grad_dtype": None,
-            "grad_memory": 0,
-            "transformed_grad_memory": None,
+            "gradient_memory": 0,
+            "transformed_gradient_memory": None,
             "func": None,
             "func_call_id": None,
             "func_name": "intervention_replacement",
@@ -966,12 +965,12 @@ def _ensure_module_output_tensor_logged(
                 if tensor.grad_fn is not None
                 else None
             ),
-            "grad_fn_id": id(tensor.grad_fn) if tensor.grad_fn is not None else None,
-            "grad_fn": tensor.grad_fn,
-            "grad_fn_log": None,
-            "is_part_of_iterable_output": False,
+            "grad_fn_object_id": id(tensor.grad_fn) if tensor.grad_fn is not None else None,
+            "grad_fn_handle": tensor.grad_fn,
+            "grad_fn": None,
+            "in_multi_output": False,
             "multi_output_index": None,
-            "multi_output_role": None,
+            "multi_output_name": None,
             "container_path": (),
             "container_spec": None,
             "parent_params": [],
@@ -1037,12 +1036,12 @@ def _ensure_module_output_tensor_logged(
             "_address_normalized": None,
             "modules": modules,
             "modules_entered": [],
-            "module_entry_argnames": defaultdict(list),
-            "module_ops_entered": [],
+            "module_entry_arg_keys": defaultdict(list),
+            "input_to_module_calls": [],
             "output_of_modules": [],
             "output_of_module_calls": [],
             "is_submodule_output": False,
-            "is_atomic_module_op": False,
+            "is_atomic_module": False,
             "atomic_module_call": None,
             "func_config": {},
         }
@@ -1053,7 +1052,7 @@ def _ensure_module_output_tensor_logged(
         parent_entry["children"].append(raw_label)
         parent_entry["has_children"] = True
     set_tensor_label(tensor, new_entry._label_raw)
-    if trace.save_grads:
+    if trace.save_gradients:
         from .ops import _add_tensor_backward_hook
 
         _add_tensor_backward_hook(trace, tensor, new_entry._label_raw)
@@ -1181,11 +1180,11 @@ def _record_module_exit_metadata(
         if getattr(module, "_forward_hooks", None):
             layer_entry["intervention_replaced"] = True
         layer_entry["is_submodule_output"] = True
-        layer_entry["is_atomic_module_op"] = _is_bottom_level_submodule_exit(trace, t, module)
+        layer_entry["is_atomic_module"] = _is_bottom_level_submodule_exit(trace, t, module)
         layer_entry["output_of_modules"].append(address)
         layer_entry["output_of_module_calls"].append((address, module_call_index))
         if len(output_entries) > 1:
-            layer_entry["multi_output_role"] = multi_output_role_from_path(
+            layer_entry["multi_output_name"] = multi_output_role_from_path(
                 container_path,
                 output_index,
                 hints=role_hints,
@@ -1284,7 +1283,7 @@ def module_forward_decorator(
                 op_counts=state.op_counts,
                 pass_index=state.pass_index,
                 event_index=state.event_index,
-                compute_index=None,
+                step_index=None,
                 time_since_pass_start=0.0,
                 include_source_events=state.options.include_source_events,
                 sample_id=state.sample_id,
@@ -1309,7 +1308,7 @@ def module_forward_decorator(
                 state.handle_predicate_exception(enter_ctx, exc)
             finally:
                 if not any(
-                    event.capture_index == enter_ctx.event_index
+                    event.raw_index == enter_ctx.event_index
                     for event in trace.capture_events.op_events
                 ):
                     append_projected_event(
@@ -1336,7 +1335,7 @@ def module_forward_decorator(
                     op_counts=state.op_counts,
                     pass_index=state.pass_index,
                     event_index=state.event_index,
-                    compute_index=None,
+                    step_index=None,
                     time_since_pass_start=0.0,
                     include_source_events=state.options.include_source_events,
                     sample_id=state.sample_id,
@@ -1359,7 +1358,7 @@ def module_forward_decorator(
                     state.handle_predicate_exception(exit_ctx, exc)
                 finally:
                     if not any(
-                        event.capture_index == exit_ctx.event_index
+                        event.raw_index == exit_ctx.event_index
                         for event in trace.capture_events.op_events
                     ):
                         append_projected_event(
@@ -1425,13 +1424,13 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
     sub_id = id(submodule)
 
     # Case 1: already determined in a prior call.
-    if layer_entry["is_atomic_module_op"]:
+    if layer_entry["is_atomic_module"]:
         return True
 
     # Case 2: tensor originated inside the model with no inputs entering
     # this submodule (e.g. a buffer-derived tensor in a leaf module).
     if layer_entry["is_internal_source"] and len(trace._mod_entered[sub_id]) == 0:
-        layer_entry["is_atomic_module_op"] = True
+        layer_entry["is_atomic_module"] = True
         layer_entry["atomic_module_call"] = (
             subaddress,
             trace._mod_call_index[sub_id],
@@ -1445,10 +1444,10 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
         parent_tensor = live_record_for_label(trace, parent_label).fields
         parent_modules_entered = parent_tensor["modules_entered"]
         if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != subaddress):
-            layer_entry["is_atomic_module_op"] = False
+            layer_entry["is_atomic_module"] = False
             return False
 
-    layer_entry["is_atomic_module_op"] = True
+    layer_entry["is_atomic_module"] = True
     layer_entry["atomic_module_call"] = (
         subaddress,
         trace._mod_call_index[sub_id],

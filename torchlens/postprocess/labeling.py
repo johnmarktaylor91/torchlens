@@ -68,9 +68,9 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             type_index = layer_type_counter[layer_type]
             layer_type_counter[layer_type] += 1
             if layer_type in ["input", "buffer"]:
-                trace_index = 0  # Input/buffer don't get a total order number.
+                step_index = 0  # Input/buffer don't get a total order number.
             else:
-                trace_index = layer_total_counter
+                step_index = layer_total_counter
                 layer_total_counter += 1
 
         else:
@@ -80,17 +80,17 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             layer_type = first_pass_tensor.layer_type
             type_index = first_pass_tensor.type_index
             if layer_type in ["input", "buffer"]:
-                trace_index = 0
+                step_index = 0
             else:
-                trace_index = first_pass_tensor.trace_index
+                step_index = first_pass_tensor.step_index
         tensor_log_entry.type_index = type_index
-        tensor_log_entry.trace_index = trace_index
+        tensor_log_entry.step_index = step_index
 
         if layer_type not in ["input", "output", "buffer"]:
             tensor_log_entry.layer_label_w_pass = (
-                f"{layer_type}_{type_index}_{trace_index}:{pass_index}"
+                f"{layer_type}_{type_index}_{step_index}:{pass_index}"
             )
-            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}_{trace_index}"
+            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}_{step_index}"
         else:
             tensor_log_entry.layer_label_w_pass = f"{layer_type}_{type_index}:{pass_index}"
             tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}"
@@ -127,7 +127,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     ``in`` checks on lists for large models.
     """
     unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
-    compute_index = 1
+    step_index = 1
     mbd = self._module_build_data
 
     # Shadow sets for O(1) membership checks in _log_module_hierarchy_info_for_layer.
@@ -144,13 +144,13 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
     for t, layer_entry in enumerate(self):
         if layer_entry.layer_type in ["input", "buffer"]:
-            layer_entry.compute_index = 0
+            layer_entry.step_index = 0
         elif layer_entry.layer_type == "output":
-            layer_entry.compute_index = None  # fix later
+            layer_entry.step_index = None  # fix later
         else:
-            layer_entry.compute_index = compute_index
+            layer_entry.step_index = step_index
             self.num_ops += 1
-            compute_index += 1
+            step_index += 1
 
         # Replace any layer names with their final names:
         _replace_layer_names_for_layer_entry(self, layer_entry)
@@ -241,9 +241,9 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
 
 
 def _finalize_output_compute_indexs(self: "Trace") -> None:
-    """Assign compute_index to output layers (deferred until total is known)."""
+    """Assign step_index to output layers (deferred until total is known)."""
     for layer in self.output_layers:
-        self[layer].compute_index = self.num_ops
+        self[layer].step_index = self.num_ops
 
 
 def _build_module_hierarchy_dicts(self: "Trace") -> None:
@@ -328,7 +328,7 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
     1. List/set fields (parents, children, etc.): creates NEW objects
        via type(orig)([comprehension]) — no shared-set corruption possible.
     2. parent_arg_positions dict: renames values in-place.
-    3. output_versions_per_child dict: renames keys.
+    3. out_versions_by_child dict: renames keys.
 
     Args:
         layer_entry: Op to rename labels for.
@@ -354,9 +354,9 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
                 sub[key] = mapping[value]
 
     # Fix the field names for different children tensor versions:
-    ctv = d.get("output_versions_per_child")
+    ctv = d.get("out_versions_by_child")
     if ctv:
-        d["output_versions_per_child"] = {
+        d["out_versions_by_child"] = {
             mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()
         }
 
@@ -534,7 +534,7 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
     for layer_entry in self:
         if getattr(layer_entry, "is_orphan", False):
             continue
-        if layer_entry.has_saved_outs:
+        if layer_entry.has_saved_activation:
             self.num_saved_ops += 1
 
     retained_call_group_labels = _labels_in_replay_ready_call_groups_to_retain(self)
@@ -549,7 +549,8 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
             for layer_entry in self
             if not getattr(layer_entry, "is_orphan", False)
             and (
-                layer_entry.has_saved_outs or layer_entry.layer_label in retained_call_group_labels
+                layer_entry.has_saved_activation
+                or layer_entry.layer_label in retained_call_group_labels
             )
         )
 
@@ -568,7 +569,7 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
         # Determine valid lookup keys and relate them to the tensor's realtime operation number:
         should_keep_for_replay = layer_entry.layer_label in retained_call_group_labels
         if (
-            getattr(layer_entry, "has_saved_outs", False)
+            getattr(layer_entry, "has_saved_activation", False)
             or self.keep_unsaved_layers
             or should_keep_for_replay
         ):
@@ -582,7 +583,7 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
             self.layer_labels.append(layer_entry.layer_label_no_pass)
             self.op_labels.append(layer_entry.layer_label_w_pass)
             self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_passes
-            if layer_entry.has_saved_outs:
+            if layer_entry.has_saved_activation:
                 self.saved_activation_memory += layer_entry.memory
             i += 1
         else:
@@ -632,7 +633,7 @@ def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
     labels_to_keep = {
         layer_entry.layer_label
         for layer_entry in self
-        if layer_entry.has_saved_outs and not getattr(layer_entry, "is_orphan", False)
+        if layer_entry.has_saved_activation and not getattr(layer_entry, "is_orphan", False)
     }
     label_to_entry = {layer_entry.layer_label: layer_entry for layer_entry in self}
     changed = True
@@ -738,6 +739,7 @@ def _add_lookup_keys_for_layer_entry(
         tensor_index,
         tensor_index - num_tensors_to_keep,
     ]
+    layer_entry.ordinal_index = tensor_index
 
     # If just one pass, also allow indexing by pass label.
     if layer_entry.num_passes == 1:
@@ -751,9 +753,9 @@ def _add_lookup_keys_for_layer_entry(
             f"{module_name}:{module_pass}"
             for module_name, module_pass in layer_entry.output_of_module_calls
         ]
-        layer_entry.module_ops_entered = [
+        layer_entry.input_to_module_calls = [
             f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.module_ops_entered
+            for module_name, module_pass in layer_entry.input_to_module_calls
         ]
         if layer_entry.module is not None:
             layer_entry.module = ":".join([str(i) for i in layer_entry.module])
@@ -784,9 +786,9 @@ def _add_lookup_keys_for_layer_entry(
     layer_entry.lookup_keys = lookup_keys_for_tensor
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
-            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.capture_index
+            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
             self.layer_dict_all_keys[lookup_key] = layer_entry
-        self._layer_num_to_lookup_keys_dict[layer_entry.capture_index].append(lookup_key)
+        self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
 
 
 def _trim_and_reorder_layer_entry_fields(layer_entry: Op) -> None:
@@ -848,7 +850,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     saved_layers = [
         layer_entry
         for layer_entry in self.layer_list
-        if getattr(layer_entry, "has_saved_outs", False)
+        if getattr(layer_entry, "has_saved_activation", False)
         and not getattr(layer_entry, "is_orphan", False)
     ]
     self.num_saved_layers = len({layer_entry.layer_label_no_pass for layer_entry in saved_layers})

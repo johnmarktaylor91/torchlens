@@ -4,7 +4,7 @@ This module contains every user-facing function:
   - ``trace``  - the main entry point (runs model, returns Trace)
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
-  - ``draw_backward`` - backward grad_fn visualization wrapper
+  - ``draw_backward`` - backward grad_fn_handle visualization wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
   - ``get_model_metadata`` - deprecated alias for ``log_model_metadata``
   - ``validate_batch_of_models_and_inputs`` - bulk validation harness
@@ -153,12 +153,12 @@ def _trace_mlx_model(
     keep_orphans: bool | MissingType,
     output_device: OutputDeviceLiteral | MissingType,
     out_transform: ActivationPostfunc | None | MissingType,
-    grad_transform: GradientPostfunc | None | MissingType,
+    gradient_transform: GradientPostfunc | None | MissingType,
     save_raw_outs: bool | MissingType,
-    save_raw_grads: bool | MissingType,
+    save_raw_gradients: bool | MissingType,
     save_arg_values: bool | MissingType,
-    save_grads: bool | MissingType,
-    grads_to_save: str | list[Any] | None | MissingType,
+    save_gradients: bool | MissingType,
+    gradients_to_save: str | list[Any] | None | MissingType,
     save_code_context: bool | MissingType,
     save_rng_states: bool | MissingType,
     random_seed: int | None | MissingType,
@@ -205,8 +205,8 @@ def _trace_mlx_model(
         keep_orphans=keep_orphans,
         output_device=output_device,
         save_arg_values=save_arg_values,
-        save_grads=save_grads,
-        grads_to_save=grads_to_save,
+        save_gradients=save_gradients,
+        gradients_to_save=gradients_to_save,
         save_code_context=save_code_context,
         save_rng_states=save_rng_states,
         random_seed=random_seed,
@@ -231,9 +231,9 @@ def _trace_mlx_model(
     save_options = merge_save_options(
         save=save,
         out_transform=resolved_out_transform,
-        grad_transform=grad_transform,
+        gradient_transform=gradient_transform,
         save_raw_outs=save_raw_outs,
-        save_raw_grads=save_raw_grads,
+        save_raw_gradients=save_raw_gradients,
     )
     if capture_options.intervention_ready:
         raise NotImplementedError(
@@ -248,7 +248,7 @@ def _trace_mlx_model(
         )
     if visualization is not None and visualization.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
-    if capture_options.save_grads:
+    if capture_options.save_gradients:
         raise NotImplementedError("backward capture is not supported on the mlx backend")
     raw_input = None
     model_input_args = input_args
@@ -276,8 +276,8 @@ def _trace_mlx_model(
         out_transform=save_options.out_transform,
         save_raw_outs=save_options.save_raw_outs,
         detach_saved_activations=capture_options.detach_saved_activations,
-        save_grads=capture_options.save_grads,
-        grads_to_save=capture_options.grads_to_save,
+        save_gradients=capture_options.save_gradients,
+        gradients_to_save=capture_options.gradients_to_save,
         random_seed=capture_options.random_seed,
         num_context_lines=capture_options.source_context_lines,
         save_arg_values=capture_options.save_arg_values,
@@ -698,8 +698,8 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
             value = getattr(layer, field_name, None)
             if isinstance(value, torch.Tensor):
                 layer._internal_set(field_name, value.detach().cpu())
-        layer.grad_fn = None
-        layer.grad_fn_log = None
+        layer.grad_fn_handle = None
+        layer.grad_fn_handle = None
         layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
         layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
     for layer_log in getattr(trace, "layer_logs", {}).values():
@@ -707,8 +707,8 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
             value = getattr(layer_log, field_name, None)
             if isinstance(value, torch.Tensor):
                 setattr(layer_log, field_name, value.detach().cpu())
-        layer_log.grad_fn = None
-        layer_log.grad_fn_log = None
+        layer_log.grad_fn_handle = None
+        layer_log.grad_fn_handle = None
 
 
 def _detach_nested_for_cache(value: Any) -> Any:
@@ -901,14 +901,14 @@ def _run_model_and_save_specified_outs(
     keep_orphans: bool = False,
     output_device: OutputDeviceLiteral = "same",
     out_transform: ActivationPostfunc | None = None,
-    grad_transform: GradientPostfunc | None = None,
+    gradient_transform: GradientPostfunc | None = None,
     save_raw_outs: bool = True,
-    save_raw_grads: bool = True,
+    save_raw_gradients: bool = True,
     mark_layer_depths: bool = False,
     detach_saved_activations: bool = False,
     save_arg_values: bool = False,
-    save_grads: bool = False,
-    grads_to_save: str | list[int | str] | None = "all",
+    save_gradients: bool = False,
+    gradients_to_save: str | list[int | str] | None = "all",
     random_seed: int | None = None,
     num_context_lines: int = 7,
     optimizer: Any = None,
@@ -963,18 +963,18 @@ def _run_model_and_save_specified_outs(
         output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
         out_transform: Optional transform applied to each out before storage
             (e.g., channel-wise averaging to reduce memory).
-        grad_transform: Optional transform applied to each grad before storage.
+        gradient_transform: Optional transform applied to each grad before storage.
         save_raw_outs: Whether raw outs are retained when ``out_transform``
             is set. Metadata always describes the raw out.
-        save_raw_grads: Whether raw grads are retained when ``grad_transform`` is set.
+        save_raw_gradients: Whether raw grads are retained when ``gradient_transform`` is set.
             Metadata always describes the raw grad.
         mark_layer_depths: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
         detach_saved_activations: If True, saved tensors are detached from the autograd graph.
         save_arg_values: If True, store the non-tensor arguments to each function call.
             Required for validation replay (``validate_saved_outs``).
-        save_grads: If True, register backward hooks to capture grads.
-        grads_to_save: Which layer grads to save.
+        save_gradients: If True, register backward hooks to capture grads.
+        gradients_to_save: Which layer grads to save.
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
@@ -1051,14 +1051,14 @@ def _run_model_and_save_specified_outs(
         model_class_name=model_class_name,
         output_device=output_device,
         out_postfunc=out_transform,
-        grad_transform=grad_transform,
+        gradient_transform=gradient_transform,
         save_raw_outs=save_raw_outs,
-        save_raw_grads=save_raw_grads,
+        save_raw_gradients=save_raw_gradients,
         keep_unsaved_layers=keep_unsaved_layers,
         keep_orphans=keep_orphans,
         save_arg_values=save_arg_values,
-        save_grads=save_grads,
-        grads_to_save=grads_to_save,
+        save_gradients=save_gradients,
+        gradients_to_save=gradients_to_save,
         detach_saved_activations=detach_saved_activations,
         mark_layer_depths=mark_layer_depths,
         num_context_lines=num_context_lines,
@@ -1114,7 +1114,7 @@ def _run_model_and_save_specified_outs(
             cast(torch.Tensor | list[Any], input_args),
             input_kwargs,
             layers_to_save,
-            grads_to_save,
+            gradients_to_save,
             random_seed,
         )
     except (TorchLensIOError, TorchLensPostfuncError):
@@ -1180,7 +1180,7 @@ def _render_one_layer_visualizer(
         Callable accepting ``(tensor, *, layer_label=None)``.
     """
 
-    if not bool(getattr(op, "has_saved_outs", False)) or getattr(op, "out", None) is None:
+    if not bool(getattr(op, "has_saved_activation", False)) or getattr(op, "out", None) is None:
         return
     try:
         rendered = visualizer(op.out, layer_label=getattr(op, "layer_label", None))
@@ -1233,16 +1233,16 @@ def trace(
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
     out_transform: ActivationPostfunc | None | MissingType = MISSING,
-    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    gradient_transform: GradientPostfunc | None | MissingType = MISSING,
     gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     save_raw_outs: bool | MissingType = MISSING,
-    save_raw_grads: bool | MissingType = MISSING,
+    save_raw_gradients: bool | MissingType = MISSING,
     out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     mark_layer_depths: bool | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
     save_arg_values: bool | MissingType = MISSING,
-    save_grads: bool | MissingType = MISSING,
-    grads_to_save: str | list[Any] | None | MissingType = MISSING,
+    save_gradients: bool | MissingType = MISSING,
+    gradients_to_save: str | list[Any] | None | MissingType = MISSING,
     save_code_context: bool | MissingType = MISSING,
     save_rng_states: bool | MissingType = MISSING,
     random_seed: int | None | MissingType = MISSING,
@@ -1329,22 +1329,22 @@ def trace(
         out_transform: Optional function applied to each out before saving. The
             raw out remains in ``layer.tensor``/``layer.out`` by default, and
             the transform result is stored in ``layer.transformed_out``.
-        grad_transform: Optional function applied to each grad before saving. The raw
+        gradient_transform: Optional function applied to each grad before saving. The raw
             grad remains in ``layer.grad`` by default, and the postfunc result is stored
             in ``layer.transformed_grad``.
-        gradient_postfunc: Alias for ``grad_transform``. Passing both names is an error.
+        gradient_postfunc: Alias for ``gradient_transform``. Passing both names is an error.
         out_postfunc: Deprecated alias for ``out_transform``.
         save_raw_outs: When ``False`` and ``out_transform`` is set, do not retain
             raw out tensors in memory; raw out metadata is still populated.
-        save_raw_grads: When ``False`` and ``grad_transform`` is set, do not retain raw
+        save_raw_gradients: When ``False`` and ``gradient_transform`` is set, do not retain raw
             grad tensors in memory; raw grad metadata is still populated.
         mark_layer_depths: Deprecated alias for
             ``compute_input_output_distances``.
         detach_saved_activations: If True, detach saved tensors from the autograd graph.
         save_arg_values: Store non-tensor args for each function call (needed for
             ``validate_forward_pass``).
-        save_grads: Capture grads during a subsequent backward pass.
-        grads_to_save: Which layer grads to save. When omitted, explicit
+        save_gradients: Capture grads during a subsequent backward pass.
+        gradients_to_save: Which layer grads to save. When omitted, explicit
             backward capture uses the same selection as ``layers_to_save``.
         save_code_context: Python call-stack identity is always recorded for each
             tensor operation. If False (default), identity fields such as ``file``,
@@ -1404,7 +1404,7 @@ def trace(
         stop_after: Experimental stop-early site. Unsupported for ``trace``.
 
     Postfunc behavior:
-        ``out_transform`` and ``grad_transform`` both take a tensor, should return a
+        ``out_transform`` and ``gradient_transform`` both take a tensor, should return a
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
         raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
 
@@ -1445,12 +1445,12 @@ def trace(
             keep_orphans=keep_orphans,
             output_device=output_device,
             out_transform=out_transform,
-            grad_transform=grad_transform,
+            gradient_transform=gradient_transform,
             save_raw_outs=save_raw_outs,
-            save_raw_grads=save_raw_grads,
+            save_raw_gradients=save_raw_gradients,
             save_arg_values=save_arg_values,
-            save_grads=save_grads,
-            grads_to_save=grads_to_save,
+            save_gradients=save_gradients,
+            gradients_to_save=gradients_to_save,
             save_code_context=save_code_context,
             save_rng_states=save_rng_states,
             random_seed=random_seed,
@@ -1479,9 +1479,9 @@ def trace(
         warn_deprecated_alias("out_postfunc", "out_transform")
         out_transform = out_postfunc
     if gradient_postfunc is not MISSING:
-        if grad_transform is not MISSING:
-            raise TypeError("kwarg gradient_postfunc aliases grad_transform; do not pass both")
-        grad_transform = gradient_postfunc
+        if gradient_transform is not MISSING:
+            raise TypeError("kwarg gradient_postfunc aliases gradient_transform; do not pass both")
+        gradient_transform = gradient_postfunc
 
     capture_options = merge_capture_options(
         capture=capture,
@@ -1497,8 +1497,8 @@ def trace(
         keep_orphans=keep_orphans,
         output_device=output_device,
         save_arg_values=save_arg_values,
-        save_grads=save_grads,
-        grads_to_save=grads_to_save,
+        save_gradients=save_gradients,
+        gradients_to_save=gradients_to_save,
         save_code_context=save_code_context,
         save_rng_states=save_rng_states,
         random_seed=random_seed,
@@ -1539,9 +1539,9 @@ def trace(
     save_options = merge_save_options(
         save=save,
         out_transform=out_transform,
-        grad_transform=grad_transform,
+        gradient_transform=gradient_transform,
         save_raw_outs=save_raw_outs,
-        save_raw_grads=save_raw_grads,
+        save_raw_gradients=save_raw_gradients,
     )
     streaming_options = merge_streaming_options(
         streaming=streaming,
@@ -1562,11 +1562,11 @@ def trace(
     keep_orphans = capture_options.keep_orphans
     output_device = capture_options.output_device
     out_transform = save_options.out_transform
-    grad_transform = save_options.grad_transform
+    gradient_transform = save_options.gradient_transform
     save_raw_outs = save_options.save_raw_outs
-    save_raw_grads = save_options.save_raw_grads
+    save_raw_gradients = save_options.save_raw_gradients
     save_arg_values = capture_options.save_arg_values
-    save_grads = capture_options.save_grads
+    save_gradients = capture_options.save_gradients
     save_code_context = capture_options.save_code_context
     save_rng_states = capture_options.save_rng_states
     random_seed = capture_options.random_seed
@@ -1598,20 +1598,22 @@ def trace(
         raise ValueError("save_outs_to and out_sink are mutually exclusive.")
     train_mode_explicit = capture_options.is_field_explicit("backward_ready")
     train_mode_value = capture_options.backward_ready
-    backward_opted_in = capture_options.is_field_explicit("grads_to_save")
+    backward_opted_in = capture_options.is_field_explicit("gradients_to_save")
     grad_streaming_requested = save_grads_to_value is not None
     if grad_streaming_requested:
-        save_grads = True
+        save_gradients = True
     if backward_opted_in:
         if train_mode_explicit and train_mode_value is False:
             raise ValueError(
-                "grads_to_save opts into backward capture, which requires backward_ready=True. "
+                "gradients_to_save opts into backward capture, which requires backward_ready=True. "
                 "Omit backward_ready or set backward_ready=True."
             )
         train_mode_value = True
-        save_grads = True
-    grads_to_save_resolved = capture_options.grads_to_save if backward_opted_in else layers_to_save
-    if save_grads and save_grads_to_value is None and streaming_options.bundle_path is not None:
+        save_gradients = True
+    grads_to_save_resolved = (
+        capture_options.gradients_to_save if backward_opted_in else layers_to_save
+    )
+    if save_gradients and save_grads_to_value is None and streaming_options.bundle_path is not None:
         save_grads_to_value = streaming_options.bundle_path
     if (
         save_grads_to_value is not None
@@ -1655,8 +1657,8 @@ def trace(
             "keep_orphans": keep_orphans,
             "output_device": output_device,
             "save_arg_values": save_arg_values,
-            "save_grads": save_grads,
-            "grads_to_save": grads_to_save_resolved,
+            "save_gradients": save_gradients,
+            "gradients_to_save": grads_to_save_resolved,
             "save_code_context": save_code_context,
             "save_rng_states": save_rng_states,
             "source_context_lines": source_context_lines,
@@ -1687,7 +1689,7 @@ def trace(
         )
     if save_grads_to_value is not None and uses_two_pass:
         raise TorchLensIOError(
-            'save_grads_to is only supported with grads_to_save="all" in this '
+            'save_grads_to is only supported with gradients_to_save="all" in this '
             "release. Capture all grads and filter post-hoc with torchlens.save(...)."
         )
 
@@ -1703,14 +1705,14 @@ def trace(
             keep_orphans=keep_orphans,
             output_device=output_device,
             out_transform=out_transform,
-            grad_transform=grad_transform,
+            gradient_transform=gradient_transform,
             save_raw_outs=save_raw_outs,
-            save_raw_grads=save_raw_grads,
+            save_raw_gradients=save_raw_gradients,
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,
-            save_grads=save_grads,
-            grads_to_save=grads_to_save_resolved,
+            save_gradients=save_gradients,
+            gradients_to_save=grads_to_save_resolved,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
@@ -1764,14 +1766,14 @@ def trace(
             keep_orphans=keep_orphans,
             output_device=output_device,
             out_transform=out_transform,
-            grad_transform=grad_transform,
+            gradient_transform=gradient_transform,
             save_raw_outs=save_raw_outs,
-            save_raw_grads=save_raw_grads,
+            save_raw_gradients=save_raw_gradients,
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,
-            save_grads=False,
-            grads_to_save=None,
+            save_gradients=False,
+            gradients_to_save=None,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
@@ -1808,14 +1810,14 @@ def trace(
         next(capture_progress, None)
         _vprint(trace, "Two-pass mode: Pass 2 (fast, saving requested layers)")
         trace.keep_unsaved_layers = keep_unsaved_layers
-        trace.save_grads = save_grads
-        trace.grads_to_save = grads_to_save_resolved
+        trace.save_gradients = save_gradients
+        trace.gradients_to_save = grads_to_save_resolved
         trace.save_new_outs(
             model=model,
             input_args=cast(torch.Tensor | list[Any], input_args),
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,  # type: ignore[arg-type]
-            grads_to_save=grads_to_save_resolved,
+            gradients_to_save=grads_to_save_resolved,
             random_seed=random_seed,
             backward_ready=train_mode_value,
         )
@@ -2069,7 +2071,7 @@ def show_model_graph(
         out_transform=None,
         mark_layer_depths=False,
         detach_saved_activations=False,
-        save_grads=False,
+        save_gradients=False,
         random_seed=random_seed,
         recurrence_detection=recurrence_detection_enabled,
         verbose=verbose,
@@ -2104,7 +2106,7 @@ def draw_backward(
     code_panel: CodePanelOption = False,
     visualization: VisualizationOptions | None = None,
 ) -> str:
-    """Render an existing Trace's captured backward grad_fn graph.
+    """Render an existing Trace's captured backward grad_fn_handle graph.
 
     Parameters
     ----------
@@ -2124,12 +2126,12 @@ def draw_backward(
     vis_edge_overrides:
         Graphviz edge-level overrides.
     node_spec_fn:
-        Optional callback receiving ``(grad_fn_log, default_spec)``.
+        Optional callback receiving ``(grad_fn_handle, default_spec)``.
     collapsed_node_spec_fn:
         Accepted for forward-visualization API symmetry. Not applied because
         backward graphs do not render collapsed module nodes.
     vis_node_mode:
-        Accepted for forward-visualization API symmetry. Not applied to grad_fn
+        Accepted for forward-visualization API symmetry. Not applied to grad_fn_handle
         nodes.
     code_panel:
         Optional source-code panel mode.
@@ -2229,7 +2231,7 @@ def draw_combined(
     node_spec_fn:
         Optional callback receiving ``(layer_log, default_spec)``.
     backward_node_spec_fn:
-        Optional callback receiving ``(grad_fn_log, default_spec)``.
+        Optional callback receiving ``(grad_fn_handle, default_spec)``.
     vis_mode:
         Combined rendering currently supports only ``"unrolled"``.
     intervening_cluster:
@@ -2470,21 +2472,27 @@ def _add_bundle_backward_graph(dot: Any, bundle: Any) -> None:
                     color="#7A3E9D",
                 )
                 continue
-            visible_ids = {grad_fn.grad_fn_id for grad_fn in grad_fns}
-            for grad_fn in grad_fns:
+            visible_ids = {grad_fn_handle.grad_fn_object_id for grad_fn_handle in grad_fns}
+            for grad_fn_handle in grad_fns:
                 subgraph.node(
-                    f"bwd_{member_name}_{grad_fn.grad_fn_id}",
-                    label=str(getattr(grad_fn, "label", getattr(grad_fn, "name", "grad_fn"))),
+                    f"bwd_{member_name}_{grad_fn_handle.grad_fn_object_id}",
+                    label=str(
+                        getattr(
+                            grad_fn_handle,
+                            "label",
+                            getattr(grad_fn_handle, "name", "grad_fn_handle"),
+                        )
+                    ),
                     shape="box",
                     style="filled,rounded",
                     fillcolor="#F4E8FA",
                     color="#7A3E9D",
                 )
-            for grad_fn in grad_fns:
-                for next_id in getattr(grad_fn, "next_grad_fn_ids", []):
+            for grad_fn_handle in grad_fns:
+                for next_id in getattr(grad_fn_handle, "next_grad_fn_ids", []):
                     if next_id in visible_ids:
                         subgraph.edge(
-                            f"bwd_{member_name}_{grad_fn.grad_fn_id}",
+                            f"bwd_{member_name}_{grad_fn_handle.grad_fn_object_id}",
                             f"bwd_{member_name}_{next_id}",
                             color="#7A3E9D",
                         )
@@ -2674,7 +2682,7 @@ def validate_forward_pass(
             out_transform=None,
             mark_layer_depths=False,
             detach_saved_activations=False,
-            save_grads=False,
+            save_gradients=False,
             save_arg_values=True,
             random_seed=random_seed,
             save_rng_states=True,

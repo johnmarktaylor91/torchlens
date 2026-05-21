@@ -82,7 +82,7 @@ def _saved_layers(trace: Trace) -> list[Any]:
         Saved layer-pass entries in log order.
     """
 
-    return [layer for layer in trace.layer_list if layer.has_saved_outs]
+    return [layer for layer in trace.layer_list if layer.has_saved_activation]
 
 
 def _first_saved_layer(trace: Trace) -> Any:
@@ -99,7 +99,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_outs)
+    return next(layer for layer in trace.layer_list if layer.has_saved_activation)
 
 
 def _contains_blob_ref(value: Any) -> bool:

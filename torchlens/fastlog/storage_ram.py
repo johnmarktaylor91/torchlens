@@ -68,8 +68,8 @@ class RamStorageBackend:
             backend), transformed RAM payload, and transformed disk payload.
         """
 
-        transform = options.grad_transform if kind == "grad" else options.out_transform
-        save_raw = options.save_raw_grads if kind == "grad" else options.save_raw_outs
+        transform = options.gradient_transform if kind == "grad" else options.out_transform
+        save_raw = options.save_raw_gradients if kind == "grad" else options.save_raw_outs
         return _resolve_storage(
             tensor,
             spec,

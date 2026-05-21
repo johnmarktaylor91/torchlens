@@ -322,19 +322,19 @@ def _assign_output_roles(
     if len(output_entries) <= 1:
         return
     for index, output in enumerate(output_entries):
-        if output.multi_output_role is not None:
+        if output.multi_output_name is not None:
             parent_layer = getattr(output, "parent_layer_log", None)
             if parent_layer is not None:
-                parent_layer.multi_output_role = output.multi_output_role
+                parent_layer.multi_output_name = output.multi_output_name
             continue
-        output.multi_output_role = multi_output_role_from_path(
+        output.multi_output_name = multi_output_role_from_path(
             tuple(output.container_path or ()),
             output.multi_output_index if output.multi_output_index is not None else index,
             hints=hints,
         )
         parent_layer = getattr(output, "parent_layer_log", None)
         if parent_layer is not None:
-            parent_layer.multi_output_role = output.multi_output_role
+            parent_layer.multi_output_name = output.multi_output_name
 
 
 def _merge_layer_log_conditional_fields(
@@ -501,7 +501,7 @@ def _build_submodule_call_logs(
         for layer_label in pass_layers:
             if layer_label in self.layer_dict_all_keys:
                 te = self.layer_dict_all_keys[layer_label]
-                if te.is_submodule_input and call_label in te.module_ops_entered:
+                if te.is_submodule_input and call_label in te.input_to_module_calls:
                     pass_input_layers.append(layer_label)
                 if te.is_submodule_output and call_label in te.output_of_module_calls:
                     pass_output_layers.append(layer_label)
@@ -817,7 +817,7 @@ def _build_layer_logs(self: "Trace") -> None:
     1. has_input_ancestor: OR across ops (True if ANY pass has an input ancestor).
     2. io_role: Character-wise merge with '*' for differing characters
        (e.g., "output.0" + "output.1" -> "output.*").
-    3. is_atomic_module_op: OR across ops.
+    3. is_atomic_module: OR across ops.
     4. is_in_conditional_body: OR across ops.
     5. conditional_role_stacks / conditional_branch_stack_ops:
        unique stack signatures in first-seen order plus sorted pass maps.
@@ -868,9 +868,9 @@ def _build_layer_logs(self: "Trace") -> None:
                 if merged.endswith("*"):
                     merged = merged.rstrip("*") + "*"
                 layer_log.io_role = merged
-            # Merge field 3/3: is_atomic_module_op (OR across ops).
-            if pass_log.is_atomic_module_op:
-                layer_log.is_atomic_module_op = True
+            # Merge field 3/3: is_atomic_module (OR across ops).
+            if pass_log.is_atomic_module:
+                layer_log.is_atomic_module = True
 
         layer_log.ops[pass_log.pass_index] = pass_log
         layer_log.call_labels.append(pass_log.layer_label)
@@ -1049,7 +1049,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     scrubbed_state, blob_specs, unsupported_tensor_records = scrub_for_save(
         self,
         include_outs=True,
-        include_grads=self.save_grads,
+        include_grads=self.save_gradients,
         include_saved_args=self.save_arg_values,
         include_rng_states=self.save_rng_states,
     )

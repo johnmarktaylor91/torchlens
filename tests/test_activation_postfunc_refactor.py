@@ -56,7 +56,7 @@ def test_out_postfunc_keeps_raw_tensor_and_transformed_metadata() -> None:
     assert layer.shape != layer.transformed_out_shape
     assert layer.dtype == layer.out.dtype
     assert layer.transformed_out_dtype == layer.transformed_out.dtype
-    assert layer.transformed_out_memory == layer.transformed_out.nelement() * (
+    assert layer.transformed_activation_memory == layer.transformed_out.nelement() * (
         layer.transformed_out.element_size()
     )
 
@@ -94,8 +94,8 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
-        grads_to_save="all",
-        grad_transform=lambda t: t.mean(),
+        gradients_to_save="all",
+        gradient_transform=lambda t: t.mean(),
     )
     trace.log_backward(_output_loss(trace))
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
@@ -105,20 +105,20 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
     assert layer.transformed_grad is not None
     assert layer.transformed_grad_shape == ()
     assert layer.transformed_grad_dtype == layer.transformed_grad.dtype
-    assert layer.transformed_grad_memory == layer.transformed_grad.nelement() * (
+    assert layer.transformed_gradient_memory == layer.transformed_grad.nelement() * (
         layer.transformed_grad.element_size()
     )
 
 
 def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
-    """save_raw_grads=False drops raw grad storage but preserves raw metadata."""
+    """save_raw_gradients=False drops raw grad storage but preserves raw metadata."""
 
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
-        grads_to_save="all",
-        grad_transform=lambda t: t.mean(),
-        save_raw_grads=False,
+        gradients_to_save="all",
+        gradient_transform=lambda t: t.mean(),
+        save_raw_gradients=False,
     )
     trace.log_backward(_output_loss(trace))
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
@@ -126,7 +126,7 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
     assert layer.grad is None
     assert layer.grad_shape is not None
     assert layer.grad_dtype is not None
-    assert layer.grad_memory > 0
+    assert layer.gradient_memory > 0
     assert layer.transformed_grad is not None
 
 
@@ -164,7 +164,7 @@ def test_train_mode_out_postfunc_connected_ops() -> None:
         out_postfunc=lambda t: t * 2,
     )
 
-    assert _first_transformed_layer(trace).transformed_out.grad_fn is not None
+    assert _first_transformed_layer(trace).transformed_out.grad_fn_handle is not None
 
 
 def test_postfunc_error_has_context_and_cause() -> None:
@@ -201,7 +201,7 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
     assert torch.equal(restored_layer.transformed_out, layer.transformed_out)
     assert restored_layer.transformed_out_shape == layer.transformed_out_shape
     assert restored_layer.transformed_out_dtype == layer.transformed_out_dtype
-    assert restored_layer.transformed_out_memory == layer.transformed_out_memory
+    assert restored_layer.transformed_activation_memory == layer.transformed_activation_memory
 
 
 def test_postfunc_type_aliases_exported() -> None:

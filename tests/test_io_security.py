@@ -184,7 +184,7 @@ def test_lazy_materialize_rejects_tampered_relative_path(tmp_path: Path) -> None
 
     bundle_path = _build_bundle(tmp_path)
     lazy_log = load(bundle_path, lazy=True)
-    layer = next(layer for layer in lazy_log.layer_list if layer.has_saved_outs)
+    layer = next(layer for layer in lazy_log.layer_list if layer.has_saved_activation)
     ref = layer.out_ref
     assert ref is not None
 

@@ -1718,9 +1718,9 @@ def test_output_matches_parent_no_false_positive(input_2d):
     # No layer should have child tensor variations since nothing is mutated
     for label in mh.layer_labels:
         entry = mh[label]
-        assert not entry.has_output_variations, (
+        assert not entry.has_out_variations, (
             f"Layer {label} should not have child tensor variations in a "
-            f"mutation-free model, but has_output_variations={entry.has_output_variations}"
+            f"mutation-free model, but has_out_variations={entry.has_out_variations}"
         )
 
 

@@ -59,11 +59,11 @@
       },
       {
         "kind": "field",
-        "name": "grad_memory"
+        "name": "gradient_memory"
       },
       {
         "kind": "property",
-        "name": "grad_memory_str"
+        "name": "gradient_memory_str"
       },
       {
         "kind": "field",
@@ -75,7 +75,7 @@
       },
       {
         "kind": "field",
-        "name": "has_grad"
+        "name": "has_saved_gradient"
       },
       {
         "kind": "property",
@@ -83,7 +83,7 @@
       },
       {
         "kind": "field",
-        "name": "has_saved_outs"
+        "name": "has_saved_activation"
       },
       {
         "kind": "property",
@@ -311,7 +311,7 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn_id"
+        "name": "grad_fn_object_id"
       },
       {
         "kind": "field",
@@ -495,11 +495,11 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn_log"
+        "name": "grad_fn_handle"
       },
       {
         "kind": "property",
-        "name": "capture_index"
+        "name": "raw_index"
       },
       {
         "kind": "field",
@@ -567,7 +567,7 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn_id"
+        "name": "grad_fn_object_id"
       },
       {
         "kind": "field",
@@ -575,7 +575,7 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn"
+        "name": "grad_fn_handle"
       },
       {
         "kind": "property",
@@ -591,7 +591,7 @@
       },
       {
         "kind": "property",
-        "name": "has_grad"
+        "name": "has_saved_gradient"
       },
       {
         "kind": "property",
@@ -599,7 +599,7 @@
       },
       {
         "kind": "property",
-        "name": "has_saved_outs"
+        "name": "has_saved_activation"
       },
       {
         "kind": "property",
@@ -635,7 +635,7 @@
       },
       {
         "kind": "field",
-        "name": "is_part_of_iterable_output"
+        "name": "in_multi_output"
       },
       {
         "kind": "field",
@@ -675,7 +675,7 @@
       },
       {
         "kind": "field",
-        "name": "trace_index"
+        "name": "step_index"
       },
       {
         "kind": "field",
@@ -743,7 +743,7 @@
       },
       {
         "kind": "property",
-        "name": "compute_index"
+        "name": "step_index"
       },
       {
         "kind": "field",
@@ -803,7 +803,7 @@
       },
       {
         "kind": "field",
-        "name": "save_grads"
+        "name": "save_gradients"
       },
       {
         "kind": "field",
@@ -851,7 +851,7 @@
       },
       {
         "kind": "field",
-        "name": "transformed_out_memory"
+        "name": "transformed_activation_memory"
       },
       {
         "kind": "field",
@@ -867,7 +867,7 @@
       },
       {
         "kind": "field",
-        "name": "transformed_grad_memory"
+        "name": "transformed_gradient_memory"
       },
       {
         "kind": "field",
@@ -981,7 +981,7 @@
       },
       {
         "kind": "field",
-        "name": "output_versions_per_child"
+        "name": "out_versions_by_child"
       },
       {
         "kind": "property",
@@ -1033,11 +1033,11 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn_log"
+        "name": "grad_fn_handle"
       },
       {
         "kind": "field",
-        "name": "capture_index"
+        "name": "raw_index"
       },
       {
         "kind": "field",
@@ -1133,7 +1133,7 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn_id"
+        "name": "grad_fn_object_id"
       },
       {
         "kind": "field",
@@ -1141,15 +1141,15 @@
       },
       {
         "kind": "field",
-        "name": "grad_fn"
+        "name": "grad_fn_handle"
       },
       {
         "kind": "field",
-        "name": "grad_memory"
+        "name": "gradient_memory"
       },
       {
         "kind": "property",
-        "name": "grad_memory_str"
+        "name": "gradient_memory_str"
       },
       {
         "kind": "field",
@@ -1161,7 +1161,7 @@
       },
       {
         "kind": "field",
-        "name": "has_output_variations"
+        "name": "has_out_variations"
       },
       {
         "kind": "field",
@@ -1173,7 +1173,7 @@
       },
       {
         "kind": "field",
-        "name": "has_grad"
+        "name": "has_saved_gradient"
       },
       {
         "kind": "field",
@@ -1189,7 +1189,7 @@
       },
       {
         "kind": "field",
-        "name": "has_saved_outs"
+        "name": "has_saved_activation"
       },
       {
         "kind": "property",
@@ -1245,7 +1245,7 @@
       },
       {
         "kind": "field",
-        "name": "is_atomic_module_op"
+        "name": "is_atomic_module"
       },
       {
         "kind": "field",
@@ -1257,7 +1257,7 @@
       },
       {
         "kind": "field",
-        "name": "is_part_of_iterable_output"
+        "name": "in_multi_output"
       },
       {
         "kind": "field",
@@ -1309,7 +1309,7 @@
       },
       {
         "kind": "field",
-        "name": "trace_index"
+        "name": "step_index"
       },
       {
         "kind": "field",
@@ -1381,7 +1381,7 @@
       },
       {
         "kind": "field",
-        "name": "module_ops_entered"
+        "name": "input_to_module_calls"
       },
       {
         "kind": "field",
@@ -1393,7 +1393,7 @@
       },
       {
         "kind": "field",
-        "name": "module_entry_argnames"
+        "name": "module_entry_arg_keys"
       },
       {
         "kind": "field",
@@ -1437,7 +1437,7 @@
       },
       {
         "kind": "field",
-        "name": "compute_index"
+        "name": "step_index"
       },
       {
         "kind": "field",
@@ -1509,7 +1509,7 @@
       },
       {
         "kind": "field",
-        "name": "save_grads"
+        "name": "save_gradients"
       },
       {
         "kind": "method",
@@ -1565,7 +1565,7 @@
       },
       {
         "kind": "field",
-        "name": "transformed_out_memory"
+        "name": "transformed_activation_memory"
       },
       {
         "kind": "field",
@@ -1581,7 +1581,7 @@
       },
       {
         "kind": "field",
-        "name": "transformed_grad_memory"
+        "name": "transformed_gradient_memory"
       },
       {
         "kind": "field",
@@ -1891,7 +1891,7 @@
       },
       {
         "kind": "field",
-        "name": "grad_transform"
+        "name": "gradient_transform"
       },
       {
         "kind": "field",
@@ -1899,7 +1899,7 @@
       },
       {
         "kind": "field",
-        "name": "grads_to_save"
+        "name": "gradients_to_save"
       },
       {
         "kind": "field",
@@ -1915,7 +1915,7 @@
       },
       {
         "kind": "field",
-        "name": "has_grads"
+        "name": "has_gradients"
       },
       {
         "kind": "field",
@@ -2223,7 +2223,7 @@
       },
       {
         "kind": "field",
-        "name": "save_grads"
+        "name": "save_gradients"
       },
       {
         "kind": "method",
@@ -2239,7 +2239,7 @@
       },
       {
         "kind": "field",
-        "name": "save_raw_grads"
+        "name": "save_raw_gradients"
       },
       {
         "kind": "field",
@@ -2781,11 +2781,11 @@
       },
       {
         "kind": "property",
-        "name": "grad_memory"
+        "name": "gradient_memory"
       },
       {
         "kind": "property",
-        "name": "grad_memory_str"
+        "name": "gradient_memory_str"
       },
       {
         "kind": "property",
@@ -2793,7 +2793,7 @@
       },
       {
         "kind": "property",
-        "name": "has_grad"
+        "name": "has_saved_gradient"
       },
       {
         "kind": "field",
@@ -3226,7 +3226,7 @@
         "buffer_log",
         "cleanup",
         "func_call_location",
-        "grad_fn_log",
+        "grad_fn_handle",
         "grad_fn_call_log",
         "interface",
         "internal_types",

@@ -46,7 +46,7 @@ class ChildModuleModel(nn.Module):
 def _keep_ops_until_fourth(ctx: RecordContext) -> bool:
     """Halt before recording the fourth operation."""
 
-    if ctx.kind == "op" and ctx.compute_index == 4:
+    if ctx.kind == "op" and ctx.step_index == 4:
         tl.fastlog.halt("stop")
     return ctx.kind == "op"
 
@@ -54,7 +54,7 @@ def _keep_ops_until_fourth(ctx: RecordContext) -> bool:
 def _op_compute_indexes(recording: tl.fastlog.Recording) -> list[int | None]:
     """Return compute indexes for retained operation records."""
 
-    return [record.ctx.compute_index for record in recording.records if record.ctx.kind == "op"]
+    return [record.ctx.step_index for record in recording.records if record.ctx.kind == "op"]
 
 
 @pytest.mark.smoke
@@ -201,7 +201,7 @@ def test_halt_multi_call_recorder_first_halt_wins() -> None:
         """Halt once per pass with distinct reasons."""
 
         nonlocal call_count
-        if ctx.kind == "op" and ctx.compute_index == 2:
+        if ctx.kind == "op" and ctx.step_index == 2:
             call_count += 1
             tl.fastlog.halt(f"halt {call_count}")
         return ctx.kind == "op"
@@ -230,7 +230,7 @@ def test_halt_through_user_except_exception() -> None:
     def keep_op(ctx: RecordContext) -> bool:
         """Try and fail to catch the BaseException halt as Exception."""
 
-        if ctx.kind == "op" and ctx.compute_index == 1:
+        if ctx.kind == "op" and ctx.step_index == 1:
             try:
                 tl.fastlog.halt("base")
             except Exception:
@@ -248,7 +248,7 @@ def test_halted_recording_partial_events_present() -> None:
 
     recording = tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
 
-    assert [ctx.compute_index for ctx in recording.recording_trace.events if ctx.kind == "op"] == [
+    assert [ctx.step_index for ctx in recording.recording_trace.events if ctx.kind == "op"] == [
         1,
         2,
         3,

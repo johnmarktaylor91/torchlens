@@ -68,7 +68,7 @@ def _logged_backward_stream(
         model,
         inputs,
         layers_to_save="all",
-        save_grads=True,
+        save_gradients=True,
         save_grads_to=bundle_path,
         keep_grads_in_memory=keep_grads_in_memory,
     )
@@ -122,14 +122,16 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     tl.save(trace, roundtrip_path)
     restored = tl.load(roundtrip_path, lazy=True)
     label = next(iter(expected))
-    grad_fn = next(grad_fn for grad_fn in restored.grad_fns if grad_fn.op)
+    grad_fn_handle = next(
+        grad_fn_handle for grad_fn_handle in restored.grad_fns if grad_fn_handle.op
+    )
 
     assert restored.has_backward_pass is True
     assert restored.backward_num_calls == trace.backward_num_calls
     assert restored.backward_memory_backend == trace.backward_memory_backend
     assert len(restored.grad_fn_logs) == len(trace.grad_fn_logs)
     assert restored.grad_fn_order == trace.grad_fn_order
-    assert grad_fn.op.grad_fn_log is grad_fn
+    assert grad_fn_handle.op.grad_fn_handle is grad_fn_handle
     assert torch.equal(restored[label].grad, expected[label])
 
 
@@ -145,7 +147,7 @@ def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
             model,
             inputs,
             layers_to_save="all",
-            save_grads=True,
+            save_gradients=True,
             save_grads_to=tmp_path / "bad.tl",
             backward_ready=True,
         )

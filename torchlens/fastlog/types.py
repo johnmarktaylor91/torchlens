@@ -109,7 +109,7 @@ class GradRecordContext:
     grad_fn_label:
         Label assigned to the autograd node during the backward walk.
     layer_label:
-        Forward fastlog label joined by ``grad_fn`` identity, when available.
+        Forward fastlog label joined by ``grad_fn_handle`` identity, when available.
     op_label:
         Alias of the joined forward operation label for selector parity.
     module_stack:
@@ -565,7 +565,7 @@ def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -
 
 def build_grad_record_context(
     recording_state: "RecordingState",
-    grad_fn: Any,
+    grad_fn_handle: Any,
     grad: torch.Tensor | None,
     *,
     grad_fn_label: str,
@@ -576,15 +576,15 @@ def build_grad_record_context(
 ) -> GradRecordContext:
     """Build a fastlog gradient context from a backward node and optional join."""
 
-    forward_ctx = recording_state.grad_fn_to_context.get(grad_fn)
+    forward_ctx = recording_state.grad_fn_to_context.get(grad_fn_handle)
     shape = tuple(grad.shape) if grad is not None else None
     dtype = grad.dtype if grad is not None else None
     tensor_device = grad.device if grad is not None else None
-    grad_fn_type = type(grad_fn).__name__.removesuffix("Backward0").lower()
+    grad_fn_type = type(grad_fn_handle).__name__.removesuffix("Backward0").lower()
     if forward_ctx is None:
         return GradRecordContext(
             grad_fn_label=grad_fn_label,
-            grad_fn_class_name=type(grad_fn).__name__,
+            grad_fn_class_name=type(grad_fn_handle).__name__,
             grad_fn_type=grad_fn_type,
             backward_call_index=backward_call_index,
             grad_kind=grad_kind,
@@ -596,7 +596,7 @@ def build_grad_record_context(
         )
     return GradRecordContext(
         grad_fn_label=grad_fn_label,
-        grad_fn_class_name=type(grad_fn).__name__,
+        grad_fn_class_name=type(grad_fn_handle).__name__,
         grad_fn_type=grad_fn_type,
         backward_call_index=backward_call_index,
         grad_kind=grad_kind,

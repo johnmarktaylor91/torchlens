@@ -18,12 +18,12 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 3. **Saved tensor info** - the tensor contents, shape, dtype, size, device
    transfer settings, out postfunc, and function arguments.
 4. **Child tensor variations** - tracks per-child input values for
-   validation replay (``output_versions_per_child`` stores RAW values
+   validation replay (``out_versions_by_child`` stores RAW values
    because validation compares against ``saved_args``).
 5. **Gradient info** - grad tensor and metadata (stored as a bare
    reference via ``log_tensor_grad``, not deep-copied).
 6. **Function call info** - the applied function, call stack, timing,
-   FLOPs, RNG state, arg metadata, grad_fn, inplace flag.
+   FLOPs, RNG state, arg metadata, grad_fn_handle, inplace flag.
 7. **Param info** - which parameters were used, their shapes and sizes.
 8. **Equivalence info** - loop-detection equivalence type and groups.
 9. **Graph info** - parent/child/sibling/spouse edges, input/output
@@ -93,15 +93,15 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "transformed_out": None,
     "transformed_out_shape": None,
     "transformed_out_dtype": None,
-    "transformed_out_memory": None,
+    "transformed_activation_memory": None,
     "visualizer_path": None,
     "transformed_grad": None,
     "transformed_grad_shape": None,
     "transformed_grad_dtype": None,
-    "transformed_grad_memory": None,
+    "transformed_gradient_memory": None,
     "func_call_id": None,
     "container_path": (),
-    "multi_output_role": None,
+    "multi_output_name": None,
     "intervention_replaced": False,
     "interventions": [],
     "container_spec": None,
@@ -279,7 +279,7 @@ def validate_train_mode_postfunc_output(
             f"backward_ready=True with non-grad dtype {transformed_tensor.dtype} on layer "
             f"{label}. Integer and bool dtypes cannot propagate grads."
         )
-    if transformed_tensor.grad_fn is None:
+    if transformed_tensor.grad_fn_handle is None:
         raise TrainingModeConfigError(
             f"{postfunc_kind}_postfunc returned a tensor disconnected from the autograd "
             "graph (grad_fn is None) while backward_ready=True. The transformed out "
@@ -347,10 +347,10 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     entry._internal_set("shape", tuple(tensor.shape))
     entry._internal_set("dtype", tensor.dtype)
     entry._internal_set("memory", get_memory_amount(tensor))
-    entry._internal_set("has_saved_outs", True)
+    entry._internal_set("has_saved_activation", True)
     entry._internal_set("transformed_out_shape", _shape_or_none(entry.transformed_out))
     entry._internal_set("transformed_out_dtype", _dtype_or_none(entry.transformed_out))
-    entry._internal_set("transformed_out_memory", _memory_or_none(entry.transformed_out))
+    entry._internal_set("transformed_activation_memory", _memory_or_none(entry.transformed_out))
 
 
 def _tensor_content_hash(value: torch.Tensor) -> str:
@@ -415,8 +415,9 @@ class Op:
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_label_raw": FieldPolicy.KEEP,
         "_layer_label_raw": FieldPolicy.KEEP,
-        "compute_index": FieldPolicy.KEEP,
-        "capture_index": FieldPolicy.KEEP,
+        "step_index": FieldPolicy.KEEP,
+        "raw_index": FieldPolicy.KEEP,
+        "ordinal_index": FieldPolicy.KEEP,
         "source_trace": FieldPolicy.DROP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "_tracing_finished": FieldPolicy.KEEP,
@@ -430,13 +431,12 @@ class Op:
         "layer_label_no_pass_short": FieldPolicy.KEEP,
         "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
-        "trace_index": FieldPolicy.KEEP,
         "pass_index": FieldPolicy.KEEP,
         "num_passes": FieldPolicy.KEEP,
         "lookup_keys": FieldPolicy.KEEP,
         "out": FieldPolicy.BLOB,
         "transformed_out": FieldPolicy.BLOB,
-        "has_saved_outs": FieldPolicy.KEEP,
+        "has_saved_activation": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
         "out_postfunc": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
@@ -453,24 +453,24 @@ class Op:
         "dtype": FieldPolicy.KEEP,
         "transformed_out_dtype": FieldPolicy.KEEP,
         "memory": FieldPolicy.KEEP,
-        "transformed_out_memory": FieldPolicy.KEEP,
+        "transformed_activation_memory": FieldPolicy.KEEP,
         "visualizer_path": FieldPolicy.KEEP,
         "autograd_memory": FieldPolicy.KEEP,
         "num_autograd_tensors": FieldPolicy.KEEP,
         "bytes_delta_at_call": FieldPolicy.KEEP,
         "bytes_peak_at_call": FieldPolicy.KEEP,
-        "has_output_variations": FieldPolicy.KEEP,
-        "output_versions_per_child": FieldPolicy.BLOB_RECURSIVE,
+        "has_out_variations": FieldPolicy.KEEP,
+        "out_versions_by_child": FieldPolicy.BLOB_RECURSIVE,
         "grad": FieldPolicy.BLOB,
         "transformed_grad": FieldPolicy.BLOB,
-        "save_grads": FieldPolicy.KEEP,
-        "has_grad": FieldPolicy.KEEP,
+        "save_gradients": FieldPolicy.KEEP,
+        "has_saved_gradient": FieldPolicy.KEEP,
         "grad_shape": FieldPolicy.KEEP,
         "transformed_grad_shape": FieldPolicy.KEEP,
         "grad_dtype": FieldPolicy.KEEP,
         "transformed_grad_dtype": FieldPolicy.KEEP,
-        "grad_memory": FieldPolicy.KEEP,
-        "transformed_grad_memory": FieldPolicy.KEEP,
+        "gradient_memory": FieldPolicy.KEEP,
+        "transformed_gradient_memory": FieldPolicy.KEEP,
         "func": FieldPolicy.DROP,
         "func_call_id": FieldPolicy.KEEP,
         "func_name": FieldPolicy.KEEP,
@@ -491,12 +491,12 @@ class Op:
         "is_inplace": FieldPolicy.KEEP,
         "grad_fn_class_name": FieldPolicy.KEEP,
         "grad_fn_class_qualname": FieldPolicy.KEEP,
-        "grad_fn_id": FieldPolicy.KEEP,
+        "grad_fn_object_id": FieldPolicy.KEEP,
+        "grad_fn_handle": FieldPolicy.DROP,
         "grad_fn": FieldPolicy.DROP,
-        "grad_fn_log": FieldPolicy.DROP,
-        "is_part_of_iterable_output": FieldPolicy.KEEP,
+        "in_multi_output": FieldPolicy.KEEP,
         "multi_output_index": FieldPolicy.KEEP,
-        "multi_output_role": FieldPolicy.KEEP,
+        "multi_output_name": FieldPolicy.KEEP,
         "container_path": FieldPolicy.KEEP,
         "container_spec": FieldPolicy.KEEP,
         "parent_params": FieldPolicy.KEEP,
@@ -563,12 +563,12 @@ class Op:
         "fx_qualpath": FieldPolicy.KEEP,
         "fx_call_index": FieldPolicy.KEEP,
         "modules_entered": FieldPolicy.KEEP,
-        "module_entry_argnames": FieldPolicy.KEEP,
-        "module_ops_entered": FieldPolicy.KEEP,
+        "module_entry_arg_keys": FieldPolicy.KEEP,
+        "input_to_module_calls": FieldPolicy.KEEP,
         "output_of_modules": FieldPolicy.KEEP,
         "output_of_module_calls": FieldPolicy.KEEP,
         "is_submodule_output": FieldPolicy.KEEP,
-        "is_atomic_module_op": FieldPolicy.KEEP,
+        "is_atomic_module": FieldPolicy.KEEP,
         "atomic_module_call": FieldPolicy.KEEP,
         "func_config": FieldPolicy.BLOB_RECURSIVE,
         "out_ref": FieldPolicy.DROP,
@@ -669,6 +669,10 @@ class Op:
             fields_dict["fx_qualpath"] = None
         if "fx_call_index" not in fields_dict:
             fields_dict["fx_call_index"] = 0
+        if "ordinal_index" not in fields_dict:
+            fields_dict["ordinal_index"] = -1
+        if "grad_fn" not in fields_dict:
+            fields_dict["grad_fn"] = None
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
             error_str = "Error initializing Op:"
@@ -683,8 +687,9 @@ class Op:
         # General info:
         self._label_raw = fields_dict["_label_raw"]
         self._layer_label_raw = fields_dict["_layer_label_raw"]
-        self.compute_index = fields_dict["compute_index"]
-        self.capture_index = fields_dict["capture_index"]
+        self.step_index = fields_dict["step_index"]
+        self.raw_index = fields_dict["raw_index"]
+        self.ordinal_index = fields_dict["ordinal_index"]
         # Store as weakref to break circular reference (Trace -> layer_list -> entry -> Trace).
         _sml = fields_dict["source_trace"]
         self._source_trace_ref = weakref.ref(_sml) if _sml is not None else None
@@ -699,7 +704,6 @@ class Op:
         self.layer_label_no_pass_short = fields_dict["layer_label_no_pass_short"]
         self.type = fields_dict["type"]
         self.type_index = fields_dict["type_index"]
-        self.trace_index = fields_dict["trace_index"]
         self.pass_index = fields_dict["pass_index"]
         self.num_passes = fields_dict["num_passes"]
         self.lookup_keys = fields_dict["lookup_keys"]
@@ -707,7 +711,7 @@ class Op:
         # Saved tensor info:
         self.out = fields_dict["out"]
         self.transformed_out = fields_dict["transformed_out"]
-        self.has_saved_outs = fields_dict["has_saved_outs"]
+        self.has_saved_activation = fields_dict["has_saved_activation"]
         self.output_device = fields_dict["output_device"]
         self.out_postfunc = fields_dict["out_postfunc"]
         self.annotations: Dict[str, Any] = fields_dict["annotations"]
@@ -724,7 +728,7 @@ class Op:
         self.dtype = fields_dict["dtype"]
         self.transformed_out_dtype = fields_dict["transformed_out_dtype"]
         self.memory = fields_dict["memory"]
-        self.transformed_out_memory = fields_dict["transformed_out_memory"]
+        self.transformed_activation_memory = fields_dict["transformed_activation_memory"]
         self.visualizer_path: str | None = fields_dict["visualizer_path"]
         self.autograd_memory: Optional[int] = fields_dict["autograd_memory"]
         self.num_autograd_tensors: Optional[int] = fields_dict["num_autograd_tensors"]
@@ -734,21 +738,21 @@ class Op:
         # Child tensor variation tracking - stores the raw tensor values that
         # each child operation received as input.  Must store RAW values (not
         # postprocessed) because validation compares these against saved_args.
-        self.has_output_variations = fields_dict["has_output_variations"]
-        self.output_versions_per_child = fields_dict["output_versions_per_child"]
+        self.has_out_variations = fields_dict["has_out_variations"]
+        self.out_versions_by_child = fields_dict["out_versions_by_child"]
 
         # Saved grad info - grad is stored as a bare clone (not deep-copied)
         # via log_tensor_grad().  grad is populated by a backward hook.
         self.grad = fields_dict["grad"]
         self.transformed_grad = fields_dict["transformed_grad"]
-        self.save_grads = fields_dict["save_grads"]
-        self.has_grad = fields_dict["has_grad"]
+        self.save_gradients = fields_dict["save_gradients"]
+        self.has_saved_gradient = fields_dict["has_saved_gradient"]
         self.grad_shape = fields_dict["grad_shape"]
         self.transformed_grad_shape = fields_dict["transformed_grad_shape"]
         self.grad_dtype = fields_dict["grad_dtype"]
         self.transformed_grad_dtype = fields_dict["transformed_grad_dtype"]
-        self.grad_memory = fields_dict["grad_memory"]
-        self.transformed_grad_memory = fields_dict["transformed_grad_memory"]
+        self.gradient_memory = fields_dict["gradient_memory"]
+        self.transformed_gradient_memory = fields_dict["transformed_gradient_memory"]
 
         # Function call info:
         self.func = fields_dict["func"]
@@ -771,12 +775,12 @@ class Op:
         self.is_inplace = fields_dict["is_inplace"]
         self.grad_fn_class_name = fields_dict["grad_fn_class_name"]
         self.grad_fn_class_qualname = fields_dict["grad_fn_class_qualname"]
-        self.grad_fn_id = fields_dict["grad_fn_id"]
+        self.grad_fn_object_id = fields_dict["grad_fn_object_id"]
+        self.grad_fn_handle = fields_dict["grad_fn_handle"]
         self.grad_fn = fields_dict["grad_fn"]
-        self.grad_fn_log = fields_dict["grad_fn_log"]
-        self.is_part_of_iterable_output = fields_dict["is_part_of_iterable_output"]
+        self.in_multi_output = fields_dict["in_multi_output"]
         self.multi_output_index = fields_dict["multi_output_index"]
-        self.multi_output_role = fields_dict["multi_output_role"]
+        self.multi_output_name = fields_dict["multi_output_name"]
         self.container_path = fields_dict["container_path"]
         self.container_spec = fields_dict["container_spec"]
 
@@ -858,12 +862,12 @@ class Op:
         self.fx_qualpath: Optional[str] = fields_dict["fx_qualpath"]
         self.fx_call_index: int = fields_dict["fx_call_index"]
         self.modules_entered = fields_dict["modules_entered"]
-        self.module_entry_argnames = fields_dict["module_entry_argnames"]
-        self.module_ops_entered = fields_dict["module_ops_entered"]
+        self.module_entry_arg_keys = fields_dict["module_entry_arg_keys"]
+        self.input_to_module_calls = fields_dict["input_to_module_calls"]
         self.output_of_modules = fields_dict["output_of_modules"]
         self.output_of_module_calls = fields_dict["output_of_module_calls"]
         self.is_submodule_output = fields_dict["is_submodule_output"]
-        self.is_atomic_module_op = fields_dict["is_atomic_module_op"]
+        self.is_atomic_module = fields_dict["is_atomic_module"]
         self.atomic_module_call = fields_dict["atomic_module_call"]
 
         # Function config - lightweight hyperparameters always captured.
@@ -906,16 +910,16 @@ class Op:
 
     @property
     def grad_fn_cls(self) -> type[Any] | None:
-        """Return the live grad_fn class when the autograd object is retained.
+        """Return the live grad_fn_handle class when the autograd object is retained.
 
         Returns
         -------
         type[Any] | None
-            Runtime grad_fn class, or ``None`` when the object is unavailable.
+            Runtime grad_fn_handle class, or ``None`` when the object is unavailable.
         """
 
-        grad_fn = self.grad_fn
-        return None if grad_fn is None else type(grad_fn)
+        grad_fn_handle = self.grad_fn_handle
+        return None if grad_fn_handle is None else type(grad_fn_handle)
 
     @property
     def has_parents(self) -> bool:
@@ -1047,7 +1051,7 @@ class Op:
         return human_readable_size(self.memory)
 
     @property
-    def grad_memory_str(self) -> str:
+    def gradient_memory_str(self) -> str:
         """Return grad tensor size in human-readable units.
 
         Returns
@@ -1055,7 +1059,7 @@ class Op:
         str
             Human-readable grad memory amount.
         """
-        return human_readable_size(self.grad_memory)
+        return human_readable_size(self.gradient_memory)
 
     @property
     def tensor(self) -> Any:
@@ -1359,8 +1363,8 @@ class Op:
         state = self.__dict__.copy()
         state["_source_trace_ref"] = None
         state["func"] = None
-        state["grad_fn"] = None
-        state["grad_fn_log"] = None
+        state["grad_fn_handle"] = None
+        state["grad_fn_handle"] = None
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 
@@ -1386,18 +1390,18 @@ class Op:
             "operation_num": "op_num",
             "activation": "out",
             "transformed_activation": "transformed_out",
-            "has_saved_activations": "has_saved_outs",
+            "has_saved_activations": "has_saved_activation",
             "activation_postfunc": "out_postfunc",
             "activation_shape": "shape",
             "transformed_activation_shape": "transformed_out_shape",
             "activation_dtype": "dtype",
             "transformed_activation_dtype": "transformed_out_dtype",
             "activation_memory": "memory",
-            "transformed_activation_memory": "transformed_out_memory",
-            "is_part_of_iterable_output": "is_part_of_iterable_output",
+            "transformed_activation_memory": "transformed_activation_memory",
+            "in_multi_output": "in_multi_output",
             "iterable_output_index": "multi_output_index",
-            "grad_fn_object": "grad_fn",
-            "corresponding_grad_fn": "grad_fn_log",
+            "grad_fn_object": "grad_fn_handle",
+            "corresponding_grad_fn": "grad_fn_handle",
             "is_input_layer": "is_input",
             "is_output_layer": "is_output",
             "is_output_ancestor": "has_output_descendant",
@@ -1405,10 +1409,10 @@ class Op:
             "internally_initialized": "is_internal_source",
             "internally_terminated": "is_internal_sink",
             "parent_param_barcodes": "_param_barcodes",
-            "module_passes_entered": "module_ops_entered",
+            "module_passes_entered": "input_to_module_calls",
             "modules_exited": "output_of_modules",
             "module_passes_exited": "output_of_module_calls",
-            "is_leaf_module_output": "is_atomic_module_op",
+            "is_leaf_module_output": "is_atomic_module",
             "leaf_module_pass": "atomic_module_call",
             "activation_ref": "out_ref",
             "gradient_ref": "grad_ref",
@@ -1469,7 +1473,7 @@ class Op:
         * ``saved_args``, ``saved_kwargs`` - may contain large tensors;
           deep-copying them is expensive and unnecessary.
         * ``parent_params`` - references to nn.Parameters, must stay shared.
-        * ``out``, ``output_versions_per_child`` - large tensors;
+        * ``out``, ``out_versions_by_child`` - large tensors;
           shared references are safe since they're replaced (not mutated).
 
         Returns:
@@ -1479,8 +1483,8 @@ class Op:
         fields_not_to_deepcopy = [
             "func",
             "grad_fn_class_name",
-            "grad_fn",
-            "grad_fn_log",
+            "grad_fn_handle",
+            "grad_fn_handle",
             "source_trace",
             "func_rng_states",
             "saved_args",
@@ -1491,7 +1495,7 @@ class Op:
             "out",
             "transformed_out",
             "transformed_grad",
-            "output_versions_per_child",
+            "out_versions_by_child",
         ]
         for field in LAYER_PASS_LOG_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
@@ -1559,7 +1563,7 @@ class Op:
             self._internal_set("transformed_out", None)
             self.transformed_out_shape = None
             self.transformed_out_dtype = None
-            self.transformed_out_memory = None
+            self.transformed_activation_memory = None
             if out_postfunc is not None:
                 self._internal_set(
                     "transformed_out",
@@ -1582,7 +1586,7 @@ class Op:
                 )
                 self.transformed_out_shape = _shape_or_none(self.transformed_out)
                 self.transformed_out_dtype = _dtype_or_none(self.transformed_out)
-                self.transformed_out_memory = _memory_or_none(self.transformed_out)
+                self.transformed_activation_memory = _memory_or_none(self.transformed_out)
         except Exception as exc:
             if writer is not None:
                 writer.abort(f"Failed while saving out for {self._streaming_label}: {exc}")
@@ -1593,7 +1597,7 @@ class Op:
                 ) from exc
             raise
 
-        self.has_saved_outs = True
+        self.has_saved_activation = True
 
         if trace is not None:
             out_sink = getattr(trace, "_out_sink", None)
@@ -1640,19 +1644,19 @@ class Op:
         raw_grad = grad
         self.grad_shape = tuple(raw_grad.shape)
         self.grad_dtype = raw_grad.dtype
-        self.grad_memory = get_memory_amount(raw_grad)
-        grad_transform = getattr(trace, "grad_transform", None)
+        self.gradient_memory = get_memory_amount(raw_grad)
+        gradient_transform = getattr(trace, "gradient_transform", None)
         self._internal_set("transformed_grad", None)
         self.transformed_grad_shape = None
         self.transformed_grad_dtype = None
-        self.transformed_grad_memory = None
+        self.transformed_gradient_memory = None
         writer = getattr(trace, "_out_writer", None) if trace is not None else None
-        if grad_transform is not None:
+        if gradient_transform is not None:
             self._internal_set(
                 "transformed_grad",
                 self._apply_postfunc(
                     raw_grad,
-                    grad_transform,
+                    gradient_transform,
                     postfunc_kind="grad",
                     streaming_active=writer is not None,
                 ),
@@ -1669,12 +1673,12 @@ class Op:
             )
             self.transformed_grad_shape = _shape_or_none(self.transformed_grad)
             self.transformed_grad_dtype = _dtype_or_none(self.transformed_grad)
-            self.transformed_grad_memory = _memory_or_none(self.transformed_grad)
+            self.transformed_gradient_memory = _memory_or_none(self.transformed_grad)
 
-        save_raw_grads = getattr(trace, "save_raw_grads", True)
-        store_raw = save_raw_grads or grad_transform is None
+        save_raw_gradients = getattr(trace, "save_raw_gradients", True)
+        store_raw = save_raw_gradients or gradient_transform is None
         self._internal_set("grad", raw_grad.detach().clone() if store_raw else None)
-        self.has_grad = True
+        self.has_saved_gradient = True
         if writer is not None and getattr(trace, "_defer_streaming_bundle_finalization", False):
             self._stream_tensor_blob(
                 writer,
@@ -1826,7 +1830,7 @@ class Op:
                 )
             elif kind == "transformed_grad":
                 message = (
-                    "Streaming save requires grad_transform outputs to be torch.Tensor "
+                    "Streaming save requires gradient_transform outputs to be torch.Tensor "
                     f"instances, but layer {self._streaming_label} produced "
                     f"{type(tensor).__name__}."
                 )
@@ -1920,7 +1924,7 @@ class Op:
         s += f"\n\tComputed from params: {self.uses_params}"
         s += f"\n\tComputed in modules: {self.modules}"
         s += f"\n\tOutput of modules: {self.output_of_module_calls}"
-        if self.is_atomic_module_op:
+        if self.is_atomic_module:
             s += " (bottom-level submodule output)"
         else:
             s += " (not bottom-level submodule output)"
@@ -1951,9 +1955,9 @@ class Op:
             pass_str = ", "
         sml = self.source_trace
         num_ops = sml.num_ops if sml is not None else "?"
-        s = f"Layer {self.layer_label_no_pass}{pass_str}operation {self.compute_index}/{num_ops}:"
+        s = f"Layer {self.layer_label_no_pass}{pass_str}operation {self.step_index}/{num_ops}:"
         s += f"\n\tOutput tensor: shape={self.shape}, dype={self.dtype}, size={self.memory_str}"
-        if not self.has_saved_outs:
+        if not self.has_saved_activation:
             s += " (not saved)"
         s += self._tensor_contents_str_helper()
         s += self._tensor_family_str_helper()
@@ -1970,7 +1974,7 @@ class Op:
         else:
             module_str = f"\n\tComputed inside module: {self.module}"
         if not self.is_input:
-            s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_class_name}) {module_str}"
+            s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name}) {module_str}"
             if self.func_config:
                 config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
                 s += f"\n\tConfig: {config_str}"
@@ -1980,7 +1984,7 @@ class Op:
             s += f"\n\tOutput of modules: {output_of_modules_str}"
         else:
             s += "\n\tOutput of modules: none"
-        if self.is_atomic_module_op:
+        if self.is_atomic_module:
             s += f"\n\tOutput of bottom-level module: {self.atomic_module_call}"
         lookup_keys_str = ", ".join([str(key) for key in self.lookup_keys])
         s += f"\n\tLookup keys: {lookup_keys_str}"

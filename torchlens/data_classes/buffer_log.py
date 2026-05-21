@@ -104,9 +104,9 @@ class Buffer(Op):
             lines.append(f"  module: {self.module[0]}")
         if self.buffer_pass is not None:
             lines.append(f"  pass: {self.buffer_pass}")
-        lines.append(f"  has_saved_outs: {self.has_saved_outs}")
-        if self.has_grad:
-            lines.append("  has_grad: True")
+        lines.append(f"  has_saved_activation: {self.has_saved_activation}")
+        if self.has_saved_gradient:
+            lines.append("  has_saved_gradient: True")
         if self.layer_label is not None:
             lines.append(f"  layer_label: {self.layer_label}")
         return "\n".join(lines)

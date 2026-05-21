@@ -27,7 +27,7 @@ TARGET_ALL = [
     "Bundle",
     "label",
     "func",
-    "grad_fn",
+    "grad_fn_handle",
     "intervening",
     "grad_fn_label",
     "module",
@@ -87,7 +87,7 @@ def test_all_size_exactly_47() -> None:
     """Top-level ``__all__`` should contain exactly the post-backward-megasprint budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
-    grad_clamp, grad_fn, intervening, grad_fn_label) = 46; post-backward
+    grad_clamp, grad_fn_handle, intervening, grad_fn_label) = 46; post-backward
     megasprint P1 added `output` (multi-output module selector disambiguation
     per AD-7 / F-Multi) = 47.
     """

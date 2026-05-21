@@ -33,7 +33,7 @@
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
-      "trace_index": 0
+      "step_index": 0
     },
     {
       "in_submodule": true,
@@ -59,7 +59,7 @@
       "output_of_modules": [
         "relu"
       ],
-      "trace_index": 1
+      "step_index": 1
     },
     {
       "in_submodule": true,
@@ -79,7 +79,7 @@
       ],
       "output_of_module_calls": [],
       "output_of_modules": [],
-      "trace_index": 2
+      "step_index": 2
     },
     {
       "in_submodule": true,
@@ -105,7 +105,7 @@
       "output_of_modules": [
         "proj"
       ],
-      "trace_index": 3
+      "step_index": 3
     },
     {
       "in_submodule": false,
@@ -128,7 +128,7 @@
       "output_of_modules": [
         "proj"
       ],
-      "trace_index": 4
+      "step_index": 4
     }
   ],
   "module_calls": [
@@ -264,7 +264,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "intervention_replaced": false,
-      "is_atomic_module_op": false,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -280,18 +280,18 @@
         "input_1:1"
       ],
       "module": null,
-      "module_entry_argnames": {
+      "module_entry_arg_keys": {
         "relu:1": [
           0
         ]
       },
-      "module_ops_entered": [
+      "input_to_module_calls": [
         "relu:1"
       ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
-      "trace_index": 0
+      "step_index": 0
     },
     {
       "atomic_module_call": "relu:1",
@@ -299,7 +299,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "relu.relu",
       "intervention_replaced": true,
-      "is_atomic_module_op": true,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -316,8 +316,8 @@
         "relu_1_1:1"
       ],
       "module": "relu:1",
-      "module_entry_argnames": {},
-      "module_ops_entered": [],
+      "module_entry_arg_keys": {},
+      "input_to_module_calls": [],
       "modules": [
         "relu:1"
       ],
@@ -327,7 +327,7 @@
       "output_of_modules": [
         "relu"
       ],
-      "trace_index": 1
+      "step_index": 1
     },
     {
       "atomic_module_call": null,
@@ -335,7 +335,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "relu.intervention_replacement",
       "intervention_replaced": true,
-      "is_atomic_module_op": false,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -350,12 +350,12 @@
         "interventionreplacement_1_2:1"
       ],
       "module": "relu:1",
-      "module_entry_argnames": {
+      "module_entry_arg_keys": {
         "proj:1": [
           0
         ]
       },
-      "module_ops_entered": [
+      "input_to_module_calls": [
         "proj:1"
       ],
       "modules": [
@@ -363,7 +363,7 @@
       ],
       "output_of_module_calls": [],
       "output_of_modules": [],
-      "trace_index": 2
+      "step_index": 2
     },
     {
       "atomic_module_call": "proj:1",
@@ -371,7 +371,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "proj.linear",
       "intervention_replaced": false,
-      "is_atomic_module_op": true,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -388,8 +388,8 @@
         "proj:1"
       ],
       "module": "proj:1",
-      "module_entry_argnames": {},
-      "module_ops_entered": [],
+      "module_entry_arg_keys": {},
+      "input_to_module_calls": [],
       "modules": [
         "proj:1"
       ],
@@ -399,7 +399,7 @@
       "output_of_modules": [
         "proj"
       ],
-      "trace_index": 3
+      "step_index": 3
     },
     {
       "atomic_module_call": "proj:1",
@@ -407,7 +407,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "intervention_replaced": false,
-      "is_atomic_module_op": false,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -425,8 +425,8 @@
         "proj:1"
       ],
       "module": null,
-      "module_entry_argnames": {},
-      "module_ops_entered": [],
+      "module_entry_arg_keys": {},
+      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [
         "proj:1"
@@ -434,7 +434,7 @@
       "output_of_modules": [
         "proj"
       ],
-      "trace_index": 4
+      "step_index": 4
     }
   ],
   "trace_summary": {

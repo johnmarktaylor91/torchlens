@@ -481,16 +481,16 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(log.params, "ParamAccessor"))
 
     # ===== G. Gradient System =====
-    # Only for models with params — log with save_grads=True and run backward
+    # Only for models with params — log with save_gradients=True and run backward
     if len(log.params) > 0:
-        out.write(_section("G. Gradient System (save_grads=True + backward)", level=2))
+        out.write(_section("G. Gradient System (save_gradients=True + backward)", level=2))
         try:
-            grad_log = trace_fn(model, x, save_grads=True, random_seed=42)
+            grad_log = trace_fn(model, x, save_gradients=True, random_seed=42)
             output_label = grad_log.output_layers[0]
             output_tensor = grad_log[output_label].out
             output_tensor.sum().backward()
 
-            out.write(_capture("grad_log.has_grads", grad_log.has_grads))
+            out.write(_capture("grad_log.has_gradients", grad_log.has_gradients))
             out.write(
                 _capture(
                     "grad_log.saved_grad_ops",
@@ -500,43 +500,43 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
             # Show grad fields on a Op that has saved grad
             for entry in grad_log.layer_list:
-                if entry.has_grad:
+                if entry.has_saved_gradient:
                     out.write(
                         _section(
                             f"G.1 Op grad fields — {entry.layer_label}",
                             level=3,
                         )
                     )
-                    out.write(_capture("has_grad", entry.has_grad))
+                    out.write(_capture("has_saved_gradient", entry.has_saved_gradient))
                     out.write(_capture("grad", entry.grad))
                     out.write(_capture("grad_shape", entry.grad_shape))
                     out.write(_capture("grad_dtype", entry.grad_dtype))
-                    out.write(_capture("grad_memory", entry.grad_memory))
-                    out.write(_capture("grad_memory_str", entry.grad_memory_str))
+                    out.write(_capture("gradient_memory", entry.gradient_memory))
+                    out.write(_capture("gradient_memory_str", entry.gradient_memory_str))
                     break
 
             # Show a Op WITHOUT grad for contrast
             for entry in grad_log.layer_list:
-                if not entry.has_grad:
+                if not entry.has_saved_gradient:
                     out.write(
                         _section(
                             f"G.2 Op without grad — {entry.layer_label}",
                             level=3,
                         )
                     )
-                    out.write(_capture("has_grad", entry.has_grad))
+                    out.write(_capture("has_saved_gradient", entry.has_saved_gradient))
                     out.write(_capture("grad", entry.grad))
                     break
 
             # Param grad fields
             for pl in grad_log.params:
-                if pl.has_grad:
+                if pl.has_saved_gradient:
                     out.write(_section(f"G.3 Param grad fields — {pl.address}", level=3))
-                    out.write(_capture("has_grad", pl.has_grad))
+                    out.write(_capture("has_saved_gradient", pl.has_saved_gradient))
                     out.write(_capture("grad_shape", pl.grad_shape))
                     out.write(_capture("grad_dtype", pl.grad_dtype))
-                    out.write(_capture("grad_memory", pl.grad_memory))
-                    out.write(_capture("grad_memory_str", pl.grad_memory_str))
+                    out.write(_capture("gradient_memory", pl.gradient_memory))
+                    out.write(_capture("gradient_memory_str", pl.gradient_memory_str))
                     break
 
             # Show frozen param without grad (if applicable)
@@ -548,7 +548,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                             level=3,
                         )
                     )
-                    out.write(_capture("has_grad", pl.has_grad))
+                    out.write(_capture("has_saved_gradient", pl.has_saved_gradient))
                     out.write(_capture("trainable", pl.trainable))
                     break
         except Exception as e:
@@ -874,7 +874,7 @@ VIS_GALLERY = [
     ),
 ]
 
-# Gradient visualization gallery — rendered with save_grads=True + backward()
+# Gradient visualization gallery — rendered with save_gradients=True + backward()
 # (filename_stem, caption, model_class_name, input_shape_desc, vis_mode, depth, direction)
 GRADIENT_VIS_GALLERY = [
     (
@@ -1390,10 +1390,10 @@ def _vis(
 def _vis_grad(model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup"):
     """Generate a visualization PDF with grad backward arrows.
 
-    Uses trace_fn(save_grads=True) + backward() + draw()
-    since show_model_graph() hardcodes save_grads=False.
+    Uses trace_fn(save_gradients=True) + backward() + draw()
+    since show_model_graph() hardcodes save_gradients=False.
     """
-    log = trace_fn(model, x, save_grads=True, random_seed=42)
+    log = trace_fn(model, x, save_gradients=True, random_seed=42)
     output = log[log.output_layers[0]].out
     output.sum().backward()
     log.draw(
@@ -1490,7 +1490,7 @@ def test_aesthetic_loop_visualizations():
 
 
 def test_aesthetic_grad_visualizations():
-    """Gradient backward arrows (blue) — requires save_grads=True + backward().
+    """Gradient backward arrows (blue) — requires save_gradients=True + backward().
 
     Note: grad edges only render in unrolled mode.
     TODO: Consider supporting grad arrows in rolled mode.

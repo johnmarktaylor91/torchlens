@@ -192,7 +192,7 @@ def test_keep_unsaved_layers_false_preserves_replay_call_group_siblings() -> Non
 
     split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
-    assert not all(layer.has_saved_outs for layer in split_layers)
+    assert not all(layer.has_saved_activation for layer in split_layers)
     assert len({layer.func_call_id for layer in split_layers}) == 1
     assert check_metadata_invariants(log) is True
 

@@ -245,7 +245,7 @@ def test_cone_of_effect_follows_bfs_children_and_stops_at_outputs() -> None:
 
     assert relu_site.layer_label in cone_labels
     assert log.output_layers[0] in cone_labels
-    assert cone_labels == sorted(cone_labels, key=lambda label: log[label].compute_index)
+    assert cone_labels == sorted(cone_labels, key=lambda label: log[label].step_index)
 
 
 def test_cone_of_effect_follows_output_versions_per_child() -> None:
@@ -255,7 +255,7 @@ def test_cone_of_effect_follows_output_versions_per_child() -> None:
     origin = _first_func(log, "linear")
     child_label = origin.children[0]
     origin.children.remove(child_label)
-    origin.output_versions_per_child[child_label] = origin.out
+    origin.out_versions_by_child[child_label] = origin.out
 
     cone_labels = [site.layer_label for site in cone_of_effect(log, [origin])]
 

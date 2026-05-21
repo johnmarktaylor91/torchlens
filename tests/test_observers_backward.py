@@ -10,7 +10,7 @@ from torchlens.observers import TapObserver
 
 
 class _TinyRelu(nn.Module):
-    """Tiny module with a paired ReLU grad_fn."""
+    """Tiny module with a paired ReLU grad_fn_handle."""
 
     def __init__(self) -> None:
         """Initialize layers."""
@@ -73,7 +73,7 @@ def test_tap_backward_tensor_mount_forward_selector() -> None:
 
 
 def test_tap_backward_grad_fn_mount_backward_selector() -> None:
-    """Backward taps mount directly on grad_fn selectors."""
+    """Backward taps mount directly on grad_fn_handle selectors."""
 
     tap = tl.tap(tl.grad_fn(type="relu"), direction="backward")
     _trace_with_tap(tap)
@@ -96,7 +96,7 @@ def test_tap_backward_both_directions_fire() -> None:
 
 
 def test_tap_backward_intervening_grad_fn_only_grad_fn_mount() -> None:
-    """Intervening selectors fire on backward-only grad_fn sites."""
+    """Intervening selectors fire on backward-only grad_fn_handle sites."""
 
     tap = tl.tap(tl.intervening(), direction="backward")
     _trace_with_tap(tap)

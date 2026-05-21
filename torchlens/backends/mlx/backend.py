@@ -131,11 +131,11 @@ class MLXBackend:
             label=reserved.label,
             raw_label=reserved.label_raw,
             pass_index=1,
-            event_index=reserved.capture_index,
-            compute_index=None,
+            event_index=reserved.raw_index,
+            step_index=None,
             layer_type=reserved.layer_type,
             type_index=reserved.type_index,
-            capture_index=reserved.capture_index,
+            raw_index=reserved.raw_index,
             func_name=func_event_input.func_name,
             address=None,
             module_type=None,
@@ -182,7 +182,7 @@ class MLXBackend:
         """Return MLX backend semantics for one output."""
 
         return BackendSemantics(
-            grad_fn_id=None,
+            grad_fn_object_id=None,
             grad_fn_class_name=None,
             autograd_memory=None,
             num_autograd_tensors=None,
@@ -314,8 +314,8 @@ class MLXBackend:
         out_transform: object | None = None,
         save_raw_outs: bool = True,
         detach_saved_activations: bool = False,
-        save_grads: bool = False,
-        grads_to_save: str | list[Any] | None = "all",
+        save_gradients: bool = False,
+        gradients_to_save: str | list[Any] | None = "all",
         random_seed: int | None = None,
         num_context_lines: int = 7,
         save_arg_values: bool = False,
@@ -337,7 +337,7 @@ class MLXBackend:
     ) -> Trace:
         """Capture an MLX forward pass into a smoke-compatible Trace."""
 
-        if save_grads:
+        if save_gradients:
             raise NotImplementedError("backward capture is not supported on the mlx backend")
         if output_device != "same":
             raise ValueError("MLX backend only supports output_device='same' in technical preview.")
@@ -345,14 +345,14 @@ class MLXBackend:
             model_class_name=type(model).__name__,
             output_device=output_device,
             out_postfunc=cast("Callable[[Any], Any] | None", out_transform),
-            grad_transform=None,
+            gradient_transform=None,
             save_raw_outs=save_raw_outs,
-            save_raw_grads=True,
+            save_raw_gradients=True,
             keep_unsaved_layers=keep_unsaved_layers,
             keep_orphans=keep_orphans,
             save_arg_values=save_arg_values,
-            save_grads=False,
-            grads_to_save=grads_to_save,
+            save_gradients=False,
+            gradients_to_save=gradients_to_save,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=False,
             num_context_lines=num_context_lines,
@@ -416,7 +416,7 @@ class MLXBackend:
 
         if not self.is_tensor(output):
             return
-        capture_index = len(trace.layer_list)
+        raw_index = len(trace.layer_list)
         type_counts = getattr(trace, "_mlx_type_counts", defaultdict(int))
         type_counts[op_name] += 1
         trace._mlx_type_counts = type_counts
@@ -433,7 +433,7 @@ class MLXBackend:
             kwargs=kwargs,
             output=output,
             parents=parents,
-            capture_index=capture_index,
+            raw_index=raw_index,
             type_index=type_counts[op_name],
         )
         self._register_op_log(trace, op_log)
@@ -494,7 +494,7 @@ class MLXBackend:
                         kwargs={},
                         output=arg,
                         parents=[],
-                        capture_index=len(trace.layer_list),
+                        raw_index=len(trace.layer_list),
                         type_index=index + 1,
                         is_input=True,
                     ),
@@ -514,7 +514,7 @@ class MLXBackend:
                         kwargs={},
                         output=value,
                         parents=[],
-                        capture_index=len(trace.layer_list),
+                        raw_index=len(trace.layer_list),
                         type_index=len(trace.layer_list) + 1,
                         is_input=True,
                     ),
@@ -557,7 +557,7 @@ class MLXBackend:
         kwargs: dict[str, Any],
         output: object,
         parents: list[str],
-        capture_index: int,
+        raw_index: int,
         type_index: int,
         is_input: bool = False,
     ) -> Op:
@@ -571,8 +571,8 @@ class MLXBackend:
                 "layer_label": label,
                 "_label_raw": label,
                 "_layer_label_raw": label,
-                "compute_index": capture_index + 1,
-                "capture_index": capture_index,
+                "step_index": raw_index + 1,
+                "raw_index": raw_index,
                 "source_trace": trace,
                 "_tracing_finished": True,
                 "layer_label_short": label,
@@ -582,12 +582,11 @@ class MLXBackend:
                 "layer_label_no_pass_short": label,
                 "type": op_name,
                 "type_index": type_index,
-                "trace_index": capture_index,
                 "pass_index": 1,
                 "num_passes": 1,
                 "lookup_keys": [label, pass_label],
                 "out": output if trace.save_raw_outs else None,
-                "has_saved_outs": trace.save_raw_outs,
+                "has_saved_activation": trace.save_raw_outs,
                 "output_device": "same",
                 "out_postfunc": trace.out_postfunc,
                 "annotations": {},
@@ -596,11 +595,11 @@ class MLXBackend:
                 "shape": self._shape(output),
                 "dtype": self._dtype(output),
                 "memory": memory,
-                "output_versions_per_child": {},
-                "save_grads": False,
-                "has_grad": False,
+                "out_versions_by_child": {},
+                "save_gradients": False,
+                "has_saved_gradient": False,
                 "func": func,
-                "func_call_id": capture_index + 1,
+                "func_call_id": raw_index + 1,
                 "func_name": op_name,
                 "func_qualname": getattr(func, "__qualname__", None),
                 "code_context": [],
@@ -672,12 +671,12 @@ class MLXBackend:
                 "module": None,
                 "modules": [],
                 "modules_entered": [],
-                "module_ops_entered": [],
-                "module_entry_argnames": [],
+                "input_to_module_calls": [],
+                "module_entry_arg_keys": [],
                 "output_of_modules": [],
                 "output_of_module_calls": [],
                 "is_submodule_output": False,
-                "is_atomic_module_op": op_name == "linear",
+                "is_atomic_module": op_name == "linear",
                 "atomic_module_call": None,
                 "func_config": {},
             }
@@ -696,7 +695,7 @@ class MLXBackend:
             Operation log to register.
         """
 
-        capture_index = len(trace.layer_list)
+        raw_index = len(trace.layer_list)
         label = op_log.layer_label
         trace.layer_list.append(op_log)
         trace.layer_dict_main_keys[label] = op_log
@@ -705,8 +704,8 @@ class MLXBackend:
         trace.op_labels.append(op_log.layer_label_w_pass)
         trace.layer_labels.append(label)
         trace.layer_num_calls[label] = 1
-        trace._lookup_keys_to_layer_num_dict[label] = capture_index
-        trace._layer_num_to_lookup_keys_dict[capture_index].append(label)
+        trace._lookup_keys_to_layer_num_dict[label] = raw_index
+        trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
         layer_log = Layer(op_log)
         layer_log.ops[1] = op_log
         layer_log.call_labels.append(op_log.layer_label_w_pass)

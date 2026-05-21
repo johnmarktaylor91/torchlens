@@ -27,7 +27,7 @@ def execution_trace(log: Any, trace_path: str | Path) -> dict[str, Any]:
     for layer in getattr(log, "layer_list", []):
         nodes.append(
             {
-                "id": getattr(layer, "capture_index", None),
+                "id": getattr(layer, "raw_index", None),
                 "name": getattr(layer, "layer_label", None),
                 "op": getattr(layer, "func_name", None),
                 "inputs": list(getattr(layer, "parents", []) or []),
@@ -73,7 +73,7 @@ def join(log: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any]:
             {
                 "layer_label": label,
                 "func_name": func_name,
-                "capture_index": getattr(layer, "capture_index", None),
+                "raw_index": getattr(layer, "raw_index", None),
                 "kineto_event_count": len(matched_events),
                 "kineto_duration_us": duration_us,
                 "kineto_events": matched_events,

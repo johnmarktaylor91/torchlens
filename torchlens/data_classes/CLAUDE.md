@@ -29,7 +29,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `buffer_log.py` | `Buffer` and `BufferAccessor` |
 | `module_log.py` | `ModuleCall`, `Module`, `ModuleAccessor` |
 | `param_log.py` | `Param`, lazy grad access, `ParamAccessor` |
-| `grad_fn_log.py` | Backward graph `GradFn` and accessor |
+| `grad_fn_handle.py` | Backward graph `GradFn` and accessor |
 | `grad_fn_call_log.py` | Per-pass backward graph record |
 | `func_call_location.py` | Structured call stack frames and lazy source access |
 | `interface.py` | Imported `Trace` access/query custom_methods |

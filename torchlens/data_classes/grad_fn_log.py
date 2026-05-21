@@ -1,4 +1,4 @@
-"""Autograd grad_fn metadata and lookup accessors."""
+"""Autograd grad_fn_handle metadata and lookup accessors."""
 
 from __future__ import annotations
 
@@ -115,10 +115,10 @@ def _clone_grad_value(value: Any) -> Any:
 
 @dataclass
 class GradFn:
-    """Metadata and runtime ops for one autograd ``grad_fn`` node."""
+    """Metadata and runtime ops for one autograd ``grad_fn_handle`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
-        "grad_fn_id": FieldPolicy.KEEP,
+        "grad_fn_object_id": FieldPolicy.KEEP,
         "class_name": FieldPolicy.KEEP,
         "class_qualname": FieldPolicy.KEEP,
         "is_custom": FieldPolicy.KEEP,
@@ -132,7 +132,7 @@ class GradFn:
         "ops": FieldPolicy.KEEP,
     }
 
-    grad_fn_id: int
+    grad_fn_object_id: int
     class_name: str
     class_qualname: str
     is_custom: bool
@@ -178,7 +178,7 @@ class GradFn:
 
     @property
     def has_op(self) -> bool:
-        """Return whether this grad_fn has a corresponding forward op.
+        """Return whether this grad_fn_handle has a corresponding forward op.
 
         Returns
         -------
@@ -187,7 +187,7 @@ class GradFn:
         """
 
         warnings.warn(
-            "GradFn.has_op is deprecated; use not grad_fn.is_intervening instead.",
+            "GradFn.has_op is deprecated; use not grad_fn_handle.is_intervening instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -195,12 +195,12 @@ class GradFn:
 
     @property
     def num_calls(self) -> int:
-        """Number of times this grad_fn has executed during captured backward ops."""
+        """Number of times this grad_fn_handle has executed during captured backward ops."""
         return len(self.ops)
 
     @property
     def cls(self) -> type[Any] | None:
-        """Return the runtime Python class for this grad_fn when available.
+        """Return the runtime Python class for this grad_fn_handle when available.
 
         Returns
         -------
@@ -212,7 +212,7 @@ class GradFn:
 
     @property
     def grad_fn_label(self) -> str:
-        """Return the canonical grad_fn label.
+        """Return the canonical grad_fn_handle label.
 
         Returns
         -------
@@ -224,7 +224,7 @@ class GradFn:
 
     @property
     def children(self) -> list[str]:
-        """Return labels of child grad_fn nodes.
+        """Return labels of child grad_fn_handle nodes.
 
         Returns
         -------
@@ -232,15 +232,15 @@ class GradFn:
             Child grad-fn labels when resolvable from stored ids.
         """
 
-        return [str(grad_fn_id) for grad_fn_id in self.next_grad_fn_ids]
+        return [str(grad_fn_object_id) for grad_fn_object_id in self.next_grad_fn_ids]
 
     @property
     def call_labels(self) -> list[str]:
-        """Pass-qualified labels for this grad_fn."""
+        """Pass-qualified labels for this grad_fn_handle."""
         return [f"{self.label}:{call_index}" for call_index in self.ops]
 
     def _log_call(self, grad_inputs: Any, grad_outputs: Any, timestamp: float) -> None:
-        """Append one runtime hook firing to this grad_fn log.
+        """Append one runtime hook firing to this grad_fn_handle log.
 
         Parameters
         ----------
@@ -261,7 +261,7 @@ class GradFn:
         )
 
     def to_pandas(self) -> "pd.DataFrame":
-        """Export this grad_fn as a one-row DataFrame.
+        """Export this grad_fn_handle as a one-row DataFrame.
 
         Returns
         -------
@@ -287,17 +287,19 @@ class GradFnAccessor(Accessor[GradFn]):
     """
 
     def __init__(self, grad_fn_logs: Dict[int, GradFn], grad_fn_order: list[int]) -> None:
-        """Initialize an accessor from Trace's flat grad_fn fields.
+        """Initialize an accessor from Trace's flat grad_fn_handle fields.
 
         Parameters
         ----------
         grad_fn_logs:
-            Mapping from ``id(grad_fn)`` to ``GradFn``.
+            Mapping from ``id(grad_fn_handle)`` to ``GradFn``.
         grad_fn_order:
-            Discovery-order list of grad_fn ids.
+            Discovery-order list of grad_fn_handle ids.
         """
-        grad_fn_dict = {grad_fn.label: grad_fn for grad_fn in grad_fn_logs.values()}
-        grad_fn_list = [grad_fn_logs[grad_fn_id] for grad_fn_id in grad_fn_order]
+        grad_fn_dict = {
+            grad_fn_handle.label: grad_fn_handle for grad_fn_handle in grad_fn_logs.values()
+        }
+        grad_fn_list = [grad_fn_logs[grad_fn_object_id] for grad_fn_object_id in grad_fn_order]
         super().__init__(grad_fn_dict, item_list=grad_fn_list)
 
     def __getitem__(self, key: int | str) -> GradFn | GradFnCall:  # type: ignore[override]
@@ -316,14 +318,14 @@ class GradFnAccessor(Accessor[GradFn]):
         return None
 
     def _resolve_substring(self, key: str) -> GradFn | None:
-        """Resolve the first grad_fn whose label contains ``key``."""
-        matches = [grad_fn for grad_fn in self._list if key in grad_fn.label]
+        """Resolve the first grad_fn_handle whose label contains ``key``."""
+        matches = [grad_fn_handle for grad_fn_handle in self._list if key in grad_fn_handle.label]
         if matches:
             return matches[0]
         return None
 
     def _suggest(self, key: str) -> list[str]:
-        """Return valid grad_fn labels for error context."""
+        """Return valid grad_fn_handle labels for error context."""
         return list(self._dict.keys())[:10]
 
     def __repr__(self) -> str:
@@ -331,8 +333,8 @@ class GradFnAccessor(Accessor[GradFn]):
         if len(self) == 0:
             return "GradFnAccessor({})"
         items = [
-            f"  '{grad_fn.label}': {grad_fn.class_name} "
-            f"(ops={grad_fn.num_calls}, intervening={grad_fn.is_intervening})"
-            for grad_fn in self._list
+            f"  '{grad_fn_handle.label}': {grad_fn_handle.class_name} "
+            f"(ops={grad_fn_handle.num_calls}, intervening={grad_fn_handle.is_intervening})"
+            for grad_fn_handle in self._list
         ]
         return f"GradFnAccessor({len(self)} grad_fns):\n" + "\n".join(items)

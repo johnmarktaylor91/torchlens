@@ -29,7 +29,7 @@ def _ctx() -> object:
             "tensor": torch.ones(2, 3),
         },
         event_index=1,
-        compute_index=1,
+        step_index=1,
     )
 
 
@@ -102,7 +102,7 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
     op_data = {
         "label": "relu_1_2_raw",
         "raw_label": "relu_1_2_raw",
-        "capture_index": 2,
+        "raw_index": 2,
         "func_name": "relu",
         "address": "encoder",
         "module_type": "Linear",
@@ -118,7 +118,7 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
         op_log_or_op_data=op_data,
         module_stack=module_stack,
         event_index=2,
-        compute_index=1,
+        step_index=1,
         time_since_pass_start=0.25,
     )
     synth_ctx = _build_record_context(
@@ -126,7 +126,7 @@ def test_record_context_constructor_is_schema_source_of_truth() -> None:
         op_log_or_op_data=op_data,
         module_stack=tuple(frame for frame in module_stack),
         event_index=2,
-        compute_index=1,
+        step_index=1,
         time_since_pass_start=0.25,
     )
 

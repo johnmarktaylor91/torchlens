@@ -146,7 +146,7 @@ def _op_dict(op: Any) -> dict[str, Any]:
         "fx_call_index": op.fx_call_index,
         "fx_qualpath": op.fx_qualpath,
         "intervention_replaced": getattr(op, "intervention_replaced", False),
-        "is_atomic_module_op": op.is_atomic_module_op,
+        "is_atomic_module": op.is_atomic_module,
         "is_internal_sink": op.is_internal_sink,
         "is_internal_source": op.is_internal_source,
         "is_orphan": getattr(op, "is_orphan", False),
@@ -154,12 +154,12 @@ def _op_dict(op: Any) -> dict[str, Any]:
         "label": _op_label(op),
         "lookup_keys": _sorted_strings(op.lookup_keys),
         "module": _module_call_string(op.module),
-        "module_entry_argnames": _normalize_argnames(op.module_entry_argnames),
-        "module_ops_entered": _module_call_list(op.module_ops_entered),
+        "module_entry_arg_keys": _normalize_argnames(op.module_entry_arg_keys),
+        "input_to_module_calls": _module_call_list(op.input_to_module_calls),
         "modules": _module_call_list(op.modules),
         "output_of_module_calls": _module_call_list(op.output_of_module_calls),
         "output_of_modules": [str(value) for value in op.output_of_modules],
-        "trace_index": op.trace_index,
+        "step_index": op.step_index,
     }
 
 
@@ -189,7 +189,7 @@ def _layer_dict(layer: Any) -> dict[str, Any]:
         "modules": _module_call_list(layer.modules),
         "output_of_module_calls": _module_call_list(layer.output_of_module_calls),
         "output_of_modules": [str(value) for value in layer.output_of_modules],
-        "trace_index": layer.trace_index,
+        "step_index": layer.step_index,
     }
 
 

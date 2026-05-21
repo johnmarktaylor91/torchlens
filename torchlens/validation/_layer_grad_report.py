@@ -140,7 +140,7 @@ def _compare_module_output_grads(
             mismatched.append(call_label)
 
     for layer in trace.layer_list:
-        if not getattr(layer, "has_grad", False):
+        if not getattr(layer, "has_saved_gradient", False):
             continue
         candidate_grad_count += 1
         if not (getattr(layer, "modules", None) or []):

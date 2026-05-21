@@ -374,10 +374,10 @@ class _TensorBearing:
         """
 
         if field == "out":
-            has_value = getattr(member, "has_saved_outs", False)
+            has_value = getattr(member, "has_saved_activation", False)
             value = getattr(member, "out", None) if has_value else None
         else:
-            has_value = getattr(member, "has_grad", False)
+            has_value = getattr(member, "has_saved_gradient", False)
             value = getattr(member, "grad", None) if has_value else None
         return value if isinstance(value, torch.Tensor) else None
 

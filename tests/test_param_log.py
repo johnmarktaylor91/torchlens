@@ -87,7 +87,7 @@ class TestParamLogFields:
         assert "shape" in r
         assert "dtype" in r
         assert "trainable" in r or "frozen" in r
-        assert "has_grad" in r
+        assert "has_saved_gradient" in r
 
     def test_len_equals_num_params(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -357,78 +357,78 @@ class TestGradientTracking:
     def test_no_grad_by_default(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            assert pl.has_grad is False
+            assert pl.has_saved_gradient is False
             assert pl.grad_shape is None
 
     def test_no_grad_without_save_grads(self):
-        mh = trace_fn(_make_simple_model(), _simple_input(), save_grads=False)
-        # Even if we could call backward, save_grads=False means no hooks
+        mh = trace_fn(_make_simple_model(), _simple_input(), save_gradients=False)
+        # Even if we could call backward, save_gradients=False means no hooks
         for pl in mh.params:
-            assert pl.has_grad is False
+            assert pl.has_saved_gradient is False
 
     def test_grad_after_backward(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].out
         output.sum().backward()
 
         # All trainable params should have grads
         for pl in mh.params:
-            assert pl.has_grad is True
+            assert pl.has_saved_gradient is True
             assert pl.grad_shape == pl.shape
             assert pl.grad_dtype == pl.dtype
-            assert pl.grad_memory > 0
-            assert len(pl.grad_memory_str) > 0
+            assert pl.gradient_memory > 0
+            assert len(pl.gradient_memory_str) > 0
 
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].out
         output.sum().backward()
 
         # Frozen params should NOT have grads
-        assert mh.params["0.weight"].has_grad is False
-        assert mh.params["0.bias"].has_grad is False
+        assert mh.params["0.weight"].has_saved_gradient is False
+        assert mh.params["0.bias"].has_saved_gradient is False
         # Trainable params should have grads
-        assert mh.params["2.weight"].has_grad is True
-        assert mh.params["2.bias"].has_grad is True
+        assert mh.params["2.weight"].has_saved_gradient is True
+        assert mh.params["2.bias"].has_saved_gradient is True
 
     def test_tle_grad_saved(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].out
         output.sum().backward()
 
         # TLEs with param layers should have saved grads
         for entry in mh:
             if entry.uses_params:
-                assert entry.has_grad is True
+                assert entry.has_saved_gradient is True
                 assert entry.grad is not None
                 assert entry.grad_shape is not None
 
     def test_saved_grad_ops_populated(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].out
         output.sum().backward()
 
         assert len(mh.saved_grad_ops) > 0
         for label in mh.saved_grad_ops.keys():
-            assert mh[label].has_grad is True
+            assert mh[label].has_saved_gradient is True
 
     def test_grad_shape_matches_param_shape(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_grads=True)
+        mh = trace_fn(model, x, save_gradients=True)
         output = mh["output_1"].out
         output.sum().backward()
 
         for pl in mh.params:
-            if pl.has_grad:
+            if pl.has_saved_gradient:
                 assert pl.grad_shape == pl.shape, (
                     f"Grad shape {pl.grad_shape} != param shape {pl.shape} for {pl.address}"
                 )
@@ -599,13 +599,13 @@ class TestIntegration:
 
     def test_grad_tracking_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        mh = trace_fn(model, input_2d, save_grads=True)
+        mh = trace_fn(model, input_2d, save_gradients=True)
         output = mh["output_1"].out
         output.sum().backward()
 
         # Despite multiple ops, each param should have exactly one grad
         for pl in mh.params:
-            assert pl.has_grad is True
+            assert pl.has_saved_gradient is True
             assert pl.grad_shape == pl.shape
 
     def test_parent_params_cleared_from_tle(self):

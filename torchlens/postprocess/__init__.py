@@ -137,7 +137,7 @@ def _prune_final_unsaved_layers(self: "Trace") -> None:
         layer_entry
         for layer_entry in self.layer_list
         if not getattr(layer_entry, "is_orphan", False)
-        and not getattr(layer_entry, "has_saved_outs", False)
+        and not getattr(layer_entry, "has_saved_activation", False)
         and layer_entry.layer_label not in retained_call_group_labels
     ]
     if not layers_to_remove:
@@ -180,7 +180,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     saved_layers = [
         layer_entry
         for layer_entry in self.layer_list
-        if getattr(layer_entry, "has_saved_outs", False)
+        if getattr(layer_entry, "has_saved_activation", False)
         and not getattr(layer_entry, "is_orphan", False)
     ]
     self.num_saved_ops = len(saved_layers)
@@ -389,14 +389,14 @@ def postprocess_fast(self: "Trace") -> None:
         output_layer.memory = parent_layer.memory
         output_layer.transformed_out_shape = parent_layer.transformed_out_shape
         output_layer.transformed_out_dtype = parent_layer.transformed_out_dtype
-        output_layer.transformed_out_memory = parent_layer.transformed_out_memory
-        output_layer.has_saved_outs = parent_layer.has_saved_outs
-        output_layer.has_grad = parent_layer.has_grad
+        output_layer.transformed_activation_memory = parent_layer.transformed_activation_memory
+        output_layer.has_saved_activation = parent_layer.has_saved_activation
+        output_layer.has_saved_gradient = parent_layer.has_saved_gradient
         output_layer._internal_set("grad", parent_layer.grad)
         output_layer._internal_set("transformed_grad", parent_layer.transformed_grad)
         output_layer.transformed_grad_shape = parent_layer.transformed_grad_shape
         output_layer.transformed_grad_dtype = parent_layer.transformed_grad_dtype
-        output_layer.transformed_grad_memory = parent_layer.transformed_grad_memory
+        output_layer.transformed_gradient_memory = parent_layer.transformed_gradient_memory
     _refresh_fast_saved_summary(self)
     _trim_and_reorder_model_history_fields(self)
     _prune_final_unsaved_layers(self)

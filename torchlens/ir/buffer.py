@@ -70,7 +70,7 @@ class CaptureEvents:
                 ReservedLabel(
                     label=label_raw,
                     label_raw=label_raw,
-                    capture_index=self.raw_layer_counter,
+                    raw_index=self.raw_layer_counter,
                     type_index=type_counter,
                     layer_type=layer_type,
                     site=label_raw,

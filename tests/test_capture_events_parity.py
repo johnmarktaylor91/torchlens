@@ -38,7 +38,7 @@ _EXPECTED_ALLOWLIST = {
     "Op": frozenset(
         {
             "bytes_peak_at_call",
-            "capture_index",
+            "raw_index",
             "func_call_id",
             "func_duration",
         }
@@ -250,9 +250,9 @@ def _make_trace_pickleable(trace: Any) -> None:
             if isinstance(value, torch.Tensor):
                 layer._internal_set(field_name, value.detach().cpu())
         layer.func = None
-        layer.grad_fn = None
-        layer.grad_fn_id = 0 if layer.grad_fn_id is not None else None
-        layer.grad_fn_log = None
+        layer.grad_fn_handle = None
+        layer.grad_fn_object_id = 0 if layer.grad_fn_object_id is not None else None
+        layer.grad_fn_handle = None
         layer.code_context = []
         layer._source_trace_ref = None
         layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
@@ -260,15 +260,20 @@ def _make_trace_pickleable(trace: Any) -> None:
     for layer_log in getattr(trace, "layer_logs", {}).values():
         state = getattr(layer_log, "__dict__", {})
         state["func"] = None
-        state["grad_fn_id"] = 0 if state.get("grad_fn_id") is not None else None
+        state["grad_fn_object_id"] = 0 if state.get("grad_fn_object_id") is not None else None
         state["code_context"] = []
-        for field_name in ("transformed_out", "transformed_grad", "grad_fn", "grad_fn_log"):
+        for field_name in (
+            "transformed_out",
+            "transformed_grad",
+            "grad_fn_handle",
+            "grad_fn_handle",
+        ):
             if field_name not in state:
                 continue
             value = state[field_name]
             if isinstance(value, torch.Tensor):
                 state[field_name] = value.detach().cpu()
-            elif field_name in {"grad_fn", "grad_fn_log"}:
+            elif field_name in {"grad_fn_handle", "grad_fn_handle"}:
                 state[field_name] = None
     for volatile_field in ("_mod_call_index", "_mod_call_labels", "_mod_entered", "_mod_exited"):
         if hasattr(trace, volatile_field):
@@ -467,7 +472,7 @@ def test_walk_detects_accumulategrad_via_type_name() -> None:
 
     model = nn.Linear(3, 1)
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, random_seed=123, save_grads=True)
+    trace = tl.trace(model, x, random_seed=123, save_gradients=True)
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     assert trace._grad_fn_param_refs

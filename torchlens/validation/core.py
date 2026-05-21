@@ -476,11 +476,11 @@ def _check_arglocs_correct_for_arg(
     """
     target_layer_label = target_layer.layer_label
     parent_layer_label = parent_layer.layer_label
-    # output_versions_per_child stores per-child snapshots when an in-place
+    # out_versions_by_child stores per-child snapshots when an in-place
     # op modified the tensor between uses.  Fall back to out
     # when no child-specific version exists.
-    if target_layer_label in parent_layer.output_versions_per_child:
-        parent_outs = parent_layer.output_versions_per_child[target_layer_label]
+    if target_layer_label in parent_layer.out_versions_by_child:
+        parent_outs = parent_layer.out_versions_by_child[target_layer_label]
     else:
         parent_outs = parent_layer.out
 
@@ -673,7 +673,7 @@ def _deep_numeric_replay_matches_saved(
         return False
     if layer.func_name not in DEEP_NUMERIC_REPLAY_FUNCS:
         return False
-    if layer.compute_index < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
+    if layer.step_index < DEEP_NUMERIC_REPLAY_MIN_OPERATION_NUM:
         return False
     if recomputed_output.shape != saved_output.shape:
         return False
@@ -849,8 +849,8 @@ def _prepare_input_args_for_validating_layer(
             parent_layer_arg,
         ) in layer_to_validate_parents_for.parent_arg_positions[arg_type].items():
             parent_layer = self[parent_layer_arg]
-            if layer_to_validate_parents_for.layer_label in parent_layer.output_versions_per_child:
-                parent_values = parent_layer.output_versions_per_child[
+            if layer_to_validate_parents_for.layer_label in parent_layer.out_versions_by_child:
+                parent_values = parent_layer.out_versions_by_child[
                     layer_to_validate_parents_for.layer_label
                 ]
             else:

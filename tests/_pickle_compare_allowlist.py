@@ -18,7 +18,7 @@ ALLOWED_PICKLE_DIFF_FIELDS: dict[str, frozenset[str]] = {
     "Op": frozenset(
         {
             "bytes_peak_at_call",
-            "capture_index",
+            "raw_index",
             "func_call_id",
             "func_duration",
         }

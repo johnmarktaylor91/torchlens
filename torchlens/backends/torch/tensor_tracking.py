@@ -52,7 +52,7 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
     (GC-8).  The closure also captures ``tensor_label`` (a string) rather than
     the tensor itself, avoiding circular references.
 
-    Only tensors that participate in autograd (have grad_fn or require_grad)
+    Only tensors that participate in autograd (have grad_fn_handle or require_grad)
     get hooks — others would never receive grads.
 
     Args:
@@ -84,7 +84,7 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
         grad: The grad tensor from autograd.
         _label_raw: Raw tensor label used to look up the final label.
     """
-    self.has_grads = True
+    self.has_gradients = True
     tensor_label = self._raw_to_final_layer_labels[_label_raw]
     layer_log_entry = self[tensor_label]
     layers_to_update = [tensor_label]
@@ -98,13 +98,13 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
         layer = self[layer_label]
         selection = getattr(self, "_grad_layer_nums_to_save", "all")
         if selection != "all":
-            if selection in [None, "none", []] or layer.capture_index not in selection:
+            if selection in [None, "none", []] or layer.raw_index not in selection:
                 continue
         if layer_label not in self._saved_grads_set:
             self._saved_grads_set.add(layer_label)
         layer.log_tensor_grad(grad)
-        self.saved_gradient_memory += layer.grad_memory
-        self.total_gradient_memory += layer.grad_memory
+        self.saved_gradient_memory += layer.gradient_memory
+        self.total_gradient_memory += layer.gradient_memory
 
 
 def _locate_parent_tensors_in_args(
@@ -364,7 +364,7 @@ def _get_equivalence_class(
         kwargs: Keyword arguments to the function call.
         i: Index of this output tensor within a multi-output call.
         layer_type: The normalized operation name.
-        fields_dict: Must contain ``is_part_of_iterable_output`` and
+        fields_dict: Must contain ``in_multi_output`` and
             ``module``.
 
     Returns:
@@ -372,7 +372,7 @@ def _get_equivalence_class(
     """
     arg_hash = _get_hash_from_args(args, kwargs)
     equivalence_class = f"{layer_type}_{arg_hash}"
-    if fields_dict["is_part_of_iterable_output"]:
+    if fields_dict["in_multi_output"]:
         equivalence_class += f"_outindex{i}"
     if fields_dict["module"] is not None:
         module_str = fields_dict["module"][0]

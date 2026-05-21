@@ -362,7 +362,7 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
     The default ``Tensor.__repr__`` calls decorated custom_methods internally,
     which would re-enter the logging pipeline and cause infinite recursion.
     This override pauses logging, converts to a numpy array for formatting,
-    and appends autograd metadata (``grad_fn`` / ``requires_grad``) to
+    and appends autograd metadata (``grad_fn_handle`` / ``requires_grad``) to
     match the standard PyTorch repr style.
 
     Falls back to a shape/dtype summary for tensors that can't be converted
@@ -393,7 +393,7 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
         np_str = f"tensor(shape={list(t.shape)}, dtype={t.dtype})"
     # Append autograd info to mimic standard PyTorch repr.
     if t.grad_fn is not None:
-        grad_fn_str = f", grad_fn={type(t.grad_fn).__name__})"
+        grad_fn_str = f", grad_fn_handle={type(t.grad_fn).__name__})"
         np_str = np_str[0:-1] + grad_fn_str
     elif t.requires_grad:
         np_str = np_str[0:-1] + ", requires_grad=True)"

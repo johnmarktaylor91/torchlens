@@ -166,7 +166,7 @@ def test_trace_defaults_are_stable(
     assert captured_calls[-1]["mark_layer_depths"] is False
     assert captured_calls[-1]["detach_saved_activations"] is False
     assert captured_calls[-1]["save_arg_values"] is False
-    assert captured_calls[-1]["save_grads"] is False
+    assert captured_calls[-1]["save_gradients"] is False
     assert captured_calls[-1]["num_context_lines"] == 7
     assert captured_calls[-1]["save_code_context"] is False
     assert captured_calls[-1]["save_rng_states"] is False
@@ -215,7 +215,7 @@ def test_show_model_graph_defaults_are_stable(
     assert captured_calls[-1]["layers_to_save"] is None
     assert captured_calls[-1]["mark_layer_depths"] is False
     assert captured_calls[-1]["detach_saved_activations"] is False
-    assert captured_calls[-1]["save_grads"] is False
+    assert captured_calls[-1]["save_gradients"] is False
     assert captured_calls[-1]["recurrence_detection"] is True
     assert captured_calls[-1]["verbose"] is False
     assert dummy_logs[-1].render_calls[-1]["vis_mode"] == "unrolled"
@@ -313,7 +313,7 @@ def test_validate_forward_pass_uses_validation_overrides(
     assert captured_calls[-1]["out_transform"] is None
     assert captured_calls[-1]["mark_layer_depths"] is False
     assert captured_calls[-1]["detach_saved_activations"] is False
-    assert captured_calls[-1]["save_grads"] is False
+    assert captured_calls[-1]["save_gradients"] is False
     assert captured_calls[-1]["save_arg_values"] is True
     assert captured_calls[-1]["save_rng_states"] is True
     assert dummy_logs[-1].validate_calls[-1]["validate_metadata"] is False

@@ -94,7 +94,7 @@ class TapObserver:
         grad_input: tuple[torch.Tensor | None, ...],
         *,
         grad_output: tuple[torch.Tensor | None, ...] | None,
-        grad_fn_log: Any,
+        grad_fn_handle: Any,
         call_index: int,
         run_ctx: dict[str, Any],
     ) -> None:
@@ -103,10 +103,10 @@ class TapObserver:
         Parameters
         ----------
         grad_input:
-            Autograd grad_input tuple at the grad_fn hook.
+            Autograd grad_input tuple at the grad_fn_handle hook.
         grad_output:
-            Autograd grad_output tuple at the grad_fn hook, when available.
-        grad_fn_log:
+            Autograd grad_output tuple at the grad_fn_handle hook, when available.
+        grad_fn_handle:
             GradFn site whose hook fired.
         call_index:
             One-based backward call index.
@@ -131,7 +131,7 @@ class TapObserver:
         self.records.append(
             TapRecord(
                 value=value,
-                site_label=getattr(grad_fn_log, "label", None),
+                site_label=getattr(grad_fn_handle, "label", None),
                 span_names=span_names,
                 timestamp=time.monotonic(),
                 direction="backward",

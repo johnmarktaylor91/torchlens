@@ -351,7 +351,7 @@ def _make_backward_log() -> Trace:
 
     model = _SimpleFF()
     x = torch.randn(2, 5, requires_grad=True)
-    log = trace_fn(model, x, grads_to_save="all", random_seed=42)
+    log = trace_fn(model, x, gradients_to_save="all", random_seed=42)
     log.log_backward(log[log.output_layers[0]].out.sum())
     return log
 
@@ -382,13 +382,13 @@ def test_backward_invariants_with_intervening() -> None:
     """Backward metadata invariants allow intervening grad_fns."""
 
     log = _make_backward_log()
-    assert any(grad_fn.is_intervening for grad_fn in log.grad_fn_logs.values())
+    assert any(grad_fn_handle.is_intervening for grad_fn_handle in log.grad_fn_logs.values())
     assert check_metadata_invariants(log) is True
     log.cleanup()
 
 
 def test_bad_grad_fn_order_raises() -> None:
-    """Unknown grad_fn ids in grad_fn_order raise an invariant error."""
+    """Unknown grad_fn_handle ids in grad_fn_order raise an invariant error."""
 
     log = _make_backward_log()
     log.grad_fn_order.append(-1)
@@ -408,13 +408,13 @@ def test_bad_backward_root_grad_fn_id_raises() -> None:
 
 
 def test_bad_layer_grad_fn_backpointer_raises() -> None:
-    """A mismatched layer-to-grad_fn backpointer raises an invariant error."""
+    """A mismatched layer-to-grad_fn_handle backpointer raises an invariant error."""
 
     log = _make_backward_log()
     for layer in log.layer_list:
-        if layer.grad_fn_log is not None:
-            layer.grad_fn_log.op = None
-            layer.grad_fn_log.is_intervening = True
+        if layer.grad_fn_handle is not None:
+            layer.grad_fn_handle.op = None
+            layer.grad_fn_handle.is_intervening = True
             break
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)
@@ -533,26 +533,26 @@ def _make_nested_log():
 
 
 def test_corruption_graph_ordering_duplicate_rt_num():
-    """Duplicate capture_index triggers graph_ordering error."""
+    """Duplicate raw_index triggers graph_ordering error."""
     log = _make_clean_log()
-    # Set two layers to the same capture_index
-    log.layer_list[0].capture_index = log.layer_list[1].capture_index
+    # Set two layers to the same raw_index
+    log.layer_list[0].raw_index = log.layer_list[1].raw_index
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):
         check_metadata_invariants(log)
     log.cleanup()
 
 
 def test_corruption_graph_ordering_topo_violation():
-    """Parent with higher capture_index than child triggers error."""
+    """Parent with higher raw_index than child triggers error."""
     log = _make_clean_log()
     # Find a layer with parents and swap rt nums to break topo order
     for lpl in log.layer_list:
         if lpl.parents:
             parent = log[lpl.parents[0]]
             # Give parent a higher rt num than child
-            parent.capture_index, lpl.capture_index = (
-                lpl.capture_index,
-                parent.capture_index,
+            parent.raw_index, lpl.raw_index = (
+                lpl.raw_index,
+                parent.raw_index,
             )
             break
     with pytest.raises(MetadataInvariantError, match="graph_ordering"):

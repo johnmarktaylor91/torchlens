@@ -352,7 +352,7 @@ def validate_backward_pass(
             logged_inputs,
             input_kwargs=logged_kwargs,
             layers_to_save="all",
-            grads_to_save="all",
+            gradients_to_save="all",
             random_seed=random_seed,
         )
         logged_output = _reconstruct_candidate_output_for_loss(trace)
@@ -362,7 +362,7 @@ def validate_backward_pass(
             check_metadata_invariants(trace)
         if perturb_saved_grads:
             for layer in trace.layer_list:
-                if layer.has_grad and isinstance(layer.grad, torch.Tensor):
+                if layer.has_saved_gradient and isinstance(layer.grad, torch.Tensor):
                     layer.grad = layer.grad + torch.randn_like(layer.grad)
                     break
         observed_param_grads = _param_grads(model)
@@ -474,7 +474,7 @@ def _validate_layer_grads(
             candidate_inputs,
             input_kwargs=candidate_kwargs,
             layers_to_save="all",
-            grads_to_save="all",
+            gradients_to_save="all",
             random_seed=random_seed,
         )
         candidate_output = _reconstruct_candidate_output_for_loss(candidate_trace)

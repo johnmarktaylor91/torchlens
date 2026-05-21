@@ -1,4 +1,4 @@
-"""Backward-pass graph walking, grad_fn hooks, and Trace APIs."""
+"""Backward-pass graph walking, grad_fn_handle hooks, and Trace APIs."""
 
 from __future__ import annotations
 
@@ -17,12 +17,12 @@ from ...data_classes.grad_fn_log import GradFn
 from .tensor_tracking import _add_tensor_backward_hook
 
 
-def _grad_fn_is_custom(grad_fn: Any) -> bool:
-    """Return whether a grad_fn appears to come from user/custom autograd code.
+def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
+    """Return whether a grad_fn_handle appears to come from user/custom autograd code.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         Autograd function object.
 
     Returns
@@ -31,27 +31,27 @@ def _grad_fn_is_custom(grad_fn: Any) -> bool:
         True when the type's module path is outside PyTorch's built-in autograd
         and nn namespaces.
     """
-    class_module = type(grad_fn).__module__
+    class_module = type(grad_fn_handle).__module__
     if class_module == "torch.autograd.function":
         return True
     builtin_prefixes = ("torch.autograd", "torch.nn", "torch", "builtins")
     return not class_module.startswith(builtin_prefixes)
 
 
-def _iter_next_grad_fns(grad_fn: Any) -> Iterator[Any]:
-    """Yield non-null child grad_fns from ``grad_fn.next_functions``.
+def _iter_next_grad_fns(grad_fn_handle: Any) -> Iterator[Any]:
+    """Yield non-null child grad_fns from ``grad_fn_handle.next_functions``.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         Autograd function object.
 
     Yields
     ------
     Any
-        Reachable child grad_fn object.
+        Reachable child grad_fn_handle object.
     """
-    for next_fn, _input_num in getattr(grad_fn, "next_functions", ()):
+    for next_fn, _input_num in getattr(grad_fn_handle, "next_functions", ()):
         if next_fn is not None:
             yield next_fn
 
@@ -69,7 +69,7 @@ def _selected_for_grad_save(trace: Any, layer_label: str | None) -> bool:
     Returns
     -------
     bool
-        True if this layer is selected by ``grads_to_save``.
+        True if this layer is selected by ``gradients_to_save``.
     """
     if layer_label is None:
         return False
@@ -78,15 +78,15 @@ def _selected_for_grad_save(trace: Any, layer_label: str | None) -> bool:
         return True
     if selection in [None, "none", []]:
         return False
-    return trace[layer_label].capture_index in selection
+    return trace[layer_label].raw_index in selection
 
 
-def _normalize_grad_fn_type(grad_fn: Any) -> str:
-    """Normalize an autograd grad_fn class name for TorchLens labels.
+def _normalize_grad_fn_type(grad_fn_handle: Any) -> str:
+    """Normalize an autograd grad_fn_handle class name for TorchLens labels.
 
     Parameters
     ----------
-    grad_fn:
+    grad_fn_handle:
         Autograd function object.
 
     Returns
@@ -94,7 +94,7 @@ def _normalize_grad_fn_type(grad_fn: Any) -> str:
     str
         Lowercased class name with a trailing ``Backward<digits>`` suffix removed.
     """
-    return re.sub(r"Backward\d*$", "", type(grad_fn).__name__).lower()
+    return re.sub(r"Backward\d*$", "", type(grad_fn_handle).__name__).lower()
 
 
 def _grad_fn_label_parts(
@@ -104,14 +104,14 @@ def _grad_fn_label_parts(
     type_counter: dict[str, int],
     total_num: int,
 ) -> tuple[int, int, str]:
-    """Build numeric label fields for one grad_fn.
+    """Build numeric label fields for one grad_fn_handle.
 
     Parameters
     ----------
     trace:
         Trace being updated.
     grad_fn_type:
-        Normalized grad_fn type.
+        Normalized grad_fn_handle type.
     layer_label:
         Matching forward layer label, or ``None`` for intervening grad_fns.
     type_counter:
@@ -127,7 +127,7 @@ def _grad_fn_label_parts(
     if layer_label is not None:
         layer = trace.layers[layer_label]
         type_num = layer.type_index
-        total_num = layer.trace_index
+        total_num = layer.step_index
     else:
         type_counter[grad_fn_type] = type_counter.get(grad_fn_type, 0) + 1
         type_num = type_counter[grad_fn_type]
@@ -137,25 +137,25 @@ def _grad_fn_label_parts(
 
 def _make_grad_fn_hook(
     trace: Any,
-    grad_fn_id: int,
+    grad_fn_object_id: int,
     *,
     is_accumulate_grad: bool = False,
 ) -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
-    """Build a runtime hook for one autograd grad_fn.
+    """Build a runtime hook for one autograd grad_fn_handle.
 
     Parameters
     ----------
     trace:
         Trace whose flat backward fields should receive runtime data.
-    grad_fn_id:
-        ``id()`` of the hooked grad_fn.
+    grad_fn_object_id:
+        ``id()`` of the hooked grad_fn_handle.
     is_accumulate_grad:
         Whether this hook is attached to an AccumulateGrad node.
 
     Returns
     -------
     Callable[..., tuple[torch.Tensor | None, ...] | None]
-        Hook compatible with ``grad_fn.register_hook``.
+        Hook compatible with ``grad_fn_handle.register_hook``.
     """
 
     trace_ref = weakref.ref(trace)
@@ -164,32 +164,32 @@ def _make_grad_fn_hook(
         live_trace = trace_ref()
         if live_trace is None:
             return None
-        grad_fn_log = live_trace.grad_fn_logs.get(grad_fn_id)
-        if grad_fn_log is None:
+        grad_fn_handle = live_trace.grad_fn_logs.get(grad_fn_object_id)
+        if grad_fn_handle is None:
             return None
         grad_inputs = hook_args[0] if len(hook_args) >= 1 else None
         grad_outputs = hook_args[1] if len(hook_args) >= 2 else None
-        layer_label = grad_fn_log.op.layer_label if grad_fn_log.op is not None else None
+        layer_label = grad_fn_handle.op.layer_label if grad_fn_handle.op is not None else None
         stored_grad_inputs = grad_inputs
         stored_grad_outputs = grad_outputs
         if not _selected_for_grad_save(live_trace, layer_label):
             stored_grad_inputs = None
             stored_grad_outputs = None
         with pause_logging():
-            grad_fn_log._log_call(stored_grad_inputs, stored_grad_outputs, time.time())
-        call_index = len(grad_fn_log.ops)
+            grad_fn_handle._log_call(stored_grad_inputs, stored_grad_outputs, time.time())
+        call_index = len(grad_fn_handle.ops)
         if is_accumulate_grad:
             return None
         from ...intervention.runtime import _apply_live_backward_hooks
 
-        return _apply_live_backward_hooks(grad_inputs, grad_outputs, grad_fn_log, call_index)
+        return _apply_live_backward_hooks(grad_inputs, grad_outputs, grad_fn_handle, call_index)
 
     return hook
 
 
 def _make_grad_fn_prehook(
     trace: Any,
-    grad_fn_id: int,
+    grad_fn_object_id: int,
 ) -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
     """Build an AccumulateGrad prehook for mutating incoming gradients.
 
@@ -197,13 +197,13 @@ def _make_grad_fn_prehook(
     ----------
     trace:
         Trace whose backward hook plan should dispatch.
-    grad_fn_id:
-        ``id()`` of the hooked grad_fn.
+    grad_fn_object_id:
+        ``id()`` of the hooked grad_fn_handle.
 
     Returns
     -------
     Callable[..., tuple[torch.Tensor | None, ...] | None]
-        Hook compatible with ``grad_fn.register_prehook``.
+        Hook compatible with ``grad_fn_handle.register_prehook``.
     """
 
     trace_ref = weakref.ref(trace)
@@ -212,14 +212,14 @@ def _make_grad_fn_prehook(
         live_trace = trace_ref()
         if live_trace is None:
             return None
-        grad_fn_log = live_trace.grad_fn_logs.get(grad_fn_id)
-        if grad_fn_log is None:
+        grad_fn_handle = live_trace.grad_fn_logs.get(grad_fn_object_id)
+        if grad_fn_handle is None:
             return None
         grad_inputs = hook_args[0] if len(hook_args) >= 1 else ()
-        call_index = len(grad_fn_log.ops) + 1
+        call_index = len(grad_fn_handle.ops) + 1
         from ...intervention.runtime import _apply_live_backward_prehooks
 
-        return _apply_live_backward_prehooks(grad_inputs, grad_fn_log, call_index)
+        return _apply_live_backward_prehooks(grad_inputs, grad_fn_handle, call_index)
 
     return prehook
 
@@ -267,7 +267,7 @@ def _reset_peak_memory(device: torch.device) -> tuple[str, int]:
 
 
 def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
-    """Build a mapping from forward grad_fn identity to final layer label.
+    """Build a mapping from forward grad_fn_handle identity to final layer label.
 
     Parameters
     ----------
@@ -277,18 +277,18 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     Returns
     -------
     dict[int, str]
-        Mapping from ``id(grad_fn)`` to final layer label.
+        Mapping from ``id(grad_fn_handle)`` to final layer label.
     """
     mapping = {}
     for layer in trace.layer_list:
-        grad_fn_id = getattr(layer, "grad_fn_id", None)
-        if grad_fn_id is not None:
-            mapping[grad_fn_id] = layer.layer_label
+        grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
+        if grad_fn_object_id is not None:
+            mapping[grad_fn_object_id] = layer.layer_label
     return mapping
 
 
 def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
-    """Walk ``loss.grad_fn`` and register hooks on every reachable grad_fn.
+    """Walk ``loss.grad_fn`` and register hooks on every reachable grad_fn_handle.
 
     Parameters
     ----------
@@ -303,14 +303,14 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
         Hook handles to remove after backward finishes.
     """
     if loss.grad_fn is None:
-        raise ValueError("log_backward requires a loss tensor with a grad_fn.")
+        raise ValueError("log_backward requires a loss tensor with a grad_fn_handle.")
 
     layer_lookup = _layer_by_grad_fn_id(trace)
     queue: deque[Any] = deque([loss.grad_fn])
     seen: set[int] = set()
     handles: list[Any] = []
     type_counter: dict[str, int] = {}
-    # Keep strong refs to every discovered grad_fn for the trace's lifetime so
+    # Keep strong refs to every discovered grad_fn_handle for the trace's lifetime so
     # Python cannot recycle their memory addresses. ``id()`` is used as the
     # primary key for ``grad_fn_logs`` and ``next_grad_fn_ids``; if leaf nodes
     # like AccumulateGrad were gc'd, their ids could be reused by later-created
@@ -323,18 +323,18 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
     trace.has_backward_pass = True
 
     while queue:
-        grad_fn = queue.popleft()
-        grad_fn_id = id(grad_fn)
-        if grad_fn_id in seen:
+        grad_fn_handle = queue.popleft()
+        grad_fn_object_id = id(grad_fn_handle)
+        if grad_fn_object_id in seen:
             continue
-        seen.add(grad_fn_id)
-        next_grad_fns = list(_iter_next_grad_fns(grad_fn))
+        seen.add(grad_fn_object_id)
+        next_grad_fns = list(_iter_next_grad_fns(grad_fn_handle))
         strong_refs.extend(next_grad_fns)
         queue.extend(next_grad_fns)
-        layer_label = layer_lookup.get(grad_fn_id)
-        grad_fn_log = trace.grad_fn_logs.get(grad_fn_id)
-        if grad_fn_log is None:
-            grad_fn_type = _normalize_grad_fn_type(grad_fn)
+        layer_label = layer_lookup.get(grad_fn_object_id)
+        grad_fn_record = trace.grad_fn_logs.get(grad_fn_object_id)
+        if grad_fn_record is None:
+            grad_fn_type = _normalize_grad_fn_type(grad_fn_handle)
             grad_fn_total_num = len(trace.grad_fn_order) + 1
             grad_fn_type_num, grad_fn_total_num, label = _grad_fn_label_parts(
                 trace,
@@ -344,47 +344,49 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 grad_fn_total_num,
             )
             op = trace.layers[layer_label] if layer_label is not None else None
-            grad_fn_cls = type(grad_fn)
-            grad_fn_log = GradFn(
-                grad_fn_id=grad_fn_id,
+            grad_fn_cls = type(grad_fn_handle)
+            grad_fn_record = GradFn(
+                grad_fn_object_id=grad_fn_object_id,
                 class_name=grad_fn_cls.__name__,
                 class_qualname=f"{grad_fn_cls.__module__}.{grad_fn_cls.__qualname__}",
                 label=label,
                 grad_fn_type=grad_fn_type,
                 grad_fn_type_num=grad_fn_type_num,
                 grad_fn_total_num=grad_fn_total_num,
-                is_custom=_grad_fn_is_custom(grad_fn),
+                is_custom=_grad_fn_is_custom(grad_fn_handle),
                 is_intervening=layer_label is None,
                 op=op,
                 next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
             )
-            trace.grad_fn_logs[grad_fn_id] = grad_fn_log
-            trace.grad_fn_order.append(grad_fn_id)
+            trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
+            trace.grad_fn_order.append(grad_fn_object_id)
         else:
-            grad_fn_log.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
-        is_accumulate_grad = _is_accumulate_grad(grad_fn)
+            grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
+        is_accumulate_grad = _is_accumulate_grad(grad_fn_handle)
         if is_accumulate_grad:
-            param = getattr(grad_fn, "variable", None)
+            param = getattr(grad_fn_handle, "variable", None)
             param_address = trace._param_log_by_pid.get(id(param)) if param is not None else None
             if param_address is not None:
-                trace._grad_fn_param_refs[grad_fn_log.label] = param_address
+                trace._grad_fn_param_refs[grad_fn_record.label] = param_address
         if layer_label is not None:
             layer = trace[layer_label]
-            layer.grad_fn_log = grad_fn_log
+            layer.grad_fn = grad_fn_record
             if hasattr(layer, "parent_layer_log"):
-                layer.parent_layer_log.grad_fn_log = grad_fn_log
+                layer.parent_layer_log.grad_fn = grad_fn_record
         try:
             handles.append(
-                grad_fn.register_hook(
+                grad_fn_handle.register_hook(
                     _make_grad_fn_hook(
                         trace,
-                        grad_fn_id,
+                        grad_fn_object_id,
                         is_accumulate_grad=is_accumulate_grad,
                     )
                 )
             )
             if is_accumulate_grad:
-                handles.append(grad_fn.register_prehook(_make_grad_fn_prehook(trace, grad_fn_id)))
+                handles.append(
+                    grad_fn_handle.register_prehook(_make_grad_fn_prehook(trace, grad_fn_object_id))
+                )
         except RuntimeError:
             continue
     return handles
@@ -413,14 +415,14 @@ def _normalize_grad_capture_decision(value: Any) -> Any:
 
 
 def _recording_grad_fn_label(
-    grad_fn: Any,
+    grad_fn_handle: Any,
     layer_label: str | None,
     type_counter: dict[str, int],
     total_num: int,
 ) -> str:
-    """Build a fastlog grad_fn label for one autograd node."""
+    """Build a fastlog grad_fn_handle label for one autograd node."""
 
-    grad_fn_type = _normalize_grad_fn_type(grad_fn)
+    grad_fn_type = _normalize_grad_fn_type(grad_fn_handle)
     if layer_label is not None:
         return f"{grad_fn_type}_back_{layer_label}"
     type_counter[grad_fn_type] = type_counter.get(grad_fn_type, 0) + 1
@@ -431,18 +433,18 @@ def _iter_backward_nodes(loss: torch.Tensor) -> list[Any]:
     """Return reachable autograd nodes from a loss tensor in BFS order."""
 
     if loss.grad_fn is None:
-        raise ValueError("log_backward requires a loss tensor with a grad_fn.")
+        raise ValueError("log_backward requires a loss tensor with a grad_fn_handle.")
     queue: deque[Any] = deque([loss.grad_fn])
     seen: set[int] = set()
     nodes: list[Any] = []
     while queue:
-        grad_fn = queue.popleft()
-        grad_fn_id = id(grad_fn)
-        if grad_fn_id in seen:
+        grad_fn_handle = queue.popleft()
+        grad_fn_object_id = id(grad_fn_handle)
+        if grad_fn_object_id in seen:
             continue
-        seen.add(grad_fn_id)
-        nodes.append(grad_fn)
-        queue.extend(_iter_next_grad_fns(grad_fn))
+        seen.add(grad_fn_object_id)
+        nodes.append(grad_fn_handle)
+        queue.extend(_iter_next_grad_fns(grad_fn_handle))
     return nodes
 
 
@@ -518,7 +520,7 @@ def _first_tensor_from_hook_args(
 def _make_recording_grad_hook(
     recording_state: Any,
     recording: Any,
-    grad_fn: Any,
+    grad_fn_handle: Any,
     grad_fn_label: str,
     *,
     keep_grad: Any,
@@ -538,7 +540,7 @@ def _make_recording_grad_hook(
         grad_kind_literal = cast(Literal["grad_input", "grad_output"], grad_kind)
         ctx = build_grad_record_context(
             recording_state,
-            grad_fn,
+            grad_fn_handle,
             grad,
             grad_fn_label=grad_fn_label,
             grad_kind=grad_kind_literal,
@@ -614,16 +616,18 @@ def log_recording_backward(
     type_counter: dict[str, int] = {}
     backward_call_index = len(recording.grad_records) + 1
     try:
-        for index, grad_fn in enumerate(nodes, start=1):
-            forward_ctx = recording_state.grad_fn_to_context.get(grad_fn)
+        for index, grad_fn_handle in enumerate(nodes, start=1):
+            forward_ctx = recording_state.grad_fn_to_context.get(grad_fn_handle)
             layer_label = forward_ctx.label if forward_ctx is not None else None
-            grad_fn_label = _recording_grad_fn_label(grad_fn, layer_label, type_counter, index)
+            grad_fn_label = _recording_grad_fn_label(
+                grad_fn_handle, layer_label, type_counter, index
+            )
             handles.append(
-                grad_fn.register_hook(
+                grad_fn_handle.register_hook(
                     _make_recording_grad_hook(
                         recording_state,
                         recording,
-                        grad_fn,
+                        grad_fn_handle,
                         grad_fn_label,
                         keep_grad=effective_keep_grad,
                         default_grad=effective_default_grad,
@@ -643,22 +647,24 @@ def log_recording_backward(
     return recording
 
 
-def _is_accumulate_grad(grad_fn: Any) -> bool:
+def _is_accumulate_grad(grad_fn_handle: Any) -> bool:
     """Return whether an autograd node is an AccumulateGrad leaf.
 
     Parameters
     ----------
-    grad_fn
+    grad_fn_handle
         Autograd node to inspect.
 
     Returns
     -------
     bool
-        True when ``grad_fn`` is an AccumulateGrad node.
+        True when ``grad_fn_handle`` is an AccumulateGrad node.
     """
 
     accumulate_grad_cls = getattr(getattr(torch._C, "_functions", object()), "AccumulateGrad", ())
-    return type(grad_fn).__name__ == "AccumulateGrad" or isinstance(grad_fn, accumulate_grad_cls)
+    return type(grad_fn_handle).__name__ == "AccumulateGrad" or isinstance(
+        grad_fn_handle, accumulate_grad_cls
+    )
 
 
 def _clear_forward_grad_fn_refs(trace: Any) -> None:
@@ -667,13 +673,13 @@ def _clear_forward_grad_fn_refs(trace: Any) -> None:
     Parameters
     ----------
     trace:
-        Trace whose Op and Layer grad_fn object refs should be
+        Trace whose Op and Layer grad_fn_handle object refs should be
         released.
     """
     for layer in trace.layer_list:
-        layer.grad_fn = None
+        layer.grad_fn_handle = None
     for layer_log in trace.layer_logs.values():
-        layer_log.grad_fn = None
+        layer_log.grad_fn_handle = None
 
 
 def _run_backward_with_capture(
@@ -727,7 +733,7 @@ def _run_backward_with_capture(
     trace.backward_peak_memory += max(0, after - before)
     trace.backward_durations.append(time.time() - backward_start_time)
     trace.total_param_gradient_memory = sum(
-        param_log.grad_memory for param_log in getattr(trace, "param_logs", [])
+        param_log.gradient_memory for param_log in getattr(trace, "param_logs", [])
     )
     trace.backward_num_calls += 1
     return result
@@ -741,9 +747,9 @@ def _ensure_layer_grad_hooks(trace: Any) -> None:
     trace:
         Trace whose saved outs should receive grad hooks.
     """
-    if getattr(trace, "save_grads", False):
+    if getattr(trace, "save_gradients", False):
         return
-    trace.save_grads = True
+    trace.save_gradients = True
     if getattr(trace, "_grad_layer_nums_to_save", None) in [None, [], "none"]:
         trace._grad_layer_nums_to_save = "all"
     for layer in getattr(trace, "layer_list", []):
@@ -777,7 +783,7 @@ def _configure_grad_streaming(
             raise ValueError("Cannot set save_grads_to after a streaming writer exists.")
         trace._out_writer = BundleStreamWriter(save_grads_to)
         trace._defer_streaming_bundle_finalization = True
-        trace.save_grads = True
+        trace.save_gradients = True
 
 
 def _finalize_grad_streaming(trace: Any) -> None:
@@ -821,7 +827,7 @@ def log_backward(
     Parameters
     ----------
     loss:
-        Loss tensor whose ``grad_fn`` roots the backward graph.
+        Loss tensor whose ``grad_fn_handle`` roots the backward graph.
     **backward_kwargs:
         Keyword arguments forwarded to ``torch.Tensor.backward``.
 

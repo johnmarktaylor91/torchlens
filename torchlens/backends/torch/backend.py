@@ -109,11 +109,11 @@ class TorchBackend:
             label=reserved.label,
             raw_label=reserved.label_raw,
             pass_index=1,
-            event_index=reserved.capture_index,
-            compute_index=None,
+            event_index=reserved.raw_index,
+            step_index=None,
             layer_type=reserved.layer_type,
             type_index=reserved.type_index,
-            capture_index=reserved.capture_index,
+            raw_index=reserved.raw_index,
             func_name=func_event_input.func_name,
             address=None,
             module_type=None,
@@ -161,7 +161,7 @@ class TorchBackend:
         output: object,
     ) -> BackendSemantics:
         """Return torch autograd and mutation semantics for one output."""
-        grad_fn = output.grad_fn if isinstance(output, torch.Tensor) else None
+        grad_fn_handle = output.grad_fn if isinstance(output, torch.Tensor) else None
         saved_memory, saved_count = (
             _get_autograd_saved_stats_for_tensor(output)
             if isinstance(output, torch.Tensor)
@@ -178,8 +178,10 @@ class TorchBackend:
             else ()
         )
         return BackendSemantics(
-            grad_fn_id=id(grad_fn) if grad_fn is not None else None,
-            grad_fn_class_name=type(grad_fn).__name__ if grad_fn is not None else None,
+            grad_fn_object_id=id(grad_fn_handle) if grad_fn_handle is not None else None,
+            grad_fn_class_name=type(grad_fn_handle).__name__
+            if grad_fn_handle is not None
+            else None,
             autograd_memory=saved_memory,
             num_autograd_tensors=saved_count,
             mutates_inputs=mutates_inputs,

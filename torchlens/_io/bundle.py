@@ -943,7 +943,7 @@ def _attach_fast_copy_specs(
                 tensor_field="out",
                 ref_field="out_ref",
                 kind="out",
-                has_field="has_saved_outs",
+                has_field="has_saved_activation",
                 used_blob_ids=used_blob_ids,
             )
             if fast_copy_spec is not None:
@@ -955,7 +955,7 @@ def _attach_fast_copy_specs(
                 tensor_field="grad",
                 ref_field="grad_ref",
                 kind="grad",
-                has_field="has_grad",
+                has_field="has_saved_gradient",
                 used_blob_ids=used_blob_ids,
             )
             if fast_copy_spec is not None:
@@ -1227,7 +1227,7 @@ def _validate_out_postfunc_outputs(
     if not include_outs or getattr(trace, "out_postfunc", None) is None:
         return
     for layer in trace.layer_list:
-        if not getattr(layer, "has_saved_outs", False):
+        if not getattr(layer, "has_saved_activation", False):
             continue
         transformed_out = getattr(layer, "transformed_out", None)
         if transformed_out is None:
@@ -1262,10 +1262,12 @@ def _apply_skipped_blobs_to_scrubbed_state(
         out_labels = [
             layer.layer_label
             for layer in layer_list
-            if bool(getattr(layer, "has_saved_outs", False))
+            if bool(getattr(layer, "has_saved_activation", False))
         ]
         grad_labels = [
-            layer.layer_label for layer in layer_list if bool(getattr(layer, "has_grad", False))
+            layer.layer_label
+            for layer in layer_list
+            if bool(getattr(layer, "has_saved_gradient", False))
         ]
         scrubbed_state["num_saved_ops"] = len(out_labels)
         scrubbed_state["num_saved_layers"] = len(
@@ -1274,9 +1276,9 @@ def _apply_skipped_blobs_to_scrubbed_state(
         scrubbed_state["saved_activation_memory"] = sum(
             int(getattr(layer, "memory", 0) or 0)
             for layer in layer_list
-            if bool(getattr(layer, "has_saved_outs", False))
+            if bool(getattr(layer, "has_saved_activation", False))
         )
-        scrubbed_state["has_grads"] = bool(grad_labels)
+        scrubbed_state["has_gradients"] = bool(grad_labels)
 
 
 def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
@@ -1317,10 +1319,14 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
     for field_name, field_value in list(vars(value).items()):
         replaced_value = _replace_skipped_blob_refs(field_value, skipped_blob_ids)
         setattr(value, field_name, replaced_value)
-        if field_name == "out" and replaced_value is None and hasattr(value, "has_saved_outs"):
-            value.has_saved_outs = False
-        if field_name == "grad" and replaced_value is None and hasattr(value, "has_grad"):
-            value.has_grad = False
+        if (
+            field_name == "out"
+            and replaced_value is None
+            and hasattr(value, "has_saved_activation")
+        ):
+            value.has_saved_activation = False
+        if field_name == "grad" and replaced_value is None and hasattr(value, "has_saved_gradient"):
+            value.has_saved_gradient = False
     return value
 
 

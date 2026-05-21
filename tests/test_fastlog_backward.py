@@ -15,7 +15,7 @@ from torchlens.options import StreamingOptions
 
 
 class TinyRelu(nn.Module):
-    """Tiny model with a joined ReLU grad_fn."""
+    """Tiny model with a joined ReLU grad_fn_handle."""
 
     def __init__(self) -> None:
         """Initialize layers."""
@@ -36,7 +36,7 @@ def _input() -> torch.Tensor:
 
 
 def test_recording_log_backward_grad_fn_id_link() -> None:
-    """Fastlog joins a ReLU grad_fn back to its forward RecordContext."""
+    """Fastlog joins a ReLU grad_fn_handle back to its forward RecordContext."""
 
     out, recording = tl.fastlog.record(
         TinyRelu(),
@@ -55,7 +55,7 @@ def test_recording_log_backward_grad_fn_id_link() -> None:
 
 
 def test_recording_log_backward_intervening_grad_fn() -> None:
-    """Callable keep_grad can capture an intervening grad_fn as metadata."""
+    """Callable keep_grad can capture an intervening grad_fn_handle as metadata."""
 
     out, recording = tl.fastlog.record(
         TinyRelu(),
@@ -106,7 +106,7 @@ def test_recording_log_backward_disk_only_dynamic_keep_grad_resolves(tmp_path: P
 
 
 def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
-    """Sequential Recorder rollouts do not join a grad_fn to a stale forward."""
+    """Sequential Recorder rollouts do not join a grad_fn_handle to a stale forward."""
 
     model = TinyRelu()
     with tl.fastlog.Recorder(
@@ -126,14 +126,14 @@ def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
 
 
 def test_gradient_postfunc_alias_silent() -> None:
-    """gradient_postfunc silently aliases grad_transform."""
+    """gradient_postfunc silently aliases gradient_transform."""
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         trace = tl.trace(
             TinyRelu(),
             _input(),
-            grads_to_save="all",
+            gradients_to_save="all",
             gradient_postfunc=lambda grad: torch.zeros_like(grad),
         )
     trace.log_backward(trace[trace.output_layers[-1]].out.sum())

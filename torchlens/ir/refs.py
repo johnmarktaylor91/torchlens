@@ -54,7 +54,7 @@ class ReservedLabel:
 
     label: str
     label_raw: str
-    capture_index: int
+    raw_index: int
     type_index: int
     layer_type: str
     site: object

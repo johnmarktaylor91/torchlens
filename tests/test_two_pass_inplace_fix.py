@@ -93,7 +93,7 @@ def test_two_pass_preserves_identity_pass_through_detection() -> None:
     trace = tl.trace(model, x, layers_to_save=[identity_label])
 
     _assert_layer_present(trace, identity_label)
-    assert trace[identity_label].has_saved_outs
+    assert trace[identity_label].has_saved_activation
     trace.cleanup()
 
 

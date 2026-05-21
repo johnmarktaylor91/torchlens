@@ -150,7 +150,7 @@ class BundleStreamWriter:
 
         self._ensure_writable()
         if not isinstance(tensor, torch.Tensor):
-            postfunc_name = "grad_transform" if kind == "grad" else "out_postfunc"
+            postfunc_name = "gradient_transform" if kind == "grad" else "out_postfunc"
             reason = (
                 f"Streaming {kind} save requires {postfunc_name} outputs to be torch.Tensor "
                 f"instances, but blob_id={blob_id} ({label}) received {type(tensor).__name__}."

@@ -148,7 +148,7 @@ def _group_by_shared_params(self: "Trace") -> None:
     # For multi-member groups, set _layer_label_raw to the first member's raw label.
     for key, members in param_barcode_groups.items():
         if len(members) > 1:
-            leader = min(members, key=lambda x: self[x].capture_index)
+            leader = min(members, key=lambda x: self[x].raw_index)
             leader_raw = self[leader]._layer_label_raw
             for label in members:
                 self[label]._layer_label_raw = leader_raw
@@ -178,7 +178,7 @@ def _detect_and_label_loops(self: "Trace") -> None:
     (Phase 5) still reconciles conflicts left by repeated expansion rounds.
     """
     # Pre-compute sort keys to avoid repeated attribute lookups in the heap.
-    _sort_keys = {label: self[label].capture_index for label in self._raw_layer_labels_list}
+    _sort_keys = {label: self[label].raw_index for label in self._raw_layer_labels_list}
 
     # Seed the heap with root nodes (inputs + internally-initialized tensors).
     initial_labels = [
@@ -238,7 +238,7 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
     a node to a new group (via ``_finalize_layer_assignments``) while leaving stale
     references in the old group's ``recurrent_ops``. Without this cleanup,
     duplicate layer:pass labels would cause dict overwrites during renaming, leading
-    to validation failures (e.g., wrong tensor looked up for output_versions_per_child).
+    to validation failures (e.g., wrong tensor looked up for out_versions_by_child).
 
     HOW IT WORKS: Groups all tensors by their current ``_layer_label_raw`` (the
     authoritative group key set by ``_finalize_layer_assignments``), sorts each
@@ -252,7 +252,7 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
         groups[entry._layer_label_raw].append(entry._label_raw)
 
     for raw_label, members in groups.items():
-        members_sorted = sorted(members, key=lambda x: self[x].capture_index)
+        members_sorted = sorted(members, key=lambda x: self[x].raw_index)
         for pass_index, member_label in enumerate(members_sorted):
             member = self[member_label]
             member.recurrent_ops = members_sorted
@@ -720,7 +720,7 @@ def _finalize_layer_assignments(
         if len(layer_nodes) < max([len(self[layer].recurrent_ops) for layer in layer_nodes]):
             continue
         # convert to list and sort
-        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].capture_index)  # type: ignore[assignment]
+        layer_nodes = sorted(list(layer_nodes), key=lambda layer: self[layer].raw_index)  # type: ignore[assignment]
         # Unify equivalence_class: when param-sharing merges nodes
         # from different iso groups (e.g., shared module called from different
         # parent blocks), their equivalence types may differ due to module path

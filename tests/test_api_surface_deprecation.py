@@ -197,10 +197,10 @@ def test_draw_backward_legacy_kwargs(
     loss = log[log.output_layers[0]].out.sum()
     log.log_backward(loss)
 
-    def node_spec_fn(grad_fn_log: Any, default_spec: Any) -> Any:
-        """Keep default grad_fn node specs."""
+    def node_spec_fn(grad_fn_handle: Any, default_spec: Any) -> Any:
+        """Keep default grad_fn_handle node specs."""
 
-        del grad_fn_log
+        del grad_fn_handle
         return default_spec
 
     with pytest.warns(DeprecationWarning):

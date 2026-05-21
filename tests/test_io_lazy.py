@@ -145,7 +145,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_outs)
+    return next(layer for layer in trace.layer_list if layer.has_saved_activation)
 
 
 def _read_manifest(bundle_path: Path) -> dict[str, Any]:

@@ -176,13 +176,13 @@ def draw(
     op_contexts = [ctx for ctx in trace.events if ctx.kind in {"op", "input", "buffer"}]
     event_to_index = {ctx.event_index: index for index, ctx in enumerate(trace.events)}
     for op_number, ctx in enumerate(op_contexts):
-        trace_index = event_to_index[ctx.event_index]
+        step_index = event_to_index[ctx.event_index]
         address = _module_key(ctx)
         rail_color = _module_color(address, color_map)
-        fillcolor = "#98FB98" if _event_kept(trace, trace_index) else "#E6E6E6"
+        fillcolor = "#98FB98" if _event_kept(trace, step_index) else "#E6E6E6"
         dot.node(
             f"event_{ctx.event_index}",
-            label=_graph_label(ctx, _event_kept(trace, trace_index), rail_color),
+            label=_graph_label(ctx, _event_kept(trace, step_index), rail_color),
             shape="box",
             style="filled,rounded",
             fillcolor=fillcolor,

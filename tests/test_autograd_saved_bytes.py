@@ -108,14 +108,14 @@ def test_autograd_memory_basic_shape_model() -> None:
 
 
 def test_add_op_reports_zero_autograd_memory() -> None:
-    """Add should have a grad_fn but save no tensors for backward."""
+    """Add should have a grad_fn_handle but save no tensors for backward."""
     model = TinyAddModel()
     x = torch.ones(2, 3, requires_grad=True)
     y = torch.ones(2, 3, requires_grad=True)
     trace = tl.trace(model, (x, y), layers_to_save="all")
     add_pass = next(layer for layer in trace.layer_list if layer.layer_type == "add")
 
-    assert add_pass.grad_fn_id is not None
+    assert add_pass.grad_fn_object_id is not None
     assert add_pass.autograd_memory == 0
     assert add_pass.num_autograd_tensors == 0
     assert trace.layer_logs[add_pass.layer_label_no_pass].autograd_memory == 0
@@ -139,7 +139,7 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
 
 
 def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
-    """Inputs without requires_grad should not create grad_fn-backed saved fields."""
+    """Inputs without requires_grad should not create grad_fn_handle-backed saved fields."""
     torch.manual_seed(0)
     model = TinySequentialModel()
     for parameter in model.parameters():

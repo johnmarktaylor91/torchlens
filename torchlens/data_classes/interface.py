@@ -121,7 +121,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
         ]
         entries_with_substr = {
-            self.layer_dict_all_keys[key].capture_index: self.layer_dict_all_keys[key]
+            self.layer_dict_all_keys[key].raw_index: self.layer_dict_all_keys[key]
             for key in keys_with_substr
         }
         if len(entries_with_substr) == 1:
@@ -224,7 +224,7 @@ def _str_after_pass(self: "Trace") -> str:
         else:
             pass_str = ""
 
-        if layer_entry.has_saved_outs and (not self._layers_saved):
+        if layer_entry.has_saved_activation and (not self._layers_saved):
             s += "\n\t\t* "
         else:
             s += "\n\t\t  "

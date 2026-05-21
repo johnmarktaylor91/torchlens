@@ -155,7 +155,7 @@ def _make_layer_stub(
         op_equivalence_classes=set(),
         recurrent_ops=[],
         parent_arg_positions={"args": {}, "kwargs": {}},
-        output_versions_per_child={},
+        out_versions_by_child={},
     )
 
 

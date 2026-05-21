@@ -108,7 +108,7 @@ def log_source_tensor_predicate(
     self._layer_counter += 1
     self._raw_layer_type_counter[source] += 1
     state.event_index += 1
-    capture_index = self._layer_counter
+    raw_index = self._layer_counter
     type_index = self._raw_layer_type_counter[source]
     tensor_label = f"{source}_{type_index}_raw"
     set_tensor_label(t, tensor_label)
@@ -123,7 +123,7 @@ def log_source_tensor_predicate(
             "label": tensor_label,
             "raw_label": tensor_label,
             "_label_raw": tensor_label,
-            "capture_index": capture_index,
+            "raw_index": raw_index,
             "type": source,
             "type_index": type_index,
             "func_name": None,
@@ -138,7 +138,7 @@ def log_source_tensor_predicate(
         op_counts=state.op_counts,
         pass_index=state.pass_index,
         event_index=state.event_index,
-        compute_index=None,
+        step_index=None,
         time_since_pass_start=time.time() - self.capture_start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
@@ -192,7 +192,7 @@ def log_source_tensor_predicate(
         state.handle_predicate_exception(ctx, exc)
     finally:
         if not any(
-            event.capture_index == capture_index
+            event.raw_index == raw_index
             for event in getattr(getattr(self, "capture_events", None), "op_events", ())
         ):
             append_projected_event(
@@ -220,7 +220,7 @@ def log_source_tensor_exhaustive(
     # Fetch counters and increment to be ready for next tensor to be logged
     self._layer_counter += 1
     self._raw_layer_type_counter[layer_type] += 1
-    capture_index = self._layer_counter
+    raw_index = self._layer_counter
     type_index = self._raw_layer_type_counter[layer_type]
 
     tensor_label = f"{layer_type}_{type_index}_raw"
@@ -271,8 +271,8 @@ def log_source_tensor_exhaustive(
         # General info:
         "_label_raw": tensor_label,
         "_layer_label_raw": tensor_label,
-        "capture_index": capture_index,
-        "compute_index": None,
+        "raw_index": raw_index,
+        "step_index": None,
         "source_trace": self,
         "_tracing_finished": False,
         "_construction_done": False,
@@ -285,14 +285,13 @@ def log_source_tensor_exhaustive(
         "layer_label_no_pass_short": None,
         "type": layer_type,
         "type_index": type_index,
-        "trace_index": None,
         "pass_index": 1,
         "num_passes": 1,
         "lookup_keys": [],
         # Saved tensor info:
         "out": None,
         "transformed_out": None,
-        "has_saved_outs": False,
+        "has_saved_activation": False,
         "out_postfunc": self.out_postfunc,
         "annotations": {},
         "interventions": [],
@@ -309,26 +308,26 @@ def log_source_tensor_exhaustive(
         "dtype": t.dtype,
         "transformed_out_dtype": None,
         "memory": memory,
-        "transformed_out_memory": None,
+        "transformed_activation_memory": None,
         "visualizer_path": None,
         "autograd_memory": None,
         "num_autograd_tensors": None,
         "bytes_delta_at_call": 0,
         "bytes_peak_at_call": 0,
         # Child tensor variation tracking
-        "has_output_variations": False,
-        "output_versions_per_child": {},
+        "has_out_variations": False,
+        "out_versions_by_child": {},
         # Grad info:
         "grad": None,
         "transformed_grad": None,
-        "save_grads": self.save_grads,
-        "has_grad": False,
+        "save_gradients": self.save_gradients,
+        "has_saved_gradient": False,
         "grad_shape": None,
         "transformed_grad_shape": None,
         "grad_dtype": None,
         "transformed_grad_dtype": None,
-        "grad_memory": 0,
-        "transformed_grad_memory": None,
+        "gradient_memory": 0,
+        "transformed_gradient_memory": None,
         # Function call info:
         "func": None,
         "func_call_id": None,
@@ -354,12 +353,12 @@ def log_source_tensor_exhaustive(
         "is_inplace": False,
         "grad_fn_class_name": "none",
         "grad_fn_class_qualname": None,
-        "grad_fn_id": id(t.grad_fn) if t.grad_fn is not None else None,
-        "grad_fn": t.grad_fn,
-        "grad_fn_log": None,
-        "is_part_of_iterable_output": False,
+        "grad_fn_object_id": id(t.grad_fn) if t.grad_fn is not None else None,
+        "grad_fn_handle": t.grad_fn,
+        "grad_fn": None,
+        "in_multi_output": False,
         "multi_output_index": None,
-        "multi_output_role": None,
+        "multi_output_name": None,
         "container_path": (),
         "container_spec": None,
         # Param info:
@@ -428,12 +427,12 @@ def log_source_tensor_exhaustive(
         "module": modules[-1] if modules else None,
         "modules": modules,
         "modules_entered": [],
-        "module_entry_argnames": defaultdict(list),
-        "module_ops_entered": [],
+        "module_entry_arg_keys": defaultdict(list),
+        "input_to_module_calls": [],
         "output_of_modules": [],
         "output_of_module_calls": [],
         "is_submodule_output": False,
-        "is_atomic_module_op": False,
+        "is_atomic_module": False,
         "atomic_module_call": None,
         # Function config
         "func_config": {},
@@ -458,7 +457,7 @@ def log_source_tensor_exhaustive(
         self.internal_source_ops.append(tensor_label)
 
     # Register backward hook for grad capture if requested.
-    if self.save_grads:
+    if self.save_gradients:
         _add_tensor_backward_hook(self, t, tensor_label)
 
 
@@ -494,7 +493,7 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
     orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
     previous_shape = orig_layer_entry.shape
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
-    if (layer_nums_to_save == "all") or (orig_layer_entry.capture_index in layer_nums_to_save):
+    if (layer_nums_to_save == "all") or (orig_layer_entry.raw_index in layer_nums_to_save):
         orig_layer_entry.save_activation(t, [], {}, self.save_arg_values, self.out_postfunc)
 
     # Minimal graph consistency validation (#99)

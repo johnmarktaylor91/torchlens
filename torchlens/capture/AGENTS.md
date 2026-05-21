@@ -38,7 +38,7 @@
 - Buffer duplicate guards prevent repeated buffer source nodes when many ops read one buffer.
 
 ## backward.py Gotchas
-- Backward capture walks autograd `grad_fn` links and installs hooks after forward capture.
+- Backward capture walks autograd `grad_fn_handle` links and installs hooks after forward capture.
 - Gradient streaming reuses `_io` bundle refs and must finalize/evict in postprocess finalization.
 - Validation for backward lives in `validation/backward.py`.
 

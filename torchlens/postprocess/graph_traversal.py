@@ -53,7 +53,7 @@ def _add_output_layers(
         self._layer_counter += 1
         new_output_node._label_raw = f"output_{i + 1}_raw"
         new_output_node._layer_label_raw = new_output_node._label_raw
-        new_output_node.capture_index = self._layer_counter
+        new_output_node.raw_index = self._layer_counter
         output_address = "output"
         if output_addresses[i] != "":
             output_address += f".{output_addresses[i]}"
@@ -110,11 +110,11 @@ def _add_output_layers(
         new_output_node.module = None
         new_output_node.modules = []
         new_output_node.modules_entered = []
-        new_output_node.module_ops_entered = []
+        new_output_node.input_to_module_calls = []
         new_output_node.output_of_modules = [mod_pass[0] for mod_pass in output_node.modules]
         new_output_node.output_of_module_calls = output_node.modules
         new_output_node.is_submodule_output = False
-        new_output_node.is_atomic_module_op = False
+        new_output_node.is_atomic_module = False
 
         # Fix ancestry information:
 
@@ -143,9 +143,9 @@ def _add_output_layers(
         self.op_equivalence_classes[equiv_type].add(new_output_node._label_raw)
 
         # Track child tensor variations for output nodes.
-        new_output_node.has_output_variations = False
-        new_output_node.output_versions_per_child = {}
-        if output_node.has_saved_outs:
+        new_output_node.has_out_variations = False
+        new_output_node.out_versions_by_child = {}
+        if output_node.has_saved_activation:
             actual_output = safe_copy(output_tensors[i])
             if output_node.output_device not in [str(actual_output.device), "same"]:
                 actual_output = safe_to(actual_output, output_node.output_device)
@@ -168,8 +168,8 @@ def _add_output_layers(
             if comparison_output is not None and not tensor_nanequal(
                 actual_output, comparison_output
             ):
-                output_node.output_versions_per_child[new_output_node._label_raw] = actual_output
-                output_node.has_output_variations = True
+                output_node.out_versions_by_child[new_output_node._label_raw] = actual_output
+                output_node.has_out_variations = True
                 if output_node.out is None:
                     new_output_node._internal_set("transformed_out", actual_output)
                 else:

@@ -33,7 +33,7 @@ MODELLOG_FIELD_USAGE: dict[str, str] = {
     "is_recurrent": "Theme recommendations and recurrent-edge styling.",
     "max_recurrent_loops": "Reference-gallery and recurrent summaries.",
     "modules": "Module hierarchy, cluster labels, collapsed summaries.",
-    "has_grads": "Whether to add backward edges in unrolled mode.",
+    "has_gradients": "Whether to add backward edges in unrolled mode.",
     "layer_dict_main_keys": "Unrolled node inventory.",
     "layer_logs": "Rolled node inventory.",
     "layer_list": "Fallback node inventory and audit coverage.",
@@ -71,8 +71,8 @@ ENTRY_FIELD_USAGE: dict[str, str] = {
     "module": "Leaf-module line in labels.",
     "modules": "Cluster nesting.",
     "is_submodule_output": "Rectangle/module-output shape override.",
-    "is_atomic_module_op": "Rectangle/module-output shape override.",
-    "has_grad": "Backward-edge inclusion in unrolled mode.",
+    "is_atomic_module": "Rectangle/module-output shape override.",
+    "has_saved_gradient": "Backward-edge inclusion in unrolled mode.",
     "interventions": "Per-node intervention fire-record summary.",
 }
 
@@ -498,7 +498,7 @@ def trace_to_dagua_graph(
         if getattr(entry, "is_buffer", False):
             shape_override = buffer_shape
         elif getattr(entry, "is_submodule_output", False) or getattr(
-            entry, "is_atomic_module_op", False
+            entry, "is_atomic_module", False
         ):
             shape_override = module_shape
 
@@ -544,16 +544,16 @@ def trace_to_dagua_graph(
             g.add_edge(parent_label, child_id, label=edge_label, type=edge_type, style=style)
 
     if include_grad_edges is None:
-        include_grad_edges = bool(getattr(trace, "has_grads", False))
+        include_grad_edges = bool(getattr(trace, "has_gradients", False))
 
     if include_grad_edges and vis_mode == "unrolled":
         for child in entries:
-            if not getattr(child, "has_grad", False):
+            if not getattr(child, "has_saved_gradient", False):
                 continue
             child_id = getattr(child, "layer_label", "")
             for parent_label in getattr(child, "parents", None) or []:
                 parent = entries_by_label.get(parent_label)
-                if parent is None or not getattr(parent, "has_grad", False):
+                if parent is None or not getattr(parent, "has_saved_gradient", False):
                     continue
                 edge_key = (child_id, parent_label, "back")
                 if edge_key in edges_seen:
