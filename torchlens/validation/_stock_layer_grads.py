@@ -230,7 +230,7 @@ def _pass_index_from_layer_modules(layer: Any) -> int | None:
 
 
 def _candidate_module_call_for(trace: Any, address: str, call_index: int) -> Any | None:
-    """Return a candidate ``ModuleCallLog`` by address and call index.
+    """Return a candidate ``ModuleCall`` by address and call index.
 
     Parameters
     ----------

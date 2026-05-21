@@ -23,8 +23,8 @@ from ._literals import (
 from .visualization.node_spec import NodeSpec
 
 if TYPE_CHECKING:
-    from .data_classes.layer_log import LayerLog
-    from .data_classes.module_log import ModuleLog
+    from .data_classes.layer_log import Layer
+    from .data_classes.module_log import Module
 
 T = TypeVar("T")
 ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -600,7 +600,7 @@ class CaptureOptions:
     cache_dir:
         Optional directory for content-hash cache entries.
     module_filter:
-        Optional predicate receiving a ``OpLog`` after construction.
+        Optional predicate receiving a ``Op`` after construction.
         Returning ``False`` keeps metadata but skips out saving.
     stop_after:
         Experimental stop-early site. Only supported by ``torchlens.peek``.
@@ -1028,10 +1028,10 @@ class VisualizationOptions:
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
     node_style: VisNodeModeLiteral = "default"
-    node_spec_fn: Callable[["LayerLog", NodeSpec], NodeSpec | None] | None = None
-    collapsed_node_spec_fn: Callable[["ModuleLog", NodeSpec], NodeSpec | None] | None = None
-    collapse_fn: Callable[["ModuleLog"], bool] | None = None
-    skip_fn: Callable[["LayerLog"], bool] | None = None
+    node_spec_fn: Callable[["Layer", NodeSpec], NodeSpec | None] | None = None
+    collapsed_node_spec_fn: Callable[["Module", NodeSpec], NodeSpec | None] | None = None
+    collapse_fn: Callable[["Module"], bool] | None = None
+    skip_fn: Callable[["Layer"], bool] | None = None
     edge_overrides: dict[str, Any] | None = None
     grad_edge_overrides: dict[str, Any] | None = None
     module_overrides: dict[str, Any] | None = None
@@ -1061,13 +1061,13 @@ class VisualizationOptions:
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
         node_style: VisNodeModeLiteral | MissingType = MISSING,
         node_spec_fn: (
-            Callable[["LayerLog", NodeSpec], NodeSpec | None] | None | MissingType
+            Callable[["Layer", NodeSpec], NodeSpec | None] | None | MissingType
         ) = MISSING,
         collapsed_node_spec_fn: (
-            Callable[["ModuleLog", NodeSpec], NodeSpec | None] | None | MissingType
+            Callable[["Module", NodeSpec], NodeSpec | None] | None | MissingType
         ) = MISSING,
-        collapse_fn: Callable[["ModuleLog"], bool] | None | MissingType = MISSING,
-        skip_fn: Callable[["LayerLog"], bool] | None | MissingType = MISSING,
+        collapse_fn: Callable[["Module"], bool] | None | MissingType = MISSING,
+        skip_fn: Callable[["Layer"], bool] | None | MissingType = MISSING,
         edge_overrides: dict[str, Any] | None | MissingType = MISSING,
         grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
         module_overrides: dict[str, Any] | None | MissingType = MISSING,

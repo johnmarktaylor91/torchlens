@@ -1,14 +1,14 @@
-"""BufferLog and BufferAccessor: per-buffer metadata and dict-like accessor for model buffers.
+"""Buffer and BufferAccessor: per-buffer metadata and dict-like accessor for model buffers.
 
-BufferLog extends OpLog to represent a model buffer (e.g. BatchNorm's
+Buffer extends Op to represent a model buffer (e.g. BatchNorm's
 ``running_mean``).  Buffers participate in the computation graph just like
 regular tensors but have additional identity: a ``buffer_address`` (e.g.
 ``"features.0.running_mean"``) and an owning module.
 
-**Why name/address live on BufferLog, not LayerLog**: These are
-buffer-specific identifiers that don't apply to general layers.  A LayerLog
-is too generic — it could be any operation.  Only BufferLog entries have a
-meaningful ``buffer_address``.  For single-pass buffers, the parent LayerLog
+**Why name/address live on Buffer, not Layer**: These are
+buffer-specific identifiers that don't apply to general layers.  A Layer
+is too generic — it could be any operation.  Only Buffer entries have a
+meaningful ``buffer_address``.  For single-pass buffers, the parent Layer
 can access these fields via ``__getattr__`` delegation.
 """
 
@@ -21,7 +21,7 @@ from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 from ._accessor_base import Accessor
-from .op_log import OpLog
+from .op_log import Op
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -29,8 +29,8 @@ if TYPE_CHECKING:
     from .model_log import Trace
 
 
-def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
-    """Convert a BufferLog into one DataFrame row.
+def _buffer_log_to_row(buffer_log: "Buffer") -> Dict[str, Any]:
+    """Convert a Buffer into one DataFrame row.
 
     Parameters
     ----------
@@ -45,20 +45,20 @@ def _buffer_log_to_row(buffer_log: "BufferLog") -> Dict[str, Any]:
     return {field: getattr(buffer_log, field) for field in BUFFER_LOG_FIELD_ORDER}
 
 
-class BufferLog(OpLog):
-    """A OpLog entry representing a registered model buffer.
+class Buffer(Op):
+    """A Op entry representing a registered model buffer.
 
-    Subclasses OpLog and participates in the computation graph
+    Subclasses Op and participates in the computation graph
     identically to regular tensor operations.  Adds ``name`` and
     ``address`` computed properties derived from the
-    ``buffer_address`` field (inherited from OpLog).
+    ``buffer_address`` field (inherited from Op).
 
     No additional constructor arguments — the buffer identity comes
     from the ``buffer_address`` field in the fields_dict passed to
-    the parent ``OpLog.__init__``.
+    the parent ``Op.__init__``.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(OpLog.PORTABLE_STATE_SPEC)
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(Op.PORTABLE_STATE_SPEC)
 
     @property
     def all_buffer_addresses(self) -> list[str]:
@@ -102,7 +102,7 @@ class BufferLog(OpLog):
 
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, size, module, and pass number."""
-        lines = [f"BufferLog: {self.buffer_address or self.layer_label}"]
+        lines = [f"Buffer: {self.buffer_address or self.layer_label}"]
         if self.shape is not None:
             lines.append(f"  shape: {list(self.shape)}")
         if self.dtype is not None:
@@ -129,8 +129,8 @@ class BufferLog(OpLog):
         super().__setstate__(state)
 
 
-class BufferAccessor(Accessor["BufferLog"]):
-    """Dict-like accessor for BufferLog objects.
+class BufferAccessor(Accessor["Buffer"]):
+    """Dict-like accessor for Buffer objects.
 
     Supports indexing by:
     * **full buffer address** (str) -- e.g. ``"features.0.running_mean"``.
@@ -148,13 +148,13 @@ class BufferAccessor(Accessor["BufferLog"]):
 
     def __init__(
         self,
-        buffer_dict: Dict[str, "BufferLog"],
+        buffer_dict: Dict[str, "Buffer"],
         source_trace: "Trace | None" = None,
     ) -> None:
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(buffer_dict, source_ref=source_ref)
 
-    def _resolve_substring(self, key: str) -> "BufferLog | None":
+    def _resolve_substring(self, key: str) -> "Buffer | None":
         """Resolve an unambiguous buffer short name."""
         # Fallback: match by short name (e.g. 'running_mean')
         matches = [bl for bl in self._list if bl.name == key]
@@ -179,7 +179,7 @@ class BufferAccessor(Accessor["BufferLog"]):
         for bl in self._list:
             shape_str = str(list(bl.shape)) if bl.shape is not None else "?"
             dtype_str = str(bl.dtype) if bl.dtype is not None else "?"
-            items.append(f"'{bl.buffer_address}': BufferLog {shape_str} {dtype_str}")
+            items.append(f"'{bl.buffer_address}': Buffer {shape_str} {dtype_str}")
         inner = ",\n ".join(items)
         return "{" + inner + "}"
 

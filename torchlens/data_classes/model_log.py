@@ -1,7 +1,7 @@
 """Trace: the top-level container for a fully logged forward pass.
 
 Trace is the root data structure returned by ``trace()``.
-It owns every OpLog (per-operation entry), every LayerLog (per-layer
+It owns every Op (per-operation entry), every Layer (per-layer
 aggregate), the module hierarchy, parameter metadata, and graph-level
 bookkeeping.
 
@@ -69,7 +69,7 @@ if TYPE_CHECKING:
     from ..visualization.code_panel import CodePanelOption
     from .buffer_log import BufferAccessor
     from .layer_log import LayerAccessor
-    from .module_log import ModuleLog
+    from .module_log import Module
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .. import _state
@@ -121,9 +121,9 @@ from .interface import (
     _str_after_pass,
     _str_during_pass,
 )
-from .grad_fn_log import GradFnAccessor, GradFnLog
-from .layer_log import LayerLog, OpAccessor
-from .op_log import OpLog, TensorLog
+from .grad_fn_log import GradFnAccessor, GradFn
+from .layer_log import Layer, OpAccessor
+from .op_log import Op, TensorLog
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
 _USE_STORED_TRANSFORM = object()
@@ -380,10 +380,10 @@ class ConditionalAccessor:
         return [(conditional.id, conditional) for conditional in self._list]
 
 
-class OrphanAccessor(Accessor[OpLog]):
-    """Dict-like accessor for retained orphan ``OpLog`` records."""
+class OrphanAccessor(Accessor[Op]):
+    """Dict-like accessor for retained orphan ``Op`` records."""
 
-    def __init__(self, orphan_ops: Mapping[str, OpLog] | None = None) -> None:
+    def __init__(self, orphan_ops: Mapping[str, Op] | None = None) -> None:
         """Initialize from raw orphan labels.
 
         Parameters
@@ -394,7 +394,7 @@ class OrphanAccessor(Accessor[OpLog]):
 
         super().__init__(orphan_ops or {})
 
-    def _resolve_substring(self, key: str) -> OpLog | None:
+    def _resolve_substring(self, key: str) -> Op | None:
         """Resolve by any orphan label variant or unique substring.
 
         Parameters
@@ -404,7 +404,7 @@ class OrphanAccessor(Accessor[OpLog]):
 
         Returns
         -------
-        OpLog | None
+        Op | None
             Matching orphan operation, or ``None`` if not found or ambiguous.
         """
 
@@ -1070,10 +1070,10 @@ class Trace:
         # max_recurrent_loops, is_branching, has_conditional_branching)
 
         # Tensor Tracking - post-processed (populated after _tracing_finished=True):
-        self.layer_list: List[OpLog] = []  # ordered list of all layer ops
-        self.layer_dict_main_keys: Dict[str, OpLog] = OrderedDict()  # primary label -> entry
-        self.layer_dict_all_keys: Dict[str, OpLog] = OrderedDict()  # all lookup keys -> entry
-        self.layer_logs: Dict[str, LayerLog] = OrderedDict()  # no-pass label -> aggregate LayerLog
+        self.layer_list: List[Op] = []  # ordered list of all layer ops
+        self.layer_dict_main_keys: Dict[str, Op] = OrderedDict()  # primary label -> entry
+        self.layer_dict_all_keys: Dict[str, Op] = OrderedDict()  # all lookup keys -> entry
+        self.layer_logs: Dict[str, Layer] = OrderedDict()  # no-pass label -> aggregate Layer
         self.op_labels: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
         self.layer_num_calls: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
@@ -1104,7 +1104,7 @@ class Trace:
         self.conditionals = ConditionalAccessor()
         self.ops_with_saved_outs: List[str] = []
         self.orphan_ops: List[str] = []
-        self.orphan_logs: tuple[OpLog, ...] = ()
+        self.orphan_logs: tuple[Op, ...] = ()
         self.unlogged_ops: List[str] = []
         self.ops_with_saved_grads: List[str] = []
         self._saved_grads_set: set[str] = set()
@@ -1143,7 +1143,7 @@ class Trace:
         self.cleanup_duration: float = 0
         self.func_calls_duration: float = 0
         self.has_backward_pass: bool = False
-        self.grad_fn_logs: Dict[int, GradFnLog] = OrderedDict()
+        self.grad_fn_logs: Dict[int, GradFn] = OrderedDict()
         self.grad_fn_order: List[int] = []
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
@@ -1941,8 +1941,8 @@ class Trace:
             return None
         return self._copy_fork_value(value)
 
-    def _fork_layer_ops_from(self, parent: "Trace") -> dict[int, OpLog]:
-        """Fork every OpLog and return an old-object-id map.
+    def _fork_layer_ops_from(self, parent: "Trace") -> dict[int, Op]:
+        """Fork every Op and return an old-object-id map.
 
         Parameters
         ----------
@@ -1951,14 +1951,14 @@ class Trace:
 
         Returns
         -------
-        dict[int, OpLog]
+        dict[int, Op]
             Mapping from ``id(parent_pass)`` to forked pass.
         """
 
-        layer_map: dict[int, OpLog] = {}
+        layer_map: dict[int, Op] = {}
         fork_equivalent_ops = self.equivalent_ops
         for parent_pass in parent.layer_list:
-            fork_pass = object.__new__(OpLog)
+            fork_pass = object.__new__(Op)
             fork_pass.__dict__.update(
                 {
                     field_name: self._fork_layer_pass_field(field_name, value)
@@ -1974,12 +1974,12 @@ class Trace:
         return layer_map
 
     def _fork_layer_pass_field(self, field_name: str, value: Any) -> Any:
-        """Apply the OpLog fork policy to a single field.
+        """Apply the Op fork policy to a single field.
 
         Parameters
         ----------
         field_name:
-            OpLog field being copied.
+            Op field being copied.
         value:
             Current field value.
 
@@ -1991,14 +1991,14 @@ class Trace:
 
         if field_name in {"_source_trace_ref", "parent_layer_log"}:
             return None
-        policy = OpLog.FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
+        policy = Op.FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
             return value
         if policy is ForkFieldPolicy.FORK_RECONSTRUCT:
             return None
         return self._copy_fork_value(value)
 
-    def _rebuild_fork_layer_collections(self, parent: "Trace", layer_map: dict[int, OpLog]) -> None:
+    def _rebuild_fork_layer_collections(self, parent: "Trace", layer_map: dict[int, Op]) -> None:
         """Rebuild layer lookup containers so they point at forked ops.
 
         Parameters
@@ -2031,7 +2031,7 @@ class Trace:
         self.layer_dict_all_keys = OrderedDict(
             (key, remap_pass(layer)) for key, layer in parent.layer_dict_all_keys.items()
         )
-        fork_layer_logs: dict[str, LayerLog] = OrderedDict()
+        fork_layer_logs: dict[str, Layer] = OrderedDict()
         for label, parent_layer_log in parent.layer_logs.items():
             fork_layer_log = copy.copy(parent_layer_log)
             fork_layer_log.__dict__ = {
@@ -2859,7 +2859,7 @@ class Trace:
     # ************* FLOPs Properties *************
     # ********************************************
     # FLOPs are estimated per-operation during logging (flops_forward,
-    # flops_backward on each OpLog).  These properties aggregate
+    # flops_backward on each Op).  These properties aggregate
     # across the entire model.  Layers with None FLOPs (unknown ops) are
     # skipped, so the totals may undercount.
 
@@ -2973,9 +2973,9 @@ class Trace:
         return self._module_logs
 
     @property
-    def root_module(self) -> "ModuleLog":
+    def root_module(self) -> "Module":
         """The root module (the model itself)."""
-        return cast("ModuleLog", self._module_logs["self"])
+        return cast("Module", self._module_logs["self"])
 
     @property
     def buffers(self) -> "BufferAccessor":
@@ -3003,7 +3003,7 @@ class Trace:
 
     @property
     def num_grad_fns_without_op(self) -> int:
-        """Number of grad_fn nodes without a corresponding forward LayerLog."""
+        """Number of grad_fn nodes without a corresponding forward Layer."""
         return sum(1 for grad_fn in self.grad_fn_logs.values() if grad_fn.is_intervening)
 
     # ********************************************
@@ -3047,7 +3047,7 @@ class Trace:
         vis_call_depth: int = 1000,
         vis_outpath: str = "modelgraph",
         vis_graph_overrides: Optional[Dict[str, Any]] = None,
-        module: "ModuleLog | str | None" = None,
+        module: "Module | str | None" = None,
         node_mode: VisNodeModeLiteral = "default",
         node_spec_fn: Optional[Callable[..., Any]] = None,
         collapsed_node_spec_fn: Optional[Callable[..., Any]] = None,
@@ -4180,7 +4180,7 @@ class Trace:
 
     def _remove_log_entry(
         self,
-        log_entry: OpLog,
+        log_entry: Op,
         remove_references: bool = True,
     ) -> None:
         """Remove a single layer-pass entry and scrub graph references.
@@ -4199,7 +4199,7 @@ class Trace:
 
     def _batch_remove_log_entries(
         self,
-        entries_to_remove: Iterable[OpLog],
+        entries_to_remove: Iterable[Op],
         remove_references: bool = True,
     ) -> None:
         """Remove multiple layer-pass entries using single-pass filtering.

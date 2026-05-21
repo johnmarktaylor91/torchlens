@@ -12,7 +12,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens.backends.torch.backward import _make_grad_fn_hook, _make_grad_fn_prehook
-from torchlens.data_classes.grad_fn_log import GradFnLog
+from torchlens.data_classes.grad_fn_log import GradFn
 from torchlens.intervention.errors import HelperMountError, SelectorCompositionError
 from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import _selector_from_target_spec, normalize_hook_plan
@@ -41,7 +41,7 @@ class _EncoderModel(nn.Module):
 class _TraceStub:
     """Weakref-able trace stub for direct hook-factory tests."""
 
-    grad_fn_logs: dict[int, GradFnLog]
+    grad_fn_logs: dict[int, GradFn]
     _grad_layer_nums_to_save: str = "all"
     last_run_ctx: dict[str, Any] | None = None
 
@@ -104,10 +104,10 @@ def _first_accumulate_grad(loss: torch.Tensor) -> Any:
     raise AssertionError("AccumulateGrad not found")
 
 
-def _hook_trace() -> tuple[_TraceStub, GradFnLog]:
+def _hook_trace() -> tuple[_TraceStub, GradFn]:
     """Return a stub trace and grad_fn log for hook-factory tests."""
 
-    grad_fn_log = GradFnLog(
+    grad_fn_log = GradFn(
         grad_fn_id=1,
         name="ReluBackward0",
         module_path="torch.autograd",
@@ -143,7 +143,7 @@ def test_accumulategrad_post_hook_skips_helper_dispatch() -> None:
             grad_input: tuple[torch.Tensor | None, ...],
             *,
             grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_log: GradFnLog,
+            grad_fn_log: GradFn,
             call_index: int,
             run_ctx: dict[str, Any],
         ) -> tuple[torch.Tensor | None, ...]:
@@ -224,7 +224,7 @@ def test_grad_fn_prehook_posthook_call_index_alignment() -> None:
             grad_input: tuple[torch.Tensor | None, ...],
             *,
             grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_log: GradFnLog,
+            grad_fn_log: GradFn,
             call_index: int,
             run_ctx: dict[str, Any],
         ) -> tuple[torch.Tensor | None, ...]:
@@ -333,24 +333,24 @@ def test_selector_resolve_intervening_grad_fn_filtered_with_in_module() -> None:
 
 
 def test_find_sites_grad_fn_and_label_returns_grad_fn_sites() -> None:
-    """Grad_fn plus label resolves over GradFnLog sites."""
+    """Grad_fn plus label resolves over GradFn sites."""
 
     trace = _logged_backward_trace()
     relu_op = trace.find_sites(tl.func("relu")).first()
     sites = trace.find_sites(tl.grad_fn(type="relu") & tl.label(relu_op.layer_label))
     assert sites
-    assert all(isinstance(site, GradFnLog) for site in sites)
+    assert all(isinstance(site, GradFn) for site in sites)
     assert all(site.op is not None and site.op.layer_label == relu_op.layer_label for site in sites)
 
 
 def test_find_sites_label_alone_returns_op_sites() -> None:
-    """A lone label selector keeps the forward OpLog universe."""
+    """A lone label selector keeps the forward Op universe."""
 
     trace = _logged_backward_trace()
     relu_op = trace.find_sites(tl.func("relu")).first()
     sites = trace.find_sites(tl.label(relu_op.layer_label))
     assert sites
-    assert all(not isinstance(site, GradFnLog) for site in sites)
+    assert all(not isinstance(site, GradFn) for site in sites)
 
 
 def test_find_sites_grad_fn_and_in_module_filters_intervening() -> None:
@@ -359,7 +359,7 @@ def test_find_sites_grad_fn_and_in_module_filters_intervening() -> None:
     trace = _logged_backward_trace()
     sites = trace.find_sites(tl.grad_fn(type="addmm") & tl.in_module("encoder"))
     assert sites
-    assert all(isinstance(site, GradFnLog) for site in sites)
+    assert all(isinstance(site, GradFn) for site in sites)
     assert all(site.op is not None for site in sites)
 
 

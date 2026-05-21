@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer_log import LayerLog
+from torchlens.data_classes.layer_log import Layer
 
 
 def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
@@ -128,7 +128,7 @@ class _BranchingBoundaryModel(nn.Module):
 
 
 def test_module_focus_by_modulelog(tmp_path: Path) -> None:
-    """Focusing by ModuleLog should show only that module plus boundaries."""
+    """Focusing by Module should show only that module plus boundaries."""
 
     log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     dot = _render_dot(log, tmp_path, module=log.modules["block1"])
@@ -186,7 +186,7 @@ def test_module_focus_with_skip_fn(tmp_path: Path) -> None:
     log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     block_linear = _layer_labels(log, "linear")[1]
 
-    def skip_fn(layer_log: LayerLog) -> bool:
+    def skip_fn(layer_log: Layer) -> bool:
         """Skip ReLU layers."""
 
         return layer_log.layer_type == "relu"
@@ -202,7 +202,7 @@ def test_module_focus_with_skip_and_collapse_fn(tmp_path: Path) -> None:
 
     log = tl.trace(_NestedBlock(), torch.randn(1, 4))
 
-    def skip_fn(layer_log: LayerLog) -> bool:
+    def skip_fn(layer_log: Layer) -> bool:
         """Skip ReLU layers."""
 
         return layer_log.layer_type == "relu"
@@ -219,7 +219,7 @@ def test_module_focus_with_skip_and_collapse_fn(tmp_path: Path) -> None:
 
 
 def test_modulelog_show_graph_method(tmp_path: Path) -> None:
-    """ModuleLog.show_graph should match Trace.draw with module=self."""
+    """Module.show_graph should match Trace.draw with module=self."""
 
     log = tl.trace(_TwoBlockModel(), torch.randn(1, 4))
     module_log = log.modules["block1"]

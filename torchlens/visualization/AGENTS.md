@@ -8,7 +8,7 @@ and collapse decisions, builds Graphviz nodes/edges, styles modules, optionally 
 and code panels, and writes/renders output.
 
 ### `render_backward_graph()` in `rendering.py`
-Renders `GradFnLog` nodes and grad edges captured by `capture/backward.py`.
+Renders `GradFn` nodes and grad edges captured by `capture/backward.py`.
 
 ### Collapse and Focus
 - `_should_collapse_module()` is the central collapse decision.

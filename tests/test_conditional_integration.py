@@ -22,8 +22,8 @@ import torchlens.postprocess.ast_branches as ast_branches
 import torchlens.postprocess.graph_traversal as graph_traversal
 import torchlens.utils.introspection as introspection
 from torchlens import trace as trace_fn
-from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import ConditionalEvent, Trace
 
 
@@ -919,7 +919,7 @@ def _log_model(
     )
 
 
-def _get_terminal_bool_layers(trace: Trace) -> list[OpLog]:
+def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
     """Return terminal scalar bool layers from a model log.
 
     Parameters
@@ -929,7 +929,7 @@ def _get_terminal_bool_layers(trace: Trace) -> list[OpLog]:
 
     Returns
     -------
-    list[OpLog]
+    list[Op]
         Terminal scalar bool layers in execution order.
     """
     return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
@@ -939,7 +939,7 @@ def _find_only_layer(
     trace: Trace,
     func_name: str,
     branch_stack: list[tuple[int, str]] | None = None,
-) -> OpLog:
+) -> Op:
     """Find the unique layer matching a function name and optional branch stack.
 
     Parameters
@@ -953,7 +953,7 @@ def _find_only_layer(
 
     Returns
     -------
-    OpLog
+    Op
         Matching layer.
     """
     matching_layers = [layer for layer in trace.layer_list if layer.func_name == func_name]
@@ -970,7 +970,7 @@ def _find_only_layer(
 def _find_only_layer_any_name(
     trace: Trace,
     func_names: Sequence[str],
-) -> OpLog:
+) -> Op:
     """Find the unique layer whose function name matches any provided option.
 
     Parameters
@@ -982,7 +982,7 @@ def _find_only_layer_any_name(
 
     Returns
     -------
-    OpLog
+    Op
         Matching layer.
     """
     matching_layers = [layer for layer in trace.layer_list if layer.func_name in set(func_names)]
@@ -993,9 +993,9 @@ def _find_only_layer_any_name(
 def _find_only_layer_log(
     trace: Trace,
     func_name: str,
-    predicate: Callable[[LayerLog], bool],
-) -> LayerLog:
-    """Find one aggregate ``LayerLog`` matching the provided predicate.
+    predicate: Callable[[Layer], bool],
+) -> Layer:
+    """Find one aggregate ``Layer`` matching the provided predicate.
 
     Parameters
     ----------
@@ -1008,7 +1008,7 @@ def _find_only_layer_log(
 
     Returns
     -------
-    LayerLog
+    Layer
         Matching aggregate layer log.
     """
     matching_layers = [

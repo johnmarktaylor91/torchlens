@@ -357,7 +357,7 @@ def _apply_live_backward_hooks(
     grad_output:
         Autograd grad_output tuple.
     grad_fn_log:
-        GradFnLog site for selector matching.
+        GradFn site for selector matching.
     call_index:
         One-based grad_fn call index.
 
@@ -408,7 +408,7 @@ def _apply_live_backward_prehooks(
     grad_input:
         Current autograd prehook grad_input tuple.
     grad_fn_log:
-        GradFnLog site for selector matching.
+        GradFn site for selector matching.
     call_index:
         One-based grad_fn call index expected for the matching post-hook.
 
@@ -462,7 +462,7 @@ def _validate_grad_tuple(
     reference:
         Original grad tuple.
     grad_fn_log:
-        GradFnLog used in diagnostics.
+        GradFn used in diagnostics.
 
     Returns
     -------

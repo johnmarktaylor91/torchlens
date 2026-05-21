@@ -1,11 +1,11 @@
-"""Tests for ModuleLog, ModuleCallLog, and ModuleAccessor."""
+"""Tests for Module, ModuleCall, and ModuleAccessor."""
 
 import pytest
 import torch
 import torch.nn as nn
 
 import example_models
-from torchlens import ModuleLog, ModuleCallLog, trace as trace_fn
+from torchlens import Module, ModuleCall, trace as trace_fn
 from torchlens.data_classes import ModuleAccessor, ParamAccessor
 
 
@@ -49,7 +49,7 @@ class TestModuleLogBasic:
     def test_root_module_exists(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         root = log.modules["self"]
-        assert isinstance(root, ModuleLog)
+        assert isinstance(root, Module)
         assert root.address == "self"
 
     def test_root_module_alias(self):
@@ -69,13 +69,13 @@ class TestModuleLogBasic:
     def test_access_by_address(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        assert isinstance(ml, ModuleLog)
+        assert isinstance(ml, Module)
         assert ml.address == "0"
 
     def test_access_by_index(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules[0]
-        assert isinstance(ml, ModuleLog)
+        assert isinstance(ml, Module)
 
     def test_access_by_pass_notation(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -84,7 +84,7 @@ class TestModuleLogBasic:
         if addresses:
             addr = addresses[0]
             mpl = log.modules[f"{addr}:1"]
-            assert isinstance(mpl, ModuleCallLog)
+            assert isinstance(mpl, ModuleCall)
 
     def test_contains(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -96,14 +96,14 @@ class TestModuleLogBasic:
         log = trace_fn(_make_simple_model(), _simple_input())
         modules_list = list(log.modules)
         assert len(modules_list) == len(log.modules)
-        assert all(isinstance(ml, ModuleLog) for ml in modules_list)
+        assert all(isinstance(ml, Module) for ml in modules_list)
 
     def test_getitem_multi_pass_returns_module_log(self, input_2d):
-        """log["fc1"] for a multi-pass module should return ModuleLog (instead of error)."""
+        """log["fc1"] for a multi-pass module should return Module (instead of error)."""
         model = example_models.RecurrentParamsSimple()
         log = trace_fn(model, input_2d)
         result = log["fc1"]
-        assert isinstance(result, ModuleLog)
+        assert isinstance(result, Module)
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +192,7 @@ class TestModuleLogFields:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         r = repr(ml)
-        assert "ModuleLog" in r
+        assert "Module" in r
         assert ml.address in r
         assert ml.class_name in r
 
@@ -207,7 +207,7 @@ class TestModuleCallLog:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         mpl = ml.ops[1]
-        assert isinstance(mpl, ModuleCallLog)
+        assert isinstance(mpl, ModuleCall)
         # Pass layers should be a subset of parent layers
         assert all(label in ml.layers for label in mpl.layers)
 
@@ -230,7 +230,7 @@ class TestModuleCallLog:
         ml = log.modules["0"]
         mpl = ml.ops[1]
         r = repr(mpl)
-        assert "ModuleCallLog" in r
+        assert "ModuleCall" in r
         assert len(r) > 0
 
 
@@ -262,14 +262,14 @@ class TestMultiPassModules:
         ml = log.modules["fc1"]
         assert 1 in ml.ops
         assert 2 in ml.ops
-        assert isinstance(ml.ops[1], ModuleCallLog)
-        assert isinstance(ml.ops[2], ModuleCallLog)
+        assert isinstance(ml.ops[1], ModuleCall)
+        assert isinstance(ml.ops[2], ModuleCall)
 
     def test_pass_notation_accessor(self, input_2d):
         model = example_models.RecurrentParamsSimple()
         log = trace_fn(model, input_2d)
         mpl = log.modules["fc1:2"]
-        assert isinstance(mpl, ModuleCallLog)
+        assert isinstance(mpl, ModuleCall)
         assert mpl.call_index == 2
 
 
@@ -401,7 +401,7 @@ class _SimpleLinear(nn.Module):
 
 
 class TestModuleLogStringIndexing:
-    """ModuleLog should support string label lookup."""
+    """Module should support string label lookup."""
 
     def test_module_string_lookup(self):
         model = _SimpleLinear()

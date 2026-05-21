@@ -739,7 +739,7 @@ def _detach_nested_for_cache(value: Any) -> Any:
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .data_classes.module_log import ModuleLog
+    from .data_classes.module_log import Module
 
 
 def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
@@ -2032,7 +2032,7 @@ def show_model_graph(
     vis_call_depth: int | MissingType = MISSING,
     vis_outpath: str | MissingType = MISSING,
     vis_graph_overrides: dict[str, Any] | None | MissingType = MISSING,
-    module: "ModuleLog | str | None" = None,
+    module: "Module | str | None" = None,
     vis_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_grad_edge_overrides: dict[str, Any] | None | MissingType = MISSING,
     vis_module_overrides: dict[str, Any] | None | MissingType = MISSING,
@@ -2067,7 +2067,7 @@ def show_model_graph(
         vis_call_depth: Deprecated alias for ``visualization.max_module_depth``.
         vis_outpath: Deprecated alias for ``visualization.container_path``.
         vis_graph_overrides: Deprecated alias for ``visualization.graph_overrides``.
-        module: Optional module focus. Pass a ModuleLog or module address string
+        module: Optional module focus. Pass a Module or module address string
             to render only layers that ran inside that module.
         vis_edge_overrides: Deprecated alias for ``visualization.edge_overrides``.
         vis_grad_edge_overrides: Deprecated alias for
@@ -2167,9 +2167,9 @@ def show_model_graph(
     try:
         render_kwargs = visualization_to_render_kwargs(visualization_options)
         if module is not None:
-            from .data_classes.module_log import ModuleLog
+            from .data_classes.module_log import Module
 
-            render_kwargs["module"] = module.address if isinstance(module, ModuleLog) else module
+            render_kwargs["module"] = module.address if isinstance(module, Module) else module
         if code_panel is not False:
             render_kwargs["code_panel"] = code_panel
         trace.draw(**render_kwargs)

@@ -19,7 +19,7 @@ from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
-from ..data_classes.op_log import OpLog
+from ..data_classes.op_log import Op
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -372,8 +372,8 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
 
 def _validate_layer_against_arg(
     self: "Trace",
-    target_layer: OpLog,
-    parent_layer: OpLog,
+    target_layer: Op,
+    parent_layer: Op,
     arg_type: str,
     key: Any,
     val: Any,
@@ -422,7 +422,7 @@ def _validate_layer_against_arg(
     return True
 
 
-def _parent_logged_for_any_arg(target_layer: OpLog, parent_layer_label: str) -> bool:
+def _parent_logged_for_any_arg(target_layer: Op, parent_layer_label: str) -> bool:
     """Return whether ``parent_layer_label`` is logged at any arg location.
 
     Parameters
@@ -446,8 +446,8 @@ def _parent_logged_for_any_arg(target_layer: OpLog, parent_layer_label: str) -> 
 
 def _check_arglocs_correct_for_arg(
     self: "Trace",
-    target_layer: OpLog,
-    parent_layer: OpLog,
+    target_layer: Op,
+    parent_layer: Op,
     arg_type: str,
     argloc_key: str | tuple[Any, ...],
     saved_arg_val: Any,
@@ -548,7 +548,7 @@ def _check_arglocs_correct_for_arg(
 
 def _check_perturbation_exemptions(
     self: "Trace",
-    layer: OpLog,
+    layer: Op,
     layers_to_perturb: List[str],
 ) -> bool:
     """Check whether a perturbation check should be skipped for registry-based reasons.
@@ -587,7 +587,7 @@ def _check_perturbation_exemptions(
 
 
 def _execute_func_with_restored_state(
-    layer: OpLog,
+    layer: Op,
     input_args: dict[str, Any],
     layers_to_perturb: List[str],
     layer_label: str,
@@ -644,7 +644,7 @@ def _execute_func_with_restored_state(
 
 
 def _deep_numeric_replay_matches_saved(
-    layer: OpLog,
+    layer: Op,
     recomputed_output: torch.Tensor,
 ) -> bool:
     """Return whether a deep numeric replay matches within local relaxed tolerance.
@@ -811,7 +811,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
 def _prepare_input_args_for_validating_layer(
     self: "Trace",
-    layer_to_validate_parents_for: OpLog,
+    layer_to_validate_parents_for: Op,
     layers_to_perturb: List[str],
 ) -> dict[str, Any] | None:
     """Build the input argument dict for replaying a layer's function.

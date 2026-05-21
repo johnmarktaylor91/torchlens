@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 from torchlens import trace as trace_fn
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import ConditionalEvent, Trace
 
 
@@ -159,7 +159,7 @@ def _get_only_event(trace: Trace) -> ConditionalEvent:
     return trace.conditional_records[0]
 
 
-def _get_terminal_bool_layers(trace: Trace) -> List[OpLog]:
+def _get_terminal_bool_layers(trace: Trace) -> List[Op]:
     """Return terminal scalar bool layers from a model log.
 
     Parameters
@@ -169,14 +169,14 @@ def _get_terminal_bool_layers(trace: Trace) -> List[OpLog]:
 
     Returns
     -------
-    List[OpLog]
+    List[Op]
         Terminal scalar bool layers in execution order.
     """
 
     return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
-def _find_single_layer(trace: Trace, func_name: str) -> OpLog:
+def _find_single_layer(trace: Trace, func_name: str) -> Op:
     """Find the unique layer with the given function name.
 
     Parameters
@@ -188,7 +188,7 @@ def _find_single_layer(trace: Trace, func_name: str) -> OpLog:
 
     Returns
     -------
-    OpLog
+    Op
         Matching layer.
     """
 

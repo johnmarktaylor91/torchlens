@@ -5,14 +5,14 @@ All primary containers for logged TorchLens state. The hierarchy is:
 
 ```
 Trace
-  |- LayerLog          # aggregate per final layer
-  |   +- OpLog  # one operation/pass tensor record
-  |       +- BufferLog # buffer source node specialization
-  |- ModuleLog
-  |   +- ModuleCallLog
-  |- ParamLog
-  |- GradFnLog
-  |   +- GradFnCallLog
+  |- Layer          # aggregate per final layer
+  |   +- Op  # one operation/pass tensor record
+  |       +- Buffer # buffer source node specialization
+  |- Module
+  |   +- ModuleCall
+  |- Param
+  |- GradFn
+  |   +- GradFnCall
   +- FuncCallLocation
 ```
 
@@ -24,12 +24,12 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | File | Purpose |
 |------|---------|
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
-| `op_log.py` | `OpLog`, `TensorLog` alias, tensor save and per-pass fields |
-| `layer_log.py` | `LayerLog` aggregate, pass delegation, graph unions |
-| `buffer_log.py` | `BufferLog` and `BufferAccessor` |
-| `module_log.py` | `ModuleCallLog`, `ModuleLog`, `ModuleAccessor` |
-| `param_log.py` | `ParamLog`, lazy grad access, `ParamAccessor` |
-| `grad_fn_log.py` | Backward graph `GradFnLog` and accessor |
+| `op_log.py` | `Op`, `TensorLog` alias, tensor save and per-pass fields |
+| `layer_log.py` | `Layer` aggregate, pass delegation, graph unions |
+| `buffer_log.py` | `Buffer` and `BufferAccessor` |
+| `module_log.py` | `ModuleCall`, `Module`, `ModuleAccessor` |
+| `param_log.py` | `Param`, lazy grad access, `ParamAccessor` |
+| `grad_fn_log.py` | Backward graph `GradFn` and accessor |
 | `grad_fn_call_log.py` | Per-pass backward graph record |
 | `func_call_location.py` | Structured call stack frames and lazy source access |
 | `interface.py` | Imported `Trace` access/query custom_methods |
@@ -40,7 +40,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 
 ## Design Decisions
 
-### LayerLog Delegation
+### Layer Delegation
 Single-pass layers delegate unknown attrs to `ops[1]`. Multi-pass per-pass fields raise
 `ValueError`, not `AttributeError`, to avoid Python falling through to `__getattr__`.
 
@@ -61,20 +61,20 @@ lazy out refs that materialize on access. `cleanup.py` must preserve manifest an
 conditional consistency when removing entries.
 
 ### Layer Building
-`_build_layer_logs()` merges multiple `OpLog` entries into one aggregate. Most fields
+`_build_layer_logs()` merges multiple `Op` entries into one aggregate. Most fields
 use first-pass values; only selected graph/role fields are merged across ops.
 
 ## Autograd Contract
-`OpLog.save_activation()` is the slow/replay choke point for saved tensor copies.
+`Op.save_activation()` is the slow/replay choke point for saved tensor copies.
 `train_mode=True` keeps saved floating tensors graph-connected, rejects contradictory
 detaching/disk-only configs, and must restore all flags in `finally` paths.
 
 ## Circular References
 
 ```
-Trace -> OpLog -> source_trace -> Trace
-Trace -> ModuleLog -> _source_trace -> Trace
-ParamLog -> _param_ref -> nn.Parameter
+Trace -> Op -> source_trace -> Trace
+Trace -> Module -> _source_trace -> Trace
+Param -> _param_ref -> nn.Parameter
 ```
 
 These rely on cyclic GC. Use `Trace.cleanup()` when retaining many logs or after

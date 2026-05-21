@@ -12,7 +12,7 @@ This module implements the model preparation pipeline, which has two phases:
   Runs on every ``trace`` call. Populates session-scoped tracking
   dicts on Trace (pass counters, entered/exited labels), captures module
   metadata, forces ``requires_grad=True`` on all parameters (needed for
-  ``grad_fn`` metadata), creates ``ParamLog`` objects, and tags buffer tensors.
+  ``grad_fn`` metadata), creates ``Param`` objects, and tags buffer tensors.
   Session data is GC'd with the Trace — no per-module cleanup needed.
 
 The ``module_forward_decorator`` wraps each submodule's ``forward`` with a
@@ -55,7 +55,7 @@ from ._tl import (
     set_param_meta,
     set_tensor_label,
 )
-from ...data_classes.param_log import ParamAccessor, ParamLog
+from ...data_classes.param_log import ParamAccessor, Param
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.module_log import HookInfo
 from ...data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
@@ -263,7 +263,7 @@ def _prepare_model_session(
        ``trace._module_metadata``.
     3. Sets session-scoped Trace dictionaries for module pass counters and
        tensor entry/exit tracking.
-    4. Creates ``ParamLog`` objects and forces ``requires_grad=True`` on all
+    4. Creates ``Param`` objects and forces ``requires_grad=True`` on all
        parameters (needed so ``grad_fn`` chain is available for metadata).
     5. Tags buffer tensors with ``_tl.buffer_address``.
 
@@ -321,7 +321,7 @@ def _prepare_model_session(
 
 
 def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:
-    """Create ``ParamLog`` objects and prepare parameter grad tracking.
+    """Create ``Param`` objects and prepare parameter grad tracking.
 
     Outside ``train_mode``, ``requires_grad`` is forced True so that ``grad_fn``
     metadata is available on all intermediate tensors during the forward pass.
@@ -338,7 +338,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             for p in group["params"]:
                 optimized_param_ids.add(id(p))
 
-    param_logs: dict[str, ParamLog] = {}
+    param_logs: dict[str, Param] = {}
     seen_param_ids: set[int] = set()
     param_id_to_address: dict[int, str] = {}
     for module in model.modules():
@@ -347,7 +347,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
         for param_name, param in module._parameters.items():
             if param is None:
                 continue
-            # Shared parameters: only create one ParamLog per unique tensor.
+            # Shared parameters: only create one Param per unique tensor.
             pid = id(param)
             if pid in seen_param_ids:
                 existing_address = param_id_to_address[pid]
@@ -375,7 +375,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             )
 
             param_fsize = get_memory_amount(param)
-            param_log = ParamLog(
+            param_log = Param(
                 module_address=module_address,
                 name=param_name,
                 shape=tuple(param.shape),
@@ -810,7 +810,7 @@ def _next_intervention_replacement_label(trace: "Trace") -> tuple[str, int, int]
 
 
 def _copy_field_value_for_replacement(value: Any) -> Any:
-    """Copy mutable OpLog field values without cloning tensors.
+    """Copy mutable Op field values without cloning tensors.
 
     Parameters
     ----------
@@ -851,7 +851,7 @@ def _ensure_module_output_tensor_logged(
     Returns
     -------
     None
-        The tensor is tagged and a replacement OpLog is inserted into the raw
+        The tensor is tagged and a replacement Op is inserted into the raw
         graph so downstream module-exit and op logging can continue.
     """
 

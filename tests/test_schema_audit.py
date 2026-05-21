@@ -10,7 +10,7 @@ import torch
 import torchlens as tl
 from torchlens._run_state import RunState
 from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import Trace
 from torchlens.intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
@@ -59,9 +59,9 @@ def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
     assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.PORTABLE_STATE_SPEC)
     assert set(MODEL_LOG_FIELD_ORDER) <= set(MODEL_LOG_FIELD_FORK_POLICY)
     assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.DEFAULT_FILL_STATE)
-    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(OpLog.PORTABLE_STATE_SPEC)
+    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op.PORTABLE_STATE_SPEC)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
-    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(OpLog.DEFAULT_FILL_STATE)
+    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op.DEFAULT_FILL_STATE)
 
 
 @pytest.mark.smoke
@@ -94,7 +94,7 @@ def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
     fields_dict["source_trace"] = log
     fields_dict["_construction_done"] = True
     log._has_direct_writes = False
-    constructed = OpLog(fields_dict)
+    constructed = Op(fields_dict)
     assert constructed._construction_done is True
     assert log._has_direct_writes is False
 

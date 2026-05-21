@@ -1,6 +1,6 @@
 """Functions for logging output tensors produced by decorated torch operations.
 
-This module handles the creation and population of OpLog entries for every
+This module handles the creation and population of Op entries for every
 tensor produced during a forward pass.  It covers both *exhaustive* mode (full
 metadata collection) and *fast* mode (re-use of a previously logged graph with
 new outs).
@@ -10,14 +10,14 @@ Architecture overview:
     after executing the original function.  This dispatcher routes to either:
 
     - ``log_function_output_tensors_exhaustive``: builds a complete
-      ``fields_dict`` of ~80 fields per tensor, creates a OpLog entry,
+      ``fields_dict`` of ~80 fields per tensor, creates a Op entry,
       updates family links (parent/child/sibling/spouse), and optionally
       saves the out value.
 
     - ``log_function_output_tensors_fast``: skips metadata collection entirely.
       Increments counters to maintain alignment with the exhaustive pass,
       verifies the graph hasn't changed, and saves new out values into
-      the existing OpLog entries.
+      the existing Op entries.
 
 Label format convention:
     Raw labels follow ``{layer_type}_{type_num}_{realtime_num}_raw``, e.g.
@@ -59,7 +59,7 @@ from ...utils.collections import index_nested, ensure_iterable
 from ...capture.flops import compute_backward_flops, compute_forward_flops
 from ...capture.projections import LiveOpView
 from ...data_classes.op_log import (
-    OpLog,
+    Op,
     _dtype_or_none,
     _memory_or_none,
     _recursive_safe_copy,
@@ -166,7 +166,7 @@ def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -
     tensor
         Tensor represented by the operation event.
     fields_dict
-        Raw field mapping used to construct the corresponding ``OpLog``.
+        Raw field mapping used to construct the corresponding ``Op``.
 
     Returns
     -------
@@ -193,7 +193,7 @@ def _module_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[ModuleFrame
     Parameters
     ----------
     fields_dict
-        Raw field mapping used to construct the corresponding ``OpLog``.
+        Raw field mapping used to construct the corresponding ``Op``.
 
     Returns
     -------
@@ -220,7 +220,7 @@ def _param_refs_from_fields(fields_dict: dict[str, Any]) -> tuple[ParamRef, ...]
     Parameters
     ----------
     fields_dict
-        Raw field mapping used to construct the corresponding ``OpLog``.
+        Raw field mapping used to construct the corresponding ``Op``.
 
     Returns
     -------
@@ -255,7 +255,7 @@ def _parent_edges_from_fields(fields_dict: dict[str, Any]) -> tuple[ParentEdge, 
     Parameters
     ----------
     fields_dict
-        Raw field mapping used to construct the corresponding ``OpLog``.
+        Raw field mapping used to construct the corresponding ``Op``.
 
     Returns
     -------
@@ -274,7 +274,7 @@ def _op_event_from_log(
     tensor: torch.Tensor,
     fire_results: tuple[FireResult, ...] = (),
 ) -> OpEvent:
-    """Build an ``OpEvent`` that mirrors a just-constructed ``OpLog``.
+    """Build an ``OpEvent`` that mirrors a just-constructed ``Op``.
 
     Parameters
     ----------
@@ -1060,7 +1060,7 @@ def _pop_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...
     Parameters
     ----------
     tensor
-        Tensor about to be materialized into an ``OpLog``.
+        Tensor about to be materialized into an ``Op``.
 
     Returns
     -------
@@ -1267,7 +1267,7 @@ def _build_graph_relationship_fields(
     self: "Trace",
     fields_dict: dict[str, Any],
     parent_layer_labels: list[str],
-    parent_layer_entries: list[OpLog],
+    parent_layer_entries: list[Op],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     out_orig: Any,
@@ -1383,7 +1383,7 @@ def _build_module_context_fields(
     self: "Trace",
     fields_dict: dict[str, Any],
     arg_tensors: list[torch.Tensor],
-    parent_layer_entries: list[OpLog],
+    parent_layer_entries: list[Op],
 ) -> None:
     """Populate module nesting, address, and input/output status fields."""
     modules = _snapshot_exhaustive_module_stack(self)
@@ -1410,7 +1410,7 @@ def _build_shared_fields_dict(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     func_call_id: int,
-) -> tuple[dict[str, Any], list[OpLog], list[torch.Tensor], dict[str, int]]:
+) -> tuple[dict[str, Any], list[Op], list[torch.Tensor], dict[str, int]]:
     """Build the fields_dict shared by all output tensors of a single function call.
 
     When a function produces multiple output tensors (e.g. ``torch.split``),
@@ -1434,7 +1434,7 @@ def _build_shared_fields_dict(
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
     parent_layer_labels = get_label_list(arg_tensors)
     parent_layer_entries = [
-        cast(OpLog, LiveOpView(self, live_record_for_label(self, label)))
+        cast(Op, LiveOpView(self, live_record_for_label(self, label)))
         for label in parent_layer_labels
     ]
 
@@ -1530,7 +1530,7 @@ def _classify_new_tensor_in_trace(
 def _tag_tensor_and_track_variations(
     self: "Trace",
     out: torch.Tensor,
-    new_layer_entry: OpLog,
+    new_layer_entry: Op,
     fields_dict_onetensor: dict[str, Any],
     arg_copies: tuple[Any, ...],
     kwarg_copies: dict[str, Any],
@@ -1581,7 +1581,7 @@ def log_function_output_tensors_exhaustive(
 
     For each loggable output tensor:
       1. Build per-tensor fields (label, shape, equivalence type, FLOPs).
-      2. Create a OpLog entry and optionally save out data.
+      2. Create a Op entry and optionally save out data.
       3. Update bidirectional family links (parent→child, sibling, spouse).
       4. Tag the output tensor with ``_tl.label_raw`` so downstream
          operations can identify it as a parent.
@@ -1676,7 +1676,7 @@ def log_function_output_tensors_exhaustive(
             out_postfunc=self.out_postfunc,
         )
         new_layer_entry = cast(
-            OpLog,
+            Op,
             LiveOpView(
                 self,
                 live_record_for_label(self, fields_dict_onetensor["_label_raw"]),
@@ -2456,7 +2456,7 @@ def _make_layer_log_entry(
     t_kwargs: dict[str, Any] | None = None,
     out_postfunc: Callable[..., Any] | None = None,
 ) -> Any:
-    """Create a OpLog (or BufferLog) entry and register it in Trace.
+    """Create a Op (or Buffer) entry and register it in Trace.
 
     Instantiates the appropriate log class from ``fields_dict``, conditionally
     saves out data (if this layer is in ``_layer_nums_to_save``), and

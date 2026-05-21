@@ -2,7 +2,7 @@
 
 Verifies that func_config is correctly extracted for various operation types,
 is empty for source/output nodes, survives the postprocessing pipeline, and
-is accessible on both OpLog and LayerLog.
+is accessible on both Op and Layer.
 """
 
 import pytest
@@ -265,7 +265,7 @@ class TestFuncConfigIntegration:
                 )
 
     def test_func_config_on_op_log(self):
-        """func_config should be accessible on OpLog (per-pass) objects."""
+        """func_config should be accessible on Op (per-pass) objects."""
         model = nn.Linear(10, 5)
         log = tl.trace(model, torch.randn(1, 10))
 

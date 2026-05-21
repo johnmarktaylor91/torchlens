@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer_log import LayerLog
+from torchlens.data_classes.layer_log import Layer
 from torchlens.visualization.rendering import GRADIENT_ARROW_COLOR
 
 
@@ -107,7 +107,7 @@ def test_skip_single_layer_chains_edge(tmp_path: Any) -> None:
     conv_label = _first_label(log, "conv2d")
     linear_label = _first_label(log, "linear")
 
-    def skip_fn(layer_log: LayerLog) -> bool:
+    def skip_fn(layer_log: Layer) -> bool:
         """Skip ReLU layers."""
 
         return layer_log.layer_type == "relu"
@@ -125,7 +125,7 @@ def test_skip_consecutive_layers_chains_through(tmp_path: Any) -> None:
     conv_label = _first_label(log, "conv2d")
     linear_label = _first_label(log, "linear")
 
-    def skip_fn(layer_log: LayerLog) -> bool:
+    def skip_fn(layer_log: Layer) -> bool:
         """Skip ReLU and Dropout layers."""
 
         return layer_log.layer_type in {"relu", "dropout"}
@@ -144,7 +144,7 @@ def test_skip_branching(tmp_path: Any) -> None:
     source_label = _first_label(log, "linear")
     branch_labels = _labels(log, "linear")[1:]
 
-    def skip_fn(layer_log: LayerLog) -> bool:
+    def skip_fn(layer_log: Layer) -> bool:
         """Skip the shared ReLU branch input."""
 
         return layer_log.layer_type == "relu"
@@ -161,7 +161,7 @@ def test_skip_input_or_output_raises(tmp_path: Any) -> None:
 
     log = tl.trace(nn.Linear(4, 4), torch.randn(1, 4))
 
-    def skip_fn(layer_log: LayerLog) -> bool:
+    def skip_fn(layer_log: Layer) -> bool:
         """Try to skip the input layer."""
 
         return layer_log.is_input
@@ -183,7 +183,7 @@ def test_skip_preserves_grad_edge_kind(tmp_path: Any) -> None:
     output = log[log.output_layers[0]].out
     output.sum().backward()
 
-    def skip_fn(layer_log: LayerLog) -> bool:
+    def skip_fn(layer_log: Layer) -> bool:
         """Skip ReLU layers."""
 
         return layer_log.layer_type == "relu"

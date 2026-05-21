@@ -12,7 +12,7 @@ split into thematic submodules:
 - labeling (Steps 8-11): Generate final human-readable labels, rename all internal
   references, trim/reorder fields, build lookup keys.
 - finalization (Steps 12-19): Undecorate saved tensors, log timing, finalize
-  ParamLogs, build LayerLog/ModuleLog aggregates, mark pass as finished, then
+  ParamLogs, build Layer/Module aggregates, mark pass as finished, then
   finalize any streamed bundle and optionally evict in-memory outs.
 
 Step ordering invariants:
@@ -24,7 +24,7 @@ Step ordering invariants:
   populated in Step 9).
 - Step 10 (rename) MUST precede Step 11 (cleanup uses renamed labels).
 - Step 15.5 (_build_layer_logs) MUST precede Step 16 (_build_module_logs) because
-  ModuleLog.layers references LayerLog keys.
+  Module.layers references Layer keys.
 
 Fast mode skips Steps 1-9 and Step 16, reusing the exhaustive pass's metadata.
 It only copies outs from parent to output nodes, trims, renames, builds
@@ -298,15 +298,15 @@ def postprocess(
     with _vtimed(self, "  Step 14: Log timing"):
         _log_time_elapsed(self)
 
-    # Step 15: Populate ParamLog reverse mappings, linked params, num_calls, and grad metadata.
+    # Step 15: Populate Param reverse mappings, linked params, num_calls, and grad metadata.
     with _vtimed(self, "  Step 15: Finalize params"):
         _finalize_param_logs(self)
 
-    # Step 15.5: Build aggregate LayerLog objects from per-pass OpLog entries.
+    # Step 15.5: Build aggregate Layer objects from per-pass Op entries.
     with _vtimed(self, "  Step 15.5: Build layer logs"):
         _build_layer_logs(self)
 
-    # Step 16: Build structured ModuleLog objects from raw module_* dicts.
+    # Step 16: Build structured Module objects from raw module_* dicts.
     with _vtimed(self, "  Step 16: Build module logs"):
         _build_module_logs(self)
 
@@ -346,7 +346,7 @@ def postprocess_fast(self: "Trace") -> None:
     2. Trim and reorder fields.
     3. Remove unsaved layers and build lookup keys.
     4. Undecorate saved tensors.
-    5. Build LayerLog aggregates.
+    5. Build Layer aggregates.
     6. Mark the pass as finished.
 
     Skipped steps (already computed by the exhaustive pass):
@@ -358,7 +358,7 @@ def postprocess_fast(self: "Trace") -> None:
       ops and _module_build_data isn't repopulated in fast mode (#108).
     """
     _vprint(self, "Fast-pass postprocessing...")
-    # Use layer_dict_main_keys to get OpLog directly (not LayerLog)
+    # Use layer_dict_main_keys to get Op directly (not Layer)
     for output_layer_label in self.output_layers:
         output_layer = self.layer_dict_main_keys[output_layer_label]
         if not output_layer.parents:

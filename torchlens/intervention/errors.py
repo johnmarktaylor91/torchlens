@@ -118,7 +118,7 @@ class InterventionReadyConflictError(ConfigurationError, ValueError):
 
 
 class DirectActivationWriteWarning(TorchLensInterventionWarning):
-    """User directly wrote a OpLog out field."""
+    """User directly wrote a Op out field."""
 
 
 class MutateInPlaceWarning(TorchLensInterventionWarning):

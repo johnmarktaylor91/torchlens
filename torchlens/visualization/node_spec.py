@@ -7,8 +7,8 @@ from html import escape
 from typing import TYPE_CHECKING, Any, Callable, cast
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from ..data_classes.layer_log import LayerLog
-    from ..data_classes.op_log import OpLog
+    from ..data_classes.layer_log import Layer
+    from ..data_classes.op_log import Op
     from ..data_classes.model_log import Trace
 
 INTERVENTION_SITE_COLOR = "#FF00FF"
@@ -88,7 +88,7 @@ class NodeSpec:
         return dataclass_replace(self, **kwargs)
 
 
-NodeSpecFn = Callable[["LayerLog", NodeSpec], NodeSpec | None]
+NodeSpecFn = Callable[["Layer", NodeSpec], NodeSpec | None]
 
 
 def render_lines_to_html(lines: list[str]) -> str:
@@ -170,7 +170,7 @@ def graphviz_graph_overrides(graph_overrides: dict[str, Any] | None) -> dict[str
     }
 
 
-def intervention_sites_for_log(trace: "Trace") -> list["OpLog"]:
+def intervention_sites_for_log(trace: "Trace") -> list["Op"]:
     """Resolve intervention spec targets to layer-pass records.
 
     Parameters
@@ -180,7 +180,7 @@ def intervention_sites_for_log(trace: "Trace") -> list["OpLog"]:
 
     Returns
     -------
-    list[OpLog]
+    list[Op]
         Distinct intervention sites in execution order.
     """
 
@@ -198,14 +198,14 @@ def intervention_sites_for_log(trace: "Trace") -> list["OpLog"]:
 
     from ..intervention.resolver import resolve_sites
 
-    by_label: dict[str, OpLog] = {}
+    by_label: dict[str, Op] = {}
     for target in targets:
         table = resolve_sites(trace, target, max_fanout=max(1, len(trace.layer_list)))
         for site in table:
             forward_site = getattr(site, "op", site)
             layer_label = getattr(forward_site, "layer_label", None)
             if layer_label is not None:
-                by_label.setdefault(layer_label, cast("OpLog", forward_site))
+                by_label.setdefault(layer_label, cast("Op", forward_site))
     execution_order = {
         layer.layer_label: index for index, layer in enumerate(getattr(trace, "layer_list", ()))
     }
@@ -292,7 +292,7 @@ def make_intervention_node_spec_fn(
         intervention_graph_override(graph_overrides, "intervention_cone_penwidth", 1.75)
     )
 
-    def intervention_node_spec_fn(layer_log: "LayerLog", default_spec: NodeSpec) -> NodeSpec:
+    def intervention_node_spec_fn(layer_log: "Layer", default_spec: NodeSpec) -> NodeSpec:
         """Apply intervention styling before any user node-spec callback."""
 
         matching_labels = {

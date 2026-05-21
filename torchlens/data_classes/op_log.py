@@ -1,13 +1,13 @@
-"""OpLog: per-operation metadata for a single invocation of a layer.
+"""Op: per-operation metadata for a single invocation of a layer.
 
-Each OpLog records everything about one tensor operation in the
+Each Op records everything about one tensor operation in the
 forward pass: the output tensor itself, the function that produced it,
 its parents/children in the computation graph, module containment,
 parameter usage, timing, RNG state, and more.
 
 For recurrent models, the same "layer" may execute multiple times; each
-execution is a separate OpLog with a distinct ``call_index``.  The
-aggregate view across ops is provided by :class:`LayerLog`.
+execution is a separate Op with a distinct ``call_index``.  The
+aggregate view across ops is provided by :class:`Layer`.
 
 Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 
@@ -328,7 +328,7 @@ def validate_streaming_postfunc_output(
         )
 
 
-def _set_saved_out_metadata(entry: "OpLog", tensor: torch.Tensor) -> None:
+def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     """Refresh saved output metadata from a replacement tensor.
 
     Parameters
@@ -381,12 +381,12 @@ def _tensor_content_hash(value: torch.Tensor) -> str:
 if TYPE_CHECKING:
     from .._io.lazy import LazyActivationRef
     from .func_call_location import FuncCallLocation
-    from .layer_log import LayerLog
-    from .param_log import ParamLog
+    from .layer_log import Layer
+    from .param_log import Param
     from .model_log import Trace
 
 
-class OpLog:
+class Op:
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match
@@ -401,7 +401,7 @@ class OpLog:
     * ``source_trace`` is a direct reference to the owning Trace.
       This creates a circular reference (Trace -> layer_list -> entry ->
       source_trace -> Trace) that is broken by ``cleanup()``.
-    * ``parent_layer_log`` is a back-reference to the aggregate LayerLog
+    * ``parent_layer_log`` is a back-reference to the aggregate Layer
       that owns this pass.  It is set *outside* fields_dict during
       ``_build_layer_logs`` and is intentionally absent from FIELD_ORDER.
     * ``fx_qualpath`` and ``fx_call_index`` expose metadata that mirrors
@@ -612,7 +612,7 @@ class OpLog:
                 object.__setattr__(trace, "run_state", RunState.DIRECT_WRITE_DIRTY)
                 if not getattr(trace, "_warned_direct_write", False):
                     warnings.warn(
-                        "DirectActivationWriteWarning: direct OpLog out writes "
+                        "DirectActivationWriteWarning: direct Op out writes "
                         "are not recipe edits; replay/rerun propagation will overlay them.",
                         DirectActivationWriteWarning,
                         stacklevel=2,
@@ -633,7 +633,7 @@ class OpLog:
 
         object.__setattr__(self, attr, value)
 
-    def _append_tensor_from(self, other: "OpLog", field_name: str) -> None:
+    def _append_tensor_from(self, other: "Op", field_name: str) -> None:
         """Append one tensor field from another pass along batch dimension 0.
 
         Parameters
@@ -669,7 +669,7 @@ class OpLog:
             fields_dict["fx_call_index"] = 0
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
-            error_str = "Error initializing OpLog:"
+            error_str = "Error initializing Op:"
             missing_fields = _LAYER_PASS_LOG_FIELD_ORDER_SET - fields_dict_key_set
             extra_fields = fields_dict_key_set - _LAYER_PASS_LOG_FIELD_ORDER_SET
             if len(missing_fields) > 0:
@@ -780,7 +780,7 @@ class OpLog:
         self.parent_params = fields_dict["parent_params"]
         self._param_barcodes = fields_dict["_param_barcodes"]
         self.parent_param_ops = fields_dict["parent_param_ops"]
-        self._param_logs: List["ParamLog"] = fields_dict["_param_logs"]
+        self._param_logs: List["Param"] = fields_dict["_param_logs"]
         self.param_shapes = fields_dict["param_shapes"]
         self.num_params = fields_dict["num_params"]
         self.num_params_trainable = fields_dict["num_params_trainable"]
@@ -865,7 +865,7 @@ class OpLog:
         # Function config - lightweight hyperparameters always captured.
         self.func_config = fields_dict["func_config"]
 
-        # Back-reference to the aggregate LayerLog that groups all ops of
+        # Back-reference to the aggregate Layer that groups all ops of
         # this layer.  Set during postprocessing by _build_layer_logs - NOT
         # part of fields_dict or FIELD_ORDER (it's a structural link, not
         # captured data).
@@ -875,7 +875,7 @@ class OpLog:
         self._pending_transformed_out_blob_id: Optional[str] = None
         self._pending_grad_blob_id: Optional[str] = None
         self._pending_transformed_grad_blob_id: Optional[str] = None
-        self.parent_layer_log: Optional["LayerLog"] = None
+        self.parent_layer_log: Optional["Layer"] = None
         object.__setattr__(self, "_construction_done", True)
 
     @property
@@ -1047,12 +1047,12 @@ class OpLog:
         return self.out
 
     @property
-    def ops(self) -> tuple["OpLog", ...]:
+    def ops(self) -> tuple["Op", ...]:
         """Tuple containing this pass for aggregate-compatible iteration.
 
         Returns
         -------
-        tuple[OpLog, ...]
+        tuple[Op, ...]
             Single-entry tuple containing this pass log.
         """
 
@@ -1127,7 +1127,7 @@ class OpLog:
         source = ref() if ref is not None else None
         if source is None or getattr(source, "_loaded_from_bundle", False):
             raise AttributeError(
-                "This OpLog is detached from its source Trace "
+                "This Op is detached from its source Trace "
                 "(perhaps loaded from disk or after cleanup). "
                 "Use trace.do(label, transform) directly."
             )
@@ -1429,7 +1429,7 @@ class OpLog:
     # ************* Logging Functions ************
     # ********************************************
 
-    def copy(self) -> "OpLog":
+    def copy(self) -> "Op":
         """Return a selective-depth copy of this entry.
 
         Most fields are ``copy.deepcopy``'d so the clone is fully independent.
@@ -1445,7 +1445,7 @@ class OpLog:
           shared references are safe since they're replaced (not mutated).
 
         Returns:
-            A new OpLog (or subclass) with the same field values.
+            A new Op (or subclass) with the same field values.
         """
         fields_dict = {}
         fields_not_to_deepcopy = [
@@ -1821,22 +1821,22 @@ class OpLog:
     # ************* Fetcher Functions ************
     # ********************************************
 
-    def get_children(self) -> list["OpLog"]:
-        """Return child OpLog objects for this pass.
+    def get_children(self) -> list["Op"]:
+        """Return child Op objects for this pass.
 
         Returns
         -------
-        list[OpLog]
+        list[Op]
             Child ops resolved through the owning model log.
         """
         return [self.source_trace[child_label] for child_label in self.children]
 
-    def get_parents(self) -> list["OpLog"]:
-        """Return parent OpLog objects for this pass.
+    def get_parents(self) -> list["Op"]:
+        """Return parent Op objects for this pass.
 
         Returns
         -------
-        list[OpLog]
+        list[Op]
             Parent ops resolved through the owning model log.
         """
         return [self.source_trace[parent_label] for parent_label in self.parents]
@@ -2030,5 +2030,5 @@ class OpLog:
 
 
 # Backward-compatible alias: TensorLog was the original name for
-# OpLog before the LayerLog aggregate class was introduced in PR #92.
-TensorLog = OpLog
+# Op before the Layer aggregate class was introduced in PR #92.
+TensorLog = Op

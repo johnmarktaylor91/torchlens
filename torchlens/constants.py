@@ -1,7 +1,7 @@
 """Shared constants: field-order tuples and function discovery for TorchLens.
 
 **FIELD_ORDER lists** define the *canonical* set of fields for each data class
-(Trace, OpLog, LayerLog, etc.).  They serve two purposes:
+(Trace, Op, Layer, etc.).  They serve two purposes:
 
 1. **Canonical ordering** — __repr__, iteration, and serialization use these lists
    to present fields in a consistent, human-readable order.
@@ -189,7 +189,7 @@ MODEL_LOG_FIELD_ORDER = [
 ]
 
 LAYER_PASS_LOG_FIELD_ORDER = [
-    # Per-pass data for a single layer execution.  One OpLog exists for
+    # Per-pass data for a single layer execution.  One Op exists for
     # each (layer, call_index) pair.  Fields capture the tensor produced, the
     # function that created it, graph connectivity, module context, and more.
     #
@@ -361,12 +361,12 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "func_config",
 ]
 
-# Backward-compatible alias — OpLog was formerly called TensorLog.
+# Backward-compatible alias — Op was formerly called TensorLog.
 OP_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
 TENSOR_LOG_FIELD_ORDER = LAYER_PASS_LOG_FIELD_ORDER
 
 LAYER_LOG_FIELD_ORDER = [
-    # Aggregate view of a layer across all its ops.  One LayerLog per
+    # Aggregate view of a layer across all its ops.  One Layer per
     # unique layer; it delegates per-pass queries to its child OpLogs.
     #
     # Identity & labeling
@@ -477,7 +477,7 @@ FUNC_CALL_LOCATION_FIELD_ORDER = [
     "num_context_lines",
 ]
 
-# Per-parameter metadata (one ParamLog per nn.Parameter in the model).
+# Per-parameter metadata (one Param per nn.Parameter in the model).
 PARAM_LOG_FIELD_ORDER = [
     "address",
     "name",
@@ -525,7 +525,7 @@ BUFFER_LOG_FIELD_ORDER = [
     "modules",
 ]
 
-# Per-pass module execution data (one ModuleCallLog per forward call to a module).
+# Per-pass module execution data (one ModuleCall per forward call to a module).
 MODULE_PASS_LOG_FIELD_ORDER = [
     "address",
     "all_addresses",
@@ -546,7 +546,7 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "call_children",
 ]
 
-# Aggregate module metadata (one ModuleLog per unique nn.Module in the model).
+# Aggregate module metadata (one Module per unique nn.Module in the model).
 MODULE_LOG_FIELD_ORDER = [
     # Identity
     "address",

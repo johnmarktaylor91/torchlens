@@ -10,7 +10,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._run_state import RunState
 from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import Trace
 from torchlens.intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
@@ -85,16 +85,16 @@ def test_field_lifecycle_matrix_modellog() -> None:
 
 
 def test_field_lifecycle_matrix_op_log() -> None:
-    """Assert every OpLog ordered field has lifecycle policy coverage."""
+    """Assert every Op ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(LAYER_PASS_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(OpLog.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(Op.PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
-    assert ordered_fields <= set(OpLog.DEFAULT_FILL_STATE)
+    assert ordered_fields <= set(Op.DEFAULT_FILL_STATE)
 
 
 def test_construction_done_lifecycle() -> None:
-    """OpLog construction starts guarded and ends with direct-write tracking enabled."""
+    """Op construction starts guarded and ends with direct-write tracking enabled."""
 
     log = _capture_log()
     layer = next(iter(log))
@@ -105,7 +105,7 @@ def test_construction_done_lifecycle() -> None:
     fields_dict["_construction_done"] = True
 
     log._has_direct_writes = False
-    constructed = OpLog(fields_dict)
+    constructed = Op(fields_dict)
 
     assert constructed._construction_done is True
     assert log._has_direct_writes is False

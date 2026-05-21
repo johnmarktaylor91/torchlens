@@ -585,7 +585,7 @@ def _warn_if_direct_writes_will_be_overlaid(log: "Trace") -> None:
         return
     warnings.warn(
         "DirectActivationWriteWarning: replay/rerun propagation uses the intervention "
-        "recipe and may overlay direct OpLog out writes.",
+        "recipe and may overlay direct Op out writes.",
         DirectActivationWriteWarning,
         stacklevel=3,
     )

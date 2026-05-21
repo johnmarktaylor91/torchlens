@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.op_log import OpLog
+    from torchlens.data_classes.op_log import Op
     from torchlens.data_classes.model_log import Trace
 
 
@@ -50,12 +50,12 @@ class PartialTrace:
         return cls(trace=trace, original_exception=exception)
 
     @property
-    def raw_layers(self) -> tuple[OpLog, ...]:
+    def raw_layers(self) -> tuple[Op, ...]:
         """Return raw layer entries captured before failure.
 
         Returns
         -------
-        tuple[OpLog, ...]
+        tuple[Op, ...]
             Raw layer pass logs in capture order.
         """
 
@@ -243,7 +243,7 @@ def _materialize_failed_capture_events(trace: Trace) -> None:
     materialize_from_events(trace, events)
 
 
-def _raw_label(layer: OpLog) -> str:
+def _raw_label(layer: Op) -> str:
     """Return the raw label for a captured layer entry.
 
     Parameters

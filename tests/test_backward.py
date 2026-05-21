@@ -11,7 +11,7 @@ import torchlens as tl
 import torchlens.validation as tl_validation
 import torchlens.validation.backward as backward_validation
 import torchlens.validation.consolidated as consolidated_validation
-from torchlens.data_classes.grad_fn_log import GradFnLog
+from torchlens.data_classes.grad_fn_log import GradFn
 
 
 class _TinyBackwardModel(nn.Module):
@@ -182,7 +182,7 @@ def test_recording_backward_context_manager() -> None:
 
 @pytest.mark.smoke
 def test_backward_graph_walk_includes_intervening_grad_fns() -> None:
-    """The backward DAG includes grad_fns without forward LayerLog matches."""
+    """The backward DAG includes grad_fns without forward Layer matches."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
     assert any(grad_fn.is_intervening for grad_fn in trace.grad_fn_logs.values())
@@ -191,7 +191,7 @@ def test_backward_graph_walk_includes_intervening_grad_fns() -> None:
 def test_has_op_deprecation_property() -> None:
     """Legacy has_op access warns and returns the inverse of is_intervening."""
 
-    grad_fn = GradFnLog(
+    grad_fn = GradFn(
         grad_fn_id=1,
         name="AddBackward0",
         module_path="torch.autograd",
@@ -219,7 +219,7 @@ def test_grad_fn_log_back_pointer() -> None:
 
 @pytest.mark.smoke
 def test_grad_fn_naming_and_indexing() -> None:
-    """GradFnLog labels and accessor indexing mirror layer lookup patterns."""
+    """GradFn labels and accessor indexing mirror layer lookup patterns."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
     first_grad_fn = trace.grad_fns[0]
@@ -291,7 +291,7 @@ def test_grad_transform_applied() -> None:
 
 @pytest.mark.smoke
 def test_module_log_grad_aggregation() -> None:
-    """ModuleLog exposes aggregated grads for contained layers."""
+    """Module exposes aggregated grads for contained layers."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
     assert trace.modules["fc2"].grad is not None
@@ -307,7 +307,7 @@ def test_input_layer_grad_access() -> None:
 
 @pytest.mark.smoke
 def test_param_layer_grad_access() -> None:
-    """ParamLog grad metadata still works through the existing hook path."""
+    """Param grad metadata still works through the existing hook path."""
     model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
     assert any(param_log.has_grad for param_log in trace.params)
@@ -326,7 +326,7 @@ def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
 
 @pytest.mark.smoke
 def test_implicit_hook_firing_preserved() -> None:
-    """Calling backward outside log_backward still populates LayerLog grads."""
+    """Calling backward outside log_backward still populates Layer grads."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, save_grads=True)

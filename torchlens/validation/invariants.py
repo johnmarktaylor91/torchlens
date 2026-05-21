@@ -7,15 +7,15 @@ and raises ``MetadataInvariantError`` on the first failure.
   A. Trace self-consistency (counts, timing, label uniqueness)
   B. Special layer lists match per-layer boolean flags
   C. Graph topology (parent-child bidirectionality, boolean flag consistency)
-  D. OpLog field consistency (shape, dtype, pass numbering, nesting)
+  D. Op field consistency (shape, dtype, pass numbering, nesting)
   E. Recurrence / loop invariants (is_recurrent, pass dicts)
   F. Branching invariants (is_branching)
   F2. Conditional metadata invariants (13 conditional consistency checks)
-  G. OpLog <-> LayerLog cross-references (pass numbering, back-pointers)
+  G. Op <-> Layer cross-references (pass numbering, back-pointers)
   H. Module <-> Layer containment (layers, module pass layers, reverse check)
   I. Module hierarchy (address parent-child bidirectionality, pass consistency)
-  J. Param cross-references (ParamLog -> layer, uses_params flag)
-  K. Buffer cross-references (buffer_layers list, BufferLog module references)
+  J. Param cross-references (Param -> layer, uses_params flag)
+  K. Buffer cross-references (buffer_layers list, Buffer module references)
   L. Equivalence group symmetry (equivalent_ops labels are valid)
 
 **Phase 2 -- Semantic invariants:**
@@ -37,10 +37,10 @@ from typing import TYPE_CHECKING
 from ..errors._base import ValidationError
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_log import LayerLog
-    from ..data_classes.op_log import OpLog
+    from ..data_classes.layer_log import Layer
+    from ..data_classes.op_log import Op
     from ..data_classes.model_log import Trace
-    from ..data_classes.module_log import ModuleLog
+    from ..data_classes.module_log import Module
 
 
 class MetadataInvariantError(ValidationError, ValueError):
@@ -158,7 +158,7 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
     if not getattr(trace, "intervention_ready", False):
         return InvariantResult(name=name, passed=True)
 
-    groups: dict[int, list["OpLog"]] = defaultdict(list)
+    groups: dict[int, list["Op"]] = defaultdict(list)
     for layer in trace.layer_list:
         if _is_func_call_id_exempt(layer):
             continue
@@ -289,7 +289,7 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
         )
 
 
-def _is_func_call_id_exempt(layer: "OpLog") -> bool:
+def _is_func_call_id_exempt(layer: "Op") -> bool:
     """Return whether a layer is exempt from Invariant S.
 
     Parameters
@@ -315,7 +315,7 @@ def _is_func_call_id_exempt(layer: "OpLog") -> bool:
     }
 
 
-def _func_call_group_signature(layer: "OpLog") -> tuple[object, ...]:
+def _func_call_group_signature(layer: "Op") -> tuple[object, ...]:
     """Return comparable same-call metadata for Invariant S.
 
     Parameters
@@ -435,7 +435,7 @@ def _check_trace_self_consistency(ml: "Trace") -> None:
 
 
 # ---------------------------------------------------------------------------
-# B. Special layer lists ↔ OpLog flags
+# B. Special layer lists ↔ Op flags
 # ---------------------------------------------------------------------------
 
 _SPECIAL_LIST_FLAG_PAIRS = [
@@ -451,8 +451,8 @@ def _check_special_layer_lists(ml: "Trace") -> None:
     """Check B: special layer lists (input, output, buffer, etc.) match per-layer boolean flags.
 
     For each (list_attr, flag_attr) pair, verifies bidirectional consistency:
-    - Forward: every label in the list has the flag set on its OpLog.
-    - Reverse: every OpLog with the flag set appears in the list.
+    - Forward: every label in the list has the flag set on its Op.
+    - Reverse: every Op with the flag set appears in the list.
     """
     name = "special_layer_lists"
     label_set = set(ml.layer_labels)
@@ -582,7 +582,7 @@ def _check_graph_topology(ml: "Trace") -> None:
 
 
 # ---------------------------------------------------------------------------
-# D. OpLog field consistency
+# D. Op field consistency
 # ---------------------------------------------------------------------------
 
 
@@ -679,7 +679,7 @@ def _check_recurrence_invariants(ml: "Trace") -> None:
     - is_recurrent == True iff any layer has >1 pass.
     - max_recurrent_loops matches the maximum pass count.
     - layer_num_calls keys are valid no-pass labels.
-    - LayerLog.ops dict keys are contiguous {1..N}.
+    - Layer.ops dict keys are contiguous {1..N}.
     """
     name = "recurrence_invariants"
 
@@ -701,7 +701,7 @@ def _check_recurrence_invariants(ml: "Trace") -> None:
 
     # Per-layer pass consistency: layer_num_calls is keyed by no-pass labels.
     # Validate that each key exists in layer_labels, and that the
-    # recorded count matches the actual LayerLog.num_calls.
+    # recorded count matches the actual Layer.num_calls.
     no_call_labels = set(ml.layer_labels)
     for label_key, num_calls in ml.layer_num_calls.items():
         if label_key not in no_call_labels:
@@ -714,7 +714,7 @@ def _check_recurrence_invariants(ml: "Trace") -> None:
             if num_calls != actual:
                 raise MetadataInvariantError(
                     name,
-                    f"layer_num_calls['{label_key}']={num_calls} != LayerLog.num_calls={actual}",
+                    f"layer_num_calls['{label_key}']={num_calls} != Layer.num_calls={actual}",
                 )
 
     # For top-level (no-pass) layer_logs, verify pass dict consistency
@@ -724,7 +724,7 @@ def _check_recurrence_invariants(ml: "Trace") -> None:
         if actual_keys != expected_keys:
             raise MetadataInvariantError(
                 name,
-                f"LayerLog '{no_call_label}' ops keys={actual_keys} != expected {expected_keys}",
+                f"Layer '{no_call_label}' ops keys={actual_keys} != expected {expected_keys}",
             )
 
 
@@ -849,7 +849,7 @@ def _expected_layer_pass_child_views(
     ----------
     conditional_arm_children:
         Primary ``cond_id -> branch_kind -> child labels`` mapping on a
-        ``OpLog``.
+        ``Op``.
 
     Returns
     -------
@@ -888,13 +888,13 @@ def _expected_layer_pass_child_views(
 def _expected_layer_log_child_views(
     conditional_arm_children: dict[int, dict[str, list[str]]],
 ) -> tuple[list[str], dict[int, list[str]], list[str]]:
-    """Project aggregate child views from a ``LayerLog`` primary structure.
+    """Project aggregate child views from a ``Layer`` primary structure.
 
     Parameters
     ----------
     conditional_arm_children:
         Aggregate ``cond_id -> branch_kind -> child labels`` mapping on a
-        ``LayerLog``.
+        ``Layer``.
 
     Returns
     -------
@@ -921,9 +921,9 @@ def _expected_layer_log_child_views(
 
 
 def _expected_layer_log_child_union(
-    layer_log: "LayerLog",
+    layer_log: "Layer",
 ) -> dict[int, dict[str, list[str]]]:
-    """Build the expected aggregate ``conditional_arm_children`` for a ``LayerLog``.
+    """Build the expected aggregate ``conditional_arm_children`` for a ``Layer``.
 
     Parameters
     ----------
@@ -959,7 +959,7 @@ def _valid_conditional_child_labels(ml: "Trace") -> set[str]:
     Returns
     -------
     set[str]
-        Union of pass-level labels and aggregate ``LayerLog`` keys.
+        Union of pass-level labels and aggregate ``Layer`` keys.
     """
 
     return set(ml.layer_labels) | set(ml.layer_logs)
@@ -1054,7 +1054,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"LayerLog {layer_log.layer_label}.conditional_then_children="
+                f"Layer {layer_log.layer_label}.conditional_then_children="
                 f"{layer_log.conditional_then_children} != expected projection "
                 f"{expected_then_children}",
             )
@@ -1062,7 +1062,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"LayerLog {layer_log.layer_label}.conditional_elif_children="
+                f"Layer {layer_log.layer_label}.conditional_elif_children="
                 f"{layer_log.conditional_elif_children} != expected projection "
                 f"{expected_elif_children}",
             )
@@ -1070,7 +1070,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"LayerLog {layer_log.layer_label}.conditional_else_children="
+                f"Layer {layer_log.layer_label}.conditional_else_children="
                 f"{layer_log.conditional_else_children} != expected projection "
                 f"{expected_else_children}",
             )
@@ -1111,7 +1111,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     _fail_conditional_invariant(
                         name,
                         3,
-                        f"LayerLog {layer_log.layer_label}.{field_name} contains missing child "
+                        f"Layer {layer_log.layer_label}.{field_name} contains missing child "
                         f"label {child_label!r}",
                     )
         for elif_index, child_labels in layer_log.conditional_elif_children.items():
@@ -1120,7 +1120,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     _fail_conditional_invariant(
                         name,
                         3,
-                        f"LayerLog {layer_log.layer_label}.conditional_elif_children[{elif_index}] "
+                        f"Layer {layer_log.layer_label}.conditional_elif_children[{elif_index}] "
                         f"contains missing child label {child_label!r}",
                     )
 
@@ -1265,7 +1265,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"{bool_label}.terminal_conditional_id={bool_layer.terminal_conditional_id}",
                 )
 
-    # Invariant 9: LayerLog conditional aggregate views match pass-level data.
+    # Invariant 9: Layer conditional aggregate views match pass-level data.
     for layer_log in ml.layer_logs.values():
         expected_stack_order: list[list[tuple[int, str]]] = []
         expected_stack_ops: dict[tuple[tuple[int, str], ...], list[int]] = {}
@@ -1281,14 +1281,14 @@ def _check_conditional_invariants(ml: "Trace") -> None:
             _fail_conditional_invariant(
                 name,
                 9,
-                f"LayerLog {layer_log.layer_label}.conditional_role_stacks="
+                f"Layer {layer_log.layer_label}.conditional_role_stacks="
                 f"{layer_log.conditional_role_stacks} != expected {expected_stack_order}",
             )
         if layer_log.conditional_branch_stack_ops != expected_stack_ops:
             _fail_conditional_invariant(
                 name,
                 9,
-                f"LayerLog {layer_log.layer_label}.conditional_branch_stack_ops="
+                f"Layer {layer_log.layer_label}.conditional_branch_stack_ops="
                 f"{layer_log.conditional_branch_stack_ops} != expected "
                 f"{expected_stack_ops}",
             )
@@ -1352,14 +1352,14 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{layer.layer_label} still has transient _bool_conditional_key attribute",
             )
 
-    # Invariant 12: LayerLog conditional_arm_children is the exact pass union.
+    # Invariant 12: Layer conditional_arm_children is the exact pass union.
     for layer_log in ml.layer_logs.values():
         expected_children_by_cond = _expected_layer_log_child_union(layer_log)
         if layer_log.conditional_arm_children != expected_children_by_cond:
             _fail_conditional_invariant(
                 name,
                 12,
-                f"LayerLog {layer_log.layer_label}.conditional_arm_children="
+                f"Layer {layer_log.layer_label}.conditional_arm_children="
                 f"{layer_log.conditional_arm_children} != expected pass union "
                 f"{expected_children_by_cond}",
             )
@@ -1393,19 +1393,19 @@ def _check_conditional_invariants(ml: "Trace") -> None:
 
 
 # ---------------------------------------------------------------------------
-# G. OpLog ↔ LayerLog cross-references
+# G. Op ↔ Layer cross-references
 # ---------------------------------------------------------------------------
 
 
 def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
-    """Check G: OpLog <-> LayerLog cross-references.
+    """Check G: Op <-> Layer cross-references.
 
     Validates:
-    - LayerLog key matches its layer_label.
+    - Layer key matches its layer_label.
     - ops dict keys are contiguous {1..N}.
-    - Each OpLog's call_index matches its dict key.
-    - Each OpLog's layer_label_no_pass matches the parent LayerLog's label.
-    - parent_layer_log back-pointer is identity-equal to the LayerLog.
+    - Each Op's call_index matches its dict key.
+    - Each Op's layer_label_no_pass matches the parent Layer's label.
+    - parent_layer_log back-pointer is identity-equal to the Layer.
     """
     name = "layer_pass_layer_log_xrefs"
 
@@ -1413,7 +1413,7 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
         if ll.layer_label != ll_label:
             raise MetadataInvariantError(
                 name,
-                f"LayerLog key '{ll_label}' != LayerLog.layer_label='{ll.layer_label}'",
+                f"Layer key '{ll_label}' != Layer.layer_label='{ll.layer_label}'",
             )
 
         expected_keys = set(range(1, ll.num_calls + 1))
@@ -1421,27 +1421,27 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
         if actual_keys != expected_keys:
             raise MetadataInvariantError(
                 name,
-                f"LayerLog '{ll_label}' ops keys={actual_keys} != expected {expected_keys}",
+                f"Layer '{ll_label}' ops keys={actual_keys} != expected {expected_keys}",
             )
 
         for call_index, lpl in ll.ops.items():
             if lpl.call_index != call_index:
                 raise MetadataInvariantError(
                     name,
-                    f"LayerLog '{ll_label}' pass key={call_index} but OpLog.call_index={lpl.call_index}",
+                    f"Layer '{ll_label}' pass key={call_index} but Op.call_index={lpl.call_index}",
                 )
             if lpl.layer_label_no_pass != ll.layer_label:
                 raise MetadataInvariantError(
                     name,
-                    f"OpLog '{lpl.layer_label}' layer_label_no_pass="
+                    f"Op '{lpl.layer_label}' layer_label_no_pass="
                     f"'{lpl.layer_label_no_pass}' != "
-                    f"parent LayerLog.layer_label='{ll.layer_label}'",
+                    f"parent Layer.layer_label='{ll.layer_label}'",
                 )
             if lpl.parent_layer_log is not ll:
                 raise MetadataInvariantError(
                     name,
-                    f"OpLog '{lpl.layer_label}' parent_layer_log "
-                    f"does not point to its LayerLog '{ll_label}'",
+                    f"Op '{lpl.layer_label}' parent_layer_log "
+                    f"does not point to its Layer '{ll_label}'",
                 )
 
 
@@ -1454,8 +1454,8 @@ def _check_module_layer_containment(ml: "Trace") -> None:
     """Check H: Module <-> Layer containment consistency.
 
     Validates forward and reverse directions:
-    - Forward: ModuleLog.layers labels exist in layer_logs; num_layers matches.
-      ModuleCallLog.layers labels exist; input/output_layers subset of layers.
+    - Forward: Module.layers labels exist in layer_logs; num_layers matches.
+      ModuleCall.layers labels exist; input/output_layers subset of layers.
     - Reverse: each layer's module points to a valid module
       that lists the layer in its layers.
     """
@@ -1467,22 +1467,22 @@ def _check_module_layer_containment(ml: "Trace") -> None:
     for mod_log in mod_accessor:
         addr = mod_log.address
 
-        # ModuleLog.layers labels exist in layer_logs
+        # Module.layers labels exist in layer_logs
         for lbl in mod_log.layers:
             if lbl not in ml.layer_logs:
                 raise MetadataInvariantError(
                     name,
-                    f"ModuleLog '{addr}' layers contains '{lbl}' not in trace.layer_logs",
+                    f"Module '{addr}' layers contains '{lbl}' not in trace.layer_logs",
                 )
 
         if mod_log.num_layers != len(mod_log.layers):
             raise MetadataInvariantError(
                 name,
-                f"ModuleLog '{addr}': num_layers={mod_log.num_layers} != "
+                f"Module '{addr}': num_layers={mod_log.num_layers} != "
                 f"len(layers)={len(mod_log.layers)}",
             )
 
-        # ModuleCallLog checks
+        # ModuleCall checks
         # mpl.layers may contain pass-qualified labels OR no-pass labels
         # (e.g., root module in recurrent models uses no-pass labels).
         for call_index, mpl in mod_log.ops.items():
@@ -1490,14 +1490,14 @@ def _check_module_layer_containment(ml: "Trace") -> None:
                 if lbl not in label_set and lbl not in no_pass_set:
                     raise MetadataInvariantError(
                         name,
-                        f"ModuleCallLog '{addr}:{call_index}' layers contains "
+                        f"ModuleCall '{addr}:{call_index}' layers contains "
                         f"'{lbl}' not in layer_labels or layer_labels",
                     )
 
             if mpl.num_layers != len(mpl.layers):
                 raise MetadataInvariantError(
                     name,
-                    f"ModuleCallLog '{addr}:{call_index}': "
+                    f"ModuleCall '{addr}:{call_index}': "
                     f"num_layers={mpl.num_layers} != len(layers)={len(mpl.layers)}",
                 )
 
@@ -1512,7 +1512,7 @@ def _check_module_layer_containment(ml: "Trace") -> None:
                 if extra:
                     raise MetadataInvariantError(
                         name,
-                        f"ModuleCallLog '{addr}:{call_index}' "
+                        f"ModuleCall '{addr}:{call_index}' "
                         f"{sub_attr} has labels not in layers: {extra}",
                     )
 
@@ -1534,7 +1534,7 @@ def _check_module_layer_containment(ml: "Trace") -> None:
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{lpl.layer_label}' (no_pass='{lpl.layer_label_no_pass}') "
-                    f"not in ModuleLog '{cmo_addr}'.layers",
+                    f"not in Module '{cmo_addr}'.layers",
                 )
 
 
@@ -1570,40 +1570,40 @@ def _check_module_hierarchy(ml: "Trace") -> None:
         # Address hierarchy bidirectional
         if mod_log.address_parent is not None:
             try:
-                parent: ModuleLog = mod_accessor[mod_log.address_parent]  # type: ignore[assignment]
+                parent: Module = mod_accessor[mod_log.address_parent]  # type: ignore[assignment]
             except (KeyError, IndexError):
                 # Parent module may be a container (ModuleList, ModuleDict)
                 # that is never called during the forward pass, so no
-                # ModuleLog exists.  Skip rather than error.
+                # Module exists.  Skip rather than error.
                 parent = None  # type: ignore[assignment]
             if parent is not None and addr not in parent.address_children:
                 # For shared modules, addr may be an alias that the parent
                 # lists under a different address prefix.  Check if any of the
-                # parent's address_children resolve to the same ModuleLog.
+                # parent's address_children resolve to the same Module.
                 if not mod_log.has_multiple_addresses:
                     raise MetadataInvariantError(
                         name,
-                        f"ModuleLog '{addr}' has address_parent='{mod_log.address_parent}' "
+                        f"Module '{addr}' has address_parent='{mod_log.address_parent}' "
                         f"but parent doesn't list it in address_children",
                     )
 
         for child_addr in mod_log.address_children:
             try:
-                child: ModuleLog = mod_accessor[child_addr]  # type: ignore[assignment]
+                child: Module = mod_accessor[child_addr]  # type: ignore[assignment]
             except (KeyError, IndexError):
                 # Static children may not have been invoked during the forward
-                # pass, so no ModuleLog exists.  Skip rather than error.
+                # pass, so no Module exists.  Skip rather than error.
                 continue
             if child.address_parent != addr:
                 # For shared modules (same nn.Module registered under multiple
                 # addresses), the child's address_parent refers to its primary
                 # alias's parent, which may differ from the current parent addr.
-                # This is expected — there is only one ModuleLog per module
+                # This is expected — there is only one Module per module
                 # instance, so address_parent always reflects the primary path.
                 if not child.has_multiple_addresses:
                     raise MetadataInvariantError(
                         name,
-                        f"ModuleLog '{addr}' lists '{child_addr}' as address_child, "
+                        f"Module '{addr}' lists '{child_addr}' as address_child, "
                         f"but child's address_parent='{child.address_parent}'",
                     )
 
@@ -1611,7 +1611,7 @@ def _check_module_hierarchy(ml: "Trace") -> None:
         if len(mod_log.ops) != mod_log.num_calls:
             raise MetadataInvariantError(
                 name,
-                f"ModuleLog '{addr}': len(ops)={len(mod_log.ops)} != num_calls={mod_log.num_calls}",
+                f"Module '{addr}': len(ops)={len(mod_log.ops)} != num_calls={mod_log.num_calls}",
             )
 
         expected_keys = set(range(1, mod_log.num_calls + 1))
@@ -1619,7 +1619,7 @@ def _check_module_hierarchy(ml: "Trace") -> None:
         if actual_keys != expected_keys:
             raise MetadataInvariantError(
                 name,
-                f"ModuleLog '{addr}' pass keys={actual_keys} != expected {expected_keys}",
+                f"Module '{addr}' pass keys={actual_keys} != expected {expected_keys}",
             )
 
         # Call hierarchy: parent exists
@@ -1630,7 +1630,7 @@ def _check_module_hierarchy(ml: "Trace") -> None:
                 except (KeyError, IndexError):
                     raise MetadataInvariantError(
                         name,
-                        f"ModuleCallLog '{addr}:{call_index}' call_parent="
+                        f"ModuleCall '{addr}:{call_index}' call_parent="
                         f"'{mpl.call_parent}' not in module accessor",
                     )
             for cc in mpl.call_children:
@@ -1639,7 +1639,7 @@ def _check_module_hierarchy(ml: "Trace") -> None:
                 except (KeyError, IndexError):
                     raise MetadataInvariantError(
                         name,
-                        f"ModuleCallLog '{addr}:{call_index}' call_children "
+                        f"ModuleCall '{addr}:{call_index}' call_children "
                         f"contains '{cc}' not in module accessor",
                     )
 
@@ -1653,7 +1653,7 @@ def _check_param_xrefs(ml: "Trace") -> None:
     """Check J: Param <-> Layer <-> Module cross-references.
 
     Validates:
-    - ParamLog.used_by_layers labels are valid layer labels.
+    - Param.used_by_layers labels are valid layer labels.
     - uses_params == True implies _param_logs is non-empty.
     - layers_with_params values are valid layer labels.
     """
@@ -1667,8 +1667,7 @@ def _check_param_xrefs(ml: "Trace") -> None:
             if lbl not in label_set:
                 raise MetadataInvariantError(
                     name,
-                    f"ParamLog '{param.address}' used_by_layers contains "
-                    f"'{lbl}' not in layer_labels",
+                    f"Param '{param.address}' used_by_layers contains '{lbl}' not in layer_labels",
                 )
 
         # address exists (skip for conditional models where the module
@@ -1703,11 +1702,11 @@ def _check_param_xrefs(ml: "Trace") -> None:
 
 
 def _check_buffer_xrefs(ml: "Trace") -> None:
-    """Check K: buffer layer and BufferLog cross-references.
+    """Check K: buffer layer and Buffer cross-references.
 
     Validates:
     - buffer_layers list entries are valid layer labels.
-    - BufferLog objects have non-empty buffer_address and valid address.
+    - Buffer objects have non-empty buffer_address and valid address.
     """
     name = "buffer_xrefs"
     label_set = set(ml.layer_labels)
@@ -1718,13 +1717,13 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
                 name, f"buffer_layers contains '{lbl}' not in layer_labels"
             )
 
-    # Check BufferLog objects via buffer accessor
+    # Check Buffer objects via buffer accessor
     if hasattr(ml, "_buffer_accessor") and ml._buffer_accessor is not None:
         for buf in ml.buffers:
             if not buf.buffer_address:
                 raise MetadataInvariantError(
                     name,
-                    f"BufferLog '{buf.layer_label}' has empty buffer_address",
+                    f"Buffer '{buf.layer_label}' has empty buffer_address",
                 )
             # address references a valid module or an ancestor does.
             # Buffers may live on modules that were never entered during the
@@ -1740,7 +1739,7 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
             if not found_ancestor and "" not in ml.modules:
                 raise MetadataInvariantError(
                     name,
-                    f"BufferLog '{buf.layer_label}' address="
+                    f"Buffer '{buf.layer_label}' address="
                     f"'{buf.address}' — no ancestor found in "
                     f"module accessor",
                 )
@@ -1999,7 +1998,7 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
     # same output-specific equivalence class must share layer_label_no_pass. The
     # equivalence class keeps distinct outputs of a multi-output parameterized op
     # from being collapsed into one logical layer.
-    param_groups: dict[tuple[str, tuple[str, ...], str], list[OpLog]] = defaultdict(list)
+    param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
     for lpl in ml.layer_list:
         if lpl.uses_params and lpl._param_barcodes:
             key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.equivalence_class)
@@ -2240,7 +2239,7 @@ def _check_module_containment_logic(ml: "Trace") -> None:
                 )
             visited.add(current)
             try:
-                parent_mod: ModuleLog = mod_accessor[current]  # type: ignore[assignment]
+                parent_mod: Module = mod_accessor[current]  # type: ignore[assignment]
             except (KeyError, IndexError):
                 break
             current = parent_mod.address_parent
@@ -2257,7 +2256,7 @@ def _check_module_containment_logic(ml: "Trace") -> None:
             if mod_log.address_depth != expected_depth:
                 raise MetadataInvariantError(
                     name,
-                    f"ModuleLog '{addr}': address_depth={mod_log.address_depth} "
+                    f"Module '{addr}': address_depth={mod_log.address_depth} "
                     f"!= expected {expected_depth} (addr.count('.')+1)",
                 )
 

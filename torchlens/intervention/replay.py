@@ -45,7 +45,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op_log import OpLog
+    from ..data_classes.op_log import Op
     from ..data_classes.model_log import Trace
     from .selectors import SelectorLike
 
@@ -93,7 +93,7 @@ def replay(
 
 def replay_from(
     log: "Trace",
-    site: "SelectorLike | str | OpLog",
+    site: "SelectorLike | str | Op",
     *,
     strict: bool | MissingType = MISSING,
     replay: ReplayOptions | None = None,
@@ -127,7 +127,7 @@ def replay_from(
     )
 
 
-def cone_of_effect(trace: "Trace", origins: Iterable["OpLog"]) -> list["OpLog"]:
+def cone_of_effect(trace: "Trace", origins: Iterable["Op"]) -> list["Op"]:
     """Return downstream cone in topological order.
 
     Parameters
@@ -139,7 +139,7 @@ def cone_of_effect(trace: "Trace", origins: Iterable["OpLog"]) -> list["OpLog"]:
 
     Returns
     -------
-    list[OpLog]
+    list[Op]
         Origin and downstream sites in execution order, with call-group
         siblings included.
     """
@@ -181,7 +181,7 @@ def cone_of_effect(trace: "Trace", origins: Iterable["OpLog"]) -> list["OpLog"]:
 
 def _run_replay(
     log: "Trace",
-    origins: Sequence["OpLog"],
+    origins: Sequence["Op"],
     *,
     hook_entries: Sequence[NormalizedHookEntry],
     strict: bool,
@@ -305,7 +305,7 @@ def _warn_if_direct_writes_will_be_overlaid(log: "Trace") -> None:
         return
     warnings.warn(
         "DirectActivationWriteWarning: replay/rerun propagation uses the intervention "
-        "recipe and may overlay direct OpLog out writes.",
+        "recipe and may overlay direct Op out writes.",
         DirectActivationWriteWarning,
         stacklevel=3,
     )
@@ -314,7 +314,7 @@ def _warn_if_direct_writes_will_be_overlaid(log: "Trace") -> None:
 
 def _reconstruct_args_from_template(
     template: CapturedArgTemplate,
-    pass_log: "OpLog",
+    pass_log: "Op",
     trace: "Trace",
     overlay: dict[str, torch.Tensor],
     *,
@@ -380,7 +380,7 @@ def _slice_output_by_path(output: Any, path: tuple[OutputPathComponent, ...]) ->
 
 def _resolve_arg_component(
     component: Any,
-    pass_log: "OpLog",
+    pass_log: "Op",
     trace: "Trace",
     overlay: dict[str, torch.Tensor],
     *,
@@ -449,7 +449,7 @@ def _resolve_arg_component(
 
 
 def _execute_replay_func_strict(
-    site: "OpLog",
+    site: "Op",
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> Any:
@@ -484,7 +484,7 @@ def _execute_replay_func_strict(
 def _apply_replay_hooks(
     out: torch.Tensor,
     *,
-    site: "OpLog",
+    site: "Op",
     hook_entries: Sequence[NormalizedHookEntry],
     run_ctx: dict[str, Any],
 ) -> tuple[torch.Tensor, list[FireRecord]]:
@@ -572,7 +572,7 @@ def _commit_replay_updates(
         raise
 
 
-def _apply_out_update(site: "OpLog", tensor: torch.Tensor) -> None:
+def _apply_out_update(site: "Op", tensor: torch.Tensor) -> None:
     """Replace a site out and refresh saved tensor metadata.
 
     Parameters
@@ -605,7 +605,7 @@ def _preflight_log(log: "Trace") -> None:
         raise ReplayPreconditionError("replay requires intervention_ready=True capture metadata")
 
 
-def _preflight_group(group: Sequence["OpLog"]) -> None:
+def _preflight_group(group: Sequence["Op"]) -> None:
     """Validate replay preconditions for one function-call group.
 
     Parameters
@@ -620,7 +620,7 @@ def _preflight_group(group: Sequence["OpLog"]) -> None:
         _template_for_site(site)
 
 
-def _template_for_site(site: "OpLog") -> CapturedArgTemplate:
+def _template_for_site(site: "Op") -> CapturedArgTemplate:
     """Return a site's captured argument template or raise.
 
     Parameters
@@ -641,7 +641,7 @@ def _template_for_site(site: "OpLog") -> CapturedArgTemplate:
     return template
 
 
-def _raise_on_unsupported_template(site: "OpLog", template: CapturedArgTemplate) -> None:
+def _raise_on_unsupported_template(site: "Op", template: CapturedArgTemplate) -> None:
     """Reject unsupported leaves in a captured template.
 
     Parameters
@@ -715,7 +715,7 @@ def _origin_sites_for_hooks(
     hook_entries: Sequence[NormalizedHookEntry],
     *,
     strict: bool,
-) -> list["OpLog"]:
+) -> list["Op"]:
     """Resolve origin sites for replay hooks.
 
     Parameters
@@ -729,7 +729,7 @@ def _origin_sites_for_hooks(
 
     Returns
     -------
-    list[OpLog]
+    list[Op]
         Unique hook target sites in execution order.
     """
 
@@ -779,7 +779,7 @@ def _resolve_single_origin(
     site: Any,
     *,
     strict: bool,
-) -> "OpLog":
+) -> "Op":
     """Resolve one replay_from origin.
 
     Parameters
@@ -793,16 +793,16 @@ def _resolve_single_origin(
 
     Returns
     -------
-    OpLog
+    Op
         Single origin site.
     """
 
     if hasattr(site, "layer_label") and hasattr(site, "out"):
-        return cast("OpLog", site)
-    return cast("OpLog", log.resolve_sites(site, strict=strict, max_fanout=1).first())
+        return cast("Op", site)
+    return cast("Op", log.resolve_sites(site, strict=strict, max_fanout=1).first())
 
 
-def _func_call_groups(log: "Trace") -> dict[int | None, tuple["OpLog", ...]]:
+def _func_call_groups(log: "Trace") -> dict[int | None, tuple["Op", ...]]:
     """Return function-call groups in topological order.
 
     Parameters
@@ -812,21 +812,21 @@ def _func_call_groups(log: "Trace") -> dict[int | None, tuple["OpLog", ...]]:
 
     Returns
     -------
-    dict[int | None, tuple[OpLog, ...]]
+    dict[int | None, tuple[Op, ...]]
         Sites grouped by ``func_call_id``.
     """
 
-    groups: dict[int | None, list["OpLog"]] = {}
+    groups: dict[int | None, list["Op"]] = {}
     for layer in log.layer_list:
         groups.setdefault(layer.func_call_id, []).append(layer)
     return {call_id: tuple(layers) for call_id, layers in groups.items()}
 
 
 def _group_for_site(
-    site: "OpLog",
-    call_groups: Mapping[int | None, Sequence["OpLog"]],
-    cone: Sequence["OpLog"],
-) -> tuple["OpLog", ...]:
+    site: "Op",
+    call_groups: Mapping[int | None, Sequence["Op"]],
+    cone: Sequence["Op"],
+) -> tuple["Op", ...]:
     """Return same-call group members for a site.
 
     Parameters
@@ -840,7 +840,7 @@ def _group_for_site(
 
     Returns
     -------
-    tuple[OpLog, ...]
+    tuple[Op, ...]
         Same-call members in topological order.
     """
 
@@ -854,7 +854,7 @@ def _group_for_site(
     )
 
 
-def _child_labels(site: "OpLog") -> tuple[str, ...]:
+def _child_labels(site: "Op") -> tuple[str, ...]:
     """Return child labels from edge and tensor-version metadata.
 
     Parameters
@@ -947,7 +947,7 @@ def _final_label_for_ref(log: "Trace", label: str) -> str:
 
 
 def _warn_if_unexpected_parent(
-    pass_log: "OpLog",
+    pass_log: "Op",
     parent_label: str,
     *,
     strict: bool,
@@ -975,7 +975,7 @@ def _warn_if_unexpected_parent(
     warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
 
 
-def _check_edge_expectations(site: "OpLog", *, strict: bool) -> None:
+def _check_edge_expectations(site: "Op", *, strict: bool) -> None:
     """Check lightweight saved edge consistency after replaying a site.
 
     Parameters
@@ -994,7 +994,7 @@ def _check_edge_expectations(site: "OpLog", *, strict: bool) -> None:
         warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
 
 
-def _is_inplace_none_return(site: "OpLog") -> bool:
+def _is_inplace_none_return(site: "Op") -> bool:
     """Return whether a None return should be treated as mutated arg zero.
 
     Parameters
@@ -1050,7 +1050,7 @@ def _hook_name(entry: NormalizedHookEntry) -> str:
     return getattr(entry.normalized_callable, "__qualname__", "user_hook")
 
 
-def _replay_fire_record(entry: NormalizedHookEntry, site: "OpLog") -> FireRecord:
+def _replay_fire_record(entry: NormalizedHookEntry, site: "Op") -> FireRecord:
     """Build a replay fire record.
 
     Parameters

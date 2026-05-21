@@ -2,10 +2,10 @@
 
 This module provides the helper stack behind Trace cleanup operations:
 
-1. **cleanup()** — full teardown: deletes all OpLog attributes, then
+1. **cleanup()** — full teardown: deletes all Op attributes, then
    deletes all Trace attributes (both FIELD_ORDER and internal containers).
-   Breaks circular references (Trace <-> OpLog.source_trace,
-   LayerLog <-> OpLog.parent_layer_log, ModuleLog <-> _source_trace).
+   Breaks circular references (Trace <-> Op.source_trace,
+   Layer <-> Op.parent_layer_log, Module <-> _source_trace).
    Also frees GPU memory via ``torch.cuda.empty_cache()`` when CUDA is
    available (gated to avoid CUDA driver probe cost on CPU-only runs).
 
@@ -28,7 +28,7 @@ from ..constants import MODEL_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef, Unsupported
 from ..utils.collections import remove_entry_from_list
 from ..utils.tensor_utils import _is_cuda_available
-from .op_log import OpLog
+from .op_log import Op
 
 if TYPE_CHECKING:
     from .model_log import Trace
@@ -46,8 +46,8 @@ def cleanup(self: "Trace") -> None:
     if hasattr(self, "param_logs"):
         for pl in self.param_logs:
             pl.release_param_ref()
-    # First, clear all attributes from each OpLog entry.
-    # This breaks the OpLog -> Trace circular reference
+    # First, clear all attributes from each Op entry.
+    # This breaks the Op -> Trace circular reference
     # (via source_trace) without needing per-entry reference removal.
     for tensor_log_entry in self:
         _clear_entry_attributes(tensor_log_entry)
@@ -56,7 +56,7 @@ def cleanup(self: "Trace") -> None:
         if hasattr(self, attr):
             delattr(self, attr)
     # GC-5/GC-12: Also clear internal containers not in MODEL_LOG_FIELD_ORDER.
-    # These hold back-references (e.g. _module_logs -> ModuleLog -> _source_trace)
+    # These hold back-references (e.g. _module_logs -> Module -> _source_trace)
     # and large data structures (layer_logs, layer_dict_all_keys).
     for attr in [
         "_raw_layer_dict",
@@ -85,8 +85,8 @@ def cleanup(self: "Trace") -> None:
         torch.cuda.empty_cache()
 
 
-def _clear_entry_attributes(log_entry: OpLog) -> None:
-    """Clear all instance attributes from a OpLog entry."""
+def _clear_entry_attributes(log_entry: Op) -> None:
+    """Clear all instance attributes from a Op entry."""
     if hasattr(log_entry, "out_ref"):
         log_entry.out_ref = None
     if hasattr(log_entry, "grad_ref"):
@@ -107,7 +107,7 @@ def _strip_pass_suffix(layer_label: str) -> str:
     return layer_label.split(":", 1)[0]
 
 
-def _label_for_reference_removal(log_entry: OpLog, pass_finished: bool) -> str:
+def _label_for_reference_removal(log_entry: Op, pass_finished: bool) -> str:
     """Return the label namespace currently used by graph-level references.
 
     Parameters
@@ -228,10 +228,10 @@ def _filter_conditional_edge_call_indices(
 
 
 def _scrub_layer_entry_conditional_fields(
-    layer_entry: OpLog,
+    layer_entry: Op,
     labels_to_remove: Set[str],
 ) -> None:
-    """Remove deleted labels from conditional fields on a surviving OpLog.
+    """Remove deleted labels from conditional fields on a surviving Op.
 
     Args:
         layer_entry: Surviving layer entry to scrub.
@@ -263,7 +263,7 @@ def _scrub_layer_entry_conditional_fields(
 
 
 def _scrub_layer_log_conditional_fields(self: "Trace", labels_to_remove_no_pass: Set[str]) -> None:
-    """Remove deleted labels from aggregate LayerLog conditional fields.
+    """Remove deleted labels from aggregate Layer conditional fields.
 
     Args:
         self: Trace owning the LayerLogs.
@@ -298,7 +298,7 @@ def _scrub_layer_log_conditional_fields(self: "Trace", labels_to_remove_no_pass:
 def _scrub_conditional_fields_after_removal(
     self: "Trace",
     labels_to_remove: Set[str],
-    surviving_entries: Iterable[OpLog],
+    surviving_entries: Iterable[Op],
 ) -> None:
     """Scrub conditional references after one or more layer labels are removed.
 
@@ -306,7 +306,7 @@ def _scrub_conditional_fields_after_removal(
         self: Trace being updated.
         labels_to_remove: Removed layer labels using the same qualification as the
             current removal pass.
-        surviving_entries: Surviving OpLog entries to scrub in-place.
+        surviving_entries: Surviving Op entries to scrub in-place.
     """
     labels_to_remove_no_pass = {_strip_pass_suffix(layer_label) for layer_label in labels_to_remove}
 
@@ -336,7 +336,7 @@ def _scrub_conditional_fields_after_removal(
 def _scrub_intervention_fields_after_removal(
     self: Any,
     labels_to_remove: Set[str],
-    surviving_entries: Iterable[OpLog],
+    surviving_entries: Iterable[Op],
 ) -> None:
     """Scrub replay/intervention metadata that carries layer labels.
 
@@ -467,7 +467,7 @@ _LIST_FIELDS_TO_CLEAN = [
 
 
 def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
-    """Removes all references to a single OpLog from the Trace's list/dict fields.
+    """Removes all references to a single Op from the Trace's list/dict fields.
 
     This is the single-entry counterpart to the reference-cleaning logic in
     ``_batch_remove_log_entries``. Both must clean the same set of fields —

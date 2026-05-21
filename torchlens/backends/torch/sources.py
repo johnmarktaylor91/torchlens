@@ -1,7 +1,7 @@
 """Functions for logging source tensors (inputs and buffers) during model tracing.
 
 Source tensors are the starting points of the computational graph: model inputs
-and module buffers.  This module handles creating OpLog entries for these
+and module buffers.  This module handles creating Op entries for these
 tensors in both exhaustive and fast logging modes.
 
 Source tensors differ from function-output tensors in several ways:
@@ -12,7 +12,7 @@ Source tensors differ from function-output tensors in several ways:
   - Buffer labels follow ``"buffer_{N}_raw"``; input labels follow ``"input_{N}_raw"``.
   - Buffers may carry ``_tl.buffer_parent`` metadata (set during model prep)
     identifying the module that owns them.
-  - Buffer entries are instantiated as ``BufferLog`` (a OpLog subclass
+  - Buffer entries are instantiated as ``Buffer`` (a Op subclass
     that adds ``name`` and ``address`` fields).
 
 The ``equivalence_class`` for inputs encodes shape+dtype (so inputs
@@ -32,8 +32,8 @@ from ..._errors import TorchLensPostfuncError
 from ...fastlog._halt import HaltSignal
 from ._tl import get_tensor_meta, set_tensor_label
 from ..._training_validation import TrainingModeConfigError
-from ...data_classes.buffer_log import BufferLog
-from ...data_classes.op_log import OpLog
+from ...data_classes.buffer_log import Buffer
+from ...data_classes.op_log import Op
 from . import module_stack as _mstack
 from ...capture.predicates import _evaluate_keep_op
 from ...capture.projections import (
@@ -441,7 +441,7 @@ def log_source_tensor_exhaustive(
     # Imported here (not at module level) to avoid circular imports.
     from .ops import _make_layer_log_entry
 
-    # Creates a BufferLog if is_buffer=True, else OpLog.
+    # Creates a Buffer if is_buffer=True, else Op.
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.out_postfunc)
 
     # Tag the live tensor so downstream operations can find this tensor's label.

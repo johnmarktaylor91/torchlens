@@ -1,4 +1,4 @@
-"""Comprehensive metadata field testing for Trace and OpLog.
+"""Comprehensive metadata field testing for Trace and Op.
 
 Uses small/fast models from example_models.py to verify that all key metadata
 fields are populated correctly across different model types.
@@ -120,7 +120,7 @@ def test_param_info_fields(small_input):
 def test_module_info_fields(small_input):
     model = example_models.NestedModules()
     mh = trace_fn(model, small_input)
-    # Module info is now accessed via structured ModuleLog objects
+    # Module info is now accessed via structured Module objects
     assert len(mh.modules) > 1
     root = mh.modules["self"]
     assert root.address == "self"
@@ -175,7 +175,7 @@ def test_equivalent_ops(input_2d):
 
 
 # =============================================================================
-# OpLog fields
+# Op fields
 # =============================================================================
 
 
@@ -763,7 +763,7 @@ def test_flops_coverage_on_model():
 
 
 def test_module_training_modes_populated(small_input):
-    """ModuleLog.is_train_mode should capture the training flag."""
+    """Module.is_train_mode should capture the training flag."""
     model = example_models.SimpleFF()
     model.train()
     mh = trace_fn(model, small_input)

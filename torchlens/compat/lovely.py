@@ -14,7 +14,7 @@ def _tensor_from(obj: Any) -> torch.Tensor:
     Parameters
     ----------
     obj:
-        Tensor, ``LayerLog``, or ``OpLog``.
+        Tensor, ``Layer``, or ``Op``.
 
     Returns
     -------

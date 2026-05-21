@@ -36,7 +36,7 @@ Predicate = Callable[[RecordContext], CaptureDecision]
 
 
 def _module_stack_from_layer(op_log: Any) -> tuple[ModuleStackFrame, ...]:
-    """Build a synthetic module stack from a ``OpLog``.
+    """Build a synthetic module stack from a ``Op``.
 
     Parameters
     ----------

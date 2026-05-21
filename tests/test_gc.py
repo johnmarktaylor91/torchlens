@@ -1,6 +1,6 @@
 """GC and memory leak tests for TorchLens.
 
-Verifies that Trace, OpLog, ParamLog, and model parameters
+Verifies that Trace, Op, Param, and model parameters
 are garbage-collectible after use / cleanup.
 """
 
@@ -144,7 +144,7 @@ class TestTraceGC:
         trace.cleanup()
 
     def test_cleanup_breaks_param_ref(self):
-        """After cleanup, all ParamLog._param_ref should be None."""
+        """After cleanup, all Param._param_ref should be None."""
         model = _TwoLayerNet()
         trace = tl.trace(model, torch.randn(1, 5))
         param_logs = list(trace.param_logs)

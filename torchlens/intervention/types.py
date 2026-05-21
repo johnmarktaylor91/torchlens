@@ -785,12 +785,12 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
 
 
 def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
-    """Build the OpLog fork policy table.
+    """Build the Op fork policy table.
 
     Returns
     -------
     dict[str, ForkFieldPolicy]
-        Fork policies for OpLog fields.
+        Fork policies for Op fields.
     """
 
     from ..constants import LAYER_PASS_LOG_FIELD_ORDER

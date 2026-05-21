@@ -481,7 +481,7 @@ def _event_from_record(
     transformed_ram_payload: torch.Tensor | None = None,
     predicate_matched: bool,
 ) -> OpEvent:
-    """Build a lightweight fastlog ``OpEvent`` without materializing an OpLog."""
+    """Build a lightweight fastlog ``OpEvent`` without materializing an Op."""
 
     label_raw = ctx.raw_label or ctx.label
     tensor_ref = TensorRef(
@@ -646,7 +646,7 @@ _OPLOG_FIELDS_KNOWN_LATE = frozenset(
 
 
 class LiveOpView:
-    """Read-only OpLog-shaped adapter over a capture-time live record."""
+    """Read-only Op-shaped adapter over a capture-time live record."""
 
     __slots__ = ("_trace_ref", "_record")
 

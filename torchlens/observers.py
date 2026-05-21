@@ -107,7 +107,7 @@ class TapObserver:
         grad_output:
             Autograd grad_output tuple at the grad_fn hook, when available.
         grad_fn_log:
-            GradFnLog site whose hook fired.
+            GradFn site whose hook fired.
         call_index:
             One-based backward call index.
         run_ctx:

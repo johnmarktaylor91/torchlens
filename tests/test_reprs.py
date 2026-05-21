@@ -60,7 +60,7 @@ def test_trace_repr_html_is_informative() -> None:
 
 @pytest.mark.parametrize("method", ["auto", "heatmap", "channels", "rgb", "hist"])
 def test_layer_log_show_custom_methods_return_output(method: str) -> None:
-    """LayerLog.show accepts every Phase 3 display method."""
+    """Layer.show accepts every Phase 3 display method."""
 
     x = torch.randn(1, 3, 4, 4) if method == "rgb" else torch.randn(3, 4, 4)
     log = _log_for_input(x)
@@ -69,7 +69,7 @@ def test_layer_log_show_custom_methods_return_output(method: str) -> None:
 
 
 def test_op_log_show_returns_output() -> None:
-    """OpLog.show delegates to the tensor display helper."""
+    """Op.show delegates to the tensor display helper."""
 
     log = _log_for_input(torch.randn(8))
     output = log.layer_list[0].show(method="hist")

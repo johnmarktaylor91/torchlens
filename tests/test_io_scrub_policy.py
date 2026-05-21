@@ -6,13 +6,13 @@ import torch
 from torch import nn
 
 from torchlens import trace as trace_fn
-from torchlens.data_classes.buffer_log import BufferLog
+from torchlens.data_classes.buffer_log import Buffer
 from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import Trace
-from torchlens.data_classes.module_log import ModuleLog, ModuleCallLog
-from torchlens.data_classes.param_log import ParamLog
+from torchlens.data_classes.module_log import Module, ModuleCall
+from torchlens.data_classes.param_log import Param
 
 
 class _TinyIOModel(nn.Module):
@@ -51,12 +51,12 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
     live_log = _build_live_log()
     instances = {
         Trace: live_log,
-        OpLog: next(layer for layer in live_log.layer_list if type(layer) is OpLog),
-        LayerLog: next(iter(live_log.layer_logs.values())),
-        ModuleLog: next(iter(live_log.modules)),
-        ModuleCallLog: next(iter(live_log.modules._pass_dict.values())),
-        ParamLog: next(iter(live_log.param_logs)),
-        BufferLog: next(layer for layer in live_log.layer_list if isinstance(layer, BufferLog)),
+        Op: next(layer for layer in live_log.layer_list if type(layer) is Op),
+        Layer: next(iter(live_log.layer_logs.values())),
+        Module: next(iter(live_log.modules)),
+        ModuleCall: next(iter(live_log.modules._pass_dict.values())),
+        Param: next(iter(live_log.param_logs)),
+        Buffer: next(layer for layer in live_log.layer_list if isinstance(layer, Buffer)),
         FuncCallLocation: next(
             frame
             for layer in live_log.layer_list

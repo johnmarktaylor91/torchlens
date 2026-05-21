@@ -124,7 +124,7 @@ def _op_label(op: Any) -> str:
 
 
 def _op_dict(op: Any) -> dict[str, Any]:
-    """Serialize one OpLog for module-containment equality.
+    """Serialize one Op for module-containment equality.
 
     Parameters
     ----------
@@ -164,7 +164,7 @@ def _op_dict(op: Any) -> dict[str, Any]:
 
 
 def _layer_dict(layer: Any) -> dict[str, Any]:
-    """Serialize one LayerLog for module-containment equality.
+    """Serialize one Layer for module-containment equality.
 
     Parameters
     ----------
@@ -194,7 +194,7 @@ def _layer_dict(layer: Any) -> dict[str, Any]:
 
 
 def _module_dict(module: Any) -> dict[str, Any]:
-    """Serialize one ModuleLog for module-containment equality.
+    """Serialize one Module for module-containment equality.
 
     Parameters
     ----------
@@ -225,7 +225,7 @@ def _module_dict(module: Any) -> dict[str, Any]:
 
 
 def _call_dict(call: Any) -> dict[str, Any]:
-    """Serialize one ModuleCallLog for module-containment equality.
+    """Serialize one ModuleCall for module-containment equality.
 
     Parameters
     ----------

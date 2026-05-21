@@ -9,10 +9,10 @@ from torchlens.ir.events import OpEvent
 
 if TYPE_CHECKING:
     from torchlens.data_classes.model_log import Trace
-    from torchlens.data_classes.op_log import OpLog
+    from torchlens.data_classes.op_log import Op
 
 
-def materialize_log_from_fields(fields_dict: dict[str, object]) -> "OpLog":
+def materialize_log_from_fields(fields_dict: dict[str, object]) -> "Op":
     """Construct the live log object for one captured operation.
 
     Parameters
@@ -22,24 +22,24 @@ def materialize_log_from_fields(fields_dict: dict[str, object]) -> "OpLog":
 
     Returns
     -------
-    OpLog
+    Op
         Materialized operation or buffer log.
     """
 
-    from torchlens.data_classes.buffer_log import BufferLog
-    from torchlens.data_classes.op_log import OpLog
+    from torchlens.data_classes.buffer_log import Buffer
+    from torchlens.data_classes.op_log import Op
 
     pending_blob_ids = _pop_pending_blob_ids(fields_dict)
     if fields_dict.get("is_buffer"):
-        return BufferLog(fields_dict)  # type: ignore[return-value]
-    op_log = OpLog(fields_dict)  # type: ignore[arg-type]
+        return Buffer(fields_dict)  # type: ignore[return-value]
+    op_log = Op(fields_dict)  # type: ignore[arg-type]
     for field_name, blob_id in pending_blob_ids.items():
         setattr(op_log, field_name, blob_id)
     return op_log
 
 
 def _pop_pending_blob_ids(fields_dict: dict[str, object]) -> dict[str, object]:
-    """Remove streaming-only pending blob ids before OpLog construction.
+    """Remove streaming-only pending blob ids before Op construction.
 
     Parameters
     ----------
@@ -49,7 +49,7 @@ def _pop_pending_blob_ids(fields_dict: dict[str, object]) -> dict[str, object]:
     Returns
     -------
     dict[str, object]
-        Pending blob-id values keyed by OpLog attribute name.
+        Pending blob-id values keyed by Op attribute name.
     """
 
     pending_fields = (
@@ -68,7 +68,7 @@ def _pop_pending_blob_ids(fields_dict: dict[str, object]) -> dict[str, object]:
 def register_materialized_event(
     trace: "Trace",
     event: OpEvent,
-    op_log: "OpLog",
+    op_log: "Op",
     live_record: LiveOpRecord | None = None,
 ) -> None:
     """Append an event and expose its live log to in-flight hooks.
@@ -131,7 +131,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     events.op_event_by_label_raw.clear()
 
 
-def _register_raw_log(trace: "Trace", event: OpEvent, op_log: "OpLog") -> None:
+def _register_raw_log(trace: "Trace", event: OpEvent, op_log: "Op") -> None:
     """Register one live log in transient raw lookup structures.
 
     Parameters

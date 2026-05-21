@@ -35,7 +35,7 @@ _EXPECTED_ALLOWLIST = {
             "start_time",
         }
     ),
-    "OpLog": frozenset(
+    "Op": frozenset(
         {
             "bytes_peak_at_call",
             "capture_index",
@@ -454,7 +454,7 @@ def test_tensor_equal_handles_bool_int_nan_dtypes() -> None:
 
 
 def test_param_log_by_pid_populated_in_create_session_param_logs() -> None:
-    """Param pid lookup values point at real ParamLog addresses."""
+    """Param pid lookup values point at real Param addresses."""
 
     model = nn.Linear(3, 2)
     x = torch.randn(1, 3)

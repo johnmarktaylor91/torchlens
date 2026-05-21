@@ -36,8 +36,8 @@ from . import (
 )
 from ._io.bundle import load, save
 from .stats import aggregate
-from .data_classes.layer_log import LayerLog
-from .data_classes.op_log import OpLog
+from .data_classes.layer_log import Layer
+from .data_classes.op_log import Op
 from .data_classes.model_log import Trace
 from .intervention import (
     Bundle,
@@ -99,19 +99,19 @@ _REMOVED_IN = "v2.NN"
 
 _MOVED_OBJECTS = {
     "ActivationPostfunc": ("torchlens.types", "ActivationPostfunc"),
-    "BufferLog": ("torchlens.types", "BufferLog"),
+    "Buffer": ("torchlens.types", "Buffer"),
     "FuncCallLocation": ("torchlens.types", "FuncCallLocation"),
     "GradientPostfunc": ("torchlens.types", "GradientPostfunc"),
     "GradFnAccessor": ("torchlens.accessors", "GradFnAccessor"),
-    "GradFnLog": ("torchlens.types", "GradFnLog"),
-    "GradFnCallLog": ("torchlens.types", "GradFnCallLog"),
+    "GradFn": ("torchlens.types", "GradFn"),
+    "GradFnCall": ("torchlens.types", "GradFnCall"),
     "LayerAccessor": ("torchlens.accessors", "LayerAccessor"),
     "MetadataInvariantError": ("torchlens.errors", "MetadataInvariantError"),
     "ModuleAccessor": ("torchlens.accessors", "ModuleAccessor"),
-    "ModuleLog": ("torchlens.types", "ModuleLog"),
-    "ModuleCallLog": ("torchlens.types", "ModuleCallLog"),
+    "Module": ("torchlens.types", "Module"),
+    "ModuleCall": ("torchlens.types", "ModuleCall"),
     "NodeSpec": ("torchlens.experimental.dagua", "NodeSpec"),
-    "ParamLog": ("torchlens.types", "ParamLog"),
+    "Param": ("torchlens.types", "Param"),
     "RunState": ("torchlens.io", "RunState"),
     "SaveLevel": ("torchlens.types", "SaveLevel"),
     "SiteTable": ("torchlens.types", "SiteTable"),
@@ -813,8 +813,8 @@ __all__ = [
     "batched_extract",
     "validate",
     "Trace",
-    "LayerLog",
-    "OpLog",
+    "Layer",
+    "Op",
     "Bundle",
     "label",
     "func",

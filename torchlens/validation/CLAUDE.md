@@ -35,7 +35,7 @@ Legacy top-level shims for `validate_forward_pass`, `validate_backward_pass`, an
 
 ## Invariants
 `check_metadata_invariants(trace)` checks structural and semantic consistency: model-log
-self consistency, graph topology, OpLog/LayerLog fields, recurrence, branching,
+self consistency, graph topology, Op/Layer fields, recurrence, branching,
 module hierarchy, params, buffers, equivalence, ordering, distances, connectivity, and lookup
 keys. Invariants are part of the postprocess regression net.
 

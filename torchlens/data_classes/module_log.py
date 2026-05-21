@@ -1,14 +1,14 @@
-"""Structured per-module metadata: ModuleCallLog, ModuleLog, ModuleAccessor.
+"""Structured per-module metadata: ModuleCall, Module, ModuleAccessor.
 
 Three-level hierarchy:
 
-* **ModuleCallLog** -- one invocation of one module (lightweight container).
+* **ModuleCall** -- one invocation of one module (lightweight container).
   Stores ``layers`` as pass-qualified labels (e.g. ``"conv2d_1_1:1"``),
-  pointing to individual OpLog entries.
+  pointing to individual Op entries.
 
-* **ModuleLog** -- aggregate metadata for one ``nn.Module`` across all its
+* **Module** -- aggregate metadata for one ``nn.Module`` across all its
   invocations.  Stores ``layers`` as no-pass labels (e.g.
-  ``"conv2d_1_1"``), pointing to aggregate LayerLog entries.
+  ``"conv2d_1_1"``), pointing to aggregate Layer entries.
   For single-pass modules, per-pass fields are delegated to ``ops[1]``
   via ``_single_pass_or_error()``.
 
@@ -16,9 +16,9 @@ Three-level hierarchy:
   Supports lookup by module address, alias (shared modules), pass label,
   or ordinal index.
 
-ModuleLog vs ModuleCallLog label convention:
-  - ModuleLog.layers stores **no-pass** labels -> LayerLog
-  - ModuleCallLog.layers stores **pass-qualified** labels -> OpLog
+Module vs ModuleCall label convention:
+  - Module.layers stores **no-pass** labels -> Layer
+  - ModuleCall.layers stores **pass-qualified** labels -> Op
 This matches each accessor's natural granularity.
 """
 
@@ -41,13 +41,13 @@ if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .model_log import Trace
-    from .op_log import OpLog
+    from .op_log import Op
     from .param_log import ParamAccessor
     from ..intervention.types import ContainerSpec
 
 
-class ModuleCallAccessor(Accessor["ModuleCallLog"]):
-    """Scoped dict-like accessor for ModuleCallLog entries owned by a ModuleLog."""
+class ModuleCallAccessor(Accessor["ModuleCall"]):
+    """Scoped dict-like accessor for ModuleCall entries owned by a Module."""
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
@@ -55,19 +55,19 @@ class ModuleCallAccessor(Accessor["ModuleCallLog"]):
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
     }
 
-    def __init__(self, calls: Dict[int, "ModuleCallLog"] | None = None) -> None:
+    def __init__(self, calls: Dict[int, "ModuleCall"] | None = None) -> None:
         """Initialize the accessor.
 
         Parameters
         ----------
         calls:
-            Mapping from 1-based call index to ModuleCallLog.
+            Mapping from 1-based call index to ModuleCall.
         """
 
         super().__init__(calls or {})
 
-    def __getitem__(self, key: int | str) -> "ModuleCallLog":
-        """Return a ModuleCallLog by call index or call label."""
+    def __getitem__(self, key: int | str) -> "ModuleCall":
+        """Return a ModuleCall by call index or call label."""
 
         if isinstance(key, int):
             return self._dict[key]
@@ -76,13 +76,13 @@ class ModuleCallAccessor(Accessor["ModuleCallLog"]):
             return resolved
         raise KeyError(f"Module call '{key}' not found in scoped calls.")
 
-    def __setitem__(self, key: int, value: "ModuleCallLog") -> None:
-        """Set a ModuleCallLog by call index."""
+    def __setitem__(self, key: int, value: "ModuleCall") -> None:
+        """Set a ModuleCall by call index."""
 
         self._dict[key] = value
 
     def __contains__(self, key: object) -> bool:
-        """Return whether key resolves to a ModuleCallLog."""
+        """Return whether key resolves to a ModuleCall."""
 
         if isinstance(key, int):
             return key in self._dict
@@ -97,13 +97,13 @@ class ModuleCallAccessor(Accessor["ModuleCallLog"]):
 
         return iter(self._dict)
 
-    def get(self, key: int, default: "ModuleCallLog | None" = None) -> "ModuleCallLog | None":
-        """Return a ModuleCallLog by call index, or default."""
+    def get(self, key: int, default: "ModuleCall | None" = None) -> "ModuleCall | None":
+        """Return a ModuleCall by call index, or default."""
 
         return self._dict.get(key, default)
 
-    def _resolve_substring(self, key: str) -> "ModuleCallLog | None":
-        """Resolve a ModuleCallLog by exact call label."""
+    def _resolve_substring(self, key: str) -> "ModuleCall | None":
+        """Resolve a ModuleCall by exact call label."""
         for call in self._dict.values():
             if key == call.call_label:
                 return call
@@ -126,8 +126,8 @@ class HookInfo:
         return self.count > 0
 
 
-def _module_call_log_to_row(module_call_log: "ModuleCallLog") -> Dict[str, Any]:
-    """Convert a ModuleCallLog into one DataFrame row.
+def _module_call_log_to_row(module_call_log: "ModuleCall") -> Dict[str, Any]:
+    """Convert a ModuleCall into one DataFrame row.
 
     Parameters
     ----------
@@ -149,7 +149,7 @@ def _module_call_log_to_row(module_call_log: "ModuleCallLog") -> Dict[str, Any]:
     return row
 
 
-class ModuleCallLog:
+class ModuleCall:
     """Per-(module, call_index) data for one invocation of a module.
 
     Lightweight container holding the list of layers computed during
@@ -157,7 +157,7 @@ class ModuleCallLog:
     the call-graph edges (parent/children in the module invocation tree).
 
     ``layers`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
-    that resolve to individual OpLog entries.
+    that resolve to individual Op entries.
     """
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -187,7 +187,7 @@ class ModuleCallLog:
         layers: List[str],
         input_layers: List[str],
         output_layers: List[str],
-        outputs: list["OpLog"] | None = None,
+        outputs: list["Op"] | None = None,
         output_structure: "ContainerSpec | None" = None,
         forward_args: tuple[Any, ...] | None = None,
         forward_kwargs: dict[str, Any] | None = None,
@@ -340,7 +340,7 @@ class ModuleCallLog:
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
         lines = [
-            f"ModuleCallLog: {self.call_label}",
+            f"ModuleCall: {self.call_label}",
             f"  layers: {self.num_layers}",
         ]
         if self.input_layers:
@@ -461,7 +461,7 @@ class ModuleCallLog:
         self.__dict__.update(state)
 
 
-class ModuleLog:
+class Module:
     """Aggregate metadata for one nn.Module across all its invocations.
 
     The primary user-facing class for module inspection.  Provides both
@@ -469,7 +469,7 @@ class ModuleLog:
     data (layers computed, parameter usage, pass-level detail).
 
     ``layers`` stores **no-pass** labels (e.g. ``"conv2d_1_1"``),
-    pointing to aggregate LayerLog entries.  For per-pass detail, access
+    pointing to aggregate Layer entries.  For per-pass detail, access
     ``self.ops[call_index].layers`` which stores pass-qualified labels.
 
     For single-pass modules, per-pass fields (``layers``, ``input_layers``,
@@ -547,7 +547,7 @@ class ModuleLog:
         call_depth: int = 0,
         # Pass info
         num_calls: int = 1,
-        ops: Optional[Dict[int, "ModuleCallLog"]] = None,
+        ops: Optional[Dict[int, "ModuleCall"]] = None,
         call_labels: Optional[List[str]] = None,
         # Layers (aggregate)
         layers: Optional[List[str]] = None,
@@ -599,8 +599,8 @@ class ModuleLog:
         self.ops = ModuleCallAccessor(ops)
         self.call_labels = call_labels if call_labels is not None else []
 
-        # layers stores NO-PASS labels (e.g. "conv2d_1_1") -> LayerLog.
-        # Contrast with ModuleCallLog.layers which stores pass-qualified labels.
+        # layers stores NO-PASS labels (e.g. "conv2d_1_1") -> Layer.
+        # Contrast with ModuleCall.layers which stores pass-qualified labels.
         self.layers = layers if layers is not None else []
 
         from .param_log import ParamAccessor
@@ -625,7 +625,7 @@ class ModuleLog:
         self.custom_attributes = custom_attributes if custom_attributes is not None else {}
         self.custom_methods = custom_methods if custom_methods is not None else []
 
-        # Store as weakref to break circular reference (Trace -> _module_logs -> ModuleLog -> Trace).
+        # Store as weakref to break circular reference (Trace -> _module_logs -> Module -> Trace).
         self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
 
     @property
@@ -721,7 +721,7 @@ class ModuleLog:
         self.__dict__.update(state)
 
     # --- Per-call delegating properties ---
-    # Mirror the LayerLog delegation pattern: single-pass modules transparently
+    # Mirror the Layer delegation pattern: single-pass modules transparently
     # expose per-pass fields; multi-pass modules raise with guidance.
 
     def _single_pass_or_error(self, field_name: str) -> Any:
@@ -774,17 +774,17 @@ class ModuleLog:
         return labels
 
     @property
-    def outputs(self) -> list["OpLog"]:
+    def outputs(self) -> list["Op"]:
         """Aggregate output OpLogs across all module calls.
 
         Returns
         -------
-        list[OpLog]
+        list[Op]
             Output operations in source-emission order within each call and
             call-index order across calls.
         """
 
-        outputs: list["OpLog"] = []
+        outputs: list["Op"] = []
         for call in self.ops.values():
             outputs.extend(call.outputs)
         return outputs
@@ -827,8 +827,8 @@ class ModuleLog:
         """
         return cast("dict[str, Any] | None", self._single_pass_or_error("forward_kwargs"))
 
-    def _single_call_or_error(self) -> ModuleCallLog:
-        """Return the only ModuleCallLog or raise for multi-call modules."""
+    def _single_call_or_error(self) -> ModuleCall:
+        """Return the only ModuleCall or raise for multi-call modules."""
 
         if self.num_calls != 1 or 1 not in self.ops:
             raise ValueError(
@@ -941,7 +941,7 @@ class ModuleLog:
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""
         lines = [
-            f"ModuleLog: {self.address} ({self.class_name})",
+            f"Module: {self.address} ({self.class_name})",
             f"  call_depth: {self.call_depth}, address_depth: {self.address_depth}",
             f"  num_params: {self.num_params}",
             f"  num_layers: {self.num_layers}",
@@ -958,7 +958,7 @@ class ModuleLog:
         return self.num_layers
 
     def __getitem__(self, ix: int | str) -> Any:
-        """Return the OpLog at position ix within this module's layer list.
+        """Return the Op at position ix within this module's layer list.
 
         Supports int indexing and string label lookup (#120).
         """
@@ -981,7 +981,7 @@ class ModuleLog:
         return self._source_trace[self.layers[ix]]
 
     def __iter__(self) -> Iterator[Any]:
-        """Iterate over OpLog entries for all layers in this module."""
+        """Iterate over Op entries for all layers in this module."""
         if self._source_trace is None:
             return iter(self.layers)
         return iter(self._source_trace[label] for label in self.layers)
@@ -1002,12 +1002,12 @@ class ModuleLog:
         Raises
         ------
         RuntimeError
-            If this ModuleLog is not bound to a Trace.
+            If this Module is not bound to a Trace.
         """
 
         trace: Trace | None = self._source_trace
         if trace is None:
-            raise RuntimeError("ModuleLog not bound to a Trace")
+            raise RuntimeError("Module not bound to a Trace")
         return cast(str, trace.draw(module=self, **kwargs))
 
     def to_pandas(self) -> "pd.DataFrame":
@@ -1100,14 +1100,14 @@ class ModuleLog:
         self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
 
-class ModuleAccessor(Accessor["ModuleLog"]):
-    """Dict-like accessor for ModuleLog objects.
+class ModuleAccessor(Accessor["Module"]):
+    """Dict-like accessor for Module objects.
 
     Supports indexing by:
     * **module address** (str) -- e.g. ``"features.0"``, ``"self"``.
     * **alias** (str) -- for shared modules (same nn.Module registered at
-      multiple addresses), any alias resolves to the same ModuleLog.
-    * **pass label** (str) -- e.g. ``"features.0:2"`` returns a ModuleCallLog.
+      multiple addresses), any alias resolves to the same Module.
+    * **pass label** (str) -- e.g. ``"features.0:2"`` returns a ModuleCall.
     * **ordinal index** (int) -- position in address order.
 
     Available as ``trace.modules``.
@@ -1122,15 +1122,15 @@ class ModuleAccessor(Accessor["ModuleLog"]):
 
     def __init__(
         self,
-        module_dict: Dict[str, "ModuleLog"],
-        module_list: Optional[List["ModuleLog"]] = None,
-        pass_dict: Optional[Dict[str, "ModuleCallLog"]] = None,
+        module_dict: Dict[str, "Module"],
+        module_list: Optional[List["Module"]] = None,
+        pass_dict: Optional[Dict[str, "ModuleCall"]] = None,
     ) -> None:
         super().__init__(module_dict, item_list=module_list)
-        self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModuleCallLog
+        self._pass_dict = pass_dict if pass_dict is not None else {}  # pass label -> ModuleCall
         # Alias map: for shared modules (same nn.Module at multiple addresses),
-        # every non-primary address also resolves to the same ModuleLog.
-        self._alias_dict: Dict[str, "ModuleLog"] = {}
+        # every non-primary address also resolves to the same Module.
+        self._alias_dict: Dict[str, "Module"] = {}
         for ml in self._dict.values():
             for alias in ml.all_addresses:
                 if alias not in self._dict:
@@ -1138,8 +1138,8 @@ class ModuleAccessor(Accessor["ModuleLog"]):
 
     def __getitem__(  # type: ignore[override]
         self, key: Union[int, str]
-    ) -> Union["ModuleLog", "ModuleCallLog"]:
-        """Return a ModuleLog or ModuleCallLog by module-specific lookup rules."""
+    ) -> Union["Module", "ModuleCall"]:
+        """Return a Module or ModuleCall by module-specific lookup rules."""
         if key == "":
             key = "self"
         if isinstance(key, str) and key in self._alias_dict:

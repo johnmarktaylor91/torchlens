@@ -1,6 +1,6 @@
 """Human-readable formatting, print overrides, and environment detection.
 
-Formatting helpers used by the display/print paths of Trace and LayerLog,
+Formatting helpers used by the display/print paths of Trace and Layer,
 plus environment checks (Jupyter detection, parallel-processing guard).
 """
 

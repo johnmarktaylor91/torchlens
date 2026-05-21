@@ -16,8 +16,8 @@ from torchlens.constants import (
     LAYER_PASS_LOG_FIELD_ORDER,
     MODEL_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import Trace
 
 
@@ -42,7 +42,7 @@ def _fresh_log() -> Trace:
     return tl.trace(model, inputs, layers_to_save="all", random_seed=0)
 
 
-def _first_logs(trace: Trace) -> Tuple[OpLog, LayerLog]:
+def _first_logs(trace: Trace) -> Tuple[Op, Layer]:
     """Return one layer-pass log and its aggregate layer log."""
     op_log = trace.layer_list[0]
     layer_log = trace.layer_logs[op_log.layer_label_no_pass]

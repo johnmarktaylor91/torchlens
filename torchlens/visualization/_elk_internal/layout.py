@@ -235,7 +235,7 @@ def build_elk_graph_hierarchical(
     module grouping (analogous to Graphviz subgraph clusters).
 
     Args:
-        entries_to_plot: Dict of node_barcode -> OpLog/LayerLog
+        entries_to_plot: Dict of node_barcode -> Op/Layer
             (same as used by draw).
         show_buffer_layers: Whether to include buffer layers.
         edge_map: Optional skip-filtered outgoing edge map.
@@ -1014,7 +1014,7 @@ def render_elk_direct(
 
     Args:
         trace: The Trace instance.
-        entries_to_plot: Dict of node_barcode -> OpLog/LayerLog.
+        entries_to_plot: Dict of node_barcode -> Op/Layer.
         vis_mode: ``'unrolled'`` or ``'rolled'``.
         vis_call_depth: Module nesting depth for collapsed modules.
         show_buffer_layers: Whether to include buffer layers.
@@ -1560,17 +1560,17 @@ def _add_arg_label(
     Simplified version of ``rendering._label_node_arguments_if_needed`` for the
     fast ELK path.
     """
-    from ...data_classes.layer_log import LayerLog
-    from ...data_classes.op_log import OpLog
+    from ...data_classes.layer_log import Layer
+    from ...data_classes.op_log import Op
 
     # Count visible parents
     num_parents = len(child_node.parents)
     if not show_buffer_layers:
         for pl in child_node.parents:
-            if isinstance(child_node, OpLog):
+            if isinstance(child_node, Op):
                 if trace[pl].is_buffer:
                     num_parents -= 1
-            elif isinstance(child_node, LayerLog):
+            elif isinstance(child_node, Layer):
                 if trace.layer_logs[pl].is_buffer:
                     num_parents -= 1
     if num_parents <= 1:

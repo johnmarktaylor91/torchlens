@@ -20,10 +20,10 @@ from ...utils.display import format_flops, human_readable_size
 from ..._source_links import terminal_file_line_link
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_log import LayerLog
-    from ..data_classes.op_log import OpLog
+    from ..data_classes.layer_log import Layer
+    from ..data_classes.op_log import Op
     from ..data_classes.model_log import ConditionalEvent, Trace
-    from ..data_classes.module_log import ModuleLog
+    from ..data_classes.module_log import Module
 
 
 SummaryLevel = Literal[
@@ -96,8 +96,8 @@ def render_model_summary(
     columns:
         Alias for ``fields``.
     mode:
-        Operation aggregation mode. ``"rolled"`` uses ``LayerLog`` rows,
-        ``"unrolled"`` uses ``OpLog`` rows, and ``"auto"`` chooses
+        Operation aggregation mode. ``"rolled"`` uses ``Layer`` rows,
+        ``"unrolled"`` uses ``Op`` rows, and ``"auto"`` chooses
         based on recurrence.
     show_ops:
         Whether to append an operation table after the primary summary.
@@ -1260,7 +1260,7 @@ def _default_op_fields(level: str) -> List[str]:
     return ["name", "shape", "params", "parents"]
 
 
-def _iter_summary_modules(trace: "Trace") -> List["ModuleLog"]:
+def _iter_summary_modules(trace: "Trace") -> List["Module"]:
     """Return top-level module rows for summary tables.
 
     Parameters
@@ -1270,7 +1270,7 @@ def _iter_summary_modules(trace: "Trace") -> List["ModuleLog"]:
 
     Returns
     -------
-    list[ModuleLog]
+    list[Module]
         Top-level modules in accessor order.
     """
     modules = []
@@ -1282,7 +1282,7 @@ def _iter_summary_modules(trace: "Trace") -> List["ModuleLog"]:
     return modules
 
 
-def _module_overview_row(trace: "Trace", module: "ModuleLog") -> Dict[str, str]:
+def _module_overview_row(trace: "Trace", module: "Module") -> Dict[str, str]:
     """Build one overview row for a module.
 
     Parameters
@@ -1310,7 +1310,7 @@ def _module_overview_row(trace: "Trace", module: "ModuleLog") -> Dict[str, str]:
     }
 
 
-def _module_shape(trace: "Trace", module: "ModuleLog") -> str:
+def _module_shape(trace: "Trace", module: "Module") -> str:
     """Return a representative output shape for a module.
 
     Parameters
@@ -1334,7 +1334,7 @@ def _module_shape(trace: "Trace", module: "ModuleLog") -> str:
     return _shape_str(getattr(layer, "shape", None))
 
 
-def _module_parent_summary(module: "ModuleLog") -> str:
+def _module_parent_summary(module: "Module") -> str:
     """Return a short parent summary for a module row.
 
     Parameters
@@ -1352,7 +1352,7 @@ def _module_parent_summary(module: "ModuleLog") -> str:
     return str(module.address_parent)
 
 
-def _module_dtype(trace: "Trace", module: "ModuleLog") -> str:
+def _module_dtype(trace: "Trace", module: "Module") -> str:
     """Return a representative dtype for a module.
 
     Parameters
@@ -1376,7 +1376,7 @@ def _module_dtype(trace: "Trace", module: "ModuleLog") -> str:
     return _dtype_str(getattr(layer, "dtype", None))
 
 
-def _module_time_ms(trace: "Trace", module: "ModuleLog") -> float:
+def _module_time_ms(trace: "Trace", module: "Module") -> float:
     """Return the summed forward time for a module.
 
     Parameters
@@ -1405,7 +1405,7 @@ def _iter_operation_entries(
     trace: "Trace",
     *,
     mode: SummaryMode,
-) -> Iterable["LayerLog | OpLog"]:
+) -> Iterable["Layer | Op"]:
     """Iterate operation-like entries according to the requested mode.
 
     Parameters
@@ -1417,13 +1417,13 @@ def _iter_operation_entries(
 
     Returns
     -------
-    Iterable[LayerLog | OpLog]
+    Iterable[Layer | Op]
         Operation entries in display order.
     """
     effective_mode = _effective_mode(trace, mode)
     if effective_mode == "rolled":
-        return cast(Iterable["LayerLog | OpLog"], trace.layer_logs.values())
-    return cast(Iterable["LayerLog | OpLog"], trace.layer_list)
+        return cast(Iterable["Layer | Op"], trace.layer_logs.values())
+    return cast(Iterable["Layer | Op"], trace.layer_list)
 
 
 def _effective_mode(trace: "Trace", mode: SummaryMode) -> Literal["rolled", "unrolled"]:

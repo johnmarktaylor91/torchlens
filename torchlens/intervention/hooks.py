@@ -59,7 +59,7 @@ class HookContext:
     direction:
         ``"forward"`` for outs or ``"backward"`` for grads.
     layer_log:
-        Mapping proxy over selected layer metadata, never a live OpLog.
+        Mapping proxy over selected layer metadata, never a live Op.
     ctx:
         Per resolved ``(site, hook instance)`` scratch dictionary.
     run_ctx:
@@ -120,7 +120,7 @@ def make_hook_context(
     direction:
         Hook direction.
     layer_log:
-        Optional OpLog-like object or mapping to snapshot.
+        Optional Op-like object or mapping to snapshot.
     ctx:
         Per-hook scratch dictionary. A new dictionary is created when omitted.
     run_ctx:
@@ -582,7 +582,7 @@ def live_backward_selector_matches(
     selector_like:
         Selector or target spec from a normalized hook entry.
     grad_fn_log:
-        GradFnLog receiving a backward hook callback.
+        GradFn receiving a backward hook callback.
     call_index:
         One-based callback index.
 
@@ -861,7 +861,7 @@ def make_live_site_proxy(
     container_path: tuple[Any, ...],
     fields: Mapping[str, Any],
 ) -> Any:
-    """Build a minimal OpLog-like object for live hook matching.
+    """Build a minimal Op-like object for live hook matching.
 
     Parameters
     ----------
@@ -1075,12 +1075,12 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
 
 
 def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
-    """Snapshot selected OpLog metadata.
+    """Snapshot selected Op metadata.
 
     Parameters
     ----------
     layer_log:
-        OpLog-like object or mapping.
+        Op-like object or mapping.
 
     Returns
     -------

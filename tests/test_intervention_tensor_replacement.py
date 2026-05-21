@@ -64,7 +64,7 @@ def _quantize_dequantize_hook(out: torch.Tensor, *, hook: tl.HookContext) -> tor
     return torch.round(out / scale).clamp(-128, 127) * scale
 
 
-def _replacement_layers(log: tl.Trace) -> list[tl.OpLog]:
+def _replacement_layers(log: tl.Trace) -> list[tl.Op]:
     """Return layer-pass logs marked as replacement sites.
 
     Parameters
@@ -74,7 +74,7 @@ def _replacement_layers(log: tl.Trace) -> list[tl.OpLog]:
 
     Returns
     -------
-    list[tl.OpLog]
+    list[tl.Op]
         Replacement-marked layer passes.
     """
 

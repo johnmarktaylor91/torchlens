@@ -23,7 +23,7 @@ graph capture, and fastlog's lightweight `RecordContext` construction.
 
 Decorated wrappers in `decoration/torch_funcs.py` call this package for every logged
 operation. `trace.py` owns the forward session; `output_tensors.py` creates raw
-`OpLog` entries consumed by `postprocess/`. `source_tensors.py` creates roots for
+`Op` entries consumed by `postprocess/`. `source_tensors.py` creates roots for
 inputs and buffers. `backward.py` runs after a forward log when backward capture is
 requested.
 
@@ -44,13 +44,13 @@ cleanup model session, then postprocess.
 ### output_tensors.py
 - `log_function_output_tensors()` - dispatches to exhaustive or fast behavior and applies
   live intervention hooks.
-- `log_function_output_tensors_exhaustive()` - builds raw per-output `OpLog` entries.
+- `log_function_output_tensors_exhaustive()` - builds raw per-output `Op` entries.
 - `log_function_output_tensors_fast()` - validates graph alignment and updates selected tensor data.
 - `apply_live_hooks_to_outputs()` - applies normalized intervention hooks during capture.
 
 ### tensor_tracking.py
 - `_get_equivalence_class()` - structural fingerprint used by loop detection.
-- Backward hook helpers link tensors to `GradFnLog` and grad records.
+- Backward hook helpers link tensors to `GradFn` and grad records.
 
 ### backward.py
 - `log_backward()` - captures autograd graph and grads for a logged forward pass.

@@ -15,7 +15,7 @@ import torchlens
 trace(model, input)
   |- decoration/model_prep.py  - ensure torch is wrapped, prepare modules/buffers/params
   |- capture/trace.py          - run forward pass with active logging
-  |- capture/output_tensors.py - build OpLog records
+  |- capture/output_tensors.py - build Op records
   |- postprocess/              - current 20-step graph cleanup/finalization pipeline
   +- returns Trace
 
@@ -50,7 +50,7 @@ detaching or disk-only out storage.
 
 ## Subpackages
 - `capture/` - real-time forward and backward operation logging.
-- `data_classes/` - `Trace`, `LayerLog`, `OpLog`, module/param/buffer/grad logs.
+- `data_classes/` - `Trace`, `Layer`, `Op`, module/param/buffer/grad logs.
 - `decoration/` - lazy torch function wrapping, explicit wrap/unwrap, module prep.
 - `fastlog/` - sparse predicate recording with RAM/disk storage and recovery.
 - `postprocess/` - graph cleanup, conditionals, loop detection, labeling, finalization.
@@ -83,7 +83,7 @@ module-containment-refactor).
 ### Data Flow
 1. Decoration intercepts torch function calls.
 2. Barcode nesting detection identifies bottom-level operations.
-3. `capture/` builds raw `OpLog` entries.
+3. `capture/` builds raw `Op` entries.
 4. `postprocess/` removes orphans, marks conditionals, detects loops, labels nodes, builds logs.
 5. `Trace` exposes lookup, visualization, validation, save/load, intervention, and summary helpers.
 

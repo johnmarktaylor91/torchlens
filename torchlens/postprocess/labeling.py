@@ -14,7 +14,7 @@ Step 9 (_log_final_info_for_layers): Logs operation numbers, module hierarchy,
 
 Step 10 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fields):
     Renames all raw labels (e.g., "cos_3_raw") to final labels in both Trace-level
-    fields and OpLog fields, then reorders Trace fields into canonical order.
+    fields and Op fields, then reorders Trace fields into canonical order.
 
 Step 11 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (unless
     keep_unsaved_layers=True), builds lookup key mappings (integer index, label,
@@ -29,7 +29,7 @@ from typing import Any, Dict, List, TYPE_CHECKING
 from ..constants import MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef
 from ..utils.display import human_readable_size
-from ..data_classes.op_log import OpLog
+from ..data_classes.op_log import Op
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -115,7 +115,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     Iterates through all layers (before unsaved ones are discarded in Step 11)
     and computes:
     - Operation numbers (sequential, excluding input/buffer/output).
-    - Replaces raw labels with final labels in each OpLog's fields.
+    - Replaces raw labels with final labels in each Op's fields.
     - Module hierarchy information (_module_build_data dicts).
     - Cumulative tallies: tensor sizes, param counts, elapsed time.
     - Structural flags: branching, recurrence, conditional branching.
@@ -213,7 +213,7 @@ def _module_address_for_fx(module_call_label: Any) -> str:
 
 
 def _compute_fx_qualpaths(self: "Trace") -> None:
-    """Compute FX-style structural qualpath metadata for every OpLog.
+    """Compute FX-style structural qualpath metadata for every Op.
 
     ``modules`` stores cumulative module addresses, so the most nested module
     address already contains the full dotted path.
@@ -262,7 +262,7 @@ def _build_module_hierarchy_dicts(self: "Trace") -> None:
                 mbd["module_children"][module_parent_nopass].append(module_child_nopass)
 
 
-# Fields in OpLog that contain raw labels needing rename.
+# Fields in Op that contain raw labels needing rename.
 # These may be lists or sets — the rename logic handles both via type(orig).
 _LIST_FIELDS_TO_RENAME = [
     "parents",
@@ -321,8 +321,8 @@ def _rename_children_by_cond(
     }
 
 
-def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: OpLog) -> None:
-    """Replace all raw labels in a OpLog's fields with final labels.
+def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None:
+    """Replace all raw labels in a Op's fields with final labels.
 
     Handles three categories of fields:
     1. List/set fields (parents, children, etc.): creates NEW objects
@@ -331,7 +331,7 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: OpLog) -> N
     3. output_versions_per_child dict: renames keys.
 
     Args:
-        layer_entry: OpLog to rename labels for.
+        layer_entry: Op to rename labels for.
     """
     mapping = self._raw_to_final_layer_labels
     d = layer_entry.__dict__
@@ -455,7 +455,7 @@ def _rename_label_dataclass(value: Any, mapping: Dict[str, str]) -> Any:
 
 
 def _log_module_hierarchy_info_for_layer(
-    self: "Trace", layer_entry: OpLog, _shadow_sets: dict[str, Any]
+    self: "Trace", layer_entry: Op, _shadow_sets: dict[str, Any]
 ) -> None:
     """Populate module hierarchy data for a single layer in _module_build_data.
 
@@ -520,7 +520,7 @@ def _log_module_hierarchy_info_for_layer(
 def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
     """Step 11: Remove unsaved layers, build lookup keys, finalize layer lists.
 
-    Unless ``keep_unsaved_layers=True``, removes OpLog entries that don't
+    Unless ``keep_unsaved_layers=True``, removes Op entries that don't
     have saved outs. For each retained entry:
     - Builds lookup keys (integer index, label, module path, address).
     - Adds to layer_list, layer_dict_main_keys, and label lists.
@@ -621,7 +621,7 @@ def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
     if not getattr(self, "intervention_ready", False):
         return set()
 
-    call_groups: dict[int, list[OpLog]] = defaultdict(list)
+    call_groups: dict[int, list[Op]] = defaultdict(list)
     for layer_entry in self:
         if getattr(layer_entry, "is_orphan", False):
             continue
@@ -657,7 +657,7 @@ def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
     return labels_to_keep
 
 
-def _replay_dependency_labels(layer_entry: OpLog) -> set[str]:
+def _replay_dependency_labels(layer_entry: Op) -> set[str]:
     """Return final labels this entry's replay metadata depends on.
 
     Args:
@@ -713,9 +713,9 @@ def _collect_parent_refs(value: Any) -> list[ParentRef]:
 
 
 def _add_lookup_keys_for_layer_entry(
-    self: "Trace", layer_entry: OpLog, tensor_index: int, num_tensors_to_keep: int
+    self: "Trace", layer_entry: Op, tensor_index: int, num_tensors_to_keep: int
 ) -> None:
-    """Build user-facing lookup keys for a OpLog and register them.
+    """Build user-facing lookup keys for a Op and register them.
 
     Keys allow users to access layers via Trace[key]. Multiple key types:
     - String labels: layer_label, layer_label_short, with/without pass suffix.
@@ -727,7 +727,7 @@ def _add_lookup_keys_for_layer_entry(
     from (name, pass) tuples to "name:pass" strings (exhaustive mode only).
 
     Args:
-        layer_entry: OpLog to build lookup keys for.
+        layer_entry: Op to build lookup keys for.
         tensor_index: Zero-based position in the final ordered layer list.
         num_tensors_to_keep: Total number of retained tensors (for negative indices).
     """
@@ -789,8 +789,8 @@ def _add_lookup_keys_for_layer_entry(
         self._layer_num_to_lookup_keys_dict[layer_entry.capture_index].append(lookup_key)
 
 
-def _trim_and_reorder_layer_entry_fields(layer_entry: OpLog) -> None:
-    """Reorder OpLog fields into canonical display order.
+def _trim_and_reorder_layer_entry_fields(layer_entry: Op) -> None:
+    """Reorder Op fields into canonical display order.
 
     PRESERVES all fields — this function only reorders, it does NOT strip
     any data. Fields listed in LAYER_PASS_LOG_FIELD_ORDER come first (in that

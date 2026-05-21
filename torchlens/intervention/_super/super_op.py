@@ -8,12 +8,12 @@ from ._accessor_base import SuperAccessor
 from ._base import Super, _TensorBearing
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ...data_classes.layer_log import LayerLog
-    from ...data_classes.op_log import OpLog
+    from ...data_classes.layer_log import Layer
+    from ...data_classes.op_log import Op
     from .._topology.topology import SupergraphNode
 
 
-class SuperOp(Super["OpLog"], _TensorBearing):
+class SuperOp(Super["Op"], _TensorBearing):
     """View of a single site across all bundle members."""
 
     def __init__(
@@ -58,7 +58,7 @@ class SuperOp(Super["OpLog"], _TensorBearing):
             bundle_member_names = []
         super().__init__(
             node_name,
-            cast(dict[str, "OpLog"], resolved_members),
+            cast(dict[str, "Op"], resolved_members),
             query=query,
             bundle_member_names=bundle_member_names,
         )
@@ -79,7 +79,7 @@ class SuperLayer(SuperOp):
     """View of a single aggregate layer label across all bundle members."""
 
 
-class SuperOpAccessor(SuperAccessor["OpLog", SuperOp]):
+class SuperOpAccessor(SuperAccessor["Op", SuperOp]):
     """Dict-like Bundle accessor returning SuperOp objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -93,8 +93,8 @@ class SuperOpAccessor(SuperAccessor["OpLog", SuperOp]):
 
         super().__init__(bundle, super_cls=SuperOp)
 
-    def _resolve_in_member(self, trace: Any, label: str) -> OpLog | None:
-        """Resolve ``label`` to an OpLog within one member trace.
+    def _resolve_in_member(self, trace: Any, label: str) -> Op | None:
+        """Resolve ``label`` to an Op within one member trace.
 
         Parameters
         ----------
@@ -105,21 +105,21 @@ class SuperOpAccessor(SuperAccessor["OpLog", SuperOp]):
 
         Returns
         -------
-        OpLog | None
-            Matching OpLog, or ``None`` when unresolved.
+        Op | None
+            Matching Op, or ``None`` when unresolved.
         """
         try:
             resolved = trace.layers[label]
         except (KeyError, ValueError):
             return None
-        if type(resolved).__name__ == "OpLog":
-            return cast("OpLog", resolved)
-        if type(resolved).__name__ == "LayerLog" and len(resolved.ops) == 1:
-            return cast("OpLog", resolved.ops[1])
+        if type(resolved).__name__ == "Op":
+            return cast("Op", resolved)
+        if type(resolved).__name__ == "Layer" and len(resolved.ops) == 1:
+            return cast("Op", resolved.ops[1])
         return None
 
 
-class SuperLayerAccessor(SuperAccessor["LayerLog", SuperLayer]):
+class SuperLayerAccessor(SuperAccessor["Layer", SuperLayer]):
     """Dict-like Bundle accessor returning SuperLayer objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -133,8 +133,8 @@ class SuperLayerAccessor(SuperAccessor["LayerLog", SuperLayer]):
 
         super().__init__(bundle, super_cls=SuperLayer)
 
-    def _resolve_in_member(self, trace: Any, label: str) -> LayerLog | None:
-        """Resolve ``label`` to a LayerLog within one member trace.
+    def _resolve_in_member(self, trace: Any, label: str) -> Layer | None:
+        """Resolve ``label`` to a Layer within one member trace.
 
         Parameters
         ----------
@@ -145,14 +145,14 @@ class SuperLayerAccessor(SuperAccessor["LayerLog", SuperLayer]):
 
         Returns
         -------
-        LayerLog | None
-            Matching LayerLog, or ``None`` when unresolved.
+        Layer | None
+            Matching Layer, or ``None`` when unresolved.
         """
         try:
             resolved = trace.layers[label]
         except (KeyError, ValueError):
             return None
-        return cast("LayerLog", resolved) if type(resolved).__name__ == "LayerLog" else None
+        return cast("Layer", resolved) if type(resolved).__name__ == "Layer" else None
 
 
 class TraceAccessor:

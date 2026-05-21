@@ -11,8 +11,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch.ops import _get_autograd_saved_stats_for_tensor
-from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import Trace
 
 
@@ -63,15 +63,15 @@ def _log_sequential(requires_grad: bool = True) -> Trace:
     return tl.trace(model, x, layers_to_save="all", random_seed=0)
 
 
-def _non_source_ops(trace: Trace) -> list[OpLog]:
+def _non_source_ops(trace: Trace) -> list[Op]:
     """Return operation logs, excluding synthetic source and output nodes."""
     return [
         layer for layer in trace.layer_list if layer.layer_type not in {"input", "buffer", "output"}
     ]
 
 
-def _single_layer_log_for_pass(trace: Trace, pass_log: OpLog) -> LayerLog:
-    """Return the aggregate LayerLog for a pass log."""
+def _single_layer_log_for_pass(trace: Trace, pass_log: Op) -> Layer:
+    """Return the aggregate Layer for a pass log."""
     return trace.layer_logs[pass_log.layer_label_no_pass]
 
 
@@ -154,7 +154,7 @@ def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
 
 
 def test_layer_log_autograd_saved_rollup_matches_pass_values() -> None:
-    """LayerLog values should equal the sum of their pass-level values."""
+    """Layer values should equal the sum of their pass-level values."""
     trace = _log_sequential(requires_grad=True)
 
     for pass_log in _non_source_ops(trace):

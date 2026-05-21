@@ -5,10 +5,10 @@
 The lookup cascade for string keys after the pass is finished:
 
 1. Exact match in ``layer_dict_all_keys`` (all lookup keys for every
-   OpLog, including pass-qualified labels like ``"conv2d_1_1:1"``).
-2. Exact match in ``layer_logs`` (no-pass labels -> LayerLog aggregate).
+   Op, including pass-qualified labels like ``"conv2d_1_1:1"``).
+2. Exact match in ``layer_logs`` (no-pass labels -> Layer aggregate).
 3. Exact match in ``_module_logs`` (module address or pass label ->
-   ModuleLog or ModuleCallLog).
+   Module or ModuleCall).
 4. Case-insensitive exact match against all of the above.
 5. Substring match: if exactly one layer label contains the given string,
    return it.  If multiple match, raise ValueError listing them.
@@ -27,14 +27,14 @@ if TYPE_CHECKING:
     from ..capture.projections import LiveOpView
 
 from ._lookup_keys import _give_user_feedback_about_lookup_key
-from .op_log import OpLog
+from .op_log import Op
 from ..capture.projections import LiveOpView
 from ..intervention.errors import SiteAmbiguityError
 from ..intervention.selectors import BaseSelector
 from ..intervention.types import FrozenTargetSpec, TargetSpec
 
 
-def _getitem_during_pass(self: "Trace", ix: Any) -> OpLog | LiveOpView:
+def _getitem_during_pass(self: "Trace", ix: Any) -> Op | LiveOpView:
     """Fetches an item when the pass is unfinished, only based on its raw barcode.
 
     Args:
@@ -58,9 +58,9 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
 
     Lookup cascade:
     1. slice -> list slice of layer_list
-    2. exact match in layer_dict_all_keys (OpLog by any lookup key)
-    3. exact match in layer_logs (LayerLog by no-pass label)
-    4. exact match in _module_logs (ModuleLog/ModuleCallLog by address)
+    2. exact match in layer_dict_all_keys (Op by any lookup key)
+    3. exact match in layer_logs (Layer by no-pass label)
+    4. exact match in _module_logs (Module/ModuleCall by address)
     5. case-insensitive exact match against all of the above
     6. substring match: unique match returns the layer; ambiguous raises ValueError
     7. fallback: KeyError with contextual help message
@@ -69,7 +69,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         ix: int (ordinal), slice, or str (label/address/substring).
 
     Returns:
-        OpLog, LayerLog, ModuleLog, or ModuleCallLog.
+        Op, Layer, Module, or ModuleCall.
 
     Raises:
         KeyError: No match found.
@@ -92,11 +92,11 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     if ix in self.layer_dict_all_keys:
         return self.layer_dict_all_keys[ix]
 
-    # Step 3: no-pass label -> aggregate LayerLog
+    # Step 3: no-pass label -> aggregate Layer
     if isinstance(ix, str) and hasattr(self, "layer_logs") and ix in self.layer_logs:
         return self.layer_logs[ix]
 
-    # Step 4: module address or pass label -> ModuleLog/ModuleCallLog
+    # Step 4: module address or pass label -> Module/ModuleCall
     if isinstance(ix, str) and hasattr(self, "_module_logs") and ix in self._module_logs:
         return self._module_logs[ix]
 

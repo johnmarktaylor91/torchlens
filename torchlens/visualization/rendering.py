@@ -7,7 +7,7 @@ supporting two visualization modes:
   Uses ``layer_dict_main_keys`` as the node source.
 - **rolled**: layers with multiple ops are collapsed into a single node
   with edge labels showing which ops an edge applies to.  Uses
-  ``layer_logs`` (LayerLog objects) as the node source.
+  ``layer_logs`` (Layer objects) as the node source.
 
 Key mechanisms:
 
@@ -71,8 +71,8 @@ from .._literals import (
 )
 from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
-from ..data_classes.op_log import OpLog
-from ..data_classes.layer_log import LayerLog
+from ..data_classes.op_log import Op
+from ..data_classes.layer_log import Layer
 from ..viz import batch_summary
 from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
 from .node_spec import (
@@ -104,16 +104,16 @@ from ._render_utils import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn_log import GradFnLog
+    from ..data_classes.grad_fn_log import GradFn
     from ..data_classes.model_log import Trace
-    from ..data_classes.module_log import ModuleLog
+    from ..data_classes.module_log import Module
 
-BaseGraphNode = Union["OpLog", "LayerLog"]
+BaseGraphNode = Union["Op", "Layer"]
 
 
 @dataclass
 class FocusNode:
-    """Mutable render proxy for a focused LayerLog or OpLog.
+    """Mutable render proxy for a focused Layer or Op.
 
     Parameters
     ----------
@@ -195,17 +195,17 @@ class BoundaryNode:
 
 
 GraphNode = Union[BaseGraphNode, BoundaryNode, FocusNode]
-NodeSpecFn = Callable[["LayerLog", NodeSpec], NodeSpec | None]
-BackwardNodeSpecFn = Callable[["GradFnLog", NodeSpec], NodeSpec | None]
-CollapsedNodeSpecFn = Callable[["ModuleLog", NodeSpec], NodeSpec | None]
-CollapseFn = Callable[["ModuleLog"], bool]
-SkipFn = Callable[["LayerLog"], bool]
+NodeSpecFn = Callable[["Layer", NodeSpec], NodeSpec | None]
+BackwardNodeSpecFn = Callable[["GradFn", NodeSpec], NodeSpec | None]
+CollapsedNodeSpecFn = Callable[["Module", NodeSpec], NodeSpec | None]
+CollapseFn = Callable[["Module"], bool]
+SkipFn = Callable[["Layer"], bool]
 InterveningClusterMode = Literal["upstream", "outside", "downstream", "own"]
 
 # -- Color palette for node types --
 INPUT_COLOR = "#98FB98"  # Light green
 OUTPUT_COLOR = "#ff9999"  # Light red/salmon
-PARAMS_NODE_BG_COLOR = "#E6E6E6"  # Generic param (no ParamLog available)
+PARAMS_NODE_BG_COLOR = "#E6E6E6"  # Generic param (no Param available)
 TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"  # Light gray for trainable params
 FROZEN_PARAMS_BG_COLOR = "#B0B0B0"  # Darker gray for frozen params
 GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
@@ -395,7 +395,7 @@ def _get_hidden_parent_buffer_addresses(
         if parent_label.startswith("__module_focus_"):
             continue
         parent_node: BaseGraphNode
-        if isinstance(source_node, OpLog):
+        if isinstance(source_node, Op):
             parent_node = trace[parent_label]
         else:
             parent_node = trace.layer_logs[parent_label]
@@ -432,7 +432,7 @@ def draw(
     vis_call_depth: int = 1000,
     vis_outpath: str = "modelgraph",
     vis_graph_overrides: Optional[Dict[str, Any]] = None,
-    module: "ModuleLog | str | None" = None,
+    module: "Module | str | None" = None,
     node_mode: VisNodeModeLiteral = "default",
     node_spec_fn: NodeSpecFn | None = None,
     collapsed_node_spec_fn: CollapsedNodeSpecFn | None = None,
@@ -475,18 +475,18 @@ def draw(
             Use 0 to show all layers without collapsing.
         vis_outpath: Output file path (extension auto-stripped).
         vis_graph_overrides: Graphviz graph-level attribute overrides.
-        module: Optional module focus. A ModuleLog focuses that module; a string
+        module: Optional module focus. A Module focuses that module; a string
             is interpreted as a module address.
         node_mode: Preset applied to default ``NodeSpec`` objects before
             user callbacks run.
         node_spec_fn: Optional callback receiving ``(layer_log, default_spec)``.
-            In unrolled mode, ``layer_log`` is the parent aggregate LayerLog for
-            the rendered OpLog.
+            In unrolled mode, ``layer_log`` is the parent aggregate Layer for
+            the rendered Op.
         collapsed_node_spec_fn: Optional callback receiving
             ``(module_log, default_spec)`` for collapsed module nodes.
-        collapse_fn: Optional predicate receiving a ModuleLog. When provided,
+        collapse_fn: Optional predicate receiving a Module. When provided,
             it replaces ``vis_call_depth`` collapse decisions.
-        skip_fn: Optional predicate receiving a LayerLog. Skipped nodes are
+        skip_fn: Optional predicate receiving a Layer. Skipped nodes are
             elided and edges are chained through them.
         vis_edge_overrides: Overrides for forward edges.
         vis_grad_edge_overrides: Overrides for backward (grad) edges.
@@ -617,8 +617,8 @@ def draw(
     ]:
         vis_outpath = ".".join(split_outpath[:-1])
 
-    # Unrolled: iterate OpLog objects (one node per pass).
-    # Rolled: iterate LayerLog objects (one node per logical layer, multi-pass
+    # Unrolled: iterate Op objects (one node per pass).
+    # Rolled: iterate Layer objects (one node per logical layer, multi-pass
     # collapsed into a single node with edge annotations).
     if vis_mode == "unrolled":
         entries_to_plot: dict[str, GraphNode] = dict(self.layer_dict_main_keys)
@@ -1211,13 +1211,13 @@ def render_combined_graph(
     return cast(str, dot.source)
 
 
-def _backward_dot_node_name(grad_fn: "GradFnLog") -> str:
+def _backward_dot_node_name(grad_fn: "GradFn") -> str:
     """Return a DOT-safe node name for a grad_fn log.
 
     Parameters
     ----------
     grad_fn:
-        GradFnLog to name.
+        GradFn to name.
 
     Returns
     -------
@@ -1229,7 +1229,7 @@ def _backward_dot_node_name(grad_fn: "GradFnLog") -> str:
 
 
 def _add_backward_node_to_graphviz(
-    grad_fn: "GradFnLog",
+    grad_fn: "GradFn",
     graphviz_graph: graphviz.Digraph,
     node_spec_fn: BackwardNodeSpecFn | None,
 ) -> None:
@@ -1238,7 +1238,7 @@ def _add_backward_node_to_graphviz(
     Parameters
     ----------
     grad_fn:
-        GradFnLog to render.
+        GradFn to render.
     graphviz_graph:
         Graphviz Digraph object.
     node_spec_fn:
@@ -1250,7 +1250,7 @@ def _add_backward_node_to_graphviz(
 
 
 def _backward_node_graphviz_args(
-    grad_fn: "GradFnLog",
+    grad_fn: "GradFn",
     node_spec_fn: BackwardNodeSpecFn | None,
 ) -> dict[str, Any]:
     """Build Graphviz node arguments for one backward grad_fn.
@@ -1258,7 +1258,7 @@ def _backward_node_graphviz_args(
     Parameters
     ----------
     grad_fn:
-        GradFnLog to render.
+        GradFn to render.
     node_spec_fn:
         Optional callback receiving ``(grad_fn, default_spec)``.
 
@@ -1414,7 +1414,7 @@ def _setup_combined_special_clusters(
 
 def _module_key_for_grad_fn(
     trace: "Trace",
-    grad_fn: "GradFnLog",
+    grad_fn: "GradFn",
     mode: InterveningClusterMode,
 ) -> str | None:
     """Return the module cluster key for a grad_fn in combined rendering.
@@ -1424,7 +1424,7 @@ def _module_key_for_grad_fn(
     trace:
         Trace containing forward, backward, and parameter metadata.
     grad_fn:
-        GradFnLog to place.
+        GradFn to place.
     mode:
         Placement mode for intervening grad_fns.
 
@@ -1451,7 +1451,7 @@ def _module_key_for_grad_fn(
     raise ValueError("intervening_cluster must be 'upstream', 'outside', 'downstream', or 'own'.")
 
 
-def _module_key_for_forward_op(op: "LayerLog") -> str | None:
+def _module_key_for_forward_op(op: "Layer") -> str | None:
     """Return the unrolled module cluster key for a forward op.
 
     Parameters
@@ -1479,7 +1479,7 @@ def _module_key_for_forward_op(op: "LayerLog") -> str | None:
     return str(modules[-1])
 
 
-def _param_module_for_accumulate_grad(trace: "Trace", grad_fn: "GradFnLog") -> str | None:
+def _param_module_for_accumulate_grad(trace: "Trace", grad_fn: "GradFn") -> str | None:
     """Return an unambiguous owning module for an AccumulateGrad node.
 
     Parameters
@@ -1507,7 +1507,7 @@ def _param_module_for_accumulate_grad(trace: "Trace", grad_fn: "GradFnLog") -> s
     return f"{module_address}:1"
 
 
-def _infer_intervening_module_upstream(trace: "Trace", grad_fn: "GradFnLog") -> str | None:
+def _infer_intervening_module_upstream(trace: "Trace", grad_fn: "GradFn") -> str | None:
     """Infer an intervening grad_fn module from downstream autograd edges.
 
     Parameters
@@ -1515,7 +1515,7 @@ def _infer_intervening_module_upstream(trace: "Trace", grad_fn: "GradFnLog") -> 
     trace:
         Trace containing grad_fn metadata.
     grad_fn:
-        Intervening GradFnLog to place.
+        Intervening GradFn to place.
 
     Returns
     -------
@@ -1526,7 +1526,7 @@ def _infer_intervening_module_upstream(trace: "Trace", grad_fn: "GradFnLog") -> 
     return _infer_intervening_module_bfs(trace, [grad_fn.grad_fn_id], reverse=False)
 
 
-def _infer_intervening_module_downstream(trace: "Trace", grad_fn: "GradFnLog") -> str | None:
+def _infer_intervening_module_downstream(trace: "Trace", grad_fn: "GradFn") -> str | None:
     """Infer an intervening grad_fn module from reverse autograd edges.
 
     Parameters
@@ -1534,7 +1534,7 @@ def _infer_intervening_module_downstream(trace: "Trace", grad_fn: "GradFnLog") -
     trace:
         Trace containing grad_fn metadata.
     grad_fn:
-        Intervening GradFnLog to place.
+        Intervening GradFn to place.
 
     Returns
     -------
@@ -1600,13 +1600,13 @@ def _infer_intervening_module_bfs(
     return None
 
 
-def _compute_backward_node_lines(grad_fn: "GradFnLog") -> list[str]:
+def _compute_backward_node_lines(grad_fn: "GradFn") -> list[str]:
     """Build default label rows for a backward grad_fn node.
 
     Parameters
     ----------
     grad_fn:
-        GradFnLog to render.
+        GradFn to render.
 
     Returns
     -------
@@ -1627,13 +1627,13 @@ def _compute_backward_node_lines(grad_fn: "GradFnLog") -> list[str]:
     return lines
 
 
-def _format_backward_output_shape(grad_fn: "GradFnLog") -> str:
+def _format_backward_output_shape(grad_fn: "GradFn") -> str:
     """Return the first captured output-grad shape for a grad_fn.
 
     Parameters
     ----------
     grad_fn:
-        GradFnLog to inspect.
+        GradFn to inspect.
 
     Returns
     -------
@@ -1699,7 +1699,7 @@ def _build_skip_filtered_edge_map(
         show_buffer_layers:
         Buffer visibility mode.
     skip_fn:
-        Optional user predicate receiving aggregate LayerLog objects.
+        Optional user predicate receiving aggregate Layer objects.
 
     Returns
     -------
@@ -1742,8 +1742,8 @@ def _build_skip_filtered_edge_map(
 
 def _resolve_focus_module(
     trace: "Trace",
-    module: "ModuleLog | str",
-) -> "ModuleLog":
+    module: "Module | str",
+) -> "Module":
     """Resolve and validate a module focus argument.
 
     Parameters
@@ -1751,11 +1751,11 @@ def _resolve_focus_module(
     trace:
         Model log being rendered.
     module:
-        ModuleLog instance or module address string.
+        Module instance or module address string.
 
     Returns
     -------
-    ModuleLog
+    Module
         Module to focus.
 
     Raises
@@ -1764,28 +1764,26 @@ def _resolve_focus_module(
         If the module cannot be found or belongs to a different Trace.
     """
 
-    from ..data_classes.module_log import ModuleLog
+    from ..data_classes.module_log import Module
 
     if isinstance(module, str):
         if module not in trace.modules:
             raise ValueError(f"Module address '{module}' was not found in this Trace.")
         resolved = trace.modules[module]
-        if not isinstance(resolved, ModuleLog):
-            raise ValueError(
-                f"Module address '{module}' resolved to a module pass, not a ModuleLog."
-            )
+        if not isinstance(resolved, Module):
+            raise ValueError(f"Module address '{module}' resolved to a module pass, not a Module.")
         return resolved
-    if not isinstance(module, ModuleLog):
-        raise ValueError("module must be a ModuleLog, module address string, or None.")
+    if not isinstance(module, Module):
+        raise ValueError("module must be a Module, module address string, or None.")
     if module._source_trace is not trace:
-        raise ValueError("ModuleLog focus must belong to the Trace being rendered.")
+        raise ValueError("Module focus must belong to the Trace being rendered.")
     return module
 
 
 def _build_module_focus_entries(
     trace: "Trace",
     entries_to_plot: Mapping[str, GraphNode],
-    target_module: "ModuleLog",
+    target_module: "Module",
     *,
     vis_mode: str,
 ) -> dict[str, GraphNode]:
@@ -1928,7 +1926,7 @@ def _copy_focus_node(node: GraphNode) -> GraphNode:
 def _get_or_create_boundary_node(
     boundary_nodes: dict[str, BoundaryNode],
     external_node: GraphNode,
-    target_module: "ModuleLog",
+    target_module: "Module",
     *,
     vis_mode: str,
     boundary_kind: str,
@@ -1956,7 +1954,7 @@ def _get_or_create_boundary_node(
     return boundary
 
 
-def _boundary_module_path(target_module: "ModuleLog", vis_mode: str) -> list[str]:
+def _boundary_module_path(target_module: "Module", vis_mode: str) -> list[str]:
     """Return a module path for focus boundary node cluster placement."""
 
     module_path = []
@@ -2186,7 +2184,7 @@ def _add_node_to_graphviz(
 
 
 def _should_collapse_module(
-    module_log: "ModuleLog",
+    module_log: "Module",
     *,
     collapse_fn: CollapseFn | None,
     max_module_depth: int,
@@ -2258,7 +2256,7 @@ def _collapse_address_for_node(
     for address_w_pass in modules:
         address = address_w_pass.rsplit(":", 1)[0]
         if _should_collapse_module(
-            cast("ModuleLog", trace.modules[address]),
+            cast("Module", trace.modules[address]),
             collapse_fn=collapse_fn,
             max_module_depth=max_module_depth,
         ):
@@ -2289,7 +2287,7 @@ def _is_collapsed_module(
       visually "belongs" to the parent scope).
 
     Args:
-        node: The OpLog or LayerLog node to check.
+        node: The Op or Layer node to check.
         vis_call_depth: Maximum nesting depth before collapsing into a module box.
     """
     if trace is not None:
@@ -2333,7 +2331,7 @@ def _build_layer_node(
     """Builds and adds a standard (non-collapsed) layer node to the graphviz graph.
 
     Args:
-        node: The OpLog or LayerLog node to render.
+        node: The Op or Layer node to render.
         graphviz_graph: The graphviz Digraph object to add the node to.
         show_buffer_layers: Buffer visibility mode.
         vis_mode: 'unrolled' or 'rolled'.
@@ -2925,7 +2923,7 @@ def _build_collapsed_module_node(
     """Builds and adds a collapsed module box node to the graphviz graph.
 
     Args:
-        node: The OpLog or LayerLog node triggering the collapse.
+        node: The Op or Layer node triggering the collapse.
         graphviz_graph: The graphviz Digraph object to add the node to.
         collapsed_modules: Set of collapsed module names already added; updated in place.
         vis_mode: 'unrolled' or 'rolled'.
@@ -3071,7 +3069,7 @@ def _get_node_address_shape_color(
         only_non_buffer_layer = False
 
     if (node.is_atomic_module_op or only_non_buffer_layer) and (len(node.modules) > 0):
-        if isinstance(source_node, OpLog):
+        if isinstance(source_node, Op):
             module_pass_exited = node.modules[-1]
             module, _ = module_pass_exited.split(":")
             if self.modules[module].num_calls == 1:  # type: ignore[union-attr]
@@ -3088,7 +3086,7 @@ def _get_node_address_shape_color(
         node_color = "black"
     elif node.is_buffer:
         if (self.buffer_num_calls[source_node.buffer_address] == 1) or (
-            isinstance(source_node, LayerLog) and node.num_calls > 1
+            isinstance(source_node, Layer) and node.num_calls > 1
         ):
             buffer_address = source_node.buffer_address
         else:
@@ -3118,7 +3116,7 @@ def _is_only_non_buffer_in_module(
     ovals, not boxes (issue #48).
 
     Args:
-        node: The OpLog or LayerLog node to check.
+        node: The Op or Layer node to check.
         show_buffer_layers: Buffer visibility mode.
     """
     # Check whether it leaves its module:
@@ -3141,7 +3139,7 @@ def _is_only_non_buffer_in_module(
         if parent_layer_label.startswith("__module_focus_"):
             continue
         source_node = _unwrap_focus_node(node)
-        if isinstance(source_node, OpLog):
+        if isinstance(source_node, Op):
             parent_layer = self[parent_layer_label]
         else:
             parent_layer = self.layer_logs[parent_layer_label]
@@ -3204,14 +3202,14 @@ def _apply_node_spec_fn(
     trace:
         Owning Trace.
     node:
-        Rendered OpLog or LayerLog.
+        Rendered Op or Layer.
     default_spec:
         Default node spec.
     node_mode:
         Preset to apply before the optional user callback.
     node_spec_fn:
         Optional user callback. Unrolled nodes are represented to the callback
-        by their parent LayerLog.
+        by their parent Layer.
 
     Returns
     -------
@@ -3229,26 +3227,26 @@ def _apply_node_spec_fn(
     return mode_spec if result is None else result
 
 
-def _layer_log_for_node(trace: "Trace", node: GraphNode) -> "LayerLog":
-    """Return the aggregate LayerLog for ``node``.
+def _layer_log_for_node(trace: "Trace", node: GraphNode) -> "Layer":
+    """Return the aggregate Layer for ``node``.
 
     Parameters
     ----------
     trace:
         Owning Trace.
     node:
-        OpLog or LayerLog.
+        Op or Layer.
 
     Returns
     -------
-    LayerLog
+    Layer
         Aggregate layer log for callbacks.
     """
 
     node = _unwrap_focus_node(node)
     if isinstance(node, BoundaryNode):
-        raise ValueError("Synthetic boundary nodes do not have LayerLog metadata.")
-    if isinstance(node, LayerLog):
+        raise ValueError("Synthetic boundary nodes do not have Layer metadata.")
+    if isinstance(node, Layer):
         return node
     if node.parent_layer_log is not None:
         return node.parent_layer_log
@@ -3302,7 +3300,7 @@ def compute_default_node_lines(
     Parameters
     ----------
     layer_log:
-        OpLog or LayerLog to render.
+        Op or Layer to render.
     node_address:
         Existing address suffix from TorchLens node address logic.
     vis_mode:
@@ -3377,7 +3375,7 @@ def _compute_selected_node_lines(
     Parameters
     ----------
     layer_log:
-        OpLog or LayerLog to render.
+        Op or Layer to render.
     node_address:
         Existing address suffix from TorchLens node address logic.
     vis_mode:
@@ -3430,7 +3428,7 @@ def _compute_selected_node_lines(
 
 
 def _make_node_label(
-    node: Union["OpLog", "LayerLog"],
+    node: Union["Op", "Layer"],
     node_address: str,
     vis_mode: str,
 ) -> str:
@@ -3487,10 +3485,10 @@ def _format_shape_str(shape: tuple[Any, ...]) -> str:
     return "x1"
 
 
-def _make_param_label(node: Union["OpLog", "LayerLog"]) -> str:
+def _make_param_label(node: Union["Op", "Layer"]) -> str:
     """Makes the label for parameters of a node.
 
-    Uses param names and bracket convention when ParamLog objects are available:
+    Uses param names and bracket convention when Param objects are available:
     round brackets () for trainable, square brackets [] for frozen.
     """
     if node.num_param_tensors == 0:
@@ -3870,8 +3868,8 @@ def _add_edges_for_node(
         if vis_mode == "rolled" and metadata_child is not None and not edge_has_boundary:
             metadata_base_for_pass = _base_node_for_metadata(metadata_child)
             parent_base_for_pass = _base_node_for_metadata(parent_node)
-            if isinstance(metadata_base_for_pass, LayerLog) and isinstance(
-                parent_base_for_pass, LayerLog
+            if isinstance(metadata_base_for_pass, Layer) and isinstance(
+                parent_base_for_pass, Layer
             ):
                 _label_rolled_call_indexs(
                     metadata_base_for_pass,
@@ -3943,8 +3941,8 @@ def _add_edges_for_node(
 
 
 def _compute_edge_label(
-    parent_node: Union["OpLog", "LayerLog"],
-    child_node: Union["OpLog", "LayerLog"],
+    parent_node: Union["Op", "Layer"],
+    child_node: Union["Op", "Layer"],
     trace: "Trace",
     vis_mode: str,
 ) -> Optional[str]:
@@ -3983,8 +3981,8 @@ def _compute_edge_label(
 
 
 def _compute_arm_entry_edge_label(
-    parent_node: Union["OpLog", "LayerLog"],
-    child_node: Union["OpLog", "LayerLog"],
+    parent_node: Union["Op", "Layer"],
+    child_node: Union["Op", "Layer"],
     trace: "Trace",
     vis_mode: str,
 ) -> Optional[str]:
@@ -4030,8 +4028,8 @@ def _compute_arm_entry_edge_label(
 
 
 def _get_arm_edge_entries(
-    parent_node: Union["OpLog", "LayerLog"],
-    child_node: Union["OpLog", "LayerLog"],
+    parent_node: Union["Op", "Layer"],
+    child_node: Union["Op", "Layer"],
     trace: "Trace",
     vis_mode: str,
 ) -> List[Tuple[int, str, Optional[Tuple[int, ...]]]]:
@@ -4315,8 +4313,8 @@ def _branch_kind_sort_key(branch_kind: str) -> int:
 
 
 def _edge_is_conditional_branch(
-    parent_node: Union["OpLog", "LayerLog"],
-    child_node: Union["OpLog", "LayerLog"],
+    parent_node: Union["Op", "Layer"],
+    child_node: Union["Op", "Layer"],
     trace: "Trace",
     vis_mode: str,
 ) -> bool:
@@ -4368,8 +4366,8 @@ def _format_branch_edge_label_html(label_text: str) -> str:
 
 def _label_node_arguments_if_needed(
     self: "Trace",
-    parent_node: Union["OpLog", "LayerLog"],
-    child_node: Union["OpLog", "LayerLog"],
+    parent_node: Union["Op", "Layer"],
+    child_node: Union["Op", "Layer"],
     edge_dict: Dict[str, Any],
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> None:
@@ -4430,7 +4428,7 @@ def _set_argument_edge_label(edge_dict: Dict[str, Any], arg_label: str) -> None:
 
 def _should_mark_arguments_on_edge(
     self: "Trace",
-    child_node: Union["OpLog", "LayerLog"],
+    child_node: Union["Op", "Layer"],
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
     """Returns True if argument position labels should be shown on the edge to child_node.
@@ -4448,21 +4446,21 @@ def _should_mark_arguments_on_edge(
     if child_node.layer_type in COMMUTE_FUNCS:
         return False
 
-    if isinstance(child_node, OpLog):
+    if isinstance(child_node, Op):
         return _should_mark_arguments_on_unrolled_edge(self, child_node, show_buffer_layers)
-    elif isinstance(child_node, LayerLog):
+    elif isinstance(child_node, Layer):
         return _should_mark_arguments_on_rolled_edge(self, child_node, show_buffer_layers)
 
 
 def _should_mark_arguments_on_unrolled_edge(
     self: "Trace",
-    child_node: "OpLog",
+    child_node: "Op",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
     """Returns True if argument labels should be shown on an unrolled graph edge.
 
     Args:
-        child_node: The child OpLog node whose incoming edge is being considered.
+        child_node: The child Op node whose incoming edge is being considered.
         show_buffer_layers: Buffer visibility mode.
     """
     num_parents_shown = len(child_node.parents)
@@ -4486,13 +4484,13 @@ def _should_mark_arguments_on_unrolled_edge(
 
 def _should_mark_arguments_on_rolled_edge(
     self: "Trace",
-    child_node: "LayerLog",
+    child_node: "Layer",
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
 ) -> bool:
     """Returns True if argument labels should be shown on a rolled graph edge.
 
     Args:
-        child_node: The child LayerLog node whose incoming edge is being considered.
+        child_node: The child Layer node whose incoming edge is being considered.
         show_buffer_layers: Buffer visibility mode.
     """
     for call_index, pass_parents in child_node.parents_per_pass.items():
@@ -4514,8 +4512,8 @@ def _should_mark_arguments_on_rolled_edge(
 
 
 def _label_rolled_call_indexs(
-    child_node: "LayerLog",
-    parent_node: "LayerLog",
+    child_node: "Layer",
+    parent_node: "Layer",
     edge_dict: Dict[str, Any],
 ) -> None:
     """Add pass-number annotations to edges in rolled mode.
@@ -4527,8 +4525,8 @@ def _label_rolled_call_indexs(
     concise range notation (e.g., ``"1-3"`` instead of ``"1,2,3"``).
 
     Args:
-        child_node: The child LayerLog node.
-        parent_node: The parent LayerLog node.
+        child_node: The child Layer node.
+        parent_node: The parent Layer node.
         edge_dict: Mutable dict of edge attributes; taillabel/headlabel may be added.
     """
     parent_call_indexs = parent_node.child_ops_per_layer[child_node.layer_label]
@@ -4550,16 +4548,16 @@ def _get_lowest_module_for_two_render_nodes(
     """Find the deepest module subgraph for render nodes including boundaries."""
 
     return _get_lowest_module_for_two_nodes(
-        cast(Union["OpLog", "LayerLog"], node1),
-        cast(Union["OpLog", "LayerLog"], node2),
+        cast(Union["Op", "Layer"], node1),
+        cast(Union["Op", "Layer"], node2),
         both_nodes_collapsed_modules,
         vis_call_depth,
     )
 
 
 def _get_lowest_module_for_two_nodes(
-    node1: Union["OpLog", "LayerLog"],
-    node2: Union["OpLog", "LayerLog"],
+    node1: Union["Op", "Layer"],
+    node2: Union["Op", "Layer"],
     both_nodes_collapsed_modules: bool,
     vis_call_depth: int,
 ) -> Union[str, int]:
@@ -4593,7 +4591,7 @@ def _get_lowest_module_for_two_nodes(
     node1_modules = node1.modules[:]
     node2_modules = node2.modules[:]
 
-    if isinstance(node1, LayerLog) or isinstance(node2, LayerLog):
+    if isinstance(node1, Layer) or isinstance(node2, Layer):
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
@@ -4652,8 +4650,8 @@ def _add_grad_edge(
     on any pass.
 
     Args:
-        parent_layer: The parent OpLog or LayerLog (grad destination).
-        child_layer: The child OpLog or LayerLog (grad source).
+        parent_layer: The parent Op or Layer (grad destination).
+        child_layer: The child Op or Layer (grad source).
         edge_style: ``'solid'`` or ``'dashed'`` (matches the forward edge style).
         module: Module cluster name, or -1 for top-level.
         module_edge_dict: Dict mapping each module cluster to its edges.
@@ -4688,7 +4686,7 @@ def _node_has_grad(layer: Any) -> bool:
     Parameters
     ----------
     layer:
-        ``OpLog`` or rolled ``LayerLog``.
+        ``Op`` or rolled ``Layer``.
 
     Returns
     -------

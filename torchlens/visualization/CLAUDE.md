@@ -34,8 +34,8 @@ from source captured at logging time. Callable code panels require a live model.
 rendering byops this path.
 
 ## Visualization Modes
-- `vis_mode="unrolled"` renders per-pass `OpLog` nodes.
-- `vis_mode="rolled"` renders aggregate `LayerLog` nodes.
+- `vis_mode="unrolled"` renders per-pass `Op` nodes.
+- `vis_mode="rolled"` renders aggregate `Layer` nodes.
 - `module=...` focuses a submodule and inserts synthetic boundary nodes.
 - `skip_fn` can hide layers while chaining edges through them.
 - `collapse_fn` or module-depth options collapse module subgraphs.

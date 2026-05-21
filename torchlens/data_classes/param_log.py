@@ -1,16 +1,16 @@
-"""ParamLog and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters.
+"""Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters.
 
-ParamLog stores static metadata (address, shape, dtype, trainability) plus
+Param stores static metadata (address, shape, dtype, trainability) plus
 lazy grad information.  It does NOT store the parameter tensor itself --
 only a weak-ish reference (``_param_ref``) used solely for lazy grad
 access via ``_check_param_grad()``.
 
 **GC concern with _param_ref**: ``_param_ref`` holds a direct reference to
 the ``nn.Parameter`` object.  This prevents the parameter from being garbage
-collected as long as the ParamLog (and thus the Trace) is alive.  This
+collected as long as the Param (and thus the Trace) is alive.  This
 is acceptable because the Trace's lifetime is typically shorter than or
 equal to the model's lifetime.  The ``cleanup()`` method on Trace
-deletes all ParamLog references.
+deletes all Param references.
 
 **Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
 grad_memory) is computed lazily on first access via ``_check_param_grad()``.
@@ -35,8 +35,8 @@ if TYPE_CHECKING:
     import pandas as pd
 
 
-def _param_log_to_row(param_log: "ParamLog") -> Dict[str, Any]:
-    """Convert a ParamLog into one DataFrame row.
+def _param_log_to_row(param_log: "Param") -> Dict[str, Any]:
+    """Convert a Param into one DataFrame row.
 
     Parameters
     ----------
@@ -51,7 +51,7 @@ def _param_log_to_row(param_log: "ParamLog") -> Dict[str, Any]:
     return {field: getattr(param_log, field) for field in PARAM_LOG_FIELD_ORDER}
 
 
-class ParamLog:
+class Param:
     """Metadata about a single model parameter (weight or bias).
 
     Captures static parameter identity (address, shape, dtype, trainability)
@@ -118,7 +118,7 @@ class ParamLog:
         self.has_optimizer = has_optimizer
 
         # Direct reference to the actual nn.Parameter for lazy grad access.
-        # Prevents GC of the parameter while this ParamLog is alive (acceptable
+        # Prevents GC of the parameter while this Param is alive (acceptable
         # because Trace lifetime <= model lifetime; cleanup() clears it).
         self._param_ref: Optional[torch.nn.Parameter] = None
         self._source_trace_ref: Any = None
@@ -183,7 +183,7 @@ class ParamLog:
 
     @property
     def module(self) -> Any:
-        """Primary owning ModuleLog."""
+        """Primary owning Module."""
 
         trace = self.source_trace
         if trace is None:
@@ -345,7 +345,7 @@ class ParamLog:
         """Multi-line summary showing address, shape, dtype, trainability, and usage."""
         status = "trainable" if self.trainable else "frozen"
         lines = [
-            f"ParamLog: {self.address}",
+            f"Param: {self.address}",
             f"  shape: {self.shape}",
             f"  dtype: {self.dtype}",
             f"  size: {self.memory_str}",
@@ -387,8 +387,8 @@ class ParamLog:
         self.__dict__.update(state)
 
 
-class ParamAccessor(Accessor["ParamLog"]):
-    """Dict-like accessor for ParamLog objects.
+class ParamAccessor(Accessor["Param"]):
+    """Dict-like accessor for Param objects.
 
     Supports indexing by:
     * **full address** (str) -- e.g. ``"features.0.weight"``.
@@ -403,10 +403,10 @@ class ParamAccessor(Accessor["ParamLog"]):
         "_list": FieldPolicy.KEEP,
     }
 
-    def __init__(self, param_logs: Dict[str, "ParamLog"]) -> None:
+    def __init__(self, param_logs: Dict[str, "Param"]) -> None:
         super().__init__(param_logs)
 
-    def _resolve_substring(self, key: str) -> "ParamLog | None":
+    def _resolve_substring(self, key: str) -> "Param | None":
         """Resolve an unambiguous parameter short name."""
         # Fallback: match by short name (e.g. 'weight', 'bias')
         matches = [pl for pl in self._list if pl.name == key]
@@ -430,7 +430,7 @@ class ParamAccessor(Accessor["ParamLog"]):
         items = []
         for pl in self._list:
             status = "trainable" if pl.trainable else "frozen"
-            items.append(f"'{pl.address}': ParamLog {pl.shape} {pl.dtype} {status}")
+            items.append(f"'{pl.address}': Param {pl.shape} {pl.dtype} {status}")
         inner = ",\n ".join(items)
         return "{" + inner + "}"
 

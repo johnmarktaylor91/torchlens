@@ -66,7 +66,7 @@ from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
-from ..data_classes.op_log import OpLog
+from ..data_classes.op_log import Op
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -134,7 +134,7 @@ def _group_by_shared_params(self: "Trace") -> None:
 
     Operations without parameters remain as individual single-pass layers.
     Sets ``_layer_label_raw``, ``recurrent_ops``, ``call_index``,
-    and ``num_calls`` on each OpLog.
+    and ``num_calls`` on each Op.
     """
     param_barcode_groups: dict[tuple[str, tuple[str, ...]], list[str]] = defaultdict(list)
     for label in self._raw_layer_labels_list:
@@ -260,7 +260,7 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
             member.num_calls = len(members_sorted)
 
 
-def _expand_isomorphic_subgraphs(self: "Trace", node: OpLog) -> None:
+def _expand_isomorphic_subgraphs(self: "Trace", node: Op) -> None:
     """Phase 2: BFS expansion of isomorphic subgraphs from equivalent operations.
 
     Given a node with multiple equivalent operations, creates one subgraph per

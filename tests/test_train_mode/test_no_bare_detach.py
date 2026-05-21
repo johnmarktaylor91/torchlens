@@ -15,8 +15,8 @@ SCANNED_PATHS = (
     REPO_ROOT / "torchlens" / "data_classes" / "op_log.py",
 )
 ALLOWLIST = {
-    "OpLog._tensor_contents_str_helper",
-    "OpLog.log_tensor_grad",
+    "Op._tensor_contents_str_helper",
+    "Op.log_tensor_grad",
     "log_tensor_grad",
 }
 MAX_NOQA_DETACH_EXEMPTIONS = 5

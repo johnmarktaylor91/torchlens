@@ -17,7 +17,7 @@ from torchlens.constants import (
 )
 from torchlens.data_classes._summary import format_call_arg
 from torchlens.data_classes.buffer_log import BufferAccessor
-from torchlens.data_classes.module_log import ModuleCallLog
+from torchlens.data_classes.module_log import ModuleCall
 from torchlens.data_classes.param_log import ParamAccessor
 
 
@@ -193,7 +193,7 @@ def test_buffer_accessor_to_pandas_schema(
 def test_module_call_log_to_pandas_schema(
     io_pandas_log: tuple[Any, _IoPandasModel, torch.Tensor],
 ) -> None:
-    """ModuleCallLog should export a single canonical row including summaries.
+    """ModuleCall should export a single canonical row including summaries.
 
     Parameters
     ----------
@@ -203,7 +203,7 @@ def test_module_call_log_to_pandas_schema(
     log, _, _ = io_pandas_log
     pass_log = log.modules["block:1"]
     df = pass_log.to_pandas()
-    assert isinstance(pass_log, ModuleCallLog)
+    assert isinstance(pass_log, ModuleCall)
     assert list(df.columns) == MODULE_PASS_LOG_FIELD_ORDER
     assert len(df) == 1
     assert df.loc[0, "forward_args_summary"]

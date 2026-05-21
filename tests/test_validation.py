@@ -449,7 +449,7 @@ def test_corruption_num_ops():
 def test_corruption_module_back_reference():
     """Removing a layer from its module's layers raises MetadataInvariantError."""
     log = _make_clean_log()
-    # Find a layer with a containing module and corrupt the ModuleLog
+    # Find a layer with a containing module and corrupt the Module
     for lpl in log.layer_list:
         cmo = lpl.module
         if cmo:

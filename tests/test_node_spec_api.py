@@ -9,7 +9,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import NodeSpec
-from torchlens.data_classes.layer_log import LayerLog
+from torchlens.data_classes.layer_log import Layer
 
 
 def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
@@ -50,13 +50,13 @@ def test_default_nodespec_for_linear_includes_in_out(tmp_path: Any) -> None:
 
 
 def test_node_spec_fn_receives_layer_log_and_default(tmp_path: Any) -> None:
-    """node_spec_fn receives an aggregate LayerLog and default NodeSpec."""
+    """node_spec_fn receives an aggregate Layer and default NodeSpec."""
 
     model = nn.Conv2d(3, 8, kernel_size=3)
     log = tl.trace(model, torch.randn(1, 3, 8, 8))
-    captured: list[tuple[LayerLog, NodeSpec]] = []
+    captured: list[tuple[Layer, NodeSpec]] = []
 
-    def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> NodeSpec | None:
+    def node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec | None:
         """Capture callback arguments and keep defaults."""
 
         if layer_log.layer_type == "conv2d":
@@ -66,7 +66,7 @@ def test_node_spec_fn_receives_layer_log_and_default(tmp_path: Any) -> None:
     _render_dot(log, tmp_path, node_spec_fn=node_spec_fn)
 
     assert len(captured) == 1
-    assert isinstance(captured[0][0], LayerLog)
+    assert isinstance(captured[0][0], Layer)
     assert isinstance(captured[0][1], NodeSpec)
     assert captured[0][0].layer_label.startswith("conv2d")
 
@@ -77,7 +77,7 @@ def test_node_spec_fn_return_overrides_default(tmp_path: Any) -> None:
     model = nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU())
     log = tl.trace(model, torch.randn(1, 3, 8, 8))
 
-    def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> NodeSpec | None:
+    def node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec | None:
         """Replace Conv2d nodes and leave other nodes unchanged."""
 
         del default_spec
@@ -98,7 +98,7 @@ def test_node_spec_fn_returning_none_uses_default(tmp_path: Any) -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     log = tl.trace(model, torch.randn(1, 4))
 
-    def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> None:
+    def node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> None:
         """Keep all default node specs."""
 
         del layer_log, default_spec
@@ -116,7 +116,7 @@ def test_html_special_chars_escaped(tmp_path: Any) -> None:
     model = nn.Linear(4, 4)
     log = tl.trace(model, torch.randn(1, 4))
 
-    def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> NodeSpec | None:
+    def node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec | None:
         """Return a label containing HTML-special characters."""
 
         del default_spec

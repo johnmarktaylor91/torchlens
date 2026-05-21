@@ -53,7 +53,7 @@ _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     ),
     ("torchlens.data_classes.layer_pass_log", "LayerPassLog"): (
         "torchlens.data_classes.op_log",
-        "OpLog",
+        "Op",
     ),
     ("torchlens.data_classes.layer_pass_log", "TensorLog"): (
         "torchlens.data_classes.op_log",
@@ -61,11 +61,11 @@ _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     ),
     ("torchlens.data_classes.module_log", "ModulePassLog"): (
         "torchlens.data_classes.module_log",
-        "ModuleCallLog",
+        "ModuleCall",
     ),
     ("torchlens.data_classes.grad_fn_pass_log", "GradFnPassLog"): (
         "torchlens.data_classes.grad_fn_call_log",
-        "GradFnCallLog",
+        "GradFnCall",
     ),
     ("torchlens." + "multi_trace.node_view", "NodeView"): (
         "torchlens.intervention._super.super_op",
@@ -978,9 +978,9 @@ def _maybe_make_fast_copy_spec(
     Parameters
     ----------
     live_layer:
-        Live ``OpLog`` instance being saved.
+        Live ``Op`` instance being saved.
     scrubbed_layer:
-        Scrubbed ``OpLog`` counterpart that will be pickled.
+        Scrubbed ``Op`` counterpart that will be pickled.
     tensor_field:
         Direct tensor field name, for example ``"out"``.
     ref_field:

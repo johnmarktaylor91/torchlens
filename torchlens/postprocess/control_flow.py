@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 import torch
 
-from ..data_classes.op_log import OpLog
+from ..data_classes.op_log import Op
 from ..utils.display import identity
 from ..utils.tensor_utils import safe_copy
 from . import ast_branches
@@ -702,7 +702,7 @@ def _fix_buffer_layers(self: "Trace") -> None:
         buffer_counter[buffer_address] += 1
 
 
-def _merge_buffer_entries(self: "Trace", source_buffer: OpLog, buffer_to_remove: OpLog) -> None:
+def _merge_buffer_entries(self: "Trace", source_buffer: Op, buffer_to_remove: Op) -> None:
     """Merge a duplicate buffer into a source buffer, rewiring all edges.
 
     Transfers all child and parent connections from ``buffer_to_remove`` to

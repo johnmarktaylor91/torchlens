@@ -1,6 +1,6 @@
 """Steps 1-4: Output nodes, ancestry tracing, orphan removal, distance marking.
 
-Step 1 (_add_output_layers): Creates dedicated output OpLog nodes, copying
+Step 1 (_add_output_layers): Creates dedicated output Op nodes, copying
     metadata from the original output tensors but stripping params and module info.
 Step 2 (_find_output_ancestors): DFS backward from outputs marking has_output_descendant.
 Step 3 (_remove_orphan_nodes): Bidirectional flood from inputs AND outputs to find
@@ -18,7 +18,7 @@ from ..utils.display import identity
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
 from ..utils.introspection import _get_code_context
-from ..data_classes.op_log import OpLog
+from ..data_classes.op_log import Op
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -29,7 +29,7 @@ def _add_output_layers(
 ) -> None:
     """Step 1: Add dedicated output nodes to the graph.
 
-    For each tensor in the model's output, creates a new OpLog that acts
+    For each tensor in the model's output, creates a new Op that acts
     as a terminal "output" node. The new node copies tensor metadata from the
     original output tensor but resets function, parameter, and module information
     to reflect that this is a synthetic bookkeeping node (func=identity,
@@ -43,7 +43,7 @@ def _add_output_layers(
     new_output_layers = []
     for i, output_layer_label in enumerate(self.output_layers):
         output_node = self[output_layer_label]
-        new_output_node = cast(OpLog, output_node.copy())
+        new_output_node = cast(Op, output_node.copy())
         new_output_node.layer_type = "output"
         new_output_node.is_output = True
         new_output_node.is_input = False
@@ -401,7 +401,7 @@ def _flood_graph_from_input_or_output_nodes(self: "Trace", mode: str) -> None:
 
 
 def _update_node_distance_vals(
-    current_node: OpLog,
+    current_node: Op,
     min_field: str,
     max_field: str,
     nodes_since_start: int,

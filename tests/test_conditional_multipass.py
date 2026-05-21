@@ -1,6 +1,6 @@
 """PYTEST_DONT_REWRITE
 
-Coverage for Phase 5 multi-pass LayerLog conditional aggregation.
+Coverage for Phase 5 multi-pass Layer conditional aggregation.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from torchlens import trace as trace_fn
-from torchlens.data_classes.layer_log import LayerLog
+from torchlens.data_classes.layer_log import Layer
 from torchlens.data_classes.model_log import Trace
 
 
@@ -197,8 +197,8 @@ def _get_only_event(trace: Trace) -> int:
     return trace.conditional_records[0].id
 
 
-def _find_multi_pass_linear_layer(trace: Trace) -> LayerLog:
-    """Find the unique multi-pass linear LayerLog.
+def _find_multi_pass_linear_layer(trace: Trace) -> Layer:
+    """Find the unique multi-pass linear Layer.
 
     Parameters
     ----------
@@ -207,7 +207,7 @@ def _find_multi_pass_linear_layer(trace: Trace) -> LayerLog:
 
     Returns
     -------
-    LayerLog
+    Layer
         Repeated linear layer entry.
     """
     matching_layers = [
@@ -235,7 +235,7 @@ def _assert_sorted_unique_pass_lists(
 
 
 def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
-    """Multi-pass LayerLog stores both branch signatures and pass unions."""
+    """Multi-pass Layer stores both branch signatures and pass unions."""
     trace = _log_model(AlternatingRecurrentIfModel())
     conditional_id = _get_only_event(trace)
     linear_layer = _find_multi_pass_linear_layer(trace)

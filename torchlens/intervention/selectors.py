@@ -261,7 +261,7 @@ class ContainsSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class WhereSelector(BaseSelector):
-    """Predicate selector over ``OpLog`` objects.
+    """Predicate selector over ``Op`` objects.
 
     Parameters
     ----------
@@ -416,7 +416,7 @@ class GradFnLabelSelector(BaseSelector):
         Parameters
         ----------
         name:
-            GradFnLog label to match.
+            GradFn label to match.
         """
 
         object.__setattr__(self, "selector_kind", "grad_fn_label")
@@ -693,7 +693,7 @@ def grad_fn_label(name: str) -> GradFnLabelSelector:
     Parameters
     ----------
     name:
-        GradFnLog label to match.
+        GradFn label to match.
 
     Returns
     -------

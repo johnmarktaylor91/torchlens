@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Union, cast
 
 if TYPE_CHECKING:
     from .model_log import Trace
-    from .module_log import ModuleLog
+    from .module_log import Module
 
 
 def _give_user_feedback_about_lookup_key(
@@ -94,7 +94,7 @@ def _get_lookup_help_str(self: "Trace", layer_label: Union[int, str], mode: str)
     else:
         sample_layer1 = random.choice(self.op_labels)
         sample_layer2 = random.choice(self.layer_labels)
-    module_logs = cast("list[ModuleLog]", list(self.modules))
+    module_logs = cast("list[Module]", list(self.modules))
     module_addrs = [ml.address for ml in module_logs if ml.address != "self"]
     if len(module_addrs) > 0:
         sample_module1 = random.choice(module_addrs)

@@ -31,8 +31,8 @@ from test_conditional_multipass import (
 from test_conditional_rendering import BranchEntryWithArgLabelModel
 from test_conditional_step5 import ElifLadderModel, SimpleIfElseModel
 from torchlens import check_metadata_invariants, trace as trace_fn
-from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import ConditionalEvent, Trace
 
 
@@ -996,7 +996,7 @@ def _log_model(
     )
 
 
-def _get_terminal_bool_layers(trace: Trace) -> list[OpLog]:
+def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
     """Return terminal scalar bool layers from a model log.
 
     Parameters
@@ -1006,7 +1006,7 @@ def _get_terminal_bool_layers(trace: Trace) -> list[OpLog]:
 
     Returns
     -------
-    list[OpLog]
+    list[Op]
         Terminal scalar bool layers in execution order.
     """
     return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
@@ -1016,7 +1016,7 @@ def _find_only_layer(
     trace: Trace,
     func_name: str,
     branch_stack: list[tuple[int, str]] | None = None,
-) -> OpLog:
+) -> Op:
     """Find the unique layer matching a function name and optional branch stack.
 
     Parameters
@@ -1030,7 +1030,7 @@ def _find_only_layer(
 
     Returns
     -------
-    OpLog
+    Op
         Matching layer.
     """
     matching_layers = [layer for layer in trace.layer_list if layer.func_name == func_name]
@@ -1047,9 +1047,9 @@ def _find_only_layer(
 def _find_only_layer_log(
     trace: Trace,
     func_name: str,
-    predicate: Callable[[LayerLog], bool],
-) -> LayerLog:
-    """Find one aggregate ``LayerLog`` matching the provided predicate.
+    predicate: Callable[[Layer], bool],
+) -> Layer:
+    """Find one aggregate ``Layer`` matching the provided predicate.
 
     Parameters
     ----------
@@ -1062,7 +1062,7 @@ def _find_only_layer_log(
 
     Returns
     -------
-    LayerLog
+    Layer
         Matching aggregate layer log.
     """
     matching_layers = [
@@ -1586,7 +1586,7 @@ def test_looped_if_alternating_model_has_exactly_two_signatures() -> None:
 
 
 def test_alternating_recurrent_if_model_merges_layerlog_conditionals() -> None:
-    """Multi-pass ``LayerLog`` stores both branch signatures and pass unions."""
+    """Multi-pass ``Layer`` stores both branch signatures and pass unions."""
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     conditional_id = _get_root_event(trace).id
     linear_layer = _find_only_layer_log(

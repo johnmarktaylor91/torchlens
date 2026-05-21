@@ -22,7 +22,7 @@ class _KpiModel(torch.nn.Module):
 
 
 def test_capture_memory_fields_and_forward_source_line() -> None:
-    """Populate Phase 4 OpLog memory fields and forward line number."""
+    """Populate Phase 4 Op memory fields and forward line number."""
 
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     log = tl.trace(model, torch.ones(1, 2))

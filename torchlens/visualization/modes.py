@@ -13,11 +13,11 @@ from ..utils.display import human_readable_size
 from .node_spec import NodeSpec
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_log import LayerLog
-    from ..data_classes.module_log import ModuleLog
+    from ..data_classes.layer_log import Layer
+    from ..data_classes.module_log import Module
 
-NodeModeFn = Callable[["LayerLog", NodeSpec], NodeSpec]
-CollapsedNodeModeFn = Callable[["ModuleLog", NodeSpec], NodeSpec]
+NodeModeFn = Callable[["Layer", NodeSpec], NodeSpec]
+CollapsedNodeModeFn = Callable[["Module", NodeSpec], NodeSpec]
 
 VISION_LAYER_TYPES: Final[frozenset[str]] = frozenset(
     {
@@ -55,7 +55,7 @@ ATTENTION_PROJECTION_ROLES: Final[dict[str, str]] = {
 DOMAIN_NODE_MODES: Final[frozenset[str]] = frozenset({"vision", "attention"})
 
 
-def default_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
+def default_node_mode(layer_log: "Layer", spec: NodeSpec) -> NodeSpec:
     """Return the default node spec unchanged.
 
     Parameters
@@ -75,7 +75,7 @@ def default_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
     return spec
 
 
-def profiling_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
+def profiling_node_mode(layer_log: "Layer", spec: NodeSpec) -> NodeSpec:
     """Append runtime, output storage, and source-call details when available.
 
     Parameters
@@ -114,7 +114,7 @@ def profiling_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
     return spec.replace(lines=lines)
 
 
-def vision_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
+def vision_node_mode(layer_log: "Layer", spec: NodeSpec) -> NodeSpec:
     """Append input/output spatial shapes for vision-like layers.
 
     Parameters
@@ -143,7 +143,7 @@ def vision_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
     return spec.replace(lines=lines)
 
 
-def attention_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
+def attention_node_mode(layer_log: "Layer", spec: NodeSpec) -> NodeSpec:
     """Append compact annotations for attention-related layers.
 
     Parameters
@@ -182,7 +182,7 @@ def attention_node_mode(layer_log: "LayerLog", spec: NodeSpec) -> NodeSpec:
     return spec.replace(lines=lines) if lines != spec.lines else spec
 
 
-def profiling_collapsed_node_mode(module_log: "ModuleLog", spec: NodeSpec) -> NodeSpec:
+def profiling_collapsed_node_mode(module_log: "Module", spec: NodeSpec) -> NodeSpec:
     """Append aggregate runtime and output storage for a collapsed module.
 
     Parameters
@@ -225,7 +225,7 @@ def profiling_collapsed_node_mode(module_log: "ModuleLog", spec: NodeSpec) -> No
     return spec.replace(lines=lines)
 
 
-def identity_collapsed_node_mode(module_log: "ModuleLog", spec: NodeSpec) -> NodeSpec:
+def identity_collapsed_node_mode(module_log: "Module", spec: NodeSpec) -> NodeSpec:
     """Return a collapsed module node spec unchanged.
 
     Parameters
@@ -260,7 +260,7 @@ COLLAPSED_MODE_REGISTRY: Final[dict[VisNodeModeLiteral, CollapsedNodeModeFn]] = 
 
 
 def _get_optional_attr(obj: object, attr_name: str) -> Any:
-    """Read an attribute, returning ``None`` when LayerLog delegation cannot satisfy it."""
+    """Read an attribute, returning ``None`` when Layer delegation cannot satisfy it."""
 
     try:
         return getattr(obj, attr_name)
@@ -274,7 +274,7 @@ def _compact_size(size: float) -> str:
     return human_readable_size(size).replace(" ", "")
 
 
-def _first_call_location(layer_log: "LayerLog") -> Any | None:
+def _first_call_location(layer_log: "Layer") -> Any | None:
     """Return the first captured call-stack location for a layer."""
 
     call_stack = _get_optional_attr(layer_log, "code_context")
@@ -283,13 +283,13 @@ def _first_call_location(layer_log: "LayerLog") -> Any | None:
     return None
 
 
-def _normalized_layer_type(layer_log: "LayerLog") -> str:
+def _normalized_layer_type(layer_log: "Layer") -> str:
     """Return a lower-case layer type with underscores removed."""
 
     return str(layer_log.layer_type).lower().replace("_", "")
 
 
-def _first_input_shape(layer_log: "LayerLog") -> tuple[int, ...] | None:
+def _first_input_shape(layer_log: "Layer") -> tuple[int, ...] | None:
     """Infer the first tensor input shape from parent graph metadata or captured args."""
 
     trace = _get_optional_attr(layer_log, "source_trace")
@@ -315,7 +315,7 @@ def _format_shape(shape: tuple[Any, ...]) -> str:
     return "x".join(str(dim) for dim in shape) if shape else "x1"
 
 
-def _is_inside_multihead_attention(layer_log: "LayerLog") -> bool:
+def _is_inside_multihead_attention(layer_log: "Layer") -> bool:
     """Return whether the layer belongs to a recorded MultiheadAttention module."""
 
     trace = _get_optional_attr(layer_log, "source_trace")
@@ -330,7 +330,7 @@ def _is_inside_multihead_attention(layer_log: "LayerLog") -> bool:
     return False
 
 
-def _format_attention_head_line(layer_log: "LayerLog") -> str:
+def _format_attention_head_line(layer_log: "Layer") -> str:
     """Format head/embed/head-dim details for an attention operation."""
 
     shape = _get_optional_attr(layer_log, "shape")
@@ -354,7 +354,7 @@ def _format_attention_head_line(layer_log: "LayerLog") -> str:
     return " ".join(parts)
 
 
-def _attention_dropout(layer_log: "LayerLog") -> float | None:
+def _attention_dropout(layer_log: "Layer") -> float | None:
     """Return non-structural attention dropout captured in layer config."""
 
     config = _get_optional_attr(layer_log, "func_config")
@@ -364,7 +364,7 @@ def _attention_dropout(layer_log: "LayerLog") -> float | None:
     return float(value) if isinstance(value, int | float) else None
 
 
-def _attention_projection_role(layer_log: "LayerLog", containing_mha: bool) -> str | None:
+def _attention_projection_role(layer_log: "Layer", containing_mha: bool) -> str | None:
     """Infer q/k/v/out projection role from module address and MHA context."""
 
     layer_type = _normalized_layer_type(layer_log)

@@ -10,9 +10,9 @@ from typing import Any, Callable, cast
 
 from ... import _state
 from ...constants import LAYER_PASS_LOG_FIELD_ORDER
-from ...data_classes.layer_log import LayerLog
+from ...data_classes.layer_log import Layer
 from ...data_classes.model_log import Trace
-from ...data_classes.op_log import OpLog, _LAYER_PASS_LOG_DEFAULT_FILL
+from ...data_classes.op_log import Op, _LAYER_PASS_LOG_DEFAULT_FILL
 from ...ir.events import OpEvent, TraceBuildState
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext
@@ -287,7 +287,7 @@ class MLXBackend:
     ) -> tuple[OpEvent, ...]:
         """Emit Protocol operation events.
 
-        The M7 MLX path writes existing ``OpLog`` objects directly for smoke
+        The M7 MLX path writes existing ``Op`` objects directly for smoke
         compatibility; structured ``OpEvent`` emission is reserved for later
         unification work.
         """
@@ -560,8 +560,8 @@ class MLXBackend:
         capture_index: int,
         type_index: int,
         is_input: bool = False,
-    ) -> OpLog:
-        """Build a minimal but structurally valid ``OpLog`` for MLX."""
+    ) -> Op:
+        """Build a minimal but structurally valid ``Op`` for MLX."""
 
         fields = dict(_LAYER_PASS_LOG_DEFAULT_FILL)
         pass_label = f"{label}:1"
@@ -681,9 +681,9 @@ class MLXBackend:
             }
         )
         op_fields = {field_name: fields[field_name] for field_name in LAYER_PASS_LOG_FIELD_ORDER}
-        return OpLog(op_fields)
+        return Op(op_fields)
 
-    def _register_op_log(self, trace: Trace, op_log: OpLog) -> None:
+    def _register_op_log(self, trace: Trace, op_log: Op) -> None:
         """Register an MLX op log on all trace lookup structures.
 
         Parameters
@@ -705,7 +705,7 @@ class MLXBackend:
         trace.layer_num_calls[label] = 1
         trace._lookup_keys_to_layer_num_dict[label] = capture_index
         trace._layer_num_to_lookup_keys_dict[capture_index].append(label)
-        layer_log = LayerLog(op_log)
+        layer_log = Layer(op_log)
         layer_log.ops[1] = op_log
         layer_log.call_labels.append(op_log.layer_label_w_pass)
         op_log.parent_layer_log = layer_log

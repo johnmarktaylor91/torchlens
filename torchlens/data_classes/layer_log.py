@@ -1,11 +1,11 @@
-"""LayerLog and LayerAccessor: aggregate per-layer metadata and dict-like accessor.
+"""Layer and LayerAccessor: aggregate per-layer metadata and dict-like accessor.
 
-LayerLog groups one or more OpLog entries that represent the same
+Layer groups one or more Op entries that represent the same
 logical layer across recurrent ops.  For non-recurrent models (the
-common case), every LayerLog wraps exactly one OpLog.
+common case), every Layer wraps exactly one Op.
 
 **Delegation pattern**: For single-pass layers, per-pass fields (out,
-grad, compute_index, etc.) are accessible directly on the LayerLog
+grad, compute_index, etc.) are accessible directly on the Layer
 via ``_single_pass_or_error()`` and ``__getattr__`` delegation to ``ops[1]``.
 For multi-pass layers, accessing these fields raises ``ValueError`` (NOT
 ``AttributeError``) directing the user to ``layer_log.ops[N].field``.
@@ -16,7 +16,7 @@ through to ``__getattr__``.  Using ``ValueError`` avoids this trap and gives
 the user a clear error message.
 
 **_build_layer_logs merge rules** (in postprocess/layer_log.py):
-When merging multiple ops into one LayerLog, these aggregate fields are merged:
+When merging multiple ops into one Layer, these aggregate fields are merged:
   - ``has_input_ancestor``: OR across ops
   - ``io_role``: character-level merge of "I", "O", "IO" strings
   - ``is_atomic_module_op``: OR across ops
@@ -43,13 +43,13 @@ from ._accessor_base import Accessor
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .op_log import OpLog
+    from .op_log import Op
     from .model_log import Trace
-    from .param_log import ParamLog
+    from .param_log import Param
 
 
-class OpAccessor(Accessor["OpLog"]):
-    """Scoped dict-like accessor for the OpLog entries owned by one LayerLog."""
+class OpAccessor(Accessor["Op"]):
+    """Scoped dict-like accessor for the Op entries owned by one Layer."""
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
@@ -57,34 +57,34 @@ class OpAccessor(Accessor["OpLog"]):
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
     }
 
-    def __init__(self, ops: Dict[int, "OpLog"] | None = None) -> None:
+    def __init__(self, ops: Dict[int, "Op"] | None = None) -> None:
         """Initialize the accessor.
 
         Parameters
         ----------
         ops:
-            Mapping from 1-based call index to OpLog.
+            Mapping from 1-based call index to Op.
         """
 
         super().__init__(ops or {})
 
-    def __getitem__(self, key: int | str) -> "OpLog":
-        """Return an OpLog by call index or pass-qualified label."""
+    def __getitem__(self, key: int | str) -> "Op":
+        """Return an Op by call index or pass-qualified label."""
 
         if isinstance(key, int):
             return self._dict[key]
         resolved = self._resolve_substring(key)
         if resolved is not None:
             return resolved
-        raise KeyError(f"Op '{key}' not found in scoped LayerLog ops.")
+        raise KeyError(f"Op '{key}' not found in scoped Layer ops.")
 
-    def __setitem__(self, key: int, value: "OpLog") -> None:
-        """Set an OpLog by call index."""
+    def __setitem__(self, key: int, value: "Op") -> None:
+        """Set an Op by call index."""
 
         self._dict[key] = value
 
     def __contains__(self, key: object) -> bool:
-        """Return whether key resolves to an OpLog."""
+        """Return whether key resolves to an Op."""
 
         if isinstance(key, int):
             return key in self._dict
@@ -103,13 +103,13 @@ class OpAccessor(Accessor["OpLog"]):
 
         return iter(self._dict)
 
-    def get(self, key: int, default: "OpLog | None" = None) -> "OpLog | None":
-        """Return an OpLog by call index, or default."""
+    def get(self, key: int, default: "Op | None" = None) -> "Op | None":
+        """Return an Op by call index, or default."""
 
         return self._dict.get(key, default)
 
-    def _resolve_substring(self, key: str) -> "OpLog | None":
-        """Resolve OpLog by any scoped layer-label variant."""
+    def _resolve_substring(self, key: str) -> "Op | None":
+        """Resolve Op by any scoped layer-label variant."""
         for op_log in self._dict.values():
             if key in {
                 op_log.layer_label,
@@ -123,15 +123,15 @@ class OpAccessor(Accessor["OpLog"]):
         return None
 
 
-class LayerLog:
+class Layer:
     """Aggregate per-layer metadata for a logged model operation.
 
-    Groups one or more OpLog objects (one per invocation of this layer).
-    For non-recurrent models, every LayerLog has exactly one pass.
+    Groups one or more Op objects (one per invocation of this layer).
+    For non-recurrent models, every Layer has exactly one pass.
 
     Aggregate fields (function identity, param identity, flags, module containment)
-    live directly on LayerLog.  Per-pass fields (outs, graph edges,
-    execution state, grads) live on the OpLog objects in ``self.ops``.
+    live directly on Layer.  Per-pass fields (outs, graph edges,
+    execution state, grads) live on the Op objects in ``self.ops``.
 
     For single-pass layers, per-pass fields are accessible directly via
     ``__getattr__`` delegation (e.g. ``layer_log.out`` transparently
@@ -225,11 +225,11 @@ class LayerLog:
         "call_labels": FieldPolicy.KEEP,
     }
 
-    def __init__(self, first_pass: "OpLog") -> None:
+    def __init__(self, first_pass: "Op") -> None:
         """Initialize from the first pass of this layer.
 
         Args:
-            first_pass: The OpLog for pass 1 of this layer.
+            first_pass: The Op for pass 1 of this layer.
         """
         # Identity & labeling
         self.layer_label = first_pass.layer_label_no_pass
@@ -238,7 +238,7 @@ class LayerLog:
         self.type_index = first_pass.type_index
         self.trace_index = first_pass.trace_index
         self.num_calls = first_pass.num_calls
-        # Store as weakref to break circular reference (Trace -> layer_logs -> LayerLog -> Trace).
+        # Store as weakref to break circular reference (Trace -> layer_logs -> Layer -> Trace).
         _sml = first_pass.source_trace
         self._source_trace_ref: weakref.ReferenceType["Trace"] | None = (
             weakref.ref(_sml) if _sml is not None else None
@@ -287,7 +287,7 @@ class LayerLog:
 
         # Param identity
         self._param_barcodes = first_pass._param_barcodes
-        self._param_logs: List["ParamLog"] = first_pass._param_logs
+        self._param_logs: List["Param"] = first_pass._param_logs
         self.param_shapes = first_pass.param_shapes
         self.num_params = first_pass.num_params
         self.num_params_trainable = first_pass.num_params_trainable
@@ -478,7 +478,7 @@ class LayerLog:
     # ******* Single-pass delegation *************
     # ********************************************
     # For single-pass layers, per-pass fields are transparently accessible
-    # on the LayerLog itself.  For multi-pass layers, attempting to access
+    # on the Layer itself.  For multi-pass layers, attempting to access
     # these fields raises ValueError directing the user to a specific pass.
 
     def _single_pass_or_error(self, field_name: str) -> Any:
@@ -662,7 +662,7 @@ class LayerLog:
     # ***** Aggregate graph properties ***********
     # ********************************************
     # Graph-edge properties compute the union across all ops, returning
-    # no-pass labels (i.e. LayerLog-level identifiers).  This gives a
+    # no-pass labels (i.e. Layer-level identifiers).  This gives a
     # complete picture of which layers are connected across all recurrent
     # iterations.  Order is preserved (first-seen insertion order).
 
@@ -815,12 +815,12 @@ class LayerLog:
 
     @property
     def layer_label_no_pass(self) -> str:
-        """Alias so code expecting layer_label_no_pass works on LayerLog."""
+        """Alias so code expecting layer_label_no_pass works on Layer."""
         return cast(str, self.layer_label)
 
     @property
     def layer_label_no_pass_short(self) -> str:
-        """Alias so code expecting layer_label_no_pass_short works on LayerLog."""
+        """Alias so code expecting layer_label_no_pass_short works on Layer."""
         return cast(str, self.layer_label_short)
 
     @property
@@ -948,7 +948,7 @@ class LayerLog:
 
         Only called when normal attribute lookup has already failed (Python's
         ``__getattr__`` protocol).  For single-pass layers, transparently
-        forwards to the underlying OpLog, enabling code like
+        forwards to the underlying Op, enabling code like
         ``layer_log.func_rng_states`` without needing an explicit property.
 
         Private attributes (starting with '_') are never delegated — they
@@ -969,22 +969,22 @@ class LayerLog:
     # ************ User-facing custom_methods ***********
     # ********************************************
 
-    def get_children(self) -> list["LayerLog"]:
-        """Return child LayerLog objects for this layer.
+    def get_children(self) -> list["Layer"]:
+        """Return child Layer objects for this layer.
 
         Returns
         -------
-        list[LayerLog]
+        list[Layer]
             Child layers resolved through the owning model log.
         """
         return [self.source_trace[child_label] for child_label in self.children]
 
-    def get_parents(self) -> list["LayerLog"]:
-        """Return parent LayerLog objects for this layer.
+    def get_parents(self) -> list["Layer"]:
+        """Return parent Layer objects for this layer.
 
         Returns
         -------
-        list[LayerLog]
+        list[Layer]
             Parent layers resolved through the owning model log.
         """
         return [self.source_trace[parent_label] for parent_label in self.parents]
@@ -1032,7 +1032,7 @@ class LayerLog:
         source = ref() if ref is not None else None
         if source is None or getattr(source, "_loaded_from_bundle", False):
             raise AttributeError(
-                "This LayerLog is detached from its source Trace "
+                "This Layer is detached from its source Trace "
                 "(perhaps loaded from disk or after cleanup). "
                 "Use trace.do(label, transform) directly."
             )
@@ -1160,7 +1160,7 @@ class LayerLog:
 
     def __str__(self) -> str:
         if not self._tracing_finished:
-            return f"LayerLog({self.layer_label}) (pass not finished)"
+            return f"Layer({self.layer_label}) (pass not finished)"
         s = f"Layer {self.layer_label}:"
         if self.num_calls > 1:
             s += f" ({self.num_calls} ops)"
@@ -1192,13 +1192,13 @@ class LayerLog:
         return cast(int, self.num_calls)
 
 
-class LayerAccessor(Accessor[Union["LayerLog", "OpLog"]]):
-    """Dict-like accessor for LayerLog objects.
+class LayerAccessor(Accessor[Union["Layer", "Op"]]):
+    """Dict-like accessor for Layer objects.
 
     Supports indexing by:
     * **layer label** (str) -- exact match against no-pass label.
     * **ordinal index** (int) -- position in execution order.
-    * **pass notation** (str ``"conv2d_1_1:2"``) -- returns the OpLog
+    * **pass notation** (str ``"conv2d_1_1:2"``) -- returns the Op
       for a specific pass of a multi-pass layer.
 
     Available as ``trace.layers``.
@@ -1212,14 +1212,14 @@ class LayerAccessor(Accessor[Union["LayerLog", "OpLog"]]):
 
     def __init__(
         self,
-        layer_logs: Dict[str, "LayerLog"],
+        layer_logs: Dict[str, "Layer"],
         source_trace: Optional["Trace"] = None,
     ) -> None:
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(layer_logs, source_ref=source_ref)
 
-    def _resolve_pass_qualified(self, key: str) -> "OpLog | None":
-        """Resolve ``layer_label:pass`` notation to an OpLog."""
+    def _resolve_pass_qualified(self, key: str) -> "Op | None":
+        """Resolve ``layer_label:pass`` notation to an Op."""
         base, _, pass_str = key.rpartition(":")
         if base in self._dict:
             try:

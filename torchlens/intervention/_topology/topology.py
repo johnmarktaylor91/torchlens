@@ -6,7 +6,7 @@ this module produces:
 * :func:`compare_topology` -- a pairwise structural diff between two Traces.
 * :class:`TopologyDiff` -- the result type for the pairwise comparison.
 * :class:`Supergraph` (and :class:`SupergraphNode`) -- the union of N graphs,
-  with each node carrying which traces traversed it plus per-trace LayerLog
+  with each node carrying which traces traversed it plus per-trace Layer
   pointers.
 * :func:`build_supergraph` -- the constructor used by intervention ``Bundle``.
 
@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ...data_classes.layer_log import LayerLog
+    from ...data_classes.layer_log import Layer
     from ...data_classes.model_log import Trace
 
 
@@ -41,7 +41,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only
 Fingerprint = Tuple[str, str]
 
 
-def _fingerprint(layer: "LayerLog") -> Fingerprint:
+def _fingerprint(layer: "Layer") -> Fingerprint:
     """Return the structural fingerprint used for cross-trace node matching.
 
     Composed of ``(module or "", func_name or "")`` -- both
@@ -54,7 +54,7 @@ def _fingerprint(layer: "LayerLog") -> Fingerprint:
     return (str(mod), str(func))
 
 
-def _shape_excluding_batch(layer: "LayerLog") -> Optional[Tuple[int, ...]]:
+def _shape_excluding_batch(layer: "Layer") -> Optional[Tuple[int, ...]]:
     """Return the layer's tensor shape excluding the leading (batch) dim.
 
     Returns ``None`` if the shape is unavailable. 0-d tensors yield ``()``;
@@ -173,7 +173,7 @@ class SupergraphNode:
     ----------
     name:
         Canonical supergraph node name. Equal to one of the per-trace
-        ``LayerLog.layer_label`` values (chosen from the first trace that
+        ``Layer.layer_label`` values (chosen from the first trace that
         contributed the node).
     fingerprint:
         ``(module, func_name)`` tuple used for matching.
@@ -181,10 +181,10 @@ class SupergraphNode:
         Ordered list of trace names that traversed this node, preserving
         bundle order.
     layer_refs:
-        Maps each trace name to the ``LayerLog`` for that trace at this node.
+        Maps each trace name to the ``Layer`` for that trace at this node.
     op_type:
         Representative function name (taken from the first contributing
-        trace's LayerLog).
+        trace's Layer).
     module_path:
         Representative ``module`` (or ``None`` if not in a module).
     module_type:
@@ -194,7 +194,7 @@ class SupergraphNode:
     name: str
     fingerprint: Fingerprint
     traces: List[str] = field(default_factory=list)
-    layer_refs: Dict[str, "LayerLog"] = field(default_factory=dict)
+    layer_refs: Dict[str, "Layer"] = field(default_factory=dict)
     op_type: str = ""
     module_path: Optional[str] = None
     module_type: Optional[str] = None
@@ -225,7 +225,7 @@ class Supergraph:
     topological_order: List[str] = field(default_factory=list)
 
 
-def _module_type_for_layer(trace: "Trace", layer: "LayerLog") -> Optional[str]:
+def _module_type_for_layer(trace: "Trace", layer: "Layer") -> Optional[str]:
     """Return the module class name for a layer's containing module.
 
     Parameters
@@ -259,10 +259,10 @@ def _module_type_for_layer(trace: "Trace", layer: "LayerLog") -> Optional[str]:
 def _per_trace_fingerprint_to_canonical(
     canonical_assignments: Dict[Tuple[str, Fingerprint, int], str],
     trace_name: str,
-    layer: "LayerLog",
+    layer: "Layer",
     fp_seen_count: Dict[Tuple[str, Fingerprint], int],
 ) -> str:
-    """Compute the canonical node name for a per-trace LayerLog.
+    """Compute the canonical node name for a per-trace Layer.
 
     Each fingerprint may legitimately repeat (e.g. multiple ``relu`` calls
     in the same module pass).  We disambiguate by pairing the trace name
@@ -288,7 +288,7 @@ def build_supergraph(traces: List["Trace"], names: List[str]) -> Supergraph:
        name (the layer_label from the first trace that contributed it).
 
     2. **Node payloads.** Walk each trace's layer_logs in order, populating
-       :class:`SupergraphNode` entries with the per-trace LayerLog refs and
+       :class:`SupergraphNode` entries with the per-trace Layer refs and
        the trace coverage list.
 
     3. **Edges + topological order.** Merge per-trace adjacency and per-

@@ -38,7 +38,7 @@ from .types import Relationship
 if TYPE_CHECKING:  # pragma: no cover - typing-only
     from torch import nn
 
-    from ..data_classes.op_log import OpLog
+    from ..data_classes.op_log import Op
     from ..data_classes.model_log import Trace
 
 
@@ -571,12 +571,12 @@ class Bundle:
 
         self._require_relationship("node", _REQUIRED_RELATIONSHIPS["node"])
         self._ensure_supergraph()
-        layer_members: dict[str, OpLog] = {}
+        layer_members: dict[str, Op] = {}
         failures: dict[str, str] = {}
         for name, log in self._members.items():
             try:
                 table = resolve_sites(log, site, max_fanout=1)
-                layer_members[name] = cast("OpLog", table.first())
+                layer_members[name] = cast("Op", table.first())
             except Exception as exc:  # noqa: BLE001 - rewrapped with member context
                 failures[name] = str(exc)
         if failures:
@@ -1802,7 +1802,7 @@ def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | N
     Parameters
     ----------
     layer:
-        LayerLog or OpLog-like object.
+        Layer or Op-like object.
     field:
         Tensor field to read.
 

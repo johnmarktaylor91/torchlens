@@ -29,14 +29,14 @@ from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.grad_fn_log import GradFnLog
-    from torchlens.data_classes.layer_log import LayerLog
-    from torchlens.data_classes.op_log import OpLog
+    from torchlens.data_classes.grad_fn_log import GradFn
+    from torchlens.data_classes.layer_log import Layer
+    from torchlens.data_classes.op_log import Op
     from torchlens.data_classes.model_log import Trace
 
 SelectorInput = BaseSelector | TargetSpec | FrozenTargetSpec | str
 if TYPE_CHECKING:
-    Site: TypeAlias = OpLog | LayerLog | GradFnLog
+    Site: TypeAlias = Op | Layer | GradFn
 else:
     Site: TypeAlias = Any
 DIRECTION_AGNOSTIC_KINDS = frozenset({"label", "in_module", "module", "contains", "predicate"})
@@ -147,7 +147,7 @@ class SiteTable:
 
         Returns
         -------
-        Iterator[OpLog]
+        Iterator[Op]
             Iterator over layer-pass records.
         """
 
@@ -163,7 +163,7 @@ class SiteTable:
 
         Returns
         -------
-        OpLog | SiteTable
+        Op | SiteTable
             Single layer pass for integer indexes, table for slices.
         """
 
@@ -212,7 +212,7 @@ class SiteTable:
 
         Returns
         -------
-        OpLog
+        Op
             First layer-pass record.
 
         Raises
@@ -391,7 +391,7 @@ def find_sites(
     return SiteTable(matched, query=query)
 
 
-def _iter_layer_ops(log: "Trace") -> Sequence["OpLog"]:
+def _iter_layer_ops(log: "Trace") -> Sequence["Op"]:
     """Return final layer ops from a completed model log.
 
     Parameters
@@ -401,7 +401,7 @@ def _iter_layer_ops(log: "Trace") -> Sequence["OpLog"]:
 
     Returns
     -------
-    Sequence[OpLog]
+    Sequence[Op]
         Execution-order layer-pass records.
 
     Raises
@@ -457,7 +457,7 @@ def _resolve_unchecked(
 
     Returns
     -------
-    tuple[OpLog, ...]
+    tuple[Op, ...]
         Matching sites in execution order.
     """
 
@@ -569,9 +569,9 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
         Whether the selector matches.
     """
 
-    from torchlens.data_classes.grad_fn_log import GradFnLog
+    from torchlens.data_classes.grad_fn_log import GradFn
 
-    if isinstance(site, GradFnLog):
+    if isinstance(site, GradFn):
         if kind in DIRECTION_AGNOSTIC_KINDS:
             if site.op is None:
                 return False
@@ -600,7 +600,7 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
     return False
 
 
-def _resolve_grad_fn_kind(site: "GradFnLog", kind: str, value: Any) -> bool:
+def _resolve_grad_fn_kind(site: "GradFn", kind: str, value: Any) -> bool:
     """Return whether one grad_fn site matches a backward-only selector.
 
     Parameters
@@ -658,7 +658,7 @@ def _output_matches(site: Site, value: Any) -> bool:
     return getattr(site, "multi_output_role", None) == str(value)
 
 
-def _grad_fn_type_matches(site: "GradFnLog", requested: str) -> bool:
+def _grad_fn_type_matches(site: "GradFn", requested: str) -> bool:
     """Return whether a grad_fn type matches user spelling flexibly.
 
     Parameters
@@ -865,7 +865,7 @@ def _predicate_payload(value: Any) -> tuple[Callable[[Any], bool], str | None]:
 
     Returns
     -------
-    tuple[Callable[[OpLog], bool], str | None]
+    tuple[Callable[[Op], bool], str | None]
         Predicate and optional name hint.
 
     Raises

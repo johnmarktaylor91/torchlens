@@ -37,7 +37,7 @@ import torch
 
 from ._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
 from ...ir import live_record_for_label
-from ...data_classes.op_log import OpLog
+from ...data_classes.op_log import Op
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
 
 def _locate_parent_tensors_in_args(
     self: "Trace",
-    parent_log_entries: list[OpLog],
+    parent_log_entries: list[Op],
     args: tuple[Any, ...],
     kwargs: dict[Any, Any],
 ) -> dict[str, dict[Any, str]]:
@@ -146,7 +146,7 @@ def _locate_parent_tensors_in_args(
 
 
 def _find_arg_positions_for_single_parent(
-    parent_entry: OpLog,
+    parent_entry: Op,
     arg_type: str,
     arg_struct: list[Any] | tuple[Any, ...] | dict[Any, Any],
     tensor_all_arg_positions: dict[str, dict[Any, str]],
@@ -193,7 +193,7 @@ def _find_arg_positions_for_single_parent(
 
 
 def _get_ancestors_from_parents(
-    parent_entries: list[OpLog],
+    parent_entries: list[Op],
 ) -> tuple[set[str], set[str]]:
     """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
@@ -212,7 +212,7 @@ def _get_ancestors_from_parents(
     return input_ancestors, internal_source_ancestors
 
 
-def _update_tensor_family_links(self: "Trace", entry_to_update: OpLog) -> None:
+def _update_tensor_family_links(self: "Trace", entry_to_update: Op) -> None:
     """Update bidirectional family links for a newly created tensor.
 
     All four relationship types are updated symmetrically:
@@ -222,7 +222,7 @@ def _update_tensor_family_links(self: "Trace", entry_to_update: OpLog) -> None:
         of the new tensor (and vice versa).
 
     Args:
-        entry_to_update: The newly created OpLog entry.
+        entry_to_update: The newly created Op entry.
     """
     tensor_label = entry_to_update._label_raw
     parent_tensor_labels = entry_to_update.parents

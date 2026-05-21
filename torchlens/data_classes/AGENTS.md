@@ -3,22 +3,22 @@
 ## Key Access Patterns
 
 ```python
-log["conv2d_1_5"]      # LayerLog aggregate
-log["conv2d_1_5:2"]    # OpLog for a specific pass
-log[3]                 # OpLog by ordinal
+log["conv2d_1_5"]      # Layer aggregate
+log["conv2d_1_5:2"]    # Op for a specific pass
+log[3]                 # Op by ordinal
 log.layers             # LayerAccessor
 log.modules            # ModuleAccessor
 log.params             # ParamAccessor
 log.buffers            # BufferAccessor
 ```
 
-Single-pass `LayerLog` values delegate per-pass attributes:
+Single-pass `Layer` values delegate per-pass attributes:
 
 ```python
 layer = log.layers["linear_1_1"]
 layer.out
 layer.children       # union across ops
-layer.ops             # dict[int, OpLog]
+layer.ops             # dict[int, Op]
 ```
 
 ## Field Management
@@ -34,26 +34,26 @@ layer.ops             # dict[int, OpLog]
   creates cycles.
 - `graph_shape_hash` is computed before `_set_tracing_finished`.
 
-## OpLog Gotchas
+## Op Gotchas
 - `copy()` shallow-copies selected graph/conditional fields and deep-copies the rest.
 - `out` for some output/getitem cases may reference parent saved data directly.
 - `grad` is a bare reference; do not mutate it in-place.
 - `save_activation()` must route through `safe_copy()` and respect `train_mode`.
 - `TensorLog` is a compatibility alias from `op_log.py`; new docs should prefer
-  `OpLog` unless referring to the alias itself.
+  `Op` unless referring to the alias itself.
 
-## LayerLog Gotchas
+## Layer Gotchas
 - `__getattr__` delegation must raise `ValueError` for ambiguous multi-pass access.
 - Aggregate graph properties are unions across ops.
 - Conditional per-cond children need explicit merge handling; do not treat legacy THEN-only
   views as canonical.
 
 ## Module/Param/Buffer/Grad Logs
-- `ModuleLog` and `ModuleCallLog` are built in postprocess Step 17 from `_module_build_data`.
-- `ParamLog` keeps `_param_ref` for lazy grad access; call `release_param_ref()` when
+- `Module` and `ModuleCall` are built in postprocess Step 17 from `_module_build_data`.
+- `Param` keeps `_param_ref` for lazy grad access; call `release_param_ref()` when
   breaking model references.
-- `BufferLog` extends `OpLog` but owns buffer-specific `name` and `address`.
-- `GradFnLog` and `GradFnCallLog` are populated by backward capture and rendered separately.
+- `Buffer` extends `Op` but owns buffer-specific `name` and `address`.
+- `GradFn` and `GradFnCall` are populated by backward capture and rendered separately.
 
 ## Cleanup
 `cleanup.py` removes backrefs, parameter refs, saved outs, conditional edges, and

@@ -1,12 +1,12 @@
-"""Tests for LayerLog: aggregate per-layer metadata."""
+"""Tests for Layer: aggregate per-layer metadata."""
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.op_log import Op
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ def recurrent_log():
 
 
 # ---------------------------------------------------------------------------
-# Basic LayerLog construction
+# Basic Layer construction
 # ---------------------------------------------------------------------------
 
 
@@ -59,17 +59,17 @@ class TestLayerLogConstruction:
         """Keys are no-pass layer labels."""
         for key, layer_log in simple_log.layer_logs.items():
             assert ":" not in key
-            assert isinstance(layer_log, LayerLog)
+            assert isinstance(layer_log, Layer)
 
     def test_single_pass_layer_has_one_pass(self, simple_log):
-        """Non-recurrent model: every LayerLog has exactly one pass."""
+        """Non-recurrent model: every Layer has exactly one pass."""
         for layer_log in simple_log.layer_logs.values():
             assert layer_log.num_calls == 1
             assert len(layer_log.ops) == 1
             assert 1 in layer_log.ops
 
     def test_back_reference_set(self, simple_log):
-        """parent_layer_log is set on each OpLog."""
+        """parent_layer_log is set on each Op."""
         for layer_log in simple_log.layer_logs.values():
             for pass_log in layer_log.ops.values():
                 assert pass_log.parent_layer_log is layer_log
@@ -117,7 +117,7 @@ class TestSinglePassDelegation:
 
 class TestAggregateFields:
     def test_aggregate_fields_match_first_pass(self, simple_log):
-        """Aggregate fields on LayerLog match the corresponding first-pass values."""
+        """Aggregate fields on Layer match the corresponding first-pass values."""
         for layer_log in simple_log.layer_logs.values():
             fp = layer_log.ops[1]
             assert layer_log.layer_type == fp.layer_type
@@ -135,7 +135,7 @@ class TestAggregateFields:
 
 
 # ---------------------------------------------------------------------------
-# Multi-pass (recurrent) LayerLog
+# Multi-pass (recurrent) Layer
 # ---------------------------------------------------------------------------
 
 
@@ -151,7 +151,7 @@ class TestMultiPassLayerLog:
         assert multi_pass_found, "Expected at least one multi-pass layer in recurrent model"
 
     def test_multi_pass_tensor_contents_raises(self, recurrent_log):
-        """Accessing per-pass field on multi-pass LayerLog raises ValueError."""
+        """Accessing per-pass field on multi-pass Layer raises ValueError."""
         for layer_log in recurrent_log.layer_logs.values():
             if layer_log.num_calls > 1:
                 with pytest.raises(ValueError, match="has .* ops"):
@@ -179,21 +179,21 @@ class TestMultiPassLayerLog:
                 break
 
     def test_getitem_returns_layer_log_for_multi_pass(self, recurrent_log):
-        """log['label'] returns LayerLog for multi-pass layers."""
+        """log['label'] returns Layer for multi-pass layers."""
         for layer_log in recurrent_log.layer_logs.values():
             if layer_log.num_calls > 1:
                 result = recurrent_log[layer_log.layer_label]
-                assert isinstance(result, LayerLog)
+                assert isinstance(result, Layer)
                 assert result is layer_log
                 break
 
     def test_getitem_pass_notation_returns_pass_log(self, recurrent_log):
-        """log['label:2'] still returns OpLog."""
+        """log['label:2'] still returns Op."""
         for layer_log in recurrent_log.layer_logs.values():
             if layer_log.num_calls > 1:
                 for call_index, pass_log in layer_log.ops.items():
                     result = recurrent_log[pass_log.layer_label]
-                    assert isinstance(result, OpLog)
+                    assert isinstance(result, Op)
                 break
 
     def test_call_labels_populated(self, recurrent_log):
@@ -360,7 +360,7 @@ class TestCaseInsensitiveLookup:
 
 
 class TestParentLayerArgLocs:
-    """LayerLog.parent_arg_positions should return strings, not sets."""
+    """Layer.parent_arg_positions should return strings, not sets."""
 
     def test_arg_locs_are_strings(self):
         model = _SimpleLinear()

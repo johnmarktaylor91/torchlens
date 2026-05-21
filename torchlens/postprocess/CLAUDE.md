@@ -52,7 +52,7 @@ then derives legacy THEN/ELIF/ELSE views. Canonical structures are:
 - `Trace.conditional_records`
 - `Trace.conditional_arm_entry_edges`
 - `Trace.conditional_edge_call_indices`
-- `conditional_arm_children` on `OpLog` and `LayerLog`
+- `conditional_arm_children` on `Op` and `Layer`
 
 ## equivalence_class module suffix
 Module containment comes from op-creation stack snapshots, and op creation appends

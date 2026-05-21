@@ -225,7 +225,7 @@ def test_lstm_three_outputs_distinct_layers() -> None:
 
 
 def test_lstm_module_call_outputs_and_structure() -> None:
-    """ModuleCallLog exposes output OpLogs and a container spec."""
+    """ModuleCall exposes output OpLogs and a container spec."""
 
     call = _lstm_trace().modules["lstm:1"]
     assert len(call.outputs) == 3

@@ -13,7 +13,7 @@ import torch
 
 from ..._io.streaming import BundleStreamWriter
 from ..._state import pause_logging
-from ...data_classes.grad_fn_log import GradFnLog
+from ...data_classes.grad_fn_log import GradFn
 from .tensor_tracking import _add_tensor_backward_hook
 
 
@@ -343,7 +343,7 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 grad_fn_total_num,
             )
             op = trace.layers[layer_label] if layer_label is not None else None
-            grad_fn_log = GradFnLog(
+            grad_fn_log = GradFn(
                 grad_fn_id=grad_fn_id,
                 name=type(grad_fn).__name__,
                 label=label,
@@ -665,7 +665,7 @@ def _clear_forward_grad_fn_refs(trace: Any) -> None:
     Parameters
     ----------
     trace:
-        Trace whose OpLog and LayerLog grad_fn object refs should be
+        Trace whose Op and Layer grad_fn object refs should be
         released.
     """
     for layer in trace.layer_list:

@@ -5,7 +5,7 @@ model outs:
 
 1. **Exhaustive pass** (``capture_mode="exhaustive"``): Runs the model once,
    capturing every tensor operation's full metadata (shapes, dtypes, FLOPs,
-   parent-child relationships, module context, etc.) into OpLog entries.
+   parent-child relationships, module context, etc.) into Op entries.
    This builds the complete computational graph.
 
 2. **Fast pass** (``capture_mode="fast"``): Re-runs the model using the graph

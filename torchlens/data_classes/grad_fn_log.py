@@ -11,16 +11,16 @@ import torch
 from .._io import FieldPolicy, IO_FORMAT_VERSION, default_fill_state, read_io_format_version
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
-from .grad_fn_call_log import GradFnCallLog
+from .grad_fn_call_log import GradFnCall
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .layer_log import LayerLog
+    from .layer_log import Layer
 
 
-class GradFnCallAccessor(Accessor[GradFnCallLog]):
-    """Scoped dict-like accessor for GradFnCallLog entries owned by a GradFnLog."""
+class GradFnCallAccessor(Accessor[GradFnCall]):
+    """Scoped dict-like accessor for GradFnCall entries owned by a GradFn."""
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
@@ -29,22 +29,22 @@ class GradFnCallAccessor(Accessor[GradFnCallLog]):
         "_label": FieldPolicy.KEEP,
     }
 
-    def __init__(self, calls: dict[int, GradFnCallLog] | None = None, label: str = "") -> None:
+    def __init__(self, calls: dict[int, GradFnCall] | None = None, label: str = "") -> None:
         """Initialize the accessor.
 
         Parameters
         ----------
         calls:
-            Mapping from 1-based call index to GradFnCallLog.
+            Mapping from 1-based call index to GradFnCall.
         label:
-            Owning GradFnLog label used for pass-qualified lookup.
+            Owning GradFn label used for pass-qualified lookup.
         """
 
         super().__init__(calls or {})
         self._label = label
 
-    def __getitem__(self, key: int | str) -> GradFnCallLog:
-        """Return a GradFnCallLog by call index or pass-qualified label."""
+    def __getitem__(self, key: int | str) -> GradFnCall:
+        """Return a GradFnCall by call index or pass-qualified label."""
 
         if isinstance(key, int):
             return self._dict[key]
@@ -53,13 +53,13 @@ class GradFnCallAccessor(Accessor[GradFnCallLog]):
             return resolved
         raise KeyError(f"GradFn call '{key}' not found in scoped calls.")
 
-    def __setitem__(self, key: int, value: GradFnCallLog) -> None:
-        """Set a GradFnCallLog by call index."""
+    def __setitem__(self, key: int, value: GradFnCall) -> None:
+        """Set a GradFnCall by call index."""
 
         self._dict[key] = value
 
     def __contains__(self, key: object) -> bool:
-        """Return whether key resolves to a GradFnCallLog."""
+        """Return whether key resolves to a GradFnCall."""
 
         if isinstance(key, int):
             return key in self._dict
@@ -78,8 +78,8 @@ class GradFnCallAccessor(Accessor[GradFnCallLog]):
 
         return iter(self._dict)
 
-    def _resolve_pass_qualified(self, key: str) -> GradFnCallLog | None:
-        """Resolve ``grad_fn_label:pass`` notation to a GradFnCallLog."""
+    def _resolve_pass_qualified(self, key: str) -> GradFnCall | None:
+        """Resolve ``grad_fn_label:pass`` notation to a GradFnCall."""
         base, _, call_index_str = key.rpartition(":")
         if base == self._label:
             try:
@@ -114,7 +114,7 @@ def _clone_grad_value(value: Any) -> Any:
 
 
 @dataclass
-class GradFnLog:
+class GradFn:
     """Metadata and runtime ops for one autograd ``grad_fn`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -141,9 +141,9 @@ class GradFnLog:
     grad_fn_type_num: int
     grad_fn_total_num: int
     is_intervening: bool = True
-    op: "LayerLog | None" = None
+    op: "Layer | None" = None
     next_grad_fn_ids: list[int] = field(default_factory=list)
-    ops: dict[int, GradFnCallLog] | GradFnCallAccessor = field(default_factory=dict)
+    ops: dict[int, GradFnCall] | GradFnCallAccessor = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Promote call storage to a scoped accessor."""
@@ -187,7 +187,7 @@ class GradFnLog:
         """
 
         warnings.warn(
-            "GradFnLog.has_op is deprecated; use not grad_fn.is_intervening instead.",
+            "GradFn.has_op is deprecated; use not grad_fn.is_intervening instead.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -276,7 +276,7 @@ class GradFnLog:
             Wall-clock time when the hook fired.
         """
         call_index = len(self.ops) + 1
-        self.ops[call_index] = GradFnCallLog(
+        self.ops[call_index] = GradFnCall(
             call_index=call_index,
             grad_inputs=_clone_grad_value(grad_inputs),
             grad_outputs=_clone_grad_value(grad_outputs),
@@ -303,20 +303,20 @@ class GradFnLog:
         return pd.DataFrame([row], columns=GRAD_FN_LOG_FIELD_ORDER)
 
 
-class GradFnAccessor(Accessor[GradFnLog]):
-    """Dict-like accessor for ``GradFnLog`` objects.
+class GradFnAccessor(Accessor[GradFn]):
+    """Dict-like accessor for ``GradFn`` objects.
 
     Supports integer order, exact label, pass-qualified label, and first
     substring match against labels.
     """
 
-    def __init__(self, grad_fn_logs: Dict[int, GradFnLog], grad_fn_order: list[int]) -> None:
+    def __init__(self, grad_fn_logs: Dict[int, GradFn], grad_fn_order: list[int]) -> None:
         """Initialize an accessor from Trace's flat grad_fn fields.
 
         Parameters
         ----------
         grad_fn_logs:
-            Mapping from ``id(grad_fn)`` to ``GradFnLog``.
+            Mapping from ``id(grad_fn)`` to ``GradFn``.
         grad_fn_order:
             Discovery-order list of grad_fn ids.
         """
@@ -324,12 +324,12 @@ class GradFnAccessor(Accessor[GradFnLog]):
         grad_fn_list = [grad_fn_logs[grad_fn_id] for grad_fn_id in grad_fn_order]
         super().__init__(grad_fn_dict, item_list=grad_fn_list)
 
-    def __getitem__(self, key: int | str) -> GradFnLog | GradFnCallLog:  # type: ignore[override]
-        """Return a GradFnLog or GradFnCallLog by grad-fn-specific lookup rules."""
+    def __getitem__(self, key: int | str) -> GradFn | GradFnCall:  # type: ignore[override]
+        """Return a GradFn or GradFnCall by grad-fn-specific lookup rules."""
         return super().__getitem__(key)
 
-    def _resolve_pass_qualified(self, key: str) -> GradFnCallLog | None:  # type: ignore[override]
-        """Resolve ``grad_fn_label:pass`` notation to a GradFnCallLog."""
+    def _resolve_pass_qualified(self, key: str) -> GradFnCall | None:  # type: ignore[override]
+        """Resolve ``grad_fn_label:pass`` notation to a GradFnCall."""
         base, _, pass_str = key.rpartition(":")
         if base in self._dict:
             try:
@@ -339,7 +339,7 @@ class GradFnAccessor(Accessor[GradFnLog]):
                 return None
         return None
 
-    def _resolve_substring(self, key: str) -> GradFnLog | None:
+    def _resolve_substring(self, key: str) -> GradFn | None:
         """Resolve the first grad_fn whose label contains ``key``."""
         matches = [grad_fn for grad_fn in self._list if key in grad_fn.label]
         if matches:

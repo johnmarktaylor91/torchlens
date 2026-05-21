@@ -1,4 +1,4 @@
-"""Tests for ParamLog, ParamAccessor, and param-related visualization."""
+"""Tests for Param, ParamAccessor, and param-related visualization."""
 
 import os
 from os.path import join as opj
@@ -9,7 +9,7 @@ import torch.nn as nn
 
 import example_models
 from conftest import VIS_OUTPUT_DIR
-from torchlens import ParamLog, trace as trace_fn, show_model_graph
+from torchlens import Param, trace as trace_fn, show_model_graph
 from torchlens.data_classes import ParamAccessor
 
 
@@ -55,7 +55,7 @@ def _simple_input():
 
 
 # ---------------------------------------------------------------------------
-# ParamLog class structure
+# Param class structure
 # ---------------------------------------------------------------------------
 
 
@@ -63,7 +63,7 @@ class TestParamLogFields:
     def test_fields_populated(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params[0]
-        assert isinstance(pl, ParamLog)
+        assert isinstance(pl, Param)
         assert isinstance(pl.address, str)
         assert isinstance(pl.name, str)
         assert isinstance(pl.shape, tuple)
@@ -114,7 +114,7 @@ class TestParamAccessorMH:
     def test_access_by_index(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params[0]
-        assert isinstance(pl, ParamLog)
+        assert isinstance(pl, Param)
 
     def test_iterable(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -139,7 +139,7 @@ class TestParamAccessorMH:
         mh = trace_fn(_make_simple_model(), _simple_input())
         r = repr(mh.params)
         assert "0.weight" in r
-        assert "ParamLog" in r
+        assert "Param" in r
 
     def test_params_property_same_as_param_logs(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -147,7 +147,7 @@ class TestParamAccessorMH:
 
 
 # ---------------------------------------------------------------------------
-# ParamAccessor on OpLog
+# ParamAccessor on Op
 # ---------------------------------------------------------------------------
 
 
@@ -156,7 +156,7 @@ class TestParamAccessorTLE:
         mh = trace_fn(_make_simple_model(), _simple_input())
         entry = [e for e in mh if e.uses_params][0]
         pl = entry.params[entry._param_logs[0].address]
-        assert isinstance(pl, ParamLog)
+        assert isinstance(pl, Param)
 
     def test_access_by_short_name(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -169,7 +169,7 @@ class TestParamAccessorTLE:
     def test_access_by_index(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         entry = [e for e in mh if e.uses_params][0]
-        assert isinstance(entry.params[0], ParamLog)
+        assert isinstance(entry.params[0], Param)
 
     def test_len(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -686,7 +686,7 @@ class TestParamContains:
 
 
 class TestParamRefCleared:
-    """GC-1: ParamLog._param_ref should be cleared after cleanup."""
+    """GC-1: Param._param_ref should be cleared after cleanup."""
 
     def test_param_ref_cleared_after_cleanup(self):
         model = _SimpleLinear()

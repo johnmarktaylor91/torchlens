@@ -12,8 +12,8 @@ import torch
 import torch.nn as nn
 
 from torchlens import MetadataInvariantError, check_metadata_invariants, trace as trace_fn
-from torchlens.data_classes.layer_log import LayerLog
-from torchlens.data_classes.op_log import OpLog
+from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.op_log import Op
 from torchlens.data_classes.model_log import ConditionalEvent, Trace
 
 
@@ -196,7 +196,7 @@ def _get_only_event(trace: Trace) -> ConditionalEvent:
     return trace.conditional_records[0]
 
 
-def _get_only_terminal_bool(trace: Trace) -> OpLog:
+def _get_only_terminal_bool(trace: Trace) -> Op:
     """Return the only terminal scalar bool layer in a model log.
 
     Parameters
@@ -206,7 +206,7 @@ def _get_only_terminal_bool(trace: Trace) -> OpLog:
 
     Returns
     -------
-    OpLog
+    Op
         The only terminal scalar bool layer.
     """
 
@@ -217,8 +217,8 @@ def _get_only_terminal_bool(trace: Trace) -> OpLog:
     return bool_layers[0]
 
 
-def _find_multi_pass_linear_layer(trace: Trace) -> LayerLog:
-    """Return the unique repeated linear ``LayerLog`` in a recurrent test log.
+def _find_multi_pass_linear_layer(trace: Trace) -> Layer:
+    """Return the unique repeated linear ``Layer`` in a recurrent test log.
 
     Parameters
     ----------
@@ -227,7 +227,7 @@ def _find_multi_pass_linear_layer(trace: Trace) -> LayerLog:
 
     Returns
     -------
-    LayerLog
+    Layer
         Multi-pass linear layer aggregate.
     """
 
@@ -258,8 +258,8 @@ def _assert_invariant_error(trace: Trace, substrings: Iterable[str]) -> None:
         assert substring in message
 
 
-def _sync_layer_log_child_views(layer_log: LayerLog) -> None:
-    """Recompute ``LayerLog`` derived child views from its primary structure.
+def _sync_layer_log_child_views(layer_log: Layer) -> None:
+    """Recompute ``Layer`` derived child views from its primary structure.
 
     Parameters
     ----------
@@ -376,7 +376,7 @@ def test_invariant_6_parent_child_stacks_are_prefix_related() -> None:
 
     trace = _log_model(NestedIfModel(), torch.ones(2, 3))
     try:
-        violating_child: OpLog | None = None
+        violating_child: Op | None = None
         for layer in trace.layer_list:
             if len(layer.conditional_branch_stack) != 2:
                 continue
@@ -425,7 +425,7 @@ def test_invariant_8_event_bool_layers_point_back_to_the_event() -> None:
 
 
 def test_invariant_9_layerlog_stack_aggregates_match_pass_logs() -> None:
-    """Invariant 9 fails when ``LayerLog`` stack-pass aggregation is corrupted."""
+    """Invariant 9 fails when ``Layer`` stack-pass aggregation is corrupted."""
 
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     try:
@@ -463,7 +463,7 @@ def test_invariant_11_transient_bool_key_is_removed() -> None:
 
 
 def test_invariant_12_layerlog_children_union_is_exact() -> None:
-    """Invariant 12 fails when ``LayerLog.conditional_arm_children`` loses a child."""
+    """Invariant 12 fails when ``Layer.conditional_arm_children`` loses a child."""
 
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     try:

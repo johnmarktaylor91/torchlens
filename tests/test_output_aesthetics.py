@@ -194,9 +194,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     pass_key = f"{param_module_addr}:1"
     if pass_key in log.modules:
         out.write(
-            _capture(
-                f'repr(log.modules["{pass_key}"]) — ModuleCallLog', repr(log.modules[pass_key])
-            )
+            _capture(f'repr(log.modules["{pass_key}"]) — ModuleCall', repr(log.modules[pass_key]))
         )
     else:
         out.write(f"  # {pass_key} not in modules (single-pass module)\n")
@@ -219,11 +217,11 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                         repr(ml),
                     )
                 )
-                # Show ModuleCallLog for each pass
+                # Show ModuleCall for each pass
                 for p in sorted(ml.ops.keys()):
                     out.write(
                         _capture(
-                            f'repr(log.modules["{ml.address}"].ops[{p}]) — ModuleCallLog pass {p}',
+                            f'repr(log.modules["{ml.address}"].ops[{p}]) — ModuleCall pass {p}',
                             repr(ml.ops[p]),
                         )
                     )
@@ -320,15 +318,15 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 pass
 
         # Show that buffer is also accessible as a layer (isinstance check)
-        from torchlens.data_classes.buffer_log import BufferLog
-        from torchlens.data_classes.op_log import OpLog
+        from torchlens.data_classes.buffer_log import Buffer
+        from torchlens.data_classes.op_log import Op
 
-        out.write(f"  isinstance(log.buffers[0], BufferLog): {isinstance(first_buf, BufferLog)}\n")
-        out.write(f"  isinstance(log.buffers[0], OpLog): {isinstance(first_buf, OpLog)}\n")
+        out.write(f"  isinstance(log.buffers[0], Buffer): {isinstance(first_buf, Buffer)}\n")
+        out.write(f"  isinstance(log.buffers[0], Op): {isinstance(first_buf, Op)}\n")
         out.write("\n")
 
-    # ===== D. OpLog / Layer Access =====
-    out.write(_section("D. OpLog / Layer Access", level=2))
+    # ===== D. Op / Layer Access =====
+    out.write(_section("D. Op / Layer Access", level=2))
 
     out.write(_capture("repr(log[0]) — first layer", repr(log[0])))
     out.write(_capture("repr(log[-1]) — last layer", repr(log[-1])))
@@ -351,7 +349,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
             out.write(_capture(f'repr(log["{lbl}"]) — by label no pass', repr(log[lbl])))
             break
 
-    # By module address (returns ModuleLog for single-pass)
+    # By module address (returns Module for single-pass)
     if any_non_root_addr != "self":
         result = log[any_non_root_addr]
         out.write(
@@ -375,9 +373,9 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 )
                 break
 
-    # ===== D.1 LayerLog =====
+    # ===== D.1 Layer =====
     if log.is_recurrent and len(log.layer_logs) > 0:
-        out.write(_section("D.1 LayerLog (multi-pass)", level=3))
+        out.write(_section("D.1 Layer (multi-pass)", level=3))
         for ll in log.layer_logs.values():
             if ll.num_calls > 1:
                 out.write(
@@ -429,8 +427,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_code(f"Model: {name}, input: {list(x.shape)}"))
     out.write(_field_dump(log, "Trace"))
 
-    # F.2 OpLog — pick a layer with params if possible
-    out.write(_section("F.2 OpLog field dump", level=3))
+    # F.2 Op — pick a layer with params if possible
+    out.write(_section("F.2 Op field dump", level=3))
     tensor_for_dump = None
     for entry in log.layer_list:
         if entry.uses_params:
@@ -439,11 +437,11 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if tensor_for_dump is None:
         tensor_for_dump = log[len(log) // 2]
     out.write(_code(f"Layer: {tensor_for_dump.layer_label}"))
-    out.write(_field_dump(tensor_for_dump, f"OpLog: {tensor_for_dump.layer_label}"))
+    out.write(_field_dump(tensor_for_dump, f"Op: {tensor_for_dump.layer_label}"))
 
-    # F.3 LayerLog (multi-pass)
+    # F.3 Layer (multi-pass)
     if log.is_recurrent and len(log.layer_logs) > 0:
-        out.write(_section("F.3 LayerLog field dump (multi-pass)", level=3))
+        out.write(_section("F.3 Layer field dump (multi-pass)", level=3))
         ll_for_dump = None
         for ll in log.layer_logs.values():
             if ll.num_calls > 1:
@@ -452,27 +450,27 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         if ll_for_dump is None:
             ll_for_dump = next(iter(log.layer_logs.values()))
         out.write(_code(f"Layer: {ll_for_dump.layer_label}"))
-        out.write(_field_dump(ll_for_dump, f"LayerLog: {ll_for_dump.layer_label}"))
+        out.write(_field_dump(ll_for_dump, f"Layer: {ll_for_dump.layer_label}"))
 
-    # F.4 ModuleLog
-    out.write(_section("F.4 ModuleLog field dump", level=3))
+    # F.4 Module
+    out.write(_section("F.4 Module field dump", level=3))
     mod_for_dump = log.modules[param_module_addr]
     out.write(_code(f"Module: {mod_for_dump.address}"))
-    out.write(_field_dump(mod_for_dump, f"ModuleLog: {mod_for_dump.address}"))
+    out.write(_field_dump(mod_for_dump, f"Module: {mod_for_dump.address}"))
 
-    # F.5 ModuleCallLog
+    # F.5 ModuleCall
     if 1 in mod_for_dump.ops:
-        out.write(_section("F.5 ModuleCallLog field dump", level=3))
+        out.write(_section("F.5 ModuleCall field dump", level=3))
         mpl_for_dump = mod_for_dump.ops[1]
-        out.write(_code(f"ModuleCallLog: {mpl_for_dump.call_label}"))
-        out.write(_field_dump(mpl_for_dump, f"ModuleCallLog: {mpl_for_dump.call_label}"))
+        out.write(_code(f"ModuleCall: {mpl_for_dump.call_label}"))
+        out.write(_field_dump(mpl_for_dump, f"ModuleCall: {mpl_for_dump.call_label}"))
 
-    # F.6 ParamLog
+    # F.6 Param
     if len(log.params) > 0:
-        out.write(_section("F.6 ParamLog field dump", level=3))
+        out.write(_section("F.6 Param field dump", level=3))
         pl_for_dump = log.params[0]
         out.write(_code(f"Param: {pl_for_dump.address}"))
-        out.write(_field_dump(pl_for_dump, f"ParamLog: {pl_for_dump.address}"))
+        out.write(_field_dump(pl_for_dump, f"Param: {pl_for_dump.address}"))
 
     # F.7 ModuleAccessor
     out.write(_section("F.7 ModuleAccessor field dump", level=3))
@@ -500,12 +498,12 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 )
             )
 
-            # Show grad fields on a OpLog that has saved grad
+            # Show grad fields on a Op that has saved grad
             for entry in grad_log.layer_list:
                 if entry.has_grad:
                     out.write(
                         _section(
-                            f"G.1 OpLog grad fields — {entry.layer_label}",
+                            f"G.1 Op grad fields — {entry.layer_label}",
                             level=3,
                         )
                     )
@@ -517,12 +515,12 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("grad_memory_str", entry.grad_memory_str))
                     break
 
-            # Show a OpLog WITHOUT grad for contrast
+            # Show a Op WITHOUT grad for contrast
             for entry in grad_log.layer_list:
                 if not entry.has_grad:
                     out.write(
                         _section(
-                            f"G.2 OpLog without grad — {entry.layer_label}",
+                            f"G.2 Op without grad — {entry.layer_label}",
                             level=3,
                         )
                     )
@@ -530,10 +528,10 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("grad", entry.grad))
                     break
 
-            # ParamLog grad fields
+            # Param grad fields
             for pl in grad_log.params:
                 if pl.has_grad:
-                    out.write(_section(f"G.3 ParamLog grad fields — {pl.address}", level=3))
+                    out.write(_section(f"G.3 Param grad fields — {pl.address}", level=3))
                     out.write(_capture("has_grad", pl.has_grad))
                     out.write(_capture("grad_shape", pl.grad_shape))
                     out.write(_capture("grad_dtype", pl.grad_dtype))
@@ -546,7 +544,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                 if not pl.trainable:
                     out.write(
                         _section(
-                            f"G.4 Frozen ParamLog — no grad — {pl.address}",
+                            f"G.4 Frozen Param — no grad — {pl.address}",
                             level=3,
                         )
                     )
@@ -590,8 +588,8 @@ def test_generate_aesthetic_report():
         content = f.read()
     assert len(content) > 5000, f"Report too short ({len(content)} chars)"
     assert "Trace" in content
-    assert "OpLog" in content
-    assert "ParamLog" in content
+    assert "Op" in content
+    assert "Param" in content
 
 
 # ---------------------------------------------------------------------------
@@ -1064,13 +1062,13 @@ def _build_latex_report() -> str:
         doc.write(_verbatim_box("D. First Layer — repr(log[0])", repr(log[0])))
         doc.write(_verbatim_box("D. Last Layer — repr(log[-1])", repr(log[-1])))
 
-        # D.1 LayerLog (multi-pass)
+        # D.1 Layer (multi-pass)
         if log.is_recurrent and len(log.layer_logs) > 0:
             for ll in log.layer_logs.values():
                 if ll.num_calls > 1:
                     doc.write(
                         _verbatim_box(
-                            f"D.1 LayerLog — {ll.layer_label} ({ll.num_calls} ops)",
+                            f"D.1 Layer — {ll.layer_label} ({ll.num_calls} ops)",
                             repr(ll),
                         )
                     )
@@ -1111,7 +1109,7 @@ def _build_latex_report() -> str:
         if error_text:
             doc.write(_verbatim_box("E. Convenience Error Messages", error_text))
 
-        # F. Field Dumps (just Trace headline fields + one OpLog)
+        # F. Field Dumps (just Trace headline fields + one Op)
         # Trace field dump
         model_fields = ""
         for field in sorted(dir(log)):
@@ -1134,7 +1132,7 @@ def _build_latex_report() -> str:
             model_fields += f"{field}: {attr}\n"
         doc.write(_verbatim_box("F.1 Trace — All Fields", model_fields))
 
-        # OpLog field dump — pick a layer with params
+        # Op field dump — pick a layer with params
         tensor_for_dump = None
         for entry in log.layer_list:
             if entry.uses_params:
@@ -1155,9 +1153,9 @@ def _build_latex_report() -> str:
             if field in {"source_trace", "func_rng_states"}:
                 continue
             tensor_fields += f"{field}: {attr}\n"
-        doc.write(_verbatim_box(f"F.2 OpLog — {tensor_for_dump.layer_label}", tensor_fields))
+        doc.write(_verbatim_box(f"F.2 Op — {tensor_for_dump.layer_label}", tensor_fields))
 
-        # ModuleLog field dump
+        # Module field dump
         param_module_addr = None
         for ml in log.modules:
             if ml.address != "self" and ml.num_params > 0:
@@ -1182,9 +1180,9 @@ def _build_latex_report() -> str:
                 if callable(attr):
                     continue
                 mod_fields += f"{field}: {attr}\n"
-            doc.write(_verbatim_box(f"F.4 ModuleLog — {mod_dump.address}", mod_fields))
+            doc.write(_verbatim_box(f"F.4 Module — {mod_dump.address}", mod_fields))
 
-        # ParamLog field dump
+        # Param field dump
         if len(log.params) > 0:
             pl = log.params[0]
             pl_fields = ""
@@ -1198,7 +1196,7 @@ def _build_latex_report() -> str:
                 if callable(attr):
                     continue
                 pl_fields += f"{field}: {attr}\n"
-            doc.write(_verbatim_box(f"F.6 ParamLog — {pl.address}", pl_fields))
+            doc.write(_verbatim_box(f"F.6 Param — {pl.address}", pl_fields))
 
         doc.write("\\newpage\n\n")
 
@@ -1577,7 +1575,7 @@ class TestVisualizationBugfixes:
 
 
 class TestVisModuleListFormat:
-    """_get_lowest_module should handle mixed LayerLog/OpLog nodes."""
+    """_get_lowest_module should handle mixed Layer/Op nodes."""
 
     def test_vis_with_nested_modules(self):
         class Inner(nn.Module):

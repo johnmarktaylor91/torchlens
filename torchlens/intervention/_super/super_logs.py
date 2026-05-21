@@ -11,14 +11,14 @@ from ._accessor_base import SuperAccessor
 from ._base import _TENSOR_FIELD_LITERAL, Super, _TensorBearing
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ...data_classes.buffer_log import BufferLog
-    from ...data_classes.grad_fn_call_log import GradFnCallLog
-    from ...data_classes.grad_fn_log import GradFnLog
-    from ...data_classes.module_log import ModuleCallLog, ModuleLog
-    from ...data_classes.param_log import ParamLog
+    from ...data_classes.buffer_log import Buffer
+    from ...data_classes.grad_fn_call_log import GradFnCall
+    from ...data_classes.grad_fn_log import GradFn
+    from ...data_classes.module_log import ModuleCall, Module
+    from ...data_classes.param_log import Param
 
 
-class SuperModule(Super["ModuleLog"]):
+class SuperModule(Super["Module"]):
     """Aligned view of a module address across bundle members."""
 
     @property
@@ -54,11 +54,11 @@ class SuperModule(Super["ModuleLog"]):
         }
 
 
-class SuperBuffer(Super["BufferLog"], _TensorBearing):
+class SuperBuffer(Super["Buffer"], _TensorBearing):
     """Aligned view of a buffer address across bundle members."""
 
 
-class SuperParam(Super["ParamLog"], _TensorBearing):
+class SuperParam(Super["Param"], _TensorBearing):
     """Aligned view of a parameter address across bundle members."""
 
     @property
@@ -89,7 +89,7 @@ class SuperParam(Super["ParamLog"], _TensorBearing):
         Parameters
         ----------
         member:
-            ParamLog member.
+            Param member.
         field:
             Tensor field to collect.
 
@@ -106,7 +106,7 @@ class SuperParam(Super["ParamLog"], _TensorBearing):
         return param.detach() if isinstance(param, torch.Tensor) else None
 
 
-class SuperGradFn(Super["GradFnLog"], _TensorBearing):
+class SuperGradFn(Super["GradFn"], _TensorBearing):
     """Aligned view of a grad_fn label across bundle members."""
 
     def _get_tensor(self, member: Any, field: _TENSOR_FIELD_LITERAL) -> torch.Tensor | None:
@@ -115,7 +115,7 @@ class SuperGradFn(Super["GradFnLog"], _TensorBearing):
         Parameters
         ----------
         member:
-            GradFnLog member.
+            GradFn member.
         field:
             Tensor field to collect.
 
@@ -131,15 +131,15 @@ class SuperGradFn(Super["GradFnLog"], _TensorBearing):
         return super()._get_tensor(op, field)
 
 
-class SuperModuleCall(Super["ModuleCallLog"]):
+class SuperModuleCall(Super["ModuleCall"]):
     """Aligned view of a module call label across bundle members."""
 
 
-class SuperGradFnCall(Super["GradFnCallLog"]):
+class SuperGradFnCall(Super["GradFnCall"]):
     """Aligned view of a grad_fn call label across bundle members."""
 
 
-class SuperModuleAccessor(SuperAccessor["ModuleLog", SuperModule]):
+class SuperModuleAccessor(SuperAccessor["Module", SuperModule]):
     """Dict-like Bundle accessor returning SuperModule objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -153,8 +153,8 @@ class SuperModuleAccessor(SuperAccessor["ModuleLog", SuperModule]):
 
         super().__init__(bundle, super_cls=SuperModule)
 
-    def _resolve_in_member(self, trace: Any, label: str) -> ModuleLog | None:
-        """Resolve ``label`` to a ModuleLog within one member trace.
+    def _resolve_in_member(self, trace: Any, label: str) -> Module | None:
+        """Resolve ``label`` to a Module within one member trace.
 
         Parameters
         ----------
@@ -165,15 +165,15 @@ class SuperModuleAccessor(SuperAccessor["ModuleLog", SuperModule]):
 
         Returns
         -------
-        ModuleLog | None
-            Matching ModuleLog, or ``None`` when unresolved.
+        Module | None
+            Matching Module, or ``None`` when unresolved.
         """
 
         try:
             resolved = trace.modules[label]
         except (KeyError, ValueError):
             return None
-        return cast("ModuleLog", resolved) if type(resolved).__name__ == "ModuleLog" else None
+        return cast("Module", resolved) if type(resolved).__name__ == "Module" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:
         """Return module labels from one member trace.
@@ -192,7 +192,7 @@ class SuperModuleAccessor(SuperAccessor["ModuleLog", SuperModule]):
         return [str(label) for label in trace.modules.keys()]
 
 
-class SuperBufferAccessor(SuperAccessor["BufferLog", SuperBuffer]):
+class SuperBufferAccessor(SuperAccessor["Buffer", SuperBuffer]):
     """Dict-like Bundle accessor returning SuperBuffer objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -206,8 +206,8 @@ class SuperBufferAccessor(SuperAccessor["BufferLog", SuperBuffer]):
 
         super().__init__(bundle, super_cls=SuperBuffer)
 
-    def _resolve_in_member(self, trace: Any, label: str) -> BufferLog | None:
-        """Resolve ``label`` to a BufferLog within one member trace.
+    def _resolve_in_member(self, trace: Any, label: str) -> Buffer | None:
+        """Resolve ``label`` to a Buffer within one member trace.
 
         Parameters
         ----------
@@ -218,12 +218,12 @@ class SuperBufferAccessor(SuperAccessor["BufferLog", SuperBuffer]):
 
         Returns
         -------
-        BufferLog | None
-            Matching BufferLog, or ``None`` when unresolved.
+        Buffer | None
+            Matching Buffer, or ``None`` when unresolved.
         """
 
         try:
-            return cast("BufferLog", trace.buffers[label])
+            return cast("Buffer", trace.buffers[label])
         except (KeyError, ValueError):
             return None
 
@@ -244,7 +244,7 @@ class SuperBufferAccessor(SuperAccessor["BufferLog", SuperBuffer]):
         return [str(label) for label in trace.buffers.keys()]
 
 
-class SuperParamAccessor(SuperAccessor["ParamLog", SuperParam]):
+class SuperParamAccessor(SuperAccessor["Param", SuperParam]):
     """Dict-like Bundle accessor returning SuperParam objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -258,8 +258,8 @@ class SuperParamAccessor(SuperAccessor["ParamLog", SuperParam]):
 
         super().__init__(bundle, super_cls=SuperParam)
 
-    def _resolve_in_member(self, trace: Any, label: str) -> ParamLog | None:
-        """Resolve ``label`` to a ParamLog within one member trace.
+    def _resolve_in_member(self, trace: Any, label: str) -> Param | None:
+        """Resolve ``label`` to a Param within one member trace.
 
         Parameters
         ----------
@@ -270,12 +270,12 @@ class SuperParamAccessor(SuperAccessor["ParamLog", SuperParam]):
 
         Returns
         -------
-        ParamLog | None
-            Matching ParamLog, or ``None`` when unresolved.
+        Param | None
+            Matching Param, or ``None`` when unresolved.
         """
 
         try:
-            return cast("ParamLog", trace.params[label])
+            return cast("Param", trace.params[label])
         except (KeyError, ValueError):
             return None
 
@@ -296,7 +296,7 @@ class SuperParamAccessor(SuperAccessor["ParamLog", SuperParam]):
         return [str(label) for label in trace.params.keys()]
 
 
-class SuperGradFnAccessor(SuperAccessor["GradFnLog", SuperGradFn]):
+class SuperGradFnAccessor(SuperAccessor["GradFn", SuperGradFn]):
     """Dict-like Bundle accessor returning SuperGradFn objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -310,8 +310,8 @@ class SuperGradFnAccessor(SuperAccessor["GradFnLog", SuperGradFn]):
 
         super().__init__(bundle, super_cls=SuperGradFn)
 
-    def _resolve_in_member(self, trace: Any, label: str) -> GradFnLog | None:
-        """Resolve ``label`` to a GradFnLog within one member trace.
+    def _resolve_in_member(self, trace: Any, label: str) -> GradFn | None:
+        """Resolve ``label`` to a GradFn within one member trace.
 
         Parameters
         ----------
@@ -322,15 +322,15 @@ class SuperGradFnAccessor(SuperAccessor["GradFnLog", SuperGradFn]):
 
         Returns
         -------
-        GradFnLog | None
-            Matching GradFnLog, or ``None`` when unresolved.
+        GradFn | None
+            Matching GradFn, or ``None`` when unresolved.
         """
 
         try:
             resolved = trace.grad_fns[label]
         except (KeyError, ValueError):
             return None
-        return cast("GradFnLog", resolved) if type(resolved).__name__ == "GradFnLog" else None
+        return cast("GradFn", resolved) if type(resolved).__name__ == "GradFn" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:
         """Return grad_fn labels from one member trace.
@@ -349,7 +349,7 @@ class SuperGradFnAccessor(SuperAccessor["GradFnLog", SuperGradFn]):
         return [str(label) for label in trace.grad_fns.keys()]
 
 
-class SuperModuleCallAccessor(SuperAccessor["ModuleCallLog", SuperModuleCall]):
+class SuperModuleCallAccessor(SuperAccessor["ModuleCall", SuperModuleCall]):
     """Dict-like Bundle accessor returning SuperModuleCall objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -363,8 +363,8 @@ class SuperModuleCallAccessor(SuperAccessor["ModuleCallLog", SuperModuleCall]):
 
         super().__init__(bundle, super_cls=SuperModuleCall)
 
-    def _resolve_in_member(self, trace: Any, label: str) -> ModuleCallLog | None:
-        """Resolve ``label`` to a ModuleCallLog within one member trace.
+    def _resolve_in_member(self, trace: Any, label: str) -> ModuleCall | None:
+        """Resolve ``label`` to a ModuleCall within one member trace.
 
         Parameters
         ----------
@@ -375,17 +375,15 @@ class SuperModuleCallAccessor(SuperAccessor["ModuleCallLog", SuperModuleCall]):
 
         Returns
         -------
-        ModuleCallLog | None
-            Matching ModuleCallLog, or ``None`` when unresolved.
+        ModuleCall | None
+            Matching ModuleCall, or ``None`` when unresolved.
         """
 
         try:
             resolved = trace.modules[label]
         except (KeyError, ValueError):
             return None
-        return (
-            cast("ModuleCallLog", resolved) if type(resolved).__name__ == "ModuleCallLog" else None
-        )
+        return cast("ModuleCall", resolved) if type(resolved).__name__ == "ModuleCall" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:
         """Return module-call labels from one member trace.
@@ -408,7 +406,7 @@ class SuperModuleCallAccessor(SuperAccessor["ModuleCallLog", SuperModuleCall]):
         ]
 
 
-class SuperGradFnCallAccessor(SuperAccessor["GradFnCallLog", SuperGradFnCall]):
+class SuperGradFnCallAccessor(SuperAccessor["GradFnCall", SuperGradFnCall]):
     """Dict-like Bundle accessor returning SuperGradFnCall objects."""
 
     def __init__(self, bundle: Any) -> None:
@@ -422,8 +420,8 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCallLog", SuperGradFnCall]):
 
         super().__init__(bundle, super_cls=SuperGradFnCall)
 
-    def _resolve_in_member(self, trace: Any, label: str) -> GradFnCallLog | None:
-        """Resolve ``label`` to a GradFnCallLog within one member trace.
+    def _resolve_in_member(self, trace: Any, label: str) -> GradFnCall | None:
+        """Resolve ``label`` to a GradFnCall within one member trace.
 
         Parameters
         ----------
@@ -434,17 +432,15 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCallLog", SuperGradFnCall]):
 
         Returns
         -------
-        GradFnCallLog | None
-            Matching GradFnCallLog, or ``None`` when unresolved.
+        GradFnCall | None
+            Matching GradFnCall, or ``None`` when unresolved.
         """
 
         try:
             resolved = trace.grad_fns[label]
         except (KeyError, ValueError):
             return None
-        return (
-            cast("GradFnCallLog", resolved) if type(resolved).__name__ == "GradFnCallLog" else None
-        )
+        return cast("GradFnCall", resolved) if type(resolved).__name__ == "GradFnCall" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:
         """Return grad-fn-call labels from one member trace.

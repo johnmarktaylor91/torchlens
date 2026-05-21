@@ -57,7 +57,7 @@ def test_round_trip_save_load_preserves_module_containment(tmp_path: Path) -> No
 
 
 def test_legacy_pickle_load_drops_thread_fields() -> None:
-    """Load a v2 OpLog state and confirm legacy thread fields are dropped."""
+    """Load a v2 Op state and confirm legacy thread fields are dropped."""
 
     model, x = _simple_model_and_input()
     trace = tl.trace(model, x, vis_opt="none")

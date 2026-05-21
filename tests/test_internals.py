@@ -73,16 +73,16 @@ class TestFieldOrderSync:
 
     @pytest.mark.smoke
     def test_op_log_field_order_covers_init(self):
-        """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in OpLog.__init__."""
-        from torchlens.data_classes.op_log import OpLog
+        """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in Op.__init__."""
+        from torchlens.data_classes.op_log import Op
 
-        init_attrs = self._init_assigned_attrs(OpLog)
+        init_attrs = self._init_assigned_attrs(Op)
         # Private fields (prefixed _) are intentionally excluded from some FIELD_ORDERs,
         # but some _ fields ARE in FIELD_ORDER (e.g. _tracing_finished). Check both directions:
         # 1. Every FIELD_ORDER entry should be an init attr or a property
         for field in LAYER_PASS_LOG_FIELD_ORDER:
-            assert field in init_attrs or hasattr(OpLog, field), (
-                f"{field!r} in LAYER_PASS_LOG_FIELD_ORDER but not in OpLog"
+            assert field in init_attrs or hasattr(Op, field), (
+                f"{field!r} in LAYER_PASS_LOG_FIELD_ORDER but not in Op"
             )
 
     def test_trace_field_order_covers_init(self):
@@ -97,22 +97,22 @@ class TestFieldOrderSync:
         assert not missing, f"Trace public fields missing from FIELD_ORDER: {missing}"
 
     def test_module_call_log_field_order_covers_init(self):
-        from torchlens.data_classes.module_log import ModuleCallLog
+        from torchlens.data_classes.module_log import ModuleCall
 
-        init_attrs = self._init_assigned_attrs(ModuleCallLog)
+        init_attrs = self._init_assigned_attrs(ModuleCall)
         order_set = set(MODULE_PASS_LOG_FIELD_ORDER)
         public_attrs = {a for a in init_attrs if not a.startswith("_")}
         missing = public_attrs - order_set
-        assert not missing, f"ModuleCallLog public fields missing from FIELD_ORDER: {missing}"
+        assert not missing, f"ModuleCall public fields missing from FIELD_ORDER: {missing}"
 
     def test_module_log_field_order_covers_init(self):
-        from torchlens.data_classes.module_log import ModuleLog
+        from torchlens.data_classes.module_log import Module
 
-        init_attrs = self._init_assigned_attrs(ModuleLog)
+        init_attrs = self._init_assigned_attrs(Module)
         order_set = set(MODULE_LOG_FIELD_ORDER)
         public_attrs = {a for a in init_attrs if not a.startswith("_")}
         missing = public_attrs - order_set
-        assert not missing, f"ModuleLog public fields missing from FIELD_ORDER: {missing}"
+        assert not missing, f"Module public fields missing from FIELD_ORDER: {missing}"
 
 
 # ---------------------------------------------------------------------------

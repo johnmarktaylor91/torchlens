@@ -15,14 +15,14 @@ from ..data_classes.module_log import ModuleAccessor
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
-    from ..data_classes.module_log import ModuleLog, ModuleCallLog
+    from ..data_classes.module_log import Module, ModuleCall
 
 
 def rebuild_trace_accessors(
     trace: "Trace",
-    module_dict: dict[str, "ModuleLog"],
-    module_order: list["ModuleLog"],
-    pass_dict: dict[str, "ModuleCallLog"],
+    module_dict: dict[str, "Module"],
+    module_order: list["Module"],
+    pass_dict: dict[str, "ModuleCall"],
 ) -> None:
     """Rebuild the user-facing module and buffer accessors on a ``Trace``.
 
@@ -31,11 +31,11 @@ def rebuild_trace_accessors(
     trace:
         Model log receiving the rebuilt accessors.
     module_dict:
-        Mapping from primary module address to ``ModuleLog``.
+        Mapping from primary module address to ``Module``.
     module_order:
         Ordered list of module logs for iteration and integer indexing.
     pass_dict:
-        Mapping from ``"address:pass"`` labels to ``ModuleCallLog`` entries.
+        Mapping from ``"address:pass"`` labels to ``ModuleCall`` entries.
     """
 
     for module_log in module_dict.values():

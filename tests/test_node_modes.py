@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import NodeSpec
-from torchlens.data_classes.layer_log import LayerLog
+from torchlens.data_classes.layer_log import Layer
 
 
 def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
@@ -140,7 +140,7 @@ def test_user_callback_wins_over_mode(tmp_path: Path) -> None:
     model = nn.Linear(4, 4)
     log = tl.trace(model, torch.randn(1, 4))
 
-    def node_spec_fn(layer_log: LayerLog, default_spec: NodeSpec) -> NodeSpec:
+    def node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec:
         """Replace every node label with a single custom row."""
 
         del layer_log, default_spec

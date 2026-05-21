@@ -4,13 +4,13 @@ Step 12 (_undecorate_all_saved_tensors): Removes TorchLens tensor metadata from
     all saved tensors and their creation args/kwargs.
 Step 13: torch.cuda.empty_cache() — handled inline in __init__.py.
 Step 14 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
-Step 15 (_finalize_param_logs): Populates ParamLog reverse mappings (used_by_layers,
+Step 15 (_finalize_param_logs): Populates Param reverse mappings (used_by_layers,
     co_parent_params), num_calls, and clears Parameter tensor references.
-Step 15.5 (_build_layer_logs): Groups OpLog entries by layer_label_no_pass to
-    create aggregate LayerLog objects. Static identity fields still use first-pass
+Step 15.5 (_build_layer_logs): Groups Op entries by layer_label_no_pass to
+    create aggregate Layer objects. Static identity fields still use first-pass
     values, while aggregate fields merge across ops, including conditional
     branch signatures, pass maps, and pass-stripped child views.
-Step 16 (_build_module_logs): Builds structured ModuleLog/ModuleCallLog objects from
+Step 16 (_build_module_logs): Builds structured Module/ModuleCall objects from
     _module_build_data and _module_metadata. MUST NOT run in fast mode — _module_build_data
     isn't repopulated in fast mode (Step 9 is skipped). Existing module logs from the
     exhaustive pass remain valid.
@@ -38,12 +38,12 @@ from ..data_classes._module_role_hints import (
     role_hints_for_module_class,
 )
 from ..data_classes._summary import format_call_arg
-from ..data_classes.module_log import ModuleLog, ModuleCallLog
+from ..data_classes.module_log import Module, ModuleCall
 from ..utils.introspection import get_vars_of_type_from_obj
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_log import LayerLog
-    from ..data_classes.op_log import OpLog
+    from ..data_classes.layer_log import Layer
+    from ..data_classes.op_log import Op
     from ..data_classes.model_log import Trace
 
 
@@ -89,18 +89,18 @@ def _log_time_elapsed(self: "Trace") -> None:
 
 
 def _finalize_param_logs(self: "Trace") -> None:
-    """Step 15: Populate ParamLog reverse mappings, linked params, and num_calls.
+    """Step 15: Populate Param reverse mappings, linked params, and num_calls.
 
-    For each OpLog with _param_logs:
-    - Adds the layer's label to each ParamLog's used_by_layers list.
+    For each Op with _param_logs:
+    - Adds the layer's label to each Param's used_by_layers list.
     - Links params that co-occur in the same operation (co_parent_params).
     - Sets num_calls = max(1, len(used_by_layers)).
 
     Then clears actual Parameter tensor references (parent_params) from
-    OpLog entries to reduce memory, while preserving ParamLog._param_ref
+    Op entries to reduce memory, while preserving Param._param_ref
     for potential backward() calls by the user.
     """
-    # Build used_by_layers and co_parent_params from OpLog entries
+    # Build used_by_layers and co_parent_params from Op entries
     for layer_entry in self.layer_list:
         if not layer_entry._param_logs:
             continue
@@ -118,23 +118,23 @@ def _finalize_param_logs(self: "Trace") -> None:
         pl.num_calls = max(1, len(pl.used_by_layers))
         pl.source_trace = self
 
-    # ParamLog grad metadata is populated lazily via backward hooks in _log_tensor_grad.
-    # Each ParamLog holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
+    # Param grad metadata is populated lazily via backward hooks in _log_tensor_grad.
+    # Each Param holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
     # reads param.grad after backward is called.
 
     # Note: _param_ref (GC-1) is NOT cleared here because the user may call backward()
     # after postprocessing to populate grads. It's cleared in cleanup() instead.
     # Same for _param_logs (GC-9) and func (GC-10) — needed by validation.
 
-    # Clear actual Parameter tensor references from OpLog entries to save memory.
+    # Clear actual Parameter tensor references from Op entries to save memory.
     for layer_entry in self.layer_list:
         layer_entry.parent_params = []
 
 
 def _build_root_module_log(
-    self: "Trace", pass_dict: dict[str, "ModuleCallLog"], mbd: dict[str, Any]
-) -> "ModuleLog":
-    """Build the root ModuleLog ("self") representing the model itself.
+    self: "Trace", pass_dict: dict[str, "ModuleCall"], mbd: dict[str, Any]
+) -> "Module":
+    """Build the root Module ("self") representing the model itself.
 
     The root module encomops all layers and params. Its address_children are
     only direct children (no dots in address), while call_children may include
@@ -153,7 +153,7 @@ def _build_root_module_log(
     root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.trainable)
     root_fsize = sum(pl.memory for pl in self.param_logs)
 
-    root_module = ModuleLog(
+    root_module = Module(
         address="self",
         all_addresses=root_meta.get("all_addresses", ["self"]),
         name="self",
@@ -200,7 +200,7 @@ def _build_root_module_log(
         _source_trace=self,
     )
 
-    root_pass = ModuleCallLog(
+    root_pass = ModuleCall(
         address="self",
         call_index=1,
         call_label="self:1",
@@ -224,8 +224,8 @@ def _build_root_module_log(
     return root_module
 
 
-def _compute_call_depths(module_dict: dict[str, "ModuleLog"], root_module: "ModuleLog") -> None:
-    """Assign call_depth to each ModuleLog via BFS from the root.
+def _compute_call_depths(module_dict: dict[str, "Module"], root_module: "Module") -> None:
+    """Assign call_depth to each Module via BFS from the root.
 
     Root ("self") has depth 0. Each level of call_children nesting adds 1.
     """
@@ -302,7 +302,7 @@ def _first_output_structure(self: "Trace", output_layers: list[str]) -> Any | No
 
 
 def _assign_output_roles(
-    output_entries: list["OpLog"],
+    output_entries: list["Op"],
     *,
     hints: Any | None,
 ) -> None:
@@ -335,10 +335,10 @@ def _assign_output_roles(
 
 
 def _merge_layer_log_conditional_fields(
-    layer_log: "LayerLog",
-    pass_log: "OpLog",
+    layer_log: "Layer",
+    pass_log: "Op",
 ) -> None:
-    """Merge one pass's conditional metadata into an aggregate ``LayerLog``.
+    """Merge one pass's conditional metadata into an aggregate ``Layer``.
 
     Parameters
     ----------
@@ -374,8 +374,8 @@ def _merge_layer_log_conditional_fields(
                 )
 
 
-def _rebuild_layer_log_conditional_views(layer_log: "LayerLog") -> None:
-    """Recompute aggregate conditional compatibility views for one ``LayerLog``.
+def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
+    """Recompute aggregate conditional compatibility views for one ``Layer``.
 
     Parameters
     ----------
@@ -469,19 +469,19 @@ def _build_submodule_call_logs(
     self: "Trace",
     address: str,
     num_calls: int,
-    pass_dict: dict[str, "ModuleCallLog"],
+    pass_dict: dict[str, "ModuleCall"],
     mbd: dict[str, Any],
     _child_to_parent_pass: dict[str, str] | None = None,
     all_addresses: list[str] | None = None,
     module_class: type[torch.nn.Module] | None = None,
-) -> tuple[dict[int, "ModuleCallLog"], list[str]]:
-    """Build ModuleCallLog objects for all ops of a single submodule.
+) -> tuple[dict[int, "ModuleCall"], list[str]]:
+    """Build ModuleCall objects for all ops of a single submodule.
 
-    For each pass, derives input/output layers from OpLog fields,
+    For each pass, derives input/output layers from Op fields,
     retrieves forward args, and resolves call parent/children relationships.
 
     Returns:
-        Tuple of (ops dict {call_index: ModuleCallLog}, call_labels list).
+        Tuple of (ops dict {call_index: ModuleCall}, call_labels list).
     """
     ops = {}
     call_labels_list = []
@@ -491,7 +491,7 @@ def _build_submodule_call_logs(
 
         pass_layers = list(mbd["module_pass_layers"].get(call_label, []))
 
-        # Derive input/output layers per pass from OpLog fields
+        # Derive input/output layers per pass from Op fields
         pass_input_layers = []
         pass_output_layers = []
         pass_outputs = []
@@ -523,7 +523,7 @@ def _build_submodule_call_logs(
         if call_parent_pass is None and call_label in mbd["top_level_module_ops"]:
             call_parent_pass = "self:1"
 
-        module_call_log = ModuleCallLog(
+        module_call_log = ModuleCall(
             address=address,
             call_index=call_index,
             call_label=call_label,
@@ -548,7 +548,7 @@ def _build_submodule_call_logs(
 
 
 def _resolve_call_hierarchy(
-    ops: dict[int, "ModuleCallLog"],
+    ops: dict[int, "ModuleCall"],
 ) -> tuple[list[str], str | None]:
     """Derive module-level call_children and call_parent from per-pass data.
 
@@ -622,11 +622,11 @@ def _build_module_param_info(
 
 
 def _build_module_logs(self: "Trace") -> None:
-    """Step 16: Build structured ModuleLog/ModuleCallLog objects.
+    """Step 16: Build structured Module/ModuleCall objects.
 
     Constructs the module hierarchy from _module_build_data (populated in Step 9)
     and _module_metadata (captured during model preparation). Creates:
-    - A root ModuleLog for "self" (the model itself).
+    - A root Module for "self" (the model itself).
     - ModuleLogs for each submodule with ModuleCallLogs for each pass.
     - ModuleAccessor and BufferAccessor for user-facing access.
 
@@ -640,11 +640,11 @@ def _build_module_logs(self: "Trace") -> None:
     after building.
     """
     mbd = self._module_build_data
-    module_dict = {}  # address -> ModuleLog
-    pass_dict: Dict[str, ModuleCallLog] = {}  # "addr:pass" -> ModuleCallLog
+    module_dict = {}  # address -> Module
+    pass_dict: Dict[str, ModuleCall] = {}  # "addr:pass" -> ModuleCall
     module_order = []  # ordered by first appearance
 
-    # --- Build root ModuleLog ("self") ---
+    # --- Build root Module ("self") ---
     root_module = _build_root_module_log(self, pass_dict, mbd)
     module_dict["self"] = root_module
     module_order.append(root_module)
@@ -734,7 +734,7 @@ def _build_module_logs(self: "Trace") -> None:
         else:
             address_children = list(mbd["module_children"].get(address, []))
 
-        ml = ModuleLog(
+        ml = Module(
             address=address,
             all_addresses=meta.get("all_addresses", [address]),
             name=name,
@@ -804,11 +804,11 @@ def _build_module_logs(self: "Trace") -> None:
 
 
 def _build_layer_logs(self: "Trace") -> None:
-    """Step 15.5: Build aggregate LayerLog objects from per-pass OpLog entries.
+    """Step 15.5: Build aggregate Layer objects from per-pass Op entries.
 
-    Groups layer_list entries by layer_label_no_pass and creates a LayerLog for
-    each unique layer. For single-pass layers, the LayerLog is a thin wrapper
-    delegating attribute access to the sole OpLog.
+    Groups layer_list entries by layer_label_no_pass and creates a Layer for
+    each unique layer. For single-pass layers, the Layer is a thin wrapper
+    delegating attribute access to the sole Op.
 
     MERGE RULES for multi-pass layers:
     1. has_input_ancestor: OR across ops (True if ANY pass has an input ancestor).
@@ -834,7 +834,7 @@ def _build_layer_logs(self: "Trace") -> None:
     """
     from collections import OrderedDict
 
-    from ..data_classes.layer_log import LayerLog
+    from ..data_classes.layer_log import Layer
 
     layer_logs = OrderedDict()
 
@@ -842,8 +842,8 @@ def _build_layer_logs(self: "Trace") -> None:
         no_call_label = pass_log.layer_label_no_pass
 
         if no_call_label not in layer_logs:
-            # First pass: create LayerLog from this pass's data.
-            layer_log = LayerLog(pass_log)
+            # First pass: create Layer from this pass's data.
+            layer_log = Layer(pass_log)
             layer_logs[no_call_label] = layer_log
         else:
             # Subsequent pass: merge only the 3 aggregate fields.
@@ -1007,7 +1007,7 @@ def _set_tracing_finished(self: "Trace") -> None:
     """Step 17: Mark the Trace and all OpLogs as pass-finished.
 
     Sets ``_tracing_finished = True`` on the Trace and every retained
-    OpLog entry. This flag switches various custom_methods (e.g., __str__,
+    Op entry. This flag switches various custom_methods (e.g., __str__,
     __getitem__) from their "realtime debugging" behavior to their
     "user-facing" behavior.
 
