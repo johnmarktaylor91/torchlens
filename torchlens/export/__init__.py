@@ -150,7 +150,7 @@ def speedscope(log: Any, path: str | Path) -> Path:
         "profiles": [
             {
                 "type": "evented",
-                "name": getattr(log, "model_name", "TorchLens forward"),
+                "name": getattr(log, "model_class_name", "TorchLens forward"),
                 "unit": "microseconds",
                 "startValue": 0,
                 "endValue": cursor_us,
@@ -182,9 +182,9 @@ def flamegraph(log: Any, path: str | Path) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     lines = []
-    model_name = str(getattr(log, "model_name", "TorchLens"))
+    model_class_name = str(getattr(log, "model_class_name", "TorchLens"))
     for layer in _iter_layers(log):
-        stack = [model_name]
+        stack = [model_class_name]
         stack.extend(str(module) for module in (getattr(layer, "modules", None) or []))
         stack.append(_layer_display_name(layer))
         folded_stack = ";".join(_sanitize_flamegraph_frame(frame) for frame in stack)
@@ -341,7 +341,7 @@ def tensorboard(log: Any, writer: Any, step: int = 0, prefix: str = "torchlens")
         int(getattr(log, "total_out_memory", 0) or 0),
         step,
     )
-    writer.add_text(f"{prefix}/model_name", str(getattr(log, "model_name", "")), step)
+    writer.add_text(f"{prefix}/model_class_name", str(getattr(log, "model_class_name", "")), step)
     flush = getattr(writer, "flush", None)
     if callable(flush):
         flush()
@@ -551,7 +551,9 @@ def model_explorer(log: Any, path: str | Path) -> Path:
         "schema": "torchlens.model_explorer.v1",
         "graphs": [
             {
-                "id": str(getattr(log, "name", None) or getattr(log, "model_name", "model")),
+                "id": str(
+                    getattr(log, "trace_label", None) or getattr(log, "model_class_name", "model")
+                ),
                 "nodes": [
                     {
                         "id": node["id"],
@@ -599,7 +601,7 @@ def netron(log: Any, path: str | Path) -> Path:
         "runnable": False,
         "disclaimer": "Lossy ONNX-shaped inspection graph; not a real ONNX runtime model.",
         "graph": {
-            "name": str(getattr(log, "model_name", "TorchLens graph")),
+            "name": str(getattr(log, "model_class_name", "TorchLens graph")),
             "node": [
                 {
                     "name": str(getattr(layer, "layer_label", "")),
@@ -697,7 +699,7 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
             "ph": "M",
             "pid": 1,
             "tid": 0,
-            "args": {"name": str(getattr(log, "model_name", "TorchLens forward"))},
+            "args": {"name": str(getattr(log, "model_class_name", "TorchLens forward"))},
         }
     ]
     cursor_us = 0
@@ -948,7 +950,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
     width = max((int(node["x"]) for node in nodes), default=0) + 160
     height = max((int(node["y"]) for node in nodes), default=0) + 100
     return {
-        "title": getattr(log, "model_name", "TorchLens graph"),
+        "title": getattr(log, "model_class_name", "TorchLens graph"),
         "nodes": nodes,
         "edges": edges,
         "width": width,

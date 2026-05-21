@@ -148,9 +148,9 @@ def _build_ir_instances() -> dict[str, object]:
         entry_argnames=("input",),
     )
     buffer_event = BufferEvent(
-        buffer_address="layer.running_mean",
+        address="layer.running_mean",
         name="running_mean",
-        address="layer",
+        module_address="layer",
         buffer_pass=1,
         parent_label_raw=None,
         shape=(2,),
@@ -175,7 +175,7 @@ def _build_ir_instances() -> dict[str, object]:
     )
     backend_semantics = BackendSemantics(
         grad_fn_id=None,
-        grad_fn_name=None,
+        grad_fn_class_name=None,
         autograd_saved_memory=None,
         num_autograd_saved_tensors=None,
         mutates_inputs=(),

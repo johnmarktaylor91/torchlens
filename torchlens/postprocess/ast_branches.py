@@ -255,7 +255,7 @@ class FileIndex:
     bool_consumers: List[BoolConsumer]
 
     def resolve_scope(
-        self, code_firstlineno: int, func_name: str, code_qualname: Optional[str]
+        self, code_firstlineno: int, func_name: str, func_qualname: Optional[str]
     ) -> Optional[ScopeEntry]:
         """Resolve a runtime frame to a single indexed function scope.
 
@@ -265,7 +265,7 @@ class FileIndex:
             ``co_firstlineno`` from the runtime frame.
         func_name:
             Simple function name from the runtime frame.
-        code_qualname:
+        func_qualname:
             Qualified function name from the runtime frame, when available.
 
         Returns
@@ -275,9 +275,9 @@ class FileIndex:
             require the frame to be skipped.
         """
 
-        if code_qualname is not None:
+        if func_qualname is not None:
             for scope in self.scopes:
-                if scope.code_firstlineno == code_firstlineno and scope.qualname == code_qualname:
+                if scope.code_firstlineno == code_firstlineno and scope.qualname == func_qualname:
                     return scope
             return None
 
@@ -430,7 +430,7 @@ def attribute_op(code_context: List[FuncCallLocation]) -> List[Tuple[Conditional
         scope = file_index.resolve_scope(
             code_firstlineno=frame.code_firstlineno,
             func_name=frame.func_name,
-            code_qualname=frame.code_qualname,
+            func_qualname=frame.func_qualname,
         )
         if scope is None:
             continue

@@ -2,13 +2,13 @@
 
 Buffer extends Op to represent a model buffer (e.g. BatchNorm's
 ``running_mean``).  Buffers participate in the computation graph just like
-regular tensors but have additional identity: a ``buffer_address`` (e.g.
+regular tensors but have additional identity: a ``address`` (e.g.
 ``"features.0.running_mean"``) and an owning module.
 
 **Why name/address live on Buffer, not Layer**: These are
 buffer-specific identifiers that don't apply to general layers.  A Layer
 is too generic — it could be any operation.  Only Buffer entries have a
-meaningful ``buffer_address``.  For single-pass buffers, the parent Layer
+meaningful ``address``.  For single-pass buffers, the parent Layer
 can access these fields via ``__getattr__`` delegation.
 """
 
@@ -49,12 +49,11 @@ class Buffer(Op):
     """A Op entry representing a registered model buffer.
 
     Subclasses Op and participates in the computation graph
-    identically to regular tensor operations.  Adds ``name`` and
-    ``address`` computed properties derived from the
-    ``buffer_address`` field (inherited from Op).
+    identically to regular tensor operations.  Adds ``name`` derived
+    from the ``address`` field inherited from Op.
 
     No additional constructor arguments — the buffer identity comes
-    from the ``buffer_address`` field in the fields_dict passed to
+    from the ``address`` field in the fields_dict passed to
     the parent ``Op.__init__``.
     """
 
@@ -70,7 +69,7 @@ class Buffer(Op):
             Buffer addresses.
         """
 
-        return [] if self.buffer_address is None else [self.buffer_address]
+        return [] if self.address is None else [self.address]
 
     @property
     def has_multiple_addresses(self) -> bool:
@@ -87,30 +86,22 @@ class Buffer(Op):
     @property
     def name(self) -> str:
         """Buffer name (last segment of address), e.g. 'running_mean'."""
-        addr = self.buffer_address
+        addr = self.address
         if addr is None:
             return ""
         return cast(str, addr.rsplit(".", 1)[-1])
 
-    @property
-    def address(self) -> str:
-        """Module address (everything before last dot), e.g. 'features.0'."""
-        addr = self.buffer_address
-        if addr is None:
-            return ""
-        return cast(str, addr.rsplit(".", 1)[0]) if "." in addr else ""
-
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, size, module, and pass number."""
-        lines = [f"Buffer: {self.buffer_address or self.layer_label}"]
+        lines = [f"Buffer: {self.address or self.layer_label}"]
         if self.shape is not None:
             lines.append(f"  shape: {list(self.shape)}")
         if self.dtype is not None:
             lines.append(f"  dtype: {self.dtype}")
         if self.memory is not None:
             lines.append(f"  size: {human_readable_size(self.memory)}")
-        if self.address:
-            lines.append(f"  module: {self.address}")
+        if self.module:
+            lines.append(f"  module: {self.module[0]}")
         if self.buffer_pass is not None:
             lines.append(f"  pass: {self.buffer_pass}")
         lines.append(f"  has_saved_outs: {self.has_saved_outs}")
@@ -179,7 +170,7 @@ class BufferAccessor(Accessor["Buffer"]):
         for bl in self._list:
             shape_str = str(list(bl.shape)) if bl.shape is not None else "?"
             dtype_str = str(bl.dtype) if bl.dtype is not None else "?"
-            items.append(f"'{bl.buffer_address}': Buffer {shape_str} {dtype_str}")
+            items.append(f"'{bl.address}': Buffer {shape_str} {dtype_str}")
         inner = ",\n ".join(items)
         return "{" + inner + "}"
 

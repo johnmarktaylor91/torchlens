@@ -219,6 +219,18 @@ class ModuleCall:
         return len(self.layers)
 
     @property
+    def name(self) -> str:
+        """Return the final segment of the primary module-call address.
+
+        Returns
+        -------
+        str
+            Module name within its parent module.
+        """
+
+        return "" if self.address == "self" else self.address.rsplit(".", 1)[-1]
+
+    @property
     def has_multiple_addresses(self) -> bool:
         """Whether this module appears at multiple addresses."""
         return len(self.all_addresses) > 1

@@ -149,8 +149,10 @@ class Layer:
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "func": FieldPolicy.DROP,
         "func_name": FieldPolicy.KEEP,
+        "func_qualname": FieldPolicy.KEEP,
         "is_inplace": FieldPolicy.KEEP,
-        "grad_fn_name": FieldPolicy.KEEP,
+        "grad_fn_class_name": FieldPolicy.KEEP,
+        "grad_fn_class_qualname": FieldPolicy.KEEP,
         "grad_fn_id": FieldPolicy.KEEP,
         "grad_fn": FieldPolicy.DROP,
         "grad_fn_log": FieldPolicy.DROP,
@@ -196,7 +198,7 @@ class Layer:
         "is_output": FieldPolicy.KEEP,
         "is_final_output": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
-        "buffer_address": FieldPolicy.KEEP,
+        "address": FieldPolicy.KEEP,
         "buffer_parent": FieldPolicy.KEEP,
         "is_internal_source": FieldPolicy.KEEP,
         "is_internal_sink": FieldPolicy.KEEP,
@@ -247,8 +249,10 @@ class Layer:
         # Function identity
         self.func = first_pass.func
         self.func_name = first_pass.func_name
+        self.func_qualname = first_pass.func_qualname
         self.is_inplace = first_pass.is_inplace
-        self.grad_fn_name = first_pass.grad_fn_name
+        self.grad_fn_class_name = first_pass.grad_fn_class_name
+        self.grad_fn_class_qualname = first_pass.grad_fn_class_qualname
         self.grad_fn_id = first_pass.grad_fn_id
         self.grad_fn = first_pass.grad_fn
         self.grad_fn_log = first_pass.grad_fn_log
@@ -306,7 +310,7 @@ class Layer:
         self.is_output = first_pass.is_output
         self.is_final_output = first_pass.is_final_output
         self.is_buffer = first_pass.is_buffer
-        self.buffer_address = first_pass.buffer_address
+        self.address = first_pass.address
         self.buffer_parent = first_pass.buffer_parent
         self.is_internal_source = first_pass.is_internal_source
         self.is_internal_sink = first_pass.is_internal_sink
@@ -1166,7 +1170,7 @@ class Layer:
             s += f" ({self.num_calls} ops)"
         s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.memory_str}"
         if not self.is_input:
-            s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_name})"
+            s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_class_name})"
             if self.func_config:
                 config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
                 s += f"\n\tConfig: {config_str}"

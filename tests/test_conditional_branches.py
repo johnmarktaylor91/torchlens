@@ -1691,7 +1691,7 @@ def test_nested_helper_same_name_model_distinguishes_helpers_by_code_firstlineno
 
 @pytest.mark.skipif(
     sys.version_info < (3, 11),
-    reason="code_qualname is only available on Python 3.11+",
+    reason="func_qualname is only available on Python 3.11+",
 )
 def test_nested_qualname_model_distinguishes_method_and_nested_helper() -> None:
     """Distinct qualnames keep a method helper separate from a nested helper."""
@@ -1729,10 +1729,10 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
     original_get_file_index = ast_branches.get_file_index
 
     def _stack_without_qualname(*args: object, **kwargs: object) -> list[object]:
-        """Return a call stack with ``code_qualname`` cleared on every frame."""
+        """Return a call stack with ``func_qualname`` cleared on every frame."""
         stack = original_get_stack(*args, **kwargs)
         for frame in stack:
-            frame.code_qualname = None
+            frame.func_qualname = None
         return stack
 
     def _ambiguous_file_index(filename: str) -> object:

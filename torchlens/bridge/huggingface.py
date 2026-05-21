@@ -118,8 +118,8 @@ def _artifact_bytes(log_or_bundle_or_spec: Any) -> bytes:
         metadata = {
             "schema": "torchlens.hub_artifact_manifest.v1",
             "kind": type(log_or_bundle_or_spec).__name__,
-            "model_name": getattr(log_or_bundle_or_spec, "model_name", None),
-            "name": getattr(log_or_bundle_or_spec, "name", None),
+            "model_class_name": getattr(log_or_bundle_or_spec, "model_class_name", None),
+            "name": getattr(log_or_bundle_or_spec, "trace_label", None),
             "num_layers": len(getattr(log_or_bundle_or_spec, "layer_list", []) or []),
             "note": "Full pickle serialization failed; this manifest is inspection metadata only.",
         }

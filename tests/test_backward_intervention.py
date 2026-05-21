@@ -109,8 +109,8 @@ def _hook_trace() -> tuple[_TraceStub, GradFn]:
 
     grad_fn_log = GradFn(
         grad_fn_id=1,
-        name="ReluBackward0",
-        module_path="torch.autograd",
+        class_name="ReluBackward0",
+        class_qualname="torch.autograd.ReluBackward0",
         is_custom=False,
         label="relu_back_1_1",
         grad_fn_type="relu",
@@ -125,7 +125,9 @@ def test_accumulategrad_post_hook_logs_grad_fn_call() -> None:
     """AccumulateGrad post-hooks still record call logs."""
 
     trace = _logged_backward_trace()
-    accumulate_logs = [gfl for gfl in trace.grad_fn_logs.values() if gfl.name == "AccumulateGrad"]
+    accumulate_logs = [
+        gfl for gfl in trace.grad_fn_logs.values() if gfl.class_name == "AccumulateGrad"
+    ]
     assert accumulate_logs
     assert all(gfl.num_calls >= 1 for gfl in accumulate_logs)
 

@@ -353,7 +353,7 @@ def test_bundle_version_policy_rows(
         (bundle_path / "blobs" / "extra.bin").write_bytes(b"extra")
         with pytest.warns(UserWarning, match="unreferenced extra files"):
             loaded = load(bundle_path)
-        assert loaded.model_name == "_ConvBundleModel"
+        assert loaded.model_class_name == "_ConvBundleModel"
         return
 
     if expectation == "raise":
@@ -364,26 +364,26 @@ def test_bundle_version_policy_rows(
     if expectation == "deprecation_warning":
         with pytest.warns(DeprecationWarning, match=resolved_expected_text or ""):
             loaded = load(bundle_path)
-        assert loaded.model_name == "_ConvBundleModel"
+        assert loaded.model_class_name == "_ConvBundleModel"
         return
 
     if expectation == "warning":
         with pytest.warns(UserWarning, match=resolved_expected_text or ""):
             loaded = load(bundle_path)
-        assert loaded.model_name == "_ConvBundleModel"
+        assert loaded.model_class_name == "_ConvBundleModel"
         return
 
     if expectation == "info_log":
         with caplog.at_level(logging.INFO, logger="torchlens._io.manifest"):
             loaded = load(bundle_path)
-        assert loaded.model_name == "_ConvBundleModel"
+        assert loaded.model_class_name == "_ConvBundleModel"
         assert resolved_expected_text is not None
         assert resolved_expected_text in caplog.text
         assert "older than runtime torchlens_version" in caplog.text
         return
 
     loaded = load(bundle_path)
-    assert loaded.model_name == "_ConvBundleModel"
+    assert loaded.model_class_name == "_ConvBundleModel"
 
 
 def test_bundle_load_raises_for_missing_safetensors_backend(

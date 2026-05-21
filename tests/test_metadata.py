@@ -35,8 +35,8 @@ from torchlens.capture.flops import (
 def test_general_info_fields(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert isinstance(mh.model_name, str)
-    assert len(mh.model_name) > 0
+    assert isinstance(mh.model_class_name, str)
+    assert len(mh.model_class_name) > 0
     assert mh._tracing_finished is True
     assert isinstance(mh.num_ops, int)
     assert mh.num_ops > 0
@@ -319,7 +319,7 @@ def test_buffer_layer_fields():
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.is_buffer:
-            assert isinstance(entry.buffer_address, str)
+            assert isinstance(entry.address, str)
             found = True
             break
     assert found, "BufferModel should have buffer layers"

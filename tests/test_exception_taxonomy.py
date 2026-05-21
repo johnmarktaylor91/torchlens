@@ -272,12 +272,12 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
 )
 
 
-def _import_exception(module_path: str, class_name: str) -> Any:
+def _import_exception(class_module: str, class_name: str) -> Any:
     """Import an exception or warning class from a module path.
 
     Parameters
     ----------
-    module_path:
+    class_module:
         Module path containing the class.
     class_name:
         Exception or warning class name.
@@ -288,7 +288,7 @@ def _import_exception(module_path: str, class_name: str) -> Any:
         Imported class object.
     """
 
-    module_obj = importlib.import_module(module_path)
+    module_obj = importlib.import_module(class_module)
     return getattr(module_obj, class_name)
 
 
@@ -340,17 +340,17 @@ def test_invalid_severity_is_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    ("module_path", "class_name", "expected_base", "status"), OLD_EXCEPTION_MAPPING
+    ("class_module", "class_name", "expected_base", "status"), OLD_EXCEPTION_MAPPING
 )
 def test_old_exception_class_maps_to_new_base(
-    module_path: str,
+    class_module: str,
     class_name: str,
     expected_base: type[BaseException],
     status: str,
 ) -> None:
     """Every inventoried old exception class is preserved under the new taxonomy."""
 
-    cls = _import_exception(module_path, class_name)
+    cls = _import_exception(class_module, class_name)
 
     assert issubclass(cls, expected_base)
     assert getattr(errors, class_name) is cls

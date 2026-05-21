@@ -193,8 +193,8 @@ def test_has_op_deprecation_property() -> None:
 
     grad_fn = GradFn(
         grad_fn_id=1,
-        name="AddBackward0",
-        module_path="torch.autograd",
+        class_name="AddBackward0",
+        class_qualname="torch.autograd.AddBackward0",
         is_custom=False,
         label="addbackward0_1_1",
         grad_fn_type="addbackward0",

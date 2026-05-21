@@ -119,8 +119,8 @@ class GradFn:
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "grad_fn_id": FieldPolicy.KEEP,
-        "name": FieldPolicy.KEEP,
-        "module_path": FieldPolicy.KEEP,
+        "class_name": FieldPolicy.KEEP,
+        "class_qualname": FieldPolicy.KEEP,
         "is_custom": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,
         "grad_fn_type": FieldPolicy.KEEP,
@@ -133,8 +133,8 @@ class GradFn:
     }
 
     grad_fn_id: int
-    name: str
-    module_path: str
+    class_name: str
+    class_qualname: str
     is_custom: bool
     label: str
     grad_fn_type: str
@@ -209,30 +209,6 @@ class GradFn:
         """
 
         return None
-
-    @property
-    def class_name(self) -> str:
-        """Return the grad_fn class name.
-
-        Returns
-        -------
-        str
-            Grad-fn class name.
-        """
-
-        return self.name
-
-    @property
-    def class_qualname(self) -> str:
-        """Return the best-known qualified grad_fn class name.
-
-        Returns
-        -------
-        str
-            Qualified class name when known, otherwise ``class_name``.
-        """
-
-        return self.name
 
     @property
     def grad_fn_label(self) -> str:
@@ -355,7 +331,7 @@ class GradFnAccessor(Accessor[GradFn]):
         if len(self) == 0:
             return "GradFnAccessor({})"
         items = [
-            f"  '{grad_fn.label}': {grad_fn.name} "
+            f"  '{grad_fn.label}': {grad_fn.class_name} "
             f"(ops={grad_fn.num_calls}, intervening={grad_fn.is_intervening})"
             for grad_fn in self._list
         ]

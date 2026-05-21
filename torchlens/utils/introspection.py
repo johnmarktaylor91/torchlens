@@ -596,7 +596,7 @@ def _get_code_context(
                 else None
             ),
             code_firstlineno=code_firstlineno,
-            code_qualname=_get_code_qualname(frame_ref),
+            func_qualname=_get_code_qualname(frame_ref),
             col_offset=None if disable_col_offset else _get_col_offset(frame_ref),
             source_loading_enabled=source_loading_enabled,
         )

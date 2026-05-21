@@ -72,7 +72,7 @@ def test_tensor_helpers_lazy_init_and_field_operations() -> None:
     promote_label_to_buffer_parent_and_clear_label(t)
     assert t._tl.label_raw is None
     assert t._tl.buffer_parent == "buffer_parent_raw"
-    assert t._tl.buffer_address == "block.buf"
+    assert t._tl.address == "block.buf"
 
 
 @pytest.mark.smoke
@@ -178,7 +178,7 @@ def test_copy_replacement_meta_preserves_subclass_and_is_shallow_copy() -> None:
 @pytest.mark.parametrize(
     "meta",
     [
-        TensorMeta(label_raw="x", buffer_address="buf", buffer_parent="parent"),
+        TensorMeta(label_raw="x", address="buf", buffer_parent="parent"),
         ParamMeta(
             param_barcode="abc",
             param_address="linear.weight",

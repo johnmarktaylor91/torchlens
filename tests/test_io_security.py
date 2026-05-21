@@ -217,4 +217,4 @@ def test_orphaned_extra_blob_only_warns(tmp_path: Path) -> None:
     with pytest.warns(UserWarning, match="unreferenced extra files"):
         restored = load(bundle_path)
 
-    assert restored.model_name == "_SecurityIOModel"
+    assert restored.model_class_name == "_SecurityIOModel"

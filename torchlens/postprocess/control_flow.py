@@ -576,17 +576,17 @@ def _resolve_scope_with_decorator_fallback(
     resolved_scope = file_index.resolve_scope(
         code_firstlineno=frame.code_firstlineno,
         func_name=frame.func_name,
-        code_qualname=frame.code_qualname,
+        func_qualname=frame.func_qualname,
     )
     if resolved_scope is not None:
         return resolved_scope
 
     candidate_firstlineno = frame.code_firstlineno + 1
-    if frame.code_qualname is not None:
+    if frame.func_qualname is not None:
         qualname_matches = [
             scope
             for scope in file_index.scopes
-            if scope.qualname == frame.code_qualname
+            if scope.qualname == frame.func_qualname
             and scope.code_firstlineno == candidate_firstlineno
         ]
         if len(qualname_matches) == 1:
@@ -641,9 +641,9 @@ def _fix_buffer_layers(self: "Trace") -> None:
     1. Connects each buffer to its buffer_parent (the tensor that produced the
        buffer's value), updating parent/child links and ancestry.
     2. Deduplicates buffers: buffers with the same containing module, same parent,
-       same buffer_address, AND same tensor value are merged into a single node.
-       The dedup hash is (modules + buffer_parent + buffer_address).
-    3. Assigns sequential buffer_pass numbers per buffer_address.
+       same address, AND same tensor value are merged into a single node.
+       The dedup hash is (modules + buffer_parent + address).
+    3. Assigns sequential buffer_pass numbers per address.
 
     Note: Buffer siblings are always empty — the sibling iteration in
     _merge_buffer_entries is effectively dead code for buffers (#2).
@@ -669,7 +669,7 @@ def _fix_buffer_layers(self: "Trace") -> None:
                     safe_copy(self[layer.buffer_parent].out, detach_tensor=True)
                 )
 
-        buffer_hash = str(layer.modules) + str(layer.buffer_parent) + layer.buffer_address
+        buffer_hash = str(layer.modules) + str(layer.buffer_parent) + layer.address
         buffer_hash_groups[buffer_hash].append(layer_label)
 
     # Merge buffers with the same hash AND the same tensor value.
@@ -696,10 +696,10 @@ def _fix_buffer_layers(self: "Trace") -> None:
 
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
-        buffer_address = layer.buffer_address
-        layer.buffer_pass = buffer_counter[buffer_address]
-        self.buffer_num_calls[buffer_address] = buffer_counter[buffer_address]
-        buffer_counter[buffer_address] += 1
+        address = layer.address
+        layer.buffer_pass = buffer_counter[address]
+        self.buffer_num_calls[address] = buffer_counter[address]
+        buffer_counter[address] += 1
 
 
 def _merge_buffer_entries(self: "Trace", source_buffer: Op, buffer_to_remove: Op) -> None:

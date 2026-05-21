@@ -569,7 +569,7 @@ def _event_from_record(
         module_stack=_module_frames_from_record_context(ctx),
         backend_semantics=BackendSemantics(
             grad_fn_id=None,
-            grad_fn_name=None,
+            grad_fn_class_name=None,
             autograd_saved_memory=0,
             num_autograd_saved_tensors=0,
             mutates_inputs=(),

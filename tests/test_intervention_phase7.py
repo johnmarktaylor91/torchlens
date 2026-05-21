@@ -251,14 +251,14 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     new_log = _capture(ReluAdd(), x + 1)
     spec = InterventionSpec(targets=[TargetSpec("func", "relu")], hook=_zero_hook)
     history: list[Any] = [{"engine": "before"}]
-    log.name = "kept"
+    log.trace_label = "kept"
     log.parent_run = "parent-sentinel"  # type: ignore[assignment]
     log._intervention_spec = spec
     log.ledger = history
     log._warned_direct_write = True
     log._warned_mutate_in_place = True
     log.model_id = 123
-    log.model_class = "kept.Model"
+    log.model_class_qualname = "kept.Model"
     log.param_hash_quick = "weights-a"
     log.param_hash_full = "weights-full"
     log.input_id = 456
@@ -269,14 +269,14 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
 
     log.replace_run_state_from(new_log)
 
-    assert log.name == "kept"
+    assert log.trace_label == "kept"
     assert log.parent_run == "parent-sentinel"
     assert log._intervention_spec is spec
     assert log.ledger is history
     assert log._warned_direct_write is True
     assert log._warned_mutate_in_place is True
     assert log.model_id == 123
-    assert log.model_class == "kept.Model"
+    assert log.model_class_qualname == "kept.Model"
     assert log.param_hash_quick == "weights-a"
     assert log.param_hash_full == "weights-full"
     assert log.input_id == 456

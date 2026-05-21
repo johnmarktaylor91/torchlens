@@ -71,14 +71,14 @@ def _model_summary_lines(log: Any) -> list[str]:
         Bullet lines for the model section.
     """
 
-    model_name = getattr(log, "model_name", type(log).__name__)
+    model_class_name = getattr(log, "model_class_name", type(log).__name__)
     num_params = int(getattr(log, "num_params", 0) or 0)
     trainable_params = int(getattr(log, "num_params_trainable", 0) or 0)
     frozen_params = int(getattr(log, "num_params_frozen", 0) or 0)
     total_flops = int(getattr(log, "total_flops_forward", getattr(log, "total_flops", 0)) or 0)
     module_count = _safe_len(getattr(log, "modules", None))
     return [
-        f"- Architecture: {model_name}.",
+        f"- Architecture: {model_class_name}.",
         (
             f"- Parameters: {_format_count(num_params)} total "
             f"({_format_count(trainable_params)} trainable, {_format_count(frozen_params)} frozen)."

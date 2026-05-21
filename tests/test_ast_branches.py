@@ -108,7 +108,7 @@ def _make_frame(
     col: Optional[int],
     func_name: str,
     code_firstlineno: int,
-    code_qualname: Optional[str],
+    func_qualname: Optional[str],
 ) -> FuncCallLocation:
     """Build a manual ``FuncCallLocation`` for attribution tests.
 
@@ -124,7 +124,7 @@ def _make_frame(
         Simple function name.
     code_firstlineno:
         Code object first line number.
-    code_qualname:
+    func_qualname:
         Qualified function name, if available.
 
     Returns
@@ -138,7 +138,7 @@ def _make_frame(
         line_number=line,
         func_name=func_name,
         code_firstlineno=code_firstlineno,
-        code_qualname=code_qualname,
+        func_qualname=func_qualname,
         col_offset=col,
         source_loading_enabled=False,
     )
@@ -370,7 +370,7 @@ def test_nested_ifs_attribute_operation_with_full_branch_stack(tmp_path: Path) -
                 col=col,
                 func_name="forward",
                 code_firstlineno=forward_scope.code_firstlineno,
-                code_qualname=forward_scope.qualname,
+                func_qualname=forward_scope.qualname,
             )
         ]
     )

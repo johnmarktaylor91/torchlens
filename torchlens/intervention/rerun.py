@@ -261,7 +261,7 @@ def _streaming_append_error_message(log: "Trace") -> str:
         details.append("out_callback streaming")
     details_text = ", ".join(details) if details else "streaming"
     return (
-        f"Trace {getattr(log, 'model_name', None)!r} has active {details_text}; "
+        f"Trace {getattr(log, 'model_class_name', None)!r} has active {details_text}; "
         "rerun(append=True) cannot update streamed activation storage. Save and reload "
         "the trace before appending, or disable streaming for this capture."
     )

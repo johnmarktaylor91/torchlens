@@ -104,7 +104,7 @@ def profiling_node_mode(layer_log: "Layer", spec: NodeSpec) -> NodeSpec:
     if call_location is not None:
         file_name = Path(call_location.file).name
         lines.append(f"call={file_name}:{call_location.line_number}")
-        function_name = call_location.code_qualname or call_location.func_name
+        function_name = call_location.func_qualname or call_location.func_name
         if function_name:
             lines.append(f"fn={function_name}")
     else:

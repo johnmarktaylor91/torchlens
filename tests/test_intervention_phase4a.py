@@ -62,7 +62,7 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
 
     assert log.intervention_ready is True
     assert log.model_id == id(model)
-    assert log.model_class == f"{type(model).__module__}.{type(model).__qualname__}"
+    assert log.model_class_qualname == f"{type(model).__module__}.{type(model).__qualname__}"
     assert log.param_hash_quick is not None
     assert log.param_hash_full == log.param_hash_quick
     assert log.input_id == id(x)

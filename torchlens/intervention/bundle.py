@@ -1456,7 +1456,7 @@ class Bundle:
 
         if name is not None:
             return str(name)
-        log_name = getattr(log, "name", None)
+        log_name = getattr(log, "trace_label", None)
         if log_name:
             return str(log_name)
         return f"member_{index}"
@@ -1701,8 +1701,8 @@ class Bundle:
         if left is right:
             return Relationship.SAME_OBJECT
 
-        left_class = getattr(left, "model_class", None)
-        right_class = getattr(right, "model_class", None)
+        left_class = getattr(left, "model_class_qualname", None)
+        right_class = getattr(right, "model_class_qualname", None)
         left_weight = cls._weight_fingerprint(left)
         right_weight = cls._weight_fingerprint(right)
         left_id = getattr(left, "model_id", None)

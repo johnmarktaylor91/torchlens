@@ -311,9 +311,9 @@ class _TlSpecWriter:
 
         if kind == "bundle":
             return "torchlens.intervention.bundle.Bundle"
-        model_class = getattr(source, "model_class", None)
-        if isinstance(model_class, str) and model_class:
-            return model_class
+        model_class_qualname = getattr(source, "model_class_qualname", None)
+        if isinstance(model_class_qualname, str) and model_class_qualname:
+            return model_class_qualname
         model = _source_model(source)
         if model is not None:
             model_type = type(model)
@@ -606,7 +606,7 @@ def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
     """
 
     return {
-        "model_name": _json_str_or_none(getattr(source, "model_name", None)),
+        "model_class_name": _json_str_or_none(getattr(source, "model_class_name", None)),
         "graph_shape_hash": _json_str_or_none(getattr(source, "graph_shape_hash", None)),
         "input_shape_hash": _json_str_or_none(getattr(source, "input_shape_hash", None)),
     }

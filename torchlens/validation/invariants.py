@@ -1706,7 +1706,7 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
 
     Validates:
     - buffer_layers list entries are valid layer labels.
-    - Buffer objects have non-empty buffer_address and valid address.
+    - Buffer objects have non-empty address and valid address.
     """
     name = "buffer_xrefs"
     label_set = set(ml.layer_labels)
@@ -1720,10 +1720,10 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
     # Check Buffer objects via buffer accessor
     if hasattr(ml, "_buffer_accessor") and ml._buffer_accessor is not None:
         for buf in ml.buffers:
-            if not buf.buffer_address:
+            if not buf.address:
                 raise MetadataInvariantError(
                     name,
-                    f"Buffer '{buf.layer_label}' has empty buffer_address",
+                    f"Buffer '{buf.layer_label}' has empty address",
                 )
             # address references a valid module or an ancestor does.
             # Buffers may live on modules that were never entered during the

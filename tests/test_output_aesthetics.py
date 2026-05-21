@@ -97,7 +97,7 @@ def _field_dump(obj, label: str, exclude=None) -> str:
 # ---------------------------------------------------------------------------
 
 AESTHETIC_TEXT_MODELS = [
-    # (name, model_class, input_tensor, description)
+    # (name, model_class_qualname, input_tensor, description)
     (
         "SimpleFF",
         example_models.SimpleFF,
@@ -283,11 +283,11 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
         )
 
         # Show by full address
-        if first_buf.buffer_address is not None:
+        if first_buf.address is not None:
             out.write(
                 _capture(
-                    f'repr(log.buffers["{first_buf.buffer_address}"]) — by full address',
-                    repr(log.buffers[first_buf.buffer_address]),
+                    f'repr(log.buffers["{first_buf.address}"]) — by full address',
+                    repr(log.buffers[first_buf.address]),
                 )
             )
 
@@ -601,7 +601,7 @@ PDF_PATH = opj(REPORTS_DIR, "aesthetic_report.pdf")
 
 # Visualization configurations for the gallery section
 VIS_GALLERY = [
-    # (filename_stem, caption, model_class, input_shape_desc, vis_mode, depth, direction, buffers)
+    # (filename_stem, caption, model_class_qualname, input_shape_desc, vis_mode, depth, direction, buffers)
     (
         "deep_nested_depth1",
         "AestheticDeepNested — depth=1",
@@ -875,7 +875,7 @@ VIS_GALLERY = [
 ]
 
 # Gradient visualization gallery — rendered with save_grads=True + backward()
-# (filename_stem, caption, model_name, input_shape_desc, vis_mode, depth, direction)
+# (filename_stem, caption, model_class_name, input_shape_desc, vis_mode, depth, direction)
 GRADIENT_VIS_GALLERY = [
     (
         "grad_deep_nested",
@@ -1207,7 +1207,16 @@ def _build_latex_report() -> str:
         "\\texttt{show\\_model\\_graph()} with the specified parameters.\n\n"
     )
 
-    for stem, caption, model_name, input_desc, vis_mode, depth, direction, buffers in VIS_GALLERY:
+    for (
+        stem,
+        caption,
+        model_class_name,
+        input_desc,
+        vis_mode,
+        depth,
+        direction,
+        buffers,
+    ) in VIS_GALLERY:
         pdf_path = opj(VIS_DIR, f"{stem}.pdf")
         if not os.path.exists(pdf_path):
             continue
@@ -1234,7 +1243,15 @@ def _build_latex_report() -> str:
         "Gradient arrows only appear in unrolled mode.\n\n"
     )
 
-    for stem, caption, model_name, input_desc, vis_mode, depth, direction in GRADIENT_VIS_GALLERY:
+    for (
+        stem,
+        caption,
+        model_class_name,
+        input_desc,
+        vis_mode,
+        depth,
+        direction,
+    ) in GRADIENT_VIS_GALLERY:
         pdf_path = opj(VIS_DIR, f"{stem}.pdf")
         if not os.path.exists(pdf_path):
             continue
@@ -1272,8 +1289,8 @@ def _ensure_vis_pdfs_exist():
 
     # Standard gallery
     missing = [g for g in VIS_GALLERY if not os.path.exists(opj(VIS_DIR, f"{g[0]}.pdf"))]
-    for stem, caption, model_name, _, vis_mode, depth, direction, buffers in missing:
-        model, x = model_inputs[model_name]
+    for stem, caption, model_class_name, _, vis_mode, depth, direction, buffers in missing:
+        model, x = model_inputs[model_class_name]
         _vis(
             model,
             x,
@@ -1288,8 +1305,8 @@ def _ensure_vis_pdfs_exist():
     grad_missing = [
         g for g in GRADIENT_VIS_GALLERY if not os.path.exists(opj(VIS_DIR, f"{g[0]}.pdf"))
     ]
-    for stem, caption, model_name, _, vis_mode, depth, direction in grad_missing:
-        model, x = model_inputs[model_name]
+    for stem, caption, model_class_name, _, vis_mode, depth, direction in grad_missing:
+        model, x = model_inputs[model_class_name]
         _vis_grad(model, x, stem, vis_mode=vis_mode, depth=depth, direction=direction)
 
 

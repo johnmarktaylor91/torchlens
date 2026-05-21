@@ -121,7 +121,7 @@ class GradRecordContext:
     """
 
     grad_fn_label: str
-    grad_fn_name: str
+    grad_fn_class_name: str
     grad_fn_type: str
     backward_call_index: int
     grad_kind: Literal["grad_input", "grad_output"]
@@ -584,7 +584,7 @@ def build_grad_record_context(
     if forward_ctx is None:
         return GradRecordContext(
             grad_fn_label=grad_fn_label,
-            grad_fn_name=type(grad_fn).__name__,
+            grad_fn_class_name=type(grad_fn).__name__,
             grad_fn_type=grad_fn_type,
             backward_call_index=backward_call_index,
             grad_kind=grad_kind,
@@ -596,7 +596,7 @@ def build_grad_record_context(
         )
     return GradRecordContext(
         grad_fn_label=grad_fn_label,
-        grad_fn_name=type(grad_fn).__name__,
+        grad_fn_class_name=type(grad_fn).__name__,
         grad_fn_type=grad_fn_type,
         backward_call_index=backward_call_index,
         grad_kind=grad_kind,

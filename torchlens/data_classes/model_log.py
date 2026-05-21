@@ -129,7 +129,8 @@ from .._source_links import file_line_text, terminal_file_line_link, vscode_file
 _USE_STORED_TRANSFORM = object()
 
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
-    "name": None,
+    "trace_label": None,
+    "model_label": None,
     "intervention_ready": False,
     "capture_args_template": False,
     "raw_input": None,
@@ -156,7 +157,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_last_hook_handle_ids": (),
     "run_state": RunState.PRISTINE,
     "model_id": None,
-    "model_class": None,
+    "model_class_qualname": None,
     "param_hash_quick": None,
     "param_hash_full": None,
     "input_id": None,
@@ -703,8 +704,9 @@ class Trace:
             setattr(build_state, state_field, getattr(default_state, state_field))
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
-        "name": FieldPolicy.KEEP,
-        "model_name": FieldPolicy.KEEP,
+        "trace_label": FieldPolicy.KEEP,
+        "model_class_name": FieldPolicy.KEEP,
+        "model_label": FieldPolicy.KEEP,
         "_backend_name": FieldPolicy.KEEP,
         "num_context_lines": FieldPolicy.KEEP,
         "_optimizer": FieldPolicy.DROP,
@@ -735,7 +737,7 @@ class Trace:
         "_source_model_ref": FieldPolicy.DROP,
         "parent_run": FieldPolicy.DROP,
         "model_id": FieldPolicy.KEEP,
-        "model_class": FieldPolicy.KEEP,
+        "model_class_qualname": FieldPolicy.KEEP,
         "param_hash_quick": FieldPolicy.KEEP,
         "param_hash_full": FieldPolicy.KEEP,
         "input_id": FieldPolicy.KEEP,
@@ -889,7 +891,7 @@ class Trace:
 
     def __init__(
         self,
-        model_name: str,
+        model_class_name: str,
         output_device: str = "same",
         out_postfunc: Optional[ActivationPostfunc] = None,
         grad_transform: Optional[GradientPostfunc] = None,
@@ -924,7 +926,7 @@ class Trace:
         """Initialise a fresh Trace for a new logging session.
 
         Args:
-            model_name: Human-readable name of the model being logged.
+            model_class_name: Human-readable name of the model being logged.
             output_device: Device to move saved outs to ("same" keeps original device).
             out_postfunc: Optional function applied to each tensor before saving.
             grad_transform: Optional function applied to each grad before saving.
@@ -963,8 +965,9 @@ class Trace:
         # Callables are effectively immutable - deepcopy is unnecessary.
 
         # General info
-        self.name: str | None = None
-        self.model_name = model_name
+        self.trace_label: str | None = None
+        self.model_class_name = model_class_name
+        self.model_label = model_class_name
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
         self.io_format_version = IO_FORMAT_VERSION
@@ -1004,7 +1007,7 @@ class Trace:
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
         self.parent_run: weakref.ReferenceType["Trace"] | None = None
         self.model_id: int | None = None
-        self.model_class: str | None = None
+        self.model_class_qualname: str | None = None
         self.param_hash_quick: str | None = None
         self.param_hash_full: str | None = None
         self.input_id: int | None = None
@@ -1294,6 +1297,20 @@ class Trace:
         called = set(getattr(self._module_logs, "_dict", {}).keys())
         called.update(getattr(self._module_logs, "_alias_dict", {}).keys())
         return _CallableList(sorted(registered - called))
+
+    @property
+    def model_cls(self) -> type[Any] | None:
+        """Return the live source model class when the model is still alive.
+
+        Returns
+        -------
+        type[Any] | None
+            Runtime class of the source model, or ``None`` after the weakref dies.
+        """
+
+        source_ref = getattr(self, "_source_model_ref", None)
+        model = source_ref() if source_ref is not None else None
+        return None if model is None else type(model)
 
     def save_intervention(
         self,
@@ -1693,7 +1710,7 @@ class Trace:
         """
 
         fork = self._fork_trace(name=name)
-        self._record_operation("fork", source_id=id(self), name=fork.name)
+        self._record_operation("fork", source_id=id(self), name=fork.trace_label)
         return fork
 
     def _record_operation(self, op: str, **payload: Any) -> None:
@@ -1855,7 +1872,7 @@ class Trace:
         from ..intervention.errors import ModelMismatchError
         from ..user_funcs import _fingerprint_model_weights, _qualname_for_model
 
-        expected_class = getattr(self, "model_class", None)
+        expected_class = getattr(self, "model_class_qualname", None)
         actual_class = _qualname_for_model(model)
         if expected_class is not None and actual_class != expected_class:
             raise ModelMismatchError(
@@ -1893,7 +1910,7 @@ class Trace:
         }
         fork.__dict__.update(fork_state)
         fork.parent_run = weakref.ref(self)
-        fork.name = name or self._next_fork_name()
+        fork.trace_label = name or self._next_fork_name()
         fork._intervention_spec = copy.deepcopy(self._ensure_intervention_spec())
         fork.ledger = copy.deepcopy(self.ledger)
         fork.relationship_evidence = copy.deepcopy(self.relationship_evidence)
@@ -1912,7 +1929,7 @@ class Trace:
     def _next_fork_name(self) -> str:
         """Return a deterministic default fork name for this parent log."""
 
-        base_name = self.name or "trace"
+        base_name = self.trace_label or "trace"
         fork_count = sum(
             1 for record in self.ledger if isinstance(record, dict) and record.get("op") == "fork"
         )
@@ -2241,7 +2258,7 @@ class Trace:
         nonfinite_summary = (
             "No non-finite saved outs" if nonfinite.startswith("No non-finite") else nonfinite
         )
-        title = escape(str(getattr(self, "name", None) or self.model_name))
+        title = escape(str(getattr(self, "trace_label", None) or self.model_label))
         run_state = escape(str(getattr(getattr(self, "run_state", None), "name", "UNKNOWN")))
         return (
             "<div style='border:1px solid #d0d7de;border-radius:8px;"
@@ -2461,7 +2478,7 @@ class Trace:
         """
 
         preserved_fields = (
-            "name",
+            "trace_label",
             "parent_run",
             "_intervention_spec",
             "_transform",
@@ -2473,7 +2490,7 @@ class Trace:
             "_warned_direct_write",
             "_warned_mutate_in_place",
             "model_id",
-            "model_class",
+            "model_class_qualname",
             "param_hash_quick",
             "param_hash_full",
             "input_id",
@@ -2542,7 +2559,7 @@ class Trace:
             "non_tensor_kwargs",
             "func_non_tensor_args",
             "is_inplace",
-            "grad_fn_name",
+            "grad_fn_class_name",
             "grad_fn_id",
             "interventions",
             "annotations",
@@ -3617,7 +3634,7 @@ class Trace:
             "func_config",
             "func_duration",
             "is_inplace",
-            "grad_fn_name",
+            "grad_fn_class_name",
             "is_input",
             "is_output",
             "is_buffer",

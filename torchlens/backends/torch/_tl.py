@@ -48,7 +48,7 @@ class TensorMeta(TorchLensMeta):
     """Metadata attached to non-Parameter tensors during a capture session."""
 
     label_raw: Optional[str] = None
-    buffer_address: Optional[str] = None
+    address: Optional[str] = None
     buffer_parent: Optional[str] = None
 
 
@@ -258,7 +258,7 @@ def set_buffer_address(t: Any, address: str) -> None:
     address : str
         Dotted buffer address.
     """
-    _ensure_tensor_meta(t).buffer_address = address
+    _ensure_tensor_meta(t).address = address
 
 
 def get_buffer_address(t: Any) -> Optional[str]:
@@ -275,7 +275,7 @@ def get_buffer_address(t: Any) -> Optional[str]:
         Dotted buffer address if present.
     """
     meta = get_tensor_meta(t)
-    return None if meta is None else meta.buffer_address
+    return None if meta is None else meta.address
 
 
 def get_label_list(tensors: Iterable[Any]) -> List[str]:

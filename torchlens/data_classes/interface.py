@@ -150,7 +150,7 @@ def _str_after_pass(self: "Trace") -> str:
     Returns:
         String summarizing the model.
     """
-    s = f"Log of {self.model_name} forward pass:"
+    s = f"Log of {self.model_class_name} forward pass:"
 
     # General info
 
@@ -239,7 +239,7 @@ def _str_during_pass(self: "Trace") -> str:
     Returns:
         String summarizing the model.
     """
-    s = f"Log of {self.model_name} forward pass (pass still ongoing):"
+    s = f"Log of {self.model_class_name} forward pass (pass still ongoing):"
     s += f"\n\tRandom seed: {self.random_seed}"
     s += f"\n\tInput tensors: {self.input_layers}"
     s += f"\n\tOutput tensors: {self.output_layers}"

@@ -1027,9 +1027,9 @@ def _run_model_and_save_specified_outs(
         if input_kwargs is not None:
             input_kwargs = _move_tensors_to_device(input_kwargs, model_device)
 
-    model_name = str(type(model).__name__)
+    model_class_name = str(type(model).__name__)
     model_id = id(model)
-    model_class = _qualname_for_model(model)
+    model_class_qualname = _qualname_for_model(model)
     weight_fingerprint = _fingerprint_model_weights(model)
     input_id = _input_id_for_relationship_evidence(input_args)
     input_shape_hash = _hash_input_shapes(input_args, input_kwargs)
@@ -1042,13 +1042,13 @@ def _run_model_and_save_specified_outs(
         intervention_spec=intervention_spec,
         capture_replay_templates=intervention_ready,
         model_id=model_id,
-        model_class=model_class,
+        model_class_qualname=model_class_qualname,
         weight_fingerprint=weight_fingerprint,
         input_id=input_id,
         input_shape_hash=input_shape_hash,
     )
     trace = Trace(
-        model_name=model_name,
+        model_class_name=model_class_name,
         output_device=output_device,
         out_postfunc=out_transform,
         grad_transform=grad_transform,
@@ -1079,7 +1079,7 @@ def _run_model_and_save_specified_outs(
         layer_visualizers=layer_visualizers,
         save_visualizations=save_visualizations,
     )
-    trace.name = name
+    trace.trace_label = name
     trace._module_containment_engine = module_containment_engine
     forward_code = getattr(model.forward, "__code__", None)
     trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
@@ -1088,7 +1088,7 @@ def _run_model_and_save_specified_outs(
         trace.run_state = RunState.LIVE_CAPTURED
         trace._initial_hook_plan = tuple(hook_plan)
     trace.model_id = model_id
-    trace.model_class = model_class
+    trace.model_class_qualname = model_class_qualname
     trace.param_hash_quick = weight_fingerprint
     trace.param_hash_full = weight_fingerprint
     trace.input_id = input_id
@@ -1376,7 +1376,7 @@ def trace(
         save_code_context: Python call-stack identity is always recorded for each
             tensor operation. If False (default), identity fields such as ``file``,
             ``line_number``, ``func_name``, ``code_firstlineno``,
-            ``code_qualname``, and ``col_offset`` are still captured, but the rich
+            ``func_qualname``, and ``col_offset`` are still captured, but the rich
             source-text properties return their existing empty-placeholder values.
             If True, TorchLens also captures source text on each ``FuncCallLocation``
             (``source_context``, ``code_context``, etc.) plus module source metadata.
@@ -2879,7 +2879,7 @@ def validate_batch_of_models_and_inputs(
     validated models can be skipped (controlled by *redo_model_if_already_run*).
 
     Args:
-        models_and_inputs_dict: Mapping of model_name to a dict with keys:
+        models_and_inputs_dict: Mapping of model_class_name to a dict with keys:
             - ``model_category`` (str): grouping label (e.g. 'torchvision').
             - ``model_loading_func`` (callable): zero-arg function returning an nn.Module.
             - ``model_sample_inputs`` (dict[str, input]): named sample inputs.
@@ -2887,7 +2887,7 @@ def validate_batch_of_models_and_inputs(
         redo_model_if_already_run: Re-validate models already present in the CSV.
 
     Returns:
-        DataFrame with columns: model_category, model_name, input_name, validation_success.
+        DataFrame with columns: model_category, model_class_name, input_name, validation_success.
     """
     try:
         import pandas as pd
@@ -2902,15 +2902,17 @@ def validate_batch_of_models_and_inputs(
         current_csv = pd.DataFrame.from_dict(
             {
                 "model_category": [],
-                "model_name": [],
+                "model_class_name": [],
                 "input_name": [],
                 "validation_success": [],
             }
         )
-    models_already_run = current_csv["model_name"].unique()
-    for model_name, model_info in tqdm(models_and_inputs_dict.items(), desc="Validating models"):
-        print(f"Validating model {model_name}")
-        if model_name in models_already_run and not redo_model_if_already_run:
+    models_already_run = current_csv["model_class_name"].unique()
+    for model_class_name, model_info in tqdm(
+        models_and_inputs_dict.items(), desc="Validating models"
+    ):
+        print(f"Validating model {model_class_name}")
+        if model_class_name in models_already_run and not redo_model_if_already_run:
             continue
         model_category = model_info["model_category"]
         model_loading_func = model_info["model_loading_func"]
@@ -2925,7 +2927,7 @@ def validate_batch_of_models_and_inputs(
                         [
                             {
                                 "model_category": model_category,
-                                "model_name": model_name,
+                                "model_class_name": model_class_name,
                                 "input_name": input_name,
                                 "validation_success": validation_success,
                             }

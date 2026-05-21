@@ -16,7 +16,7 @@ import torch
 from thingsvision import get_extractor
 
 
-extractor = get_extractor(model_name="alexnet", source="torchvision")
+extractor = get_extractor(model_class_name="alexnet", source="torchvision")
 features = extractor.extract_features(
     batches=[torch.zeros(1, 3, 224, 224)],
     module_name="features.0",

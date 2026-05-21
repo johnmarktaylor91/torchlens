@@ -10,7 +10,7 @@ class BackendSemantics:
     """Backend-specific operation facts normalized into portable scalars."""
 
     grad_fn_id: int | None
-    grad_fn_name: str | None
+    grad_fn_class_name: str | None
     autograd_saved_memory: int | None
     num_autograd_saved_tensors: int | None
     mutates_inputs: tuple[int, ...]

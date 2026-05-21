@@ -297,12 +297,12 @@ def _normalize_buffer_visibility(
     raise ValueError("show_buffer_layers must be 'never', 'meaningful', 'always', or a bool.")
 
 
-def _buffer_name_segment(buffer_address: str | None) -> str:
+def _buffer_name_segment(address: str | None) -> str:
     """Return the last dotted segment of a buffer address.
 
     Parameters
     ----------
-    buffer_address:
+    address:
         Fully qualified buffer address, if available.
 
     Returns
@@ -311,9 +311,9 @@ def _buffer_name_segment(buffer_address: str | None) -> str:
         Final dotted address segment, or an empty string for missing addresses.
     """
 
-    if buffer_address is None:
+    if address is None:
         return ""
-    return buffer_address.split(".")[-1]
+    return address.split(".")[-1]
 
 
 def _is_noise_buffer(node: GraphNode) -> bool:
@@ -334,8 +334,8 @@ def _is_noise_buffer(node: GraphNode) -> bool:
     source_node = _unwrap_focus_node(node)
     if not source_node.is_buffer:
         return False
-    buffer_address = getattr(source_node, "buffer_address", None)
-    return _buffer_name_segment(buffer_address) in _NOISE_BUFFER_NAMES
+    address = getattr(source_node, "address", None)
+    return _buffer_name_segment(address) in _NOISE_BUFFER_NAMES
 
 
 def _is_buffer_visible(node: GraphNode, show_buffer_layers: BufferVisibilityLiteral) -> bool:
@@ -401,11 +401,11 @@ def _get_hidden_parent_buffer_addresses(
             parent_node = trace.layer_logs[parent_label]
         if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
             continue
-        buffer_address = parent_node.buffer_address
-        if buffer_address is None or buffer_address in seen_addresses:
+        address = parent_node.address
+        if address is None or address in seen_addresses:
             continue
-        hidden_addresses.append(buffer_address)
-        seen_addresses.add(buffer_address)
+        hidden_addresses.append(address)
+        seen_addresses.add(address)
     return hidden_addresses
 
 
@@ -679,7 +679,7 @@ def draw(
         )
 
     graph_caption = (
-        f"<<B>{self.model_name}</B><br align='left'/>{self.num_tensors} "
+        f"<<B>{self.model_class_name}</B><br align='left'/>{self.num_tensors} "
         f"tensors total ({self.total_out_memory_str})"
         f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
@@ -719,7 +719,7 @@ def draw(
         return result
 
     dot = graphviz.Digraph(
-        name=self.model_name,
+        name=self.model_class_name,
         comment="Computational graph for the feedforward sweep",
         format=vis_fileformat,
     )
@@ -954,12 +954,12 @@ def render_backward_graph(
         vis_outpath = ".".join(split_outpath[:-1])
 
     graph_caption = (
-        f"<<B>{self.model_name} backward graph</B><br align='left'/>"
+        f"<<B>{self.model_class_name} backward graph</B><br align='left'/>"
         f"{self.num_grad_fns} grad_fn nodes"
         f"<br align='left'/>{self.backward_num_calls} backward pass(es)<br align='left'/>>"
     )
     dot = graphviz.Digraph(
-        name=f"{self.model_name}_backward",
+        name=f"{self.model_class_name}_backward",
         comment="Backward grad_fn graph",
         format=vis_fileformat,
     )
@@ -1123,12 +1123,12 @@ def render_combined_graph(
     )
 
     graph_caption = (
-        f"<<B>{self.model_name} combined forward/backward graph</B><br align='left'/>"
+        f"<<B>{self.model_class_name} combined forward/backward graph</B><br align='left'/>"
         f"{self.num_tensors} forward nodes, {self.num_grad_fns} grad_fn nodes"
         f"<br align='left'/>{self.backward_num_calls} backward pass(es)<br align='left'/>>"
     )
     dot = graphviz.Digraph(
-        name=f"{self.model_name}_combined",
+        name=f"{self.model_class_name}_combined",
         comment="Combined forward and backward graph",
         format=vis_fileformat,
     )
@@ -3085,13 +3085,13 @@ def _get_node_address_shape_color(
         node_shape = "box"
         node_color = "black"
     elif node.is_buffer:
-        if (self.buffer_num_calls[source_node.buffer_address] == 1) or (
+        if (self.buffer_num_calls[source_node.address] == 1) or (
             isinstance(source_node, Layer) and node.num_calls > 1
         ):
-            buffer_address = source_node.buffer_address
+            address = source_node.address
         else:
-            buffer_address = f"{source_node.buffer_address}:{source_node.buffer_pass}"
-        node_address = "<br/>@" + buffer_address
+            address = f"{source_node.address}:{source_node.buffer_pass}"
+        node_address = "<br/>@" + address
         node_shape = "cylinder"
         node_color = "black"
     elif node.is_output or node.is_input:

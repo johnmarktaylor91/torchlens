@@ -100,9 +100,9 @@ def fixture_model_input(request: pytest.FixtureRequest) -> tuple[nn.Module, torc
         Model, input tensor, and stable model name.
     """
 
-    model_name = str(request.param)
+    model_class_name = str(request.param)
     torch.manual_seed(12345)
-    if model_name == "tiny_mlp":
+    if model_class_name == "tiny_mlp":
         model = nn.Sequential(
             nn.Linear(8, 16),
             nn.ReLU(),
@@ -111,22 +111,22 @@ def fixture_model_input(request: pytest.FixtureRequest) -> tuple[nn.Module, torc
             nn.Linear(16, 8),
         )
         x = torch.randn(2, 8)
-    elif model_name == "resnet50":
+    elif model_class_name == "resnet50":
         torchvision = pytest.importorskip("torchvision")
         model = torchvision.models.resnet50(weights=None)
         x = torch.randn(1, 3, 64, 64)
-    elif model_name == "gpt2_small":
+    elif model_class_name == "gpt2_small":
         model = TinyTransformerBlock()
         x = torch.randn(2, 4, 16)
-    elif model_name == "lstm_small":
+    elif model_class_name == "lstm_small":
         model = nn.LSTM(input_size=16, hidden_size=32, num_layers=2)
         x = torch.randn(4, 2, 16)
     else:
-        raise AssertionError(f"unknown fixture {model_name}")
+        raise AssertionError(f"unknown fixture {model_class_name}")
     model.eval()
     for parameter in model.parameters():
         parameter.requires_grad_(False)
-    return model, x, model_name
+    return model, x, model_class_name
 
 
 @pytest.fixture(autouse=True)
@@ -288,7 +288,7 @@ def _make_trace_pickleable(trace: Any) -> None:
     if hasattr(trace, "model_source_line"):
         trace.model_source_line = None
     if hasattr(trace, "name"):
-        trace.name = "capture_events_parity"
+        trace.trace_label = "capture_events_parity"
     _drop_capture_scratch(trace)
 
 
@@ -364,7 +364,7 @@ def _read_golden_pickle_bytes(path: Path) -> bytes:
     return data
 
 
-def _write_golden_pickle_bytes(path: Path, data: bytes, model_name: str) -> None:
+def _write_golden_pickle_bytes(path: Path, data: bytes, model_class_name: str) -> None:
     """Write pickle bytes, compressing oversized ResNet goldens for pre-commit.
 
     Parameters
@@ -373,7 +373,7 @@ def _write_golden_pickle_bytes(path: Path, data: bytes, model_name: str) -> None
         Golden pickle path.
     data
         Raw pickle bytes to persist.
-    model_name
+    model_class_name
         Fixture model name.
 
     Returns
@@ -382,7 +382,7 @@ def _write_golden_pickle_bytes(path: Path, data: bytes, model_name: str) -> None
         Writes the golden artifact in place.
     """
 
-    payload = gzip.compress(data, compresslevel=9) if model_name == "resnet50" else data
+    payload = gzip.compress(data, compresslevel=9) if model_class_name == "resnet50" else data
     path.write_bytes(payload)
 
 
@@ -397,7 +397,7 @@ def test_pickle_byte_equal_pre_m6(
         Parametrized model/input/name fixture.
     """
 
-    model, x, model_name = fixture_model_input
+    model, x, model_class_name = fixture_model_input
     trace = tl.trace(
         model,
         x,
@@ -408,12 +408,12 @@ def test_pickle_byte_equal_pre_m6(
         save_code_context=False,
     )
     _make_trace_pickleable(trace)
-    golden_path = Path("tests/golden/m5_pre_m6") / f"{model_name}.pkl"
+    golden_path = Path("tests/golden/m5_pre_m6") / f"{model_class_name}.pkl"
 
     actual = pickle.dumps(trace, protocol=4)
     if os.environ.get("TL_REGEN_GOLDEN") == "1":
         golden_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_golden_pickle_bytes(golden_path, actual, model_name)
+        _write_golden_pickle_bytes(golden_path, actual, model_class_name)
         pytest.skip(f"regenerated golden at {golden_path}")
 
     expected_trace = pickle.loads(_read_golden_pickle_bytes(golden_path))
@@ -427,7 +427,7 @@ def test_pickle_byte_equal_pre_m6(
             diff = _first_state_difference(actual_trace, expected_trace)
             if diff is not None:
                 diffs.insert(0, diff)
-            pytest.fail(f"Trace pickle differs for {model_name}: {diffs[:5]!r}")
+            pytest.fail(f"Trace pickle differs for {model_class_name}: {diffs[:5]!r}")
 
 
 def test_pickle_compare_allowlist_stable() -> None:

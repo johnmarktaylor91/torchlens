@@ -85,7 +85,7 @@ def _add_output_layers(
         new_output_node.non_tensor_pos_args = []
         new_output_node.non_tensor_kwargs = {}
         new_output_node.func_non_tensor_args = []
-        new_output_node.grad_fn_name = None
+        new_output_node.grad_fn_class_name = None
         new_output_node.autograd_saved_memory = None
         new_output_node.num_autograd_saved_tensors = None
         new_output_node.bytes_delta_at_call = 0

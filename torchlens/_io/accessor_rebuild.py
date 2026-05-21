@@ -59,6 +59,6 @@ def rebuild_trace_accessors(
     for label in trace.buffer_layers:
         if label in trace.layer_dict_all_keys:
             entry = trace.layer_dict_all_keys[label]
-            if entry.buffer_address is not None:
-                buffer_dict[entry.buffer_address] = entry
+            if entry.address is not None:
+                buffer_dict[entry.address] = entry
     trace._buffer_accessor = BufferAccessor(buffer_dict, source_trace=trace)  # type: ignore[assignment, arg-type]

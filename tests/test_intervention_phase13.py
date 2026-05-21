@@ -82,13 +82,13 @@ def test_auto_naming_explicit_name_and_reset_counter() -> None:
     log2 = _capture()
     log3 = _capture(name="custom_name")
 
-    assert log1.name == "m_1"
-    assert log2.name == "m_2"
-    assert log3.name == "custom_name"
+    assert log1.trace_label == "m_1"
+    assert log2.trace_label == "m_2"
+    assert log3.trace_label == "custom_name"
 
     tl.reset_naming_counter("m")
     log4 = _capture()
-    assert log4.name == "m_1"
+    assert log4.trace_label == "m_1"
 
 
 def test_huggingface_suffix_is_stripped_for_auto_name() -> None:
@@ -102,7 +102,7 @@ def test_huggingface_suffix_is_stripped_for_auto_name() -> None:
         intervention_ready=True,
     )
 
-    assert log.name == "bert_1"
+    assert log.trace_label == "bert_1"
 
 
 def test_list_logs_returns_tuple_snapshot() -> None:
@@ -159,7 +159,7 @@ def test_find_sites_repr_empty_one_and_many() -> None:
 
 
 def test_bundle_default_names_derive_from_log_names_with_collision_suffix() -> None:
-    """Implicit Bundle member names use log.name and suffix collisions."""
+    """Implicit Bundle member names use log.trace_label and suffix collisions."""
 
     log1 = _capture(name="same")
     log2 = _capture(name="same")
@@ -167,8 +167,8 @@ def test_bundle_default_names_derive_from_log_names_with_collision_suffix() -> N
     bundle = tl.bundle([log1, log2])
 
     assert bundle.names == ["same", "same_2"]
-    assert log1.name == "same"
-    assert log2.name == "same"
+    assert log1.trace_label == "same"
+    assert log2.trace_label == "same"
 
 
 def test_loaded_log_preserves_name_without_incrementing_counter(tmp_path: Path) -> None:
@@ -182,5 +182,5 @@ def test_loaded_log_preserves_name_without_incrementing_counter(tmp_path: Path) 
     loaded = tl.load(path)
     fresh = _capture()
 
-    assert loaded.name == "saved_name"
-    assert fresh.name == "m_1"
+    assert loaded.trace_label == "saved_name"
+    assert fresh.trace_label == "m_1"

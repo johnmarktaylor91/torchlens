@@ -208,7 +208,7 @@ def _assert_modellog_matches(live_log: tl.Trace, loaded_log: tl.Trace) -> None:
         Loaded fixture model log.
     """
 
-    assert loaded_log.model_name == live_log.model_name
+    assert loaded_log.model_class_name == live_log.model_class_name
     assert [layer.layer_label for layer in loaded_log.layer_list] == [
         layer.layer_label for layer in live_log.layer_list
     ]

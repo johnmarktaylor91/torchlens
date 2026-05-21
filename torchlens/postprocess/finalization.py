@@ -158,7 +158,7 @@ def _build_root_module_log(
         all_addresses=root_meta.get("all_addresses", ["self"]),
         name="self",
         cls=root_meta.get("cls"),
-        class_name=root_meta.get("class_name", self.model_name),
+        class_name=root_meta.get("class_name", self.model_class_name),
         class_qualname=root_meta.get("class_qualname", ""),
         source_file=root_meta.get("source_file"),
         source_line=root_meta.get("source_line"),
@@ -611,9 +611,9 @@ def _build_module_param_info(
             bl
             for bl in self.buffer_layers
             if bl in self.layer_dict_all_keys
-            and hasattr(self.layer_dict_all_keys[bl], "buffer_address")
-            and self.layer_dict_all_keys[bl].buffer_address is not None
-            and self.layer_dict_all_keys[bl].buffer_address.rsplit(".", 1)[0] == address
+            and hasattr(self.layer_dict_all_keys[bl], "address")
+            and self.layer_dict_all_keys[bl].address is not None
+            and self.layer_dict_all_keys[bl].address.rsplit(".", 1)[0] == address
         ]
 
     return ModuleParamInfo(
@@ -676,8 +676,8 @@ def _build_module_logs(self: "Trace") -> None:
     for bl in self.buffer_layers:
         if bl in self.layer_dict_all_keys:
             bl_entry = self.layer_dict_all_keys[bl]
-            if hasattr(bl_entry, "buffer_address") and bl_entry.buffer_address is not None:
-                module_addr = bl_entry.buffer_address.rsplit(".", 1)[0]
+            if hasattr(bl_entry, "address") and bl_entry.address is not None:
+                module_addr = bl_entry.address.rsplit(".", 1)[0]
                 _buffer_layers_by_module[module_addr].append(bl)
 
     # --- Build ModuleLogs for each submodule ---

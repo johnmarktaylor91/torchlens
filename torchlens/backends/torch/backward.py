@@ -31,11 +31,11 @@ def _grad_fn_is_custom(grad_fn: Any) -> bool:
         True when the type's module path is outside PyTorch's built-in autograd
         and nn namespaces.
     """
-    module_path = type(grad_fn).__module__
-    if module_path == "torch.autograd.function":
+    class_module = type(grad_fn).__module__
+    if class_module == "torch.autograd.function":
         return True
     builtin_prefixes = ("torch.autograd", "torch.nn", "torch", "builtins")
-    return not module_path.startswith(builtin_prefixes)
+    return not class_module.startswith(builtin_prefixes)
 
 
 def _iter_next_grad_fns(grad_fn: Any) -> Iterator[Any]:
@@ -343,14 +343,15 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 grad_fn_total_num,
             )
             op = trace.layers[layer_label] if layer_label is not None else None
+            grad_fn_cls = type(grad_fn)
             grad_fn_log = GradFn(
                 grad_fn_id=grad_fn_id,
-                name=type(grad_fn).__name__,
+                class_name=grad_fn_cls.__name__,
+                class_qualname=f"{grad_fn_cls.__module__}.{grad_fn_cls.__qualname__}",
                 label=label,
                 grad_fn_type=grad_fn_type,
                 grad_fn_type_num=grad_fn_type_num,
                 grad_fn_total_num=grad_fn_total_num,
-                module_path=type(grad_fn).__module__,
                 is_custom=_grad_fn_is_custom(grad_fn),
                 is_intervening=layer_label is None,
                 op=op,

@@ -170,7 +170,7 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     fork = parent.fork("test")
     fork_relu_pass = next(layer for layer in fork.layer_list if layer.func_name == "relu")
     assert fork.parent_run() is parent
-    assert fork.name == "test"
+    assert fork.trace_label == "test"
     assert fork_relu_pass.out is relu_pass.out
     assert fork_relu_pass.interventions is not relu_pass.interventions
     assert fork_relu_pass.equivalent_ops is not relu_pass.equivalent_ops

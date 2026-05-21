@@ -82,7 +82,7 @@ class FuncCallLocation:
         "line_number": FieldPolicy.KEEP,
         "func_name": FieldPolicy.KEEP,
         "code_firstlineno": FieldPolicy.KEEP,
-        "code_qualname": FieldPolicy.KEEP,
+        "func_qualname": FieldPolicy.KEEP,
         "col_offset": FieldPolicy.KEEP,
         "source_loading_enabled": FieldPolicy.KEEP,
         "_num_context_lines_requested": FieldPolicy.KEEP,
@@ -115,7 +115,7 @@ class FuncCallLocation:
         code_context_labeled: str = _SENTINEL,
         num_context_lines: int = _SENTINEL,
         code_firstlineno: int = _SENTINEL,
-        code_qualname: Optional[str] = None,
+        func_qualname: Optional[str] = None,
         col_offset: Optional[int] = None,
         source_loading_enabled: bool = True,
     ) -> None:
@@ -123,7 +123,7 @@ class FuncCallLocation:
         self.line_number = line_number
         self.func_name = func_name
         self.code_firstlineno = line_number if code_firstlineno is _SENTINEL else code_firstlineno
-        self.code_qualname = code_qualname
+        self.func_qualname = func_qualname
         self.col_offset = col_offset
         self.source_loading_enabled = source_loading_enabled
 

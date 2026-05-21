@@ -25,6 +25,7 @@ All of the following must hold for the run to be considered DONE:
 7. Branch `rename-sprint-2.0` is merged to local `main` (fast-forward, no push).
 8. Fresh definitive glossary written to `<vault>/brain/projects/torchlens/reports/2026-05-21-glossary-v4-definitive/torchlens_glossary.md` reflecting current code state.
 9. iMessage sent to JMT confirming completion with one-line result.
+10. `pytest tests/ -m "not slow" -x --tb=short` PASSES at very end (user explicit ask: "all tests except super long ones").
 
 max_rounds: 14
 
@@ -101,3 +102,6 @@ DO NOT push. DO NOT open a PR. JMT explicitly said "merge it to local main" and 
 
 | Round | Start | End | Commit | Score / Result | Notes |
 |---|---|---|---|---|---|
+| 1 | 2026-05-21T17:35:08-04:00 | 2026-05-21T17:50:41-04:00 | 31e2d95 | OK | 123 files; 1193+/1202- |
+
+| 2 | 2026-05-21T17:50:41-04:00 | 2026-05-21T18:08:08-04:00 | PENDING | OK | 90 files; +439/-370 |

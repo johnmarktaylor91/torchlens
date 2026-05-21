@@ -101,7 +101,7 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     assert restored.modules["self"].address == "self"
     assert restored.modules["bn"].address == "bn"
     assert restored.modules["bn"]._source_trace is restored
-    assert restored.buffers["bn.running_mean"].buffer_address == "bn.running_mean"
+    assert restored.buffers["bn.running_mean"].address == "bn.running_mean"
 
     first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_outs)
     assert isinstance(first_saved_layer.out, torch.Tensor)
@@ -158,6 +158,6 @@ def test_plain_pickle_roundtrip_still_works() -> None:
     restored = pickle.loads(pickle.dumps(live_log))
 
     assert isinstance(restored, Trace)
-    assert restored.model_name == live_log.model_name
+    assert restored.model_class_name == live_log.model_class_name
     assert len(restored.layer_list) == len(live_log.layer_list)
     assert restored.layer_list[0].source_trace is restored

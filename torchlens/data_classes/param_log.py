@@ -191,6 +191,31 @@ class Param:
         return trace.modules[self.module_address]
 
     @property
+    def module_name(self) -> str:
+        """Return the bare local name of the owning module.
+
+        Returns
+        -------
+        str
+            Final dotted segment of ``module_address``.
+        """
+
+        return "" if self.module_address == "self" else self.module_address.rsplit(".", 1)[-1]
+
+    @property
+    def module_cls(self) -> type[Any] | None:
+        """Return the live class object for the owning module when available.
+
+        Returns
+        -------
+        type[Any] | None
+            Owning module class, or ``None`` if the model/module is unavailable.
+        """
+
+        module = self.module
+        return None if module is None else module.cls
+
+    @property
     def modules(self) -> list[Any]:
         """All owning ModuleLogs."""
 

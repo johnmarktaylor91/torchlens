@@ -206,7 +206,7 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     assert isinstance(live_layer.out, torch.Tensor)
     assert isinstance(restored_layer.out, torch.Tensor)
     assert torch.equal(restored_layer.out, live_layer.out)
-    assert restored.model_name == live_log.model_name
+    assert restored.model_class_name == live_log.model_class_name
     assert len(restored.layer_list) == len(live_log.layer_list)
     assert any(
         layer.saved_args is not None

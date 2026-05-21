@@ -154,14 +154,14 @@ def _buffer_node_lines(dot_source: str) -> list[str]:
     ]
 
 
-def _child_ops_for_buffer(log: Trace, buffer_address: str) -> list[str]:
+def _child_ops_for_buffer(log: Trace, address: str) -> list[str]:
     """Return child op labels for a buffer address.
 
     Parameters
     ----------
     log:
         Trace to inspect.
-    buffer_address:
+    address:
         Buffer address whose child ops should be returned.
 
     Returns
@@ -171,9 +171,9 @@ def _child_ops_for_buffer(log: Trace, buffer_address: str) -> list[str]:
     """
 
     for node in log.layer_dict_main_keys.values():
-        if node.is_buffer and node.buffer_address == buffer_address:
+        if node.is_buffer and node.address == address:
             return [child.replace(":", "pass") for child in node.children]
-    raise AssertionError(f"Buffer {buffer_address!r} was not found in the log.")
+    raise AssertionError(f"Buffer {address!r} was not found in the log.")
 
 
 @pytest.mark.smoke

@@ -309,7 +309,7 @@ class Recorder:
         if self._state is None or self._capture_events is None:
             raise RecorderStateError("Recorder.log() requires an active with-block")
         trace = Trace(
-            model_name=str(type(self.model).__name__),
+            model_class_name=str(type(self.model).__name__),
             out_postfunc=self.options.out_transform,
             save_raw_outs=self.options.save_raw_outs,
             detach_saved_activations=False,

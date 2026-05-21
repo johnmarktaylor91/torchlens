@@ -1506,7 +1506,7 @@ def test_simple_moe():
 
 def _instantiate_transformers_model_or_skip(
     transformers_module: Any,
-    model_name: str,
+    model_class_name: str,
     config: Any,
 ) -> Any:
     """Instantiate a transformers model or skip invalid optional backends.
@@ -1517,7 +1517,7 @@ def _instantiate_transformers_model_or_skip(
     is effectively unavailable for this real-world smoke test.
     """
     try:
-        model_cls = getattr(transformers_module, model_name)
+        model_cls = getattr(transformers_module, model_class_name)
         return model_cls(config)
     except ImportError as exc:
         pytest.skip(f"transformers optional backend unavailable: {exc}")

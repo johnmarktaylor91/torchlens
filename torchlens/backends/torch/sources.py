@@ -233,7 +233,7 @@ def log_source_tensor_exhaustive(
         has_input_ancestor = True
         io_role = extra_addr
         is_buffer = False
-        buffer_address = None
+        address = None
         buffer_parent = None
         is_internal_source = False
         has_internal_source_ancestor = False
@@ -247,7 +247,7 @@ def log_source_tensor_exhaustive(
         has_input_ancestor = False
         io_role = None
         is_buffer = True
-        buffer_address = extra_addr
+        address = extra_addr
         is_internal_source = True
         has_internal_source_ancestor = True
         internal_source_ancestors = {tensor_label}
@@ -333,6 +333,7 @@ def log_source_tensor_exhaustive(
         "func": None,
         "func_call_id": None,
         "func_name": "none",
+        "func_qualname": None,
         "code_context": _get_code_context(
             self.num_context_lines,
             source_loading_enabled=self.save_code_context,
@@ -351,7 +352,8 @@ def log_source_tensor_exhaustive(
         "non_tensor_kwargs": {},
         "func_non_tensor_args": [],
         "is_inplace": False,
-        "grad_fn_name": "none",
+        "grad_fn_class_name": "none",
+        "grad_fn_class_qualname": None,
         "grad_fn_id": id(t.grad_fn) if t.grad_fn is not None else None,
         "grad_fn": t.grad_fn,
         "grad_fn_log": None,
@@ -396,7 +398,7 @@ def log_source_tensor_exhaustive(
         "max_distance_from_output": None,
         "io_role": io_role,
         "is_buffer": is_buffer,
-        "buffer_address": buffer_address,
+        "address": address,
         "buffer_pass": None,
         "buffer_parent": buffer_parent,
         "is_internal_source": is_internal_source,

@@ -433,14 +433,14 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
         arg_tensorlike = _collect_tensor_args(args, kwargs)
 
         # Register buffer tensors on first encounter. Buffers are tagged with
-        # _tl.buffer_address during model prep but don't get _tl.label_raw
+        # _tl.address during model prep but don't get _tl.label_raw
         # until the first function actually uses them.
         for t in arg_tensorlike:
             if isinstance(t, torch.nn.Parameter):
                 continue
-            buffer_address = get_buffer_address(t)
-            if buffer_address is not None and get_tensor_label(t) is None:
-                log_source_tensor(trace, t, "buffer", buffer_address)
+            address = get_buffer_address(t)
+            if address is not None and get_tensor_label(t) is None:
+                log_source_tensor(trace, t, "buffer", address)
 
         # Intercept print functions to show TorchLens label info in repr.
         if (func_name in print_funcs) and (len(arg_tensorlike) > 0):

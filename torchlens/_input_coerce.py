@@ -106,7 +106,7 @@ def _tokenize_text(model: Any, x: str | list[str]) -> Any:
         "or model.tokenizer(...) (HuggingFace with attached tokenizer). "
         "For HuggingFace models without an attached tokenizer, run:\n"
         "    from transformers import AutoTokenizer\n"
-        "    model.tokenizer = AutoTokenizer.from_pretrained(<model_name>)\n"
+        "    model.tokenizer = AutoTokenizer.from_pretrained(<model_class_name>)\n"
         "or pass tokens directly: model.tokenizer(text, return_tensors='pt').input_ids"
     )
 
@@ -136,7 +136,7 @@ def _process_image(model: Any, x: Any) -> Any:
     if proc is None:
         raise TypeError(
             "PIL Image input requires model.image_processor or model.processor. "
-            "Attach one: model.image_processor = AutoImageProcessor.from_pretrained(<model_name>)"
+            "Attach one: model.image_processor = AutoImageProcessor.from_pretrained(<model_class_name>)"
         )
     result = proc(x, return_tensors="pt")
     return result.pixel_values if hasattr(result, "pixel_values") else result

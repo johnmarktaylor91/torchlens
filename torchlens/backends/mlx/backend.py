@@ -183,7 +183,7 @@ class MLXBackend:
 
         return BackendSemantics(
             grad_fn_id=None,
-            grad_fn_name=None,
+            grad_fn_class_name=None,
             autograd_saved_memory=None,
             num_autograd_saved_tensors=None,
             mutates_inputs=(),
@@ -342,7 +342,7 @@ class MLXBackend:
         if output_device != "same":
             raise ValueError("MLX backend only supports output_device='same' in technical preview.")
         trace = Trace(
-            model_name=type(model).__name__,
+            model_class_name=type(model).__name__,
             output_device=output_device,
             out_postfunc=cast("Callable[[Any], Any] | None", out_transform),
             grad_transform=None,
@@ -373,7 +373,7 @@ class MLXBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
-        trace.name = name
+        trace.trace_label = name
         trace._backend_name = self.name
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
@@ -602,6 +602,7 @@ class MLXBackend:
                 "func": func,
                 "func_call_id": capture_index + 1,
                 "func_name": op_name,
+                "func_qualname": getattr(func, "__qualname__", None),
                 "code_context": [],
                 "func_duration": None,
                 "func_rng_states": None,
@@ -616,6 +617,7 @@ class MLXBackend:
                 ),
                 "func_non_tensor_args": tuple(arg for arg in args if not self.is_tensor(arg)),
                 "is_inplace": False,
+                "grad_fn_class_qualname": None,
                 "parent_params": [],
                 "_param_barcodes": [],
                 "parent_param_ops": [],

@@ -82,7 +82,7 @@ def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
         restored = pickle.load(handle)
 
     assert isinstance(restored, Trace)
-    assert restored.model_name == trace.model_name
+    assert restored.model_class_name == trace.model_class_name
     assert len(restored.layer_list) == len(trace.layer_list)
     assert restored[restored.output_layers[0]].layer_label == restored.output_layers[0]
     assert restored.layer_list[0].source_trace is restored

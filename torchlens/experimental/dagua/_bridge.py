@@ -22,7 +22,7 @@ from ...visualization.node_spec import (
 COMMUTATIVE_FUNCS = {"add", "mul", "cat", "eq", "ne"}
 
 MODELLOG_FIELD_USAGE: dict[str, str] = {
-    "model_name": "Graph caption title.",
+    "model_class_name": "Graph caption title.",
     "num_tensors": "Graph caption tensor count.",
     "total_out_memory": "Graph caption out-memory summary.",
     "num_param_tensors": "Caption metadata for model scale.",
@@ -53,7 +53,7 @@ ENTRY_FIELD_USAGE: dict[str, str] = {
     "is_input": "Input node styling.",
     "is_output": "Output node styling.",
     "is_buffer": "Buffer node styling and optional visibility filtering.",
-    "buffer_address": "Buffer node secondary text.",
+    "address": "Buffer node secondary text.",
     "is_terminal_bool": "Boolean node styling and TRUE/FALSE header.",
     "bool_value": "Boolean node header.",
     "num_params": "Parameterized-op styling and summaries.",
@@ -196,7 +196,7 @@ def build_torchlens_caption(trace: Any) -> str:
             f"({trainable:,}/{num_params:,} trainable, {human_readable_size(getattr(trace, 'param_memory', 0) or 0)})"
         )
     return (
-        f"{getattr(trace, 'model_name', 'TorchLens model')}\n"
+        f"{getattr(trace, 'model_class_name', 'TorchLens model')}\n"
         f"{getattr(trace, 'num_tensors', 0)} tensors total "
         f"({human_readable_size(getattr(trace, 'total_out_memory', 0) or 0)})\n"
         f"{params_line}"
@@ -257,7 +257,7 @@ def _param_summary_line(entry: Any) -> str | None:
 
 def _module_line(entry: Any) -> str | None:
     if getattr(entry, "is_buffer", False):
-        addr = getattr(entry, "buffer_address", None)
+        addr = getattr(entry, "address", None)
         return f"@{addr}" if addr else "@buffer"
     addr = getattr(entry, "module", None)
     if addr:

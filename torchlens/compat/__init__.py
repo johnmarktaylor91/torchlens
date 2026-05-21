@@ -76,12 +76,12 @@ def from_huggingface(
     return AutoModel.from_pretrained(model_id, local_files_only=local_files_only, **kwargs)
 
 
-def from_timm(model_name: str, *, pretrained: bool = False, **kwargs: Any) -> Any:
+def from_timm(model_class_name: str, *, pretrained: bool = False, **kwargs: Any) -> Any:
     """Load a timm model through TorchLens' HF compatibility extra.
 
     Parameters
     ----------
-    model_name:
+    model_class_name:
         timm model name.
     pretrained:
         Whether timm should load pretrained weights.
@@ -104,7 +104,7 @@ def from_timm(model_name: str, *, pretrained: bool = False, **kwargs: Any) -> An
     except ImportError as exc:
         raise ImportError("timm loading requires the `hf` extra: install torchlens[hf].") from exc
 
-    return timm.create_model(model_name, pretrained=pretrained, **kwargs)
+    return timm.create_model(model_class_name, pretrained=pretrained, **kwargs)
 
 
 def from_torchextractor(model: Any, layers: Any | None = None) -> Extractor:

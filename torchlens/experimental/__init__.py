@@ -131,7 +131,7 @@ class Session:
             intervention_ready=True,
             name=f"session_{index}",
         )
-        metadata = {"index": index, "name": log.name}
+        metadata = {"index": index, "name": log.trace_label}
         setattr(log, "session_invocation", metadata)
         self.logs.append(log)
         self.invocations.append(metadata)

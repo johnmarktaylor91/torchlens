@@ -221,7 +221,7 @@ def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:
 
     fork = log.fork("candidate")
     assert fork is not log
-    assert fork.name == "candidate"
+    assert fork.trace_label == "candidate"
     assert fork.parent_run() is log
 
     result = log.do({tl.func("relu"): _identity_hook}, confirm_mutation=True)

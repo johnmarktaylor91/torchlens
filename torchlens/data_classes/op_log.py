@@ -474,6 +474,7 @@ class Op:
         "func": FieldPolicy.DROP,
         "func_call_id": FieldPolicy.KEEP,
         "func_name": FieldPolicy.KEEP,
+        "func_qualname": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
         "func_duration": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
@@ -488,7 +489,8 @@ class Op:
         "non_tensor_kwargs": FieldPolicy.KEEP,
         "func_non_tensor_args": FieldPolicy.KEEP,
         "is_inplace": FieldPolicy.KEEP,
-        "grad_fn_name": FieldPolicy.KEEP,
+        "grad_fn_class_name": FieldPolicy.KEEP,
+        "grad_fn_class_qualname": FieldPolicy.KEEP,
         "grad_fn_id": FieldPolicy.KEEP,
         "grad_fn": FieldPolicy.DROP,
         "grad_fn_log": FieldPolicy.DROP,
@@ -530,7 +532,7 @@ class Op:
         "max_distance_from_output": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
-        "buffer_address": FieldPolicy.KEEP,
+        "address": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
         "buffer_parent": FieldPolicy.KEEP,
         "is_internal_source": FieldPolicy.KEEP,
@@ -752,6 +754,7 @@ class Op:
         self.func = fields_dict["func"]
         self.func_call_id = fields_dict["func_call_id"]
         self.func_name = fields_dict["func_name"]
+        self.func_qualname = fields_dict["func_qualname"]
         self.code_context: List["FuncCallLocation"] = fields_dict["code_context"]
         self.func_duration = fields_dict["func_duration"]
         self.flops_forward = fields_dict["flops_forward"]
@@ -766,7 +769,8 @@ class Op:
         self.non_tensor_kwargs = fields_dict["non_tensor_kwargs"]
         self.func_non_tensor_args = fields_dict["func_non_tensor_args"]
         self.is_inplace = fields_dict["is_inplace"]
-        self.grad_fn_name = fields_dict["grad_fn_name"]
+        self.grad_fn_class_name = fields_dict["grad_fn_class_name"]
+        self.grad_fn_class_qualname = fields_dict["grad_fn_class_qualname"]
         self.grad_fn_id = fields_dict["grad_fn_id"]
         self.grad_fn = fields_dict["grad_fn"]
         self.grad_fn_log = fields_dict["grad_fn_log"]
@@ -819,7 +823,7 @@ class Op:
         self.max_distance_from_output = fields_dict["max_distance_from_output"]
         self.io_role = fields_dict["io_role"]
         self.is_buffer = fields_dict["is_buffer"]
-        self.buffer_address = fields_dict["buffer_address"]
+        self.address = fields_dict["address"]
         self.buffer_pass = fields_dict["buffer_pass"]
         self.buffer_parent = fields_dict["buffer_parent"]
         self.is_internal_source = fields_dict["is_internal_source"]
@@ -899,6 +903,19 @@ class Op:
     def macs_backward(self) -> Optional[int]:
         """Backward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
         return self.flops_backward // 2 if self.flops_backward is not None else None
+
+    @property
+    def grad_fn_cls(self) -> type[Any] | None:
+        """Return the live grad_fn class when the autograd object is retained.
+
+        Returns
+        -------
+        type[Any] | None
+            Runtime grad_fn class, or ``None`` when the object is unavailable.
+        """
+
+        grad_fn = self.grad_fn
+        return None if grad_fn is None else type(grad_fn)
 
     @property
     def has_parents(self) -> bool:
@@ -1435,7 +1452,7 @@ class Op:
         Most fields are ``copy.deepcopy``'d so the clone is fully independent.
         However, certain fields are shallow-copied (shared by reference) because:
 
-        * ``func``, ``grad_fn_name`` - function objects, immutable/shared.
+        * ``func``, ``grad_fn_class_name`` - function objects, immutable/shared.
         * ``source_trace`` - must point to the same Trace instance.
         * ``func_rng_states`` - large state dicts, not mutated after capture.
         * ``saved_args``, ``saved_kwargs`` - may contain large tensors;
@@ -1450,7 +1467,7 @@ class Op:
         fields_dict = {}
         fields_not_to_deepcopy = [
             "func",
-            "grad_fn_name",
+            "grad_fn_class_name",
             "grad_fn",
             "grad_fn_log",
             "source_trace",
@@ -1942,7 +1959,7 @@ class Op:
         else:
             module_str = f"\n\tComputed inside module: {self.module}"
         if not self.is_input:
-            s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_name}) {module_str}"
+            s += f"\n\tFunction: {self.func_name} (grad_fn: {self.grad_fn_class_name}) {module_str}"
             if self.func_config:
                 config_str = ", ".join(f"{k}={v}" for k, v in self.func_config.items())
                 s += f"\n\tConfig: {config_str}"

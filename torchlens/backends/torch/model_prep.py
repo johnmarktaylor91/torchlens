@@ -265,14 +265,14 @@ def _prepare_model_session(
        tensor entry/exit tracking.
     4. Creates ``Param`` objects and forces ``requires_grad=True`` on all
        parameters (needed so ``grad_fn`` chain is available for metadata).
-    5. Tags buffer tensors with ``_tl.buffer_address``.
+    5. Tags buffer tensors with ``_tl.address``.
 
     All session-scoped state is cleaned up by ``_cleanup_model_session``.
     """
     _module_class_metadata_cache.clear()
     _state._dir_cache.clear()
     trace._exhaustive_module_stack = []
-    trace.model_name = str(type(model).__name__)
+    trace.model_class_name = str(type(model).__name__)
     try:
         trace.model_source_file = inspect.getfile(type(model))
         trace.model_source_line = inspect.getsourcelines(type(model))[1]
@@ -614,7 +614,7 @@ def _capture_module_metadata(
 
 
 def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
-    """Tag buffer tensors with ``_tl.buffer_address`` for later identification.
+    """Tag buffer tensors with ``_tl.address`` for later identification.
 
     Buffers are non-parameter tensors registered via ``register_buffer()`` or
     stored as plain tensor attributes. They are tagged here so that when a
@@ -636,9 +636,9 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
                 and not isinstance(buf_tensor, torch.nn.Parameter)
                 and get_buffer_address(buf_tensor) is None
             ):
-                buffer_address = f"{module_addr}.{buf_name}" if module_addr else buf_name
+                address = f"{module_addr}.{buf_name}" if module_addr else buf_name
                 try:
-                    set_buffer_address(buf_tensor, buffer_address)
+                    set_buffer_address(buf_tensor, address)
                     _state._tagged_buffer_ids.add(id(buf_tensor))
                 except Exception:
                     pass
@@ -651,9 +651,9 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
                 and not isinstance(attr_val, torch.nn.Parameter)
                 and get_buffer_address(attr_val) is None
             ):
-                buffer_address = f"{module_addr}.{attr_name}" if module_addr else attr_name
+                address = f"{module_addr}.{attr_name}" if module_addr else attr_name
                 try:
-                    set_buffer_address(attr_val, buffer_address)
+                    set_buffer_address(attr_val, address)
                     _state._tagged_buffer_ids.add(id(attr_val))
                 except Exception:
                     pass
@@ -680,7 +680,7 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
 
 
 def _tag_untagged_buffers(module: nn.Module) -> None:
-    """Tag any buffers that lack ``_tl.buffer_address`` metadata.
+    """Tag any buffers that lack ``_tl.address`` metadata.
 
     Called during ``_record_module_entry_metadata`` to catch buffers that were created
     dynamically (e.g. in ``forward()``) after the initial ``prepare_buffer_tensors``
@@ -693,10 +693,10 @@ def _tag_untagged_buffers(module: nn.Module) -> None:
             continue
         module_addr = _module_address(module)
         if module_addr == "":
-            buffer_address = buffer_name
+            address = buffer_name
         else:
-            buffer_address = f"{module_addr}.{buffer_name}"
-        set_buffer_address(buffer_tensor, buffer_address)
+            address = f"{module_addr}.{buffer_name}"
+        set_buffer_address(buffer_tensor, address)
         # If this buffer was already logged as an intermediate tensor, save the
         # old label as parent and reset so it gets a proper buffer source entry.
         promote_label_to_buffer_parent_and_clear_label(buffer_tensor)
@@ -747,9 +747,9 @@ def _record_module_entry_metadata(
     for t in input_tensors:
         # Lazily register buffer tensors that haven't been logged yet.
         label = get_tensor_label(t)
-        buffer_address = get_buffer_address(t)
-        if label is None and buffer_address is not None:
-            log_source_tensor(trace, t, "buffer", buffer_address)
+        address = get_buffer_address(t)
+        if label is None and address is not None:
+            log_source_tensor(trace, t, "buffer", address)
             label = get_tensor_label(t)
         if label is None:
             # Raw ``register_forward_hook`` replacements run after this
@@ -939,6 +939,7 @@ def _ensure_module_output_tensor_logged(
             "func": None,
             "func_call_id": None,
             "func_name": "intervention_replacement",
+            "func_qualname": None,
             "code_context": [],
             "func_duration": 0,
             "flops_forward": 0,
@@ -953,7 +954,14 @@ def _ensure_module_output_tensor_logged(
             "non_tensor_kwargs": {},
             "func_non_tensor_args": [],
             "is_inplace": False,
-            "grad_fn_name": type(tensor.grad_fn).__name__,
+            "grad_fn_class_name": type(tensor.grad_fn).__name__
+            if tensor.grad_fn is not None
+            else None,
+            "grad_fn_class_qualname": (
+                f"{type(tensor.grad_fn).__module__}.{type(tensor.grad_fn).__qualname__}"
+                if tensor.grad_fn is not None
+                else None
+            ),
             "grad_fn_id": id(tensor.grad_fn) if tensor.grad_fn is not None else None,
             "grad_fn": tensor.grad_fn,
             "grad_fn_log": None,
@@ -994,7 +1002,7 @@ def _ensure_module_output_tensor_logged(
             "max_distance_from_output": None,
             "io_role": None,
             "is_buffer": False,
-            "buffer_address": None,
+            "address": None,
             "buffer_pass": None,
             "buffer_parent": None,
             "is_internal_source": not parent_entries,

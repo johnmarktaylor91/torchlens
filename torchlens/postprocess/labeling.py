@@ -721,7 +721,7 @@ def _add_lookup_keys_for_layer_entry(
     - String labels: layer_label, layer_label_short, with/without pass suffix.
     - Integer indices: positive (0-based) and negative (Python-style).
     - Module paths: module_pass labels for modules exited by this layer.
-    - Addresses: buffer_address, input/output address.
+    - Addresses: address, input/output address.
 
     Also reformats output_of_module_calls/entered and modules
     from (name, pass) tuples to "name:pass" strings (exhaustive mode only).
@@ -772,9 +772,9 @@ def _add_lookup_keys_for_layer_entry(
 
     # Allow using buffer/input/output address as key, too:
     if layer_entry.is_buffer:
-        if self.buffer_num_calls[layer_entry.buffer_address] == 1:
-            lookup_keys_for_tensor.append(layer_entry.buffer_address)
-        lookup_keys_for_tensor.append(f"{layer_entry.buffer_address}:{layer_entry.buffer_pass}")
+        if self.buffer_num_calls[layer_entry.address] == 1:
+            lookup_keys_for_tensor.append(layer_entry.address)
+        lookup_keys_for_tensor.append(f"{layer_entry.address}:{layer_entry.buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
         lookup_keys_for_tensor.append(layer_entry.io_role)
 

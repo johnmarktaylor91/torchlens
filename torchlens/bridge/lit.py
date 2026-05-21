@@ -72,7 +72,7 @@ class TorchLensLitModel:
         """
 
         labels = [str(getattr(layer, "layer_label", "layer")) for layer in self.log.layer_list]
-        row = {"layer_labels": labels, "num_layers": len(labels), "model_name": self.name}
+        row = {"layer_labels": labels, "num_layers": len(labels), "model_class_name": self.name}
         return [dict(row) for _ in inputs]
 
 

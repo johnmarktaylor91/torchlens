@@ -63,7 +63,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "address",
     ],
     "buffers": [
-        "buffer_address",
+        "address",
         "name",
         "call_index",
         "has_saved_outs",

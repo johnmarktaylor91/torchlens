@@ -251,7 +251,7 @@ def configure_capture_runtime_context(
     intervention_spec: "InterventionSpec | None" = None,
     capture_replay_templates: bool = False,
     model_id: int | None = None,
-    model_class: str | None = None,
+    model_class_qualname: str | None = None,
     weight_fingerprint: str | None = None,
     input_id: int | None = None,
     input_shape_hash: str | None = None,
@@ -268,7 +268,7 @@ def configure_capture_runtime_context(
         Whether replay-template capture should be enabled for this run.
     model_id:
         ``id(model)`` captured at the public API boundary.
-    model_class:
+    model_class_qualname:
         Model class qualname captured at the public API boundary.
     weight_fingerprint:
         Deterministic model-parameter fingerprint.
@@ -292,7 +292,7 @@ def configure_capture_runtime_context(
     _active_intervention_spec = intervention_spec
     _capture_replay_templates = capture_replay_templates
     _relationship_model_id = model_id
-    _relationship_model_class = model_class
+    _relationship_model_class = model_class_qualname
     _relationship_weight_fingerprint = weight_fingerprint
     _relationship_input_id = input_id
     _relationship_input_shape_hash = input_shape_hash
@@ -435,7 +435,7 @@ call to an uncovered function.  Subsequent calls reuse the cached spec."""
 # ---------------------------------------------------------------------------
 
 _tagged_buffer_ids: set[int] = set()
-"""ids of tensors tagged with _tl.buffer_address during prepare_buffer_tensors.
+"""ids of tensors tagged with _tl.address during prepare_buffer_tensors.
 Used by _undecorate_model_tensors for O(n) cleanup instead of re-scanning
 all module attributes."""
 

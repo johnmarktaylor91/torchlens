@@ -321,7 +321,7 @@ def _op_event_from_log(
         function=FunctionCallRef(
             func=fields_dict["func"],
             func_name=fields_dict["func_name"],
-            func_qualname=None,
+            func_qualname=fields_dict["func_qualname"],
             func_call_id=fields_dict["func_call_id"],
             code_context=tuple(fields_dict["code_context"]),
             func_duration=fields_dict["func_duration"],
@@ -365,7 +365,7 @@ def _op_event_from_log(
         module_stack=_module_frames_from_fields(fields_dict),
         backend_semantics=BackendSemantics(
             grad_fn_id=fields_dict["grad_fn_id"],
-            grad_fn_name=fields_dict["grad_fn_name"],
+            grad_fn_class_name=fields_dict["grad_fn_class_name"],
             autograd_saved_memory=fields_dict["autograd_saved_memory"],
             num_autograd_saved_tensors=fields_dict["num_autograd_saved_tensors"],
             mutates_inputs=(0,) if fields_dict["is_inplace"] else (),
@@ -1302,7 +1302,7 @@ def _build_graph_relationship_fields(
     fields_dict["max_distance_from_output"] = None
     fields_dict["io_role"] = None
     fields_dict["is_buffer"] = False
-    fields_dict["buffer_address"] = None
+    fields_dict["address"] = None
     fields_dict["buffer_pass"] = None
     fields_dict["buffer_parent"] = None
     fields_dict["is_internal_source"] = len(parent_layer_labels) == 0
@@ -1476,6 +1476,7 @@ def _build_shared_fields_dict(
     fields_dict["func"] = func
     fields_dict["func_call_id"] = func_call_id
     fields_dict["func_name"] = func_name
+    fields_dict["func_qualname"] = getattr(func, "__qualname__", None)
     fields_dict["code_context"] = _get_code_context(
         self.num_context_lines,
         source_loading_enabled=self.save_code_context,
@@ -2208,7 +2209,11 @@ def _log_output_tensor_info(
 
     # In-place ops return the same tensor object, which already has a raw label.
     fields_dict["is_inplace"] = get_tensor_label(t) is not None
-    fields_dict["grad_fn_name"] = type(t.grad_fn).__name__
+    grad_fn_cls = type(t.grad_fn) if t.grad_fn is not None else None
+    fields_dict["grad_fn_class_name"] = None if grad_fn_cls is None else grad_fn_cls.__name__
+    fields_dict["grad_fn_class_qualname"] = (
+        None if grad_fn_cls is None else f"{grad_fn_cls.__module__}.{grad_fn_cls.__qualname__}"
+    )
     fields_dict["grad_fn_id"] = id(t.grad_fn) if t.grad_fn is not None else None
     # Autograd Function objects do not consistently support weak references.
     # Keep the object only until explicit backward capture has registered hooks;

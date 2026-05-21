@@ -156,14 +156,14 @@ def format_model_repr(trace: "Trace") -> str:
     run_state = getattr(getattr(trace, "run_state", None), "name", "UNKNOWN")
     if not trace._tracing_finished:
         return (
-            f"Trace(name={getattr(trace, 'name', None)!r}, "
-            f"model_class={trace.model_name!r}, layers={_live_op_count(trace)}, "
+            f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
+            f"model_class_qualname={trace.model_class_name!r}, layers={_live_op_count(trace)}, "
             f"run_state={run_state})"
         )
 
     return (
-        f"Trace(name={getattr(trace, 'name', None)!r}, "
-        f"model_class={trace.model_name!r}, layers={len(trace.layer_logs)}, "
+        f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
+        f"model_class_qualname={trace.model_class_name!r}, layers={len(trace.layer_logs)}, "
         f"run_state={run_state})"
     )
 
@@ -208,8 +208,8 @@ def format_discoverability_summary(trace: "Trace") -> str:
     lines = [
         "TorchLens Discoverability Summary",
         "Capture:",
-        f"  name: {getattr(trace, 'name', None)!r}",
-        f"  model_class: {getattr(trace, 'model_name', None)}",
+        f"  name: {getattr(trace, 'trace_label', None)!r}",
+        f"  model_class_qualname: {getattr(trace, 'model_class_name', None)}",
         f"  input_shape: {_input_shape_summary(trace)}",
         f"  capture_timestamp: {_capture_timestamp(trace)}",
         f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
@@ -232,7 +232,7 @@ def format_discoverability_summary(trace: "Trace") -> str:
         f"  fork_chain: {_fork_chain_summary(trace)}",
         "Graph and relationship evidence:",
         f"  graph_shape_hash: {_truncated(getattr(trace, 'graph_shape_hash', None))}",
-        f"  model_class: {getattr(trace, 'model_class', None)}",
+        f"  model_class_qualname: {getattr(trace, 'model_class_qualname', None)}",
         f"  weight_fingerprint: {_truncated(getattr(trace, 'param_hash_quick', None))}",
         f"  relationship_evidence: {_relationship_evidence_summary(trace)}",
         "Next operations:",
@@ -505,7 +505,7 @@ def _parent_run_summary(trace: "Trace") -> str:
     parent = parent_ref()
     if parent is None:
         return "collected"
-    return f"{getattr(parent, 'name', None)!r} ({getattr(parent, 'model_name', None)})"
+    return f"{getattr(parent, 'trace_label', None)!r} ({getattr(parent, 'model_class_name', None)})"
 
 
 def _fork_chain_summary(trace: "Trace") -> str:
@@ -522,7 +522,7 @@ def _fork_chain_summary(trace: "Trace") -> str:
         Fork chain from root to current log.
     """
 
-    names = [str(getattr(trace, "name", None))]
+    names = [str(getattr(trace, "trace_label", None))]
     seen = {id(trace)}
     current = trace
     while True:
@@ -532,7 +532,7 @@ def _fork_chain_summary(trace: "Trace") -> str:
         parent = parent_ref()
         if parent is None or id(parent) in seen:
             break
-        names.append(str(getattr(parent, "name", None)))
+        names.append(str(getattr(parent, "trace_label", None)))
         seen.add(id(parent))
         current = parent
     return " <- ".join(reversed(names))
@@ -779,7 +779,7 @@ def _render_in_progress_summary(
         Rendered in-progress summary.
     """
     lines = [
-        f"Model: {trace.model_name}",
+        f"Model: {trace.model_class_name}",
         "Status: pass in progress; postprocessing has not finished yet.",
         f"Ops logged so far: {_live_op_count(trace)}",
     ]
@@ -920,12 +920,12 @@ def _level_title(*, trace: "Trace", level: str) -> str:
         Section title.
     """
     title_map = {
-        "overview": f"Model: {trace.model_name}",
-        "graph": f"Graph Summary: {trace.model_name}",
-        "memory": f"Memory Summary: {trace.model_name}",
-        "control_flow": f"Control-Flow Summary: {trace.model_name}",
-        "compute": f"Compute Summary: {trace.model_name}",
-        "waterfall": f"Waterfall Summary: {trace.model_name}",
+        "overview": f"Model: {trace.model_class_name}",
+        "graph": f"Graph Summary: {trace.model_class_name}",
+        "memory": f"Memory Summary: {trace.model_class_name}",
+        "control_flow": f"Control-Flow Summary: {trace.model_class_name}",
+        "compute": f"Compute Summary: {trace.model_class_name}",
+        "waterfall": f"Waterfall Summary: {trace.model_class_name}",
     }
     return title_map[level]
 

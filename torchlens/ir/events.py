@@ -117,9 +117,9 @@ class ModuleFrame:
 class BufferEvent:
     """Captured module buffer metadata event."""
 
-    buffer_address: str
-    name: str
     address: str
+    name: str
+    module_address: str
     buffer_pass: int
     parent_label_raw: str | None
     shape: tuple[int, ...] | None

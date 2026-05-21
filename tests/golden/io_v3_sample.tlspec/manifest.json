@@ -102,7 +102,7 @@
     "buffer_meta_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
     "class_qualname": "torch.nn.modules.container.Sequential",
     "extra_metadata": {
-      "model_name": "Sequential",
+      "model_class_name": "Sequential",
       "graph_shape_hash": "7217e3c4f38ae64549e0fb7135af07d65f7b720e8c950176bc6fd9cf7a22fc9f",
       "input_shape_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38"
     }

@@ -142,8 +142,8 @@ def __getattr__(name: str) -> Any:
     """
 
     if name in _LEGACY_EXCEPTION_PATHS:
-        module_path, attr_name = _LEGACY_EXCEPTION_PATHS[name]
-        module_obj = importlib.import_module(module_path)
+        class_module, attr_name = _LEGACY_EXCEPTION_PATHS[name]
+        module_obj = importlib.import_module(class_module)
         return getattr(module_obj, attr_name)
     raise AttributeError(f"module 'torchlens.errors' has no attribute {name!r}")
 
