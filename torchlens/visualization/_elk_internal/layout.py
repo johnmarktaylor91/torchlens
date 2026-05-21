@@ -1123,10 +1123,10 @@ def render_elk_direct(
                 if vis_mode == "unrolled":
                     mpl = trace.modules[mod_w_pass]
                     n_tensors = mpl.num_layers
-                    has_anc = any(trace[la].has_input_ancestor for la in mpl.layers)
+                    has_anc = any(trace[la].has_input_ancestor for la in mpl.ops)
                 else:
                     n_tensors = ml.num_layers
-                    has_anc = any(trace[la].has_input_ancestor for la in ml.layers)
+                    has_anc = any(trace[la].has_input_ancestor for la in ml.layer_labels)
 
                 np_ = ml.num_calls
                 if np_ == 1:

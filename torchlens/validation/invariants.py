@@ -1455,8 +1455,8 @@ def _check_module_layer_containment(ml: "Trace") -> None:
     """Check H: Module <-> Layer containment consistency.
 
     Validates forward and reverse directions:
-    - Forward: Module.layers labels exist in layer_logs; num_layers matches.
-      ModuleCall.layers labels exist; input/output_layers subset of layers.
+    - Forward: Module.layer_labels exist in layer_logs; num_layers matches.
+      ModuleCall.ops labels exist; input/output_layers subset of ops.
     - Reverse: each layer's module points to a valid module
       that lists the layer in its layers.
     """
@@ -1468,43 +1468,43 @@ def _check_module_layer_containment(ml: "Trace") -> None:
     for mod_log in mod_accessor:
         addr = mod_log.address
 
-        # Module.layers labels exist in layer_logs
-        for lbl in mod_log.layers:
+        # Module.layer_labels exist in layer_logs
+        for lbl in mod_log.layer_labels:
             if lbl not in ml.layer_logs:
                 raise MetadataInvariantError(
                     name,
                     f"Module '{addr}' layers contains '{lbl}' not in trace.layer_logs",
                 )
 
-        if mod_log.num_layers != len(mod_log.layers):
+        if mod_log.num_layers != len(mod_log.layer_labels):
             raise MetadataInvariantError(
                 name,
                 f"Module '{addr}': num_layers={mod_log.num_layers} != "
-                f"len(layers)={len(mod_log.layers)}",
+                f"len(layer_labels)={len(mod_log.layer_labels)}",
             )
 
         # ModuleCall checks
-        # mpl.layers may contain pass-qualified labels OR no-pass labels
+        # mpl.ops may contain pass-qualified labels OR no-pass labels
         # (e.g., root module in recurrent models uses no-pass labels).
         for call_index, mpl in mod_log.ops.items():
-            for lbl in mpl.layers:
+            for lbl in mpl.ops:
                 if lbl not in label_set and lbl not in no_pass_set:
                     raise MetadataInvariantError(
                         name,
-                        f"ModuleCall '{addr}:{call_index}' layers contains "
+                        f"ModuleCall '{addr}:{call_index}' ops contains "
                         f"'{lbl}' not in layer_labels or layer_labels",
                     )
 
-            if mpl.num_layers != len(mpl.layers):
+            if mpl.num_layers != len(mpl.ops):
                 raise MetadataInvariantError(
                     name,
                     f"ModuleCall '{addr}:{call_index}': "
-                    f"num_layers={mpl.num_layers} != len(layers)={len(mpl.layers)}",
+                    f"num_layers={mpl.num_layers} != len(ops)={len(mpl.ops)}",
                 )
 
-            # input/output layers subset of layers (using both pass-qualified
+            # input/output layers subset of ops (using both pass-qualified
             # and no-pass labels to handle recurrent models)
-            mpl_layer_set = set(mpl.layers)
+            mpl_layer_set = set(mpl.ops)
             valid_set = mpl_layer_set | label_set | no_pass_set
             for sub_attr in ("input_layers", "output_layers"):
                 sub_list = getattr(mpl, sub_attr)
@@ -1531,7 +1531,7 @@ def _check_module_layer_containment(ml: "Trace") -> None:
                     f"Layer '{lpl.layer_label}' module='{cmo}' "
                     f"(addr='{cmo_addr}') not found in module accessor",
                 )
-            if lpl.layer_label_no_pass not in mod.layers:  # type: ignore[union-attr]
+            if lpl.layer_label_no_pass not in mod.layer_labels:  # type: ignore[union-attr]
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{lpl.layer_label}' (no_pass='{lpl.layer_label_no_pass}') "

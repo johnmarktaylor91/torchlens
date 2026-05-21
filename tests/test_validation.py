@@ -456,9 +456,11 @@ def test_corruption_module_back_reference():
             # module may include pass (e.g. 'fc:1'), strip it
             cmo_addr = cmo.split(":")[0] if ":" in cmo else cmo
             mod_log = log.modules._dict[cmo_addr]
-            if lpl.layer_label_no_pass in mod_log.layers:
-                mod_log.layers = [x for x in mod_log.layers if x != lpl.layer_label_no_pass]
-                # num_layers is a read-only property derived from layers
+            if lpl.layer_label_no_pass in mod_log.layer_labels:
+                mod_log.layer_labels = [
+                    x for x in mod_log.layer_labels if x != lpl.layer_label_no_pass
+                ]
+                # num_layers is a read-only property derived from layer_labels
                 break
     with pytest.raises(MetadataInvariantError, match="module_layer_containment"):
         check_metadata_invariants(log)

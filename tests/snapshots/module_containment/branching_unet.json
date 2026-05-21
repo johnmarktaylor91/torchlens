@@ -391,7 +391,7 @@
       "input_layers": [
         "input_1"
       ],
-      "layers": [
+      "ops": [
         "input_1",
         "conv2d_1_1",
         "relu_1_2",
@@ -419,7 +419,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_1_1"
       ],
       "output_layers": [
@@ -432,7 +432,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 8, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_2_3"
       ],
       "output_layers": [
@@ -445,7 +445,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 8, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_3_5"
       ],
       "output_layers": [
@@ -458,7 +458,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 16, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_4_8"
       ],
       "output_layers": [
@@ -471,7 +471,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 16, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_5_11"
       ],
       "output_layers": [
@@ -484,7 +484,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 12, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_6_14"
       ],
       "output_layers": [
@@ -505,8 +505,8 @@
       "input_layers": [
         "input_1"
       ],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "input_1",
         "conv2d_1_1",
         "relu_1_2",
@@ -543,8 +543,8 @@
         "encoders.0:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_1_1"
       ],
       "num_calls": 1,
@@ -566,8 +566,8 @@
         "encoders.1:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_2_3"
       ],
       "num_calls": 1,
@@ -589,8 +589,8 @@
         "encoders.2:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_3_5"
       ],
       "num_calls": 1,
@@ -612,8 +612,8 @@
         "decoders.0:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_4_8"
       ],
       "num_calls": 1,
@@ -635,8 +635,8 @@
         "decoders.1:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_5_11"
       ],
       "num_calls": 1,
@@ -658,8 +658,8 @@
         "decoders.2:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_6_14"
       ],
       "num_calls": 1,

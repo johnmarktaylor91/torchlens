@@ -199,7 +199,7 @@
       "input_layers": [
         "input_1"
       ],
-      "layers": [
+      "ops": [
         "input_1",
         "mean_1_1",
         "gt_1_2",
@@ -218,7 +218,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_3",
         "tanh_1_4",
         "linear_2_5"
@@ -233,7 +233,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_3"
       ],
       "output_layers": [
@@ -246,7 +246,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "tanh_1_4"
       ],
       "output_layers": [
@@ -259,7 +259,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_2_5"
       ],
       "output_layers": [
@@ -280,8 +280,8 @@
       "input_layers": [
         "input_1"
       ],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "input_1",
         "mean_1_1",
         "gt_1_2",
@@ -309,8 +309,8 @@
         "negative:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_3",
         "tanh_1_4",
         "linear_2_5"
@@ -334,8 +334,8 @@
         "negative.0:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_3"
       ],
       "num_calls": 1,
@@ -357,8 +357,8 @@
         "negative.1:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "tanh_1_4"
       ],
       "num_calls": 1,
@@ -380,8 +380,8 @@
         "negative.2:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_2_5"
       ],
       "num_calls": 1,

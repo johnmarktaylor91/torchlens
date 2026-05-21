@@ -763,7 +763,7 @@ def test_flops_coverage_on_model():
 
 
 def test_module_training_modes_populated(small_input):
-    """Module.is_train_mode should capture the training flag."""
+    """Module.training should capture the training flag."""
     model = example_models.SimpleFF()
     model.train()
     mh = trace_fn(model, small_input)
@@ -780,13 +780,13 @@ def test_module_training_modes_train_vs_eval():
     mh_train = trace_fn(model, x)
     for ml in mh_train.modules:
         if ml.address != "self":
-            assert ml.is_train_mode is True, f"Module {ml.address} should be training=True"
+            assert ml.training is True, f"Module {ml.address} should be training=True"
 
     model.eval()
     mh_eval = trace_fn(model, x)
     for ml in mh_eval.modules:
         if ml.address != "self":
-            assert ml.is_train_mode is False, f"Module {ml.address} should be training=False"
+            assert ml.training is False, f"Module {ml.address} should be training=False"
 
 
 @pytest.mark.slow

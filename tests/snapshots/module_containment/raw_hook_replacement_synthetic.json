@@ -140,7 +140,7 @@
       "input_layers": [
         "input_1"
       ],
-      "layers": [
+      "ops": [
         "input_1",
         "relu_1_1",
         "interventionreplacement_1_2",
@@ -157,7 +157,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "relu_1_1",
         "interventionreplacement_1_2"
       ],
@@ -171,7 +171,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_3"
       ],
       "output_layers": [
@@ -192,8 +192,8 @@
       "input_layers": [
         "input_1"
       ],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "input_1",
         "relu_1_1",
         "interventionreplacement_1_2",
@@ -219,8 +219,8 @@
         "relu:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "relu_1_1",
         "interventionreplacement_1_2"
       ],
@@ -243,8 +243,8 @@
         "proj:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_3"
       ],
       "num_calls": 1,

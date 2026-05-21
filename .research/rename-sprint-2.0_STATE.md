@@ -110,3 +110,4 @@ DO NOT push. DO NOT open a PR. JMT explicitly said "merge it to local main" and 
 
 | 4 | 2026-05-21T18:25:40-04:00 | 2026-05-21T18:48:05-04:00 | pending | OK | Trace field renames/additions/removals; exact old-name grep clean; import/dataclass probes, ruff, and smoke green |
 | 5 | 2026-05-21T18:48:05-04:00 | 2026-05-21T19:01:06-04:00 | ebda8d5 | OK | Op + Layer field renames and grad_fn split; ruff and smoke green; `num_ops` left as Trace/Layer canonical per glossary |
+| 6 | 2026-05-21T19:01:06-04:00 | 2026-05-21T19:16:36-04:00 | pending | OK | Module + ModuleCall field locks; deprecated greps clean; import/dataclass probes, ruff, and smoke green |

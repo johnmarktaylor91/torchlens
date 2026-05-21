@@ -1325,10 +1325,10 @@ def _module_shape(trace: "Trace", module: "Module") -> str:
     str
         Representative output shape.
     """
-    if not module.layers:
+    if not module.layer_labels:
         return "-"
     try:
-        layer = trace[module.layers[-1]]
+        layer = trace[module.layer_labels[-1]]
     except KeyError:
         return "-"
     return _shape_str(getattr(layer, "shape", None))
@@ -1367,10 +1367,10 @@ def _module_dtype(trace: "Trace", module: "Module") -> str:
     str
         Representative dtype.
     """
-    if not module.layers:
+    if not module.layer_labels:
         return "-"
     try:
-        layer = trace[module.layers[-1]]
+        layer = trace[module.layer_labels[-1]]
     except KeyError:
         return "-"
     return _dtype_str(getattr(layer, "dtype", None))
@@ -1392,7 +1392,7 @@ def _module_time_ms(trace: "Trace", module: "Module") -> float:
         Summed execution time in milliseconds.
     """
     total = 0.0
-    for layer_label in module.layers:
+    for layer_label in module.layer_labels:
         try:
             layer = trace[layer_label]
         except KeyError:

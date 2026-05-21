@@ -26,6 +26,7 @@ fast mode, it skips entry/exit tracking entirely but still handles
 import inspect
 import itertools
 import copy
+import time
 import warnings
 from collections.abc import Callable
 from collections import defaultdict, deque
@@ -61,7 +62,11 @@ from ...data_classes.module_log import HookInfo
 from ...data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
 from ...ir import live_record_for_label
 from ...utils.tensor_utils import get_memory_amount
-from ...utils.introspection import get_vars_of_type_from_obj, iter_accessible_attributes
+from ...utils.introspection import (
+    _get_code_context,
+    get_vars_of_type_from_obj,
+    iter_accessible_attributes,
+)
 from ...utils.hashing import make_random_barcode
 from .tensor_tracking import _append_module_suffix_to_equivalence_class
 from .sources import log_source_tensor
@@ -438,16 +443,28 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
 
     if save_code_context:
         try:
-            meta["source_file"] = inspect.getfile(module_class)
+            meta["class_source_file"] = inspect.getfile(module_class)
         except (TypeError, OSError):
-            meta["source_file"] = None
+            meta["class_source_file"] = None
         try:
             _, line = inspect.getsourcelines(module_class)
-            meta["source_line"] = line
+            meta["class_source_line"] = line
         except (TypeError, OSError):
-            meta["source_line"] = None
+            meta["class_source_line"] = None
 
         init_method = getattr(module_class, "__init__", None)
+        try:
+            if init_method is not None and init_method is not nn.Module.__init__:
+                meta["init_source_file"] = inspect.getsourcefile(init_method) or inspect.getfile(
+                    init_method
+                )
+                meta["init_source_line"] = inspect.getsourcelines(init_method)[1]
+            else:
+                meta["init_source_file"] = None
+                meta["init_source_line"] = None
+        except (TypeError, OSError):
+            meta["init_source_file"] = None
+            meta["init_source_line"] = None
         try:
             meta["init_signature"] = (
                 str(inspect.signature(init_method)) if init_method is not None else None
@@ -458,6 +475,18 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
 
         forward_method = getattr(module_class, "forward", None)
         try:
+            if forward_method is not None:
+                meta["forward_source_file"] = inspect.getsourcefile(
+                    forward_method
+                ) or inspect.getfile(forward_method)
+                meta["forward_source_line"] = inspect.getsourcelines(forward_method)[1]
+            else:
+                meta["forward_source_file"] = None
+                meta["forward_source_line"] = None
+        except (TypeError, OSError):
+            meta["forward_source_file"] = None
+            meta["forward_source_line"] = None
+        try:
             meta["forward_signature"] = (
                 str(inspect.signature(forward_method)) if forward_method is not None else None
             )
@@ -465,8 +494,12 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
             meta["forward_signature"] = None
         meta["forward_docstring"] = getattr(forward_method, "__doc__", None)
     else:
-        meta["source_file"] = None
-        meta["source_line"] = None
+        meta["class_source_file"] = None
+        meta["class_source_line"] = None
+        meta["init_source_file"] = None
+        meta["init_source_line"] = None
+        meta["forward_source_file"] = None
+        meta["forward_source_line"] = None
         meta["init_signature"] = None
         meta["init_docstring"] = None
         meta["forward_signature"] = None
@@ -476,8 +509,8 @@ def _get_class_metadata(module_class: type, save_code_context: bool = False) -> 
     return meta
 
 
-def _hook_info_from_registry(registry: Any) -> HookInfo:
-    """Build HookInfo for a PyTorch module hook registry.
+def _hook_info_from_registry(registry: Any) -> list[HookInfo]:
+    """Build HookInfo entries for a PyTorch module hook registry.
 
     Parameters
     ----------
@@ -486,38 +519,34 @@ def _hook_info_from_registry(registry: Any) -> HookInfo:
 
     Returns
     -------
-    HookInfo
-        Portable hook metadata summary.
+    list[HookInfo]
+        Portable hook metadata, one entry per registered hook.
     """
 
     hooks = list(registry.values())
-    names: list[str] = []
-    qualnames: list[str] = []
-    source_locations: list[FuncCallLocation] = []
+    hook_infos: list[HookInfo] = []
     for hook in hooks:
-        names.append(getattr(hook, "__name__", type(hook).__name__))
-        qualname = getattr(hook, "__qualname__", names[-1])
+        name = getattr(hook, "__name__", type(hook).__name__)
+        qualname = getattr(hook, "__qualname__", name)
         module_name = getattr(hook, "__module__", "")
-        qualnames.append(f"{module_name}.{qualname}" if module_name else qualname)
+        full_qualname = f"{module_name}.{qualname}" if module_name else qualname
+        source_location = None
         try:
             source_file = inspect.getsourcefile(hook) or inspect.getfile(hook)
             source_line = inspect.getsourcelines(hook)[1]
         except (OSError, TypeError):
-            continue
-        source_locations.append(
-            FuncCallLocation(
+            pass
+        else:
+            source_location = FuncCallLocation(
                 file=source_file,
                 line_number=source_line,
-                func_name=qualnames[-1],
+                func_name=full_qualname,
                 source_loading_enabled=False,
             )
+        hook_infos.append(
+            HookInfo(name=name, qualname=full_qualname, source_location=source_location)
         )
-    return HookInfo(
-        count=len(hooks),
-        names=names,
-        qualnames=qualnames,
-        source_locations=source_locations,
-    )
+    return hook_infos
 
 
 def _capture_module_metadata(
@@ -571,21 +600,19 @@ def _capture_module_metadata(
             meta["forward_docstring"] = doc
 
     # Instance-specific fields
-    meta["forward_pre_hook_info"] = _hook_info_from_registry(
-        getattr(module, "_forward_pre_hooks", {})
-    )
-    meta["forward_hook_info"] = _hook_info_from_registry(getattr(module, "_forward_hooks", {}))
-    meta["backward_pre_hook_info"] = _hook_info_from_registry(
+    meta["forward_pre_hooks"] = _hook_info_from_registry(getattr(module, "_forward_pre_hooks", {}))
+    meta["forward_hooks"] = _hook_info_from_registry(getattr(module, "_forward_hooks", {}))
+    meta["backward_pre_hooks"] = _hook_info_from_registry(
         getattr(module, "_backward_pre_hooks", {})
     )
-    meta["backward_hook_info"] = _hook_info_from_registry(getattr(module, "_backward_hooks", {}))
-    meta["full_backward_pre_hook_info"] = _hook_info_from_registry(
+    meta["backward_hooks"] = _hook_info_from_registry(getattr(module, "_backward_hooks", {}))
+    meta["full_backward_pre_hooks"] = _hook_info_from_registry(
         getattr(module, "_full_backward_pre_hooks", {})
     )
-    meta["full_backward_hook_info"] = _hook_info_from_registry(
+    meta["full_backward_hooks"] = _hook_info_from_registry(
         getattr(module, "_full_backward_hooks", {})
     )
-    meta["is_train_mode"] = module.training
+    meta["training"] = module.training
 
     child_addresses = []
     for child_name, _ in module_children:
@@ -741,6 +768,19 @@ def _record_module_entry_metadata(
 
     # Stash forward args for later use by _build_module_logs.
     trace._module_forward_args[(address, module_call_index)] = (args, kwargs)
+    module_call_label_str = f"{address}:{module_call_index}"
+    trace._module_build_data.setdefault("module_forward_start_times", {})[module_call_label_str] = (
+        time.time()
+    )
+    trace._module_build_data.setdefault("module_code_contexts", {})[module_call_label_str] = (
+        _get_code_context(
+            num_context_lines=trace.num_context_lines,
+            source_loading_enabled=trace.save_code_context,
+        )
+    )
+    trace._module_build_data.setdefault("module_call_stacks", {})[module_call_label_str] = [
+        f"{frame.address}:{frame.pass_index}" for frame in trace._exhaustive_module_stack[:-1]
+    ]
 
     # Find all tensor arguments (excluding Parameters, which are source tensors).
     input_tensors = get_vars_of_type_from_obj(
@@ -1156,6 +1196,11 @@ def _record_module_exit_metadata(
         output_entries = [(tensor, (), None) for tensor in output_tensors]
     role_hints = role_hints_for_module(module)
     module_call_label = f"{address}:{module_call_index}"
+    start_times = trace._module_build_data.setdefault("module_forward_start_times", {})
+    if module_call_label in start_times:
+        trace._module_build_data.setdefault("module_forward_durations", {})[module_call_label] = (
+            time.time() - start_times[module_call_label]
+        )
     if output_entries:
         trace._module_build_data.setdefault("module_output_structures", {})[module_call_label] = (
             output_entries[0][2]

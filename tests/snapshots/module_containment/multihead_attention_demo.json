@@ -680,7 +680,7 @@
       "input_layers": [
         "input_1"
       ],
-      "layers": [
+      "ops": [
         "input_1",
         "linear_1_1",
         "unflatten_1_2",
@@ -721,7 +721,7 @@
       "forward_args_summary": "[Tensor(shape=(4, 2, 8), dtype=float32), Tensor(shape=(4, 2, 8), dtype=float32), Tensor(shape=(4, 2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{need_weights: True}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_1",
         "unflatten_1_2",
         "unsqueeze_1_3",
@@ -769,8 +769,8 @@
       "input_layers": [
         "input_1"
       ],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "input_1",
         "linear_1_1",
         "unflatten_1_2",
@@ -820,8 +820,8 @@
         "attn:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_1",
         "unflatten_1_2",
         "unsqueeze_1_3",

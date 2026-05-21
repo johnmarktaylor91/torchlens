@@ -142,7 +142,7 @@
       "input_layers": [
         "input_1"
       ],
-      "layers": [
+      "ops": [
         "input_1",
         "linear_1_1",
         "linear_2_2",
@@ -159,7 +159,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_1",
         "linear_2_2"
       ],
@@ -174,7 +174,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_1"
       ],
       "output_layers": [
@@ -187,7 +187,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_2_2"
       ],
       "output_layers": [
@@ -208,8 +208,8 @@
       "input_layers": [
         "input_1"
       ],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "input_1",
         "linear_1_1",
         "linear_2_2",
@@ -235,8 +235,8 @@
         "inner:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_1",
         "linear_2_2"
       ],
@@ -260,8 +260,8 @@
         "inner.left:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_1"
       ],
       "num_calls": 1,
@@ -283,8 +283,8 @@
         "inner.right:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_2_2"
       ],
       "num_calls": 1,

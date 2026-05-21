@@ -122,7 +122,7 @@ class TestModuleLogFields:
     def test_source_info(self):
         log = trace_fn(_make_simple_model(), _simple_input(), save_code_context=True)
         ml = log.modules["0"]
-        assert ml.source_file is not None  # nn.Linear has inspectable source
+        assert ml.class_source_file is not None  # nn.Linear has inspectable source
         assert ml.forward_signature is not None
 
     def test_hierarchy_address(self):
@@ -180,7 +180,7 @@ class TestModuleLogFields:
         log = trace_fn(model, _simple_input())
         for ml in log.modules:
             if ml.address != "self":
-                assert ml.is_train_mode is False
+                assert ml.training is False
 
     def test_hooks_detected_false(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -209,7 +209,7 @@ class TestModuleCallLog:
         mpl = ml.ops[1]
         assert isinstance(mpl, ModuleCall)
         # Pass layers should be a subset of parent layers
-        assert all(label in ml.layers for label in mpl.layers)
+        assert all(label.split(":", 1)[0] in ml.layer_labels for label in mpl.ops)
 
     def test_input_output_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -252,7 +252,7 @@ class TestMultiPassModules:
         log = trace_fn(model, input_2d)
         ml = log.modules["fc1"]
         assert ml.num_calls > 1
-        assert ml.layers
+        assert ml.layer_labels
         with pytest.raises(AttributeError, match="ops"):
             _ = ml.forward_args
 
@@ -283,8 +283,7 @@ class TestSinglePassDelegation:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         assert ml.num_calls == 1
-        # Should delegate to ops[1].layers
-        assert ml.layers == ml.ops[1].layers
+        assert ml.layer_labels == [label.split(":", 1)[0] for label in ml.ops[1].ops]
 
     def test_forward_args_delegates(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -330,7 +329,7 @@ class TestModuleLogIntegration:
     def test_root_layers_equals_model_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         root = log.root_module
-        assert root.layers == [layer.layer_label for layer in log.layer_list]
+        assert root.layer_labels == [layer.layer_label for layer in log.layer_list]
 
     def test_root_params_count(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -372,7 +371,7 @@ class TestModuleLogIntegration:
         ml = log.modules["0"]
         if ml.num_layers > 0:
             entry = ml[0]
-            assert entry.layer_label == ml.layers[0]
+            assert entry.layer_label == ml.layer_labels[0]
 
     def test_nested_modules_model(self, input_2d):
         """Integration test with the NestedModules example model."""

@@ -213,8 +213,8 @@ def _module_dict(module: Any) -> dict[str, Any]:
         "buffer_layers": list(module.buffer_layers),
         "call_labels": list(module.call_labels),
         "input_layers": list(module.input_layers),
-        "is_train_mode": module.is_train_mode,
-        "layers": list(module.layers),
+        "training": module.training,
+        "ops": list(module.layer_labels),
         "num_calls": module.num_calls,
         "num_param_tensors": len(module.params),
         "num_params": module.num_params,
@@ -244,7 +244,7 @@ def _call_dict(call: Any) -> dict[str, Any]:
         "forward_args_summary": call.forward_args_summary,
         "forward_kwargs_summary": call.forward_kwargs_summary,
         "input_layers": list(call.input_layers),
-        "layers": list(call.layers),
+        "ops": list(call.ops),
         "output_layers": list(call.output_layers),
     }
 

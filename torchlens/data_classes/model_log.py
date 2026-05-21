@@ -228,6 +228,10 @@ def _init_module_hierarchy_data() -> dict[str, Any]:
         "module_output_structures": {},
         "module_layer_argnames": defaultdict(list),
         "module_training_modes": {},
+        "module_forward_start_times": {},
+        "module_forward_durations": {},
+        "module_code_contexts": {},
+        "module_call_stacks": {},
     }
 
 

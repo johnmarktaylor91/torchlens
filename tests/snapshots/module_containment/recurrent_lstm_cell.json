@@ -183,7 +183,7 @@
       "input_layers": [
         "input_1"
       ],
-      "layers": [
+      "ops": [
         "input_1",
         "newzeros_1_1",
         "newzeros_2_2",
@@ -201,7 +201,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "lstmcell_1_3:1",
         "lstmcell_1_3:2"
       ],
@@ -216,7 +216,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "lstmcell_1_3:3",
         "lstmcell_1_3:4"
       ],
@@ -231,7 +231,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "lstmcell_1_3:5",
         "lstmcell_1_3:6"
       ],
@@ -246,7 +246,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_4"
       ],
       "output_layers": [
@@ -267,8 +267,8 @@
       "input_layers": [
         "input_1"
       ],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "input_1",
         "newzeros_1_1",
         "newzeros_2_2",
@@ -297,8 +297,8 @@
         "cell:3"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "lstmcell_1_3"
       ],
       "num_calls": 3,
@@ -325,8 +325,8 @@
         "readout:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_4"
       ],
       "num_calls": 1,

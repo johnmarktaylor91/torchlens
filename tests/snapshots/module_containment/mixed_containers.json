@@ -302,7 +302,7 @@
       "input_layers": [
         "input_1"
       ],
-      "layers": [
+      "ops": [
         "input_1",
         "linear_1_1",
         "relu_1_2",
@@ -325,7 +325,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_1",
         "relu_1_2"
       ],
@@ -339,7 +339,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_1_1"
       ],
       "output_layers": [
@@ -352,7 +352,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "relu_1_2"
       ],
       "output_layers": [
@@ -365,7 +365,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_2_4"
       ],
       "output_layers": [
@@ -378,7 +378,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "relu_2_5"
       ],
       "output_layers": [
@@ -391,7 +391,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "sigmoid_1_8"
       ],
       "output_layers": [
@@ -404,7 +404,7 @@
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "linear_3_9"
       ],
       "output_layers": [
@@ -425,8 +425,8 @@
       "input_layers": [
         "input_1"
       ],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "input_1",
         "linear_1_1",
         "relu_1_2",
@@ -458,8 +458,8 @@
         "seq:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_1",
         "relu_1_2"
       ],
@@ -482,8 +482,8 @@
         "seq.0:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_1_1"
       ],
       "num_calls": 1,
@@ -505,8 +505,8 @@
         "seq.1:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "relu_1_2"
       ],
       "num_calls": 1,
@@ -528,8 +528,8 @@
         "layers.0:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_2_4"
       ],
       "num_calls": 1,
@@ -551,8 +551,8 @@
         "layers.1:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "relu_2_5"
       ],
       "num_calls": 1,
@@ -574,8 +574,8 @@
         "choices.gate:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "sigmoid_1_8"
       ],
       "num_calls": 1,
@@ -597,8 +597,8 @@
         "choices.proj:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "linear_3_9"
       ],
       "num_calls": 1,

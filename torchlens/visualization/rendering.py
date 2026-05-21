@@ -2953,11 +2953,11 @@ def _build_collapsed_module_node(
         node_name = "pass".join(module_tuple)
         mpl = self.modules[address_w_pass]
         module_num_tensors = mpl.num_layers
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in mpl.layers)
+        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in mpl.ops)
     else:
         node_name = module_tuple[0]
         module_num_tensors = ml.num_layers
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layers)  # type: ignore[union-attr]
+        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)  # type: ignore[union-attr]
 
     # Deduplicate: multiple layers in the same collapsed module will each
     # trigger this function, but the node should only be added once.

@@ -64,6 +64,13 @@ conditional consistency when removing entries.
 `_build_layer_logs()` merges multiple `Op` entries into one aggregate. Most fields
 use first-pass values; only selected graph/role fields are merged across ops.
 
+### Module / ModuleCall Fields
+`Module.training` mirrors `nn.Module.training`; `Module.layer_labels` stores Layer
+labels, while `Module.layers` resolves those labels to Layer records. Module input/output
+collections (`input_ops`, `input_layers`, `output_ops`, `output_layers`) are bare label lists.
+`ModuleCall.ops`, `input_ops`, `input_layers`, `output_ops`, and `output_layers` are also bare
+label lists; resolve through the owning Trace accessor when records are needed.
+
 ## Autograd Contract
 `Op.save_activation()` is the slow/replay choke point for saved tensor copies.
 `backward_ready=True` keeps saved floating tensors graph-connected, rejects contradictory

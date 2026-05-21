@@ -363,7 +363,7 @@
       "input_layers": [
         "input_1"
       ],
-      "layers": [
+      "ops": [
         "input_1",
         "conv2d_1_1",
         "buffer_1",
@@ -388,7 +388,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_1_1",
         "buffer_1",
         "buffer_2",
@@ -405,7 +405,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_1_1"
       ],
       "output_layers": [
@@ -418,7 +418,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "buffer_1",
         "buffer_2",
         "batchnorm_1_2"
@@ -433,7 +433,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "relu_1_3"
       ],
       "output_layers": [
@@ -446,7 +446,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_2_4",
         "buffer_3",
         "buffer_4",
@@ -462,7 +462,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "conv2d_2_4"
       ],
       "output_layers": [
@@ -475,7 +475,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "buffer_3",
         "buffer_4",
         "batchnorm_2_5"
@@ -490,7 +490,7 @@
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
       "input_layers": [],
-      "layers": [
+      "ops": [
         "relu_2_7"
       ],
       "output_layers": [
@@ -516,8 +516,8 @@
       "input_layers": [
         "input_1"
       ],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "input_1",
         "conv2d_1_1",
         "buffer_1",
@@ -551,8 +551,8 @@
         "first:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_1_1",
         "buffer_1",
         "buffer_2",
@@ -578,8 +578,8 @@
         "first.0:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_1_1"
       ],
       "num_calls": 1,
@@ -604,8 +604,8 @@
         "first.1:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "buffer_1",
         "buffer_2",
         "batchnorm_1_2"
@@ -629,8 +629,8 @@
         "first.2:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "relu_1_3"
       ],
       "num_calls": 1,
@@ -652,8 +652,8 @@
         "second:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_2_4",
         "buffer_3",
         "buffer_4",
@@ -678,8 +678,8 @@
         "second.0:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "conv2d_2_4"
       ],
       "num_calls": 1,
@@ -704,8 +704,8 @@
         "second.1:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "buffer_3",
         "buffer_4",
         "batchnorm_2_5"
@@ -729,8 +729,8 @@
         "out_relu:1"
       ],
       "input_layers": [],
-      "is_train_mode": true,
-      "layers": [
+      "training": true,
+      "ops": [
         "relu_2_7"
       ],
       "num_calls": 1,

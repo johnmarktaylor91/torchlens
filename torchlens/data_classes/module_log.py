@@ -3,11 +3,11 @@
 Three-level hierarchy:
 
 * **ModuleCall** -- one invocation of one module (lightweight container).
-  Stores ``layers`` as pass-qualified labels (e.g. ``"conv2d_1_1:1"``),
+  Stores ``ops`` as pass-qualified labels (e.g. ``"conv2d_1_1:1"``),
   pointing to individual Op entries.
 
 * **Module** -- aggregate metadata for one ``nn.Module`` across all its
-  invocations.  Stores ``layers`` as no-pass labels (e.g.
+  invocations.  Stores ``layer_labels`` as no-pass labels (e.g.
   ``"conv2d_1_1"``), pointing to aggregate Layer entries.
   For single-pass modules, per-pass fields are delegated to ``ops[1]``
   via ``_single_pass_or_error()``.
@@ -17,16 +17,16 @@ Three-level hierarchy:
   or ordinal index.
 
 Module vs ModuleCall label convention:
-  - Module.layers stores **no-pass** labels -> Layer
-  - ModuleCall.layers stores **pass-qualified** labels -> Op
+  - Module.layer_labels stores **no-pass** labels -> Layer
+  - ModuleCall.ops stores **pass-qualified** labels -> Op
 This matches each accessor's natural granularity.
 """
 
 import weakref
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union, cast
 
 import torch
 
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 class ModuleCallAccessor(Accessor["ModuleCall"]):
     """Scoped dict-like accessor for ModuleCall entries owned by a Module."""
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
@@ -112,18 +112,28 @@ class ModuleCallAccessor(Accessor["ModuleCall"]):
 
 @dataclass
 class HookInfo:
-    """Summary of one PyTorch module hook registry."""
+    """Metadata for one PyTorch module hook."""
 
-    count: int = 0
-    names: List[str] = field(default_factory=list)
-    qualnames: List[str] = field(default_factory=list)
-    source_locations: List["FuncCallLocation"] = field(default_factory=list)
+    name: str = ""
+    qualname: str = ""
+    source_location: "FuncCallLocation | None" = None
 
-    @property
-    def has_any(self) -> bool:
-        """Whether the registry has hooks."""
 
-        return self.count > 0
+def _duration_str(duration: float) -> str:
+    """Return a human-readable duration string.
+
+    Parameters
+    ----------
+    duration:
+        Duration in seconds.
+
+    Returns
+    -------
+    str
+        Duration formatted in milliseconds.
+    """
+
+    return f"{duration * 1000:.3f} ms"
 
 
 def _module_call_log_to_row(module_call_log: "ModuleCall") -> Dict[str, Any]:
@@ -140,7 +150,7 @@ def _module_call_log_to_row(module_call_log: "ModuleCall") -> Dict[str, Any]:
         Mapping from canonical field name to exported value.
     """
     row = {field: getattr(module_call_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
-    row["outputs"] = [output.layer_label for output in module_call_log.outputs]
+    row["output_ops"] = list(module_call_log.output_ops)
     row["output_structure"] = (
         repr(module_call_log.output_structure)
         if module_call_log.output_structure is not None
@@ -149,6 +159,7 @@ def _module_call_log_to_row(module_call_log: "ModuleCall") -> Dict[str, Any]:
     return row
 
 
+@dataclass(init=False)
 class ModuleCall:
     """Per-(module, call_index) data for one invocation of a module.
 
@@ -156,67 +167,142 @@ class ModuleCall:
     this particular invocation, the captured forward arguments, and
     the call-graph edges (parent/children in the module invocation tree).
 
-    ``layers`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
+    ``ops`` stores **pass-qualified** labels (e.g. ``"conv2d_1_1:1"``)
     that resolve to individual Op entries.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "address": FieldPolicy.KEEP,
+        "all_addresses": FieldPolicy.KEEP,
+        "class_name": FieldPolicy.KEEP,
+        "class_qualname": FieldPolicy.KEEP,
+        "cls": FieldPolicy.DROP,
         "call_index": FieldPolicy.KEEP,
         "call_label": FieldPolicy.KEEP,
-        "layers": FieldPolicy.KEEP,
+        "ordinal_index": FieldPolicy.KEEP,
+        "ops": FieldPolicy.KEEP,
+        "input_ops": FieldPolicy.KEEP,
         "input_layers": FieldPolicy.KEEP,
+        "output_ops": FieldPolicy.KEEP,
         "output_layers": FieldPolicy.KEEP,
-        "outputs": FieldPolicy.KEEP,
         "output_structure": FieldPolicy.KEEP,
         "forward_args": FieldPolicy.BLOB_RECURSIVE,
         "forward_kwargs": FieldPolicy.BLOB_RECURSIVE,
+        "forward_arg_names": FieldPolicy.KEEP,
+        "num_forward_args_total": FieldPolicy.KEEP,
+        "num_forward_pos_args": FieldPolicy.KEEP,
+        "num_forward_kwargs": FieldPolicy.KEEP,
         "forward_args_summary": FieldPolicy.KEEP,
         "forward_kwargs_summary": FieldPolicy.KEEP,
+        "forward_duration": FieldPolicy.KEEP,
+        "code_context": FieldPolicy.KEEP,
+        "module_call_stack": FieldPolicy.KEEP,
         "call_parent": FieldPolicy.KEEP,
         "call_children": FieldPolicy.KEEP,
-        "all_addresses": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
+
+    address: str
+    all_addresses: List[str]
+    cls: type[Any] | None
+    class_name: str
+    class_qualname: str
+    call_index: int
+    call_label: str
+    ordinal_index: int
+    ops: List[str]
+    input_ops: List[str]
+    input_layers: List[str]
+    output_ops: List[str]
+    output_layers: List[str]
+    output_structure: "ContainerSpec | None"
+    forward_args: tuple[Any, ...] | None
+    forward_kwargs: dict[str, Any] | None
+    forward_arg_names: List[str]
+    num_forward_args_total: int
+    num_forward_pos_args: int
+    num_forward_kwargs: int
+    forward_args_summary: str
+    forward_kwargs_summary: str
+    forward_duration: float
+    code_context: List["FuncCallLocation"]
+    module_call_stack: List[str]
+    call_parent: Optional[str]
+    call_children: List[str]
 
     def __init__(
         self,
         address: str,
         call_index: int,
         call_label: str,
-        layers: List[str],
+        ops: List[str],
         input_layers: List[str],
         output_layers: List[str],
-        outputs: list["Op"] | None = None,
+        output_ops: List[str] | None = None,
         output_structure: "ContainerSpec | None" = None,
         forward_args: tuple[Any, ...] | None = None,
         forward_kwargs: dict[str, Any] | None = None,
+        forward_arg_names: List[str] | None = None,
+        forward_duration: float = 0.0,
+        code_context: List["FuncCallLocation"] | None = None,
+        module_call_stack: List[str] | None = None,
         call_parent: Optional[str] = None,
         call_children: Optional[List[str]] = None,
         all_addresses: Optional[List[str]] = None,
+        cls: type[Any] | None = None,
+        class_name: str = "",
+        class_qualname: str = "",
+        ordinal_index: int = 0,
         _source_trace: "Trace | None" = None,
     ) -> None:
         self.address = address
+        self.all_addresses = all_addresses if all_addresses is not None else [address]
+        self.cls = cls
+        self.class_name = class_name
+        self.class_qualname = class_qualname
         self.call_index = call_index
         self.call_label = call_label  # e.g. "features.0:1"
-        self.layers = layers  # pass-qualified layer labels
+        self.ordinal_index = ordinal_index
+        self.ops = ops  # pass-qualified Op labels
         self.input_layers = input_layers
         self.output_layers = output_layers
-        self.outputs = outputs if outputs is not None else []
+        self.input_ops = list(input_layers)
+        self.output_ops = output_ops if output_ops is not None else list(output_layers)
         self.output_structure = output_structure
         self.forward_args = forward_args
         self.forward_kwargs = forward_kwargs
+        self.forward_arg_names = forward_arg_names if forward_arg_names is not None else []
+        self.num_forward_pos_args = len(forward_args) if forward_args is not None else 0
+        self.num_forward_kwargs = len(forward_kwargs) if forward_kwargs is not None else 0
+        self.num_forward_args_total = self.num_forward_pos_args + self.num_forward_kwargs
         self.forward_args_summary = ""
         self.forward_kwargs_summary = ""
+        self.forward_duration = forward_duration
+        self.code_context = code_context if code_context is not None else []
+        self.module_call_stack = module_call_stack if module_call_stack is not None else []
         self.call_parent = call_parent
         self.call_children = call_children if call_children is not None else []
-        self.all_addresses = all_addresses if all_addresses is not None else [address]
         self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
+
+    @property
+    def module(self) -> "Module":
+        """Return the Module record invoked by this call."""
+
+        trace = self._source_trace
+        if trace is None:
+            raise RuntimeError("ModuleCall not bound to a Trace")
+        return cast("Module", trace.modules[self.address])
 
     @property
     def num_layers(self) -> int:
         """Number of layers in this pass."""
-        return len(self.layers)
+        return len(self.ops)
+
+    @property
+    def num_ops(self) -> int:
+        """Number of Ops in this module call."""
+
+        return len(self.ops)
 
     @property
     def name(self) -> str:
@@ -236,6 +322,63 @@ class ModuleCall:
         return len(self.all_addresses) > 1
 
     @property
+    def has_saved_forward_args(self) -> bool:
+        """Whether forward arguments were captured for this module call."""
+
+        return self.forward_args is not None or self.forward_kwargs is not None
+
+    @property
+    def num_param_tensors(self) -> int:
+        """Number of parameter tensors owned by the called Module."""
+
+        return self.module.num_param_tensors
+
+    @property
+    def num_param_tensors_trainable(self) -> int:
+        """Number of trainable parameter tensors owned by the called Module."""
+
+        return self.module.num_param_tensors_trainable
+
+    @property
+    def num_param_tensors_frozen(self) -> int:
+        """Number of frozen parameter tensors owned by the called Module."""
+
+        return self.module.num_param_tensors_frozen
+
+    @property
+    def has_trainable_params(self) -> bool:
+        """Whether the called Module owns trainable parameters."""
+
+        return self.module.has_trainable_params
+
+    @property
+    def has_frozen_params(self) -> bool:
+        """Whether the called Module owns frozen parameters."""
+
+        return self.module.has_frozen_params
+
+    @property
+    def func_calls_duration(self) -> float:
+        """Inclusive duration of torch function calls inside this ModuleCall."""
+
+        trace = self._source_trace
+        if trace is None:
+            return 0.0
+        return sum(getattr(trace.ops[label], "func_duration", 0.0) or 0.0 for label in self.ops)
+
+    @property
+    def func_calls_duration_str(self) -> str:
+        """Human-readable inclusive torch function duration."""
+
+        return _duration_str(self.func_calls_duration)
+
+    @property
+    def forward_duration_str(self) -> str:
+        """Human-readable wall-clock forward duration."""
+
+        return _duration_str(self.forward_duration)
+
+    @property
     def _source_trace(self) -> "Trace | None":
         """Owning Trace, if still alive."""
 
@@ -252,11 +395,9 @@ class ModuleCall:
         """Return one field from all output layers."""
 
         trace = self._source_trace
-        if self.outputs:
-            return [getattr(output, field_name) for output in self.outputs]
         if trace is None:
             return []
-        return [getattr(trace[layer_label], field_name) for layer_label in self.output_layers]
+        return [getattr(trace.ops[op_label], field_name) for op_label in self.output_ops]
 
     def _single_output_value(self, field_name: str) -> Any:
         """Return one output field, requiring exactly one output."""
@@ -267,7 +408,7 @@ class ModuleCall:
 
             raise MultiOutputModuleError(
                 f"ModuleCall '{self.call_label}' has {len(values)} outputs; "
-                "use .outs[i] or .outputs[i]."
+                "use .outs[i] or resolve .output_ops[i]."
             )
         return values[0]
 
@@ -343,17 +484,11 @@ class ModuleCall:
 
         return self._single_output_value("grad")
 
-    @property
-    def inputs(self) -> List[str]:
-        """Module-pass input layer labels."""
-
-        return self.input_layers
-
     def __repr__(self) -> str:
         """Show pass label, layer count, and children."""
         lines = [
             f"ModuleCall: {self.call_label}",
-            f"  layers: {self.num_layers}",
+            f"  ops: {self.num_ops}",
         ]
         if self.input_layers:
             lines.append(f"  input_layers: {self.input_layers}")
@@ -459,20 +594,40 @@ class ModuleCall:
             state["call_label"] = state.pop("pass_label")
         if "all_addresses" not in state and "all_module_addresses" in state:
             state["all_addresses"] = state.pop("all_module_addresses")
+        if "ops" not in state and "layers" in state:
+            state["ops"] = state.pop("layers")
+        if "input_ops" not in state:
+            state["input_ops"] = list(state.get("input_layers", []))
+        if "output_ops" not in state:
+            if "output_labels" in state:
+                state["output_ops"] = state.pop("output_labels")
+            else:
+                state["output_ops"] = list(state.get("output_layers", []))
         default_fill_state(
             state,
             defaults={
                 "all_addresses": [state["address"]],
+                "cls": None,
+                "class_name": "",
+                "class_qualname": "",
+                "ordinal_index": 0,
+                "forward_arg_names": [],
+                "num_forward_args_total": 0,
+                "num_forward_pos_args": 0,
+                "num_forward_kwargs": 0,
                 "forward_args_summary": "",
                 "forward_kwargs_summary": "",
+                "forward_duration": 0.0,
+                "code_context": [],
+                "module_call_stack": [],
                 "_source_trace_ref": None,
-                "outputs": [],
                 "output_structure": None,
             },
         )
         self.__dict__.update(state)
 
 
+@dataclass(init=False)
 class Module:
     """Aggregate metadata for one nn.Module across all its invocations.
 
@@ -480,23 +635,27 @@ class Module:
     static metadata (source file, class name, hierarchy) and dynamic
     data (layers computed, parameter usage, pass-level detail).
 
-    ``layers`` stores **no-pass** labels (e.g. ``"conv2d_1_1"``),
+    ``layer_labels`` stores **no-pass** labels (e.g. ``"conv2d_1_1"``),
     pointing to aggregate Layer entries.  For per-pass detail, access
-    ``self.ops[call_index].layers`` which stores pass-qualified labels.
+    ``self.ops[call_index].ops`` which stores pass-qualified labels.
 
-    For single-pass modules, per-pass fields (``layers``, ``input_layers``,
+    For single-pass modules, per-pass fields (``input_layers``,
     ``output_layers``, ``forward_args``, ``forward_kwargs``) are accessible
     directly via ``_single_pass_or_error()`` delegation to ``ops[1]``.
     """
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
         "cls": FieldPolicy.DROP,
         "class_name": FieldPolicy.KEEP,
         "class_qualname": FieldPolicy.KEEP,
-        "source_file": FieldPolicy.KEEP,
-        "source_line": FieldPolicy.KEEP,
+        "class_source_file": FieldPolicy.KEEP,
+        "class_source_line": FieldPolicy.KEEP,
+        "init_source_file": FieldPolicy.KEEP,
+        "init_source_line": FieldPolicy.KEEP,
+        "forward_source_file": FieldPolicy.KEEP,
+        "forward_source_line": FieldPolicy.KEEP,
         "class_docstring": FieldPolicy.KEEP,
         "init_signature": FieldPolicy.KEEP,
         "init_docstring": FieldPolicy.KEEP,
@@ -511,26 +670,83 @@ class Module:
         "num_calls": FieldPolicy.KEEP,
         "ops": FieldPolicy.KEEP,
         "call_labels": FieldPolicy.KEEP,
-        "layers": FieldPolicy.KEEP,
+        "layer_labels": FieldPolicy.KEEP,
         "params": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
         "param_memory": FieldPolicy.KEEP,
-        "has_trainable_params": FieldPolicy.KEEP,
         "buffer_layers": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
-        "is_train_mode": FieldPolicy.KEEP,
-        "forward_pre_hook_info": FieldPolicy.KEEP,
-        "forward_hook_info": FieldPolicy.KEEP,
-        "backward_pre_hook_info": FieldPolicy.KEEP,
-        "backward_hook_info": FieldPolicy.KEEP,
-        "full_backward_pre_hook_info": FieldPolicy.KEEP,
-        "full_backward_hook_info": FieldPolicy.KEEP,
+        "training": FieldPolicy.KEEP,
+        "forward_pre_hooks": FieldPolicy.KEEP,
+        "forward_hooks": FieldPolicy.KEEP,
+        "backward_pre_hooks": FieldPolicy.KEEP,
+        "backward_hooks": FieldPolicy.KEEP,
+        "full_backward_pre_hooks": FieldPolicy.KEEP,
+        "full_backward_hooks": FieldPolicy.KEEP,
         "custom_attributes": FieldPolicy.BLOB_RECURSIVE,
         "custom_methods": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
+
+    address: str
+    all_addresses: List[str]
+    cls: type[Any] | None
+    class_name: str
+    class_qualname: str
+    class_source_file: Optional[str]
+    class_source_line: Optional[int]
+    init_source_file: Optional[str]
+    init_source_line: Optional[int]
+    forward_source_file: Optional[str]
+    forward_source_line: Optional[int]
+    class_docstring: Optional[str]
+    init_signature: Optional[str]
+    init_docstring: Optional[str]
+    forward_signature: Optional[str]
+    forward_docstring: Optional[str]
+    address_parent: Optional[str]
+    address_children: List[str]
+    address_depth: int
+    call_parent: Optional[str]
+    call_children: List[str]
+    call_depth: int
+    num_calls: int
+    ops: ModuleCallAccessor
+    call_labels: List[str]
+    layer_labels: List[str]
+    input_ops: List[str]
+    input_layers: List[str]
+    output_ops: List[str]
+    output_layers: List[str]
+    output_structure: "ContainerSpec | None"
+    params: "ParamAccessor"
+    num_params: int
+    num_params_trainable: int
+    num_params_frozen: int
+    num_param_tensors: int
+    num_param_tensors_trainable: int
+    num_param_tensors_frozen: int
+    param_memory: int
+    has_trainable_params: bool
+    has_frozen_params: bool
+    buffer_layers: List[str]
+    training: bool
+    forward_pre_hooks: List[HookInfo]
+    forward_hooks: List[HookInfo]
+    backward_pre_hooks: List[HookInfo]
+    backward_hooks: List[HookInfo]
+    full_backward_pre_hooks: List[HookInfo]
+    full_backward_hooks: List[HookInfo]
+    custom_attributes: Dict[str, Any]
+    custom_methods: List[str]
+    forward_args_summary: str
+    forward_kwargs_summary: str
+    forward_duration: float
+    total_forward_duration: float
+    func_calls_duration: float
+    total_func_calls_duration: float
 
     def __init__(
         self,
@@ -542,8 +758,12 @@ class Module:
         class_name: str = "",
         class_qualname: str = "",
         # Source info
-        source_file: Optional[str] = None,
-        source_line: Optional[int] = None,
+        class_source_file: Optional[str] = None,
+        class_source_line: Optional[int] = None,
+        init_source_file: Optional[str] = None,
+        init_source_line: Optional[int] = None,
+        forward_source_file: Optional[str] = None,
+        forward_source_line: Optional[int] = None,
         class_docstring: Optional[str] = None,
         init_signature: Optional[str] = None,
         init_docstring: Optional[str] = None,
@@ -562,24 +782,23 @@ class Module:
         ops: Optional[Dict[int, "ModuleCall"]] = None,
         call_labels: Optional[List[str]] = None,
         # Layers (aggregate)
-        layers: Optional[List[str]] = None,
+        layer_labels: Optional[List[str]] = None,
         # Parameters
         params: Optional["ParamAccessor"] = None,
         num_params: int = 0,
         num_params_trainable: int = 0,
         num_params_frozen: int = 0,
         param_memory: int = 0,
-        has_trainable_params: bool = False,
         # Buffers
         buffer_layers: Optional[List[str]] = None,
         # Module state
-        is_train_mode: bool = True,
-        forward_pre_hook_info: HookInfo | None = None,
-        forward_hook_info: HookInfo | None = None,
-        backward_pre_hook_info: HookInfo | None = None,
-        backward_hook_info: HookInfo | None = None,
-        full_backward_pre_hook_info: HookInfo | None = None,
-        full_backward_hook_info: HookInfo | None = None,
+        training: bool = True,
+        forward_pre_hooks: List[HookInfo] | None = None,
+        forward_hooks: List[HookInfo] | None = None,
+        backward_pre_hooks: List[HookInfo] | None = None,
+        backward_hooks: List[HookInfo] | None = None,
+        full_backward_pre_hooks: List[HookInfo] | None = None,
+        full_backward_hooks: List[HookInfo] | None = None,
         custom_attributes: Optional[Dict[str, Any]] = None,
         custom_methods: Optional[List[str]] = None,
         # Back-reference
@@ -591,8 +810,12 @@ class Module:
         self.class_name = class_name
         self.class_qualname = class_qualname
 
-        self.source_file = source_file
-        self.source_line = source_line
+        self.class_source_file = class_source_file
+        self.class_source_line = class_source_line
+        self.init_source_file = init_source_file
+        self.init_source_line = init_source_line
+        self.forward_source_file = forward_source_file
+        self.forward_source_line = forward_source_line
         self.class_docstring = class_docstring
         self.init_signature = init_signature
         self.init_docstring = init_docstring
@@ -611,9 +834,9 @@ class Module:
         self.ops = ModuleCallAccessor(ops)
         self.call_labels = call_labels if call_labels is not None else []
 
-        # layers stores NO-PASS labels (e.g. "conv2d_1_1") -> Layer.
-        # Contrast with ModuleCall.layers which stores pass-qualified labels.
-        self.layers = layers if layers is not None else []
+        # layer_labels stores NO-PASS labels (e.g. "conv2d_1_1") -> Layer.
+        # Contrast with ModuleCall.ops which stores pass-qualified labels.
+        self.layer_labels = layer_labels if layer_labels is not None else []
 
         from .param_log import ParamAccessor
 
@@ -622,18 +845,18 @@ class Module:
         self.num_params_trainable = num_params_trainable
         self.num_params_frozen = num_params_frozen
         self.param_memory = param_memory
-        self.has_trainable_params = has_trainable_params
-
         self.buffer_layers = buffer_layers if buffer_layers is not None else []
         self._buffer_accessor: Any = None  # populated by _build_module_logs
 
-        self.is_train_mode = is_train_mode
-        self.forward_pre_hook_info = forward_pre_hook_info or HookInfo()
-        self.forward_hook_info = forward_hook_info or HookInfo()
-        self.backward_pre_hook_info = backward_pre_hook_info or HookInfo()
-        self.backward_hook_info = backward_hook_info or HookInfo()
-        self.full_backward_pre_hook_info = full_backward_pre_hook_info or HookInfo()
-        self.full_backward_hook_info = full_backward_hook_info or HookInfo()
+        self.training = training
+        self.forward_pre_hooks = forward_pre_hooks if forward_pre_hooks is not None else []
+        self.forward_hooks = forward_hooks if forward_hooks is not None else []
+        self.backward_pre_hooks = backward_pre_hooks if backward_pre_hooks is not None else []
+        self.backward_hooks = backward_hooks if backward_hooks is not None else []
+        self.full_backward_pre_hooks = (
+            full_backward_pre_hooks if full_backward_pre_hooks is not None else []
+        )
+        self.full_backward_hooks = full_backward_hooks if full_backward_hooks is not None else []
         self.custom_attributes = custom_attributes if custom_attributes is not None else {}
         self.custom_methods = custom_methods if custom_methods is not None else []
 
@@ -660,7 +883,33 @@ class Module:
     @property
     def num_layers(self) -> int:
         """Number of unique layers in this module."""
-        return len(self.layers)
+        return len(self.layer_labels)
+
+    @property
+    def layers(self) -> list[Any]:
+        """Layer records belonging to this Module."""
+
+        trace = self._source_trace
+        if trace is None:
+            return list(self.layer_labels)
+        return [trace.layers[label] for label in self.layer_labels]
+
+    @property
+    def call_parent_module(self) -> "Module | None":
+        """Parent Module in the dynamic call tree, if any."""
+
+        if self.call_parent is None or self._source_trace is None:
+            return None
+        return cast("Module", self._source_trace.modules[self.call_parent])
+
+    @property
+    def call_children_modules(self) -> list["Module"]:
+        """Child Modules in the dynamic call tree."""
+
+        trace = self._source_trace
+        if trace is None:
+            return []
+        return [cast("Module", trace.modules[address]) for address in self.call_children]
 
     @property
     def param_memory_str(self) -> str:
@@ -677,17 +926,17 @@ class Module:
     def has_forward_hooks(self) -> bool:
         """Whether any forward hook registry is nonempty."""
 
-        return self.forward_pre_hook_info.has_any or self.forward_hook_info.has_any
+        return bool(self.forward_pre_hooks or self.forward_hooks)
 
     @property
     def has_backward_hooks(self) -> bool:
         """Whether any backward hook registry is nonempty."""
 
-        return (
-            self.backward_pre_hook_info.has_any
-            or self.backward_hook_info.has_any
-            or self.full_backward_pre_hook_info.has_any
-            or self.full_backward_hook_info.has_any
+        return bool(
+            self.backward_pre_hooks
+            or self.backward_hooks
+            or self.full_backward_pre_hooks
+            or self.full_backward_hooks
         )
 
     @property
@@ -718,16 +967,19 @@ class Module:
             defaults={
                 "_buffer_accessor": None,
                 "_source_trace_ref": None,
-                "forward_pre_hook_info": HookInfo(),
-                "forward_hook_info": HookInfo(
-                    count=int(bool(state.pop("has_forward_hooks", False)))
-                ),
-                "backward_pre_hook_info": HookInfo(),
-                "backward_hook_info": HookInfo(
-                    count=int(bool(state.pop("has_backward_hooks", False)))
-                ),
-                "full_backward_pre_hook_info": HookInfo(),
-                "full_backward_hook_info": HookInfo(),
+                "class_source_file": None,
+                "class_source_line": None,
+                "init_source_file": None,
+                "init_source_line": None,
+                "forward_source_file": None,
+                "forward_source_line": None,
+                "training": True,
+                "forward_pre_hooks": [],
+                "forward_hooks": [],
+                "backward_pre_hooks": [],
+                "backward_hooks": [],
+                "full_backward_pre_hooks": [],
+                "full_backward_hooks": [],
             },
         )
         self.__dict__.update(state)
@@ -768,6 +1020,15 @@ class Module:
         return list(dict.fromkeys(labels))
 
     @property
+    def input_ops(self) -> List[str]:
+        """Aggregate input Op labels across module calls."""
+
+        labels: list[str] = []
+        for call in self.ops.values():
+            labels.extend(call.input_ops)
+        return list(dict.fromkeys(labels))
+
+    @property
     def output_layers(self) -> List[str]:
         """Aggregate module output layer labels.
 
@@ -777,29 +1038,19 @@ class Module:
             Output layer labels across module calls, preserving multi-output
             leaves and pass qualification.
         """
-        outputs = self.outputs
-        if outputs:
-            return [output.layer_label for output in outputs]
         labels: list[str] = []
         for call in self.ops.values():
             labels.extend(call.output_layers)
-        return labels
+        return list(dict.fromkeys(labels))
 
     @property
-    def outputs(self) -> list["Op"]:
-        """Aggregate output OpLogs across all module calls.
+    def output_ops(self) -> List[str]:
+        """Aggregate output Op labels across module calls."""
 
-        Returns
-        -------
-        list[Op]
-            Output operations in source-emission order within each call and
-            call-index order across calls.
-        """
-
-        outputs: list["Op"] = []
+        labels: list[str] = []
         for call in self.ops.values():
-            outputs.extend(call.outputs)
-        return outputs
+            labels.extend(call.output_ops)
+        return list(dict.fromkeys(labels))
 
     @property
     def output_structure(self) -> "ContainerSpec | None":
@@ -838,6 +1089,120 @@ class Module:
             Captured keyword arguments, or ``None`` when unavailable.
         """
         return cast("dict[str, Any] | None", self._single_pass_or_error("forward_kwargs"))
+
+    @property
+    def forward_args_summary(self) -> str:
+        """Human-readable forward positional arguments for a single-call Module."""
+
+        return cast(str, self._single_pass_or_error("forward_args_summary"))
+
+    @property
+    def forward_kwargs_summary(self) -> str:
+        """Human-readable forward keyword arguments for a single-call Module."""
+
+        return cast(str, self._single_pass_or_error("forward_kwargs_summary"))
+
+    @property
+    def forward_duration(self) -> float:
+        """Wall-clock duration for this Module's single forward call."""
+
+        return cast(float, self._single_pass_or_error("forward_duration"))
+
+    @property
+    def forward_duration_str(self) -> str:
+        """Human-readable single-call forward duration."""
+
+        return _duration_str(self.forward_duration)
+
+    @property
+    def total_forward_duration(self) -> float:
+        """Sum of wall-clock forward durations across all calls."""
+
+        return sum(call.forward_duration for call in self.ops.values())
+
+    @property
+    def total_forward_duration_str(self) -> str:
+        """Human-readable total forward duration."""
+
+        return _duration_str(self.total_forward_duration)
+
+    @property
+    def func_calls_duration(self) -> float:
+        """Inclusive torch function duration for this Module's single call."""
+
+        return cast(float, self._single_pass_or_error("func_calls_duration"))
+
+    @property
+    def func_calls_duration_str(self) -> str:
+        """Human-readable single-call torch function duration."""
+
+        return _duration_str(self.func_calls_duration)
+
+    @property
+    def total_func_calls_duration(self) -> float:
+        """Sum of inclusive torch function durations across all calls."""
+
+        return sum(call.func_calls_duration for call in self.ops.values())
+
+    @property
+    def total_func_calls_duration_str(self) -> str:
+        """Human-readable total torch function duration."""
+
+        return _duration_str(self.total_func_calls_duration)
+
+    @property
+    def num_param_tensors(self) -> int:
+        """Number of parameter tensors owned by this Module."""
+
+        return len(self.params)
+
+    @property
+    def num_param_tensors_trainable(self) -> int:
+        """Number of trainable parameter tensors owned by this Module."""
+
+        return sum(1 for param in self.params if param.trainable)
+
+    @property
+    def num_param_tensors_frozen(self) -> int:
+        """Number of frozen parameter tensors owned by this Module."""
+
+        return sum(1 for param in self.params if not param.trainable)
+
+    @property
+    def has_trainable_params(self) -> bool:
+        """Whether this Module owns at least one trainable parameter."""
+
+        return self.num_params_trainable > 0
+
+    @property
+    def has_frozen_params(self) -> bool:
+        """Whether this Module owns at least one frozen parameter."""
+
+        return self.num_params_frozen > 0
+
+    @property
+    def class_source_location(self) -> str | None:
+        """Combined class source location as ``file:line``."""
+
+        if self.class_source_file is None or self.class_source_line is None:
+            return None
+        return f"{self.class_source_file}:{self.class_source_line}"
+
+    @property
+    def init_source_location(self) -> str | None:
+        """Combined ``__init__`` source location as ``file:line``."""
+
+        if self.init_source_file is None or self.init_source_line is None:
+            return None
+        return f"{self.init_source_file}:{self.init_source_line}"
+
+    @property
+    def forward_source_location(self) -> str | None:
+        """Combined ``forward`` source location as ``file:line``."""
+
+        if self.forward_source_file is None or self.forward_source_line is None:
+            return None
+        return f"{self.forward_source_file}:{self.forward_source_line}"
 
     def _single_call_or_error(self) -> ModuleCall:
         """Return the only ModuleCall or raise for multi-call modules."""
@@ -913,7 +1278,7 @@ class Module:
         if self._source_trace is None:
             return 0
         total = 0
-        for label in self.layers:
+        for label in self.layer_labels:
             entry = self._source_trace[label]
             val = getattr(entry, field, None)
             if val is not None:
@@ -978,10 +1343,10 @@ class Module:
             raise RuntimeError("No source Trace reference; cannot index into layers.")
         if isinstance(ix, str):
             # String label lookup within this module's layers
-            if ix in self.layers:
+            if ix in self.layer_labels:
                 return self._source_trace[ix]
             # Try substring match within module layers
-            matches = [lbl for lbl in self.layers if ix in lbl]
+            matches = [lbl for lbl in self.layer_labels if ix in lbl]
             if len(matches) == 1:
                 return self._source_trace[matches[0]]
             elif len(matches) > 1:
@@ -990,13 +1355,13 @@ class Module:
                     f"'{self.address}': {', '.join(matches[:5])}"
                 )
             raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
-        return self._source_trace[self.layers[ix]]
+        return self._source_trace[self.layer_labels[ix]]
 
     def __iter__(self) -> Iterator[Any]:
         """Iterate over Op entries for all layers in this module."""
         if self._source_trace is None:
-            return iter(self.layers)
-        return iter(self._source_trace[label] for label in self.layers)
+            return iter(self.layer_labels)
+        return iter(self._source_trace[label] for label in self.layer_labels)
 
     def draw(self, **kwargs: Any) -> str:
         """Render this module's focused graph.
@@ -1040,7 +1405,7 @@ class Module:
             ) from e
 
         rows = []
-        for label in self.layers:
+        for label in self.layer_labels:
             entry = self._source_trace[label]
             rows.append(
                 {
@@ -1048,7 +1413,7 @@ class Module:
                     "layer_type": entry.layer_type,
                     "shape": entry.shape,
                     "dtype": entry.dtype,
-                    "call_index": entry.call_index,
+                    "num_ops": getattr(entry, "num_ops", 1),
                     "func_name": entry.func_name,
                 }
             )
