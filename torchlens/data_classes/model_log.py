@@ -904,7 +904,6 @@ class Trace:
         "capture_mode": FieldPolicy.KEEP,
         "_layers_logged": FieldPolicy.KEEP,
         "_layers_saved": FieldPolicy.KEEP,
-        "keep_unsaved_layers": FieldPolicy.KEEP,
         "keep_orphans": FieldPolicy.KEEP,
         "intervention_ready": FieldPolicy.KEEP,
         "save_arg_templates": FieldPolicy.KEEP,
@@ -1012,7 +1011,6 @@ class Trace:
         "conditionals": FieldPolicy.KEEP,
         "orphan_ops": FieldPolicy.KEEP,
         "orphan_logs": FieldPolicy.KEEP,
-        "unlogged_ops": FieldPolicy.KEEP,
         "_saved_grads_set": FieldPolicy.DROP,
         "layers_with_params": FieldPolicy.KEEP,
         "ops_with_params": FieldPolicy.KEEP,
@@ -1091,7 +1089,6 @@ class Trace:
         gradient_transform: Optional[GradientPostfunc] = None,
         save_raw_outs: bool = True,
         save_raw_gradients: bool = True,
-        keep_unsaved_layers: bool = True,
         keep_orphans: bool = False,
         save_arg_values: bool = False,
         save_gradients: bool = False,
@@ -1126,8 +1123,6 @@ class Trace:
             gradient_transform: Optional function applied to each grad before saving.
             save_raw_outs: Whether raw outs are retained when a postfunc is set.
             save_raw_gradients: Whether raw grads are retained when a postfunc is set.
-            keep_unsaved_layers: If False, layers without saved outs are removed
-                from the final log (but still logged during the pass).
             keep_orphans: If True, orphan island ops remain in raw metadata and
                 are exposed via ``trace.orphans``.
             save_arg_values: Whether to deep-copy each operation's input arguments.
@@ -1177,7 +1172,6 @@ class Trace:
         self.capture_mode: Literal["exhaustive", "fast", "predicate"] = "exhaustive"
         self._layers_logged = False
         self._layers_saved = False
-        self.keep_unsaved_layers = keep_unsaved_layers
         self.keep_orphans = keep_orphans
         self.intervention_ready = False
         self.save_arg_templates = False
@@ -1305,7 +1299,6 @@ class Trace:
         self.conditionals = ConditionalAccessor()
         self.orphan_ops: List[str] = []
         self.orphan_logs: tuple[Op, ...] = ()
-        self.unlogged_ops: List[str] = []
         self._saved_grads_set: set[str] = set()
         self.layers_with_params: Dict[str, List[Any]] = defaultdict(list)
         # Maps equivalence_class -> set of layer labels that share
@@ -2189,7 +2182,7 @@ class Trace:
             Field value for the forked pass.
         """
 
-        if field_name in {"_source_trace_ref", "parent_layer_log"}:
+        if field_name == "_source_trace_ref":
             return None
         policy = Op.FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
@@ -2232,21 +2225,18 @@ class Trace:
             (key, remap_pass(layer)) for key, layer in parent.layer_dict_all_keys.items()
         )
         fork_layer_logs: dict[str, Layer] = OrderedDict()
-        for label, parent_layer_log in parent.layer_logs.items():
-            fork_layer_log = copy.copy(parent_layer_log)
+        for label, parent_layer in parent.layer_logs.items():
+            fork_layer_log = copy.copy(parent_layer)
             fork_layer_log.__dict__ = {
-                key: self._copy_fork_value(value)
-                for key, value in parent_layer_log.__dict__.items()
+                key: self._copy_fork_value(value) for key, value in parent_layer.__dict__.items()
             }
             fork_layer_log.source_trace = self
             fork_layer_log.ops = OpAccessor(
                 OrderedDict(
                     (call_index, remap_pass(layer_pass))
-                    for call_index, layer_pass in parent_layer_log.ops.items()
+                    for call_index, layer_pass in parent_layer.ops.items()
                 )
             )
-            for layer_pass in fork_layer_log.ops.values():
-                layer_pass.parent_layer_log = fork_layer_log
             if getattr(fork_layer_log, "equivalence_class", None) in self.op_equivalence_classes:
                 fork_layer_log.equivalent_ops = self.op_equivalence_classes[
                     fork_layer_log.equivalence_class
@@ -2259,9 +2249,6 @@ class Trace:
 
         for layer_pass in self.layer_list:
             layer_pass.source_trace = self
-            parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
-            if parent_layer_log is not None:
-                layer_pass.parent_layer_log = parent_layer_log
         for layer_log in self.layer_logs.values():
             layer_log.source_trace = self
 
@@ -2606,12 +2593,8 @@ class Trace:
             layer_log.source_trace = self
             for layer_pass in layer_log.ops.values():
                 layer_pass.source_trace = self
-                layer_pass.parent_layer_log = layer_log
         for layer_pass in self.layer_list:
             layer_pass.source_trace = self
-            parent_layer_log = self.layer_logs.get(layer_pass.layer_label_no_pass)
-            if parent_layer_log is not None:
-                layer_pass.parent_layer_log = parent_layer_log
         for grad_fn_handle in self.grad_fn_logs.values():
             grad_fn_handle.source_trace = self
             if grad_fn_handle.op is not None:

@@ -160,7 +160,6 @@ def test_trace_defaults_are_stable(
 
     assert result is dummy_logs[-1]
     assert captured_calls[-1]["layers_to_save"] is None
-    assert captured_calls[-1]["keep_unsaved_layers"] is True
     assert captured_calls[-1]["output_device"] == "same"
     assert captured_calls[-1]["out_transform"] is None
     assert captured_calls[-1]["mark_layer_depths"] is False
@@ -189,14 +188,12 @@ def test_trace_accepts_explicit_opt_in_overrides(
         _TinyModel(),
         _tiny_input(),
         layers_to_save=None,
-        keep_unsaved_layers=False,
         compute_input_output_distances=True,
         save_code_context=True,
         recurrence_detection=False,
     )
 
     assert result is dummy_logs[-1]
-    assert captured_calls[-1]["keep_unsaved_layers"] is False
     assert captured_calls[-1]["mark_layer_depths"] is True
     assert captured_calls[-1]["save_code_context"] is True
     assert captured_calls[-1]["recurrence_detection"] is False
@@ -287,7 +284,6 @@ def test_summary_uses_metadata_only_defaults(
 
     assert result == "summary output"
     assert captured_calls[-1]["layers_to_save"] is None
-    assert captured_calls[-1]["keep_unsaved_layers"] is True
     assert captured_calls[-1]["recurrence_detection"] is True
     assert dummy_logs[-1].summary_calls[-1] == {"depth": 2}
     assert dummy_logs[-1].cleanup_calls == 1
@@ -309,7 +305,6 @@ def test_validate_forward_pass_uses_validation_overrides(
 
     assert result is True
     assert captured_calls[-1]["layers_to_save"] == "all"
-    assert captured_calls[-1]["keep_unsaved_layers"] is True
     assert captured_calls[-1]["out_transform"] is None
     assert captured_calls[-1]["mark_layer_depths"] is False
     assert captured_calls[-1]["detach_saved_activations"] is False

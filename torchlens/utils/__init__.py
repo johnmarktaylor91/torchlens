@@ -354,7 +354,7 @@ def _log_ops_for_mode(
         trace = trace_fn(
             model,
             x,
-            capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
+            capture=CaptureOptions(layers_to_save=None),
         )
     finally:
         model.train(original_mode)
@@ -422,7 +422,7 @@ def flop_count(model: nn.Module, x: Any, *, count_fma_as_two: bool = False) -> i
     trace = trace_fn(
         model,
         x,
-        capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
+        capture=CaptureOptions(layers_to_save=None),
     )
     return int(sum(getattr(layer, "flops_forward", None) or 0 for layer in trace.layer_list))
 
@@ -461,7 +461,7 @@ def peek_graph(
     trace = trace_fn(
         model,
         x,
-        capture=CaptureOptions(layers_to_save=None, keep_unsaved_layers=True),
+        capture=CaptureOptions(layers_to_save=None),
     )
     trace.draw(
         vis_mode=view,

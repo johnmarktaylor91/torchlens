@@ -39,7 +39,6 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "save_raw_output",
     "layer_visualizers",
     "save_visualizations",
-    "keep_unsaved_layers",
     "keep_orphans",
     "output_device",
     "save_arg_values",
@@ -138,7 +137,6 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "save_raw_output": "save_raw_output",
     "layer_visualizers": "layer_visualizers",
     "save_visualizations": "save_visualizations",
-    "keep_unsaved_layers": "keep_unsaved_layers",
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
     "save_arg_values": "save_arg_values",
@@ -554,8 +552,6 @@ class CaptureOptions:
         Optional mapping from site selectors to per-layer thumbnail callables.
     save_visualizations:
         Whether rendered visualizer image files should be copied into portable bundles.
-    keep_unsaved_layers:
-        Whether metadata-only layers remain in the returned log.
     keep_orphans:
         Whether island ops are retained in raw metadata and exposed via
         ``trace.orphans``.
@@ -624,7 +620,6 @@ class CaptureOptions:
     save_raw_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
     save_visualizations: bool = False
-    keep_unsaved_layers: bool = True
     keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
     save_arg_values: bool = False
@@ -663,7 +658,6 @@ class CaptureOptions:
         save_raw_output: str | bool | MissingType = MISSING,
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None | MissingType = MISSING,
         save_visualizations: bool | MissingType = MISSING,
-        keep_unsaved_layers: bool | MissingType = MISSING,
         keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
         save_arg_values: bool | MissingType = MISSING,
@@ -736,9 +730,6 @@ class CaptureOptions:
             ),
             "save_visualizations": _resolve_option_value(
                 "save_visualizations", save_visualizations, False, specified_fields
-            ),
-            "keep_unsaved_layers": _resolve_option_value(
-                "keep_unsaved_layers", keep_unsaved_layers, True, specified_fields
             ),
             "keep_orphans": _resolve_option_value(
                 "keep_orphans", keep_orphans, False, specified_fields

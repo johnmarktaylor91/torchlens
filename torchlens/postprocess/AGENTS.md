@@ -24,9 +24,8 @@ so identical ops in different modules do not get loop-grouped together. Loop
 detection still rebuilds assignments after expansion to clear stale group references.
 
 ## Step 11 Save Policy
-`_remove_unwanted_entries_and_log_remaining()` applies `layers_to_save`,
-`keep_unsaved_layers`, intervention-readiness retention, and lookup-key construction. It must
-preserve dependencies needed for replay/intervention when those modes request them.
+`_remove_unwanted_entries_and_log_remaining()` applies lookup-key construction while
+preserving dependencies needed for replay/intervention when those modes request them.
 
 ## Steps 18-19 Streaming
 Streaming bundle finalization and eviction live in `finalization.py`. These steps coordinate

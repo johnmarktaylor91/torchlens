@@ -1581,14 +1581,14 @@ class TestVisualizationBugfixes:
         finally:
             log.cleanup()
 
-    def test_vis_keep_unsaved_false(self):
-        """keep_unsaved_layers=False should not crash visualization."""
+    def test_vis_selective_save(self):
+        """Selective activation saving should not crash visualization."""
         model = _SimpleLinear()
-        log = trace_fn(model, torch.randn(2, 10), layers_to_save="all", keep_unsaved_layers=False)
+        log = trace_fn(model, torch.randn(2, 10), layers_to_save="all")
         try:
             from torchlens.visualization.rendering import draw
 
-            draw(log, vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_keep_unsaved_false"))
+            draw(log, vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_selective_save"))
         except ImportError:
             pytest.skip("graphviz not available")
 

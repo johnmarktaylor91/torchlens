@@ -25,10 +25,8 @@ Key mechanisms:
   Values can be static strings or callables receiving ``(trace, node)``
   for dynamic computation.
 
-- **_layers_logged guard**: rendering requires all layers to be present
-  in the Trace (either saved or kept-unsaved).  This check prevents
-  IndexError crashes when ``keep_unsaved_layers=False`` was used and nodes
-  reference absent layers.
+- **_layers_logged guard**: rendering requires all layers to be present in the
+  Trace. This check prevents IndexError crashes when nodes reference absent layers.
 """
 
 import copy
@@ -533,7 +531,7 @@ def draw(
 
     Raises:
         ValueError: If ``_layers_logged`` is False (layers were discarded
-            by ``keep_unsaved_layers=False``).
+            by missing final lookup containers).
     """
     if node_mode not in MODE_REGISTRY:
         raise ValueError(
@@ -592,14 +590,10 @@ def draw(
         module=vis_module_overrides or {},
     )
 
-    # THE _layers_logged guard: prevents IndexError crashes that would
-    # occur when edges reference layers that were discarded by
-    # keep_unsaved_layers=False.  This is the single chokepoint that
-    # protects all downstream rendering code from missing-layer lookups.
+    # THE _layers_logged guard: protects all downstream rendering code from missing-layer lookups.
     if not self._layers_logged:
         raise ValueError(
-            "Must have all layers logged in order to render the graph; either save all layers,"
-            "set keep_unsaved_layers to True, or use show_model_graph."
+            "Must have all layers logged in order to render the graph; use show_model_graph."
         )
 
     # Fix the filename if need be, to remove the extension:
@@ -1108,8 +1102,7 @@ def render_combined_graph(
         raise ValueError("No backward graph is available; call log_backward(loss) first.")
     if not self._layers_logged:
         raise ValueError(
-            "Must have all layers logged in order to render the graph; either save all layers,"
-            "set keep_unsaved_layers to True, or use show_model_graph."
+            "Must have all layers logged in order to render the graph; use show_model_graph."
         )
 
     show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
@@ -3252,8 +3245,6 @@ def _layer_log_for_node(trace: "Trace", node: GraphNode) -> "Layer":
         raise ValueError("Synthetic boundary nodes do not have Layer metadata.")
     if isinstance(node, Layer):
         return node
-    if node.parent_layer_log is not None:
-        return node.parent_layer_log
     return trace.layer_logs[node.layer_label_no_pass]
 
 

@@ -40,7 +40,6 @@ MODEL_LOG_FIELD_ORDER = [
     "capture_mode",
     "_layers_logged",
     "_layers_saved",
-    "keep_unsaved_layers",
     "keep_orphans",
     "intervention_ready",
     "save_arg_templates",
@@ -151,7 +150,6 @@ MODEL_LOG_FIELD_ORDER = [
     "conditionals",
     "layers_with_params",
     "op_equivalence_classes",
-    "unlogged_ops",
     "orphan_ops",
     "orphan_logs",
     # Tensor info:

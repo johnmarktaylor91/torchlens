@@ -16,8 +16,7 @@ Step 10 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fie
     Renames all raw labels (e.g., "cos_3_raw") to final labels in both Trace-level
     fields and Op fields, then reorders Trace fields into canonical order.
 
-Step 11 (_remove_unwanted_entries_and_log_remaining): Removes unsaved layers (unless
-    keep_unsaved_layers=True), builds lookup key mappings (integer index, label,
+Step 11 (_remove_unwanted_entries_and_log_remaining): Builds lookup key mappings (integer index, label,
     module path, buffer/input/output address), and logs remaining layer metadata.
 """
 
@@ -518,18 +517,19 @@ def _log_module_hierarchy_info_for_layer(
 
 
 def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
-    """Step 11: Remove unsaved layers, build lookup keys, finalize layer lists.
+    """Step 11: Build lookup keys and finalize retained layer lists.
 
-    Unless ``keep_unsaved_layers=True``, removes Op entries that don't
-    have saved outs. For each retained entry:
-    - Builds lookup keys (integer index, label, module path, address).
-    - Adds to layer_list, layer_dict_main_keys, and label lists.
-    - Reorders fields via _trim_and_reorder_layer_entry_fields.
+    Parameters
+    ----------
+    self:
+        Trace whose raw layer entries should be promoted into final containers.
 
-    Sets _layers_logged and _layers_saved flags for downstream
-    consumers (e.g., visualization guards for keep_unsaved_layers=False).
+    Returns
+    -------
+    None
+        Mutates final layer lookup containers in place.
     """
-    layers_to_remove = []
+
     # Quick loop to count how many tensors are saved:
     for layer_entry in self:
         if getattr(layer_entry, "is_orphan", False):
@@ -537,22 +537,9 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
         if layer_entry.has_saved_activation:
             self.num_saved_ops += 1
 
-    retained_call_group_labels = _labels_in_replay_ready_call_groups_to_retain(self)
-
-    if self.keep_unsaved_layers:
-        num_logged_tensors = sum(
-            1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
-        )
-    else:
-        num_logged_tensors = sum(
-            1
-            for layer_entry in self
-            if not getattr(layer_entry, "is_orphan", False)
-            and (
-                layer_entry.has_saved_activation
-                or layer_entry.layer_label in retained_call_group_labels
-            )
-        )
+    num_logged_tensors = sum(
+        1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
+    )
 
     self.layer_list = []
     self.layer_dict_main_keys = {}
@@ -566,42 +553,21 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
         layer_entry = self._raw_layer_dict[raw_tensor_label]
         if getattr(layer_entry, "is_orphan", False):
             continue
-        # Determine valid lookup keys and relate them to the tensor's realtime operation number:
-        should_keep_for_replay = layer_entry.layer_label in retained_call_group_labels
-        if (
-            getattr(layer_entry, "has_saved_activation", False)
-            or self.keep_unsaved_layers
-            or should_keep_for_replay
-        ):
-            # Add the lookup keys for the layer, to itself and to Trace:
-            _add_lookup_keys_for_layer_entry(self, layer_entry, i, num_logged_tensors)
+        # Add the lookup keys for the layer, to itself and to Trace:
+        _add_lookup_keys_for_layer_entry(self, layer_entry, i, num_logged_tensors)
 
-            # Log all information:
-            self.layer_list.append(layer_entry)
-            self.layer_dict_main_keys[layer_entry.layer_label] = layer_entry
-            self.layer_labels.append(layer_entry.layer_label)
-            self.layer_labels.append(layer_entry.layer_label_no_pass)
-            self.op_labels.append(layer_entry.layer_label_w_pass)
-            self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_passes
-            if layer_entry.has_saved_activation:
-                self.saved_activation_memory += layer_entry.memory
-            i += 1
-        else:
-            layers_to_remove.append(layer_entry)
-            self.unlogged_ops.append(layer_entry.layer_label)
-            self._unsaved_layers_lookup_keys.update(layer_entry.lookup_keys)
+        # Log all information:
+        self.layer_list.append(layer_entry)
+        self.layer_dict_main_keys[layer_entry.layer_label] = layer_entry
+        self.layer_labels.append(layer_entry.layer_label)
+        self.layer_labels.append(layer_entry.layer_label_no_pass)
+        self.op_labels.append(layer_entry.layer_label_w_pass)
+        self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_passes
+        if layer_entry.has_saved_activation:
+            self.saved_activation_memory += layer_entry.memory
+        i += 1
 
-    # Remove unused entries and scrub any label-bearing references they left behind.
-    if layers_to_remove:
-        self._batch_remove_log_entries(layers_to_remove, remove_references=True)
-
-    num_non_orphan_ops = sum(
-        1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
-    )
-    if (self.num_saved_ops == num_non_orphan_ops) or self.keep_unsaved_layers:
-        self._layers_logged = True
-    else:
-        self._layers_logged = False
+    self._layers_logged = True
 
     if self.num_saved_ops == len(self.layer_list):
         self._layers_saved = True

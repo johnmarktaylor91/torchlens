@@ -333,7 +333,7 @@ def _assign_output_roles(
         return
     for index, output in enumerate(output_entries):
         if output.multi_output_name is not None:
-            parent_layer = getattr(output, "parent_layer_log", None)
+            parent_layer = output.source_trace.layer_logs.get(output.layer_label_no_pass)
             if parent_layer is not None:
                 parent_layer.multi_output_name = output.multi_output_name
             continue
@@ -342,7 +342,7 @@ def _assign_output_roles(
             output.multi_output_index if output.multi_output_index is not None else index,
             hints=hints,
         )
-        parent_layer = getattr(output, "parent_layer_log", None)
+        parent_layer = output.source_trace.layer_logs.get(output.layer_label_no_pass)
         if parent_layer is not None:
             parent_layer.multi_output_name = output.multi_output_name
 
@@ -899,7 +899,6 @@ def _build_layer_logs(self: "Trace") -> None:
 
         layer_log.ops[pass_log.pass_index] = pass_log
         layer_log.call_labels.append(pass_log.layer_label)
-        pass_log.parent_layer_log = layer_log
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 
     autograd_memory = 0

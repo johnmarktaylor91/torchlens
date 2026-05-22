@@ -1022,53 +1022,6 @@ class Module:
         return getattr(self.ops[0], field_name)
 
     @property
-    def input_layers(self) -> List[str]:
-        """Aggregate module input layer labels.
-
-        Returns
-        -------
-        List[str]
-            No-pass input layer labels across module calls.
-        """
-        labels: list[str] = []
-        for call in self.ops.values():
-            labels.extend(label.split(":", 1)[0] for label in call.input_layers)
-        return list(dict.fromkeys(labels))
-
-    @property
-    def input_ops(self) -> List[str]:
-        """Aggregate input Op labels across module calls."""
-
-        labels: list[str] = []
-        for call in self.ops.values():
-            labels.extend(call.input_ops)
-        return list(dict.fromkeys(labels))
-
-    @property
-    def output_layers(self) -> List[str]:
-        """Aggregate module output layer labels.
-
-        Returns
-        -------
-        List[str]
-            Output layer labels across module calls, preserving multi-output
-            leaves and pass qualification.
-        """
-        labels: list[str] = []
-        for call in self.ops.values():
-            labels.extend(call.output_layers)
-        return list(dict.fromkeys(labels))
-
-    @property
-    def output_ops(self) -> List[str]:
-        """Aggregate output Op labels across module calls."""
-
-        labels: list[str] = []
-        for call in self.ops.values():
-            labels.extend(call.output_ops)
-        return list(dict.fromkeys(labels))
-
-    @property
     def output_structure(self) -> "ContainerSpec | None":
         """Return the single call's structured output shape when unambiguous.
 

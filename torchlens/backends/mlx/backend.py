@@ -308,7 +308,6 @@ class MLXBackend:
         input_kwargs: dict[Any, Any] | None = None,
         *,
         layers_to_save: str | list[Any] | None = "all",
-        keep_unsaved_layers: bool = True,
         keep_orphans: bool = False,
         output_device: str = "same",
         out_transform: object | None = None,
@@ -348,7 +347,6 @@ class MLXBackend:
             gradient_transform=None,
             save_raw_outs=save_raw_outs,
             save_raw_gradients=True,
-            keep_unsaved_layers=keep_unsaved_layers,
             keep_orphans=keep_orphans,
             save_arg_values=save_arg_values,
             save_gradients=False,
@@ -709,7 +707,6 @@ class MLXBackend:
         layer_log = Layer(op_log)
         layer_log.ops[1] = op_log
         layer_log.call_labels.append(op_log.layer_label_w_pass)
-        op_log.parent_layer_log = layer_log
         trace.layer_logs[label] = layer_log
 
     def _parent_labels(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[str]:

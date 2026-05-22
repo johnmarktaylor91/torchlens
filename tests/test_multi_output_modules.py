@@ -218,7 +218,7 @@ def test_lstm_three_outputs_distinct_layers() -> None:
 
     trace = _lstm_trace()
     lstm = trace.modules["lstm"]
-    outputs = [trace.ops[label] for label in lstm.output_ops]
+    outputs = [trace.ops[label] for label in trace.modules["lstm"].ops[0].output_ops]
     assert lstm.num_calls == 1
     assert len(outputs) == 3
     assert len({output.layer_label for output in outputs}) == 3
@@ -250,7 +250,7 @@ def test_gru_two_outputs_distinct_equivalence_classes() -> None:
     """GRU parameterized outputs get distinct equivalence classes."""
 
     trace = tl.trace(GRUModel(), torch.randn(7, 4, 5))
-    outputs = [trace.ops[label] for label in trace.modules["gru"].output_ops]
+    outputs = [trace.ops[label] for label in trace.modules["gru"].ops[0].output_ops]
     assert len(outputs) == 2
     assert len({output.equivalence_class for output in outputs}) == 2
     assert [output.multi_output_name for output in outputs] == ["output", "h_n"]
@@ -261,7 +261,7 @@ def test_bilstm_outputs_preserve_single_call_structure() -> None:
 
     trace = tl.trace(BiLSTMModel(), torch.randn(4, 10, 8))
     lstm = trace.modules["lstm"]
-    outputs = [trace.ops[label] for label in lstm.output_ops]
+    outputs = [trace.ops[label] for label in trace.modules["lstm"].ops[0].output_ops]
     assert lstm.num_calls == 1
     assert len(outputs) == 3
     assert outputs[1].shape == (2, 4, 4)
@@ -273,7 +273,7 @@ def test_mha_attention_outputs_are_selectable() -> None:
 
     x = [torch.randn(7, 4, 16), torch.randn(7, 4, 16), torch.randn(7, 4, 16)]
     trace = tl.trace(MHAModel(), x)
-    outputs = [trace.ops[label] for label in trace.modules["mha"].output_ops]
+    outputs = [trace.ops[label] for label in trace.modules["mha"].ops[0].output_ops]
     assert [output.multi_output_name for output in outputs] == [
         "attn_output",
         "attn_output_weights",
@@ -287,7 +287,7 @@ def test_dict_module_outputs_keyed_by_dict_keys() -> None:
 
     trace = tl.trace(DictWrapper(), torch.randn(3, 4))
     inner = trace.modules["inner"]
-    outputs = [trace.ops[label] for label in inner.output_ops]
+    outputs = [trace.ops[label] for label in trace.modules["inner"].ops[0].output_ops]
     assert [output.multi_output_name for output in outputs] == ["logits", "hidden"]
     assert inner.output_structure is not None
     assert inner.output_structure.kind == "dict"
@@ -298,7 +298,7 @@ def test_output_selectors_match_index_and_role() -> None:
     """Output selectors match module and function outputs."""
 
     trace = _lstm_trace()
-    h_n = trace.ops[trace.modules["lstm"].output_ops[1]]
+    h_n = trace.ops[trace.modules["lstm"].ops[0].output_ops[1]]
     assert [site.layer_label for site in trace.find_sites(tl.module("lstm") & tl.output(1))] == [
         h_n.layer_label
     ]
@@ -315,7 +315,7 @@ def test_save_load_preserves_module_outputs(tmp_path: Any) -> None:
     trace.save(path)
     loaded = tl.load(path)
     lstm = loaded.modules["lstm"]
-    outputs = [loaded.ops[label] for label in lstm.output_ops]
+    outputs = [loaded.ops[label] for label in loaded.modules["lstm"].ops[0].output_ops]
     assert len(outputs) == 3
     assert [output.multi_output_name for output in outputs] == ["output", "h_n", "c_n"]
     assert lstm.output_structure is not None

@@ -179,14 +179,13 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
                 assert parent_ref.parent_label in final_labels
 
 
-def test_keep_unsaved_layers_false_preserves_replay_call_group_siblings() -> None:
-    """Step 12 keeps multi-output call groups atomic when outs are pruned."""
+def test_selective_save_preserves_replay_call_group_siblings() -> None:
+    """Selective activation saving keeps multi-output call groups atomic."""
 
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
         layers_to_save="output",
-        keep_unsaved_layers=False,
         intervention_ready=True,
     )
 

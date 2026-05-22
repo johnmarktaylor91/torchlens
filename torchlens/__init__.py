@@ -363,7 +363,7 @@ def peek(model: _nn.Module, x: Any, layer: str, stop_after: Any | None = None) -
     trace = _trace(
         model,
         x,
-        capture=_CaptureOptions(layers_to_save=[layer], keep_unsaved_layers=True),
+        capture=_CaptureOptions(layers_to_save=[layer]),
     )
     return _out_from_log(trace, layer)
 
@@ -397,7 +397,6 @@ def extract(
         x,
         capture=_CaptureOptions(
             layers_to_save=list(layer_plan.values()),
-            keep_unsaved_layers=True,
         ),
     )
     if isinstance(layers, _Mapping):

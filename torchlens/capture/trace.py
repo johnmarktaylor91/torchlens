@@ -149,7 +149,6 @@ def save_new_outs(
     # num_tensors) are NOT reset — they describe the static graph structure.
     self._saved_grads_set = set()
     self.has_gradients = False
-    self.unlogged_ops = []
     self.num_saved_ops = 0
     self.saved_activation_memory = 0
     self.total_gradient_memory = 0
@@ -166,8 +165,6 @@ def save_new_outs(
     # before the new forward pass populates them.  They're rebuilt in postprocessing.
     if hasattr(self, "_tensor_num_to_lookup_keys_dict"):
         self._tensor_num_to_lookup_keys_dict.clear()
-    if hasattr(self, "_unsaved_layers_lookup_keys"):
-        self._unsaved_layers_lookup_keys.clear()
 
     # Now run and log the new inputs.
     _vprint(self, "Running fast pass (saving requested outs)")

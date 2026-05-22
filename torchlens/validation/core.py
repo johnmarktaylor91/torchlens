@@ -490,7 +490,7 @@ def _check_arglocs_correct_for_arg(
         )
     else:
         parent_layer_matches_arg = False
-    parent_layer_logged_as_arg = (argloc_key in target_layer.parent_arg_positions[arg_type]) and (
+    parent_layerged_as_arg = (argloc_key in target_layer.parent_arg_positions[arg_type]) and (
         target_layer.parent_arg_positions[arg_type][argloc_key] == parent_layer_label
     )
 
@@ -503,7 +503,7 @@ def _check_arglocs_correct_for_arg(
     #   - another parent has identical tensor values (ambiguous attribution)
     if (
         parent_layer_matches_arg
-        and (not parent_layer_logged_as_arg)
+        and (not parent_layerged_as_arg)
         and (not _parent_logged_for_any_arg(target_layer, parent_layer_label))
         and (parent_outs.numel() != 0)
         and (parent_outs.dtype != torch.bool)
@@ -530,13 +530,13 @@ def _check_arglocs_correct_for_arg(
     # the saved_args snapshot.  This is expected and not a real mismatch.
     if (
         not parent_layer_matches_arg
-        and parent_layer_logged_as_arg
+        and parent_layerged_as_arg
         and parent_layer.func_name in ["bernoulli_", "full"]
     ):
         return True
 
     # Case 3: parent is logged at this position but values don't match.
-    if (not parent_layer_matches_arg) and parent_layer_logged_as_arg:
+    if (not parent_layer_matches_arg) and parent_layerged_as_arg:
         print(
             f"Parent {parent_layer_label} of {target_layer_label} is logged as {arg_type} {argloc_key} to "
             f"{target_layer_label}, but its saved outs don't match the saved argument."

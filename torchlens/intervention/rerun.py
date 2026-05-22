@@ -667,7 +667,6 @@ def _capture_with_active_spec(
         input_args=x,
         input_kwargs={},
         layers_to_save="all",
-        keep_unsaved_layers=True,
         output_device=getattr(log, "output_device", "same"),
         out_transform=getattr(log, "out_transform", None),
         gradient_transform=getattr(log, "gradient_transform", None),

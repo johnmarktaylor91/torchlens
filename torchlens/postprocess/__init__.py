@@ -60,8 +60,6 @@ from .graph_traversal import (
     _remove_orphan_nodes,
 )
 from .labeling import (
-    _add_lookup_keys_for_layer_entry,
-    _labels_in_replay_ready_call_groups_to_retain,
     _log_final_info_for_layers,
     _map_raw_labels_to_final_labels,
     _remove_unwanted_entries_and_log_remaining,
@@ -118,53 +116,6 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         )
     for field_name in field_names:
         self.__dict__.pop(field_name, None)
-
-
-def _prune_final_unsaved_layers(self: "Trace") -> None:
-    """Prune unsaved final layer entries during fast two-pass postprocessing.
-
-    Args:
-        self: Trace whose final containers should be filtered.
-
-    Returns:
-        None. Mutates final layer containers in place.
-    """
-
-    if self.keep_unsaved_layers:
-        return
-    retained_call_group_labels = _labels_in_replay_ready_call_groups_to_retain(self)
-    layers_to_remove = [
-        layer_entry
-        for layer_entry in self.layer_list
-        if not getattr(layer_entry, "is_orphan", False)
-        and not getattr(layer_entry, "has_saved_activation", False)
-        and layer_entry.layer_label not in retained_call_group_labels
-    ]
-    if not layers_to_remove:
-        return
-
-    self.unlogged_ops.extend(layer_entry.layer_label for layer_entry in layers_to_remove)
-    self._batch_remove_log_entries(layers_to_remove, remove_references=True)
-    retained_layers = [
-        layer_entry for layer_entry in self.layer_list if layer_entry not in layers_to_remove
-    ]
-    self.layer_list = []
-    self.layer_dict_main_keys = {}
-    self.layer_dict_all_keys = {}
-    self.layer_labels = []
-    self.op_labels = []
-    self.layer_num_calls = {}
-    num_logged_tensors = len(retained_layers)
-    for layer_index, layer_entry in enumerate(retained_layers):
-        _add_lookup_keys_for_layer_entry(self, layer_entry, layer_index, num_logged_tensors)
-        self.layer_list.append(layer_entry)
-        self.layer_dict_main_keys[layer_entry.layer_label] = layer_entry
-        self.layer_labels.append(layer_entry.layer_label)
-        self.layer_labels.append(layer_entry.layer_label_no_pass)
-        self.op_labels.append(layer_entry.layer_label_w_pass)
-        self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_passes
-    self._layers_logged = self.num_saved_ops == len(self.layer_list)
-    self._layers_saved = self.num_saved_ops == len(self.layer_list)
 
 
 def _refresh_fast_saved_summary(self: "Trace") -> None:
@@ -399,7 +350,6 @@ def postprocess_fast(self: "Trace") -> None:
         output_layer.transformed_gradient_memory = parent_layer.transformed_gradient_memory
     _refresh_fast_saved_summary(self)
     _trim_and_reorder_model_history_fields(self)
-    _prune_final_unsaved_layers(self)
     _undecorate_all_saved_tensors(self)
 
     # Gated behind cached cuda.is_available() so CPU-only fast-pass runs don't

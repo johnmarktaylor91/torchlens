@@ -887,7 +887,6 @@ def _log_model(
     x: torch.Tensor,
     *,
     save_code_context: bool = True,
-    keep_unsaved_layers: bool = True,
     layers_to_save: str | Sequence[str] | None = "all",
 ) -> Trace:
     """Capture a ``Trace`` for a small integration-test model.
@@ -900,8 +899,6 @@ def _log_model(
         Input tensor.
     save_code_context:
         Whether rich source loading is enabled during capture.
-    keep_unsaved_layers:
-        Whether unsaved layers remain in the final log.
     layers_to_save:
         Activation-saving selection passed through to ``trace``.
 
@@ -914,7 +911,6 @@ def _log_model(
         model,
         x,
         save_code_context=save_code_context,
-        keep_unsaved_layers=keep_unsaved_layers,
         layers_to_save=layers_to_save,
     )
 
@@ -1655,59 +1651,22 @@ def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> 
     _assert_branchless_log(trace)
 
 
-def test_keep_unsaved_layers_false_model_scrubs_removed_labels_from_all_conditional_surfaces() -> (
-    None
-):
-    """Pruning unsaved layers leaves no stale labels in conditional metadata."""
+def test_selective_save_preserves_all_conditional_surfaces() -> None:
+    """Selective activation saving keeps conditional metadata addressable."""
+
     input_tensor = torch.ones(1, 2)
-    full_log = _log_model(
+    log = _log_model(
         KeepUnsavedLayersFalseModel(),
         input_tensor,
         save_code_context=True,
-        keep_unsaved_layers=True,
-        layers_to_save=[-1],
-    )
-    pruned_log = _log_model(
-        KeepUnsavedLayersFalseModel(),
-        input_tensor,
-        save_code_context=True,
-        keep_unsaved_layers=False,
         layers_to_save=[-1],
     )
 
-    removed_labels = set(full_log.layer_labels) - set(pruned_log.layer_labels)
-    removed_no_pass = {label.split(":", 1)[0] for label in removed_labels}
-
-    assert removed_labels
-    assert _collect_model_conditional_labels(pruned_log).isdisjoint(removed_labels)
-    assert {
-        label
-        for layer in pruned_log.layer_list
-        for label in _collect_branch_child_labels(layer.conditional_arm_children)
-    }.isdisjoint(removed_labels)
-    assert {
-        label
-        for layer_log in pruned_log.layer_logs.values()
-        for label in _collect_branch_child_labels(layer_log.conditional_arm_children)
-    }.isdisjoint(removed_no_pass)
+    assert log.num_saved_ops == 1
+    assert _collect_model_conditional_labels(log).issubset(set(log.layer_labels))
     assert all(
-        parent_label not in removed_no_pass and child_label not in removed_no_pass
-        for parent_label, child_label, _, _ in pruned_log.conditional_edge_call_indices
-    )
-    assert all(
-        removed_label not in layer_log.conditional_then_children
-        for removed_label in removed_no_pass
-        for layer_log in pruned_log.layer_logs.values()
-    )
-    assert all(
-        removed_label not in layer_log.conditional_else_children
-        for removed_label in removed_no_pass
-        for layer_log in pruned_log.layer_logs.values()
-    )
-    assert all(
-        removed_label not in layer_log.conditional_entry_children
-        for removed_label in removed_no_pass
-        for layer_log in pruned_log.layer_logs.values()
+        parent_label in log.layer_logs and child_label in log.layer_logs
+        for parent_label, child_label, _, _ in log.conditional_edge_call_indices
     )
 
 

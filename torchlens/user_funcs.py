@@ -149,7 +149,6 @@ def _trace_mlx_model(
     save_raw_output: str | bool | MissingType,
     layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType,
     save_visualizations: bool | MissingType,
-    keep_unsaved_layers: bool | MissingType,
     keep_orphans: bool | MissingType,
     output_device: OutputDeviceLiteral | MissingType,
     out_transform: ActivationPostfunc | None | MissingType,
@@ -201,7 +200,6 @@ def _trace_mlx_model(
         save_raw_output=save_raw_output,
         layer_visualizers=layer_visualizers,
         save_visualizations=save_visualizations,
-        keep_unsaved_layers=keep_unsaved_layers,
         keep_orphans=keep_orphans,
         output_device=output_device,
         save_arg_values=save_arg_values,
@@ -270,7 +268,6 @@ def _trace_mlx_model(
         model_input_args,
         model_input_kwargs,
         layers_to_save=capture_options.layers_to_save,
-        keep_unsaved_layers=capture_options.keep_unsaved_layers,
         keep_orphans=capture_options.keep_orphans,
         output_device=capture_options.output_device,
         out_transform=save_options.out_transform,
@@ -897,7 +894,6 @@ def _run_model_and_save_specified_outs(
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None,
     layers_to_save: str | list[int | str] | None = "all",
-    keep_unsaved_layers: bool = True,
     keep_orphans: bool = False,
     output_device: OutputDeviceLiteral = "same",
     out_transform: ActivationPostfunc | None = None,
@@ -952,12 +948,6 @@ def _run_model_and_save_specified_outs(
         input_args: Positional arguments to model.forward(); a single tensor or list.
         input_kwargs: Keyword arguments to model.forward().
         layers_to_save: Which layers to save outs for ('all', 'none'/None, or a list).
-        keep_unsaved_layers: If False, layers without saved outs are pruned from the
-            final log. When ``layers_to_save`` is a specific subset, TorchLens still runs the
-            initial exhaustive metadata pass with ``keep_unsaved_layers=True`` so it can resolve
-            names before the fast replay. Example: use
-            ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
-            requested saved outs in the returned log.
         keep_orphans: If True, island ops are retained in raw metadata and exposed via
             ``trace.orphans`` while remaining hidden from the main graph.
         output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
@@ -1054,7 +1044,6 @@ def _run_model_and_save_specified_outs(
         gradient_transform=gradient_transform,
         save_raw_outs=save_raw_outs,
         save_raw_gradients=save_raw_gradients,
-        keep_unsaved_layers=keep_unsaved_layers,
         keep_orphans=keep_orphans,
         save_arg_values=save_arg_values,
         save_gradients=save_gradients,
@@ -1229,7 +1218,6 @@ def trace(
     batch_render: str | MissingType = MISSING,
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
     save_raw_output: str | bool | MissingType = MISSING,
-    keep_unsaved_layers: bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
     out_transform: ActivationPostfunc | None | MissingType = MISSING,
@@ -1316,13 +1304,6 @@ def trace(
         save_raw_output: Raw output save policy for portable bundles:
             ``"small"`` (default), ``True``, or ``False``.
         layers_to_save: Which layers to save outs for (see above).
-        keep_unsaved_layers: If False, layers without saved outs are removed from
-            the returned Trace (they still exist during processing). When
-            ``layers_to_save`` is a specific subset, TorchLens still does an initial
-            exhaustive metadata pass with ``keep_unsaved_layers=True`` so it can resolve
-            names before the fast replay. Example: use
-            ``layers_to_save=['conv2d_1_1'], keep_unsaved_layers=False`` to keep only the
-            requested saved outs in the final log.
         keep_orphans: If True, retain island ops in raw metadata and expose them via
             ``trace.orphans``. Default False preserves pruning behavior.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
@@ -1441,7 +1422,6 @@ def trace(
             save_raw_output=save_raw_output,
             layer_visualizers=MISSING,
             save_visualizations=MISSING,
-            keep_unsaved_layers=keep_unsaved_layers,
             keep_orphans=keep_orphans,
             output_device=output_device,
             out_transform=out_transform,
@@ -1493,7 +1473,6 @@ def trace(
         save_raw_output=save_raw_output,
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
-        keep_unsaved_layers=keep_unsaved_layers,
         keep_orphans=keep_orphans,
         output_device=output_device,
         save_arg_values=save_arg_values,
@@ -1558,7 +1537,6 @@ def trace(
         "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
     )
     save_visualizations_value = capture_options.save_visualizations
-    keep_unsaved_layers = capture_options.keep_unsaved_layers
     keep_orphans = capture_options.keep_orphans
     output_device = capture_options.output_device
     out_transform = save_options.out_transform
@@ -1653,7 +1631,6 @@ def trace(
     if cache_enabled:
         cache_config = {
             "layers_to_save": layers_to_save,
-            "keep_unsaved_layers": keep_unsaved_layers,
             "keep_orphans": keep_orphans,
             "output_device": output_device,
             "save_arg_values": save_arg_values,
@@ -1701,7 +1678,6 @@ def trace(
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
-            keep_unsaved_layers=keep_unsaved_layers,
             keep_orphans=keep_orphans,
             output_device=output_device,
             out_transform=out_transform,
@@ -1746,8 +1722,8 @@ def trace(
         )
     else:
         # --- TWO-PASS path ---
-        # Pass 1 (exhaustive): Run with layers_to_save=None and keep_unsaved_layers=True
-        # so the full graph is discovered and all layer labels are assigned.  No
+        # Pass 1 (exhaustive): Run with layers_to_save=None so the full graph is
+        # discovered and all layer labels are assigned. No
         # outs are saved yet - this pass is purely for metadata/structure.
         from .utils.display import progress_bar
 
@@ -1762,7 +1738,6 @@ def trace(
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=None,
-            keep_unsaved_layers=True,
             keep_orphans=keep_orphans,
             output_device=output_device,
             out_transform=out_transform,
@@ -1809,7 +1784,6 @@ def trace(
         # layers and replay the model, saving only the matching outs.
         next(capture_progress, None)
         _vprint(trace, "Two-pass mode: Pass 2 (fast, saving requested layers)")
-        trace.keep_unsaved_layers = keep_unsaved_layers
         trace.save_gradients = save_gradients
         trace.gradients_to_save = grads_to_save_resolved
         trace.save_new_outs(
@@ -1924,7 +1898,6 @@ def summary(
         input_args=input_args,
         input_kwargs=input_kwargs,
         layers_to_save=None,
-        keep_unsaved_layers=True,
         recurrence_detection=True,
     )
     try:
@@ -2678,7 +2651,6 @@ def validate_forward_pass(
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save="all",
-            keep_unsaved_layers=True,
             out_transform=None,
             mark_layer_depths=False,
             detach_saved_activations=False,

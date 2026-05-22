@@ -1780,8 +1780,6 @@ def log_function_output_tensors_fast(
                 "trace with the desired inputs."
             )
         orig_tensor_label = self._raw_to_final_layer_labels[_label_raw]
-        if orig_tensor_label in self.unlogged_ops:
-            continue
         orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
         previous_shape = orig_layer_entry.shape
 

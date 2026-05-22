@@ -1405,7 +1405,6 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
     - ops dict keys are contiguous {1..N}.
     - Each Op's call_index matches its dict key.
     - Each Op's layer_label_no_pass matches the parent Layer's label.
-    - parent_layer_log back-pointer is identity-equal to the Layer.
     """
     name = "layer_pass_layer_log_xrefs"
 
@@ -1436,12 +1435,6 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
                     f"Op '{lpl.layer_label}' layer_label_no_pass="
                     f"'{lpl.layer_label_no_pass}' != "
                     f"parent Layer.layer_label='{ll.layer_label}'",
-                )
-            if lpl.parent_layer_log is not ll:
-                raise MetadataInvariantError(
-                    name,
-                    f"Op '{lpl.layer_label}' parent_layer_log "
-                    f"does not point to its Layer '{ll_label}'",
                 )
 
 

@@ -504,8 +504,9 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
         if layer_label is not None:
             layer = trace[layer_label]
             layer.grad_fn = grad_fn_record
-            if hasattr(layer, "parent_layer_log"):
-                layer.parent_layer_log.grad_fn = grad_fn_record
+            parent_layer = trace.layer_logs.get(layer.layer_label_no_pass)
+            if parent_layer is not None:
+                parent_layer.grad_fn = grad_fn_record
         try:
             handles.append(
                 grad_fn_handle.register_hook(

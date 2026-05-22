@@ -78,7 +78,6 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
 )
 _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_source_trace_ref": None,
-    "parent_layer_log": None,
     "out_ref": None,
     "grad_ref": None,
     "_pending_blob_id": None,
@@ -401,9 +400,6 @@ class Op:
     * ``source_trace`` is a direct reference to the owning Trace.
       This creates a circular reference (Trace -> layer_list -> entry ->
       source_trace -> Trace) that is broken by ``cleanup()``.
-    * ``parent_layer_log`` is a back-reference to the aggregate Layer
-      that owns this pass.  It is set *outside* fields_dict during
-      ``_build_layer_logs`` and is intentionally absent from FIELD_ORDER.
     * ``fx_qualpath`` and ``fx_call_index`` expose metadata that mirrors
       ``torch.fx.symbolic_trace`` naming conventions, computed independently
       using TorchLens rules.  ``fx_qualpath`` is not a lookup key, so
@@ -577,7 +573,6 @@ class Op:
         "_pending_transformed_out_blob_id": FieldPolicy.DROP,
         "_pending_grad_blob_id": FieldPolicy.DROP,
         "_pending_transformed_grad_blob_id": FieldPolicy.DROP,
-        "parent_layer_log": FieldPolicy.DROP,
     }
     FIELD_FORK_POLICY = LAYER_PASS_LOG_FIELD_FORK_POLICY
     DEFAULT_FILL_STATE = _LAYER_PASS_LOG_DEFAULT_FILL
@@ -873,17 +868,12 @@ class Op:
         # Function config - lightweight hyperparameters always captured.
         self.func_config = fields_dict["func_config"]
 
-        # Back-reference to the aggregate Layer that groups all ops of
-        # this layer.  Set during postprocessing by _build_layer_logs - NOT
-        # part of fields_dict or FIELD_ORDER (it's a structural link, not
-        # captured data).
         self.out_ref: Optional["LazyActivationRef"] = None
         self.grad_ref: Optional["LazyActivationRef"] = None
         self._pending_blob_id: Optional[str] = None
         self._pending_transformed_out_blob_id: Optional[str] = None
         self._pending_grad_blob_id: Optional[str] = None
         self._pending_transformed_grad_blob_id: Optional[str] = None
-        self.parent_layer_log: Optional["Layer"] = None
         object.__setattr__(self, "_construction_done", True)
 
     @property

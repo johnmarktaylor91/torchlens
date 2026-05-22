@@ -68,12 +68,6 @@ class TestLayerLogConstruction:
             assert len(layer_log.ops) == 1
             assert 0 in layer_log.ops
 
-    def test_back_reference_set(self, simple_log):
-        """parent_layer_log is set on each Op."""
-        for layer_log in simple_log.layer_logs.values():
-            for pass_log in layer_log.ops.values():
-                assert pass_log.parent_layer_log is layer_log
-
 
 # ---------------------------------------------------------------------------
 # Single-pass delegation

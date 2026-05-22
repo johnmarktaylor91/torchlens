@@ -5,7 +5,7 @@ This module provides the helper stack behind Trace cleanup operations:
 1. **cleanup()** — full teardown: deletes all Op attributes, then
    deletes all Trace attributes (both FIELD_ORDER and internal containers).
    Breaks circular references (Trace <-> Op.source_trace,
-   Layer <-> Op.parent_layer_log, Module <-> _source_trace).
+   Module <-> _source_trace).
    Also frees GPU memory via ``torch.cuda.empty_cache()`` when CUDA is
    available (gated to avoid CUDA driver probe cost on CPU-only runs).
 
@@ -72,7 +72,6 @@ def cleanup(self: "Trace") -> None:
         "layer_dict_all_keys",
         "layer_dict_main_keys",
         "orphan_ops",
-        "unlogged_ops",
         "_loaded_from_bundle",
         "_source_bundle_manifest_sha256",
         "_source_bundle_path",
