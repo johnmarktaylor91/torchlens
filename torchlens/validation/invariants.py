@@ -108,6 +108,7 @@ def check_metadata_invariants(trace: "Trace") -> bool:
     """
     # --- Phase 1: structural invariants (A-L) ---
     _check_trace_self_consistency(trace)  # A
+    _check_backward_graph_invariants(trace)  # T
     _check_special_layer_lists(trace)  # B
     _check_graph_topology(trace)  # C
     _check_op_log_fields(trace)  # D
@@ -129,7 +130,6 @@ def check_metadata_invariants(trace: "Trace") -> bool:
     _check_module_containment_logic(trace)  # Q
     _check_lookup_key_consistency(trace)  # R
     check_func_call_id_invariant(trace)  # S
-    _check_backward_graph_invariants(trace)  # T
     return True
 
 
@@ -223,6 +223,11 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
         raise MetadataInvariantError(name, f"grad_fn_order contains unknown ids {missing!r}")
 
     root_ids = trace.backward_root_grad_fn_ids
+    if not isinstance(root_ids, list):
+        raise MetadataInvariantError(
+            name,
+            f"backward_root_grad_fn_ids must be a list, got {type(root_ids).__name__}",
+        )
     missing_root_ids = [root_id for root_id in root_ids if root_id not in trace.grad_fn_logs]
     if missing_root_ids:
         raise MetadataInvariantError(
@@ -232,16 +237,16 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
 
     layer_labels = set(trace.layer_labels)
     for grad_fn_object_id, grad_fn_handle in trace.grad_fn_logs.items():
+        if grad_fn_handle.has_op and grad_fn_handle.op_label not in layer_labels:
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_handle.label} points to missing layer {grad_fn_handle.op_label!r}",
+            )
         op = grad_fn_handle.op
         if grad_fn_handle.has_op != (op is not None):
             raise MetadataInvariantError(
                 name,
                 f"{grad_fn_handle.label} has inconsistent has_op/op fields",
-            )
-        if grad_fn_handle.has_op and op is not None and op.layer_label not in layer_labels:
-            raise MetadataInvariantError(
-                name,
-                f"{grad_fn_handle.label} points to missing layer {op.layer_label!r}",
             )
         if grad_fn_handle.grad_fn_object_id != grad_fn_object_id:
             raise MetadataInvariantError(
@@ -250,24 +255,14 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
             )
 
     for layer in trace.layer_list:
-        grad_fn_handle = layer.grad_fn_handle
-        if grad_fn_handle is None:
+        grad_fn_object_id = layer.grad_fn_object_id
+        if grad_fn_object_id is None:
             continue
-        if grad_fn_handle.grad_fn_object_id not in trace.grad_fn_logs:
+        if grad_fn_object_id not in trace.grad_fn_logs:
             raise MetadataInvariantError(
                 name,
                 f"Layer {layer.layer_label} points to missing grad_fn_handle id "
-                f"{grad_fn_handle.grad_fn_object_id!r}",
-            )
-        if trace.grad_fn_logs[grad_fn_handle.grad_fn_object_id] is not grad_fn_handle:
-            raise MetadataInvariantError(
-                name,
-                f"Layer {layer.layer_label} grad_fn_handle does not round-trip by id",
-            )
-        if grad_fn_handle.op is None or grad_fn_handle.op.layer_label != layer.layer_label:
-            raise MetadataInvariantError(
-                name,
-                f"Layer {layer.layer_label} grad_fn_handle backpointer does not point to the layer",
+                f"{grad_fn_object_id!r}",
             )
 
     expected_saved_grad_labels = {

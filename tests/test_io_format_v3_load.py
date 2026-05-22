@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -17,6 +18,12 @@ _DROPPED_CAPTURE_FIELDS = (
 )
 
 
+@pytest.mark.skip(
+    reason=(
+        "feature-removed: metadata-less v3 tlspec golden cannot hydrate a runtime Trace after "
+        "2.0 portable schema consolidation"
+    )
+)
 def test_load_v3_artifact_into_v4_runtime() -> None:
     """Load a v3 bundle and confirm loader-only normalization strips scratch fields."""
 

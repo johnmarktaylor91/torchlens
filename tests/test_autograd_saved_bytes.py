@@ -119,7 +119,7 @@ def test_add_op_reports_zero_autograd_memory() -> None:
     assert add_pass.autograd_memory == 0
     assert add_pass.num_autograd_tensors == 0
     assert trace.layer_logs[add_pass.layer_label_no_pass].autograd_memory == 0
-    assert trace.autograd_memory == 0
+    assert trace.total_autograd_memory == 0
 
 
 def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
@@ -135,7 +135,7 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     assert all(layer.num_autograd_tensors is None for layer in trace.layer_list)
     assert all(layer.autograd_memory is None for layer in trace.layer_logs.values())
     assert all(layer.num_autograd_tensors is None for layer in trace.layer_logs.values())
-    assert trace.autograd_memory is None
+    assert trace.total_autograd_memory is None
 
 
 def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
@@ -150,7 +150,7 @@ def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
     assert all(layer.autograd_memory is None for layer in _non_source_ops(trace))
     assert all(layer.num_autograd_tensors is None for layer in _non_source_ops(trace))
     assert all(layer.autograd_memory is None for layer in trace.layer_logs.values())
-    assert trace.autograd_memory is None
+    assert trace.total_autograd_memory is None
 
 
 def test_layer_log_autograd_saved_rollup_matches_pass_values() -> None:
@@ -167,7 +167,7 @@ def test_trace_autograd_saved_rollup_matches_layer_values() -> None:
     """Trace total should equal the sum of non-None layer-level values."""
     trace = _log_sequential(requires_grad=True)
 
-    assert trace.autograd_memory == _sum_layer_autograd_bytes(trace)
+    assert trace.total_autograd_memory == _sum_layer_autograd_bytes(trace)
 
 
 def test_custom_autograd_function_saved_tensor_bytes() -> None:
@@ -190,7 +190,7 @@ def test_autograd_saved_fields_roundtrip_through_bundle_save_load(tmp_path: Path
     tl.save(trace, bundle_path)
     loaded = tl.load(bundle_path)
 
-    assert loaded.autograd_memory == trace.autograd_memory
+    assert loaded.total_autograd_memory == trace.total_autograd_memory
     for original_layer, loaded_layer in zip(trace.layer_list, loaded.layer_list):
         assert loaded_layer.autograd_memory == original_layer.autograd_memory
         assert loaded_layer.num_autograd_tensors == original_layer.num_autograd_tensors

@@ -194,7 +194,7 @@ class TestMultiPassLayerLog:
         """call_labels list contains the w-pass labels of each pass."""
         for layer_log in recurrent_log.layer_logs.values():
             assert len(layer_log.call_labels) == layer_log.num_passes
-            for i, call_label in enumerate(layer_log.call_labels, 1):
+            for i, call_label in enumerate(layer_log.call_labels):
                 assert layer_log.ops[i].layer_label == call_label
 
 

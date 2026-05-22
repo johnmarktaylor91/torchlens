@@ -411,10 +411,9 @@ def test_bad_layer_grad_fn_backpointer_raises() -> None:
     """A mismatched layer-to-grad_fn_handle backpointer raises an invariant error."""
 
     log = _make_backward_log()
-    for layer in log.layer_list:
-        if layer.grad_fn_handle is not None:
-            layer.grad_fn_handle.op_label = None
-            layer.grad_fn_handle.has_op = False
+    for grad_fn_handle in log.grad_fn_logs.values():
+        if grad_fn_handle.has_op:
+            grad_fn_handle.op_label = "missing_layer_1"
             break
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)

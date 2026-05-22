@@ -207,12 +207,19 @@ def _module_dict(module: Any) -> dict[str, Any]:
         Stable module snapshot record.
     """
 
+    input_layers = sorted(
+        {str(layer) for call in module.ops.values() for layer in getattr(call, "input_layers", [])}
+    )
+    output_layers = sorted(
+        {str(layer) for call in module.ops.values() for layer in getattr(call, "output_layers", [])}
+    )
+
     return {
         "address": module.address,
         "all_addresses": sorted(str(value) for value in module.all_addresses),
         "buffer_layers": list(module.buffer_layers),
         "call_labels": list(module.call_labels),
-        "input_layers": list(module.input_layers),
+        "input_layers": input_layers,
         "training": module.training,
         "ops": list(module.layer_labels),
         "num_calls": module.num_calls,
@@ -220,7 +227,7 @@ def _module_dict(module: Any) -> dict[str, Any]:
         "num_params": module.num_params,
         "num_params_frozen": module.num_params_frozen,
         "num_params_trainable": module.num_params_trainable,
-        "output_layers": list(module.output_layers),
+        "output_layers": output_layers,
     }
 
 

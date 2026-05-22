@@ -96,6 +96,18 @@ class Buffer(Op):
         return self.buffer_pass
 
     @property
+    def call_index(self) -> int | None:
+        """Return this buffer's 1-based call index for its address.
+
+        Returns
+        -------
+        int | None
+            Call index, or ``None`` before buffer postprocessing assigns it.
+        """
+
+        return self.buffer_pass
+
+    @property
     def name(self) -> str:
         """Buffer name (last segment of address), e.g. 'running_mean'."""
         addr = self.address

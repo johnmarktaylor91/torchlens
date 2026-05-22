@@ -504,7 +504,7 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "predicate":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
-    if kind in {"grad_fn_handle", "intervening", "grad_fn_label"}:
+    if kind in {"grad_fn", "grad_fn_handle", "intervening", "grad_fn_label"}:
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
 
     raise SiteResolutionError(f"Unsupported selector kind {kind!r}.")

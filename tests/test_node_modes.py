@@ -155,10 +155,9 @@ def test_user_callback_wins_over_mode(tmp_path: Path) -> None:
 def test_invalid_mode_raises() -> None:
     """Invalid vis_node_mode values should fail during option merging."""
 
+    log = tl.trace(nn.Linear(4, 4), torch.randn(1, 4))
     with pytest.raises(ValueError, match="node_mode"):
-        tl.trace(
-            nn.Linear(4, 4),
-            torch.randn(1, 4),
+        log.draw(
             vis_mode="unrolled",
             vis_node_mode="bogus",  # type: ignore[arg-type]
             vis_save_only=True,

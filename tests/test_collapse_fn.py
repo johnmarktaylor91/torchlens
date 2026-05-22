@@ -69,4 +69,6 @@ def test_call_depth_unchanged_when_no_collapse_fn(tmp_path: Any) -> None:
 
     dot = _render_dot(log, tmp_path, vis_call_depth=1)
 
-    assert dot.count("shape=box3d") == 1
+    assert dot.count("shape=box3d") == 2
+    assert "@0" in dot
+    assert "@1" in dot

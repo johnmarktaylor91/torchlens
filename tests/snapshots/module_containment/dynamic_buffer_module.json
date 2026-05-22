@@ -129,7 +129,7 @@
         "child",
         "child.proj"
       ],
-      "step_index": 4
+      "step_index": 3
     }
   ],
   "module_calls": [
@@ -193,7 +193,11 @@
       "input_layers": [
         "input_1"
       ],
-      "training": true,
+      "num_calls": 1,
+      "num_param_tensors": 2,
+      "num_params": 20,
+      "num_params_frozen": 0,
+      "num_params_trainable": 20,
       "ops": [
         "input_1",
         "randn_1_1",
@@ -201,14 +205,10 @@
         "linear_1_3",
         "output_1"
       ],
-      "num_calls": 1,
-      "num_param_tensors": 2,
-      "num_params": 20,
-      "num_params_frozen": 0,
-      "num_params_trainable": 20,
       "output_layers": [
         "output_1"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "child",
@@ -220,19 +220,19 @@
         "child:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "add_1_2",
-        "linear_1_3"
-      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 20,
       "num_params_frozen": 0,
       "num_params_trainable": 20,
+      "ops": [
+        "add_1_2",
+        "linear_1_3"
+      ],
       "output_layers": [
         "linear_1_3"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "child.proj",
@@ -244,18 +244,18 @@
         "child.proj:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "linear_1_3"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 20,
       "num_params_frozen": 0,
       "num_params_trainable": 20,
+      "ops": [
+        "linear_1_3"
+      ],
       "output_layers": [
         "linear_1_3"
-      ]
+      ],
+      "training": true
     }
   ],
   "ops": [
@@ -264,6 +264,9 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "child:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -286,9 +289,6 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "child:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -299,6 +299,9 @@
       "func_name": "randn",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "child:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -320,9 +323,6 @@
           1
         ]
       },
-      "input_to_module_calls": [
-        "child:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -333,6 +333,9 @@
       "func_name": "__add__",
       "fx_call_index": 0,
       "fx_qualpath": "child.__add__",
+      "input_to_module_calls": [
+        "child.proj:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -354,9 +357,6 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "child.proj:1"
-      ],
       "modules": [
         "child:1"
       ],
@@ -365,12 +365,13 @@
       "step_index": 2
     },
     {
-      "atomic_module_call": "child.proj:1",
+      "atomic_module_call": null,
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "child.proj.linear",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -390,7 +391,6 @@
       ],
       "module": "child.proj:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "child:1",
         "child.proj:1"
@@ -406,10 +406,11 @@
       "step_index": 3
     },
     {
-      "atomic_module_call": "child.proj:1",
+      "atomic_module_call": null,
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -432,7 +433,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [
         "child:1",
@@ -442,7 +442,7 @@
         "child",
         "child.proj"
       ],
-      "step_index": 4
+      "step_index": 3
     }
   ],
   "trace_summary": {

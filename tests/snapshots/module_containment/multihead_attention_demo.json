@@ -668,7 +668,7 @@
       "output_of_modules": [
         "attn"
       ],
-      "step_index": 28
+      "step_index": 27
     }
   ],
   "module_calls": [
@@ -769,7 +769,11 @@
       "input_layers": [
         "input_1"
       ],
-      "training": true,
+      "num_calls": 1,
+      "num_param_tensors": 4,
+      "num_params": 288,
+      "num_params_frozen": 0,
+      "num_params_trainable": 288,
       "ops": [
         "input_1",
         "linear_1_1",
@@ -801,14 +805,10 @@
         "mean_1_27",
         "output_1"
       ],
-      "num_calls": 1,
-      "num_param_tensors": 4,
-      "num_params": 288,
-      "num_params_frozen": 0,
-      "num_params_trainable": 288,
       "output_layers": [
         "output_1"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "attn",
@@ -820,7 +820,11 @@
         "attn:1"
       ],
       "input_layers": [],
-      "training": true,
+      "num_calls": 1,
+      "num_param_tensors": 2,
+      "num_params": 288,
+      "num_params_frozen": 0,
+      "num_params_trainable": 288,
       "ops": [
         "linear_1_1",
         "unflatten_1_2",
@@ -850,15 +854,11 @@
         "view_6_26",
         "mean_1_27"
       ],
-      "num_calls": 1,
-      "num_param_tensors": 2,
-      "num_params": 288,
-      "num_params_frozen": 0,
-      "num_params_trainable": 288,
       "output_layers": [
-        "view_5_25",
-        "mean_1_27"
-      ]
+        "mean_1_27",
+        "view_5_25"
+      ],
+      "training": true
     }
   ],
   "ops": [
@@ -867,6 +867,9 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "attn:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -891,9 +894,6 @@
           2
         ]
       },
-      "input_to_module_calls": [
-        "attn:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -904,6 +904,7 @@
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "attn.linear",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -921,7 +922,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -934,6 +934,7 @@
       "func_name": "unflatten",
       "fx_call_index": 0,
       "fx_qualpath": "attn.unflatten",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -951,7 +952,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -964,6 +964,7 @@
       "func_name": "unsqueeze",
       "fx_call_index": 0,
       "fx_qualpath": "attn.unsqueeze",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -981,7 +982,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -994,6 +994,7 @@
       "func_name": "transpose",
       "fx_call_index": 0,
       "fx_qualpath": "attn.transpose",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1011,7 +1012,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1024,6 +1024,7 @@
       "func_name": "squeeze",
       "fx_call_index": 0,
       "fx_qualpath": "attn.squeeze",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1041,7 +1042,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1054,6 +1054,7 @@
       "func_name": "contiguous",
       "fx_call_index": 0,
       "fx_qualpath": "attn.contiguous",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1071,7 +1072,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1084,6 +1084,7 @@
       "func_name": "__getitem__",
       "fx_call_index": 0,
       "fx_qualpath": "attn.__getitem__",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1101,7 +1102,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1114,6 +1114,7 @@
       "func_name": "__getitem__",
       "fx_call_index": 1,
       "fx_qualpath": "attn.__getitem__",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1131,7 +1132,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1144,6 +1144,7 @@
       "func_name": "__getitem__",
       "fx_call_index": 2,
       "fx_qualpath": "attn.__getitem__",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1161,7 +1162,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1174,6 +1174,7 @@
       "func_name": "view",
       "fx_call_index": 0,
       "fx_qualpath": "attn.view",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1191,7 +1192,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1204,6 +1204,7 @@
       "func_name": "transpose",
       "fx_call_index": 1,
       "fx_qualpath": "attn.transpose",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1221,7 +1222,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1234,6 +1234,7 @@
       "func_name": "view",
       "fx_call_index": 1,
       "fx_qualpath": "attn.view",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1251,7 +1252,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1264,6 +1264,7 @@
       "func_name": "transpose",
       "fx_call_index": 2,
       "fx_qualpath": "attn.transpose",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1281,7 +1282,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1294,6 +1294,7 @@
       "func_name": "view",
       "fx_call_index": 2,
       "fx_qualpath": "attn.view",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1311,7 +1312,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1324,6 +1324,7 @@
       "func_name": "transpose",
       "fx_call_index": 3,
       "fx_qualpath": "attn.transpose",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1341,7 +1342,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1354,6 +1354,7 @@
       "func_name": "__mul__",
       "fx_call_index": 0,
       "fx_qualpath": "attn.__mul__",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1371,7 +1372,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1384,6 +1384,7 @@
       "func_name": "transpose",
       "fx_call_index": 4,
       "fx_qualpath": "attn.transpose",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1401,7 +1402,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1414,6 +1414,7 @@
       "func_name": "bmm",
       "fx_call_index": 0,
       "fx_qualpath": "attn.bmm",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1431,7 +1432,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1444,6 +1444,7 @@
       "func_name": "softmax",
       "fx_call_index": 0,
       "fx_qualpath": "attn.softmax",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1461,7 +1462,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1474,6 +1474,7 @@
       "func_name": "bmm",
       "fx_call_index": 1,
       "fx_qualpath": "attn.bmm",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1491,7 +1492,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1504,6 +1504,7 @@
       "func_name": "transpose",
       "fx_call_index": 5,
       "fx_qualpath": "attn.transpose",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1521,7 +1522,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1534,6 +1534,7 @@
       "func_name": "contiguous",
       "fx_call_index": 1,
       "fx_qualpath": "attn.contiguous",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1551,7 +1552,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1564,6 +1564,7 @@
       "func_name": "view",
       "fx_call_index": 3,
       "fx_qualpath": "attn.view",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1581,7 +1582,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1594,6 +1594,7 @@
       "func_name": "linear",
       "fx_call_index": 1,
       "fx_qualpath": "attn.linear",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1611,7 +1612,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1624,6 +1624,7 @@
       "func_name": "view",
       "fx_call_index": 4,
       "fx_qualpath": "attn.view",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1643,7 +1644,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1660,6 +1660,7 @@
       "func_name": "view",
       "fx_call_index": 5,
       "fx_qualpath": "attn.view",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1677,7 +1678,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1690,6 +1690,7 @@
       "func_name": "mean",
       "fx_call_index": 0,
       "fx_qualpath": "attn.mean",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": true,
@@ -1709,7 +1710,6 @@
       ],
       "module": "attn:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "attn:1"
       ],
@@ -1726,6 +1726,7 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1746,7 +1747,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [
         "attn:1"
@@ -1754,7 +1754,7 @@
       "output_of_modules": [
         "attn"
       ],
-      "step_index": 28
+      "step_index": 27
     }
   ],
   "trace_summary": {

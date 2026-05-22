@@ -278,7 +278,9 @@ def validate_train_mode_postfunc_output(
             f"backward_ready=True with non-grad dtype {transformed_tensor.dtype} on layer "
             f"{label}. Integer and bool dtypes cannot propagate grads."
         )
-    if transformed_tensor.grad_fn_handle is None:
+    if not transformed_tensor.requires_grad or (
+        transformed_tensor.grad_fn is None and transformed_tensor is not raw_tensor
+    ):
         raise TrainingModeConfigError(
             f"{postfunc_kind}_postfunc returned a tensor disconnected from the autograd "
             "graph (grad_fn is None) while backward_ready=True. The transformed out "

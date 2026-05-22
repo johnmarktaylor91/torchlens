@@ -232,7 +232,7 @@ def test_train_mode_well_behaved_postfunc_keeps_graph_connected_payload() -> Non
     for record in grad_records:
         assert record.transformed_ram_payload is not None
         assert record.transformed_ram_payload.requires_grad is True
-        assert record.transformed_ram_payload.grad_fn_handle is not None
+        assert record.transformed_ram_payload.grad_fn is not None
     grad_records[0].transformed_ram_payload.sum().backward()
     assert model.linear.weight.grad is not None
 
@@ -240,7 +240,7 @@ def test_train_mode_well_behaved_postfunc_keeps_graph_connected_payload() -> Non
 def test_train_mode_detaching_postfunc_rejected() -> None:
     """A detaching postfunc fails train-mode validation."""
 
-    with pytest.raises(tl.TrainingModeConfigError, match="grad_fn_handle is None"):
+    with pytest.raises(tl.TrainingModeConfigError, match="grad_fn is None"):
         tl.fastlog.record(
             _PostfuncModel(),
             torch.ones(1, 3),

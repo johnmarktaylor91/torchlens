@@ -39,19 +39,19 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "call_depth",
         "num_params",
         "num_layers",
-        "num_passes",
+        "num_calls",
     ],
     "module_log": [
         "layer_label",
         "layer_type",
-        "pass_index",
+        "num_ops",
         "func_name",
     ],
     "module_pass": [
         "address",
-        "pass_index",
+        "call_index",
         "call_label",
-        "num_layers",
+        "num_ops",
         "forward_args_summary",
         "forward_kwargs_summary",
     ],
@@ -65,7 +65,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
     "buffers": [
         "address",
         "name",
-        "pass_index",
+        "call_index",
         "has_saved_activation",
     ],
 }
@@ -209,7 +209,7 @@ def _get_surface(log: Any, surface_name: str) -> Any:
     if surface_name == "module_log":
         return log.modules["block"]
     if surface_name == "module_pass":
-        return log.modules["block:1"]
+        return log.module_calls["block:1"]
     if surface_name == "params":
         return log.params
     return log.buffers

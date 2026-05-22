@@ -591,7 +591,9 @@ class ModuleCall:
         **kwargs:
             Additional keyword arguments forwarded to ``DataFrame.to_json``.
         """
-        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
+        from ..export import _parquet_safe_dataframe
+
+        _parquet_safe_dataframe(self.to_pandas()).to_json(filepath, orient=orient, **kwargs)
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state annotated with the current I/O format version."""

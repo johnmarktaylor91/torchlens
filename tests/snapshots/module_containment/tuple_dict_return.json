@@ -130,7 +130,7 @@
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
-      "step_index": 4
+      "step_index": 3
     }
   ],
   "module_calls": [
@@ -208,7 +208,11 @@
       "input_layers": [
         "input_1"
       ],
-      "training": true,
+      "num_calls": 1,
+      "num_param_tensors": 4,
+      "num_params": 40,
+      "num_params_frozen": 0,
+      "num_params_trainable": 40,
       "ops": [
         "input_1",
         "linear_1_1",
@@ -216,14 +220,10 @@
         "add_1_3",
         "output_1"
       ],
-      "num_calls": 1,
-      "num_param_tensors": 4,
-      "num_params": 40,
-      "num_params_frozen": 0,
-      "num_params_trainable": 40,
       "output_layers": [
         "output_1"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "inner",
@@ -235,20 +235,20 @@
         "inner:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "linear_1_1",
-        "linear_2_2"
-      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 40,
       "num_params_frozen": 0,
       "num_params_trainable": 40,
+      "ops": [
+        "linear_1_1",
+        "linear_2_2"
+      ],
       "output_layers": [
         "linear_1_1",
         "linear_2_2"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "inner.left",
@@ -260,18 +260,18 @@
         "inner.left:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "linear_1_1"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 20,
       "num_params_frozen": 0,
       "num_params_trainable": 20,
+      "ops": [
+        "linear_1_1"
+      ],
       "output_layers": [
         "linear_1_1"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "inner.right",
@@ -283,18 +283,18 @@
         "inner.right:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "linear_2_2"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 20,
       "num_params_frozen": 0,
       "num_params_trainable": 20,
+      "ops": [
+        "linear_2_2"
+      ],
       "output_layers": [
         "linear_2_2"
-      ]
+      ],
+      "training": true
     }
   ],
   "ops": [
@@ -303,6 +303,11 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "inner:1",
+        "inner.left:1",
+        "inner.right:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -331,23 +336,19 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "inner:1",
-        "inner.left:1",
-        "inner.right:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 0
     },
     {
-      "atomic_module_call": "inner.left:1",
+      "atomic_module_call": null,
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "inner.left.linear",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -367,7 +368,6 @@
       ],
       "module": "inner.left:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "inner:1",
         "inner.left:1"
@@ -383,12 +383,13 @@
       "step_index": 1
     },
     {
-      "atomic_module_call": "inner.right:1",
+      "atomic_module_call": null,
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "inner.right.linear",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -408,7 +409,6 @@
       ],
       "module": "inner.right:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "inner:1",
         "inner.right:1"
@@ -428,6 +428,7 @@
       "func_name": "__add__",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -445,7 +446,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -456,6 +456,7 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -474,11 +475,10 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
-      "step_index": 4
+      "step_index": 3
     }
   ],
   "trace_summary": {

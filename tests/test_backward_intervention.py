@@ -251,7 +251,7 @@ def test_grad_fn_prehook_posthook_call_index_alignment() -> None:
     pre_hook((torch.ones(1),))
     post_hook((), (torch.ones(1),))
     assert seen == [1]
-    assert grad_fn_handle.ops[1].call_index == 1
+    assert grad_fn_handle.ops[0].call_index == 1
 
 
 def test_grad_fn_prehook_posthook_call_index_alignment_multi_fire() -> None:

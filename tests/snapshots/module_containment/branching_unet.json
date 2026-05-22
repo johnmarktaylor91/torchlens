@@ -379,7 +379,7 @@
       "output_of_modules": [
         "decoders.2"
       ],
-      "step_index": 15
+      "step_index": 14
     }
   ],
   "module_calls": [
@@ -505,7 +505,11 @@
       "input_layers": [
         "input_1"
       ],
-      "training": true,
+      "num_calls": 1,
+      "num_param_tensors": 12,
+      "num_params": 4220,
+      "num_params_frozen": 0,
+      "num_params_trainable": 4220,
       "ops": [
         "input_1",
         "conv2d_1_1",
@@ -524,14 +528,10 @@
         "conv2d_6_14",
         "output_1"
       ],
-      "num_calls": 1,
-      "num_param_tensors": 12,
-      "num_params": 4220,
-      "num_params_frozen": 0,
-      "num_params_trainable": 4220,
       "output_layers": [
         "output_1"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "encoders.0",
@@ -543,18 +543,18 @@
         "encoders.0:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "conv2d_1_1"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 296,
       "num_params_frozen": 0,
       "num_params_trainable": 296,
+      "ops": [
+        "conv2d_1_1"
+      ],
       "output_layers": [
         "conv2d_1_1"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "encoders.1",
@@ -566,18 +566,18 @@
         "encoders.1:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "conv2d_2_3"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 584,
       "num_params_frozen": 0,
       "num_params_trainable": 584,
+      "ops": [
+        "conv2d_2_3"
+      ],
       "output_layers": [
         "conv2d_2_3"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "encoders.2",
@@ -589,18 +589,18 @@
         "encoders.2:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "conv2d_3_5"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 584,
       "num_params_frozen": 0,
       "num_params_trainable": 584,
+      "ops": [
+        "conv2d_3_5"
+      ],
       "output_layers": [
         "conv2d_3_5"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "decoders.0",
@@ -612,18 +612,18 @@
         "decoders.0:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "conv2d_4_8"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 1160,
       "num_params_frozen": 0,
       "num_params_trainable": 1160,
+      "ops": [
+        "conv2d_4_8"
+      ],
       "output_layers": [
         "conv2d_4_8"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "decoders.1",
@@ -635,18 +635,18 @@
         "decoders.1:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "conv2d_5_11"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 1160,
       "num_params_frozen": 0,
       "num_params_trainable": 1160,
+      "ops": [
+        "conv2d_5_11"
+      ],
       "output_layers": [
         "conv2d_5_11"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "decoders.2",
@@ -658,18 +658,18 @@
         "decoders.2:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "conv2d_6_14"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 436,
       "num_params_frozen": 0,
       "num_params_trainable": 436,
+      "ops": [
+        "conv2d_6_14"
+      ],
       "output_layers": [
         "conv2d_6_14"
-      ]
+      ],
+      "training": true
     }
   ],
   "ops": [
@@ -678,6 +678,9 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "encoders.0:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -700,21 +703,19 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "encoders.0:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 0
     },
     {
-      "atomic_module_call": "encoders.0:1",
+      "atomic_module_call": null,
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "encoders.0.conv2d",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -732,7 +733,6 @@
       ],
       "module": "encoders.0:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "encoders.0:1"
       ],
@@ -749,6 +749,9 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "encoders.1:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -770,21 +773,19 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "encoders.1:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 2
     },
     {
-      "atomic_module_call": "encoders.1:1",
+      "atomic_module_call": null,
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "encoders.1.conv2d",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -802,7 +803,6 @@
       ],
       "module": "encoders.1:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "encoders.1:1"
       ],
@@ -819,6 +819,9 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "encoders.2:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -840,21 +843,19 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "encoders.2:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 4
     },
     {
-      "atomic_module_call": "encoders.2:1",
+      "atomic_module_call": null,
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "encoders.2.conv2d",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -872,7 +873,6 @@
       ],
       "module": "encoders.2:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "encoders.2:1"
       ],
@@ -889,6 +889,7 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -906,7 +907,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -917,6 +917,9 @@
       "func_name": "cat",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "decoders.0:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -938,21 +941,19 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "decoders.0:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 7
     },
     {
-      "atomic_module_call": "decoders.0:1",
+      "atomic_module_call": null,
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "decoders.0.conv2d",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -970,7 +971,6 @@
       ],
       "module": "decoders.0:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "decoders.0:1"
       ],
@@ -987,6 +987,7 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1004,7 +1005,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -1015,6 +1015,9 @@
       "func_name": "cat",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "decoders.1:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1036,21 +1039,19 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "decoders.1:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 10
     },
     {
-      "atomic_module_call": "decoders.1:1",
+      "atomic_module_call": null,
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "decoders.1.conv2d",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -1068,7 +1069,6 @@
       ],
       "module": "decoders.1:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "decoders.1:1"
       ],
@@ -1085,6 +1085,7 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1102,7 +1103,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -1113,6 +1113,9 @@
       "func_name": "cat",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "decoders.2:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1134,21 +1137,19 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "decoders.2:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 13
     },
     {
-      "atomic_module_call": "decoders.2:1",
+      "atomic_module_call": null,
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "decoders.2.conv2d",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -1166,7 +1167,6 @@
       ],
       "module": "decoders.2:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "decoders.2:1"
       ],
@@ -1179,10 +1179,11 @@
       "step_index": 14
     },
     {
-      "atomic_module_call": "decoders.2:1",
+      "atomic_module_call": null,
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -1203,7 +1204,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [
         "decoders.2:1"
@@ -1211,7 +1211,7 @@
       "output_of_modules": [
         "decoders.2"
       ],
-      "step_index": 15
+      "step_index": 14
     }
   ],
   "trace_summary": {

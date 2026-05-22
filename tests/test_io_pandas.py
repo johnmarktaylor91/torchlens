@@ -201,7 +201,7 @@ def test_module_call_log_to_pandas_schema(
         Logged model fixture.
     """
     log, _, _ = io_pandas_log
-    pass_log = log.modules["block:1"]
+    pass_log = log.module_calls["block:1"]
     df = pass_log.to_pandas()
     assert isinstance(pass_log, ModuleCall)
     assert list(df.columns) == MODULE_PASS_LOG_FIELD_ORDER
@@ -222,7 +222,7 @@ def test_module_pass_summaries_are_formatted_before_gc(
     """
     log, model, x = io_pandas_log
     payload, config, kwargs = model.build_block_inputs(x)
-    pass_log = log.modules["block:1"]
+    pass_log = log.module_calls["block:1"]
 
     expected_args_summary = format_call_arg((x, payload, config))
     expected_kwargs_summary = format_call_arg(kwargs)

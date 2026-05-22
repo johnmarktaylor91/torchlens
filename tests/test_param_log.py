@@ -602,7 +602,7 @@ class TestIntegration:
         assert mh.params["fc2.weight"].num_calls >= 2
         # Verify all entries point to real layers
         for pl in mh.params:
-            for label in pl.used_by_layers:
+            for label in pl.used_by_ops:
                 assert label in mh.layer_dict_all_keys
 
     def test_grad_tracking_recurrent(self, input_2d):

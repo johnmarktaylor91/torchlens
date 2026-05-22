@@ -271,7 +271,7 @@ class TestFuncConfigIntegration:
 
         linear_layer = next(ly for ly in log.layers if ly.layer_type == "linear")
         # Access via pass
-        pass_log = linear_layer.ops[1]
+        pass_log = linear_layer.ops[0]
         assert pass_log.func_config["out_features"] == 5
 
     def test_func_config_in_str_output(self):

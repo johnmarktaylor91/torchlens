@@ -37,6 +37,7 @@ MODEL_LOG_FIELD_ORDER = [
     "model_label",
     "tlspec_version",
     "_tracing_finished",
+    "backend",
     "capture_mode",
     "_layers_logged",
     "_layers_saved",

@@ -207,7 +207,7 @@ class TestModuleCallLog:
     def test_pass_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.ops[1]
+        mpl = ml.ops[0]
         assert isinstance(mpl, ModuleCall)
         # Pass layers should be a subset of parent layers
         assert all(label.split(":", 1)[0] in ml.layer_labels for label in mpl.ops)
@@ -215,7 +215,7 @@ class TestModuleCallLog:
     def test_input_output_layers(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.ops[1]
+        mpl = ml.ops[0]
         assert isinstance(mpl.input_layers, list)
         assert isinstance(mpl.output_layers, list)
 
@@ -223,13 +223,13 @@ class TestModuleCallLog:
         log = trace_fn(_make_nested_model(), _nested_input())
         # "0" contains "0.0" and "0.1" as submodules
         ml = log.modules["0"]
-        mpl = ml.ops[1]
+        mpl = ml.ops[0]
         assert isinstance(mpl.call_children, list)
 
     def test_repr(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        mpl = ml.ops[1]
+        mpl = ml.ops[0]
         r = repr(mpl)
         assert "ModuleCall" in r
         assert len(r) > 0
@@ -285,7 +285,7 @@ class TestSinglePassDelegation:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         assert ml.num_calls == 1
-        assert ml.layer_labels == [label.split(":", 1)[0] for label in ml.ops[1].ops]
+        assert ml.layer_labels == [label.split(":", 1)[0] for label in ml.ops[0].ops]
 
     def test_forward_args_delegates(self):
         log = trace_fn(_make_simple_model(), _simple_input())

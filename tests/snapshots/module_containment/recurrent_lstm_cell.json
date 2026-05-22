@@ -148,7 +148,7 @@
       "output_of_modules": [
         "readout"
       ],
-      "step_index": 4
+      "step_index": 9
     },
     {
       "in_submodule": false,
@@ -171,7 +171,7 @@
       "output_of_modules": [
         "readout"
       ],
-      "step_index": 5
+      "step_index": 9
     }
   ],
   "module_calls": [
@@ -267,7 +267,11 @@
       "input_layers": [
         "input_1"
       ],
-      "training": true,
+      "num_calls": 1,
+      "num_param_tensors": 6,
+      "num_params": 1732,
+      "num_params_frozen": 0,
+      "num_params_trainable": 1732,
       "ops": [
         "input_1",
         "newzeros_1_1",
@@ -276,14 +280,10 @@
         "linear_1_4",
         "output_1"
       ],
-      "num_calls": 1,
-      "num_param_tensors": 6,
-      "num_params": 1732,
-      "num_params_frozen": 0,
-      "num_params_trainable": 1732,
       "output_layers": [
         "output_1"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "cell",
@@ -297,15 +297,14 @@
         "cell:3"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "lstmcell_1_3"
-      ],
       "num_calls": 3,
       "num_param_tensors": 4,
       "num_params": 1664,
       "num_params_frozen": 0,
       "num_params_trainable": 1664,
+      "ops": [
+        "lstmcell_1_3"
+      ],
       "output_layers": [
         "lstmcell_1_3:1",
         "lstmcell_1_3:2",
@@ -313,7 +312,8 @@
         "lstmcell_1_3:4",
         "lstmcell_1_3:5",
         "lstmcell_1_3:6"
-      ]
+      ],
+      "training": true
     },
     {
       "address": "readout",
@@ -325,18 +325,18 @@
         "readout:1"
       ],
       "input_layers": [],
-      "training": true,
-      "ops": [
-        "linear_1_4"
-      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 68,
       "num_params_frozen": 0,
       "num_params_trainable": 68,
+      "ops": [
+        "linear_1_4"
+      ],
       "output_layers": [
         "linear_1_4"
-      ]
+      ],
+      "training": true
     }
   ],
   "ops": [
@@ -345,6 +345,11 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "cell:1",
+        "cell:2",
+        "cell:3"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -373,11 +378,6 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "cell:1",
-        "cell:2",
-        "cell:3"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -388,6 +388,9 @@
       "func_name": "new_zeros",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "cell:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -405,9 +408,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [
-        "cell:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
@@ -418,6 +418,9 @@
       "func_name": "new_zeros",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [
+        "cell:1"
+      ],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -435,21 +438,21 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [
-        "cell:1"
-      ],
       "modules": [],
       "output_of_module_calls": [],
       "output_of_modules": [],
       "step_index": 2
     },
     {
-      "atomic_module_call": "cell:1",
+      "atomic_module_call": null,
       "func_name": "lstm_cell",
       "fx_call_index": 0,
       "fx_qualpath": "cell.lstm_cell",
+      "input_to_module_calls": [
+        "cell:2"
+      ],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -464,9 +467,6 @@
       ],
       "module": "cell:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [
-        "cell:2"
-      ],
       "modules": [
         "cell:1"
       ],
@@ -479,12 +479,15 @@
       "step_index": 3
     },
     {
-      "atomic_module_call": "cell:1",
+      "atomic_module_call": null,
       "func_name": "lstm_cell",
       "fx_call_index": 1,
       "fx_qualpath": "cell.lstm_cell",
+      "input_to_module_calls": [
+        "cell:2"
+      ],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -499,9 +502,6 @@
       ],
       "module": "cell:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [
-        "cell:2"
-      ],
       "modules": [
         "cell:1"
       ],
@@ -511,15 +511,18 @@
       "output_of_modules": [
         "cell"
       ],
-      "step_index": 3
+      "step_index": 4
     },
     {
-      "atomic_module_call": "cell:2",
+      "atomic_module_call": null,
       "func_name": "lstm_cell",
       "fx_call_index": 2,
       "fx_qualpath": "cell.lstm_cell",
+      "input_to_module_calls": [
+        "cell:3"
+      ],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -534,9 +537,6 @@
       ],
       "module": "cell:2",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [
-        "cell:3"
-      ],
       "modules": [
         "cell:2"
       ],
@@ -546,15 +546,18 @@
       "output_of_modules": [
         "cell"
       ],
-      "step_index": 3
+      "step_index": 5
     },
     {
-      "atomic_module_call": "cell:2",
+      "atomic_module_call": null,
       "func_name": "lstm_cell",
       "fx_call_index": 3,
       "fx_qualpath": "cell.lstm_cell",
+      "input_to_module_calls": [
+        "cell:3"
+      ],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -569,9 +572,6 @@
       ],
       "module": "cell:2",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [
-        "cell:3"
-      ],
       "modules": [
         "cell:2"
       ],
@@ -581,15 +581,18 @@
       "output_of_modules": [
         "cell"
       ],
-      "step_index": 3
+      "step_index": 6
     },
     {
-      "atomic_module_call": "cell:3",
+      "atomic_module_call": null,
       "func_name": "lstm_cell",
       "fx_call_index": 4,
       "fx_qualpath": "cell.lstm_cell",
+      "input_to_module_calls": [
+        "readout:1"
+      ],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -608,9 +611,6 @@
           0
         ]
       },
-      "input_to_module_calls": [
-        "readout:1"
-      ],
       "modules": [
         "cell:3"
       ],
@@ -620,15 +620,16 @@
       "output_of_modules": [
         "cell"
       ],
-      "step_index": 3
+      "step_index": 7
     },
     {
-      "atomic_module_call": "cell:3",
+      "atomic_module_call": null,
       "func_name": "lstm_cell",
       "fx_call_index": 5,
       "fx_qualpath": "cell.lstm_cell",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": true,
       "is_internal_source": false,
       "is_orphan": false,
@@ -643,7 +644,6 @@
       ],
       "module": "cell:3",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "cell:3"
       ],
@@ -653,15 +653,16 @@
       "output_of_modules": [
         "cell"
       ],
-      "step_index": 3
+      "step_index": 8
     },
     {
-      "atomic_module_call": "readout:1",
+      "atomic_module_call": null,
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "readout.linear",
+      "input_to_module_calls": [],
       "intervention_replaced": false,
-      "is_atomic_module": true,
+      "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
@@ -679,7 +680,6 @@
       ],
       "module": "readout:1",
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [
         "readout:1"
       ],
@@ -689,13 +689,14 @@
       "output_of_modules": [
         "readout"
       ],
-      "step_index": 4
+      "step_index": 9
     },
     {
-      "atomic_module_call": "readout:1",
+      "atomic_module_call": null,
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
+      "input_to_module_calls": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
@@ -716,7 +717,6 @@
       ],
       "module": null,
       "module_entry_arg_keys": {},
-      "input_to_module_calls": [],
       "modules": [],
       "output_of_module_calls": [
         "readout:1"
@@ -724,7 +724,7 @@
       "output_of_modules": [
         "readout"
       ],
-      "step_index": 5
+      "step_index": 9
     }
   ],
   "trace_summary": {

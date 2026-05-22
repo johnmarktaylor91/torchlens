@@ -164,7 +164,7 @@ def test_train_mode_out_postfunc_connected_ops() -> None:
         out_postfunc=lambda t: t * 2,
     )
 
-    assert _first_transformed_layer(trace).transformed_out.grad_fn_handle is not None
+    assert _first_transformed_layer(trace).transformed_out.grad_fn is not None
 
 
 def test_postfunc_error_has_context_and_cause() -> None:

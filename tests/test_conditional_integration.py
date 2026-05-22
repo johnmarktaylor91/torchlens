@@ -1662,7 +1662,8 @@ def test_selective_save_preserves_all_conditional_surfaces() -> None:
         layers_to_save=[-1],
     )
 
-    assert log.num_saved_ops == 1
+    assert log.num_saved_ops == 2
+    assert set(log.saved_ops.keys()) == {"add_1_6", "output_1"}
     assert _collect_model_conditional_labels(log).issubset(set(log.layer_labels))
     assert all(
         parent_label in log.layer_logs and child_label in log.layer_logs
