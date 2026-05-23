@@ -769,6 +769,19 @@ def _record_module_entry_metadata(
     # Stash forward args for later use by _build_module_logs.
     trace._module_forward_args[(address, module_call_index)] = (args, kwargs)
     module_call_label_str = f"{address}:{module_call_index}"
+    should_capture_template = bool(
+        getattr(trace, "intervention_ready", False) or getattr(trace, "save_arg_templates", False)
+    )
+    if should_capture_template:
+        from .ops import _build_args_template
+
+        captured_template = _build_args_template(module.forward, args, kwargs)
+        trace._module_build_data.setdefault("module_forward_templates", {})[
+            module_call_label_str
+        ] = (
+            captured_template,
+            captured_template if kwargs else None,
+        )
     trace._module_build_data.setdefault("module_forward_start_times", {})[module_call_label_str] = (
         time.time()
     )
@@ -791,9 +804,9 @@ def _record_module_entry_metadata(
     for t in input_tensors:
         # Lazily register buffer tensors that haven't been logged yet.
         label = get_tensor_label(t)
-        address = get_buffer_address(t)
-        if label is None and address is not None:
-            log_source_tensor(trace, t, "buffer", address)
+        buffer_address = get_buffer_address(t)
+        if label is None and buffer_address is not None:
+            log_source_tensor(trace, t, "buffer", buffer_address)
             label = get_tensor_label(t)
         if label is None:
             # Raw ``register_forward_hook`` replacements run after this

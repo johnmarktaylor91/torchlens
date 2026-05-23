@@ -383,6 +383,7 @@ if TYPE_CHECKING:
     from .._io.lazy import LazyActivationRef
     from .func_call_location import FuncCallLocation
     from .layer_log import Layer
+    from .layer_log import OpAccessor
     from .param_log import Param
     from .model_log import Trace
 
@@ -446,6 +447,12 @@ class Op:
         "saved_kwargs": FieldPolicy.BLOB_RECURSIVE,
         "args_template": FieldPolicy.DROP,
         "kwargs_template": FieldPolicy.DROP,
+        "input_ops": FieldPolicy.DROP,
+        "input_activations": FieldPolicy.DROP,
+        "input_shapes": FieldPolicy.DROP,
+        "input_dtypes": FieldPolicy.DROP,
+        "input_memory": FieldPolicy.DROP,
+        "num_inputs": FieldPolicy.DROP,
         "shape": FieldPolicy.KEEP,
         "transformed_out_shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
@@ -670,6 +677,16 @@ class Op:
             fields_dict["ordinal_index"] = -1
         if "grad_fn" not in fields_dict:
             fields_dict["grad_fn"] = None
+        for derived_field in (
+            "input_ops",
+            "input_activations",
+            "input_shapes",
+            "input_dtypes",
+            "input_memory",
+            "num_inputs",
+        ):
+            if derived_field not in fields_dict:
+                fields_dict[derived_field] = None
         fields_dict_key_set = set(fields_dict.keys())
         if fields_dict_key_set != _LAYER_PASS_LOG_FIELD_ORDER_SET:
             error_str = "Error initializing Op:"
@@ -1015,6 +1032,117 @@ class Op:
     def num_param_tensors(self) -> int:
         """Number of parameter tensors used by this operation."""
         return len(self._param_barcodes)
+
+    @property
+    def input_ops(self) -> "OpAccessor":
+        """Accessor over graph-parent Op records in ``parents`` order."""
+
+        from .layer_log import OpAccessor
+
+        trace = self._source_trace_or_error()
+        parent_ops = {}
+        for parent_index, parent_label in enumerate(self.parents, start=1):
+            try:
+                parent_ops[parent_index] = trace.ops[parent_label]
+            except KeyError:
+                if parent_label in trace.layer_dict_all_keys:
+                    parent_ops[parent_index] = trace.layer_dict_all_keys[parent_label]
+        return OpAccessor(parent_ops)
+
+    @input_ops.deleter
+    def input_ops(self) -> None:
+        """Ignore cleanup deletion for derived input Op access."""
+
+    @property
+    def input_activations(self) -> tuple[torch.Tensor | None, ...]:
+        """Saved parent activations consumed by this Op, as references.
+
+        Returned tensors are not copied. Mutating them mutates TorchLens saved
+        state. For in-place-modified parents, the per-child version consumed by
+        this Op is returned when available.
+        """
+
+        trace = self._source_trace_or_error()
+        activations: list[torch.Tensor | None] = []
+        child_labels = (
+            self.layer_label,
+            self.layer_label_w_pass,
+            self._label_raw,
+            self._layer_label_raw,
+        )
+        for parent_label in self.parents:
+            parent: Op | None
+            try:
+                parent = trace.ops[parent_label]
+            except KeyError:
+                parent = cast("Op | None", trace.layer_dict_all_keys.get(parent_label))
+            if parent is None:
+                activations.append(None)
+                continue
+            if not parent.has_saved_activation:
+                activations.append(None)
+                continue
+            child_versions = getattr(parent, "out_versions_by_child", {}) or {}
+            consumed = next(
+                (child_versions[label] for label in child_labels if label in child_versions),
+                parent.out,
+            )
+            activations.append(consumed if isinstance(consumed, torch.Tensor) else None)
+        return tuple(activations)
+
+    @input_activations.deleter
+    def input_activations(self) -> None:
+        """Ignore cleanup deletion for derived input activations."""
+
+    @property
+    def input_shapes(self) -> tuple[Any | None, ...]:
+        """Shapes of saved parent activations in ``parents`` order."""
+
+        return tuple(
+            None if activation is None else activation.shape
+            for activation in self.input_activations
+        )
+
+    @input_shapes.deleter
+    def input_shapes(self) -> None:
+        """Ignore cleanup deletion for derived input shapes."""
+
+    @property
+    def input_dtypes(self) -> tuple[torch.dtype | None, ...]:
+        """Dtypes of saved parent activations in ``parents`` order."""
+
+        return tuple(
+            None if activation is None else activation.dtype
+            for activation in self.input_activations
+        )
+
+    @input_dtypes.deleter
+    def input_dtypes(self) -> None:
+        """Ignore cleanup deletion for derived input dtypes."""
+
+    @property
+    def input_memory(self) -> int:
+        """Sum of activation bytes across saved graph-parent Ops."""
+
+        return sum(
+            int(getattr(parent, "memory", 0) or 0)
+            for parent in self.input_ops.values()
+            if parent.has_saved_activation
+        )
+
+    @input_memory.deleter
+    def input_memory(self) -> None:
+        """Ignore cleanup deletion for derived input memory."""
+
+    @property
+    def num_inputs(self) -> int:
+        """Number of graph-parent input Ops."""
+
+        return len(self.parents)
+
+    @num_inputs.deleter
+    def num_inputs(self) -> None:
+        """Ignore cleanup deletion for derived input count."""
 
     @property
     def in_submodule(self) -> bool:

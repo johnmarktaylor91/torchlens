@@ -71,7 +71,7 @@ if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .layer_log import LayerAccessor
-    from .module_log import Module
+    from .module_log import CallTreeNode, Module
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .. import _state
@@ -992,6 +992,8 @@ class Trace:
         "layer_num_calls": FieldPolicy.KEEP,
         "_layer_nums_to_save": FieldPolicy.KEEP,
         "num_ops": FieldPolicy.KEEP,
+        "num_modules": FieldPolicy.DROP,
+        "call_tree": FieldPolicy.DROP,
         "_raw_to_final_layer_labels": FieldPolicy.KEEP,
         "_final_to_raw_layer_labels": FieldPolicy.KEEP,
         "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
@@ -3246,6 +3248,22 @@ class Trace:
         """Total number of registered source-model submodules."""
 
         return len(self._module_logs)
+
+    @num_modules.deleter
+    def num_modules(self) -> None:
+        """Ignore cleanup deletion for derived module count."""
+
+    @property
+    def call_tree(self) -> "CallTreeNode":
+        """Full dynamic ModuleCall tree rooted at the model-entry call."""
+
+        if "self:1" not in self.module_calls:
+            return None  # type: ignore[return-value]
+        return self.module_calls["self:1"].call_tree
+
+    @call_tree.deleter
+    def call_tree(self) -> None:
+        """Ignore cleanup deletion for derived call-tree access."""
 
     @property
     def orphans(self) -> OrphanAccessor:

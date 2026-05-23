@@ -24,7 +24,7 @@ This matches each accessor's natural granularity.
 
 import weakref
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from os import PathLike
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union, cast
 
@@ -135,6 +135,19 @@ class HookInfo:
     source_location: "FuncCallLocation | None" = None
 
 
+@dataclass
+class CallTreeNode:
+    """Node in the dynamic call tree of a Trace."""
+
+    call: "ModuleCall"
+    children: list["CallTreeNode"] = field(default_factory=list)
+
+    def __repr__(self) -> str:
+        """Return a compact call-label and child-count representation."""
+
+        return f"CallTreeNode(call={self.call.call_label!r}, children={len(self.children)})"
+
+
 def _duration_str(duration: float) -> str:
     """Return a human-readable duration string.
 
@@ -210,6 +223,10 @@ class ModuleCall:
         "num_forward_kwargs": FieldPolicy.KEEP,
         "forward_args_summary": FieldPolicy.KEEP,
         "forward_kwargs_summary": FieldPolicy.KEEP,
+        "forward_args_template": FieldPolicy.DROP,
+        "forward_kwargs_template": FieldPolicy.DROP,
+        "_forward_args_template": FieldPolicy.DROP,
+        "_forward_kwargs_template": FieldPolicy.DROP,
         "forward_duration": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
         "module_call_stack": FieldPolicy.KEEP,
@@ -258,6 +275,8 @@ class ModuleCall:
         output_structure: "ContainerSpec | None" = None,
         forward_args: tuple[Any, ...] | None = None,
         forward_kwargs: dict[str, Any] | None = None,
+        forward_args_template: Any = None,
+        forward_kwargs_template: Any = None,
         forward_arg_names: List[str] | None = None,
         forward_duration: float = 0.0,
         code_context: List["FuncCallLocation"] | None = None,
@@ -293,6 +312,8 @@ class ModuleCall:
         self.num_forward_args_total = self.num_forward_pos_args + self.num_forward_kwargs
         self.forward_args_summary = ""
         self.forward_kwargs_summary = ""
+        self.forward_args_template = forward_args_template
+        self.forward_kwargs_template = forward_kwargs_template
         self.forward_duration = forward_duration
         self.code_context = code_context if code_context is not None else []
         self.module_call_stack = module_call_stack if module_call_stack is not None else []
@@ -344,6 +365,30 @@ class ModuleCall:
         return self.forward_args is not None or self.forward_kwargs is not None
 
     @property
+    def forward_args_template(self) -> Any:
+        """Structural template for positional forward arguments at this call."""
+
+        return self.__dict__.get("_forward_args_template")
+
+    @forward_args_template.setter
+    def forward_args_template(self, value: Any) -> None:
+        """Set the structural template for positional forward arguments."""
+
+        self.__dict__["_forward_args_template"] = value
+
+    @property
+    def forward_kwargs_template(self) -> Any:
+        """Structural template for keyword forward arguments at this call."""
+
+        return self.__dict__.get("_forward_kwargs_template")
+
+    @forward_kwargs_template.setter
+    def forward_kwargs_template(self, value: Any) -> None:
+        """Set the structural template for keyword forward arguments."""
+
+        self.__dict__["_forward_kwargs_template"] = value
+
+    @property
     def num_param_tensors(self) -> int:
         """Number of parameter tensors owned by the called Module."""
 
@@ -393,6 +438,149 @@ class ModuleCall:
         """Human-readable wall-clock forward duration."""
 
         return _duration_str(self.forward_duration)
+
+    @property
+    def backward_duration(self) -> float | None:
+        """Backward duration placeholder populated in the backward-pass sprint."""
+
+        return None
+
+    @property
+    def backward_duration_str(self) -> str | None:
+        """Human-readable backward duration placeholder for the backward-pass sprint."""
+
+        return None
+
+    def _ops_by_output_role(self, *, output: bool) -> list["Op"]:
+        """Return Op records inside this call, filtered by output boundary role."""
+
+        trace = self._source_trace
+        if trace is None:
+            return []
+        output_labels = set(self.output_ops)
+        return [
+            cast("Op", trace.ops[label]) for label in self.ops if (label in output_labels) is output
+        ]
+
+    def _sum_op_memory(self, field_name: str, *, output: bool) -> int:
+        """Sum an Op memory field for output or non-output Ops in this call."""
+
+        return sum(
+            int(getattr(op, field_name, 0) or 0) for op in self._ops_by_output_role(output=output)
+        )
+
+    @property
+    def output_activation_memory(self) -> int:
+        """Activation bytes for Ops whose outputs form this call's return value."""
+
+        return self._sum_op_memory("memory", output=True)
+
+    @property
+    def output_activation_memory_str(self) -> str:
+        """Human-readable output activation memory for this call."""
+
+        return human_readable_size(self.output_activation_memory)
+
+    @property
+    def internal_activation_memory(self) -> int:
+        """Activation bytes for non-output Ops executed inside this call."""
+
+        return self._sum_op_memory("memory", output=False)
+
+    @property
+    def internal_activation_memory_str(self) -> str:
+        """Human-readable internal activation memory for this call."""
+
+        return human_readable_size(self.internal_activation_memory)
+
+    @property
+    def output_gradient_memory(self) -> int:
+        """Gradient bytes for Ops whose outputs form this call's return value."""
+
+        return self._sum_op_memory("gradient_memory", output=True)
+
+    @property
+    def output_gradient_memory_str(self) -> str:
+        """Human-readable output gradient memory for this call."""
+
+        return human_readable_size(self.output_gradient_memory)
+
+    @property
+    def internal_gradient_memory(self) -> int:
+        """Gradient bytes for non-output Ops executed inside this call."""
+
+        return self._sum_op_memory("gradient_memory", output=False)
+
+    @property
+    def internal_gradient_memory_str(self) -> str:
+        """Human-readable internal gradient memory for this call."""
+
+        return human_readable_size(self.internal_gradient_memory)
+
+    @property
+    def autograd_memory(self) -> int:
+        """Autograd-saved tensor bytes for all Ops executed inside this call."""
+
+        trace = self._source_trace
+        if trace is None:
+            return 0
+        return sum(int(getattr(trace.ops[label], "autograd_memory", 0) or 0) for label in self.ops)
+
+    @property
+    def autograd_memory_str(self) -> str:
+        """Human-readable autograd memory for this call."""
+
+        return human_readable_size(self.autograd_memory)
+
+    @property
+    def param_memory(self) -> int:
+        """Address-recursive parameter bytes for the Module invoked by this call."""
+
+        return self.module.param_memory
+
+    @property
+    def param_memory_str(self) -> str:
+        """Human-readable address-recursive parameter memory for this call."""
+
+        return human_readable_size(self.param_memory)
+
+    @property
+    def call_tree(self) -> CallTreeNode:
+        """Return the dynamic call subtree rooted at this ModuleCall."""
+
+        trace = self._source_trace
+        if trace is None:
+            return CallTreeNode(call=self)
+        return CallTreeNode(
+            call=self,
+            children=[
+                trace.module_calls[child_label].call_tree for child_label in self.call_children
+            ],
+        )
+
+    @property
+    def num_descendant_calls(self) -> int:
+        """Number of nested ModuleCalls under this call, recursively."""
+
+        trace = self._source_trace
+        if trace is None:
+            return 0
+        return sum(
+            1 + trace.module_calls[child_label].num_descendant_calls
+            for child_label in self.call_children
+        )
+
+    @property
+    def max_descendant_depth(self) -> int:
+        """Deepest nested ModuleCall depth beneath this call."""
+
+        trace = self._source_trace
+        if trace is None or not self.call_children:
+            return 0
+        return 1 + max(
+            trace.module_calls[child_label].max_descendant_depth
+            for child_label in self.call_children
+        )
 
     @property
     def _source_trace(self) -> "Trace | None":
@@ -621,6 +809,10 @@ class ModuleCall:
                 state["output_ops"] = state.pop("output_labels")
             else:
                 state["output_ops"] = list(state.get("output_layers", []))
+        if "forward_args_template" in state:
+            state["_forward_args_template"] = state.pop("forward_args_template")
+        if "forward_kwargs_template" in state:
+            state["_forward_kwargs_template"] = state.pop("forward_kwargs_template")
         default_fill_state(
             state,
             defaults={
@@ -635,6 +827,8 @@ class ModuleCall:
                 "num_forward_kwargs": 0,
                 "forward_args_summary": "",
                 "forward_kwargs_summary": "",
+                "_forward_args_template": None,
+                "_forward_kwargs_template": None,
                 "forward_duration": 0.0,
                 "code_context": [],
                 "module_call_stack": [],
@@ -694,6 +888,7 @@ class Module:
         "num_params_trainable": FieldPolicy.KEEP,
         "num_params_frozen": FieldPolicy.KEEP,
         "param_memory": FieldPolicy.KEEP,
+        "_direct_param_memory": FieldPolicy.DROP,
         "buffer_layers": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
         "training": FieldPolicy.KEEP,
@@ -746,7 +941,6 @@ class Module:
     num_param_tensors: int
     num_param_tensors_trainable: int
     num_param_tensors_frozen: int
-    param_memory: int
     has_trainable_params: bool
     has_frozen_params: bool
     buffer_layers: List[str]
@@ -862,7 +1056,7 @@ class Module:
         self.num_params = num_params
         self.num_params_trainable = num_params_trainable
         self.num_params_frozen = num_params_frozen
-        self.param_memory = param_memory
+        self._direct_param_memory = param_memory
         self.buffer_layers = buffer_layers if buffer_layers is not None else []
         self._buffer_accessor: Any = None  # populated by _build_module_logs
 
@@ -929,14 +1123,111 @@ class Module:
             return []
         return [cast("Module", trace.modules[address]) for address in self.call_children]
 
+    def _recursive_modules_depth_first(self) -> list["Module"]:
+        """Return this Module and address descendants in stable depth-first order."""
+
+        trace = self._source_trace
+        if trace is None:
+            return [self]
+
+        modules: list[Module] = []
+
+        def visit(module: Module) -> None:
+            """Append one module and recursively visit address-sorted children."""
+
+            modules.append(module)
+            for child_address in sorted(module.address_children):
+                if child_address in trace.modules:
+                    visit(cast("Module", trace.modules[child_address]))
+
+        visit(self)
+        return modules
+
+    @property
+    def recursive_params(self) -> "ParamAccessor":
+        """Parameters owned by this Module address and all address descendants."""
+
+        from .param_log import ParamAccessor
+
+        trace = self._source_trace
+        if trace is None:
+            return self.params
+
+        module_addresses = [module.address for module in self._recursive_modules_depth_first()]
+        recursive_param_dict: dict[str, Any] = {}
+        for module_address in module_addresses:
+            for param in trace.param_logs:
+                if (
+                    param.module_address == module_address
+                    and param.address not in recursive_param_dict
+                ):
+                    recursive_param_dict[param.address] = param
+        return ParamAccessor(recursive_param_dict)
+
+    @property
+    def recursive_param_addresses(self) -> list[str]:
+        """Parameter addresses in the same order as ``recursive_params``."""
+
+        return list(self.recursive_params.keys())
+
+    @property
+    def num_recursive_params(self) -> int:
+        """Number of address-recursive parameter records."""
+
+        return len(self.recursive_params)
+
+    @property
+    def num_recursive_params_trainable(self) -> int:
+        """Number of trainable address-recursive parameter records."""
+
+        return sum(1 for param in self.recursive_params if param.trainable)
+
+    @property
+    def num_recursive_params_frozen(self) -> int:
+        """Number of frozen address-recursive parameter records."""
+
+        return sum(1 for param in self.recursive_params if not param.trainable)
+
+    @property
+    def num_recursive_param_tensors(self) -> int:
+        """Number of tensors across address-recursive parameter records."""
+
+        return sum(int(getattr(param, "num_tensors", 1) or 1) for param in self.recursive_params)
+
+    @property
+    def num_recursive_param_tensors_trainable(self) -> int:
+        """Number of trainable tensors across address-recursive parameters."""
+
+        return sum(
+            int(getattr(param, "num_tensors", 1) or 1)
+            for param in self.recursive_params
+            if param.trainable
+        )
+
+    @property
+    def num_recursive_param_tensors_frozen(self) -> int:
+        """Number of frozen tensors across address-recursive parameters."""
+
+        return sum(
+            int(getattr(param, "num_tensors", 1) or 1)
+            for param in self.recursive_params
+            if not param.trainable
+        )
+
+    @property
+    def param_memory(self) -> int:
+        """Address-recursive parameter bytes for this Module and descendants."""
+
+        return sum(int(param.memory or 0) for param in self.recursive_params)
+
     @property
     def param_memory_str(self) -> str:
-        """Return parameter tensor size in human-readable units.
+        """Return address-recursive parameter size in human-readable units.
 
         Returns
         -------
         str
-            Human-readable parameter memory amount.
+            Human-readable recursive parameter memory amount.
         """
         return human_readable_size(self.param_memory)
 
@@ -1074,6 +1365,22 @@ class Module:
         return cast(str, self._single_pass_or_error("forward_kwargs_summary"))
 
     @property
+    def forward_args_template(self) -> Any:
+        """Representative structural template for positional forward arguments."""
+
+        if len(self.ops) == 0:
+            return None
+        return next(iter(self.ops.values())).forward_args_template
+
+    @property
+    def forward_kwargs_template(self) -> Any:
+        """Representative structural template for keyword forward arguments."""
+
+        if len(self.ops) == 0:
+            return None
+        return next(iter(self.ops.values())).forward_kwargs_template
+
+    @property
     def forward_duration(self) -> float:
         """Wall-clock duration for this Module's single forward call."""
 
@@ -1098,6 +1405,30 @@ class Module:
         return _duration_str(self.total_forward_duration)
 
     @property
+    def backward_duration(self) -> float | None:
+        """Backward duration placeholder populated in the backward-pass sprint."""
+
+        return None
+
+    @property
+    def backward_duration_str(self) -> str | None:
+        """Human-readable backward duration placeholder for the backward-pass sprint."""
+
+        return None
+
+    @property
+    def total_backward_duration(self) -> float | None:
+        """Cross-call backward duration placeholder for the backward-pass sprint."""
+
+        return None
+
+    @property
+    def total_backward_duration_str(self) -> str | None:
+        """Human-readable cross-call backward duration placeholder."""
+
+        return None
+
+    @property
     def func_calls_duration(self) -> float:
         """Inclusive torch function duration for this Module's single call."""
 
@@ -1120,6 +1451,93 @@ class Module:
         """Human-readable total torch function duration."""
 
         return _duration_str(self.total_func_calls_duration)
+
+    @property
+    def total_output_activation_memory(self) -> int:
+        """Sum of output activation bytes across this Module's calls."""
+
+        return sum(call.output_activation_memory for call in self.ops.values())
+
+    @property
+    def total_output_activation_memory_str(self) -> str:
+        """Human-readable total output activation memory."""
+
+        return human_readable_size(self.total_output_activation_memory)
+
+    @property
+    def total_internal_activation_memory(self) -> int:
+        """Sum of internal activation bytes across this Module's calls."""
+
+        return sum(call.internal_activation_memory for call in self.ops.values())
+
+    @property
+    def total_internal_activation_memory_str(self) -> str:
+        """Human-readable total internal activation memory."""
+
+        return human_readable_size(self.total_internal_activation_memory)
+
+    @property
+    def total_output_gradient_memory(self) -> int:
+        """Sum of output gradient bytes across this Module's calls."""
+
+        return sum(call.output_gradient_memory for call in self.ops.values())
+
+    @property
+    def total_output_gradient_memory_str(self) -> str:
+        """Human-readable total output gradient memory."""
+
+        return human_readable_size(self.total_output_gradient_memory)
+
+    @property
+    def total_internal_gradient_memory(self) -> int:
+        """Sum of internal gradient bytes across this Module's calls."""
+
+        return sum(call.internal_gradient_memory for call in self.ops.values())
+
+    @property
+    def total_internal_gradient_memory_str(self) -> str:
+        """Human-readable total internal gradient memory."""
+
+        return human_readable_size(self.total_internal_gradient_memory)
+
+    @property
+    def total_autograd_memory(self) -> int:
+        """Sum of autograd-saved bytes across this Module's calls."""
+
+        return sum(call.autograd_memory for call in self.ops.values())
+
+    @property
+    def total_autograd_memory_str(self) -> str:
+        """Human-readable total autograd memory across this Module's calls."""
+
+        return human_readable_size(self.total_autograd_memory)
+
+    @property
+    def call_tree(self) -> CallTreeNode | list[CallTreeNode]:
+        """Return call subtree(s) for this Module.
+
+        Returns a single ``CallTreeNode`` when the Module has one call and a list
+        of sibling roots when the Module was called multiple times.
+        """
+
+        trees = [call.call_tree for call in self.ops.values()]
+        if len(trees) == 1:
+            return trees[0]
+        return trees
+
+    @property
+    def num_descendant_calls(self) -> int:
+        """Total nested ModuleCalls beneath all calls of this Module."""
+
+        return sum(call.num_descendant_calls for call in self.ops.values())
+
+    @property
+    def max_descendant_depth(self) -> int:
+        """Deepest nested ModuleCall depth beneath this Module."""
+
+        if len(self.ops) == 0:
+            return 0
+        return max(call.max_descendant_depth for call in self.ops.values())
 
     @property
     def num_param_tensors(self) -> int:

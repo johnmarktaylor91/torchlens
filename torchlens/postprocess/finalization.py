@@ -526,6 +526,9 @@ def _build_submodule_call_logs(
         fwd_args = module_forward_args.get((address, call_index))
         fwd_positional = fwd_args[0] if fwd_args else None
         fwd_kwargs = fwd_args[1] if fwd_args else None
+        fwd_templates = mbd.get("module_forward_templates", {}).get(call_label)
+        fwd_args_template = fwd_templates[0] if fwd_templates else None
+        fwd_kwargs_template = fwd_templates[1] if fwd_templates else None
 
         # Call children for this pass
         call_children_pass = list(mbd["module_pass_children"].get(call_label, []))
@@ -548,6 +551,8 @@ def _build_submodule_call_logs(
             ),
             forward_args=fwd_positional,
             forward_kwargs=fwd_kwargs,
+            forward_args_template=fwd_args_template,
+            forward_kwargs_template=fwd_kwargs_template,
             forward_arg_names=[
                 str(arg_key)
                 for _layer_label, arg_key in mbd["module_layer_argnames"].get(call_label, [])
