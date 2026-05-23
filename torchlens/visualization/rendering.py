@@ -2240,7 +2240,7 @@ def _collapse_address_for_node(
         return None
 
     modules = list(node.modules)
-    if getattr(node, "is_atomic_module", False):
+    if getattr(node, "is_atomic_module", False) and len(modules) > 1:
         modules = modules[:-1]
     if not modules:
         return None
@@ -2248,7 +2248,7 @@ def _collapse_address_for_node(
     if collapse_fn is None:
         if max_module_depth == 0 or len(modules) < max_module_depth:
             return None
-            return cast(str, modules[max_module_depth - 1])
+        return cast(str, modules[max_module_depth - 1])
 
     for address_w_pass in modules:
         address = address_w_pass.rsplit(":", 1)[0]
@@ -2302,8 +2302,9 @@ def _is_collapsed_module(
 
     node_call_depth = len(node.modules)
     # Bottom-level submodule outputs are rendered at the parent nesting level,
-    # not their own, so subtract 1 from their effective depth.
-    if getattr(node, "is_atomic_module", False):
+    # not their own. Top-level atomic leaves have no module parent to bubble
+    # up to, so they remain eligible for top-level collapse.
+    if getattr(node, "is_atomic_module", False) and node_call_depth > 1:
         node_call_depth -= 1
 
     if node_call_depth >= vis_call_depth:

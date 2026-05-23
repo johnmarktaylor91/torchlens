@@ -804,9 +804,9 @@ def _record_module_entry_metadata(
     for t in input_tensors:
         # Lazily register buffer tensors that haven't been logged yet.
         label = get_tensor_label(t)
-        buffer_address = get_buffer_address(t)
-        if label is None and buffer_address is not None:
-            log_source_tensor(trace, t, "buffer", buffer_address)
+        address = cast(str, get_buffer_address(t))
+        if label is None and address is not None:
+            log_source_tensor(trace, t, "buffer", address)
             label = get_tensor_label(t)
         if label is None:
             # Raw ``register_forward_hook`` replacements run after this
