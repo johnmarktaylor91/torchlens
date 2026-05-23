@@ -24,9 +24,21 @@ This matches each accessor's natural granularity.
 
 import weakref
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from os import PathLike
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    TextIO,
+    Tuple,
+    Union,
+    cast,
+)
 
 import torch
 
@@ -135,19 +147,6 @@ class HookInfo:
     source_location: "FuncCallLocation | None" = None
 
 
-@dataclass
-class CallTreeNode:
-    """Node in the dynamic call tree of a Trace."""
-
-    call: "ModuleCall"
-    children: list["CallTreeNode"] = field(default_factory=list)
-
-    def __repr__(self) -> str:
-        """Return a compact call-label and child-count representation."""
-
-        return f"CallTreeNode(call={self.call.call_label!r}, children={len(self.children)})"
-
-
 def _duration_str(duration: float) -> str:
     """Return a human-readable duration string.
 
@@ -163,6 +162,139 @@ def _duration_str(duration: float) -> str:
     """
 
     return f"{duration * 1000:.3f} ms"
+
+
+def _display_call_label(call: "ModuleCall", show_call_index: bool) -> str:
+    """Return the display label for a ModuleCall.
+
+    Parameters
+    ----------
+    call:
+        ModuleCall to display.
+    show_call_index:
+        Whether to include the ``:N`` call suffix.
+
+    Returns
+    -------
+    str
+        Display-ready call label.
+    """
+
+    if show_call_index:
+        return call.call_label
+    return call.call_label.rsplit(":", 1)[0]
+
+
+def _module_call_summary(call: "ModuleCall") -> str:
+    """Return a compact optional summary for a ModuleCall display row.
+
+    Parameters
+    ----------
+    call:
+        ModuleCall to summarize.
+
+    Returns
+    -------
+    str
+        Parenthesized summary, or an empty string.
+    """
+
+    duration = getattr(call, "forward_duration", None)
+    if duration is None:
+        return ""
+    return f" (forward_duration: {_duration_str(duration)})"
+
+
+def _is_atomic_module_call(call: "ModuleCall") -> bool:
+    """Return whether a ModuleCall represents an atomic module leaf.
+
+    Parameters
+    ----------
+    call:
+        ModuleCall to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when one of the call's output Ops is marked atomic.
+    """
+
+    trace = call._source_trace
+    if trace is None:
+        return False
+    return any(
+        getattr(trace.ops[op_label], "is_atomic_module", False) for op_label in call.output_ops
+    )
+
+
+def _visible_call_children(call: "ModuleCall", include_atomic: bool) -> list["ModuleCall"]:
+    """Return displayable child ModuleCalls for ``call``.
+
+    Parameters
+    ----------
+    call:
+        Parent ModuleCall.
+    include_atomic:
+        Whether to include atomic module leaves.
+
+    Returns
+    -------
+    list[ModuleCall]
+        Displayable children in call-tree order.
+    """
+
+    trace = call._source_trace
+    if trace is None:
+        raise RuntimeError("ModuleCall not bound to a Trace")
+    children = [trace.module_calls[child_label] for child_label in call.call_children]
+    if include_atomic:
+        return children
+    return [child for child in children if not _is_atomic_module_call(child)]
+
+
+def _print_call_tree_from_root(
+    call: "ModuleCall",
+    *,
+    max_depth: int | None,
+    include_atomic: bool,
+    show_call_index: bool,
+    file: TextIO | None,
+) -> None:
+    """Print a ModuleCall subtree as an ASCII tree.
+
+    Parameters
+    ----------
+    call:
+        Root ModuleCall to print.
+    max_depth:
+        Maximum descendant depth to print, or ``None`` for no limit.
+    include_atomic:
+        Whether to include atomic module leaves.
+    show_call_index:
+        Whether to include the ``:N`` call suffix.
+    file:
+        Optional output stream.
+    """
+
+    def print_node(node: "ModuleCall", prefix: str, is_last: bool, depth: int) -> None:
+        """Print one node and its descendants."""
+
+        connector = "" if depth == 0 else ("└── " if is_last else "├── ")
+        label = _display_call_label(node, show_call_index)
+        print(f"{prefix}{connector}{label}{_module_call_summary(node)}", file=file)
+
+        children = _visible_call_children(node, include_atomic)
+        if max_depth is not None and depth >= max_depth:
+            if children:
+                child_prefix = prefix if depth == 0 else prefix + ("    " if is_last else "│   ")
+                print(f"{child_prefix}└── ...", file=file)
+            return
+
+        child_prefix = prefix if depth == 0 else prefix + ("    " if is_last else "│   ")
+        for index, child in enumerate(children):
+            print_node(child, child_prefix, index == len(children) - 1, depth + 1)
+
+    print_node(call, "", True, 0)
 
 
 def _module_call_log_to_row(module_call_log: "ModuleCall") -> Dict[str, Any]:
@@ -545,20 +677,6 @@ class ModuleCall:
         return human_readable_size(self.param_memory)
 
     @property
-    def call_tree(self) -> CallTreeNode:
-        """Return the dynamic call subtree rooted at this ModuleCall."""
-
-        trace = self._source_trace
-        if trace is None:
-            return CallTreeNode(call=self)
-        return CallTreeNode(
-            call=self,
-            children=[
-                trace.module_calls[child_label].call_tree for child_label in self.call_children
-            ],
-        )
-
-    @property
     def num_descendant_calls(self) -> int:
         """Number of nested ModuleCalls under this call, recursively."""
 
@@ -580,6 +698,63 @@ class ModuleCall:
         return 1 + max(
             trace.module_calls[child_label].max_descendant_depth
             for child_label in self.call_children
+        )
+
+    def walk_descendants(self, include_self: bool = True) -> Iterator["ModuleCall"]:
+        """Yield this ModuleCall and all descendant calls in depth-first order.
+
+        Parameters
+        ----------
+        include_self:
+            Whether to yield this call before its descendants.
+
+        Yields
+        ------
+        ModuleCall
+            ModuleCall records in call-tree order.
+
+        Raises
+        ------
+        RuntimeError
+            If this ModuleCall is not bound to an owning Trace.
+        """
+
+        if include_self:
+            yield self
+        trace = self._source_trace
+        if trace is None:
+            raise RuntimeError("ModuleCall not bound to a Trace")
+        for child_label in self.call_children:
+            child = trace.module_calls[child_label]
+            yield from child.walk_descendants(include_self=True)
+
+    def show_call_tree(
+        self,
+        max_depth: int | None = None,
+        include_atomic: bool = True,
+        show_call_index: bool = True,
+        file: TextIO | None = None,
+    ) -> None:
+        """Print this ModuleCall subtree as an ASCII tree.
+
+        Parameters
+        ----------
+        max_depth:
+            Maximum descendant depth to print, or ``None`` for no limit.
+        include_atomic:
+            Whether to include atomic module leaves.
+        show_call_index:
+            Whether to include the ``:N`` call suffix in labels.
+        file:
+            Optional output stream. ``None`` prints to stdout.
+        """
+
+        _print_call_tree_from_root(
+            self,
+            max_depth=max_depth,
+            include_atomic=include_atomic,
+            show_call_index=show_call_index,
+            file=file,
         )
 
     @property
@@ -1513,19 +1688,6 @@ class Module:
         return human_readable_size(self.total_autograd_memory)
 
     @property
-    def call_tree(self) -> CallTreeNode | list[CallTreeNode]:
-        """Return call subtree(s) for this Module.
-
-        Returns a single ``CallTreeNode`` when the Module has one call and a list
-        of sibling roots when the Module was called multiple times.
-        """
-
-        trees = [call.call_tree for call in self.ops.values()]
-        if len(trees) == 1:
-            return trees[0]
-        return trees
-
-    @property
     def num_descendant_calls(self) -> int:
         """Total nested ModuleCalls beneath all calls of this Module."""
 
@@ -1538,6 +1700,53 @@ class Module:
         if len(self.ops) == 0:
             return 0
         return max(call.max_descendant_depth for call in self.ops.values())
+
+    def walk_descendants(self) -> Iterator["ModuleCall"]:
+        """Yield every ModuleCall nested beneath any call of this Module.
+
+        Yields
+        ------
+        ModuleCall
+            Descendant ModuleCall records in depth-first order. This Module's
+            own calls are not included.
+        """
+
+        for call in self.calls.values():
+            yield from call.walk_descendants(include_self=False)
+
+    def show_call_tree(
+        self,
+        max_depth: int | None = None,
+        include_atomic: bool = True,
+        show_call_index: bool = True,
+        file: TextIO | None = None,
+    ) -> None:
+        """Print this Module's call subtrees as ASCII trees.
+
+        Parameters
+        ----------
+        max_depth:
+            Maximum descendant depth to print for each call, or ``None`` for no
+            limit.
+        include_atomic:
+            Whether to include atomic module leaves.
+        show_call_index:
+            Whether to include the ``:N`` call suffix in labels.
+        file:
+            Optional output stream. ``None`` prints to stdout.
+        """
+
+        calls = list(self.calls.values())
+        for index, call in enumerate(calls):
+            if index > 0:
+                print(file=file)
+            _print_call_tree_from_root(
+                call,
+                max_depth=max_depth,
+                include_atomic=include_atomic,
+                show_call_index=show_call_index,
+                file=file,
+            )
 
     @property
     def num_param_tensors(self) -> int:

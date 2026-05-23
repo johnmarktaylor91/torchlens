@@ -5,7 +5,7 @@ from .func_call_location import FuncCallLocation
 from .grad_fn_log import GradFnAccessor, GradFn
 from .grad_fn_call_log import GradFnCall
 from .internal_types import FuncExecutionContext, VisualizationOverrides
-from .module_log import CallTreeNode, ModuleAccessor, Module, ModuleCall
+from .module_log import ModuleAccessor, Module, ModuleCall
 from .param_log import ParamAccessor, Param
 
 # Trace, Layer, Op, and TensorLog are intentionally NOT

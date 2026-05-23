@@ -132,7 +132,6 @@ MODEL_LOG_FIELD_ORDER = [
     "_layer_nums_to_save",
     "num_ops",
     "num_modules",
-    "call_tree",
     # Mapping from raw to final layer labels:
     "_raw_to_final_layer_labels",
     "_final_to_raw_layer_labels",
@@ -601,7 +600,6 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "module_call_stack",
     "call_parent",
     "call_children",
-    "call_tree",
     "num_descendant_calls",
     "max_descendant_depth",
     "module",
@@ -718,7 +716,6 @@ MODULE_LOG_FIELD_ORDER = [
     "total_internal_gradient_memory_str",
     "total_autograd_memory",
     "total_autograd_memory_str",
-    "call_tree",
     "num_descendant_calls",
     "max_descendant_depth",
     "custom_attributes",

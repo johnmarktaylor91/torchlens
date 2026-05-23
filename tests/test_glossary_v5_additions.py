@@ -1,5 +1,6 @@
 """Smoke coverage for glossary v5 locked field additions."""
 
+from io import StringIO
 from typing import Any
 
 import pytest
@@ -7,7 +8,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes import CallTreeNode, ParamAccessor
+from torchlens.data_classes import ParamAccessor
 from torchlens.data_classes.layer_log import OpAccessor
 from torchlens.data_classes.module_log import Module, ModuleCall
 from torchlens.data_classes.op_log import Op
@@ -38,14 +39,22 @@ def _make_trace() -> Any:
 
 @pytest.mark.smoke
 def test_trace_call_tree_and_num_modules() -> None:
-    """Trace exposes module count and full call tree."""
+    """Trace exposes module count and call-tree navigation."""
 
     trace = _make_trace()
+    stream = StringIO()
+    calls = list(trace.walk_calls())
 
     assert trace.num_modules == len(trace.modules)
-    assert isinstance(trace.call_tree, CallTreeNode)
-    assert trace.call_tree.call.call_label == "self:1"
-    assert trace.call_tree.children
+    assert trace.num_module_calls == len(trace.module_calls)
+    assert trace.root_call.call_label == "self:1"
+    assert trace.max_call_depth >= 3
+    assert len(calls) == len(trace.module_calls)
+    assert calls[0] is trace.root_call
+
+    trace.show_call_tree(file=stream)
+    assert "self:1" in stream.getvalue()
+    assert "├──" in stream.getvalue() or "└──" in stream.getvalue()
 
 
 @pytest.mark.smoke
@@ -67,11 +76,13 @@ def test_op_input_side_properties() -> None:
 
 @pytest.mark.smoke
 def test_module_recursive_params_memory_and_call_tree() -> None:
-    """Module exposes address-recursive params, memory, and call-tree metrics."""
+    """Module exposes address-recursive params, memory, and call-tree navigation."""
 
     trace = _make_trace()
     root = trace.modules["self"]
     block = trace.modules["block"]
+    stream = StringIO()
+    block_descendants = list(block.walk_descendants())
 
     assert isinstance(root, Module)
     assert isinstance(root.recursive_params, ParamAccessor)
@@ -84,9 +95,12 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
     assert root.param_memory == trace.total_param_memory
     assert block.num_recursive_params == 2
     assert block.num_recursive_param_tensors == 2
-    assert isinstance(block.call_tree, CallTreeNode)
+    assert len(block_descendants) == block.num_descendant_calls
+    assert [call.call_label for call in block_descendants] == ["block.0:1", "block.1:1"]
     assert block.num_descendant_calls >= 2
     assert block.max_descendant_depth >= 1
+    block.show_call_tree(file=stream)
+    assert "block:1" in stream.getvalue()
     assert block.forward_args_template is not None
     assert block.forward_kwargs_template is None
     assert block.backward_duration is None
@@ -97,10 +111,12 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
 
 @pytest.mark.smoke
 def test_module_call_memory_templates_and_call_tree() -> None:
-    """ModuleCall exposes templates, memory quadrants, params, and call-tree metrics."""
+    """ModuleCall exposes templates, memory quadrants, params, and call-tree navigation."""
 
     trace = _make_trace()
     call = trace.module_calls["block:1"]
+    stream = StringIO()
+    descendants = list(call.walk_descendants())
 
     assert isinstance(call, ModuleCall)
     assert call.forward_args_template is not None
@@ -114,6 +130,10 @@ def test_module_call_memory_templates_and_call_tree() -> None:
     assert call.autograd_memory >= 0
     assert call.param_memory == trace.modules["block"].param_memory
     assert isinstance(call.param_memory_str, str)
-    assert isinstance(call.call_tree, CallTreeNode)
+    assert descendants[0] is call
+    assert len(descendants) == call.num_descendant_calls + 1
     assert call.num_descendant_calls >= 2
     assert call.max_descendant_depth >= 1
+    call.show_call_tree(show_call_index=False, file=stream)
+    assert "block" in stream.getvalue()
+    assert "block:1" not in stream.getvalue()

@@ -52,6 +52,7 @@ from typing import (
     Optional,
     Set,
     TYPE_CHECKING,
+    TextIO,
     Tuple,
     cast,
 )
@@ -71,7 +72,7 @@ if TYPE_CHECKING:
     from .buffer_log import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .layer_log import LayerAccessor
-    from .module_log import CallTreeNode, Module
+    from .module_log import Module, ModuleCall
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .. import _state
@@ -993,7 +994,6 @@ class Trace:
         "_layer_nums_to_save": FieldPolicy.KEEP,
         "num_ops": FieldPolicy.KEEP,
         "num_modules": FieldPolicy.DROP,
-        "call_tree": FieldPolicy.DROP,
         "_raw_to_final_layer_labels": FieldPolicy.KEEP,
         "_final_to_raw_layer_labels": FieldPolicy.KEEP,
         "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
@@ -3234,6 +3234,70 @@ class Trace:
         return len(self.module_calls)
 
     @property
+    def root_call(self) -> "ModuleCall":
+        """The top-level ModuleCall for this Trace.
+
+        When multiple top-level calls exist, the first one in trace insertion
+        order is returned.
+        """
+
+        for call in self.module_calls:
+            if call.call_parent is None:
+                return cast("ModuleCall", call)
+        raise RuntimeError("Trace has no root ModuleCall")
+
+    @property
+    def max_call_depth(self) -> int:
+        """Deepest call-nesting depth across the entire Trace, including root."""
+
+        if not self.module_calls:
+            return 0
+        return self.root_call.max_descendant_depth + 1
+
+    def walk_calls(self) -> Iterator["ModuleCall"]:
+        """Yield every ModuleCall in call-tree depth-first order.
+
+        Yields
+        ------
+        ModuleCall
+            ModuleCall records ordered by dynamic call-tree traversal.
+        """
+
+        if not self.module_calls:
+            return
+        yield from self.root_call.walk_descendants(include_self=True)
+
+    def show_call_tree(
+        self,
+        max_depth: int | None = None,
+        include_atomic: bool = True,
+        show_call_index: bool = True,
+        file: TextIO | None = None,
+    ) -> None:
+        """Print this Trace's full ModuleCall tree as an ASCII tree.
+
+        Parameters
+        ----------
+        max_depth:
+            Maximum descendant depth to print, or ``None`` for no limit.
+        include_atomic:
+            Whether to include atomic module leaves.
+        show_call_index:
+            Whether to include the ``:N`` call suffix in labels.
+        file:
+            Optional output stream. ``None`` prints to stdout.
+        """
+
+        if not self.module_calls:
+            return
+        self.root_call.show_call_tree(
+            max_depth=max_depth,
+            include_atomic=include_atomic,
+            show_call_index=show_call_index,
+            file=file,
+        )
+
+    @property
     def root_module(self) -> "Module":
         """The root module (the model itself)."""
         return cast("Module", self._module_logs["self"])
@@ -3252,18 +3316,6 @@ class Trace:
     @num_modules.deleter
     def num_modules(self) -> None:
         """Ignore cleanup deletion for derived module count."""
-
-    @property
-    def call_tree(self) -> "CallTreeNode":
-        """Full dynamic ModuleCall tree rooted at the model-entry call."""
-
-        if "self:1" not in self.module_calls:
-            return None  # type: ignore[return-value]
-        return self.module_calls["self:1"].call_tree
-
-    @call_tree.deleter
-    def call_tree(self) -> None:
-        """Ignore cleanup deletion for derived call-tree access."""
 
     @property
     def orphans(self) -> OrphanAccessor:
