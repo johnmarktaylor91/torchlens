@@ -490,26 +490,21 @@ class TestVisualizationParams:
 
     def test_param_label_shows_names(self):
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
-        assert "weight:" in dot
-        assert "bias:" in dot
+        assert "weight (5, 10)" in dot
+        assert "bias (5,)" in dot
 
-    def test_trainable_round_brackets(self):
+    def test_param_label_uses_tuple_shapes(self):
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
-        # All trainable: should use round brackets ()
-        assert "weight: (" in dot
-        assert "bias: (" in dot
+        assert "params: weight (5, 10) · bias (5,)" in dot
 
-    def test_frozen_square_brackets(self):
+    def test_frozen_param_label_keeps_text_format(self):
         dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input())
-        # All frozen: should use square brackets []
-        assert "weight: [" in dot
-        assert "bias: [" in dot
+        assert "params: weight (5, 10) · bias (5,)" in dot
 
-    def test_mixed_brackets(self):
+    def test_mixed_param_label_keeps_text_format(self):
         dot, mh = self._get_dot_source(_make_frozen_first_layer(), _simple_input())
-        # Should have both round and square brackets
-        assert "(" in dot  # trainable
-        assert "[" in dot  # frozen
+        assert "params: weight (5, 10) · bias (5,)" in dot
+        assert "weight:" not in dot
 
     def test_trainable_bg_color(self):
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())

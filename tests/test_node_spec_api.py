@@ -25,28 +25,28 @@ def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
 
 
 def test_default_nodespec_for_conv2d_includes_args(tmp_path: Any) -> None:
-    """Conv2d default labels should include compact non-default args."""
+    """Conv2d default labels should include declaration-name args."""
 
     model = nn.Conv2d(3, 8, kernel_size=3, stride=2, padding=1)
     log = tl.trace(model, torch.randn(1, 3, 8, 8))
 
     dot = _render_dot(log, tmp_path)
 
-    assert "k=3" in dot
-    assert "s=2" in dot
-    assert "p=1" in dot
+    assert "kernel_size=(3, 3)" in dot
+    assert "stride=(2, 2)" in dot
+    assert "padding=(1, 1)" in dot
 
 
 def test_default_nodespec_for_linear_includes_in_out(tmp_path: Any) -> None:
-    """Linear default labels should include in/out feature counts."""
+    """Linear default labels should include full feature-count names."""
 
     model = nn.Linear(in_features=16, out_features=32)
     log = tl.trace(model, torch.randn(1, 16))
 
     dot = _render_dot(log, tmp_path)
 
-    assert "in=16" in dot
-    assert "out=32" in dot
+    assert "in_features=16" in dot
+    assert "out_features=32" in dot
 
 
 def test_node_spec_fn_receives_layer_log_and_default(tmp_path: Any) -> None:

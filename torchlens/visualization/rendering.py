@@ -73,6 +73,13 @@ from ..data_classes.op_log import Op
 from ..data_classes.layer_log import Layer
 from ..viz import batch_summary
 from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
+from ._label_format import (
+    format_memory,
+    format_module_kwargs,
+    format_module_path,
+    format_param_list,
+    format_shape,
+)
 from .node_spec import (
     INTERVENTION_HOOK_BORDER_COLOR,
     INTERVENTION_HOOK_FILL_COLOR,
@@ -2974,12 +2981,7 @@ def _build_collapsed_module_node(
     else:
         node_title = f"<b>@{address} (x{module_num_calls})</b>"
 
-    if len(module_output_shape) > 1:
-        shape_str = "x".join([str(x) for x in module_output_shape])
-    elif len(module_output_shape) == 1:  # #100: use module_output_shape, not node.shape
-        shape_str = f"x{module_output_shape[0]}"  # type: ignore[misc]
-    else:
-        shape_str = "x1"
+    shape_str = format_shape(module_output_shape)
 
     module_nparams_trainable = ml.num_params_trainable  # type: ignore[union-attr]
     module_nparams_frozen = ml.num_params_frozen  # type: ignore[union-attr]
@@ -3016,7 +3018,7 @@ def _build_collapsed_module_node(
         lines=[
             node_title.replace("<b>", "").replace("</b>", ""),
             module_type,
-            f"{shape_str} ({module_output_fsize})",
+            f"{shape_str}, {format_memory(module_output_fsize)}",
             f"{module_num_tensors} layers total",
             param_detail,
         ],
@@ -3089,7 +3091,7 @@ def _get_node_address_shape_color(
         node_color = "black"
     elif node.is_buffer:
         if (self.buffer_num_calls[source_node.address] == 1) or (
-            isinstance(source_node, Layer) and node.num_passes > 1
+            isinstance(source_node, Layer) and isinstance(node, Op | Layer) and node.num_passes > 1
         ):
             address = source_node.address
         else:
@@ -3346,18 +3348,18 @@ def compute_default_node_lines(
     if layer_log.is_terminal_bool:
         lines.append(str(layer_log.bool_value).upper())
     lines.append(title)
-    lines.append(f"{_format_shape_str(layer_log.shape)} ({layer_log.memory_str})")
+    lines.append(f"{format_shape(layer_log.shape)}, {format_memory(layer_log.memory_str)}")
 
-    important_args = _format_important_args(layer_log)
-    if important_args:
-        lines.append(important_args)
+    module_kwargs = format_module_kwargs(layer_log)
+    if module_kwargs is not None:
+        lines.append(module_kwargs)
 
-    param_line = _make_param_line(layer_log)
-    if param_line:
+    param_line = format_param_list(layer_log)
+    if param_line is not None:
         lines.append(param_line)
 
-    address_line = node_address.replace("<br/>", "")
-    if address_line:
+    address_line = format_module_path(node_address)
+    if address_line is not None:
         lines.append(address_line)
     overlay = overlay_line(layer_log, node_overlay)
     if overlay is not None:
@@ -3402,14 +3404,14 @@ def _compute_selected_node_lines(
         elif field_name in {"type", "op", "operation"}:
             rows.append(str(getattr(layer_log, "func_name", None) or layer_log.layer_type))
         elif field_name == "shape":
-            rows.append(_format_shape_str(layer_log.shape))
+            rows.append(format_shape(layer_log.shape))
         elif field_name in {"memory", "bytes"}:
             rows.append(str(getattr(layer_log, "memory_str", "")))
         elif field_name == "module":
-            rows.append(node_address.replace("<br/>", "") or "@root")
+            rows.append(format_module_path(node_address) or "@ root")
         elif field_name == "params":
-            param_line = _make_param_line(layer_log)
-            if param_line:
+            param_line = format_param_list(layer_log)
+            if param_line is not None:
                 rows.append(param_line)
         elif field_name == "pass":
             rows.append(
@@ -3428,257 +3430,10 @@ def _compute_selected_node_lines(
     return rows or compute_default_node_lines(layer_log, node_address, vis_mode)
 
 
-def _make_node_label(
-    node: Union["Op", "Layer"],
-    node_address: str,
-    vis_mode: str,
-) -> str:
-    """Builds an HTML-table label string for a graphviz node.
-
-    Assembles rows for the layer name, tensor shape, operation type, and other
-    metadata into an HTML table used as the node label in graphviz rendering.
-    """
-    # Pass info:
-
-    if (node.num_passes > 1) and (vis_mode == "unrolled"):
-        call_label = f":{node.pass_index}"
-    elif (node.num_passes > 1) and (vis_mode == "rolled"):
-        call_label = f" (x{node.num_passes})"
-    else:
-        call_label = ""
-
-    # Tensor shape info:
-
-    if len(node.shape) > 1:
-        shape_str = "x".join([str(x) for x in node.shape])
-    elif len(node.shape) == 1:
-        shape_str = f"x{node.shape[0]}"
-    else:
-        shape_str = "x1"
-
-    # Layer param info:
-
-    param_label = _make_param_label(node)
-
-    memory = node.memory_str
-    if node.layer_type in ["input", "output", "buffer"]:
-        node_title = f"<b>{node.layer_type}_{node.type_index}{call_label}</b>"
-    else:
-        node_title = f"<b>{node.layer_type}_{node.type_index}_{node.step_index}{call_label}</b>"
-
-    if node.is_terminal_bool:
-        label_text = str(node.bool_value).upper()
-        bool_label = f"<b><u>{label_text}:</u></b><br/><br/>"
-    else:
-        bool_label = ""
-
-    node_label = f"<{bool_label}{node_title}<br/>{shape_str} ({memory}){param_label}{node_address}>"
-
-    return node_label
-
-
 def _format_shape_str(shape: tuple[Any, ...]) -> str:
-    """Formats a shape tuple as a compact string like '3x3x64'."""
-    if len(shape) > 1:
-        return "x".join(str(s) for s in shape)
-    elif len(shape) == 1:
-        return f"x{shape[0]}"
-    return "x1"
+    """Format a shape tuple in Python tuple notation."""
 
-
-def _make_param_label(node: Union["Op", "Layer"]) -> str:
-    """Makes the label for parameters of a node.
-
-    Uses param names and bracket convention when Param objects are available:
-    round brackets () for trainable, square brackets [] for frozen.
-    """
-    if node.num_param_tensors == 0:
-        return ""
-
-    param_logs = getattr(node, "_param_logs", [])
-    if param_logs:
-        parts = []
-        for pl in param_logs:
-            shape_str = _format_shape_str(pl.shape)
-            if pl.trainable:
-                parts.append(f"{pl.name}: ({shape_str})")
-            else:
-                parts.append(f"{pl.name}: [{shape_str}]")
-        param_label = "<br/>params: " + ", ".join(parts)
-    else:
-        each_param_shape = [_format_shape_str(s) for s in node.param_shapes]
-        param_label = "<br/>params: " + ", ".join(each_param_shape)
-    return param_label
-
-
-def _make_param_line(node: GraphNode) -> str:
-    """Make a plain-text parameter summary row for a node label.
-
-    Parameters
-    ----------
-    node:
-        Node being rendered.
-
-    Returns
-    -------
-    str
-        Plain-text parameter summary, or ``""`` when no parameters are used.
-    """
-
-    if node.num_param_tensors == 0:
-        return ""
-
-    param_logs = getattr(node, "_param_logs", [])
-    if param_logs:
-        parts = []
-        for param_log in param_logs:
-            shape_str = _format_shape_str(param_log.shape)
-            wrapper = ("(", ")") if param_log.trainable else ("[", "]")
-            parts.append(f"{param_log.name}: {wrapper[0]}{shape_str}{wrapper[1]}")
-        return "params: " + ", ".join(parts)
-
-    each_param_shape = [_format_shape_str(shape) for shape in node.param_shapes]
-    return "params: " + ", ".join(each_param_shape)
-
-
-def _format_important_args(node: GraphNode) -> str:
-    """Format a compact important-argument row for known operation types.
-
-    Parameters
-    ----------
-    node:
-        Node whose ``func_config`` should be summarized.
-
-    Returns
-    -------
-    str
-        Compact argument summary, or ``""`` for unrecognized/no-op configs.
-    """
-
-    config = getattr(node, "func_config", {}) or {}
-    layer_type = node.layer_type.lower().replace("_", "")
-    if layer_type in {
-        "conv1d",
-        "conv2d",
-        "conv3d",
-        "convolution",
-        "convtranspose1d",
-        "convtranspose2d",
-        "convtranspose3d",
-    }:
-        return _format_config_fields(
-            config,
-            [
-                ("kernel_size", "k", None),
-                ("stride", "s", 1),
-                ("padding", "p", 0),
-                ("dilation", "d", 1),
-                ("groups", "g", 1),
-            ],
-        )
-    if layer_type == "linear":
-        return _format_config_fields(
-            config,
-            [("in_features", "in", None), ("out_features", "out", None)],
-        )
-    if "pool" in layer_type:
-        return _format_config_fields(
-            config,
-            [
-                ("kernel_size", "k", None),
-                ("stride", "s", None),
-                ("padding", "p", 0),
-                ("output_size", "out", None),
-            ],
-        )
-    if layer_type == "layernorm":
-        return _format_config_fields(config, [("normalized_shape", "shape", None)])
-    if "batchnorm" in layer_type or "instancenorm" in layer_type:
-        num_features = _num_features_from_params(node)
-        if num_features is None:
-            return ""
-        return f"features={num_features}"
-    if layer_type == "groupnorm":
-        return _format_config_fields(config, [("num_groups", "groups", None)])
-    if "multiheadattention" in layer_type or layer_type == "scaleddotproductattention":
-        return _format_config_fields(
-            config,
-            [
-                ("num_heads", "heads", None),
-                ("embed_dim", "dim", None),
-                ("dropout", "dropout", 0),
-                ("dropout_p", "dropout", 0),
-            ],
-        )
-    if "dropout" in layer_type:
-        return _format_config_fields(config, [("p", "p", 0)])
-    if layer_type == "embedding":
-        return _format_config_fields(
-            config,
-            [("num_embeddings", "n", None), ("embedding_dim", "dim", None)],
-        )
-    return ""
-
-
-def _format_config_fields(
-    config: dict[str, Any],
-    fields: list[tuple[str, str, Any]],
-) -> str:
-    """Format selected config fields with short display names.
-
-    Parameters
-    ----------
-    config:
-        Function config captured for a node.
-    fields:
-        ``(field_name, display_name, default_value)`` tuples.
-
-    Returns
-    -------
-    str
-        Space-separated compact summary.
-    """
-
-    parts = []
-    for key, display, default in fields:
-        if key not in config:
-            continue
-        value = config[key]
-        if default is not None and _value_matches_default(value, default):
-            continue
-        parts.append(f"{display}={_format_config_value(value)}")
-    return " ".join(parts)
-
-
-def _value_matches_default(value: Any, default: Any) -> bool:
-    """Return whether ``value`` equals a scalar default, including repeated tuples."""
-
-    if value == default:
-        return True
-    if isinstance(value, tuple) and all(item == default for item in value):
-        return True
-    return False
-
-
-def _format_config_value(value: Any) -> str:
-    """Format a captured config value compactly for a node label."""
-
-    if isinstance(value, tuple):
-        if len(value) > 0 and all(item == value[0] for item in value):
-            return str(value[0])
-        return "x".join(str(item) for item in value)
-    return str(value)
-
-
-def _num_features_from_params(node: GraphNode) -> Optional[int]:
-    """Infer normalization feature count from parameter shape metadata."""
-
-    if not node.param_shapes:
-        return None
-    first_shape = node.param_shapes[0]
-    if len(first_shape) == 0:
-        return None
-    return int(first_shape[0])
+    return format_shape(shape)
 
 
 def _add_edges_for_node(

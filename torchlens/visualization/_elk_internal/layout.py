@@ -24,6 +24,7 @@ import tempfile
 import warnings
 from typing import Any, Optional, cast
 
+from .._label_format import format_memory, format_shape
 from .._render_utils import _open_file_quietly
 
 # Set the soft stack limit to match the hard limit once at import time.
@@ -1139,12 +1140,7 @@ def render_elk_direct(
                     title = f"<b>@{mod_addr} (x{np_})</b>"
 
                 out_shape: tuple[Any, ...] = mod_out.shape or ()
-                if len(out_shape) > 1:
-                    ss = "x".join(str(s) for s in out_shape)
-                elif len(out_shape) == 1:
-                    ss = f"x{out_shape[0]}"
-                else:
-                    ss = "x1"
+                ss = format_shape(out_shape)
 
                 npar = ml.num_params
                 npt = ml.num_params_trainable
@@ -1174,7 +1170,7 @@ def render_elk_direct(
                     lines=[
                         title.replace("<b>", "").replace("</b>", ""),
                         ml.class_name,
-                        f"{ss} ({mod_out.memory_str})",
+                        f"{ss}, {format_memory(mod_out.memory_str)}",
                         f"{n_tensors} layers total",
                         pd,
                     ],

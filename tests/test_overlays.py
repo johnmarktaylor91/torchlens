@@ -96,4 +96,4 @@ def test_node_label_field_picker_limits_label_rows(tmp_path: Path) -> None:
     dot = _render_dot(log, tmp_path, node_label_fields=["label", "shape"])
 
     assert "linear" in dot
-    assert "1x2" in dot
+    assert "(1, 2)" in dot

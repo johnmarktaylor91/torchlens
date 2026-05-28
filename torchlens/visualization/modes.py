@@ -10,6 +10,7 @@ import torch
 
 from .._literals import VisNodeModeLiteral
 from ..utils.display import human_readable_size
+from ._label_format import format_shape
 from .node_spec import NodeSpec
 
 if TYPE_CHECKING:
@@ -139,7 +140,7 @@ def vision_node_mode(layer_log: "Layer", spec: NodeSpec) -> NodeSpec:
         return spec
 
     lines = list(spec.lines)
-    lines.append(f"in={_format_shape(input_shape)} out={_format_shape(output_shape)}")
+    lines.append(f"in={format_shape(input_shape)}, out={format_shape(output_shape)}")
     return spec.replace(lines=lines)
 
 
@@ -307,12 +308,6 @@ def _first_input_shape(layer_log: "Layer") -> tuple[int, ...] | None:
             if isinstance(value, torch.Tensor):
                 return tuple(value.shape)
     return None
-
-
-def _format_shape(shape: tuple[Any, ...]) -> str:
-    """Format a tensor shape compactly for a preset row."""
-
-    return "x".join(str(dim) for dim in shape) if shape else "x1"
 
 
 def _is_inside_multihead_attention(layer_log: "Layer") -> bool:

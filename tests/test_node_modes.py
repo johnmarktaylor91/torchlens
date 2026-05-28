@@ -88,7 +88,7 @@ def test_vision_mode_adds_io_shape_for_conv(tmp_path: Path) -> None:
 
     dot = _render_dot(log, tmp_path, node_mode="vision")
 
-    assert "in=2x3x8x8 out=2x8x4x4" in dot
+    assert "in=(2, 3, 8, 8), out=(2, 8, 4, 4)" in dot
 
 
 def test_vision_mode_no_op_for_linear(tmp_path: Path) -> None:
