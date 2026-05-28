@@ -55,13 +55,13 @@ def test_report_namespace_is_not_top_level_all() -> None:
 
     Phase 1a budget was 40; backward-parity added 6 top-level names, and
     post-backward P1 added ``output`` for multi-output module selector
-    disambiguation.
+    disambiguation, and facets added the top-level ``facets`` namespace.
     """
 
     assert hasattr(tl.report, "explain")
     assert "report" not in tl.__all__
     assert "explain" not in tl.__all__
-    assert len(tl.__all__) == 47
+    assert len(tl.__all__) == 48
 
 
 def test_explain_returns_sensible_string_for_each_audience() -> None:

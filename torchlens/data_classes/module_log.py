@@ -1440,6 +1440,7 @@ class Module:
         state = self.__dict__.copy()
         state["_source_trace_ref"] = None
         state["_buffer_accessor"] = None
+        state.pop("_facets_cache", None)
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 
@@ -1471,6 +1472,24 @@ class Module:
     # --- Per-call delegating properties ---
     # Mirror the Layer delegation pattern: single-pass modules transparently
     # expose per-pass fields; multi-pass modules raise with guidance.
+
+    @property
+    def facets(self) -> Any:
+        """Return the lazy semantic facet view for this Module."""
+
+        cache = self.__dict__.get("_facets_cache")
+        if cache is None:
+            from ..semantic import FacetView
+
+            cache = FacetView(self)
+            self.__dict__["_facets_cache"] = cache
+        return cache
+
+    @facets.deleter
+    def facets(self) -> None:
+        """Drop the cached semantic facet view for this Module."""
+
+        self.__dict__.pop("_facets_cache", None)
 
     def _single_pass_or_error(self, field_name: str) -> Any:
         """Return a field from the single pass, or raise if the module has multiple ops.

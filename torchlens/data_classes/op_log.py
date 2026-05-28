@@ -1482,6 +1482,7 @@ class Op:
         """Return pickle state with weakrefs stripped."""
         state = self.__dict__.copy()
         state["_source_trace_ref"] = None
+        state.pop("_facets_cache", None)
         state["func"] = None
         state["grad_fn_handle"] = None
         state["grad_fn_handle"] = None
@@ -1576,6 +1577,24 @@ class Op:
     # ********************************************
     # *********** User-Facing Functions **********
     # ********************************************
+
+    @property
+    def facets(self) -> Any:
+        """Return the lazy semantic facet view for this Op."""
+
+        cache = self.__dict__.get("_facets_cache")
+        if cache is None:
+            from ..semantic import FacetView
+
+            cache = FacetView(self)
+            self.__dict__["_facets_cache"] = cache
+        return cache
+
+    @facets.deleter
+    def facets(self) -> None:
+        """Drop the cached semantic facet view for this Op."""
+
+        self.__dict__.pop("_facets_cache", None)
 
     # ********************************************
     # ************* Logging Functions ************

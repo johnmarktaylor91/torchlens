@@ -10,6 +10,7 @@ import torchlens
 TARGET_ALL = [
     "trace",
     "fastlog",
+    "facets",
     "load",
     "save",
     "do",
@@ -74,6 +75,7 @@ CANONICAL_SUBMODULES = [
     "torchlens.options",
     "torchlens.partial",
     "torchlens.report",
+    "torchlens.semantic",
     "torchlens.stats",
     "torchlens.types",
     "torchlens.utils",
@@ -83,16 +85,16 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_47() -> None:
-    """Top-level ``__all__`` should contain exactly the post-backward-megasprint budget.
+def test_all_size_exactly_48() -> None:
+    """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
     grad_clamp, grad_fn, intervening, grad_fn_label) = 46; post-backward
     megasprint P1 added `output` (multi-output module selector disambiguation
-    per AD-7 / F-Multi) = 47.
+    per AD-7 / F-Multi) = 47; facets framework adds `facets` = 48.
     """
 
-    assert len(torchlens.__all__) == 47
+    assert len(torchlens.__all__) == 48
     assert torchlens.__all__ == TARGET_ALL
 
 

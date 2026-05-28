@@ -34,6 +34,7 @@ from . import (
     stats,
     viz,
 )
+from .semantic import facets
 from ._io.bundle import load, save
 from .stats import aggregate
 from .data_classes.layer_log import Layer
@@ -799,6 +800,7 @@ trace = _trace
 __all__ = [
     "trace",
     "fastlog",
+    "facets",
     "load",
     "save",
     "do",
