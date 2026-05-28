@@ -5400,3 +5400,254 @@ The earlier "Module / ModuleCall call-tree accessor + display" lock introduced a
 - Keep `num_descendant_calls` and `max_descendant_depth` companions (independently useful).
 
 Users iterate the tree via methods on existing records — no wrapper class to learn.
+
+
+---
+
+## Unit type family — `tl.Quantity` / `tl.Bytes` / `tl.Duration` / `tl.Flops` / `tl.Macs` (LOCKED 2026-05-24)
+
+Replace the proliferation of `*_str` companion fields with a small set of formatted numeric subclasses. Halves the API surface; preserves inline ergonomics; makes aggregation type-preserving. Source proposal: `.project-context/unit_types_proposal.md`.
+
+### The family
+
+| Type | Base | Wraps | Format example |
+|---|---|---|---|
+| `tl.Bytes` | `int` | memory in bytes | `1234567` -> `"1.2 MB"` |
+| `tl.Duration` | `float` | seconds | `0.00345` -> `"3.45 ms"` |
+| `tl.Flops` | `int` | floating-point op count | `1230000000` -> `"1.23 GFLOPs"` |
+| `tl.Macs` | `int` | multiply-accumulate count | `615000000` -> `"615 MMACs"` |
+
+`tl.Quantity` is the abstract base class encompassing all four. Use `isinstance(x, tl.Quantity)` to test "is this a formattable unit type" (e.g., in serialization registry, summary renderers, etc.). Counts (`num_*` fields) stay as bare `int` — they don't carry formatting.
+
+### Operator semantics
+
+| Operation | Result | Reason |
+|---|---|---|
+| `Bytes + Bytes` | `Bytes` | aggregation |
+| `Bytes + int` (or `int + Bytes`) | `Bytes` | scalar promotion; reflected dispatch handles `sum()` |
+| `Bytes - Bytes` | `Bytes` | difference of magnitudes |
+| `Bytes * scalar` | `Bytes` | scaling |
+| `Bytes * Bytes` | `TypeError` | "bytes squared" is meaningless |
+| `Bytes / scalar` | `Bytes` | scaling |
+| `Bytes / Bytes` | `float` | ratio, dimensionless |
+| `Bytes // Bytes` | `int` | discrete ratio |
+| `-Bytes`, `abs(Bytes)` | `Bytes` | sign preserved |
+| `min` / `max` / `sorted` | `Bytes` | inherited via `int.__lt__` etc. |
+| cross-type (e.g. `Bytes + Duration`) | `TypeError` | units don't mix |
+
+Same template for `Duration` / `Flops` / `Macs`.
+
+### `__format__` support
+
+Each type supports unit selection via the format spec mini-language:
+- `f"{x}"` -> default formatted output (`"1.2 MB"`)
+- `f"{x:raw}"` -> raw numeric (`"1234567"`)
+- `f"{x:MB}"` (Bytes) -> forced units; precision via standard float spec (`f"{x:.2f MB}"`)
+- `f"{x:ms}"` (Duration), `f"{x:GFLOPs}"` (Flops), etc.
+
+Exact unit-suffix grammar is finalized at implementation time; the lock is that `__format__` is supported.
+
+### What gets deleted
+
+**Every `*_str` field disappears from the API surface.** Roughly 70-90 fields across Trace / Op / Layer / Module / ModuleCall / GradFn / GradFnCall. The bare numeric field now returns the wrapper type; `print(op.activation_memory)` produces `"1.2 MB"` via `__str__`.
+
+Affected surface (every `*_str` companion):
+- Trace: `total_*_memory_str`, `saved_*_memory_str`, `forward_peak_memory_str`, `backward_peak_memory_str`, `total_autograd_memory_str`, `total_param_gradient_memory_str`, `forward_duration_str`, `func_calls_duration_str`, `backward_durations_str`, `last_backward_duration_str`, `total_backward_duration_str`, `total_func_calls_duration_str`.
+- Op: `activation_memory_str`, `gradient_memory_str`, `param_memory_str`, `autograd_memory_str`, all `transformed_*_str`, `flops_*_str`, `macs_*_str`, `func_duration_str`.
+- Layer: every parallel `_str` field.
+- Module / ModuleCall: every 5-23 memory cluster `_str`, plus `forward_duration_str`, `total_forward_duration_str`, `func_calls_duration_str`, `total_func_calls_duration_str`, `backward_duration_str`, `total_backward_duration_str`, etc.
+- GradFn / GradFnCall: `backward_duration_str` + aggregates.
+
+### What's preserved
+
+- Inline ergonomics: `print(op.activation_memory)` and `f"{op.activation_memory}"` produce `"1.2 MB"`.
+- Arithmetic: `op.activation_memory + 1024` returns `Bytes`. `op.activation_memory * 2` returns `Bytes`. `sum(op.activation_memory for op in ops)` returns `Bytes` thanks to `__radd__`.
+- Compatibility: `isinstance(x, int)` still works because `Bytes` IS `int`. Pickle, JSON export, CSV export round-trip as bare numeric (consumer formats columns downstream).
+- Raw access when needed: `int(op.activation_memory)` returns the bare integer.
+
+### Serialization
+
+- **`.tlspec`**: writes int/float payload; load path re-wraps based on dataclass type annotation. One central registry in `_io`: `{Bytes, Duration, Flops, Macs} -> wrap callable`.
+- **JSON / CSV / Parquet (`to_*`)**: serializes as bare numeric (subclass strips automatically). String-column export option deferred — add when users ask.
+- **Pickle**: works without changes.
+
+### Decisions confirmed by JMT 2026-05-24
+
+1. Class name: **`Bytes`** (unit-name parallel with `Duration` / `Flops` / `Macs`).
+2. `tl.Quantity` ABC: **yes** — abstract base covering all four formattable unit types.
+3. `__format__` support: **yes** — include in initial implementation.
+4. Pandas string-column option: **deferred** — default to bare numeric; revisit if users request.
+
+### Cascade scope
+
+- New module `torchlens/units.py` with the ABC + 4 classes + tests (~150 lines).
+- Type annotations across all dataclasses: `int`/`float` -> `Bytes`/`Duration`/`Flops`/`Macs` for relevant fields.
+- Delete every `*_str` field declaration + construction site.
+- Update `_io` registry to re-wrap on load.
+- Glossary v7: collapse paired entries; add Conventions section explaining the unit-type family.
+- T2 + T3 to confirm no semantic behavior change.
+
+
+
+---
+
+## Facets framework — derived semantic views on Op and Module (LOCKED 2026-05-27)
+
+Adds a general-purpose registry of "recipes" that produce derived semantic views on Op and Module records. Headline use case is HuggingFace transformer attention (q/k/v/output access with per-head reshape), but the framework generalizes — anything a user wants to expose as a named view on a record can be registered. Both built-in (shipped by TorchLens) and user-defined recipes use the same mechanism.
+
+### The umbrella term: `facets`
+
+Chosen over `view` (conflicts with `Tensor.view`), `lens` (overloaded by FP), `derived` (generic), `recipe` (the registration thing, not the output), `projection` (conflicts with q/k/v_proj terminology). `facets` reads naturally as "different angles on the same data," works as both the field name (plural collection) and the module name (singular registration verb).
+
+### Field surface on Op and Module
+
+Every `Op` and `Module` record gets a `.facets` field returning a `FacetView` — dict-like AND attribute-access.
+
+```python
+op.facets           # FacetView instance
+op.facets.q         # the 'q' facet (attribute access)
+op.facets['q']      # same — both syntaxes work
+op.facets.keys()    # list of available facet names — does NOT trigger computation
+op.facets.has('q')  # bool check, no computation
+list(op.facets)     # iterates names
+len(op.facets)      # how many facets are available
+```
+
+Same field, same surface, both on `Op` and `Module`. The recipe that matches determines which scope it applies to.
+
+### `FacetView` semantics
+
+- **Lazy computation**: `view.keys()` returns names cheap; `view.q` invokes the recipe on first access.
+- **Per-view caching**: once `view.q` computes, the value is cached on the FacetView instance. `del record.facets` discards the cache; `record.facets` re-creates a fresh FacetView.
+- **Not serialized**: facets are derived from the underlying record + the global registry. `.tlspec` save/load drops cached facet values; FacetView is reconstructed on load against the current registry.
+- **Provenance**: `view.recipe_source` (str) tells you which recipe produced this view (debugging aid; `None` when no recipe matched).
+
+### Recipe registration
+
+```python
+@tl.facets.register(class_name='DistilBertSdpaAttention')
+def distilbert_attention(mod):
+    n_heads = mod.cls.n_heads
+    d_head = mod.cls.dim // n_heads
+    B, S = mod.calls[0].input_shapes[0][:2]
+    return {
+        'q': mod.modules['q_lin'].calls[0].out.view(B, S, n_heads, d_head),
+        'k': mod.modules['k_lin'].calls[0].out.view(B, S, n_heads, d_head),
+        'v': mod.modules['v_lin'].calls[0].out.view(B, S, n_heads, d_head),
+        'attn_out': mod.calls[0].out,
+        'n_heads': n_heads,
+        'd_head': d_head,
+    }
+```
+
+Matchers (any combination — recipe fires if ALL specified matchers pass):
+- `class_name='Foo'` — short class name; accepts string or tuple of strings
+- `class_qualname='full.module.Foo'` — full qualname (disambiguates collisions); string or tuple
+- `predicate=callable(record) -> bool` — arbitrary callable on the Op/Module
+
+Recipe function signature: `(record: Op | Module) -> dict[str, Any]`. Return a flat dict of facet name → value. Values can be tensors, scalars, nested structures, callables, anything. The dict is the recipe's contribution to the FacetView; multiple recipes can match the same record (see merge below).
+
+### Multi-recipe merge behavior
+
+When multiple recipes match the same record, their dicts are MERGED into the FacetView. Conflict on the same KEY: last-registered wins, with a `UserWarning` flagging the override. This lets library + user contribute facets to the same class without one nuking the other.
+
+```python
+# Library ships:
+@tl.facets.register(class_name='DistilBertSdpaAttention')
+def _builtin_attention(mod): return {'q': ..., 'k': ..., 'v': ...}
+
+# User adds their own:
+@tl.facets.register(class_name='DistilBertSdpaAttention')
+def _user_extras(mod): return {'attention_entropy': ..., 'head_similarity': ...}
+
+# Both contribute to the FacetView; both visible in .keys()
+```
+
+### Built-in recipes shipped with v1
+
+Initial set covers common HF + torch families. Each recipe includes residual/input access where applicable (residual-stream analysis use case).
+
+- **Attention** (one per HF class flavor; GQA-aware where relevant):
+  - `DistilBertSdpaAttention` (separate q_lin/k_lin/v_lin/out_lin)
+  - `GPT2Attention` (fused `c_attn` for QKV, separate `c_proj`)
+  - `BertSelfAttention` (separate query/key/value)
+  - `LlamaAttention` / `LlamaSdpaAttention` (GQA: separate `n_q_heads`, `n_kv_heads`)
+  - `MistralAttention` / `MistralSdpaAttention`
+  - `T5Attention`
+  - `ViTSelfAttention`
+- **Normalization**: `LayerNorm`, `RMSNorm`, `LlamaRMSNorm` — facets: `normalized`, `gamma`, `beta` (None for RMS variants), `input`
+- **MLP / FFN** (common gated forms): `LlamaMLP`, `MixtralMLP`, `GPT2MLP`, `DistilBertFFN` — facets: `intermediate`, `gated_out` (where applicable), `up_out`, `down_out`, `input`, `output`
+- **Embedding**: `nn.Embedding` — facets: `lookup`, `weight`, `indices` (where extractable)
+
+Attention recipes uniformly expose: `q`, `k`, `v`, `attn_out`, `input`, `residual` (when residual stream is identifiable), `n_q_heads`, `n_kv_heads`, `n_heads` (alias for `n_q_heads` for MHA), `d_head`, `head(i)` method returning a sub-view scoped to a single head.
+
+### `AttentionView.head(i)` sub-view
+
+For attention specifically, `.head(i)` returns a sub-view object scoped to one head — `.head(3).q` is `view.q[:, :, 3, :]`, with shape `(B, S, d_head)`. Convenience for the common "show me head 3 of layer 5" pattern.
+
+### Fused-SDPA limitation
+
+For attention modules using PyTorch's fused SDPA (the default in modern HF builds), the attention pattern (post-softmax) is NOT extractable — it lives inside the C++ fused kernel. The `pattern` facet raises an informative error in that case:
+
+```python
+view.pattern
+# RuntimeError: attention pattern not captured: model uses fused SDPA at <op_label>.
+# Re-run with model.config._attn_implementation='eager' to expose the pattern.
+```
+
+Not silent None — explicit error tells the user how to fix it.
+
+### Discoverability surface
+
+```python
+tl.facets.list()                          # all registered recipes
+tl.facets.list(scope='module')            # only Module-scoped
+tl.facets.list(scope='op')                # only Op-scoped
+tl.facets.list(class_name='*Attention')   # glob match
+tl.facets.info('DistilBertSdpaAttention') # which recipes match this class, what facets they provide
+
+record.facets.keys()                       # what's available on this specific record
+record.facets.has('q')                     # explicit existence check
+record.facets.recipe_source                # which recipe(s) populated this view
+
+# Convenience finders on Trace:
+log.attention_blocks()                     # iterate detected attention Modules
+log.modules_with_facet('q')                # iterate Modules whose FacetView has a 'q' facet
+```
+
+### Serialization rules
+
+- `.tlspec` save/load: facets are derived; cached values dropped on save. FacetView reconstructed lazily on load against the receiving session's registry.
+- User-registered recipes must be re-registered in the loading session for their facets to be available after load. Convention: put recipe registrations in a Python module that gets imported by both sides.
+- No opt-in to "pickle the registry alongside" for v1; future enhancement if users request.
+
+### Cache lifecycle
+
+Cache lives on the FacetView instance (not on the underlying record). Implication: `record.facets` creates a FacetView per access — but the FacetView is itself cached on the record (lazy-init pattern) so within a session the same FacetView is reused. Explicit cache reset via `record.facets.invalidate()` or by `del record.facets` (re-created on next access, no cache).
+
+### File layout
+
+```
+torchlens/semantic/
+  __init__.py
+  facets.py              # FacetView, register(), list(), info(), registry data
+  recipes/
+    __init__.py
+    attention.py          # all attention recipes
+    norm.py               # LayerNorm, RMSNorm variants
+    mlp.py                # MLP / FFN families
+    embedding.py          # nn.Embedding
+```
+
+Top-level exposure: `tl.facets.register`, `tl.facets.list`, `tl.facets.info`, plus the `Op.facets` / `Module.facets` field-level access.
+
+### Cascade scope
+
+- New `torchlens/semantic/` subpackage (~500 lines core + recipes)
+- `Op.facets` and `Module.facets` properties on `op_log.py` and `module_log.py`
+- `FacetView` class with dict + attribute interface (~100 lines)
+- Registry data structures + decorator (~80 lines)
+- 8 built-in recipe modules (~300 lines combined)
+- Tests: DistilBERT + GPT-2 + BERT + user registration + cache invalidation + multi-recipe merge (~250 lines)
+- Glossary v8 entry for the new field family
+- `huggingface_tutorial.ipynb` updated with new section demonstrating facets
