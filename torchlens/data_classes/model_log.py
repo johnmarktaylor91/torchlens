@@ -205,6 +205,31 @@ _MODEL_LOG_DEFAULT_FILL = {
 _MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION
 
 
+@dataclass
+class ResolvedPreprocessing:
+    """Structured provenance for automatic input preprocessing.
+
+    Attributes
+    ----------
+    source:
+        Resolver source that selected the preprocessing transform.
+    identifier:
+        Model, weights, or default-policy identifier.
+    verified:
+        Whether the preprocessing came from model-specific metadata.
+    config:
+        Best-effort serializable preprocessing configuration.
+    description:
+        Human-readable one-line summary for trace summaries.
+    """
+
+    source: str
+    identifier: str
+    verified: bool
+    config: dict[str, Any]
+    description: str
+
+
 def _init_module_hierarchy_data() -> dict[str, Any]:
     """Create the transient dict used to accumulate module hierarchy data during logging.
 
@@ -879,6 +904,7 @@ class Trace:
     tlspec_version: int
     flops_by_op_type: Any
     annotations: Dict[str, Any]
+    input_preprocessor: ResolvedPreprocessing | None
     input_object_id: int | None
     model_object_id: int | None
     input_signature_hash: str | None
@@ -909,6 +935,7 @@ class Trace:
         "intervention_ready": FieldPolicy.KEEP,
         "save_arg_templates": FieldPolicy.KEEP,
         "raw_input": FieldPolicy.KEEP,
+        "input_preprocessor": FieldPolicy.KEEP,
         "_transform": FieldPolicy.DROP,
         "save_raw_input": FieldPolicy.KEEP,
         "batch_render": FieldPolicy.KEEP,
@@ -1178,6 +1205,7 @@ class Trace:
         self.intervention_ready = False
         self.save_arg_templates = False
         self.raw_input = raw_input
+        self.input_preprocessor: ResolvedPreprocessing | None = None
         self._transform = transform
         self.save_raw_input = save_raw_input
         self.batch_render = batch_render

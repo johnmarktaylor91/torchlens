@@ -45,6 +45,7 @@ MODEL_LOG_FIELD_ORDER = [
     "intervention_ready",
     "save_arg_templates",
     "raw_input",
+    "input_preprocessor",
     "_transform",
     "save_raw_input",
     "batch_render",

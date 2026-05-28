@@ -211,6 +211,7 @@ def format_discoverability_summary(trace: "Trace") -> str:
         f"  name: {getattr(trace, 'trace_label', None)!r}",
         f"  model_class_qualname: {getattr(trace, 'model_class_name', None)}",
         f"  input_shape: {_input_shape_summary(trace)}",
+        *_input_preprocessing_lines(trace),
         f"  capture_timestamp: {_capture_timestamp(trace)}",
         f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
         f"  save_arg_templates: {bool(getattr(trace, 'save_arg_templates', False))}",
@@ -241,6 +242,27 @@ def format_discoverability_summary(trace: "Trace") -> str:
         f"  {_rng_note_summary(trace)}",
     ]
     return "\n".join(lines)
+
+
+def _input_preprocessing_lines(trace: "Trace") -> list[str]:
+    """Return optional input-preprocessing summary lines.
+
+    Parameters
+    ----------
+    trace:
+        Model log to inspect.
+
+    Returns
+    -------
+    list[str]
+        Empty list when no automatic preprocessing was applied, otherwise a
+        two-line summary block.
+    """
+
+    record = getattr(trace, "input_preprocessor", None)
+    if record is None:
+        return []
+    return ["Input preprocessing:", f"  {record.description}"]
 
 
 def _input_shape_summary(trace: "Trace") -> str:
