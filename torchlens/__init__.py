@@ -193,6 +193,10 @@ def __getattr__(name: str) -> Any:
         If ``name`` is not part of the deprecation state_history.
     """
 
+    if name == "autoroute":
+        module_obj = _importlib.import_module("torchlens.autoroute")
+        globals()[name] = module_obj
+        return module_obj
     if name in _MOVED_OBJECTS:
         new_module_path, new_attr = _MOVED_OBJECTS[name]
         _warn_moved_name(name, new_module_path, new_attr)

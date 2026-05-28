@@ -52,14 +52,7 @@ from ._literals import (
     VisRendererLiteral,
 )
 from .backends.torch._tl import get_tensor_label
-from .bridge.hf import (
-    _can_resolve_hf_processor,
-    _can_resolve_hf_tokenizer,
-    _has_attached_image_processor,
-    _is_hf_image_input,
-    _is_hf_multimodal_input,
-    _is_hf_text_input,
-)
+from .bridge import hf as _hf_bridge
 from .ir import live_record_for_label
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
@@ -92,6 +85,13 @@ from .intervention.errors import InterventionReadyConflictError
 from .intervention.hooks import normalize_hook_plan
 from .intervention.resolver import resolve_sites
 from ._trace_state import TraceState
+
+_can_resolve_hf_processor = _hf_bridge._can_resolve_hf_processor
+_can_resolve_hf_tokenizer = _hf_bridge._can_resolve_hf_tokenizer
+_has_attached_image_processor = _hf_bridge._has_attached_image_processor
+_is_hf_image_input = _hf_bridge._is_hf_image_input
+_is_hf_multimodal_input = _hf_bridge._is_hf_multimodal_input
+_is_hf_text_input = _hf_bridge._is_hf_text_input
 
 
 def list_logs() -> tuple[Trace, ...]:
@@ -1408,184 +1408,61 @@ def trace(
     Returns:
         A ``Trace`` containing layer outs (if requested) and full metadata.
     """
-    if (
-        transform is MISSING
-        and (capture is None or not capture.is_field_explicit("transform"))
-        and _is_hf_text_input(input_args)
-        and _can_resolve_hf_tokenizer(model)
-    ):
-        from torchlens.bridge.hf import trace_text
+    if transform is MISSING and (capture is None or not capture.is_field_explicit("transform")):
+        from torchlens import autoroute
 
-        chat_template = (
-            isinstance(input_args, list) and bool(input_args) and isinstance(input_args[0], dict)
-        )
-        return trace_text(
-            model,
-            cast("str | list[str] | list[dict[str, Any]]", input_args),
-            input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,
-            save_raw_input=save_raw_input,
-            batch_render=batch_render,
-            output_transform=output_transform,
-            save_raw_output=save_raw_output,
-            keep_orphans=keep_orphans,
-            output_device=output_device,
-            out_transform=out_transform,
-            gradient_transform=gradient_transform,
-            gradient_postfunc=gradient_postfunc,
-            save_raw_outs=save_raw_outs,
-            save_raw_gradients=save_raw_gradients,
-            out_postfunc=out_postfunc,
-            mark_layer_depths=mark_layer_depths,
-            detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_gradients=save_gradients,
-            gradients_to_save=gradients_to_save,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
-            random_seed=random_seed,
-            num_context_lines=num_context_lines,
-            optimizer=optimizer,
-            save_outs_to=save_outs_to,
-            keep_outs_in_memory=keep_outs_in_memory,
-            save_grads_to=save_grads_to,
-            keep_grads_in_memory=keep_grads_in_memory,
-            out_sink=out_sink,
-            intervention_ready=intervention_ready,
-            hooks=hooks,
-            unwrap_when_done=unwrap_when_done,
-            verbose=verbose,
-            source_context_lines=source_context_lines,
-            compute_input_output_distances=compute_input_output_distances,
-            recurrence_detection=recurrence_detection,
-            capture=capture,
-            save=save,
-            streaming=streaming,
-            backward_ready=backward_ready,
-            name=name,
-            cache=cache,
-            cache_dir=cache_dir,
-            module_filter=module_filter,
-            stop_after=stop_after,
-            raise_on_nan=raise_on_nan,
-            chat_template=chat_template,
-        )
-    if (
-        transform is MISSING
-        and (capture is None or not capture.is_field_explicit("transform"))
-        and _is_hf_multimodal_input(input_args)
-        and _can_resolve_hf_processor(model)
-    ):
-        from torchlens.bridge.hf import trace_multimodal
-
-        return trace_multimodal(
-            model,
-            cast("dict[str, Any]", input_args),
-            input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,
-            save_raw_input=save_raw_input,
-            batch_render=batch_render,
-            output_transform=output_transform,
-            save_raw_output=save_raw_output,
-            keep_orphans=keep_orphans,
-            output_device=output_device,
-            out_transform=out_transform,
-            gradient_transform=gradient_transform,
-            gradient_postfunc=gradient_postfunc,
-            save_raw_outs=save_raw_outs,
-            save_raw_gradients=save_raw_gradients,
-            out_postfunc=out_postfunc,
-            mark_layer_depths=mark_layer_depths,
-            detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_gradients=save_gradients,
-            gradients_to_save=gradients_to_save,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
-            random_seed=random_seed,
-            num_context_lines=num_context_lines,
-            optimizer=optimizer,
-            save_outs_to=save_outs_to,
-            keep_outs_in_memory=keep_outs_in_memory,
-            save_grads_to=save_grads_to,
-            keep_grads_in_memory=keep_grads_in_memory,
-            out_sink=out_sink,
-            intervention_ready=intervention_ready,
-            hooks=hooks,
-            unwrap_when_done=unwrap_when_done,
-            verbose=verbose,
-            source_context_lines=source_context_lines,
-            compute_input_output_distances=compute_input_output_distances,
-            recurrence_detection=recurrence_detection,
-            capture=capture,
-            save=save,
-            streaming=streaming,
-            backward_ready=backward_ready,
-            name=name,
-            cache=cache,
-            cache_dir=cache_dir,
-            module_filter=module_filter,
-            stop_after=stop_after,
-            raise_on_nan=raise_on_nan,
-        )
-    if (
-        transform is MISSING
-        and (capture is None or not capture.is_field_explicit("transform"))
-        and _is_hf_image_input(input_args)
-        and not _has_attached_image_processor(model)
-    ):
-        from torchlens.bridge.hf import trace_image
-
-        return trace_image(
-            model,
-            input_args,
-            input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,
-            save_raw_input=save_raw_input,
-            batch_render=batch_render,
-            output_transform=output_transform,
-            save_raw_output=save_raw_output,
-            keep_orphans=keep_orphans,
-            output_device=output_device,
-            out_transform=out_transform,
-            gradient_transform=gradient_transform,
-            gradient_postfunc=gradient_postfunc,
-            save_raw_outs=save_raw_outs,
-            save_raw_gradients=save_raw_gradients,
-            out_postfunc=out_postfunc,
-            mark_layer_depths=mark_layer_depths,
-            detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_gradients=save_gradients,
-            gradients_to_save=gradients_to_save,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
-            random_seed=random_seed,
-            num_context_lines=num_context_lines,
-            optimizer=optimizer,
-            save_outs_to=save_outs_to,
-            keep_outs_in_memory=keep_outs_in_memory,
-            save_grads_to=save_grads_to,
-            keep_grads_in_memory=keep_grads_in_memory,
-            out_sink=out_sink,
-            intervention_ready=intervention_ready,
-            hooks=hooks,
-            unwrap_when_done=unwrap_when_done,
-            verbose=verbose,
-            source_context_lines=source_context_lines,
-            compute_input_output_distances=compute_input_output_distances,
-            recurrence_detection=recurrence_detection,
-            capture=capture,
-            save=save,
-            streaming=streaming,
-            backward_ready=backward_ready,
-            name=name,
-            cache=cache,
-            cache_dir=cache_dir,
-            module_filter=module_filter,
-            stop_after=stop_after,
-            raise_on_nan=raise_on_nan,
-        )
+        autoroute_kwargs = {
+            "input_kwargs": input_kwargs,
+            "layers_to_save": layers_to_save,
+            "save_raw_input": save_raw_input,
+            "batch_render": batch_render,
+            "output_transform": output_transform,
+            "save_raw_output": save_raw_output,
+            "keep_orphans": keep_orphans,
+            "output_device": output_device,
+            "out_transform": out_transform,
+            "gradient_transform": gradient_transform,
+            "gradient_postfunc": gradient_postfunc,
+            "save_raw_outs": save_raw_outs,
+            "save_raw_gradients": save_raw_gradients,
+            "out_postfunc": out_postfunc,
+            "mark_layer_depths": mark_layer_depths,
+            "detach_saved_activations": detach_saved_activations,
+            "save_arg_values": save_arg_values,
+            "save_gradients": save_gradients,
+            "gradients_to_save": gradients_to_save,
+            "save_code_context": save_code_context,
+            "save_rng_states": save_rng_states,
+            "random_seed": random_seed,
+            "num_context_lines": num_context_lines,
+            "optimizer": optimizer,
+            "save_outs_to": save_outs_to,
+            "keep_outs_in_memory": keep_outs_in_memory,
+            "save_grads_to": save_grads_to,
+            "keep_grads_in_memory": keep_grads_in_memory,
+            "out_sink": out_sink,
+            "intervention_ready": intervention_ready,
+            "hooks": hooks,
+            "unwrap_when_done": unwrap_when_done,
+            "verbose": verbose,
+            "source_context_lines": source_context_lines,
+            "compute_input_output_distances": compute_input_output_distances,
+            "recurrence_detection": recurrence_detection,
+            "capture": capture,
+            "save": save,
+            "streaming": streaming,
+            "backward_ready": backward_ready,
+            "name": name,
+            "cache": cache,
+            "cache_dir": cache_dir,
+            "module_filter": module_filter,
+            "stop_after": stop_after,
+            "raise_on_nan": raise_on_nan,
+        }
+        for detector in autoroute.input.iter_by_priority():
+            result = detector(model, input_args, **autoroute_kwargs)
+            if result is not None:
+                return cast("Trace", result)
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
     if _is_mlx_module_instance(model):
