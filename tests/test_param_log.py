@@ -499,12 +499,21 @@ class TestVisualizationParams:
 
     def test_frozen_param_label_keeps_text_format(self):
         dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input())
-        assert "params: weight (5, 10) · bias (5,)" in dot
+        assert "params: weight [5, 10] · bias [5,]" in dot
 
     def test_mixed_param_label_keeps_text_format(self):
         dot, mh = self._get_dot_source(_make_frozen_first_layer(), _simple_input())
-        assert "params: weight (5, 10) · bias (5,)" in dot
+        assert "params: weight [5, 10] · bias [5,]" in dot
+        assert "params: weight (2, 5) · bias (2,)" in dot
         assert "weight:" not in dot
+
+    def test_mixed_same_layer_param_label_marks_each_shape(self) -> None:
+        """Mixed params in one layer mark each shape by trainability."""
+
+        model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
+        model[0].weight.requires_grad = False
+        dot, mh = self._get_dot_source(model, _simple_input())
+        assert "params: weight [5, 10] · bias (5,)" in dot
 
     def test_trainable_bg_color(self):
         dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())

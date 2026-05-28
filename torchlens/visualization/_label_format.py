@@ -164,6 +164,30 @@ def format_shape(shape: Any) -> str:
     return f"({', '.join(str(dim) for dim in dims)})"
 
 
+def _shape_with_trainability(shape: Any, trainable: bool | None) -> str:
+    """Render a shape with frozen params marked by square brackets.
+
+    Parameters
+    ----------
+    shape:
+        Shape-like object to render.
+    trainable:
+        Whether the parameter is trainable. ``None`` defaults to trainable notation.
+
+    Returns
+    -------
+    str
+        Shape text using ``(...)`` for trainable or unknown params and ``[...]`` for frozen
+        params.
+    """
+
+    shape_text = format_shape(shape)
+    if trainable is not False:
+        return shape_text
+    assert shape_text.startswith("(") and shape_text.endswith(")")
+    return f"[{shape_text[1:-1]}]"
+
+
 def format_memory(bytes_or_quantity: Any) -> str:
     """Render memory in TorchLens' human-readable style.
 
@@ -231,7 +255,8 @@ def format_param_list(params: Any) -> str | None:
     for item in param_items:
         name = getattr(item, "name", None)
         shape = getattr(item, "shape", item)
-        shape_text = format_shape(shape)
+        trainable = getattr(item, "trainable", getattr(item, "requires_grad", None))
+        shape_text = _shape_with_trainability(shape, trainable)
         if name:
             parts.append(f"{name} {shape_text}")
         else:
