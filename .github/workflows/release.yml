@@ -12,6 +12,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     concurrency: release
+    # Belt-and-suspenders with the `[skip ci]` token in the release commit
+    # message: never run a release on the bot's own release commit, so a missing
+    # skip token can't reignite the runaway release loop.
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
 
     steps:
       - name: Generate app token
@@ -30,6 +34,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.9"
+
+      # git-lfs's pre-push hook tries to verify LFS objects against the
+      # tokenized App URL (username `torchlens-release[bot]` -- the brackets
+      # break git-lfs endpoint parsing: "batch request: missing protocol").
+      # Plain commit pushes tolerate it, but the TAG push invokes LFS and dies,
+      # so no version tag is ever created and every run re-releases. The LFS
+      # objects are already on the remote, so uninstalling the local LFS hooks
+      # lets the tag push (a pure ref create) succeed.
+      - name: Disable git-lfs hooks for release pushes
+        run: git lfs uninstall
 
       - name: Install dependencies
         run: pip install "python-semantic-release>=9,<10"

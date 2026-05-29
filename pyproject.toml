@@ -169,7 +169,10 @@ version_variables = ["torchlens/__init__.py:__version__"]
 branch = "main"
 major_on_zero = true
 build_command = "pip install build && python -m build"
-commit_message = "chore(release): {version}"
+# `[skip ci]` is REQUIRED: the bot pushes this commit to main, and without the
+# skip token GitHub re-triggers the Release workflow on it, which re-releases and
+# pushes again -> infinite loop. (See git history: a 1599-commit runaway.)
+commit_message = "chore(release): {version} [skip ci]"
 # Layer 3: custom parser that refuses to emit LevelBump.MAJOR.
 commit_parser = "scripts/no_major_parser.py:NoMajorAngularParser"
 
