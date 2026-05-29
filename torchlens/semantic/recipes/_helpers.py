@@ -115,10 +115,11 @@ def activation_silu(value: Any) -> Any | None:
 
 
 def fused_sdpa_pattern(module: Any) -> MissingFacet:
-    """Return a MissingFacet explaining fused-SDPA pattern unavailability."""
+    """Return a MissingFacet explaining fused attention pattern unavailability."""
 
     label = getattr(module.calls[0], "call_label", getattr(module, "address", "<unknown>"))
     return MissingFacet(
-        f"attention pattern not captured: model uses fused SDPA at {label}. "
+        f"attention pattern not captured: model uses a fused attention kernel "
+        f"(SDPA/FlashAttention) at {label}. "
         "Re-run with model.config._attn_implementation='eager' to expose the pattern."
     )

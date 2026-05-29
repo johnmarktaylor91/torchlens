@@ -48,7 +48,7 @@ def _with_attention_common(
         result["d_head"] = d_head
     result["head"] = module.facets.head
     class_name = getattr(module, "class_name", "")
-    if "Sdpa" in class_name:
+    if "Sdpa" in class_name or "FlashAttention" in class_name:
         result["pattern"] = fused_sdpa_pattern(module)
     return result
 
@@ -82,12 +82,28 @@ def _attention_config(module: Any) -> tuple[int | None, int | None, int | None]:
 
 
 @register(
-    class_name="DistilBertSdpaAttention",
+    class_name=("DistilBertSdpaAttention", "DistilBertFlashAttention2"),
     target_scope="module",
     facets=_ATTENTION_FACETS_SDPA,
 )
-def distilbert_sdpa_attention(module: Any) -> dict[str, Any]:
-    """Return facets for DistilBERT SDPA attention modules."""
+@register(
+    class_name="MultiHeadSelfAttention",
+    target_scope="module",
+    facets=_ATTENTION_FACETS_BASE,
+)
+def distilbert_attention(module: Any) -> dict[str, Any]:
+    """Return facets for DistilBERT attention modules.
+
+    Covers all three attention implementations DistilBERT ships: the eager
+    base class ``MultiHeadSelfAttention`` and the fused ``DistilBertSdpaAttention``
+    / ``DistilBertFlashAttention2`` variants. All three project q/k/v through the
+    same ``q_lin``/``k_lin``/``v_lin`` children, so one extraction body serves
+    every implementation. The fused variants additionally expose a ``pattern``
+    MissingFacet (their attention scores are never materialized); the eager class
+    omits ``pattern``, matching the other eager recipes (e.g. BERT). This is why
+    switching to ``_attn_implementation='eager'`` must keep q/k/v queryable --
+    see the ``pattern`` MissingFacet guidance in ``_helpers.fused_sdpa_pattern``.
+    """
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
     result: dict[str, Any] = {}

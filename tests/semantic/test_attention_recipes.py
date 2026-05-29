@@ -32,6 +32,26 @@ class DistilBertSdpaAttention(nn.Module):
         return self.out_lin(self.q_lin(x) + self.k_lin(x) + self.v_lin(x))
 
 
+class MultiHeadSelfAttention(nn.Module):
+    """Tiny DistilBERT eager attention block (q_lin/k_lin/v_lin children)."""
+
+    def __init__(self) -> None:
+        """Initialize the tiny eager attention block."""
+
+        super().__init__()
+        self.n_heads = 2
+        self.dim = 8
+        self.q_lin = nn.Linear(8, 8)
+        self.k_lin = nn.Linear(8, 8)
+        self.v_lin = nn.Linear(8, 8)
+        self.out_lin = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the attention-shaped projections."""
+
+        return self.out_lin(self.q_lin(x) + self.k_lin(x) + self.v_lin(x))
+
+
 class GPT2Attention(nn.Module):
     """Tiny GPT-2-like fused-QKV attention block."""
 
@@ -77,6 +97,27 @@ def test_distilbert_attention_q_shape_and_head_view() -> None:
     assert view.q.shape == (2, 3, 2, 4)
     assert view.head(1).q.shape == (2, 3, 4)
     assert torch.equal(view.head(1).q, view.q[:, :, 1, :])
+
+
+@pytest.mark.slow
+def test_distilbert_eager_attention_q_shape_and_head_view() -> None:
+    """DistilBERT eager class (MultiHeadSelfAttention) exposes q/k/v facets.
+
+    Regression: only ``DistilBertSdpaAttention`` was registered, so switching to
+    ``_attn_implementation='eager'`` (the very fix the ``pattern`` MissingFacet
+    recommends) landed on the unregistered eager class and raised ``KeyError('q')``.
+    """
+
+    log = trace_fn(
+        _AttentionModel(MultiHeadSelfAttention()), torch.randn(2, 3, 8), layers_to_save="all"
+    )
+    view = log.modules["attn"].facets
+    assert view.recipe_source == "distilbert_attention"
+    assert view.q.shape == (2, 3, 2, 4)
+    assert view.head(1).q.shape == (2, 3, 4)
+    assert torch.equal(view.head(1).q, view.q[:, :, 1, :])
+    # Eager omits ``pattern`` (consistent with other eager recipes).
+    assert "pattern" not in view.keys()
 
 
 @pytest.mark.slow
