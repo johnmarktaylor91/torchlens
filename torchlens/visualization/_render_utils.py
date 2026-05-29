@@ -63,6 +63,15 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
         ``True`` if a viewer launch was attempted, otherwise ``False``.
     """
 
+    # In a notebook the figure is rendered inline via IPython ``display()``;
+    # launching a desktop viewer is never appropriate there, and a
+    # "headless, skipping auto-open" note would be misleading noise. Bail out
+    # before any viewer launch or announcement.
+    from ..utils.display import in_notebook
+
+    if in_notebook():
+        return False
+
     if not _is_interactive_display_context():
         if announce_headless:
             print(
