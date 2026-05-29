@@ -35,15 +35,19 @@ jobs:
         with:
           python-version: "3.9"
 
-      # git-lfs's pre-push hook tries to verify LFS objects against the
-      # tokenized App URL (username `torchlens-release[bot]` -- the brackets
-      # break git-lfs endpoint parsing: "batch request: missing protocol").
-      # Plain commit pushes tolerate it, but the TAG push invokes LFS and dies,
-      # so no version tag is ever created and every run re-releases. The LFS
-      # objects are already on the remote, so uninstalling the local LFS hooks
-      # lets the tag push (a pure ref create) succeed.
-      - name: Disable git-lfs hooks for release pushes
-        run: git lfs uninstall
+      # The version TAG push invokes git-lfs (a few .research/*.md files are
+      # LFS-tracked). CI checks out with lfs disabled (pointers only, no LFS
+      # content), so the push is rejected with "missing or corrupt local
+      # objects" -- but those objects already live on the remote (pushed when
+      # the files landed on main), so an incomplete push is safe here. Without
+      # this, the tag never gets created and (pre-`[skip ci]`) every run
+      # re-released -> the 1599-commit runaway. `locksverify=false` additionally
+      # sidesteps the locking-API failure caused by the App's bracketed
+      # credential URL (`torchlens-release[bot]`).
+      - name: Let git-lfs tolerate the CI tag push
+        run: |
+          git config lfs.allowincompletepush true
+          git config lfs.locksverify false
 
       - name: Install dependencies
         run: pip install "python-semantic-release>=9,<10"
