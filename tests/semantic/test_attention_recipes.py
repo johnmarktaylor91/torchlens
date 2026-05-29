@@ -52,6 +52,26 @@ class MultiHeadSelfAttention(nn.Module):
         return self.out_lin(self.q_lin(x) + self.k_lin(x) + self.v_lin(x))
 
 
+class DistilBertSelfAttention(nn.Module):
+    """Tiny transformers-5.x DistilBERT unified attention block."""
+
+    def __init__(self) -> None:
+        """Initialize the tiny unified attention block."""
+
+        super().__init__()
+        self.n_heads = 2
+        self.dim = 8
+        self.q_lin = nn.Linear(8, 8)
+        self.k_lin = nn.Linear(8, 8)
+        self.v_lin = nn.Linear(8, 8)
+        self.out_lin = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the attention-shaped projections."""
+
+        return self.out_lin(self.q_lin(x) + self.k_lin(x) + self.v_lin(x))
+
+
 class GPT2Attention(nn.Module):
     """Tiny GPT-2-like fused-QKV attention block."""
 
@@ -118,6 +138,29 @@ def test_distilbert_eager_attention_q_shape_and_head_view() -> None:
     assert torch.equal(view.head(1).q, view.q[:, :, 1, :])
     # Eager omits ``pattern`` (consistent with other eager recipes).
     assert "pattern" not in view.keys()
+
+
+@pytest.mark.slow
+def test_distilbert_unified_attention_q_shape_and_pattern_missing() -> None:
+    """transformers-5.x unified class (DistilBertSelfAttention) exposes q/k/v.
+
+    Regression: transformers 5.x collapsed the per-backend subclasses into one
+    ``DistilBertSelfAttention`` class; it was unregistered, so facets.q raised
+    ``KeyError('q')``. Its default backend is fused SDPA, so ``pattern`` is the
+    informative MissingFacet (RuntimeError on access), not a silent AttributeError.
+    """
+
+    log = trace_fn(
+        _AttentionModel(DistilBertSelfAttention()), torch.randn(2, 3, 8), layers_to_save="all"
+    )
+    view = log.modules["attn"].facets
+    assert view.recipe_source == "distilbert_attention"
+    assert view.q.shape == (2, 3, 2, 4)
+    assert view.head(1).q.shape == (2, 3, 4)
+    # Fused-by-default: pattern is declared but surfaced as an informative MissingFacet.
+    assert "pattern" in view.keys()
+    with pytest.raises(RuntimeError, match="attention pattern not captured"):
+        view.pattern
 
 
 @pytest.mark.slow

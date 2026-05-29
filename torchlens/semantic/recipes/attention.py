@@ -47,10 +47,26 @@ def _with_attention_common(
     if d_head is not None:
         result["d_head"] = d_head
     result["head"] = module.facets.head
-    class_name = getattr(module, "class_name", "")
-    if "Sdpa" in class_name or "FlashAttention" in class_name:
+    if _attention_is_fused(getattr(module, "class_name", "")):
         result["pattern"] = fused_sdpa_pattern(module)
     return result
+
+
+def _attention_is_fused(class_name: str) -> bool:
+    """Return whether an attention class hides its pattern behind a fused kernel.
+
+    Covers the explicitly-fused transformers 4.x subclasses (``...SdpaAttention`` /
+    ``...FlashAttention2``) and the transformers 5.x unified ``DistilBertSelfAttention``
+    -- the 5.x class name no longer encodes the backend, but its default is fused SDPA,
+    and the recipe never extracts the pattern in any case, so ``pattern`` is surfaced as
+    an informative MissingFacet rather than silently absent (AttributeError).
+    """
+
+    return (
+        "Sdpa" in class_name
+        or "FlashAttention" in class_name
+        or class_name == "DistilBertSelfAttention"
+    )
 
 
 def _attention_config(module: Any) -> tuple[int | None, int | None, int | None]:
@@ -82,7 +98,7 @@ def _attention_config(module: Any) -> tuple[int | None, int | None, int | None]:
 
 
 @register(
-    class_name=("DistilBertSdpaAttention", "DistilBertFlashAttention2"),
+    class_name=("DistilBertSdpaAttention", "DistilBertFlashAttention2", "DistilBertSelfAttention"),
     target_scope="module",
     facets=_ATTENTION_FACETS_SDPA,
 )
@@ -94,15 +110,16 @@ def _attention_config(module: Any) -> tuple[int | None, int | None, int | None]:
 def distilbert_attention(module: Any) -> dict[str, Any]:
     """Return facets for DistilBERT attention modules.
 
-    Covers all three attention implementations DistilBERT ships: the eager
-    base class ``MultiHeadSelfAttention`` and the fused ``DistilBertSdpaAttention``
-    / ``DistilBertFlashAttention2`` variants. All three project q/k/v through the
-    same ``q_lin``/``k_lin``/``v_lin`` children, so one extraction body serves
-    every implementation. The fused variants additionally expose a ``pattern``
-    MissingFacet (their attention scores are never materialized); the eager class
-    omits ``pattern``, matching the other eager recipes (e.g. BERT). This is why
-    switching to ``_attn_implementation='eager'`` must keep q/k/v queryable --
-    see the ``pattern`` MissingFacet guidance in ``_helpers.fused_sdpa_pattern``.
+    The class name has changed across transformers releases, so match all forms:
+    ``MultiHeadSelfAttention`` (eager base, transformers 4.x), the fused
+    ``DistilBertSdpaAttention`` / ``DistilBertFlashAttention2`` subclasses (4.x),
+    and ``DistilBertSelfAttention`` (transformers 5.x, which unified the per-backend
+    subclasses into one class and selects eager/sdpa via a runtime function). All
+    forms project q/k/v through the same ``q_lin``/``k_lin``/``v_lin`` children, so
+    one extraction body serves every implementation. The explicitly-fused 4.x
+    subclasses expose a ``pattern`` MissingFacet (their scores are never
+    materialized); the unified/eager classes omit ``pattern`` (the class name no
+    longer reveals the backend), matching the other eager recipes (e.g. BERT).
     """
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
