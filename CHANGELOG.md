@@ -1,122 +1,1737 @@
 # CHANGELOG
 
-## Unreleased
 
-### Architecture
+## v2.18.0 (2026-05-29)
 
-- **Unified capture pipeline**: backend wrappers now emit typed `OpEvent`
-  records into `torchlens.ir.CaptureEvents`; postprocess consumes events
-  to materialize the final user-facing `Trace`. No more dual capture paths
-  (exhaustive `log_forward_pass` and `fastlog.record` now share one engine).
-- **Backend abstraction**: new `torchlens.backends.CaptureBackend` Protocol.
-  PyTorch implementation at `torchlens.backends.torch`; MLX implementation
-  at `torchlens.backends.mlx` (technical preview).
-- **`torchlens.decoration` namespace deleted**: torch wrappers, model prep,
-  and `_tl` namespace metadata now live under `torchlens.backends.torch`.
-  Anyone reaching into `torchlens.decoration.*` directly will need to update
-  imports.
-- **Zero capture-only scratch on final `Trace`**: `_raw_layer_dict`,
-  `_module_build_data`, `_mod_entered`, etc. no longer exist on a
-  post-capture `Trace`. They live transiently on a postprocess-local
-  `TraceBuildState` and are discarded.
-- **Backward-parity + alpha.3 sprint**: PyTorch capture now records live
-  `LiveOpRecord` projections during forward and materializes final `OpLog`
-  objects in postprocess Step 0. Backward metadata now uses
-  `is_intervening`, with capture-time AccumulateGrad attribution maps for
-  parameter-owning backward nodes.
+### Bug Fixes
 
-### Behavior changes (CHECK YOUR CODE)
+- **alpha3**: Accept LiveOpView in nonfinite check
+  ([`4e4e683`](https://github.com/johnmarktaylor91/torchlens/commit/4e4e683b05e07dc28da5efe4ee260193b435ddc5))
 
-- **Multi-output modules**: modules returning multiple tensors now preserve each
-  output as a distinct `OpLog` in `ModuleLog.outputs` /
-  `ModuleCallLog.outputs`. `module.output_layers` no longer collapses those
-  outputs, and ambiguous `module.out` access raises `MultiOutputModuleError`.
-- **Module-pass tabular export**: `ModuleCallLog.to_pandas()` now exports
-  `outputs` as layer-label lists and `output_structure` as a string summary,
-  avoiding recursive `OpLog` / `ContainerSpec` objects in CSV, JSON, and
-  Parquet surfaces.
-- **`PartialTrace.raw_layers`**: now returns `tuple[OpEvent, ...]` instead
-  of `tuple[OpLog, ...]`. Recovery-path API; rarely-used.
-- **`Trace.orphan_logs: tuple[OpLog, ...]`** added (orphan access without
-  `_raw_layer_dict`).
-- **`Trace.has_backward_pass`** is now backend-conditional. MLX traces
-  always have `has_backward_pass = False`; `log_backward()` and
-  `recording_backward()` raise `NotImplementedError` on MLX traces.
+- **alpha3**: Keep auxiliary T2 paths compatible
+  ([`b665119`](https://github.com/johnmarktaylor91/torchlens/commit/b665119693ead546539d6bf746b1480ae3838916))
 
-### Artifact format
+- **alpha3**: Materialize failed partial traces
+  ([`c0584b5`](https://github.com/johnmarktaylor91/torchlens/commit/c0584b525cffaedce665baa01e9dcde4529cb41a))
 
-- **`io_format_version: 3 -> 4`**. v3 `.tlspec` bundles continue to load
-  cleanly under v4 via a normalizer in `_io/rehydrate.py` that strips the
-  dropped capture-only fields. No user action required.
-- `tlspec_version` and manifest `schema_version` unchanged (still 1).
+- **alpha3**: Restore streaming strict capture writes
+  ([`b7b3627`](https://github.com/johnmarktaylor91/torchlens/commit/b7b3627a6e5727b876a3d7147bb1b6db47cad6ad))
 
-### New features
+- **alpha3**: Restore train_mode out_postfunc detach validation
+  ([`20b7fd0`](https://github.com/johnmarktaylor91/torchlens/commit/20b7fd0cc357001915f569f202c5af2ca2d784ad))
 
-- **`tl.fastlog.record(..., predicate=...)`**: predicate is now a
-  first-class parameter on the unified entry point as well as fastlog.
-  The intervention selector DSL (`tl.func`, `tl.module`, `tl.label`,
-  `tl.contains`, `tl.where`, `tl.in_module`) composes via Boolean algebra
-  as the unified predicate language; fastlog's bare-callable predicates
-  still work.
-- **MLX backend (technical preview)**: `pip install torchlens[mlx]`,
-  then `tl.trace(mlx_model, mlx_input)` works for eager MLX models.
-  Lazy-safe metadata extraction; batched `mx.eval` at end-of-forward.
-  `mx.compile`-wrapped models, MLX backward capture, and MLX RNG replay
-  are not yet supported.
-- **Backward validation parity**: `validate_backward_pass` now accepts
-  `random_seed` and `validate_metadata`, restores model state between stock and
-  TorchLens passes, clears grads before/between/after validation, and checks
-  backward grad-fn metadata invariants. Per AD-32, a per-layer-gradient oracle
-  remains deferred to a follow-up sprint; the shipped validator hardens
-  parameter-gradient parity.
-- **Combined forward/backward visualization**: `Trace.draw_combined(...)`,
-  `torchlens.visualization.draw_combined(...)`, and legacy
-  `torchlens.draw_combined(...)` render forward ops alongside captured
-  backward `grad_fn` nodes with dashed correspondence edges, module-aware
-  backward clustering, and bundle backward visualization regression coverage.
-- **Backward intervention parity**: added grad_fn selector DSL
-  (`tl.grad_fn`, `tl.intervening`, `tl.grad_fn_label`), live grad_fn backward
-  helper dispatch, and tuple-shaped gradient helpers (`tl.grad_clip`,
-  `tl.grad_noise`, `tl.grad_clamp`). Backward replay remains intentionally
-  unsupported.
-- **Backward gradient transformation and capture**: `gradient_postfunc` is now
-  a silent alias for `grad_transform`; `Recording.log_backward(...)` and
-  `Recorder.log_backward(...)` capture fastlog backward gradients with
-  predicate-mode forward-to-backward attribution.
-- **Gradient statistics**: `aggregate(..., target="grad", loss_fn=...)`
-  supports backward-gradient aggregation and includes streaming norm
-  statistics.
-- **Backward observer parity**: `tl.tap(..., direction=...)` supports backward
-  gradient observation and both-direction recording. `record_span(...)` accepts
-  the same direction support, and `TapRecord` includes direction, gradient kind,
-  and one-based backward call index metadata.
+Co-authored-by: Codex <codex@openai.com>
 
-### Public API surface
+- **backward, demo**: Pin grad_fn refs, fork conditional viz at single node, add bundle diff
+  ([`3cc4c46`](https://github.com/johnmarktaylor91/torchlens/commit/3cc4c4694abff7b0cd048adeb1079c19aeb8c83b))
 
-- `torchlens.__all__` now includes backward selector/helper additions
-  (`grad_fn`, `intervening`, `grad_fn_label`, `grad_clip`, `grad_noise`,
-  `grad_clamp`).
-- `torchlens.__all__` also includes `output` for multi-output module selector
-  disambiguation; the post-backward top-level budget is 47 names.
-- Existing public symbols (`tl.trace`, `tl.fastlog.*`, intervention API,
-  `Trace.summary`, `Trace.fork`, `Trace.rerun`, etc.) byte-identical.
-- Public package version: 2.x.x. No major bump.
+- backward: hold strong refs to discovered grad_fns in trace._grad_fn_strong_refs. Without this,
+  leaf AccumulateGrad nodes could be gc'd and Python could recycle their id() values for
+  later-created grad_fns (e.g., the output clone wrapper), producing phantom cycles in
+  next_grad_fn_ids and conflated/missing AccumulateGrad nodes in the rendered backward graph.
 
-### Internal package layout
+- TinyBranchCNN demo: restructure forward so each arm consumes x directly (matches
+  SimpleIfElseModel). Now both IF and THEN/ELSE labels emanate from input_1 as a single visible fork
+  point in the rendered graph, instead of IF on input -> mean and THEN far downstream on the body's
+  first edge.
 
-- `torchlens/ir/` — backend-neutral event types (new)
-- `torchlens/backends/{torch,mlx}/` — backend implementations (new)
-- `torchlens/decoration/` — deleted (was torch-specific)
-- `torchlens/fastlog/` — internals gutted; public symbols preserved
-- `torchlens/postprocess/_materialize.py` — Step 0 prelude (new)
-- `torchlens/capture/predicates.py`, `projections.py` — extracted from
-  fastlog (new)
+- Notebook: add bundle.show_diff visual cell.
 
-### Performance
+Tests: 209 conditional + backward + smoke green.
 
-- Hot-path overhead: within ≤+5% on ResNet-50 and ≤+7.5% on GPT-2 small
-  (target bars from plan §11).
-- Memory: `Trace` post-capture is now smaller (no capture scratch).
+- **bundle_diff**: Drop hard size+ratio constraints that clipped the caption
+  ([`58bf90c`](https://github.com/johnmarktaylor91/torchlens/commit/58bf90cd985b088129a4cd99235e74594e275664))
+
+The renderer set ``size: 12,8!`` (hard fit) plus ``ratio: fill`` (force aspect), forcing the layout
+  into a 1.5:1 box. The natural paired layout is ~1.69:1 taller, so graphviz emitted a viewBox
+  shorter than the content; the bottom-positioned caption got pushed below the visible viewBox and
+  clipped in rendered SVGs.
+
+Removing both attrs lets graphviz auto-size to the natural aspect (793x470 for the canonical
+  ResNet-18 demo) so the caption fits inside the viewBox.
+
+Updated the canonical snapshot to match the new aspect. Bundle tests (78) plus smoke (170) green.
+
+- **bundle_diff**: Key layer-to-supergraph lookup by layer_label, not id()
+  ([`d126ce5`](https://github.com/johnmarktaylor91/torchlens/commit/d126ce579aaee39e3e4bdebb84847fb5a09d38f3))
+
+bundle.aligned_pairs() and bundle.supergraph.nodes materialize independent layer objects with
+  different id() values. The renderer's layer_to_node dict was keyed by id(layer) from supergraph;
+  lookups during render iterated layers from aligned_pairs and missed every entry, so every node
+  fell back to a delta of 0.0, max_delta resolved to 0.0, and _delta_color short-circuited to
+  "#FFFFFF" for every cell. Result: the diff rendered all-white with no visible per-node delta
+  colorization.
+
+Switch the dict key to layer.layer_label (stable string) and look it up the same way at every
+  consumer site. Now value=0 maps to blue, intermediate nodes show salmon at ~0.85 of max, and red
+  shows up at max-delta sites.
+
+Regenerated canonical snapshot + hero demo SVG. Bundle (79) + smoke (170) green.
+
+- **bundle_diff**: Use dpi=72 so viewBox matches actual content extent
+  ([`c90d8d2`](https://github.com/johnmarktaylor91/torchlens/commit/c90d8d2658773a4f963a5847b20266775ce08cf9))
+
+Setting ``dpi=100`` makes graphviz emit a viewBox in internal layout coords while the inner ``<g
+  transform="...">`` applies a ``scale(100/72=1.389)`` to convert to display coords. Net effect: SVG
+  content (background polygon, caption, legend) extends to y=633 in transformed coords but viewBox
+  max y is only 470. Bottom ~25% of the figure was clipped.
+
+dpi=72 (graphviz default) keeps viewBox in the same units as content, so content fits inside (text
+  max y=456 vs viewBox max=470).
+
+Regenerated canonical snapshot + hero demo SVG. Bundle (78) + smoke (170) green.
+
+- **capture**: Preserve new raw_input across rerun atomic swap
+  ([`7fa8a8f`](https://github.com/johnmarktaylor91/torchlens/commit/7fa8a8fa221eafb27f03ac054ffd47c0dcf4c46c))
+
+- **ci**: Stop runaway semantic-release loop (skip-ci + lfs tag push)
+  ([`0b24b6e`](https://github.com/johnmarktaylor91/torchlens/commit/0b24b6e0cb79c95f5be88496e7c350f94145d36d))
+
+Two compounding bugs produced a 1599-commit release loop:
+
+1. The bot's `chore(release):` commit re-triggered the Release workflow (no skip token), so every
+  release pushed a commit that started another release. Fixed by appending `[skip ci]` to
+  commit_message and adding a job guard that refuses to run on `chore(release):` head commits.
+
+2. The version TAG push failed under git-lfs: the App credential URL (username
+  `torchlens-release[bot]`) breaks git-lfs endpoint parsing ("batch request: missing protocol").
+  Plain commit pushes tolerate it but the tag push invokes LFS and dies, so no tag was ever created
+  and each run re-released the same commits since v2.17.0. Fixed by `git lfs uninstall` in the
+  release job (LFS objects already live on the remote).
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+- **facets**: Correct LayerNorm gamma+beta resolution; add HF tutorial; lock spec
+  ([`9406863`](https://github.com/johnmarktaylor91/torchlens/commit/9406863fcee463861dd3e6062bb7356d6b7ad273))
+
+Three follow-ups to 3ada85d:
+
+1. torchlens/semantic/recipes/norm.py LayerNorm + RMSNorm recipes were reading `mod.cls.weight`.
+  Module.cls stores the class object, not the live instance, so cls.weight returns None and
+  `add_if_present` skipped the entry -- gamma was declared in keys() but unreachable on access. Fix
+  iterates module.params and matches on param.name, falling back to None gracefully when param.value
+  is None.
+
+2. notebooks/huggingface_tutorial.ipynb First commit of the HF tutorial. 52 cells; the new "10.
+  Facets" section adds 19 cells demonstrating recipe listing, q/k/v access, .head(i) sub-view,
+  log.attention_blocks() sweeping, MLP/LN facets, fused-SDPA pattern error, user recipe
+  registration, and tl.facets.info() discovery. Executed clean end-to-end.
+
+3. .project-context/glossary_walkthrough_deltas.md Appended the "Facets framework ... (LOCKED
+  2026-05-27)" entry that 3ada85d implemented against. Makes the spec source of truth visible
+  alongside the implementation.
+
+- **fastlog**: Preserve halt through predicate catch sites
+  ([`810b5a2`](https://github.com/johnmarktaylor91/torchlens/commit/810b5a23e76c11c7665f41d2319ce257fd31a6c8))
+
+- **glossary-v5**: Restore module collapse rendering for vis_call_depth
+  ([`16fc0eb`](https://github.com/johnmarktaylor91/torchlens/commit/16fc0eb74b72e1731ed5022e562f1fda37801100))
+
+The v5 additions accidentally changed module-entry annotation semantics by renaming the
+  buffer-address scratch variable in module entry capture. That made ordinary leaf module outputs
+  become atomic module exits, which prevented top-level leaf modules from being collapsed by legacy
+  vis_call_depth rendering and drifted module-containment snapshots.\n\nRestore the legacy entry
+  annotation behavior while keeping the v5 template capture additions, and make the collapse-address
+  helper return the legacy depth target directly. Atomic outputs now only bubble to a parent module
+  when such a parent exists, so top-level leaf modules remain eligible for vis_call_depth=1
+  collapse.
+
+- **grad_fn_log**: Rename has_op to is_intervening
+  ([`e7668ea`](https://github.com/johnmarktaylor91/torchlens/commit/e7668ea9b4b064a41628227263cbc412b8414ccb))
+
+- **intervention**: Preserve is_appended in replace_run_state_from atomic swap
+  ([`071e9e4`](https://github.com/johnmarktaylor91/torchlens/commit/071e9e4fa1997ecd23afca5cedf2eb85956629fd))
+
+- **intervention**: Preserve tl_tensor_label_raw on tensor replacement
+  ([`869c8ee`](https://github.com/johnmarktaylor91/torchlens/commit/869c8ee2e7ecd32d6b6cb2e341a9b4c44b8e4a69))
+
+Implements two-layer fix for INTERVENTION-MISSING-TENSOR-LABEL bug discovered during the 2026-05-04
+  NeurIPS fleet overnight run (EXP_19, EXP_20).
+
+Layer A: intervention API now propagates tl_* attrs from original to replacement. Layer B:
+  _handle_module_exit gracefully re-instruments tensors lacking tl_tensor_label_raw, covering raw
+  register_forward_hook patterns outside the official API.
+
+Adds regression tests for: official intervention API, raw forward_hook replacement,
+  chain-of-interventions, quantization-sensitivity pattern. All 4 pass in <1s.
+
+Bonus: also fixes a state_dict._metadata clobbering issue in validate_forward_pass that affected
+  torchvision MNASNet, surfaced during the bulletproofing audit.
+
+Closes INTERVENTION-MISSING-TENSOR-LABEL.
+
+- **intervention**: Reject append=True on streaming-active trace
+  ([`423b5ee`](https://github.com/johnmarktaylor91/torchlens/commit/423b5eefbe2409162f383655deceda4f06bf2be7))
+
+- **io**: Audit-null mlx tensors on save
+  ([`84622f1`](https://github.com/johnmarktaylor91/torchlens/commit/84622f1bcf6ea97b8e2ea3728a786b9f78a8fdbc))
+
+- **io**: Serialize module pass tabular outputs
+  ([`68f1280`](https://github.com/johnmarktaylor91/torchlens/commit/68f1280a8e1cb6af9b8f3e811608962eb9e3eb66))
+
+- **loop-detection**: Include output index in multi-output eq-class
+  ([`b98f659`](https://github.com/johnmarktaylor91/torchlens/commit/b98f6598f956a6a32e3fc03430f2378965fe9204))
+
+- **mlx**: Bind wrappers per trace and resolve inputs
+  ([`429c11c`](https://github.com/johnmarktaylor91/torchlens/commit/429c11cacea3db0403f85f2440aae04ddf9bd2d0))
+
+- **mlx**: Hard-reject unsupported preview options
+  ([`a74f0dd`](https://github.com/johnmarktaylor91/torchlens/commit/a74f0dd9205f38ef4dbf6eb55a64eeac5c928341))
+
+- **model-log**: Clear is_appended on non-append rerun
+  ([`e5a8e69`](https://github.com/johnmarktaylor91/torchlens/commit/e5a8e696a3fd812cc9162c46953960ec1f3baa41))
+
+- **rename**: Update intervention examples for ledger rename + bundle len
+  ([`455e0f0`](https://github.com/johnmarktaylor91/torchlens/commit/455e0f0f4c4725d6a45700a3471f26d04a0ef76d))
+
+Codex's R2 missed three example files: operation_history was renamed to ledger (per glossary
+  walkthrough deltas), and 13_paired_prompt_3plus.py had a stale lambda that called .names on a
+  Trace member. Replaced with idiomatic len(bundle).
+
+All three intervention example tests now pass
+  (test_examples.py::test_intervention_example_runs[05/06/13]).
+
+- **save-load**: Reattach module output references
+  ([`20790d4`](https://github.com/johnmarktaylor91/torchlens/commit/20790d49805d3e718eaf28e3ed035006c694cde5))
+
+- **save-load**: Tolerate legacy module logs without calls
+  ([`c37ad47`](https://github.com/johnmarktaylor91/torchlens/commit/c37ad473c7ff91d30a6b1146b2daddc73e562277))
+
+- **semantic**: Cover DistilBERT eager/flash attention in facet recipe
+  ([`4c0d6ee`](https://github.com/johnmarktaylor91/torchlens/commit/4c0d6ee2f582d13dbd81fa830a84b6f090eb36c0))
+
+The attention facet recipe only registered DistilBertSdpaAttention, so switching to
+  _attn_implementation='eager' (which the pattern MissingFacet explicitly recommends) landed on the
+  unregistered MultiHeadSelfAttention class and raised KeyError('q') on facets.q / facets.head(n).q.
+  Register the same q_lin/k_lin/v_lin extraction for all three DistilBERT attention classes:
+  MultiHeadSelfAttention (eager, no pattern), DistilBertSdpaAttention and DistilBertFlashAttention2
+  (fused, pattern via MissingFacet). Flash is now also flagged as fused for the pattern facet.
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+- **semantic**: Cover transformers 5.x DistilBertSelfAttention in facet recipe
+  ([`3e4dc6b`](https://github.com/johnmarktaylor91/torchlens/commit/3e4dc6b4af0e1011db5369fbfdacebd139ee231f))
+
+transformers 5.x collapsed DistilBERT's per-backend attention subclasses (MultiHeadSelfAttention /
+  DistilBertSdpaAttention / DistilBertFlashAttention2) into a single DistilBertSelfAttention class,
+  selecting eager/sdpa via a runtime function. That class was unregistered, so facets.q /
+  facets.head(n).q raised KeyError('q') on transformers 5.x even though the q_lin/k_lin/v_lin
+  children are unchanged.
+
+Register DistilBertSelfAttention alongside the existing classes. Its default backend is fused SDPA
+  and the class name no longer encodes the backend, so it surfaces `pattern` as the informative
+  MissingFacet (RuntimeError on access) rather than a silent AttributeError -- keeps the
+  fused-pattern teaching path working. 4.x eager MultiHeadSelfAttention behavior is unchanged.
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+- **tests**: Register synthetic migration examples in linecache; skip nnsight>=0.7
+  ([`4c2fb61`](https://github.com/johnmarktaylor91/torchlens/commit/4c2fb61896ebd62b593c7c8811ae139b85eea399))
+
+The migration-example test runner exec'd code under a synthetic filename without registering it in
+  linecache, so any example whose tooling called inspect.getsource on user code (nnsight
+  LanguageModel does this) failed with OSError: source code not available.
+
+Also skips the from_nnsight.md example on nnsight>=0.7, where the LanguageModel.trace input
+  semantics changed and our pinned expected output no longer applies.
+
+- **types**: Resolve pre-existing mypy errors in data_classes/
+  ([`0f54ba5`](https://github.com/johnmarktaylor91/torchlens/commit/0f54ba5dc131ca8161d400e68ca2b7de88ea4889))
+
+Cleans up mypy errors flagged repeatedly throughout the M1-M8 capture-pipeline-unification sprint.
+  Errors were in data_classes accessors and ModuleLog/ModuleCallLog narrowing, with a few
+  import-chain typing leaks required by the exact data_classes mypy gate.
+
+No behavior change. Runtime tests remain green.
+
+- **user-api**: Register tensor connections on live records
+  ([`0e3c2ce`](https://github.com/johnmarktaylor91/torchlens/commit/0e3c2cedbfd377b432ad53495453b06f1636c033))
+
+- **validation**: Allow multi-output parameterized ops
+  ([`8b85905`](https://github.com/johnmarktaylor91/torchlens/commit/8b85905ebda36db81e2219dad6bf86b55f667a25))
+
+- **validation**: Backward validator handles stacked traces
+  ([`2271de7`](https://github.com/johnmarktaylor91/torchlens/commit/2271de77aba3dc1ef4612b6572f27b13231407b1))
+
+- **viz**: Add colon separator between param name and shape in node labels
+  ([`0e323b8`](https://github.com/johnmarktaylor91/torchlens/commit/0e323b8599a31d9e9ecb889c9949968a120c5eb4))
+
+Renders 'weight: (16, 3, 3, 3)' instead of 'weight (16, 3, 3, 3)' in graphviz param labels and
+  inline param lines.
+
+- **viz**: Drop render_graph shim; auto-suppress xdg-open on headless
+  ([`1c31b6b`](https://github.com/johnmarktaylor91/torchlens/commit/1c31b6bbb58ac9049bd4dfd9a8ca8537a50d592b))
+
+- **viz**: Drop space after @ in module address labels
+  ([`2dfe89d`](https://github.com/johnmarktaylor91/torchlens/commit/2dfe89ddde3aa5e609c4a36235ceb8b64596b50b))
+
+Module path rows rendered as "@ module1.module2"; tighten to "@module1.module2" so the dotted path
+  reads as a single token and matches the no-space form already used by bundle_diff and the dagua
+  bridge.
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+- **viz**: Handle headless trace drawing
+  ([`cb141cf`](https://github.com/johnmarktaylor91/torchlens/commit/cb141cf2229474a13d571358fea08a8b769cd3bb))
+
+- **viz**: Read live capture event counts
+  ([`371f569`](https://github.com/johnmarktaylor91/torchlens/commit/371f569613958b65ffe48c70aa2505eae5b4f62b))
+
+- **viz**: Suppress headless auto-open note inside notebooks
+  ([`a1fce6b`](https://github.com/johnmarktaylor91/torchlens/commit/a1fce6b51c170cec5caf443bb84e5d1a28a29f97))
+
+In a notebook the figure is shown inline via IPython display(); the draw path still fell through to
+  _view_rendered_file, which on a headless remote kernel printed "headless context detected; ...
+  skipping auto-open". Bail out of _open_file_quietly when in_notebook() so no desktop viewer is
+  launched and no misleading note is printed. Centralizing in the shared helper also covers the
+  sfdp/ELK/bundle render paths.
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
+- **viz**: Use sequential bundle diff palette
+  ([`da060bf`](https://github.com/johnmarktaylor91/torchlens/commit/da060bfb12fad7b9d72d1104e9b66ed4a568d15d))
+
+### Chores
+
+- **audit**: Regenerate coverage manifest after notebook rewrite
+  ([`d62dadc`](https://github.com/johnmarktaylor91/torchlens/commit/d62dadccc6700236812936a718b602d1ba474f10))
+
+- Regenerate the public API coverage manifest from current TorchLens. - Refresh the strict coverage
+  matrix after the notebook rewrite.
+
+- **audit**: Rewrite 00_install_and_smoke.ipynb to actually exercise its declared coverage
+  ([`a590ab6`](https://github.com/johnmarktaylor91/torchlens/commit/a590ab65e1728305e8d92e3a6c5a873ec980a62b))
+
+- Demonstrate import surface, __all__, and first tiny-model capture. - Add shared audit helpers that
+  resolve coverage names against live objects.
+
+- **audit**: Rewrite 01_basic_capture.ipynb to actually exercise its declared coverage
+  ([`7ee5c26`](https://github.com/johnmarktaylor91/torchlens/commit/7ee5c2698451bc10c72a039c2e8d966c10fc7449))
+
+- Demonstrate canonical capture, selective save, peek, extract, and batched_extract. - Resolve
+  capture-related manifest entries against live TorchLens objects.
+
+- **audit**: Rewrite 02_layer_indexing.ipynb to actually exercise its declared coverage
+  ([`c7b8964`](https://github.com/johnmarktaylor91/torchlens/commit/c7b89644f2148f9e8fac126cfcc829fd5b44853d))
+
+- Demonstrate exact, integer, pass-qualified, module-key, suggestion, and missing-layer lookups. -
+  Resolve indexing-related coverage markers against live TorchLens objects.
+
+- **audit**: Rewrite 03_save_load_basics.ipynb to actually exercise its declared coverage
+  ([`fc516ca`](https://github.com/johnmarktaylor91/torchlens/commit/fc516ca85007da5c1d7e614255ff9ba5bb6933a5))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 05_visualization_basics.ipynb to actually exercise its declared coverage
+  ([`6f11e7f`](https://github.com/johnmarktaylor91/torchlens/commit/6f11e7f2d3df3de095fb4a5388905224b863c7d4))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 06_modellog_anatomy.ipynb to actually exercise its declared coverage
+  ([`1b4fcb1`](https://github.com/johnmarktaylor91/torchlens/commit/1b4fcb12755c4a7129c49ab33d792def9d1d97b4))
+
+- Walk ModelLog identity, timing, graph, intervention, export, and private state clusters. - Redact
+  high-entropy hash summaries in shared audit output.
+
+- **audit**: Rewrite 07_layerlog_anatomy.ipynb to actually exercise its declared coverage
+  ([`e27ac71`](https://github.com/johnmarktaylor91/torchlens/commit/e27ac716451607c91d5b498561d6caba95e30105))
+
+- Walk LayerLog identity, tensor, gradient, graph, module, and pass aggregation clusters. - Resolve
+  LayerLog coverage markers against a live aggregate layer record.
+
+- **audit**: Rewrite 08_layerpasslog_anatomy.ipynb to actually exercise its declared coverage
+  ([`e0894f7`](https://github.com/johnmarktaylor91/torchlens/commit/e0894f7b033397212e232a7be4ba4c84aa7d041a))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 09_other_log_types.ipynb to actually exercise its declared coverage
+  ([`f3a4810`](https://github.com/johnmarktaylor91/torchlens/commit/f3a4810e22d86c32985ed23d28396c17be960347))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 10_bundle_anatomy.ipynb to actually exercise its declared coverage
+  ([`4503c7f`](https://github.com/johnmarktaylor91/torchlens/commit/4503c7fc3d9c3d768ef6d81b0b2d17c9154f3b7b))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 15_visualization_options.ipynb to actually exercise its declared coverage
+  ([`95636ad`](https://github.com/johnmarktaylor91/torchlens/commit/95636ad56db065c04b4cc807a69f65dd2101c808))
+
+- Demonstrate accepted vis_opt modes and current skip for unsupported vis_opt='all'. - Resolve
+  options, viz, and visualization coverage markers against live namespaces.
+
+- **audit**: Rewrite 16_visualization_advanced.ipynb to actually exercise its declared coverage
+  ([`3fe7dd5`](https://github.com/johnmarktaylor91/torchlens/commit/3fe7dd5b308ad33ea46e769c198a2902f271c811))
+
+- Demonstrate advanced visualization hooks without opening graph artifacts. - Resolve fastlog,
+  callback, and visualization coverage markers against live objects.
+
+- **audit**: Rewrite 17_intervention_helpers.ipynb to actually exercise its declared coverage
+  ([`bbc4d84`](https://github.com/johnmarktaylor91/torchlens/commit/bbc4d84ae509ab68e99fc1bd5e79e2e7d7c82ce8))
+
+- Demonstrate selectors, activation helper specs, module splice, and backward helper specs. -
+  Resolve intervention helper coverage markers against live objects.
+
+- **audit**: Rewrite 18_intervention_verbs.ipynb to actually exercise its declared coverage
+  ([`fe04555`](https://github.com/johnmarktaylor91/torchlens/commit/fe0455583ae808648985921add30807206d17653))
+
+- Demonstrate sites, fork, rerun, and replay precondition handling. - Resolve intervention verb
+  coverage markers against live objects.
+
+- **audit**: Rewrite 19_bundles_advanced.ipynb to actually exercise its declared coverage
+  ([`9d4fa66`](https://github.com/johnmarktaylor91/torchlens/commit/9d4fa66e8330ef202c06daab8b65549cca4c8af4))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 20_save_load_advanced.ipynb to actually exercise its declared coverage
+  ([`fbc92fe`](https://github.com/johnmarktaylor91/torchlens/commit/fbc92fe5ab5c129031651b9e948eb69cf5491dd6))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 21_validation.ipynb to actually exercise its declared coverage
+  ([`998985f`](https://github.com/johnmarktaylor91/torchlens/commit/998985fdb21d86e8b11a50784c2cadfbe84d7f7c))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 23_export_formats.ipynb to actually exercise its declared coverage
+  ([`6d0ffec`](https://github.com/johnmarktaylor91/torchlens/commit/6d0ffec5d3835f2d8d3065d4149989d052063f4a))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 24_bridges.ipynb to actually exercise its declared coverage
+  ([`44fb38c`](https://github.com/johnmarktaylor91/torchlens/commit/44fb38c349316d7a6261e12c53e93b5f4e1ce9ac))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 25_compat_truth_table.ipynb to actually exercise its declared coverage
+  ([`2f46e17`](https://github.com/johnmarktaylor91/torchlens/commit/2f46e17e818b58876b63c149621371e12d39d64a))
+
+- Demonstrate compat reporting and markdown output. - Resolve compat exports and deprecated alias
+  markers against current TorchLens.
+
+- **audit**: Rewrite 26_perf_and_scaling.ipynb to actually exercise its declared coverage
+  ([`18344b5`](https://github.com/johnmarktaylor91/torchlens/commit/18344b5654f6b13db57ba27c714a0f19c384c611))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 27_taps_and_observers.ipynb to actually exercise its declared coverage
+  ([`d8d797b`](https://github.com/johnmarktaylor91/torchlens/commit/d8d797b7e7f104e98398b6f417fc2b6f7e2c9a15))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 28_sites_and_sweeps.ipynb to actually exercise its declared coverage
+  ([`ee79840`](https://github.com/johnmarktaylor91/torchlens/commit/ee7984095d24c38c4b6e59ee6f59783d95207b75))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **audit**: Rewrite 29_edge_cases.ipynb to actually exercise its declared coverage
+  ([`8f06b39`](https://github.com/johnmarktaylor91/torchlens/commit/8f06b392712c1d2b9d24b14696618ae7a6f689a8))
+
+- Replace boilerplate with a topic-specific workflow demo.\n- Resolve the notebook coverage markers
+  against live TorchLens objects.
+
+- **backward**: Rename _add_backward_hook to _add_tensor_backward_hook
+  ([`f4b7591`](https://github.com/johnmarktaylor91/torchlens/commit/f4b759145bd2fa587104d361bc5148760825cc72))
+
+- **changelog**: Consolidate backward-parity sprint
+  ([`d1b904a`](https://github.com/johnmarktaylor91/torchlens/commit/d1b904a159230050c4d3235f357af12a9d184f8a))
+
+- **changelog**: Consolidate post-backward megasprint
+  ([`d3500f0`](https://github.com/johnmarktaylor91/torchlens/commit/d3500f0db40922ebfb4cb6bd62fa7f0f049eae85))
+
+- **changelog**: Note multi-output module semantics
+  ([`4273d0d`](https://github.com/johnmarktaylor91/torchlens/commit/4273d0d4d83079491e6ef5a45ef369920b584ee6))
+
+- **changelog**: Record P1 alpha.3 finish + B1/B8
+  ([`c93dadf`](https://github.com/johnmarktaylor91/torchlens/commit/c93dadf407d566a38746288d41304cb058a4b689))
+
+- **changelog**: Record P2 validator hardening
+  ([`f064031`](https://github.com/johnmarktaylor91/torchlens/commit/f064031318a47aec355c0ab66cac2e9392237d09))
+
+- **changelog**: Record P3 combined visualization
+  ([`20730ba`](https://github.com/johnmarktaylor91/torchlens/commit/20730baa58714d21e5a7ddc434f5f948f5f45f14))
+
+- **changelog**: Record P4 backward intervention
+  ([`c5dd8b8`](https://github.com/johnmarktaylor91/torchlens/commit/c5dd8b88e4325b97f710a062681e48aac5442a75))
+
+- **changelog**: Record P6 observer bundle polish
+  ([`ec9e485`](https://github.com/johnmarktaylor91/torchlens/commit/ec9e4850ef2906e5431ecb905352e6490981011a))
+
+- **demo**: Regenerate hero bundle-diff SVG after viewBox fix
+  ([`18740de`](https://github.com/johnmarktaylor91/torchlens/commit/18740de492d5dd9e4fa57ead9fec023e448c92ba))
+
+- **finalize**: Record post-backward ready state
+  ([`10fa1ba`](https://github.com/johnmarktaylor91/torchlens/commit/10fa1ba30cae122fac9c1e4336dc1151ee71431b))
+
+- **finalize**: Record post-backward T2 block
+  ([`67b4e08`](https://github.com/johnmarktaylor91/torchlens/commit/67b4e08368a435f4e0ebe9132b9a7546209fd1d8))
+
+- **finalize**: Record post-backward T2 block
+  ([`0bb13d0`](https://github.com/johnmarktaylor91/torchlens/commit/0bb13d00873dd4e09580a19595f4698aadee3a6b))
+
+- **finalize**: Record post-backward T2 block
+  ([`fe72464`](https://github.com/johnmarktaylor91/torchlens/commit/fe7246470e64d7e0efadbe9d8bfc709d2f7d57ad))
+
+- **golden**: Regenerate M5 parity goldens after P1 multi-output eq-class fix
+  ([`02693a3`](https://github.com/johnmarktaylor91/torchlens/commit/02693a3741c1c6dcdeeb15ed656bdf5cd10e62e6))
+
+Intentional baseline refresh after AD-X multi-output equivalence-class fix added output-index
+  disambiguation for multi-output ops.
+
+- **intervention**: V1 maintenance sweep (8 items)
+  ([`da15b5f`](https://github.com/johnmarktaylor91/torchlens/commit/da15b5f2a006eb666ea1dfa864968ab7166b3602))
+
+- **io**: Bump portable state schema; drop boundary-thread fields
+  ([`c8e84e8`](https://github.com/johnmarktaylor91/torchlens/commit/c8e84e8c91cdfc2c67835b905fddf712c3ccc72e))
+
+Phase 4 of module-containment-refactor sprint. Bumps IO_FORMAT_VERSION from 2 to 3.
+  OpLog.__setstate__ now silently drops legacy thread-replay boundary fields
+  (_module_boundary_thread_output, _module_boundary_threads_inputs, and the legacy alias
+  module_entry_exit_threads_inputs) when loading pre-v3 pickles. Emits exactly one
+  DeprecationWarning per process via a load-once helper.
+
+Adds tests/test_module_containment_save_load.py covering IO_FORMAT_VERSION, round-trip save/load
+  module containment, legacy v2 pickle field dropping, and once-per-process warning behavior.
+
+Public .tlspec schema (TLSPEC_SCHEMA_VERSION) is unchanged because the removed fields were private
+  to OpLog pickle state, not part of the public unified manifest.
+
+Refs: .research/module-containment-refactor_PLAN.md (Phase 4)
+
+- **mlx**: Record p6 completion
+  ([`b611fe7`](https://github.com/johnmarktaylor91/torchlens/commit/b611fe7f4eeb68ac6635da5c3816b8535cdda712))
+
+- **polish**: Close docstring, type-hint, and mypy-strict gaps across torchlens/
+  ([`b1c37b8`](https://github.com/johnmarktaylor91/torchlens/commit/b1c37b8456cd8ca11c938cb53aec7fec4c5eff4d))
+
+Pure plumbing pass with no behavior changes. Six parallel codex workers (high reasoning effort)
+  touched disjoint subpackages; the orchestrator consolidated results and finished the residual
+  handful of strict-mode errors at the root.
+
+Coverage improvements (across torchlens/): - Public docstrings: 90% -> ~100% (81 added) - Public
+  return types: 92% -> ~100% (110 added) - mypy --strict on package: 815 errors in 63 files -> 0
+  errors in 174 files
+
+Worker partition (no file overlap): W1: capture/, decoration/, _state.py, multi_trace/, observers,
+  experimental, _summary, _run_state
+
+W2: data_classes/, _io/, io/, accessors/, errors/, types
+
+W3: postprocess/, validation/, visualization/
+
+W4: intervention/, fastlog/
+
+W5: bridge/, compat/, report/, stats/, utils/, callbacks/
+
+W6: __init__.py, user_funcs.py, options.py, appliance stubs (viewer/, paper/, notebook/, llm/,
+  neuro/)
+
+Verification gates (all pass): - mypy torchlens/ (lenient, configured): 0 errors in 174 files - mypy
+  --strict torchlens/: 0 errors in 174 files - ruff check + format: pass - pytest tests/ -m smoke
+  -x: 170 passed - len(torchlens.__all__) == 40
+
+Each worker added narrow, justified type: ignore[<specific-code>] comments where torch internals or
+  third-party libs (rich, wandb) are genuinely untyped. No blanket Any silencing.
+
+- **rename**: Apply glossary walkthrough v2 deltas to glossary
+  ([`7fe2493`](https://github.com/johnmarktaylor91/torchlens/commit/7fe2493473bbf6c99de5bfea34945e2354e2c5fe))
+
+- **rename**: Final implementation summary
+  ([`2233fed`](https://github.com/johnmarktaylor91/torchlens/commit/2233fed55aba607a94c71f3f9fc9330dfa443831))
+
+- **rename**: Green smoke tests after rename (phase 6)
+  ([`c1ac957`](https://github.com/johnmarktaylor91/torchlens/commit/c1ac9576843a635db32d8baa20878eef1bc2718d))
+
+- **rename-sprint**: Add 5 follow-on todos + state file
+  ([`9fcd466`](https://github.com/johnmarktaylor91/torchlens/commit/9fcd4669fa7b49317d919720453dff2ff5393d6e))
+
+- **research**: Record P3 implementation done
+  ([`077cc7d`](https://github.com/johnmarktaylor91/torchlens/commit/077cc7d98c29d36ab5948df38a3db042b30ed134))
+
+- **state**: Mark backward-parity sprint DONE
+  ([`5a5fd53`](https://github.com/johnmarktaylor91/torchlens/commit/5a5fd5373955e86beb6eb525630888363be40c41))
+
+- **state**: Mark post-backward megasprint DONE
+  ([`ffa73f6`](https://github.com/johnmarktaylor91/torchlens/commit/ffa73f6ebfe6dcdf4f1a4532dad7ebb9ff331601))
+
+- **todos**: Add layer visualizers — tensor->image plugins per node
+  ([`8b13563`](https://github.com/johnmarktaylor91/torchlens/commit/8b135634da81474b346a51909229731e9891e9b7))
+
+Completes the trio with input transform / output transform: same plugin dispatch, same image=
+  mechanism, same shared helpers, applied to intermediate nodes via the existing selector vocabulary
+  (tl.func, tl.module, label lists, glob). Built-in library: heatmap, channel_grid, histogram,
+  attention_heatmap, tsne/pca/umap/mds, violin. Eager render at trace time, cached PNG paths for
+  cheap idempotent draw(). Compound payoff: whole graph reads as a visual tour through the model's
+  processing.
+
+- **todos**: Add symmetric output_transform alongside input transform
+  ([`3470266`](https://github.com/johnmarktaylor91/torchlens/commit/347026617fbafbf89ac133bc2cbf2d12c3ee021a))
+
+- **todos**: Add transform= primitive + raw-input rendering as core feature
+  ([`3abae87`](https://github.com/johnmarktaylor91/torchlens/commit/3abae876e0ba8832c242a42a3628268adb8c8f3e))
+
+Refines the HF-bridge text-input idea into a cleaner architecture: generic transform=callable kwarg
+  on tl.trace, store the original alongside the trace, render it in the input node. Graphviz's
+  image= attr and HTML-label support make per-modality rendering small (text / image / audio /
+  multimodal each ~15 lines). HF bridge becomes a ~5-line wrapper instead of a 30-line ergonomic
+  feature.
+
+Total scope ~100 lines. Out of scope: autoregressive animation.
+
+- **todos**: Document -Log suffix drop rule for naming-sprint v3
+  ([`6b8d4ed`](https://github.com/johnmarktaylor91/torchlens/commit/6b8d4edcb10a016e47b694a3b19b619278dfaf07))
+
+- **todos**: Document three supply mechanisms for slicing recipes
+  ([`da8cd21`](https://github.com/johnmarktaylor91/torchlens/commit/da8cd21790d7d125b0735148d8f6ca5707d1ced4))
+
+User-facing surface: - auto-detect (default-on, strict class-identity match) - explicit at trace
+  time (stacks with auto unless auto_detect=False) - post-hoc on the trace (no re-execution,
+  supports loaded tlspecs)
+
+Plus conflict resolution (explicit wins, warn on shadow), save/load contract (recipe names + version
+  tags survive, recipe code does not), and rejected mechanisms (no global registry, no model
+  mutation) with their reasoning.
+
+- **todos**: Extend transform= entry with batched-input rendering
+  ([`5c560d4`](https://github.com/johnmarktaylor91/torchlens/commit/5c560d4c170118f1703b46360be1702100667abd))
+
+Default sampling policy shared across modalities (1: full, <=4: all, >4: first 4 + count badge).
+  Per-modality summarization: PIL montage for images, HTML-label table for text, mini-waveform stack
+  for audio. Heterogeneous/multimodal batches deferred. Batch-summarize helpers exposed as a
+  reusable tl.viz.batch_summary module so future activation-grid / bundle visual work can reuse the
+  same code.
+
+- **todos**: Extend transform= entry with rerun reuse + builtin transforms
+  ([`e3126c6`](https://github.com/johnmarktaylor91/torchlens/commit/e3126c607fd7fcf64fc06c8923b8c8bc5440a3e3))
+
+trace.rerun(new_user_input) auto-reapplies the stored transform so users don't have to keep
+  tokenizer/preprocessor references around. Composes with fork/do/bundle for one-line prompt-swap
+  experiments. Loaded traces (no stored transform) raise a clear error rather than silently failing.
+
+Built-in transform library sketched: tl.transforms.hf_tokenize_for(model),
+  tl.transforms.image_preprocess(...), etc. Same appliance pattern as recipes — small core registry,
+  long tail in bridges. The HF text-input bridge collapses to a 3-line wrapper around the primitive.
+
+- **todos**: File deferred per-layer grad oracle
+  ([`ef905b8`](https://github.com/johnmarktaylor91/torchlens/commit/ef905b8385aebe1215d3c298583b62b71e0218ac))
+
+- **todos**: Keep_orphans=true flag for retaining island ops
+  ([`6471b13`](https://github.com/johnmarktaylor91/torchlens/commit/6471b1345149df99f4eab9f7ea55559912fee41b))
+
+- **todos**: Note bundle_diff blue-white-red gradient is semantically wrong
+  ([`31116de`](https://github.com/johnmarktaylor91/torchlens/commit/31116de0e5db7db7fe58bc6a84ccca320b82b237))
+
+- **todos**: Note combined forward+backward graph rendering
+  ([`e9c0311`](https://github.com/johnmarktaylor91/torchlens/commit/e9c0311fb1b18b39accfb6d4087eb9786fbcb37e))
+
+- **todos**: Note FX-style qualpath as documented secondary lookup key
+  ([`b57706d`](https://github.com/johnmarktaylor91/torchlens/commit/b57706d3e5c365840c3c31530c08839c9ae1b481))
+
+- **todos**: Note FX-style qualpath as op-level metadata field
+  ([`570fa9d`](https://github.com/johnmarktaylor91/torchlens/commit/570fa9d435ae781776981f5b971f64ed6b0edb2b))
+
+- **todos**: Note HF bridge text-input ergonomics
+  ([`364024b`](https://github.com/johnmarktaylor91/torchlens/commit/364024be5e5b0d25379011a3ae4299803858a903))
+
+- **todos**: Note layer/op-level wrappers for trace-level intervention verbs
+  ([`a9776c6`](https://github.com/johnmarktaylor91/torchlens/commit/a9776c600a73f7ddc5cdf92b0e8bf72826f25a30))
+
+- **todos**: Note multi-arm conditional traversal feature
+  ([`d0ab3c7`](https://github.com/johnmarktaylor91/torchlens/commit/d0ab3c70cc0c817e444e2af80aa722c5f60c64fd))
+
+- **todos**: Note tensor-container data structure support
+  ([`c25257a`](https://github.com/johnmarktaylor91/torchlens/commit/c25257a00d57352aaf9172a90b7460e693fca725))
+
+- **todos**: Note tensor-slicing recipes for attention-head sub-addressing
+  ([`c77f897`](https://github.com/johnmarktaylor91/torchlens/commit/c77f897bad68ccdc0c4491f265a4217e45be50a1))
+
+- **todos**: Pencil pluck+extract and file naming-sprint v3
+  ([`610b1bc`](https://github.com/johnmarktaylor91/torchlens/commit/610b1bc593b71f0428ceb9b1aa391bc1c9ef01a6))
+
+- **todos**: Replace input-derived module attribution with call-stack snapshot
+  ([`878d2a0`](https://github.com/johnmarktaylor91/torchlens/commit/878d2a0806bf19da9594a6729160998ed7248724))
+
+- **todos**: Unify op.outs API across containers and recipe slicing
+  ([`5eb7361`](https://github.com/johnmarktaylor91/torchlens/commit/5eb736194e55321f33441725fd89b20985ba3682))
+
+Both features populate the same dict with named tensor leaves; they differ only in the source of
+  names (container fields vs user/auto recipes) and storage semantics (independent tensors vs views
+  into a parent). The container entry now owns the op.outs API design; the recipe entry is layered
+  on top. Provenance flag distinguishes mutation semantics for the intervention API.
+
+Also captured: HF auto-detect via strict class-identity matching, recipe versioning +
+  applied_recipes provenance, hard constraint that recipes never synthesize new ops,
+  convenience-feature framing for relaxed stability.
+
+- **viz**: Clean up graph node labels
+  ([`fb4680d`](https://github.com/johnmarktaylor91/torchlens/commit/fb4680d33b939dc1da8464f68b999f1eca134e80))
+
+File list + LOC summary: - torchlens/visualization/_label_format.py: +318/-0, new label formatting
+  helpers. - torchlens/visualization/rendering.py: +24/-269, wire helpers into default labels,
+  selected fields, collapsed module labels, and remove unreachable old label helpers. -
+  torchlens/visualization/modes.py: +2/-7, use tuple notation in vision IO rows. -
+  torchlens/visualization/_elk_internal/layout.py: +3/-7, match collapsed-module ELK label
+  shape/memory format. - tests/test_format_helpers.py: +46/-0, helper coverage. -
+  tests/test_node_spec_api.py: +7/-7, updated default-label arg expectations. -
+  tests/test_node_modes.py: +1/-1, updated vision shape expectation. - tests/test_overlays.py:
+  +1/-1, updated field-picker shape expectation. - tests/test_param_log.py: +9/-14, updated
+  param-label text expectations.
+
+Tier-2 result: - pytest tests/ -m "not slow" -x --tb=short: 2256 passed, 29 skipped, 214 deselected,
+  2 xfailed.
+
+Golden snapshots updated: - None. No tracked golden visual snapshot files changed; aesthetic
+  PDFs/DOT outputs were regenerated under ignored tests/test_outputs for inspection only.
+
+Visual confirmations: - Linear renders tuple shape/memory, in_features/out_features, middle-dot
+  param list, and spaced module path. - Conv2d renders tuple shape/memory plus full
+  in_channels/out_channels/kernel_size/stride/padding names. - LayerNorm renders
+  normalized_shape=(d,) and params with tuple notation. - Embedding renders
+  num_embeddings/embedding_dim and named weight shape. - Functional softmax renders no params or
+  module path placeholder. - ReLU/no-param nodes omit the params line cleanly.
+
+## Judgment calls - Module kwargs are sourced from captured func_config because Trace rendering
+  receives Layer/Op records, not live nn.Module instances; known module families are reordered to
+  declaration-style names. - Frozen/trainable parameter text no longer uses bracket syntax;
+  trainability remains represented by existing node colors.
+
+## Follow-ups - Full mypy still fails on pre-existing out-of-scope errors in intervention/bundle.py,
+  data_classes/*, and backends/mlx/backend.py.
+
+### Documentation
+
+- **agents**: Refresh CLAUDE.md/AGENTS.md and add state_of_torchlens.md
+  ([`fe0a304`](https://github.com/johnmarktaylor91/torchlens/commit/fe0a3040f5c5fa9a6c993f9d3269bd2dbedf25e8))
+
+Refresh all 20 per-package CLAUDE.md and AGENTS.md files to describe the current 2.x state after the
+  17-phase 2.0 sprint (PR #175). Add a new `.project-context/state_of_torchlens.md` reference doc
+  that gives a fresh agent (or human) a use-oriented map of the package: 40-name public API,
+  subpackage layout, key concepts, what shipped vs what is stubbed, where to look for what.
+
+No source code touched.
+
+- **fastlog**: Mark P3 halt complete
+  ([`d9794d7`](https://github.com/johnmarktaylor91/torchlens/commit/d9794d790a4802b3f78afac70c1ef1af6c3ad15b))
+
+- **glossary**: Refresh for backward-parity + post-backward megasprint outcomes
+  ([`858757b`](https://github.com/johnmarktaylor91/torchlens/commit/858757b6dd17420d1128f185864de9a62115a843))
+
+Glossary at 1135 lines (was 1040). Adds ~60 entries from the two recent sprints: backward selectors
+  (tl.grad_fn / tl.intervening / tl.grad_fn_label), backward helpers (bwd_hook / grad_zero /
+  grad_scale / grad_clip / grad_noise / grad_clamp), tl.output, tl.halt / HaltSignal, observer
+  direction kwarg, aggregate(target='grad', loss_fn=), Trace.draw_combined, Recording.log_backward,
+  Recorder.log_backward, ModuleCallLog/ModuleLog .outputs + .output_structure,
+  MultiOutputModuleError, LayerGradReport + 7 coverage buckets, MLX backend contract, scrub 3-tuple,
+  append-state fields, full error catalog.
+
+Also: companion CHANGES.md (193 lines) enumerates added/updated/removed/ uncertain entries + 3
+  inconsistencies flagged for upcoming rename sprint.
+
+- **intervention**: Clarify AppendBatchDependenceError
+  ([`28b69a3`](https://github.com/johnmarktaylor91/torchlens/commit/28b69a3435abab25bfddfb7682847e70d6d51448))
+
+- **notebook**: Add auto-route demo section to HF tutorial
+  ([`adfac12`](https://github.com/johnmarktaylor91/torchlens/commit/adfac127015247fd88f48336f0206223e56ee297))
+
+- **plan**: V33 close round-32 BLOCK -- seed census + glob fix + line_exceptions schema
+  ([`bffc71a`](https://github.com/johnmarktaylor91/torchlens/commit/bffc71a1e81ca6eb31e8cb9886bc17a9eb4247cc))
+
+- **plan**: V34 close round-33 FINDINGS -- anchor-based citation + emit-seed semantics
+  ([`0208568`](https://github.com/johnmarktaylor91/torchlens/commit/0208568ac83279330ae4d9d6163220a0527533c4))
+
+- **plan**: V35 close round-34 Claude FINDINGS -- scope exemption + typo + Phase 0.13 cleanup (Codex
+  READY preserved)
+  ([`b374738`](https://github.com/johnmarktaylor91/torchlens/commit/b37473863ad141f048bdd99760418a91831c3fd4))
+
+- **plan**: V36 close round-35 Codex HIGH -- impl tightens to spec; Phase 5.14 lifecycle checklist
+  ([`f564c26`](https://github.com/johnmarktaylor91/torchlens/commit/f564c26e47c0e2b304068561bdca2f330b6ebdf2))
+
+- **polish**: Close polish-sprint (5 phases shipped)
+  ([`5f5d583`](https://github.com/johnmarktaylor91/torchlens/commit/5f5d58329327cbb5e2338e4333637d935f51a4b2))
+
+- **research**: Record P6 implementation completion
+  ([`bcfe094`](https://github.com/johnmarktaylor91/torchlens/commit/bcfe094bcb9bd0888e62a16a32cc468861f81a94))
+
+- **research**: Record P7C completion
+  ([`c44f2ba`](https://github.com/johnmarktaylor91/torchlens/commit/c44f2ba600f9e5006353a6b1de950160167be2a7))
+
+- **sprint**: Record backward-parity sprint SUMMARY
+  ([`31d20a8`](https://github.com/johnmarktaylor91/torchlens/commit/31d20a8fd1bdb6fe11bc1aa1dfb01f5e6e9899e3))
+
+- **sprint**: Record P7 completion
+  ([`0d3efba`](https://github.com/johnmarktaylor91/torchlens/commit/0d3efbaf2d8c3f01bc88d89a609d5b08ba61e01a))
+
+- **sprint**: Record P7 T2 block
+  ([`cf3f585`](https://github.com/johnmarktaylor91/torchlens/commit/cf3f58585ce6f390d7b95e598c52fca6bcd7e804))
+
+- **sprint**: Record post-backward megasprint SUMMARY
+  ([`f543566`](https://github.com/johnmarktaylor91/torchlens/commit/f543566133d0e54e30ca50ecc777fbbc5c666d5b))
+
+- **sprint**: Record post-backward P1 completion
+  ([`bf2e4d1`](https://github.com/johnmarktaylor91/torchlens/commit/bf2e4d159ded8eb0ad9ac2b8f329b6facc08a606))
+
+- **sprint**: Record post-backward P2 completion
+  ([`6bc62b3`](https://github.com/johnmarktaylor91/torchlens/commit/6bc62b397ada68154423b68020fcff9b2dc227b0))
+
+- **sprint**: Update P7 T2 block
+  ([`c5c4534`](https://github.com/johnmarktaylor91/torchlens/commit/c5c453437459a1cb2788534dff6b2fbbc50db822))
+
+- **super**: Close super family sprint
+  ([`87821a9`](https://github.com/johnmarktaylor91/torchlens/commit/87821a9f48b3c463d6f6eb8db8b90a34938686c0))
+
+- **todos**: Close items from draw + step6 + intervention cleanup sprint
+  ([`83367c1`](https://github.com/johnmarktaylor91/torchlens/commit/83367c12c380da4622a5e6668cecb51a8324d0f1))
+
+- **transforms**: Close transforms-sprint (5 phases shipped)
+  ([`f120375`](https://github.com/johnmarktaylor91/torchlens/commit/f120375dc7fdf80461c8818675942ee36e7f09d3))
+
+### Features
+
+- **backends**: Mlx backend skeleton + smoke gate (M7)
+  ([`5ff8fdc`](https://github.com/johnmarktaylor91/torchlens/commit/5ff8fdc286757b9889c4d087ecd9b305642c0a5a))
+
+Implements MLXBackend at torchlens/backends/mlx/ satisfying the CaptureBackend Protocol. Backend
+  dispatch in trace() entry detects mlx.nn.Module vs torch.nn.Module and routes accordingly.
+
+MLX backend characteristics (per plan §9 readiness checklist): - Lazy-safe metadata extraction
+  (.shape, .dtype, .device without forcing mx.eval) - Hybrid materialization: deferred payloads with
+  batched mx.eval at end-of-forward - External tensor label store (WeakValueDictionary) since MLX
+  arrays have no _tl analog - supports_backward_capture = False (mx.grad is function transform, no
+  autograd graph) - mx.compile excluded (wrappers only fire during initial tracing) - RNG
+  snapshot/restore unsupported initially per AD-9
+
+New smoke test at tests/test_mlx_backend_smoke.py captures a linear MLP via MLX and asserts
+  structural Trace equivalence. Uses pytest.importorskip('mlx') so it skips cleanly when MLX is not
+  installed.
+
+[mlx] extra added to pyproject.toml. MLX is opt-in; the main torchlens import does not depend on mlx
+  being present.
+
+Plan: .research/capture-pipeline-unification_PLAN.md §9 + §14 AD-5 + AD-9
+
+Milestone: M7 of M1-M8 capture-pipeline-unification sprint
+
+- **backward**: Capture-time AccumulateGrad attribution map
+  ([`6ec9109`](https://github.com/johnmarktaylor91/torchlens/commit/6ec9109c12e021dbc8760b3170d80f6f4a493536))
+
+- **bridge**: Add Hugging Face text tracing bridge
+  ([`aee7dd6`](https://github.com/johnmarktaylor91/torchlens/commit/aee7dd66ef735954e689725b00bab656e11eeead))
+
+- **bundle**: Add label auto-routing dispatcher
+  ([`d0e7db0`](https://github.com/johnmarktaylor91/torchlens/commit/d0e7db07d779e89b493441603035dc9a2f5bcf42))
+
+- **bundle**: Add structural agreement predicates
+  ([`10ca3f2`](https://github.com/johnmarktaylor91/torchlens/commit/10ca3f24ce6535e6c13f76bb3996307c8ea00050))
+
+Add Bundle-level structural consistency and shared/divergent predicates for op labels, layer labels,
+  module addresses, parameter names, buffer names, and grad_fn labels.
+
+- **capture**: Add output_transform primitive
+  ([`0bf0004`](https://github.com/johnmarktaylor91/torchlens/commit/0bf00044cb2049fd4a1943ed6670d955cb736496))
+
+- **capture**: Add trace input transform primitive
+  ([`c466ffe`](https://github.com/johnmarktaylor91/torchlens/commit/c466ffeb0f8f52d9481ecf22323b6c3aa95c95d0))
+
+- **capture**: Keep orphan ops with accessor
+  ([`07f15e1`](https://github.com/johnmarktaylor91/torchlens/commit/07f15e13d09d5bc7644db39e89fec01ce446e526))
+
+- **data**: Add module role hints and output structure capture
+  ([`3b9c0d3`](https://github.com/johnmarktaylor91/torchlens/commit/3b9c0d3bf0907466e6f2aa71e1249563eb8e5598))
+
+- **demo**: Add 10-minute notebook covering trace, intervene, backward, conditional, bundle
+  ([`2e27bc5`](https://github.com/johnmarktaylor91/torchlens/commit/2e27bc52c29e4fa2e5c69e0578cc90acd498246d))
+
+- notebooks/torchlens_in_10_minutes.ipynb: 17-cell tour of the 5 flagship features. -
+  notebooks/_demo_models.py: TinyBranchCNN + TinyMLP in a real .py so the AST inspector can label
+  conditional arms in the rendered graph. - postprocess/finalization.py: materialize all AST-derived
+  arms (then / elif_N / else) in ConditionalAccessor, not only arms that produced runtime edges.
+  Restores symmetric num_arms / has_else across traces regardless of which arm fired;
+  ConditionalArm.fired still distinguishes runtime from static.
+
+Conditional tests (96) and smoke tests (170) green.
+
+- **ergonomics**: Auto-coerce str/PIL/numpy/audio inputs via duck-typed model methods
+  ([`0bfeb79`](https://github.com/johnmarktaylor91/torchlens/commit/0bfeb79633c2b7aacfb437eedbcd5851108e6f62))
+
+- **errors**: Add multi-output module error
+  ([`f6cfe75`](https://github.com/johnmarktaylor91/torchlens/commit/f6cfe756130a85b7091d5be5b36fa08084ae1fdc))
+
+- **facets**: Implement facets framework + built-in recipes per LOCKED 2026-05-27 spec
+  ([`3ada85d`](https://github.com/johnmarktaylor91/torchlens/commit/3ada85d08296e8277e0d2040c0de3c7fa15ab8ce))
+
+Adds semantic FacetView registry, lazy per-record Op/Module facets, Trace facet finders, and
+  built-in attention/norm/MLP/embedding recipes. Exposes tl.facets and updates API surface budget
+  tests.
+
+Files/LOC: 18 files changed, 1326 insertions, 6 deletions; new torchlens/semantic package is 912 LOC
+  and new tests/semantic coverage is 350 LOC.
+
+Tier-2: pytest tests/ -m "not slow" -x --tb=short passed: 2252 passed, 29 skipped, 214 deselected, 2
+  xfailed in 1277.38s.
+
+## Follow-ups
+
+None identified in this implementation scope.
+
+## Judgment calls
+
+Facet keys must be available without invoking recipes even though recipes expose values by returning
+  dicts. Built-ins therefore declare facet names at registration; simple user recipes get
+  best-effort literal return-dict key extraction without executing the recipe. TorchLens Module.cls
+  stores the class, not the live instance, so recipes read scalar config values from
+  Module.custom_attributes when needed.
+
+- **fastlog**: Add halt signal API
+  ([`adea348`](https://github.com/johnmarktaylor91/torchlens/commit/adea3484b50c9d77c034fdb336e1c2bf0d3ad540))
+
+- **fastlog**: Add predicate-mode backward gradient capture (F5)
+  ([`f509310`](https://github.com/johnmarktaylor91/torchlens/commit/f509310460be73104491eefc2601879800e8a59a))
+
+Adds Recording.log_backward(loss, *, keep_grad=...) and Recorder.log_backward(loss, *,
+  keep_grad=...). Predicate-mode forward emission populates RecordingState.grad_fn_to_context
+  (WeakKeyDictionary keyed on the live grad_fn object, not id(), to avoid id-reuse misjoin in
+  multi-rollout).
+
+Backward walker uses the join map to build GradRecordContext and distinguish paired vs intervening
+  grad_fns.
+
+RecordingOptions gains keep_grad / default_grad / grad_transform / save_raw_grads recording-level
+  defaults; per-call log_backward(keep_grad=...) overrides. Static keep_grad=True with disk-only
+  rejected preflight; callable predicates fall through to _resolve_storage dynamic rejection.
+
+keep_op remains a callable predicate slot (selectors NOT accepted -- two-slider discipline).
+  Example: keep_op=lambda ctx: ctx.label == "relu_1".
+
+Tests: tests/test_fastlog_backward.py covers join, intervening, disk preflight, id reuse,
+  gradient_postfunc alias.
+
+Co-authored-by: Codex (gpt-5.5) <noreply@openai.com>
+
+- **fastlog**: Catch halt at recorder boundary
+  ([`8984fab`](https://github.com/johnmarktaylor91/torchlens/commit/8984fabec9f1d3e08a548285ee181b257e8332c6))
+
+- **fastlog**: Track halted recordings
+  ([`b43f3e8`](https://github.com/johnmarktaylor91/torchlens/commit/b43f3e8041af514867e28612d3f766f09426bb9e))
+
+- **glossary-v5**: Implement locked field additions
+  ([`0eeea59`](https://github.com/johnmarktaylor91/torchlens/commit/0eeea5931f89b6cb5b2b509f1f1ffa59fdef3224))
+
+- add Trace, Op, Module, and ModuleCall glossary v5 accessors - add CallTreeNode and dynamic
+  call-tree derivations - make Module param_memory address-recursive and add recursive param
+  accessors - capture ModuleCall forward arg templates and add smoke coverage
+
+- **intervention**: Add backward grad_fn selectors
+  ([`09a6fe0`](https://github.com/johnmarktaylor91/torchlens/commit/09a6fe0cc35c2dfa120eea81c1cafa60ea61400f))
+
+- **intervention**: Add grad clipping noise and clamp helpers
+  ([`c0b2d4c`](https://github.com/johnmarktaylor91/torchlens/commit/c0b2d4cad8b8ab2e59ecc75a866f56031cbfc7fc))
+
+- **intervention**: Add layer and op shortcuts
+  ([`de2fe34`](https://github.com/johnmarktaylor91/torchlens/commit/de2fe34a6377ebee3723bd54ba7d617f78c53083))
+
+- **intervention**: Dispatch backward hook plans from grad_fn callbacks
+  ([`f72660a`](https://github.com/johnmarktaylor91/torchlens/commit/f72660ad6aa59e0b6fe27e44de38bf126372c4e1))
+
+- **intervention.types**: Rebuild containers from output specs
+  ([`e449190`](https://github.com/johnmarktaylor91/torchlens/commit/e449190dddc103befe5c9ba71753ab4ff3dc9ccd))
+
+- **mlx**: Expand wrapper coverage
+  ([`3f99767`](https://github.com/johnmarktaylor91/torchlens/commit/3f997673a9ca771d2ff29a4f9776375d822cf105))
+
+- **module-log**: Expose structured multi-output module outputs
+  ([`d3fd652`](https://github.com/johnmarktaylor91/torchlens/commit/d3fd6523cdd6b9ae65e6d3b1026c91c76cfd4357))
+
+- **observers**: Direction kwarg for backward taps
+  ([`2a024c3`](https://github.com/johnmarktaylor91/torchlens/commit/2a024c33e13ac14485d94ffcb612f331525bb185))
+
+- **op**: Add FX qualpath metadata
+  ([`72cec3c`](https://github.com/johnmarktaylor91/torchlens/commit/72cec3c6a38dc465b87e4979da14d1bdf5e94537))
+
+- **options**: Add gradient_postfunc silent alias for grad_transform
+  ([`4e0ca61`](https://github.com/johnmarktaylor91/torchlens/commit/4e0ca61ad813e1c2f733d51926b2110d2618bf70))
+
+Adds gradient_postfunc as a silent alias kwarg on SaveOptions / trace() that delegates to the
+  existing grad_transform field. No deprecation warning. Honors AD-2 / synthesis-brief vocabulary
+  parity (activation_postfunc / gradient_postfunc) without breaking existing grad_transform callers.
+
+Co-authored-by: Codex (gpt-5.5) <noreply@openai.com>
+
+- **selectors**: Add output selector disambiguation
+  ([`e69932f`](https://github.com/johnmarktaylor91/torchlens/commit/e69932fcca4563b9d280b177b38bce22bb181606))
+
+- **stats**: Add aggregate(target='grad') with mandatory loss_fn (F6)
+  ([`de65ee1`](https://github.com/johnmarktaylor91/torchlens/commit/de65ee134e658926618c40971c658bc9af74b1bc))
+
+Extends torchlens.stats.aggregate() with target='grad' (parallel to existing target='activation' /
+  target=None default). target='grad' REQUIRES loss_fn= kwarg; raises TypeError if missing.
+
+Adds Norm streaming stat (O(1) memory) for gradient norms per layer.
+
+Tests: tests/test_gradient_stats.py covers loss_fn requirement + basic norms.
+
+Co-authored-by: Codex (gpt-5.5) <noreply@openai.com>
+
+- **super**: Add remaining bundle super accessors
+  ([`005a72d`](https://github.com/johnmarktaylor91/torchlens/commit/005a72d26f136b286ae19eb3cd0d8ee7e9173b37))
+
+Add SuperModule, SuperBuffer, SuperParam, SuperGradFn, SuperModuleCall, and SuperGradFnCall.
+
+Expose bundle.modules, bundle.buffers, bundle.params, bundle.grad_fns, bundle.module_calls, and
+  bundle.grad_fn_calls.
+
+- **trace**: Auto-route tl.trace(model, image|multimodal_dict) with tiered preprocessing resolver
+  ([`c0f8557`](https://github.com/johnmarktaylor91/torchlens/commit/c0f85571fe57161c2ac8ce6aa2a8484f9c7d2f2a))
+
+Adds PIL image auto-route through HF AutoImageProcessor/AutoProcessor, torchvision weights
+  transforms, timm transforms, and the loud unverified ImageNet default fallback.
+
+Adds multimodal dict auto-route for HF-style modality-key dicts gated by AutoProcessor resolution.
+
+Trace.input_preprocessor is set for image, multimodal, and the existing text auto-route with
+  structured preprocessing provenance.
+
+Tier-2: pytest tests/ -m "not slow" -x --tb=short -> 2277 passed, 29 skipped, 221 deselected, 2
+  xfailed in 656.68s.
+
+HF ViT: slow route test passed with hf_auto_image_processor provenance.
+
+CLIP multimodal: slow dict route test passed with hf_auto_processor provenance.
+
+torchvision ResNet: non-slow test passed with attached weights tier accepted, default fallback also
+  allowed by test contract.
+
+timm: slow default_cfg route test passed with timm provenance.
+
+Unknown CNN: non-slow PIL route test passed with ImageNet default UserWarning and verified=False.
+
+Audio, video, file-path, bytes, numpy, and tensor image auto-routing are explicitly out of scope.
+
+- **validation**: Add backward graph metadata invariants
+  ([`e25a0f4`](https://github.com/johnmarktaylor91/torchlens/commit/e25a0f4c497cfa33411c31f562ab0106f8c83548))
+
+- **validation**: Add module output grad oracle
+  ([`b621d67`](https://github.com/johnmarktaylor91/torchlens/commit/b621d67ec1a53c2deb209433602069aabcf09455))
+
+- **validation**: Harden validate_backward_pass param-grad parity
+  ([`e89ee77`](https://github.com/johnmarktaylor91/torchlens/commit/e89ee77a43126762d205b0ecba74649ee950dc86))
+
+- **viz**: Add layer visualizers
+  ([`81d3457`](https://github.com/johnmarktaylor91/torchlens/commit/81d34579929226bd7d4595015df62239cc886162))
+
+- **viz**: Headless-quiet artifact open + multi-format bundle_diff
+  ([`7b2bb38`](https://github.com/johnmarktaylor91/torchlens/commit/7b2bb38c3ba3234095e5a8c5a2842788985c4fe9))
+
+Adds _open_file_quietly helper in _render_utils.py that silently skips viewer launch on headless
+  Linux (no DISPLAY) and suppresses xdg-open stderr noise elsewhere. Wires _elk_internal/layout.py
+  and rendering.py to use it.
+
+Extends bundle_diff to accept any Graphviz-supported format (svg, pdf, png) instead of svg-only;
+  accessibility metadata still embedded only for svg.
+
+Pre-session WIP -- captured here so main is clean before next session.
+
+- **viz**: Render batched raw inputs
+  ([`ceffa08`](https://github.com/johnmarktaylor91/torchlens/commit/ceffa08317569651f3d40d0bf867cc0d64e8de88))
+
+- **viz**: Render combined forward backward graph
+  ([`b369fab`](https://github.com/johnmarktaylor91/torchlens/commit/b369fab6e85ca2b0e1bc4782740567acbbbb3f5a))
+
+- **viz**: Restore frozen/trainable bracket marker on param shapes
+  ([`efa4c08`](https://github.com/johnmarktaylor91/torchlens/commit/efa4c08e098a800242cdd9aedb9faf4c6d238254))
+
+Restore per-parameter shape rendering so trainable params keep tuple parentheses while frozen params
+  swap only the outer shape brackets to square brackets, preserving the existing name, separator,
+  and singleton trailing-comma formatting.
+
+JMT wants the at-a-glance trainability cue preserved, especially for mixed-trainability cases like
+  LoRA.
+
+Tier-2: pytest tests/ -m "not slow" -x --tb=short passed (2260 passed, 29 skipped, 214 deselected, 2
+  xfailed).
+
+Added tests for trainable parens, frozen square brackets, mixed trainable/frozen lists, anonymous
+  frozen params, frozen singleton [3072,], and unknown trainability defaulting to parens.
+
+### Refactoring
+
+- **accessors**: Extract generic Accessor[T] base for trace-side accessors
+  ([`fbf17d4`](https://github.com/johnmarktaylor91/torchlens/commit/fbf17d42d587c9ca82c9888b99e8f02b551cfc08))
+
+Phase 1 of super-family-sprint. Pure refactor; no public API change.
+
+Extracts shared lookup, containment, iteration, IPython completion, and "did you mean"
+  infrastructure from the eight existing accessor classes (LayerAccessor, OpAccessor,
+  ModuleAccessor, ModuleCallAccessor, ParamAccessor, BufferAccessor, GradFnAccessor,
+  GradFnCallAccessor) into a single generic Accessor[T] base in
+  torchlens/data_classes/_accessor_base.py.
+
+Subclasses now override only type-specific lookup hooks (_resolve_pass_qualified,
+  _resolve_substring, _suggest); universal
+  __getitem__/__contains__/__iter__/__len__/__dir__/_ipython_key_completions_/ keys/values/items
+  live in the base. PORTABLE_STATE_SPEC kept per subclass (different keep/drop policies per type).
+
+Net: 688 insertions, 275 deletions across 8 files.
+
+- Smoke green (170/170). - No test or doc changes.
+
+- **alpha3**: Add LiveOpRecord capture projection
+  ([`a3a3d1a`](https://github.com/johnmarktaylor91/torchlens/commit/a3a3d1ad5abd5daff5ff819d90e74b95b2f5ee8f))
+
+- **alpha3**: Drain LiveOpRecord in postprocess Step 0
+  ([`c67954b`](https://github.com/johnmarktaylor91/torchlens/commit/c67954bdde5147192ca0b771418764be7ae175db))
+
+- **alpha3**: Wire LiveOpRecord write sites
+  ([`421b8a9`](https://github.com/johnmarktaylor91/torchlens/commit/421b8a97af0637025409931010b3e17e83015d5c))
+
+- **autoroute**: Extract input dispatch into priority-ordered registry
+  ([`cd888b7`](https://github.com/johnmarktaylor91/torchlens/commit/cd888b783e6ce0bf100b46983c789af53d57b1a6))
+
+Replace the hardcoded tl.trace auto-routing branches with a decorator-populated input registry while
+  preserving the existing text, multimodal, image, and fallback dispatch decisions. The Registry
+  implementation is direction-agnostic and keyed only by diagnostic kind, with tl.autoroute.output
+  reserved as a future output-routing namespace stub.
+
+Files and LOC: torchlens/autoroute/_registry.py (+216), torchlens/autoroute/input/__init__.py (+27),
+  torchlens/autoroute/_builtin_input.py (+52), torchlens/autoroute/output/__init__.py (+25),
+  torchlens/autoroute/__init__.py (+8), torchlens/user_funcs.py (+62/-185), torchlens/__init__.py
+  (+4), tests/test_autoroute_registry.py (+158). Total staged diff: 552 insertions, 185 deletions.
+
+Tier-2 result: pytest tests/ -m "not slow" -x --tb=short passed: 2285 passed, 29 skipped, 221
+  deselected, 2 xfailed.
+
+Existing tests were not modified; only tests/test_autoroute_registry.py was added.
+
+- **capture**: Add shadow module-stack capture, gated by engine flag
+  ([`8258229`](https://github.com/johnmarktaylor91/torchlens/commit/82582297500679bf9d4d55d69856da3c6a5529a0))
+
+Phase 1 of module-containment-refactor sprint. Adds Trace-owned _exhaustive_module_stack
+  pushed/popped via the Phase 0a helper inside the wrap-forward decorator. Adds
+  OpLog._modules_via_stack diagnostic field populated from snapshot at op-creation time. Adds
+  CaptureOptions._module_containment_engine flag (thread_replay default, hook_stack, both). Adds
+  post-Step-6 equality assertion (no-op for default engine). Adds 16-fixture phase-1 equality test
+  confirming shadow stack matches thread-replay on baseline fixtures.
+
+Documented divergence on raw_hook_replacement_synthetic: hook-stack gives the cleaner dynamic
+  call-stack answer for ops downstream of a synthetic interventionreplacement. The replaced module's
+  frame does not propagate into descendant ops' module stacks (which thread-replay does as a quirk
+  of recursive ancestry inheritance). Fixture 14's baseline snapshot regenerated under hook-stack
+  engine; phase-1 equality test marks the fixture as xfail with documented reason.
+
+Removes the duplicate _mod_call_index increment in _handle_module_entry (helper is now the sole
+  incrementer).
+
+Refs: .research/module-containment-refactor_PLAN.md (Phase 1)
+
+- **capture**: Collapse tl_* attributes into _tl namespace
+  ([`0e4509d`](https://github.com/johnmarktaylor91/torchlens/commit/0e4509d68aab6c6b2ddeee4edb1dc7af8e22f7f8))
+
+Replace scattered tl__label_raw, tl_buffer_address, tl_buffer_parent, tl_param_barcode,
+  tl_param_address, tl_call_index, tl_requires_grad, tl_address, tl_module_type,
+  tl_forward_call_is_decorated, tl_is_decorated_function, tl_tensor_replacement_wrapped with a
+  single typed _tl namespace per object.
+
+Adds torchlens/_tl.py with TorchLensMeta base, TensorMeta, ParamMeta, ModuleMeta, DecorationTag
+  dataclasses plus field-level helpers and batch hot-path readers.
+
+Drops the double-underscore tl__label_raw footgun; sub-field names are now plain snake_case.
+  Vestigial tl_tensor_label_raw removed.
+
+Foreign _tl collisions detected via TorchLensMeta base class; raises TorchLensTLCollisionError to
+  fail loudly.
+
+New tests: test_tl_meta (helpers), test_tl_lifecycle (cleanup paths), test_no_legacy_tl_attrs (AST
+  regression scan).
+
+No public API change. No behavior change. Internal-only refactor.
+
+- **capture**: Drop dead capture-only fields from Trace; field invariant test (M6)
+  ([`82f5ee7`](https://github.com/johnmarktaylor91/torchlens/commit/82f5ee7c7f95b427e123bf9c4c49b2929225339e))
+
+All transient capture state moved off Trace into postprocess-local TraceBuildState. Trace.__dict__
+  now contains only user-facing fields (per Appendix B of plan) — no _raw_layer_dict,
+  _layer_counter, _mod_entered, _module_build_data, _exhaustive_module_stack, etc.
+
+OpEvent.materialized_log bridge field removed. Hot path still constructs OpLog at capture time and
+  routes it through TraceBuildState (internal-only; never reaches the final Trace). Full IR-only
+  hot-path simplification deferred to a code-quality follow-up; runtime behavior is unaffected.
+
+Trace.orphan_logs: tuple[OpLog, ...] added per AD-7 (orphan access without _raw_layer_dict).
+
+New tests/test_trace_field_invariant.py asserts the zero-scratch invariant: Trace.__dict__ contains
+  only user-facing fields after log_forward_pass returns.
+
+Parity goldens regenerated at tests/golden/m5_pre_m6/ for M5 → M6 byte-equality. Old m2_pre_m3
+  goldens archived in place but no longer run.
+
+Runtime gates green: 192 smoke, parity 4/4 against new goldens, intervention 203/1, fastlog 111,
+  tier-2 non-slow 2081. Mypy reports 27 pre-existing errors in accessor typing unrelated to M6.
+
+resnet50.pkl golden exceeds the 500KB threshold (765KB); commit uses SKIP=check-added-large-files.
+  Same pre-existing repo-hygiene followup from M3 — todos.md tracks it.
+
+Plan: .research/capture-pipeline-unification_PLAN.md §2 §5 §6 §14 AD-7 + Appendix B
+
+Milestone: M6 of M1-M8 capture-pipeline-unification sprint
+
+- **capture**: Hot path emits OpEvents; postprocess Step 0 materializes (M3)
+  ([`7c75820`](https://github.com/johnmarktaylor91/torchlens/commit/7c7582002b57cdfad7db972b10dc1a901558b702))
+
+Hot path in backends/torch/ops.py now emits typed OpEvent instances into session.capture_events:
+  CaptureEvents instead of writing directly to Trace._raw_layer_dict[label] = OpLog(...).
+
+Adds torchlens/postprocess/_materialize.py (Step 0 prelude) that drains CaptureEvents into
+  _raw_layer_dict + _raw_layer_labels_list before the existing 19 postprocess steps run.
+
+Behavior is parity-gated against pre-M3 goldens for TinyMLP, ResNet-50, GPT-style small transformer,
+  and LSTM. New parity gate at tests/test_capture_events_parity.py with goldens at
+  tests/golden/m2_pre_m3/.
+
+The 19 existing postprocess steps are unchanged at this milestone; they still read _raw_layer_dict.
+  M6 will inline Step 0's work and drop _raw_layer_dict from final Trace.
+
+Plan: .research/capture-pipeline-unification_PLAN.md §5 + §11 (parity)
+
+Milestone: M3 of M1-M8 capture-pipeline-unification sprint
+
+- **capture**: Introduce IR + CaptureBackend Protocol (M1)
+  ([`f56385e`](https://github.com/johnmarktaylor91/torchlens/commit/f56385e078a26d8cef7f72a4d8879301e2a2c232))
+
+Establishes torchlens/ir/ with backend-agnostic event types (OpEvent, ModuleEvent, TensorRef,
+  ParamRef, BackendSemantics, BackwardSidecar, CapturePolicy, FireResult, etc.) and
+  torchlens/backends/_protocol.py with the CaptureBackend Protocol.
+
+No backend implementations yet (M2). No postprocess changes (M3). No source-file moves beyond new
+  packages. No __all__ deltas.
+
+Frozen+slots dataclasses on every hot-path type. CaptureEvents uses slots=False (allocated once per
+  capture; weakref-friendly). Mapping[str, object] for kwargs-shaped fields per immutability
+  discipline. No catchall extra/annotations sidecars on OpEvent.
+
+Acceptance gates (the substantive ones): - ruff: clean on new files - mypy --follow-imports=skip
+  torchlens/ir torchlens/backends: clean - pytest tests/test_ir_basic.py: 5 passed - pytest tests/
+  -m smoke: 192 passed
+
+(Two gates I originally specified were ill-formed: full mypy follows into 49 pre-existing errors in
+  unrelated files; the torch-free import check routed through torchlens/__init__.py which always
+  imports torch. M1 code itself is torch-free in isolation.)
+
+Plan: .research/capture-pipeline-unification_PLAN.md §2 + §3
+
+Milestone: M1 of M1-M8 capture-pipeline-unification sprint
+
+- **capture**: Move hot-path OpLog construction out of torch ops
+  ([`4afa79c`](https://github.com/johnmarktaylor91/torchlens/commit/4afa79c2074db7aad7ff7b0d922212c40427c98e))
+
+backends/torch/ops.py no longer directly constructs OpLog or BufferLog; log object materialization
+  is centralized in postprocess/_materialize.py via materialize_log_from_fields(). OpEvent IR fields
+  continue to be populated directly from the existing torch metadata fields.
+
+Focused gates green: zero OpLog( hits in backends/torch/ops.py, parity 4/4, field invariant 1,
+  intervention 203/1, fastlog 19.
+
+RESIDUAL: this is the safe cleanup slice. Capture still needs a live materialized log for
+  mid-forward raw lookup, module filters, family-link updates, gradient hooks, and activation
+  saving, so construction is centralized but not deferred exclusively until postprocess Step 0.
+
+- **capture**: Relocate torch capture under backends/torch/ + Protocol adapter (M2)
+  ([`b9889d6`](https://github.com/johnmarktaylor91/torchlens/commit/b9889d6cf63b033d5d2cfa95bbc4cda0d03575fb))
+
+Moves the eight torch-specific capture files into torchlens/backends/torch/: -
+  decoration/torch_funcs.py → backends/torch/wrappers.py - decoration/model_prep.py →
+  backends/torch/model_prep.py - decoration/_module_stack.py → backends/torch/module_stack.py -
+  _tl.py → backends/torch/_tl.py - capture/source_tensors.py → backends/torch/sources.py -
+  capture/output_tensors.py → backends/torch/ops.py - capture/tensor_tracking.py →
+  backends/torch/tensor_tracking.py - capture/backward.py → backends/torch/backward.py
+
+Adds backends/torch/backend.py implementing the CaptureBackend Protocol as an adapter over the
+  relocated code. log_forward_pass now dispatches model prep, wrapping, and the per-op hot path
+  through backend methods.
+
+Behavior is identical: every hot-path call still writes Trace._raw_layer_dict exactly as today. M3
+  will replace those writes with OpEvent emission into CaptureEvents. No dual-path coexistence at
+  this milestone — just relocation and Protocol adapter.
+
+torchlens/decoration/ deleted entirely (no forwarding shim, per AD-10).
+
+Plan: .research/capture-pipeline-unification_PLAN.md §1 + §3 + §4
+
+Milestone: M2 of M1-M8 capture-pipeline-unification sprint
+
+- **capture**: Switch to hook_stack engine; delete thread-replay code
+  ([`10942ba`](https://github.com/johnmarktaylor91/torchlens/commit/10942bac848e7785fab43ff87b69cdd8706f6aae))
+
+Phase 2 of module-containment-refactor sprint. Default _module_containment_engine flips to
+  "hook_stack". OpLog.modules now populated from _module_stack.snapshot at op-creation time.
+
+Deletes _module_boundary_thread_output, _module_boundary_threads_inputs, _update_tensor_modules,
+  _get_input_module_info, _modules_via_stack shadow field, and the post-Step-6 equality assertion.
+  Renames _handle_module_entry/_handle_module_exit to _record_module_entry_metadata/
+  _record_module_exit_metadata with reduced scope (counter increment moved to helper; thread-marker
+  writes removed). Retains all metadata side effects per the plan's contract.
+
+Removes constants.py LAYER_PASS_LOG_FIELD_ORDER entries for the deleted fields. Removes legacy
+  aliases. Save/load migration shims for older pickles will be added in Phase 4.
+
+Three baseline snapshots regenerated with documented behavioral improvements (drifts that fix
+  limitations of thread-replay):
+
+- recurrent_lstm_cell: newzeros_1_1 and newzeros_2_2 now correctly attribute to "cell:1" instead of
+  empty modules. Internal factory ops (torch.zeros, torch.randn) called inside a forward now have
+  proper module attribution. This is the orphan-factory-op fix the sprint was specifically designed
+  to deliver. - dynamic_buffer_module: randn_1_1 now correctly attributes to "child:1". Same family
+  as above. - raw_hook_replacement_synthetic: final output's output_of_modules narrows from ["relu",
+  "proj"] to ["proj"]. Thread-replay's recursive ancestry inheritance no longer leaks dead-module
+  markers through hook-replaced outputs. Same family as the previously documented fixture 14
+  linear_1_4 divergence (commit 8258229).
+
+Refs: .research/module-containment-refactor_PLAN.md (Phase 2)
+
+- **decoration**: Extract module-stack helper
+  ([`cee50a4`](https://github.com/johnmarktaylor91/torchlens/commit/cee50a413b3092367fa4e26d3827279a91f578f9))
+
+Phase 0a of module-containment-refactor sprint. Adds torchlens/decoration/_module_stack.py with
+  push_frame, pop_frame, current_address, snapshot. Refactors predicate-mode push/pop in
+  model_prep.py to use the helper. Behavior-preserving; 170/170 smoke tests pass.
+
+Refs: .research/module-containment-refactor_PLAN.md (Phase 0a)
+
+- **fastlog**: Collapse to projection over CaptureEvents (M5)
+  ([`a1316ec`](https://github.com/johnmarktaylor91/torchlens/commit/a1316eca9e38e8f4a2a9cecae6dabd2d241c636f))
+
+Public tl.fastlog.* API preserved byte-identical. Internal duplicate capture implementation gutted;
+  tl.fastlog.record now lowers to unified capture with postprocess=False, returning a Recording that
+  lazily projects CaptureEvents.op_events into ActivationRecord / RecordingTrace views. No Trace is
+  materialized for the fastlog path.
+
+Deleted internal fastlog files (no behavior change to public users): - fastlog/_orchestrator.py -
+  fastlog/_state.py - fastlog/_predicate.py - fastlog/_record_context.py Internal logic merged into
+  capture/predicates.py + capture/projections.py.
+
+Rewritten as thin shims: - fastlog/_record_one_shot.py - fastlog/_recorder.py
+
+Storage and recovery files preserved (fastlog disk format unchanged per AD-1; fastlog.load continues
+  to load existing artifacts via recover.py).
+
+Preserved features verified: - train_mode=True still keeps saved tensors graph-connected (new test)
+  - exception-in-predicate propagates as before (new test) -
+  RecordingTrace.draw/timeline_html/repredicate all work over projected events - Memory parity:
+  per-event cost is RecordContext-sized, not OpLog-sized
+
+Plan: .research/capture-pipeline-unification_PLAN.md §7 + post-convergence patch
+
+Milestone: M5 of M1-M8 capture-pipeline-unification sprint
+
+- **glossary-v5**: Drop CallTreeNode, use ModuleCall as call-tree node directly
+  ([`ad4eefd`](https://github.com/johnmarktaylor91/torchlens/commit/ad4eefd7f2dece110b89f9f04e8072fcd6342822))
+
+Removed CallTreeNode exports, call_tree properties, and call_tree field-order entries.
+
+Added direct ModuleCall/Module/Trace walking and call-tree display helpers, plus Trace root_call and
+  max_call_depth convenience surfaces.
+
+Updated glossary v5 tests and appended the locked design note to the deltas log.
+
+- **intervention**: Live hooks emit FireResults on OpEvents; _pending_live_fire_records deleted (M4)
+  ([`5338d43`](https://github.com/johnmarktaylor91/torchlens/commit/5338d43661bbacd03a83e1b4e25cbf82cf630654))
+
+Live intervention hook firing in backends/torch/ops.py + intervention/runtime.py now emits typed
+  FireResult annotations on the OpEvent in CaptureEvents instead of writing to
+  _state._pending_live_fire_records. The pending-fire-records module global is deleted entirely.
+
+apply_live_hooks becomes a CaptureBackend Protocol method: apply_live_hooks(session, value, site:
+  ReservedLabel) -> tuple[object, tuple[FireResult, ...]]
+
+FireResult wraps the existing intervention.types.FireRecord per plan §6.
+
+Fork no longer rebuilds _raw_layer_dict via the old path; it deep-copies the dict from the source
+  Trace's final state. _raw_layer_dict still exists until M6.
+
+replay.py's import of _set_saved_out_metadata from backends/torch/ops.py is relocated to
+  data_classes/op_log.py to close the layering leak.
+
+Public API: identical. tl.fork / attach_hooks / rerun / replay byte-equal. graph_shape_hash
+  unchanged. M3 parity gate still green.
+
+Plan: .research/capture-pipeline-unification_PLAN.md §6
+
+Milestone: M4 of M1-M8 capture-pipeline-unification sprint
+
+- **io**: Io_format_version 3 -> 4 + v3 loader normalizer + CHANGELOG (M8)
+  ([`af0faa1`](https://github.com/johnmarktaylor91/torchlens/commit/af0faa1b64d099ab1cc9bb785433e01a770a8bf3))
+
+Bumps torchlens/_io/__init__.py:IO_FORMAT_VERSION from 3 to 4. Adds a small read-only normalizer at
+  torchlens/_io/rehydrate.py:_normalize_legacy_trace_state that strips the 17 capture-only scratch
+  fields dropped by M6 when loading v3 .tlspec bundles.
+
+CHANGELOG.md documents the full M1-M8 unification sprint: - Unified capture pipeline (OpEvent +
+  CaptureEvents IR) - Backend abstraction (torchlens.backends.{torch,mlx}) - torchlens.decoration
+  namespace deleted - Zero capture-only scratch on Trace - PartialTrace.raw_layers shape change
+  (rare-path) - Trace.orphan_logs added (AD-7) - Trace.has_backward_pass backend-conditional -
+  io_format_version: 3 -> 4 with v3 loader normalizer - MLX backend (technical preview) - Public
+  torchlens.__all__ unchanged (40 names); package stays 2.x.x
+
+New test tests/test_io_format_v3_load.py asserts a v3 golden bundle loads cleanly under v4
+  (normalizer strips legacy fields) and that save/load roundtrip preserves the zero-scratch
+  invariant.
+
+Plan: .research/capture-pipeline-unification_PLAN.md §M8 + Appendix B
+
+Milestone: M8 (FINAL) of M1-M8 capture-pipeline-unification sprint
+
+- **op-log**: Eliminate mid-forward OpLog construction
+  ([`35fdaee`](https://github.com/johnmarktaylor91/torchlens/commit/35fdaee73f2f4798e6e762353cd4debc8688a546))
+
+- **postprocess**: Inline Step 6 module suffix at op-creation
+  ([`8dd33a6`](https://github.com/johnmarktaylor91/torchlens/commit/8dd33a63104b644b5e3fbf2a8cc86ec72786e06a))
+
+- **postprocess**: Simplify Step 6 to suffix-only mutation
+  ([`22b355f`](https://github.com/johnmarktaylor91/torchlens/commit/22b355fb901fd6737f276bf4618b3e4fc025ae22))
+
+Phase 3 of module-containment-refactor sprint. Replaces _fix_modules_for_internal_tensors body with
+  a suffix-only loop that appends the canonical module-path suffix to equivalence_class for every
+  non-orphan layer. Deletes _fix_modules_for_single_internal_tensor and the
+  _layers_where_internal_branches_merge_with_input plumbing (parent/child propagation is no longer
+  needed because hook-stack snapshot at op-creation time is the source of truth for modules).
+
+Step 6 still runs after Step 5; suffix logic operates on the post-conditional-attribution set.
+
+Regenerates two baselines (recurrent_lstm_cell, dynamic_buffer_module): root-level factory ops
+  (x.new_zeros, torch.randn) called in the OUTER forward BEFORE entering a submodule now correctly
+  report modules=[] instead of inheriting the downstream module's identity. The Phase 2 baseline
+  values ("cell:1", "child:1") were artifacts of the old Step 6 propagation logic that copied a
+  downstream module's identity onto root-level factory ops; Phase 3 deletes that propagation. The
+  literal hook-stack answer at op-creation time is empty modules, which is now what the snapshots
+  reflect.
+
+Refs: .research/module-containment-refactor_PLAN.md (Phase 3)
+
+- **rename**: Apply naming sprint v2 code surface
+  ([`a55ae03`](https://github.com/johnmarktaylor91/torchlens/commit/a55ae033a58ba51524339e08fec49ac3c893e786))
+
+- **rename**: Drop deprecated conditional surface + redundant OpLog back-refs + finish scoped
+  accessors
+  ([`3107330`](https://github.com/johnmarktaylor91/torchlens/commit/3107330e156324fd73ff73abfdface96d528dea4))
+
+Round 2 of naming-impl-v2 cleanup. Drops 18 deprecated conditional fields (6 Trace-level, 12
+  Op/Layer-level) folding into the locked Conditional/ConditionalArm/ConditionalRoleRef data
+  classes. Drops 3 redundant OpLog layer back-refs (layer_type_index, layer_trace_index, layer_type)
+  — exact duplicates of op-scope fields per the inheritance pattern in postprocess/labeling.py.
+  Promotes LayerLog.ops, ModuleLog.calls, GradFnLog.calls from dict-like to scoped Accessors.
+
+Tests green: ruff/mypy/smoke 170/170/tier-2 2012 passed. Three feature demos clean
+  (18_intervention_verbs, 19_bundles_advanced, 26_perf_and_scaling).
+
+- **rename**: Field renames per cluster locks (phase 2)
+  ([`55c22d1`](https://github.com/johnmarktaylor91/torchlens/commit/55c22d11b41d4e4937973c4df715d6d33411adc8))
+
+- **rename**: Method renames (phase 4)
+  ([`3541292`](https://github.com/johnmarktaylor91/torchlens/commit/35412928782a0529eb4d4fee109d2a8c08b76413))
+
+- **rename**: New accessor classes + new fields (phase 3)
+  ([`dc73744`](https://github.com/johnmarktaylor91/torchlens/commit/dc73744b0e78bd6aa6fd7c7573f94377121d2861))
+
+- **rename**: Top-level vocab + class renames (phase 1)
+  ([`30179a8`](https://github.com/johnmarktaylor91/torchlens/commit/30179a802d283d7cf53e6711f40d515601b2f324))
+
+- **rename**: Update audit notebooks
+  ([`61e47d1`](https://github.com/johnmarktaylor91/torchlens/commit/61e47d15cebec79f22697f1216c5c1c9876914ee))
+
+- **rename**: Update notebooks (phase 5)
+  ([`cb425ec`](https://github.com/johnmarktaylor91/torchlens/commit/cb425eccdc7e0ad770ddc3be5d00fb534cf6b9d2))
+
+- **rename-sprint**: Accessor API rewrite + filter consistency
+  ([`657a329`](https://github.com/johnmarktaylor91/torchlens/commit/657a3299b9f670bbf0f282e77b522d627bc5a1c0))
+
+- **rename-sprint**: Bundle + Super[T] + Conditional changes
+  ([`9a55724`](https://github.com/johnmarktaylor91/torchlens/commit/9a557248639c62a3a8a7b20d6f39e8fbd30da55a))
+
+- **rename-sprint**: Drop Log suffix from 8 data classes
+  ([`31e2d95`](https://github.com/johnmarktaylor91/torchlens/commit/31e2d951e7250124aab2e508a5c8fc73c0bd567e))
+
+- **rename-sprint**: Hard-remove deprecated features
+  ([`3f18608`](https://github.com/johnmarktaylor91/torchlens/commit/3f18608a10eed9b3aa95ccfb24b1d1e060352a8a))
+
+- **rename-sprint**: Module + ModuleCall field renames, additions, removals
+  ([`cf87490`](https://github.com/johnmarktaylor91/torchlens/commit/cf87490be0e2b0923211ce7fbfae437001ef3000))
+
+- Rename Module.is_train_mode to Module.training and add source-location triplets.
+
+- Rename ModuleCall layer/output storage to ops/input_ops/output_ops and add module resolver,
+  identity, context, argument-count, and timing fields.
+
+- Convert Module hook registry metadata to list[HookInfo] with one HookInfo per hook.
+
+- Add Module and ModuleCall forward/func duration surfaces plus parameter tensor/count predicates.
+
+- Update module build, validation, visualization, pandas exports, snapshots, and state log.
+
+- **rename-sprint**: Op + Layer field renames, additions, removals
+  ([`1c1e335`](https://github.com/johnmarktaylor91/torchlens/commit/1c1e335f7e006890058a5861a115779003e83a6a))
+
+Renames: capture_index/trace_index/compute_index to raw_index/step_index/ordinal_index;
+  func_call_stack to code_context; has_output_variations to has_out_variations;
+  output_versions_per_child to out_versions_by_child; is_multi_output/is_part_of_iterable_output to
+  in_multi_output; multi_output_role to multi_output_name;
+  is_atomic_module_op/is_atomic_module_output to is_atomic_module; module_ops_entered to
+  input_to_module_calls; module_entry_argnames to module_entry_arg_keys; detach_saved_tensors to
+  detach_saved_activations; feeds_output to is_output_parent; save_tensor_data to save_activation;
+  has_saved_outs to has_saved_activation; has_grad to has_saved_gradient;
+  grad_memory/transformed_grad_memory to gradient_memory/transformed_gradient_memory;
+  transformed_out_memory to transformed_activation_memory; save_grads to save_gradients;
+  grad_transform/save_raw_grads/grads_to_save to
+  gradient_transform/save_raw_gradients/gradients_to_save; grad_fn_id to grad_fn_object_id; grad_fn
+  runtime handle to grad_fn_handle; grad_fn_log TL record to grad_fn.
+
+Additions: Op.ordinal_index, Layer.ordinal_index/raw_index, has_saved_gradient, grad_fn_handle
+  runtime storage, grad_fn TL-record link, FX/index lookup propagation, Layer parity fields, and
+  required FIELD_ORDER/portable/fork-policy updates.
+
+Removals: dropped deprecated Op/Layer field names from active code paths with no compatibility alias
+  properties; kept Trace/Layer num_ops where glossary remains canonical.
+
+- **rename-sprint**: Param + Buffer + GradFn + GradFnCall renames
+  ([`5eef3e8`](https://github.com/johnmarktaylor91/torchlens/commit/5eef3e8ddfd8073d3bf3ea849b2a7e1c4342f66a))
+
+- **rename-sprint**: Tl.trace single-responsibility + pass/call vocab + total_ prefix
+  ([`12e159d`](https://github.com/johnmarktaylor91/torchlens/commit/12e159d1319b8f8435ae3ff46e85881dc38fdcda))
+
+Part A removes visualization kwargs and the log_forward_pass export from tl.trace, with draw/show
+  wrappers owning rendering options.
+
+Part B aligns op/layer iteration vocabulary on pass_index/num_passes while preserving callable
+  call_index/num_calls for Module, ModuleCall, GradFn, and GradFnCall.
+
+Part C applies total_/activation/autograd memory field names across Trace, Layer, Op, docs, tests,
+  and notebook references.
+
+Verification: ruff check . --fix; pytest tests/ -m smoke -x --tb=short.
+
+- **rename-sprint**: Trace class field renames, additions, removals
+  ([`39b72e8`](https://github.com/johnmarktaylor91/torchlens/commit/39b72e82479170f18e9bc67e3b1a2f10e3eec5c1))
+
+Renames applied: _backend_name to backend; run_state/RunState to state/TraceState; io_format_version
+  to tlspec_version; flops_by_type to flops_by_op_type; trace_annotations to annotations;
+  input_id/model_id to input_object_id/model_object_id; input_shape_hash to input_signature_hash;
+  ledger to state_history; train_mode to backward_ready; capture_full_args/capture_args_template to
+  save_arg_templates; total_duration/duration surface to capture_duration; trace-level
+  equivalent_ops to op_equivalence_classes; last_run_ctx to last_run; start_time/end_time to
+  capture_start_time/capture_end_time; backward_root_grad_fn_id to backward_root_grad_fn_ids.
+
+Additions applied: Trace.backend Literal field; Trace.code_context capture; Trace source-location
+  class/init fields; Trace.num_modules; ops_with_params; saved_* accessors; compute_ops and
+  compute_layers; module/grad-fn invocation accessors; boundary-type accessors; parameter tensor
+  count parity; backward duration aggregate accessors; Trace.backward() rerun entry point.
+
+Removals applied: unsupported_ops/unsupported_op collections; Trace.load classmethod;
+  streaming_pass_logs, num_streamed_ops, and num_streamed_passes; stale serialized model-log/golden
+  fixtures carrying removed field names.
+
+Schema and tests: rolled tlspec naming to tlspec_version, removed obsolete legacy model-log
+  backcompat cases, updated FIELD_ORDER/constants, Trace consumers,
+  intervention/io/validation/postprocess call sites, docs, and tests. Verification: exact old-name
+  grep clean; import probe passed; Trace dataclass field probe passed; ruff check . passed; pytest
+  tests/ -m smoke -x --tb=short passed.
+
+- **rename-sprint**: Unify name/address/class vocabulary across data classes
+  ([`f32a68e`](https://github.com/johnmarktaylor91/torchlens/commit/f32a68ea4cd825d3f6caf4c93549bf4179b9230a))
+
+Renames Trace.name to trace_label, Trace.model_name to model_class_name/model_label, and
+  Trace.model_class to model_class_qualname.
+
+Renames Op.grad_fn_name to grad_fn_class_name, adds Op.func_qualname, Op.grad_fn_class_qualname, and
+  Op.grad_fn_cls, and normalizes buffer-sourced Op/Buffer buffer_address to address with
+  Buffer.name.
+
+Renames GradFn.name to class_name, adds GradFn.class_qualname, and resolves GradFn.module_path by
+  replacing the stored module-only value with class_qualname.
+
+Renames FuncCallLocation.code_qualname to func_qualname.
+
+Adds ModuleCall.name plus Param.module_name and Param.module_cls; verifies Module.name remains the
+  bare address segment.
+
+Updates field-order constants, portable state specs, tlspec/golden fixtures, repr/summary/export
+  consumers, notebooks/docs field mentions, and tests.
+
+- **super**: Consolidate multi-trace internals into intervention
+  ([`46d230e`](https://github.com/johnmarktaylor91/torchlens/commit/46d230e3b7d1704d9ed7a87895ece031ff98e5ff))
+
+Move internal Super views, topology helpers, and metrics out of torchlens/multi_trace and into the
+  intervention package layout for the super-family sprint.
+
+- **super**: Extract generic bundle super base
+  ([`d25d9a2`](https://github.com/johnmarktaylor91/torchlens/commit/d25d9a2cb70bad65c4f1cc2c3a74f9b992f1f8b2))
+
+Move shared SuperOp/SuperLayer alignment state, labels, members, traces, coverage, and from_members
+  construction into internal Super[T].
+
+Keep tensor-specific stacking, aggregation, shape, and diff behavior in a _TensorBearing mixin in
+  the same internal module so future tensor-bearing Super classes can reuse it without inheriting
+  SuperOp semantics.
+
+- **super**: Generalize bundle super accessors
+  ([`3232674`](https://github.com/johnmarktaylor91/torchlens/commit/3232674c0b3cd3502951562d6847fd97e52392fd))
+
+Extract SuperAccessor[T, S] for shared Bundle-side lookup, sparse membership handling, label union
+  iteration, and Super view construction. Keep SuperOpAccessor and SuperLayerAccessor focused on
+  resolving OpLog and LayerLog objects from member traces.
+
+### Testing
+
+- **api**: Update __all__ size to 46 for backward-parity surface additions
+  ([`56ee78b`](https://github.com/johnmarktaylor91/torchlens/commit/56ee78b362a3bb8fa7b6ccd805c19ed55dc01ec5))
+
+P4 added 6 new public top-level names per AD-7 selector DSL parity + helper inventory: grad_clip,
+  grad_noise, grad_clamp (helpers), grad_fn, intervening, grad_fn_label (backward selectors).
+  Surface expansion intentional and documented in §1 of the backward-parity sprint plan.
+
+Renames test_all_size_exactly_40 -> test_all_size_exactly_46 and updates TARGET_ALL ordering to
+  match torchlens.__all__.
+
+- **api**: Update __all__ size to 47 for post-backward P1 output selector
+  ([`19fa2f4`](https://github.com/johnmarktaylor91/torchlens/commit/19fa2f42ed3b6a63231d0bba9dd954d759803918))
+
+P1 multi-output module support added `tl.output(...)` selector for disambiguating which output of a
+  multi-output module a hook targets (per AD-7 / F-Multi). Surface expansion intentional and
+  documented in P1 of the post-backward megasprint plan.
+
+- **api**: Update backward parity surface invariants
+  ([`e31592e`](https://github.com/johnmarktaylor91/torchlens/commit/e31592ec99ef8978636058aede3f5cf0cf336d15))
+
+- **capture**: Add module-containment field-equality harness (16 fixtures)
+  ([`a539469`](https://github.com/johnmarktaylor91/torchlens/commit/a539469c4e1fde42212fbefaa400ebc14d790176))
+
+Phase 0b of module-containment-refactor sprint. Adds 16 fixture builders spanning the edge-case
+  taxonomy in the audit report; a JSON-stable snapshot generator covering Op/Layer/Module/ModuleCall
+  fields plus equivalence-partition; a parametrized test runner. Generates baseline snapshots from
+  current HEAD (pre-refactor); future phases will assert equality against these baselines.
+
+Refs: .research/module-containment-refactor_PLAN.md (Phase 0b)
+
+- **capture**: Codify ordering invariants and exception safety
+  ([`6dafa69`](https://github.com/johnmarktaylor91/torchlens/commit/6dafa69064ce8fe9d3449cb915b07186df73b073))
+
+Phase 5 of module-containment-refactor sprint (final phase). Adds five regression test files
+  documenting and asserting the ordering invariants the refactor depends on:
+
+- test_module_stack_identity_exhaustive.py: identity/pass-through synthesized ops see the identity
+  module's stack frame. - test_module_stack_buffer_ordering.py: dynamic buffer registration ordering
+  relative to stack push. - test_module_stack_exception_safety.py: stack unwinds on forward
+  exception; subsequent capture works correctly. - test_module_stack_user_hook_ordering.py: user
+  pre-hooks fire BEFORE wrap-forward push by design; logged-replacement op correctness. -
+  test_backward_attribution_unchanged.py: backward op module attribution still works post-refactor.
+
+Adds documentation in torchlens/decoration/CLAUDE.md, torchlens/postprocess/CLAUDE.md, and
+  torchlens/CLAUDE.md describing the wrap-forward stack as the canonical module-containment
+  mechanism and the down-scoped Step 6.
+
+Adds .research/module-containment-refactor_SUMMARY.md with sprint recap, commit list, net code
+  delta, and known residuals.
+
+Marks sprint state DONE.
+
+Refs: .research/module-containment-refactor_PLAN.md (Phase 5)
+
+- **fastlog**: Cover halt early abort
+  ([`c8d6aaa`](https://github.com/johnmarktaylor91/torchlens/commit/c8d6aaadf2937d1d7da192d91fa46453ec0b9ae2))
+
+- **intervention**: Cover backward selector helper dispatch
+  ([`57a9e3d`](https://github.com/johnmarktaylor91/torchlens/commit/57a9e3deedbe6f93c8cb760beb1e8b20a4f648d6))
+
+- **io**: Generate v3 .tlspec golden bundle; un-skip v3-load test
+  ([`606e40b`](https://github.com/johnmarktaylor91/torchlens/commit/606e40be45f9d9c8ecb8e1e0001709b8299a60f9))
+
+Generates tests/golden/io_v3_sample.tlspec via an ephemeral git worktree at 83367c1 (pre-M1 main).
+  Captures a 2-layer nn.Sequential MLP with torchlens.trace() and saves the result; the bundle's
+  manifest.json records io_format_version=3.
+
+tests/test_io_format_v3_load.py::test_load_v3_artifact_into_v4_runtime now runs without the
+  missing-golden skip and verifies that the v3 bundle loads cleanly under the v4 runtime via the
+  legacy normalizer.
+
+Updates the detect-secrets baseline for the manifest's expected SHA-256 integrity hashes, matching
+  existing tlspec fixture handling.
+
+Closes the M8 deferred follow-up.
+
+- **module**: Cover multi-output module traces
+  ([`dfdc1a5`](https://github.com/johnmarktaylor91/torchlens/commit/dfdc1a5337f7c4745202300242f4ce0c8b343665))
+
+- **module**: Refresh multi-output containment snapshots
+  ([`dc4a2da`](https://github.com/johnmarktaylor91/torchlens/commit/dc4a2da8b73a0bddce8a531834752c636cd78985))
+
+- **observers**: Cover backward taps and bundle viz
+  ([`f05a356`](https://github.com/johnmarktaylor91/torchlens/commit/f05a3565fc166ba60f2eb6d60ae2a7f235e6019d))
+
+- **parity**: Add pickle-diff helpers + tensor-equal + allow-list
+  ([`8cf73a0`](https://github.com/johnmarktaylor91/torchlens/commit/8cf73a0a743c9d5188959f83e199a307c1630a3f))
+
+- **parity**: Shrink ResNet-50 golden inputs below pre-commit 500KB threshold
+  ([`0947830`](https://github.com/johnmarktaylor91/torchlens/commit/094783071c009a9842f1f8fcb73f1fd1c9a78917))
+
+Reduces ResNet-50 parity input shape from (1,3,224,224) to (1,3,64,64). The legacy ResNet trace
+  remains metadata-dominated, so the oversized resnet50 pickle payloads are stored gzip-compressed
+  on disk and transparently decompressed by the parity test; the uncompressed pickle objects are
+  still regenerated from the original anchor worktrees.
+
+Both m2_pre_m3 and m5_pre_m6 goldens were regenerated at their original anchor commits via ephemeral
+  git worktrees, then compressed below the repo's 500KB pre-commit large-file threshold.
+
+No more SKIP=check-added-large-files bypass needed for these artifacts.
+
+Resolves: tests/golden/m{2_pre_m3,5_pre_m6}/resnet50.pkl size cleanup.
+
+- **rename-sprint**: Tier-2 green after all renames
+  ([`05ac920`](https://github.com/johnmarktaylor91/torchlens/commit/05ac920a9fc75d15c30ab180de392ed37e982f83))
+
+Renames-only: updated tests for grad_fn, total_autograd_memory, module_calls, num_calls, call_index,
+  0-based accessors, Trace.show DOT return, and current export/audit fields.
+
+Removed-feature marks: skipped obsolete M5 pre-M6 pickle byte-equality schema and metadata-less v3
+  tlspec golden tests.
+
+Type-drift fixes: aligned train-mode tensor validation, backward grad_fn selector dispatch, buffer
+  call_index export, collapsed module rendering, ModuleCall JSON export, Trace backend field order,
+  and backward invariant validation. Refreshed module-containment snapshots.
+
+- **report**: Align top-level api budget
+  ([`54ff9f2`](https://github.com/johnmarktaylor91/torchlens/commit/54ff9f2bb1d8949960ab7f0bd761ed66b4b9bd9b))
+
+- **viz**: Cover combined visualization modes
+  ([`5f069d5`](https://github.com/johnmarktaylor91/torchlens/commit/5f069d515047101631732a465d7e3bb3b914e9a8))
 
 
 ## v2.17.0 (2026-05-01)
@@ -146,6 +1761,12 @@ After three incidents where commit-message conventions auto-triggered semantic-r
 
 Background and incident history:
   ~/.claude/projects/-home-jtaylor-projects-torchlens/memory/feedback_version_bumps.md
+
+- **release**: 2.17.0
+  ([`644d442`](https://github.com/johnmarktaylor91/torchlens/commit/644d442b123a75e60d2d2e35bac684c27f648d76))
+
+- **release**: 3.0.0
+  ([`9599752`](https://github.com/johnmarktaylor91/torchlens/commit/959975237e32eb25a7939086724853eebbd6ecfa))
 
 - **release**: Rollback 3.0.0 to 2.17.0 (Q22 lock — stay 2.x family)
   ([`f4ccabc`](https://github.com/johnmarktaylor91/torchlens/commit/f4ccabc173aeccf98f4d0e7447afac793301b3d0))
@@ -1050,6 +2671,9 @@ No production behavior change.
 
 Branch: codex/intervention-api.
 
+- **release**: 2.16.0
+  ([`8fbe6a9`](https://github.com/johnmarktaylor91/torchlens/commit/8fbe6a903d3c3794cd1de30b3d72d906bb49fc67))
+
 - **todos**: Log multi-trace V2 follow-ons and record sprint completion
   ([`dda5a9e`](https://github.com/johnmarktaylor91/torchlens/commit/dda5a9ef47da9bdb9e6c79e30fad2c99a00d2100))
 
@@ -1441,6 +3065,11 @@ Branch: codex/intervention-api.
 
 ## v2.15.0 (2026-04-27)
 
+### Chores
+
+- **release**: 2.15.0
+  ([`e0eb903`](https://github.com/johnmarktaylor91/torchlens/commit/e0eb903a39cfbd377e483f5d1a4a55590c9f29cd))
+
 ### Features
 
 - **multi-trace**: Add bundle visualization with divergence/swarm/group_color modes
@@ -1575,6 +3204,9 @@ Both are tracked alongside the existing Multi-trace V2 items so the follow-on sp
 
 ### Chores
 
+- **release**: 2.14.0
+  ([`d6377cd`](https://github.com/johnmarktaylor91/torchlens/commit/d6377cda930ddc2410397b2ecb32711697dd9586))
+
 - **todos**: Log deferred items from 2026-04-27 sprint and record completed PRs
   ([`70111e6`](https://github.com/johnmarktaylor91/torchlens/commit/70111e6ad93530bd518f8793744874fda2683ba8))
 
@@ -1625,6 +3257,11 @@ Visualization, counterfactual branch enumeration, intervention APIs, streaming a
 
 
 ## v2.13.0 (2026-04-27)
+
+### Chores
+
+- **release**: 2.13.0
+  ([`2db7010`](https://github.com/johnmarktaylor91/torchlens/commit/2db7010f4718150dfa220f9fa7f4b44cddfa2ae7))
 
 ### Features
 
@@ -1690,6 +3327,11 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
   tests/test_perf_bundle.py adds 11 behavioral tests covering each fix; smoke + non-slow suites pass
   without regression.
 
+### Chores
+
+- **release**: 2.12.2
+  ([`b9c5a1a`](https://github.com/johnmarktaylor91/torchlens/commit/b9c5a1a5ff74d98d7f452f385769ce7072a97b63))
+
 
 ## v2.12.1 (2026-04-27)
 
@@ -1697,6 +3339,11 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 - **capture**: Correct fast-mode pass-through detection for in-place modules
   ([`787025d`](https://github.com/johnmarktaylor91/torchlens/commit/787025d8f398486b6134a04efa03d4742c0de3f7))
+
+### Chores
+
+- **release**: 2.12.1
+  ([`b5a7502`](https://github.com/johnmarktaylor91/torchlens/commit/b5a7502ed0d226bbd2073d25104ead4157f852ea))
 
 ### Documentation
 
@@ -1710,6 +3357,9 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 - **gitignore**: Ignore default modelgraph.* and backward_modelgraph.* viz outputs in repo root
   ([`c65170c`](https://github.com/johnmarktaylor91/torchlens/commit/c65170cac2cdc82a1f6807c437339e9b4b7d3413))
+
+- **release**: 2.12.0
+  ([`b705219`](https://github.com/johnmarktaylor91/torchlens/commit/b70521980d389a09eb32967052e277b45e7b377e))
 
 - **todos**: Track activation_postfunc rename and estimated_autograd_saved_bytes followups
   ([`cd7269f`](https://github.com/johnmarktaylor91/torchlens/commit/cd7269f13f29b236c90b71e3c0be6c19172f543e))
@@ -1727,6 +3377,11 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 ## v2.11.0 (2026-04-27)
 
+### Chores
+
+- **release**: 2.11.0
+  ([`6534a68`](https://github.com/johnmarktaylor91/torchlens/commit/6534a68af33c32fcce3b6496c0ca30ec61a12115))
+
 ### Features
 
 - **capture**: Add autograd_saved_bytes field tracking per-op autograd memory
@@ -1734,6 +3389,11 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 
 ## v2.10.0 (2026-04-27)
+
+### Chores
+
+- **release**: 2.10.0
+  ([`444269d`](https://github.com/johnmarktaylor91/torchlens/commit/444269d60045ae7244d5c43fc668e21eb7ae9592))
 
 ### Features
 
@@ -1743,6 +3403,11 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 ## v2.9.0 (2026-04-27)
 
+### Chores
+
+- **release**: 2.9.0
+  ([`a32c6c0`](https://github.com/johnmarktaylor91/torchlens/commit/a32c6c031abc21b31598335c8d3c33943d7b203f))
+
 ### Features
 
 - **backward**: Gradient disk streaming and backward_tutorial notebook
@@ -1750,6 +3415,11 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 
 ## v2.8.0 (2026-04-27)
+
+### Chores
+
+- **release**: 2.8.0
+  ([`f9f0b17`](https://github.com/johnmarktaylor91/torchlens/commit/f9f0b17da93bc978edce6681c0ed48da19e6078f))
 
 ### Features
 
@@ -1764,6 +3434,9 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 - Backward-pass sprint design notes
   ([`1af1f7f`](https://github.com/johnmarktaylor91/torchlens/commit/1af1f7f6af1ff540e7536ca73602778214632f74))
 
+- **release**: 2.7.0
+  ([`0aaa2f3`](https://github.com/johnmarktaylor91/torchlens/commit/0aaa2f3a224808b9ce97bfb12080da0b2e572e16))
+
 ### Features
 
 - **backward**: First-class backward-pass capture (data model, walk, hooks, validation)
@@ -1777,6 +3450,11 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 ## v2.6.0 (2026-04-27)
 
+### Chores
+
+- **release**: 2.6.0
+  ([`5a51135`](https://github.com/johnmarktaylor91/torchlens/commit/5a51135a738d08f68b5a2df7e36b51605a61c54a))
+
 ### Features
 
 - **visualization**: Cylinder shape for buffer nodes; drop BUFFER_NODE_COLOR
@@ -1784,6 +3462,11 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 
 ## v2.5.0 (2026-04-27)
+
+### Chores
+
+- **release**: 2.5.0
+  ([`79d65fe`](https://github.com/johnmarktaylor91/torchlens/commit/79d65fea9f664c6383a26c1901ad9b494c414816))
 
 ### Features
 
@@ -1797,6 +3480,9 @@ Behavior is unchanged. ModelLog output is byte-identical for the test fixtures.
 
 - Defer menagerie revamp design notes
   ([`5118900`](https://github.com/johnmarktaylor91/torchlens/commit/51189009f9e74740ffdb9b285b00ec3106315d90))
+
+- **release**: 2.4.0
+  ([`7a7edd0`](https://github.com/johnmarktaylor91/torchlens/commit/7a7edd003487586b988ba89e070c1905e317e995))
 
 ### Features
 
@@ -1859,8 +3545,18 @@ FileNotFoundError: [Errno 2] No such file or directory: 'dot'
 at tests/test_conditional_branches.py because the graphviz `dot` binary isn't on the GitHub runner
   image by default. Add an apt-get install step before the test run.
 
+### Chores
+
+- **release**: 2.3.1
+  ([`902a72e`](https://github.com/johnmarktaylor91/torchlens/commit/902a72eda975687b4efe3ab1aacb88100ffd5c28))
+
 
 ## v2.3.0 (2026-04-27)
+
+### Chores
+
+- **release**: 2.3.0
+  ([`c4e997f`](https://github.com/johnmarktaylor91/torchlens/commit/c4e997f07c52195f360611dde125f250d67a5b2b))
 
 ### Features
 
@@ -1924,8 +3620,18 @@ Validation replay used a fixed absolute float tolerance, which was too tight for
   replays in timm models. Compare tolerated replay outputs with a small absolute floor plus relative
   tolerance so numerically equivalent conv outputs validate while real mismatches still fail.
 
+### Chores
+
+- **release**: 2.2.1
+  ([`3a9a972`](https://github.com/johnmarktaylor91/torchlens/commit/3a9a97245f7b069b340447ad3227dc957cc91fc9))
+
 
 ## v2.2.0 (2026-04-25)
+
+### Chores
+
+- **release**: 2.2.0
+  ([`153083d`](https://github.com/johnmarktaylor91/torchlens/commit/153083d927dc9d8546fa38253f97a987779ed97f))
 
 ### Features
 
@@ -1934,6 +3640,11 @@ Validation replay used a fixed absolute float tolerance, which was too tight for
 
 
 ## v2.1.0 (2026-04-25)
+
+### Chores
+
+- **release**: 2.1.0
+  ([`d27ebf3`](https://github.com/johnmarktaylor91/torchlens/commit/d27ebf3457fbec562ce50275bbaa2c0cf0d7ee20))
 
 ### Features
 
@@ -1945,6 +3656,11 @@ Validation replay used a fixed absolute float tolerance, which was too tight for
 
 
 ## v2.0.0 (2026-04-25)
+
+### Chores
+
+- **release**: 2.0.0
+  ([`70b9f77`](https://github.com/johnmarktaylor91/torchlens/commit/70b9f77f6599d34a9bf933b166ea663724a4edb7))
 
 ### Features
 
@@ -1963,6 +3679,11 @@ See PR body for migration notes.
 
 
 ## v1.7.0 (2026-04-24)
+
+### Chores
+
+- **release**: 1.7.0
+  ([`bd70a4a`](https://github.com/johnmarktaylor91/torchlens/commit/bd70a4a2aa6195524f2c84c8dbfabdb063012e0b))
 
 ### Features
 
@@ -2023,6 +3744,11 @@ Co-Authored-By: Happy <yesreply@happy.engineering>
 
 ## v1.6.0 (2026-04-24)
 
+### Chores
+
+- **release**: 1.6.0
+  ([`5ff5e1d`](https://github.com/johnmarktaylor91/torchlens/commit/5ff5e1dc2bab8b53a8e142742e2cc7b65581bf28))
+
 ### Features
 
 - **robustness**: Pr3 parallel-wrapper unwrap + framework I/O guards
@@ -2072,6 +3798,11 @@ Co-Authored-By: Happy <yesreply@happy.engineering>
 
 ## v1.5.0 (2026-04-24)
 
+### Chores
+
+- **release**: 1.5.0
+  ([`a641282`](https://github.com/johnmarktaylor91/torchlens/commit/a6412825edc680c53bcbf601398287a0544d3fa0))
+
 ### Features
 
 - **robustness**: Pr2 tensor-variant pre-flight guard + channels_last fix
@@ -2120,6 +3851,11 @@ Co-Authored-By: Happy <yesreply@happy.engineering>
 
 ## v1.4.0 (2026-04-24)
 
+### Chores
+
+- **release**: 1.4.0
+  ([`553cb85`](https://github.com/johnmarktaylor91/torchlens/commit/553cb8567287a3c29ca5e96e2a467a661faab569))
+
 ### Features
 
 - **robustness**: Pr1 correctness guards + torch floor pin
@@ -2158,6 +3894,11 @@ Co-Authored-By: Happy <yesreply@happy.engineering>
 
 
 ## v1.3.0 (2026-04-24)
+
+### Chores
+
+- **release**: 1.3.0
+  ([`595dc18`](https://github.com/johnmarktaylor91/torchlens/commit/595dc181ae190981447c1acd49420eb53bd5fd82))
 
 ### Documentation
 
@@ -2306,6 +4047,9 @@ Co-Authored-By: Happy <yesreply@happy.engineering>
 Plan v6 (Round 8, GREEN) at .project-context/plans/io-sprint/plan.md. Audits and review rounds 1-8
   archived alongside.
 
+- **release**: 1.2.0
+  ([`fe2b51f`](https://github.com/johnmarktaylor91/torchlens/commit/fe2b51f8c66552bfffa37312de8a663fabd890b4))
+
 ### Documentation
 
 - **io**: Io-s8 docstrings + README section + architecture doc
@@ -2366,6 +4110,11 @@ test_multiline_predicate_model_tracks_multiline_if_event asserts that the condit
   to preserve the genuinely multi-line predicate structure.
 
 Final tier-2: 966 passed, 12 skipped, 0 failed.
+
+### Chores
+
+- **release**: 1.1.0
+  ([`2f9eb40`](https://github.com/johnmarktaylor91/torchlens/commit/2f9eb4040d47b87d58d060b0aed0f67522099c34))
 
 ### Documentation
 
@@ -2580,6 +4329,11 @@ Three fixes: - Catch TypeError alongside ValueError in get_func_argnames (safety
 
 6 new tests, gotchas.md updated.
 
+### Chores
+
+- **release**: 1.0.2
+  ([`3ad9577`](https://github.com/johnmarktaylor91/torchlens/commit/3ad9577210e1ebeb3c33f221df81ea2fafa22e18))
+
 
 ## v1.0.1 (2026-03-23)
 
@@ -2608,6 +4362,9 @@ Adds 9 regression tests covering all lifecycle paths.
 Add detect-private-key (pre-commit-hooks) and detect-secrets (Yelp) to catch leaked keys, tokens,
   and high-entropy strings before they hit the repo.
 
+- **release**: 1.0.1
+  ([`1af6785`](https://github.com/johnmarktaylor91/torchlens/commit/1af678557a0a25ac0fdbdf2259b7bba8a5e8d313))
+
 
 ## v1.0.0 (2026-03-13)
 
@@ -2618,6 +4375,11 @@ Add detect-private-key (pre-commit-hooks) and detect-secrets (Yelp) to catch lea
 
 CI mypy (stricter torch stubs) catches that mode.device returns torch.device, not str. Explicit
   str() cast satisfies the Optional[str] return type annotation.
+
+### Chores
+
+- **release**: 1.0.0
+  ([`bd9ca16`](https://github.com/johnmarktaylor91/torchlens/commit/bd9ca16e27e70b66974c7af3d89456bf92517588))
 
 ### Features
 
@@ -2652,6 +4414,9 @@ Tests updated: 75 pass including 12 new lifecycle tests.
 ## v0.22.0 (2026-03-13)
 
 ### Chores
+
+- **release**: 0.22.0
+  ([`fcb912c`](https://github.com/johnmarktaylor91/torchlens/commit/fcb912c54f5996fb1e329f28b784ad326eb4c853))
 
 - **types**: Remove stale typing noise
   ([`5ba099d`](https://github.com/johnmarktaylor91/torchlens/commit/5ba099df82f789f308f86d78a66c82b1baf3751d))
@@ -2695,6 +4460,11 @@ Replace timer-based SIGALRM with direct os.kill() inside forward() so the signal
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.21.3
+  ([`04fa27a`](https://github.com/johnmarktaylor91/torchlens/commit/04fa27ac3602a5056a986aa01a0e8b2f1a2e0c73))
+
 
 ## v0.21.2 (2026-03-09)
 
@@ -2727,6 +4497,11 @@ If ELK fails for smaller graphs, the Python layout is also used as a fallback in
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.21.2
+  ([`fa72687`](https://github.com/johnmarktaylor91/torchlens/commit/fa726875ed4b9cd448fd5914de3d1e243c07b87e))
+
 
 ## v0.21.1 (2026-03-09)
 
@@ -2743,6 +4518,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   ([`99f4102`](https://github.com/johnmarktaylor91/torchlens/commit/99f4102fa34564868291214d6b6cf3dfc239fdce))
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **release**: 0.21.1
+  ([`364ea39`](https://github.com/johnmarktaylor91/torchlens/commit/364ea3911a0462bc83280e614a423b28f7dd3bd9))
 
 ### Performance Improvements
 
@@ -2793,6 +4571,11 @@ The Node.js Worker running ELK layout had no explicit maxOldGenerationSizeMb in 
 Also includes field/param renames from feat/grand-rename branch.
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.21.0
+  ([`bd8b348`](https://github.com/johnmarktaylor91/torchlens/commit/bd8b348f5c3074526675a633b469314736d3822c))
 
 ### Documentation
 
@@ -2846,6 +4629,11 @@ Changes: - render_large_graph.py: separate log_forward_pass from render_graph, f
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.20.5
+  ([`9b65063`](https://github.com/johnmarktaylor91/torchlens/commit/9b650633ed1925c75da06c79f2cd3cba8764b57c))
+
 
 ## v0.20.4 (2026-03-09)
 
@@ -2875,6 +4663,11 @@ V8's --stack-size flag silently caps at values well below what's requested, caus
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.20.4
+  ([`aa8c0eb`](https://github.com/johnmarktaylor91/torchlens/commit/aa8c0eb8144374a89861e2b55e5a8ed259bdc810))
+
 
 ## v0.20.3 (2026-03-08)
 
@@ -2895,6 +4688,11 @@ The OS soft stack limit (ulimit -s) was smaller than the --stack-size value pass
   stack. Uses preexec_fn to set RLIMIT_STACK to unlimited in the child process only.
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.20.3
+  ([`2c15b6b`](https://github.com/johnmarktaylor91/torchlens/commit/2c15b6b05642a36da5465ef5201a387be1276a21))
 
 ### Performance Improvements
 
@@ -2932,6 +4730,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ### Chores
 
+- **release**: 0.20.2
+  ([`fd67742`](https://github.com/johnmarktaylor91/torchlens/commit/fd67742e7ec9ba130f812ed618b9228ea3968673))
+
 - **scripts**: Enable loop detection in render_large_graph
   ([`803e16f`](https://github.com/johnmarktaylor91/torchlens/commit/803e16f3ecec7e2fbb1c662ce963f7de51f4d16c))
 
@@ -2941,6 +4742,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ## v0.20.1 (2026-03-08)
 
 ### Chores
+
+- **release**: 0.20.1
+  ([`54a7dc0`](https://github.com/johnmarktaylor91/torchlens/commit/54a7dc000da53e48205d3c05cf94479e91d3b5d5))
 
 - **scripts**: Use log_forward_pass vis_opt instead of separate render call
   ([`d2aea0f`](https://github.com/johnmarktaylor91/torchlens/commit/d2aea0fab326e02444d99aadc7dcf12abf9c8b10))
@@ -2965,6 +4769,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ## v0.20.0 (2026-03-08)
 
 ### Chores
+
+- **release**: 0.20.0
+  ([`8096b91`](https://github.com/johnmarktaylor91/torchlens/commit/8096b918ecb0458006576bdc89a29f2be7959611))
 
 - **scripts**: Unify large graph render scripts into single parameterized script
   ([`07a8186`](https://github.com/johnmarktaylor91/torchlens/commit/07a8186537cf88bb39f4abae55a05dc01ec16457))
@@ -2995,6 +4802,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   ([`d02233b`](https://github.com/johnmarktaylor91/torchlens/commit/d02233bc050657ed6088b8338e056c2c531d45bd))
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **release**: 0.19.0
+  ([`087d42d`](https://github.com/johnmarktaylor91/torchlens/commit/087d42d03a7577484ad131d9bb97362e3c4b6cca))
 
 ### Documentation
 
@@ -3035,6 +4845,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## v0.18.0 (2026-03-08)
 
+### Chores
+
+- **release**: 0.18.0
+  ([`3cbb02b`](https://github.com/johnmarktaylor91/torchlens/commit/3cbb02b24d0e37c94e99c9e8e8a14bf7e5d0d103))
+
 ### Features
 
 - **data**: Add MACs properties to LayerPassLog, LayerLog, ModelLog, ModuleLog
@@ -3068,6 +4883,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.17.0
+  ([`07bc335`](https://github.com/johnmarktaylor91/torchlens/commit/07bc33586b250aaa9c3f46f89ca974f16266ea8b))
+
 ### Features
 
 - **vis**: Scale ELK rendering to 250k+ nodes, add detect_loops option
@@ -3096,6 +4916,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   ([#117](https://github.com/johnmarktaylor91/torchlens/pull/117),
   [`98660ff`](https://github.com/johnmarktaylor91/torchlens/commit/98660ff114f31a2324d3268c0d925cf0b31c02c9))
 
+### Chores
+
+- **release**: 0.16.4
+  ([`8c0b57c`](https://github.com/johnmarktaylor91/torchlens/commit/8c0b57cf05202cf05f0144c2bf2f8a2658e71303))
+
 
 ## v0.16.3 (2026-03-08)
 
@@ -3120,6 +4945,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   type: ignore for ArgSpec arg-type and assignment
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.16.3
+  ([`1f599a8`](https://github.com/johnmarktaylor91/torchlens/commit/1f599a8b7a7be3864c9a19215f294de55f62f936))
 
 
 ## v0.16.2 (2026-03-08)
@@ -3190,6 +5020,11 @@ Non-interactive shells (IDE test runners, cron, subprocesses) often lack nvm's P
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.16.2
+  ([`272d558`](https://github.com/johnmarktaylor91/torchlens/commit/272d558a4aff5ba07275b03122f45419859aa6e8))
+
 
 ## v0.16.1 (2026-03-07)
 
@@ -3208,6 +5043,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   setitimer(50ms) instead of alarm(1s), increase model iterations to 50k, skip if alarm doesn't fire
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.16.1
+  ([`b040b6d`](https://github.com/johnmarktaylor91/torchlens/commit/b040b6d459d6264be57505d5dd3fc0eaf34cfe08))
 
 
 ## v0.16.0 (2026-03-07)
@@ -3241,6 +5081,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   (rare marker) for trophy-file rendering
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.16.0
+  ([`478d872`](https://github.com/johnmarktaylor91/torchlens/commit/478d872f2c224dc4f00e81232f60e3e9e9531e29))
 
 ### Features
 
@@ -3297,6 +5142,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   transient data clearing
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.15.15
+  ([`c124ac7`](https://github.com/johnmarktaylor91/torchlens/commit/c124ac77ec1604703a8fdf0706bd06fbfc8d7048))
 
 ### Documentation
 
@@ -3421,6 +5271,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## v0.15.14 (2026-03-07)
 
+### Chores
+
+- **release**: 0.15.14
+  ([`a24b534`](https://github.com/johnmarktaylor91/torchlens/commit/a24b53496829a51eb0905d9686852a2e1cbe053a))
+
 ### Performance Improvements
 
 - **capture**: Lazy _fsize_nice properties, remove _trim_and_reorder, batch pause_logging, drop
@@ -3450,6 +5305,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## v0.15.13 (2026-03-07)
 
+### Chores
+
+- **release**: 0.15.13
+  ([`efc5229`](https://github.com/johnmarktaylor91/torchlens/commit/efc5229a07c51fc21bf90615af8cbfab5b063a1d))
+
 ### Performance Improvements
 
 - **capture**: Speed-optimized defaults and remaining bottleneck elimination
@@ -3475,6 +5335,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 
 ## v0.15.12 (2026-03-06)
+
+### Chores
+
+- **release**: 0.15.12
+  ([`57aaa83`](https://github.com/johnmarktaylor91/torchlens/commit/57aaa83977523ac6ea7f2103eb81cd8a809e7bf3))
 
 ### Performance Improvements
 
@@ -3514,6 +5379,11 @@ Fixes: GC-2, GC-3, GC-4, PERF-19
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.15.11
+  ([`55df020`](https://github.com/johnmarktaylor91/torchlens/commit/55df02036c09372bbc73e1ed0941d34bb7adefea))
+
 ### Documentation
 
 - Add folder-wise CLAUDE.md files and comprehensive inline documentation
@@ -3538,6 +5408,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.15.10
+  ([`9530221`](https://github.com/johnmarktaylor91/torchlens/commit/9530221e015ee39dfaa43f89fb03e8c9409032a2))
+
 
 ## v0.15.9 (2026-03-05)
 
@@ -3555,6 +5430,11 @@ render_graph now returns dot.source so tests can inspect the graphviz source wit
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.15.9
+  ([`014acd8`](https://github.com/johnmarktaylor91/torchlens/commit/014acd8c94f2d2d4c39a40287f6a5c241cb89f35))
+
 
 ## v0.15.8 (2026-03-05)
 
@@ -3569,6 +5449,11 @@ The pyproject.toml configured coverage_html output directory but the pytest_sess
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.15.8
+  ([`e47f747`](https://github.com/johnmarktaylor91/torchlens/commit/e47f74745d452264da48392c24e4e2f36260d645))
+
 
 ## v0.15.7 (2026-03-04)
 
@@ -3580,6 +5465,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ### Chores
+
+- **release**: 0.15.7
+  ([`16ca1f4`](https://github.com/johnmarktaylor91/torchlens/commit/16ca1f4c3792b62bda432fe0534f5783dd441d72))
 
 - **tests**: Add @pytest.mark.smoke to 18 critical-path tests
   ([`d26f4ec`](https://github.com/johnmarktaylor91/torchlens/commit/d26f4ec86fbe64f26deb4c40880da4fb5882718c))
@@ -3604,6 +5492,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ### Chores
 
+- **release**: 0.15.6
+  ([`25f16cc`](https://github.com/johnmarktaylor91/torchlens/commit/25f16ccbe8f60cec1d2b55570068dc004d13c31b))
+
 - **tests**: Rename test_outputs/graphs to test_outputs/visualizations
   ([`fbf1fe6`](https://github.com/johnmarktaylor91/torchlens/commit/fbf1fe66786cf829ed4a26e76a9a934708e92a75))
 
@@ -3625,6 +5516,9 @@ Previously _merge_iso_groups_to_layers Pass 2 grouped operations by parent_param
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ### Chores
+
+- **release**: 0.15.5
+  ([`5922269`](https://github.com/johnmarktaylor91/torchlens/commit/5922269e96e235f6ac98588a6e581a565687de6f))
 
 - **tests**: Tidy test_outputs structure and remove private bug numbers
   ([`03817a2`](https://github.com/johnmarktaylor91/torchlens/commit/03817a25f1091f4cb0bf16b9f547cab08ecc515d))
@@ -3655,6 +5549,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   classes
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.15.4
+  ([`c8c8e94`](https://github.com/johnmarktaylor91/torchlens/commit/c8c8e94c965c5c45a1a0eaf74e290509720adf73))
 
 
 ## v0.15.3 (2026-03-04)
@@ -3691,6 +5590,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+- **release**: 0.15.3
+  ([`1781549`](https://github.com/johnmarktaylor91/torchlens/commit/1781549569858ab419266ae5f681324bff8abcf5))
+
 
 ## v0.15.2 (2026-03-04)
 
@@ -3723,6 +5625,9 @@ Replace pip with uv pip in quality and lint workflows. uv resolves and installs 
   bundle).
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **release**: 0.15.2
+  ([`fe64348`](https://github.com/johnmarktaylor91/torchlens/commit/fe643489fbfad61cd61bd2221def2796feaa856a))
 
 
 ## v0.15.1 (2026-03-04)
@@ -3796,6 +5701,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   regression tests for the above fixes
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.15.1
+  ([`17bb57a`](https://github.com/johnmarktaylor91/torchlens/commit/17bb57ab3f44b2be089fdc021db1b626e0522d49))
 
 ### Testing
 
@@ -3887,6 +5797,9 @@ Added 9 models to the profiling test for illustrative coverage: - SimpleBranchin
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+- **release**: 0.15.0
+  ([`a2bcc75`](https://github.com/johnmarktaylor91/torchlens/commit/a2bcc75862df6bbbabed277935e00e5634a333e1))
+
 ### Features
 
 - **modules**: Add shared module alias lookup and explicit alias fields
@@ -3945,6 +5858,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 
 ## v0.14.0 (2026-03-04)
+
+### Chores
+
+- **release**: 0.14.0
+  ([`88c7c3b`](https://github.com/johnmarktaylor91/torchlens/commit/88c7c3b1b32459dcec1fbed9f4320dc5a55d22f9))
 
 ### Features
 
@@ -4062,6 +5980,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   arg from perturbation (prevents CUDA OOB)
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.13.1
+  ([`9bd2aa3`](https://github.com/johnmarktaylor91/torchlens/commit/9bd2aa376b9dffe55194f1557c1c988b487a9963))
 
 ### Refactoring
 
@@ -4268,6 +6191,11 @@ Also: - Add visited set to _set_up_subgraphs while-loop for same reason - Add mi
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.13.0
+  ([`a623a24`](https://github.com/johnmarktaylor91/torchlens/commit/a623a24a44c41e1ac7d04226dde8e1c07aadd7bc))
+
 ### Features
 
 - **validation**: Capture and restore autocast context during logging and replay
@@ -4324,6 +6252,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## v0.12.0 (2026-03-02)
 
+### Chores
+
+- **release**: 0.12.0
+  ([`e714b32`](https://github.com/johnmarktaylor91/torchlens/commit/e714b323063c9a2212a4c6f8b8eb27cad68c9b12))
+
 ### Features
 
 - **data_classes**: Add BufferLog subclass and BufferAccessor for first-class buffer support
@@ -4345,6 +6278,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## v0.11.2 (2026-03-02)
 
+### Chores
+
+- **release**: 0.11.2
+  ([`94ec2e0`](https://github.com/johnmarktaylor91/torchlens/commit/94ec2e00a675606d9fe199cf42cec1807723ab8b))
+
 ### Performance Improvements
 
 - **postprocess**: Optimize 6 remaining hot-path bottlenecks in log_forward_pass
@@ -4358,6 +6296,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 
 ## v0.11.1 (2026-03-02)
+
+### Chores
+
+- **release**: 0.11.1
+  ([`d5bbd7d`](https://github.com/johnmarktaylor91/torchlens/commit/d5bbd7d7d139adb7b470f2b19bdd5313b1c12f15))
 
 ### Performance Improvements
 
@@ -4390,6 +6333,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 
 ## v0.11.0 (2026-03-02)
+
+### Chores
+
+- **release**: 0.11.0
+  ([`2a23b5c`](https://github.com/johnmarktaylor91/torchlens/commit/2a23b5cc1ad5ef648d37322c9d719ce0ed5315c8))
 
 ### Features
 
@@ -4460,6 +6408,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.10.1
+  ([`5ea2de6`](https://github.com/johnmarktaylor91/torchlens/commit/5ea2de61a1e3aba61ea9f88fb3d4a36fead03cb7))
+
 ### Refactoring
 
 - **postprocess**: Split monolithic postprocess.py into thematic package
@@ -4515,6 +6468,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 
 ## v0.10.0 (2026-03-02)
+
+### Chores
+
+- **release**: 0.10.0
+  ([`b2e5b48`](https://github.com/johnmarktaylor91/torchlens/commit/b2e5b48f10e07c6ea94e15f1141c65b2a5564afa))
 
 ### Features
 
@@ -4579,6 +6537,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 ## v0.9.0 (2026-03-01)
 
+### Chores
+
+- **release**: 0.9.0
+  ([`647ecef`](https://github.com/johnmarktaylor91/torchlens/commit/647ecefdad81db983006fd5d71d227e24702ab52))
+
 ### Features
 
 - **data**: Add ParamLog class for structured parameter metadata
@@ -4599,6 +6562,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 
 ## v0.8.0 (2026-03-01)
+
+### Chores
+
+- **release**: 0.8.0
+  ([`8b1534e`](https://github.com/johnmarktaylor91/torchlens/commit/8b1534e30a27cc40553c90ff31f37d6a35228762))
 
 ### Features
 
@@ -4626,6 +6594,11 @@ The test_video_r2plus1_18 test used a (16,3,16,112,112) input (~96M elements) wh
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.7.2
+  ([`34f2466`](https://github.com/johnmarktaylor91/torchlens/commit/34f246687bc4213334f2bc37d46ddcd0a3efb370))
+
 
 ## v0.7.1 (2026-02-28)
 
@@ -4639,6 +6612,11 @@ torch.nan_to_num does not support complex tensors, which caused test_qml to fail
   for complex dtypes.
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.7.1
+  ([`d94ad8f`](https://github.com/johnmarktaylor91/torchlens/commit/d94ad8f98ae2d3339f9ca22f12d51bb5021ff55f))
 
 
 ## v0.7.0 (2026-02-28)
@@ -4696,6 +6674,11 @@ _check_if_only_non_buffer_in_module was too broad — it returned True for funct
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.7.0
+  ([`f0b377e`](https://github.com/johnmarktaylor91/torchlens/commit/f0b377e14a6115f879bb2c6d5506d9e70084e433))
+
 ### Features
 
 - **metadata**: Track module training mode per submodule
@@ -4724,6 +6707,11 @@ Based on gilmoright's contribution in PR #56.
 
 Co-authored-by: gilmoright <artem.dahaka@gmail.com>
 
+### Chores
+
+- **release**: 0.6.2
+  ([`8e1443f`](https://github.com/johnmarktaylor91/torchlens/commit/8e1443ffb086e09e15eede3f54c928b2c69fcb58))
+
 
 ## v0.6.1 (2026-02-28)
 
@@ -4737,8 +6725,18 @@ Prevents AttributeError when copying entries that predate newly added fields (e.
 
 Co-Authored-By: whisperLiang <whisperLiang@users.noreply.github.com>
 
+### Chores
+
+- **release**: 0.6.1
+  ([`3738449`](https://github.com/johnmarktaylor91/torchlens/commit/3738449e05777c532b69035fb23f468e21981e3d))
+
 
 ## v0.6.0 (2026-02-28)
+
+### Chores
+
+- **release**: 0.6.0
+  ([`09a1e93`](https://github.com/johnmarktaylor91/torchlens/commit/09a1e93c8d141b461c7f3dda579e3cfc9e47b08b))
 
 ### Features
 
@@ -4812,6 +6810,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.5.0
+  ([`34a15a9`](https://github.com/johnmarktaylor91/torchlens/commit/34a15a99e293d79aa60232b817eb25a64c8e2cfd))
+
 ### Features
 
 - **logging**: Generalize was_getitem_applied to has_child_tensor_variations
@@ -4865,6 +6868,11 @@ When operations share the same equivalence type but occupy structurally differen
 Also adds NestedParamFreeLoops test model and prefixes intentionally unused variables in test models
   with underscores to satisfy linting.
 
+### Chores
+
+- **release**: 0.4.1
+  ([`88900b1`](https://github.com/johnmarktaylor91/torchlens/commit/88900b160fa923e8ab6bc2f4b831a25195fb3d2c))
+
 ### Code Style
 
 - Auto-format with ruff
@@ -4874,6 +6882,9 @@ Also adds NestedParamFreeLoops test model and prefixes intentionally unused vari
 ## v0.4.0 (2026-02-26)
 
 ### Chores
+
+- **release**: 0.4.0
+  ([`9b48aca`](https://github.com/johnmarktaylor91/torchlens/commit/9b48aca8f4a6ad79f4b45587714a3343d5510429))
 
 - **tests**: Move visualization_outputs into tests/ directory
   ([`22ed018`](https://github.com/johnmarktaylor91/torchlens/commit/22ed018d80ce274225bb65bae9a0dda3aed1561b))
@@ -4918,6 +6929,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
+### Chores
+
+- **release**: 0.3.1
+  ([`7d87270`](https://github.com/johnmarktaylor91/torchlens/commit/7d872703d80ac1794cf8dab72cccec4e2f8ff9fb))
+
 
 ## v0.3.0 (2026-02-25)
 
@@ -4937,6 +6953,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   ([`d63451c`](https://github.com/johnmarktaylor91/torchlens/commit/d63451cdd3360fa2ce6979b2e371a806310ec6ca))
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **release**: 0.3.0
+  ([`dfaf97f`](https://github.com/johnmarktaylor91/torchlens/commit/dfaf97f226c470a43cd2e616862ef15de5d78ce8))
 
 ### Features
 
@@ -4991,6 +7010,11 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
   ([`f2cf8ae`](https://github.com/johnmarktaylor91/torchlens/commit/f2cf8ae7450712bb54fcf58a1f2bbb8d3760f076))
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- **release**: 0.2.0
+  ([`4b54568`](https://github.com/johnmarktaylor91/torchlens/commit/4b54568dd8a6216c032663db438f7d32ed79fb6f))
 
 ### Features
 
