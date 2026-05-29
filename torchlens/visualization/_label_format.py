@@ -275,7 +275,7 @@ def format_module_path(address: Any) -> str | None:
     Returns
     -------
     str | None
-        ``"@ path.to.module"`` with one space after ``@``, or ``None``.
+        ``"@path.to.module"`` (no space after ``@``), or ``None``.
     """
 
     if address is None:
@@ -287,7 +287,7 @@ def format_module_path(address: Any) -> str | None:
         text = text[1:].strip()
     if not text:
         return None
-    return f"@ {text}"
+    return f"@{text}"
 
 
 def _shape_tuple(shape: Any) -> tuple[Any, ...]:

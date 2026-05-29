@@ -3408,7 +3408,7 @@ def _compute_selected_node_lines(
         elif field_name in {"memory", "bytes"}:
             rows.append(str(getattr(layer_log, "memory_str", "")))
         elif field_name == "module":
-            rows.append(format_module_path(node_address) or "@ root")
+            rows.append(format_module_path(node_address) or "@root")
         elif field_name == "params":
             param_line = format_param_list(layer_log)
             if param_line is not None:

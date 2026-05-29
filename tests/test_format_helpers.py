@@ -117,9 +117,9 @@ def test_visualization_format_param_list_defaults_unknown_trainability_to_parens
     assert format_param_list(params) == "params: weight (3072, 768) · bias (3072,)"
 
 
-def test_visualization_format_module_path_inserts_space_after_at() -> None:
-    """Visualization module paths use a single space after the at sign."""
+def test_visualization_format_module_path_no_space_after_at() -> None:
+    """Visualization module paths have no space after the at sign."""
 
     assert format_module_path("<br/>@transformer.layer.5.ffn.lin1") == (
-        "@ transformer.layer.5.ffn.lin1"
+        "@transformer.layer.5.ffn.lin1"
     )
