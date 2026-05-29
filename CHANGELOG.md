@@ -84,6 +84,22 @@ Regenerated canonical snapshot + hero demo SVG. Bundle (78) + smoke (170) green.
 - **capture**: Preserve new raw_input across rerun atomic swap
   ([`7fa8a8f`](https://github.com/johnmarktaylor91/torchlens/commit/7fa8a8fa221eafb27f03ac054ffd47c0dcf4c46c))
 
+- **ci**: Let git-lfs tolerate the CI tag push (allowincompletepush)
+  ([`056193d`](https://github.com/johnmarktaylor91/torchlens/commit/056193d4044c8ce3da2ff2002b19f541b974e296))
+
+`git lfs uninstall` cleared the original bracketed-URL LFS failure but the tag push then hit
+  "missing or corrupt local objects": CI checks out with lfs disabled (pointers only), so git-lfs
+  refuses to push the tag whose tree references LFS objects it can't find locally. Those objects
+  already live on the remote, so set `lfs.allowincompletepush true` (git-lfs's own recommended fix)
+  plus `lfs.locksverify false`. This lets the version tag actually get created so the release
+  completes (PyPI publish + GitHub release).
+
+Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+Co-Authored-By: Happy <yesreply@happy.engineering>
+
 - **ci**: Stop runaway semantic-release loop (skip-ci + lfs tag push)
   ([`0b24b6e`](https://github.com/johnmarktaylor91/torchlens/commit/0b24b6e0cb79c95f5be88496e7c350f94145d36d))
 
