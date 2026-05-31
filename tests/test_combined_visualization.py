@@ -126,9 +126,7 @@ def test_draw_combined_module_clusters() -> None:
     """Paired backward nodes are placed in the forward op's module cluster."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
     addmm = next(
-        grad_fn_handle
-        for grad_fn_handle in trace.grad_fns
-        if grad_fn_handle.grad_fn_type == "addmm"
+        grad_fn_handle for grad_fn_handle in trace.grad_fns if grad_fn_handle.type == "addmm"
     )
 
     assert _module_key_for_grad_fn(trace, addmm, "upstream") == "fc:1"
@@ -190,7 +188,7 @@ def test_draw_combined_accumulategrad_attribution() -> None:
     accumulate_grad = next(
         grad_fn_handle
         for grad_fn_handle in trace.grad_fns
-        if grad_fn_handle.grad_fn_type == "accumulategrad"
+        if grad_fn_handle.type == "accumulategrad"
     )
 
     assert _param_module_for_accumulate_grad(trace, accumulate_grad) == "scale:1"
@@ -211,7 +209,7 @@ def test_draw_combined_backward_node_spec_fn_callback(tmp_path: Path) -> None:
 
     def backward_node_spec_fn(grad_fn_handle: object, default_spec: NodeSpec) -> NodeSpec:
         """Tint one backward node."""
-        if getattr(grad_fn_handle, "grad_fn_type", "") == "relu":
+        if getattr(grad_fn_handle, "type", "") == "relu":
             default_spec.fillcolor = "#ABCDEF"
         return default_spec
 

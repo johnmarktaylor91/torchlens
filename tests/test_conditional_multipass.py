@@ -278,8 +278,8 @@ def test_rolled_mixed_arm_model_records_per_arm_edge_ops() -> None:
     assert len(else_edges) == 2
 
     parent_label, child_label = then_edges[0]
-    parent_no_pass = trace[parent_label].layer_label_no_pass
-    child_no_pass = trace[child_label].layer_label_no_pass
+    parent_no_pass = trace[parent_label].layer_label
+    child_no_pass = trace[child_label].layer_label
 
     assert trace.conditional_edge_call_indices[
         (parent_no_pass, child_no_pass, conditional_id, "then")

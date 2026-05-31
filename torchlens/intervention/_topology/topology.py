@@ -377,7 +377,7 @@ def build_supergraph(traces: List["Trace"], names: List[str]) -> Supergraph:
                         ref = trace[parent_label]
                     except (KeyError, IndexError):
                         continue
-                    parent_no_pass = getattr(ref, "layer_label_no_pass", None)
+                    parent_no_pass = getattr(ref, "layer_label", None)
                     if parent_no_pass is None:
                         continue
                     parent_layer = trace.layer_logs.get(parent_no_pass)

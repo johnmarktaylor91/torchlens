@@ -46,7 +46,7 @@ def test_out_postfunc_keeps_raw_tensor_and_transformed_metadata() -> None:
     """Activation postfunc stores raw and transformed tensors separately."""
 
     x = torch.randn(2, 4)
-    trace = tl.trace(_TinyModel(), x, out_postfunc=lambda t: t.mean())
+    trace = tl.trace(_TinyModel(), x, activation_transform=lambda t: t.mean())
     layer = _first_transformed_layer(trace)
 
     assert layer.tensor is layer.out
@@ -70,13 +70,13 @@ def test_transformed_out_absent_without_postfunc() -> None:
 
 
 def test_save_raw_outs_false_keeps_raw_metadata_only() -> None:
-    """save_raw_outs=False drops raw tensor storage but preserves raw metadata."""
+    """save_raw_activations=False drops raw tensor storage but preserves raw metadata."""
 
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4),
-        out_postfunc=lambda t: t.mean(),
-        save_raw_outs=False,
+        activation_transform=lambda t: t.mean(),
+        save_raw_activations=False,
     )
     layer = _first_transformed_layer(trace)
 
@@ -95,7 +95,7 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
         gradients_to_save="all",
-        gradient_transform=lambda t: t.mean(),
+        grad_transform=lambda t: t.mean(),
     )
     trace.log_backward(_output_loss(trace))
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
@@ -117,7 +117,7 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
         gradients_to_save="all",
-        gradient_transform=lambda t: t.mean(),
+        grad_transform=lambda t: t.mean(),
         save_raw_gradients=False,
     )
     trace.log_backward(_output_loss(trace))
@@ -138,7 +138,7 @@ def test_train_mode_out_postfunc_detach_rejected() -> None:
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
             backward_ready=True,
-            out_postfunc=lambda t: t.detach(),
+            activation_transform=lambda t: t.detach(),
         )
 
 
@@ -150,7 +150,7 @@ def test_train_mode_out_postfunc_int_rejected() -> None:
             _TinyModel(),
             torch.randn(2, 4, requires_grad=True),
             backward_ready=True,
-            out_postfunc=lambda t: t.to(torch.int64),
+            activation_transform=lambda t: t.to(torch.int64),
         )
 
 
@@ -161,7 +161,7 @@ def test_train_mode_out_postfunc_connected_ops() -> None:
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
         backward_ready=True,
-        out_postfunc=lambda t: t * 2,
+        activation_transform=lambda t: t * 2,
     )
 
     assert _first_transformed_layer(trace).transformed_out.grad_fn is not None
@@ -176,10 +176,10 @@ def test_postfunc_error_has_context_and_cause() -> None:
         raise ValueError("sentinel")
 
     with pytest.raises(tl.TorchLensPostfuncError) as exc_info:
-        tl.trace(_TinyModel(), torch.randn(2, 4), out_postfunc=_raise)
+        tl.trace(_TinyModel(), torch.randn(2, 4), activation_transform=_raise)
 
     message = str(exc_info.value)
-    assert "out_postfunc raised" in message
+    assert "activation_transform raised" in message
     assert "layer" in message
     assert "func=" in message
     assert "shape=" in message
@@ -191,7 +191,7 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
     """Portable save/load preserves transformed out fields."""
 
     bundle_path = tmp_path / "postfunc_bundle.tl"
-    trace = tl.trace(_TinyModel(), torch.randn(2, 4), out_postfunc=torch.mean)
+    trace = tl.trace(_TinyModel(), torch.randn(2, 4), activation_transform=torch.mean)
     layer = _first_transformed_layer(trace)
 
     tl.save(trace, bundle_path)
@@ -220,7 +220,7 @@ def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4),
-        out_postfunc=torch.mean,
+        activation_transform=torch.mean,
         save_outs_to=bundle_path,
         layers_to_save="all",
     )

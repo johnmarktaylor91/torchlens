@@ -144,8 +144,8 @@ class DiskStorageBackend:
         intent:
             Storage intent resolved from streaming options.
         options:
-            Recording options carrying ``out_postfunc`` /
-            ``save_raw_outs``.
+            Recording options carrying ``activation_transform`` /
+            ``save_raw_activations``.
         ctx:
             Record context used to enrich postfunc error messages.
 
@@ -156,14 +156,14 @@ class DiskStorageBackend:
             transformed_disk_payload)``. Any element may be ``None``.
         """
 
-        transform = options.gradient_transform if kind == "grad" else options.out_transform
-        save_raw = options.save_raw_gradients if kind == "grad" else options.save_raw_outs
+        transform = options.grad_transform if kind == "grad" else options.activation_transform
+        save_raw = options.save_raw_gradients if kind == "grad" else options.save_raw_activations
         return _resolve_storage(
             tensor,
             spec,
             intent,
-            out_postfunc=transform,
-            save_raw_outs=save_raw,
+            activation_transform=transform,
+            save_raw_activations=save_raw,
             ctx=ctx,
             kind="grad" if kind == "grad" else "activation",
         )
@@ -395,7 +395,7 @@ def _write_metadata(path: Path, recording: Recording, options: RecordingOptions)
         "keep_op_repr": recording.keep_op_repr,
         "keep_module_repr": recording.keep_module_repr,
         "_out_transform_repr": recording._out_transform_repr,
-        "save_raw_outs": options.save_raw_outs,
+        "save_raw_activations": options.save_raw_activations,
         "history_size": options.history_size,
     }
     with path.open("w", encoding="utf-8") as handle:

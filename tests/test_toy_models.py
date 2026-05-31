@@ -1553,9 +1553,9 @@ def test_trace_save_arg_values(default_input1):
 
 
 def test_trace_out_postfunc(default_input1):
-    """Test out_postfunc applies to saved tensors."""
+    """Test activation_transform applies to saved tensors."""
     model = example_models.SimpleFF()
-    mh = trace(model, default_input1, out_postfunc=torch.mean)
+    mh = trace(model, default_input1, activation_transform=torch.mean)
     # All saved tensors should be scalar (mean reduces to scalar)
     for label in mh.layer_labels:
         entry = mh[label]

@@ -35,19 +35,19 @@ class GradFnCall:
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "call_index": FieldPolicy.KEEP,
-        "grad_fn_label": FieldPolicy.KEEP,
+        "label": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
-        "time_started": FieldPolicy.KEEP,
-        "time_finished": FieldPolicy.KEEP,
+        "_time_started": FieldPolicy.KEEP,
+        "_time_finished": FieldPolicy.KEEP,
     }
 
     call_index: int
-    grad_fn_label: str = ""
+    label: str = ""
     grad_inputs: Any = None
     grad_outputs: Any = None
-    time_started: float | None = None
-    time_finished: float | None = None
+    _time_started: float | None = None
+    _time_finished: float | None = None
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -63,16 +63,16 @@ class GradFnCall:
         default_fill_state(
             state,
             defaults={
-                "grad_fn_label": "",
+                "label": "",
                 "grad_inputs": None,
                 "grad_outputs": None,
-                "time_started": None,
-                "time_finished": None,
+                "_time_started": None,
+                "_time_finished": None,
             },
         )
-        if "duration" in state and "time_started" not in state and "time_finished" not in state:
-            state["time_started"] = 0.0
-            state["time_finished"] = float(state.pop("duration"))
+        if "duration" in state and "_time_started" not in state and "_time_finished" not in state:
+            state["_time_started"] = 0.0
+            state["_time_finished"] = float(state.pop("duration"))
         self.__dict__.update(state)
 
     @property
@@ -85,11 +85,7 @@ class GradFnCall:
             GradFn label with the 1-based call index suffix.
         """
 
-        return (
-            f"{self.grad_fn_label}:{self.call_index}"
-            if self.grad_fn_label
-            else str(self.call_index)
-        )
+        return f"{self.label}:{self.call_index}" if self.label else str(self.call_index)
 
     @property
     def backward_duration(self) -> float:
@@ -98,12 +94,12 @@ class GradFnCall:
         Returns
         -------
         float
-            Seconds elapsed between ``time_started`` and ``time_finished``.
+            Seconds elapsed between ``_time_started`` and ``_time_finished``.
         """
 
-        if self.time_started is None or self.time_finished is None:
+        if self._time_started is None or self._time_finished is None:
             return 0.0
-        return max(0.0, self.time_finished - self.time_started)
+        return max(0.0, self._time_finished - self._time_started)
 
     @property
     def backward_duration_str(self) -> str:

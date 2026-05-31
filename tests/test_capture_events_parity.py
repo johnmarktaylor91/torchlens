@@ -341,8 +341,8 @@ def _drop_capture_scratch(trace: Any) -> None:
         "_defer_streaming_bundle_finalization",
     ):
         trace.__dict__.pop(field_name, None)
-    if trace.__dict__.get("orphan_logs") is None:
-        trace.__dict__["orphan_logs"] = ()
+    if trace.__dict__.get("_orphan_logs") is None:
+        trace.__dict__["_orphan_logs"] = ()
     if "forward_source_line" in trace.__dict__:
         trace.__dict__["forward_source_line"] = None
     if "class_source_line" in trace.__dict__:

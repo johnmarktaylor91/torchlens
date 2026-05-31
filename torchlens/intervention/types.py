@@ -773,8 +773,8 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
     return _fork_policy_table(
         MODEL_LOG_FIELD_ORDER,
         share={
-            "out_postfunc",
-            "gradient_transform",
+            "activation_transform",
+            "grad_transform",
             "_output_transform",
             "_source_code_blob",
             "_source_model_ref",

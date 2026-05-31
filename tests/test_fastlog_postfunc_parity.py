@@ -1,4 +1,4 @@
-"""Behavioral coverage for fastlog ``out_postfunc`` parity.
+"""Behavioral coverage for fastlog ``activation_transform`` parity.
 
 Mirrors the slow-path raw-vs-transformed contract added in PR #166 while
 documenting the intentional fastlog divergence:
@@ -8,7 +8,7 @@ documenting the intentional fastlog divergence:
 * The postfunc runs in ``_storage_resolver`` after predicate selection,
   so predicates continue to see raw metadata.
 * ``dry_run()`` does not invoke the postfunc.
-* No ``gradient_transform`` is exposed.
+* No ``grad_transform`` is exposed.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def test_postfunc_replaces_transformed_payload_with_raw_kept() -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        out_postfunc=lambda t: t.float() * 2,
+        activation_transform=lambda t: t.float() * 2,
     )
 
     records = _out_records(recording)
@@ -92,13 +92,13 @@ def test_postfunc_replaces_transformed_payload_with_raw_kept() -> None:
 
 
 def test_out_transform_canonical_name_matches_postfunc_alias() -> None:
-    """Fastlog accepts out_transform as the canonical transform name."""
+    """Fastlog accepts activation_transform as the canonical transform name."""
 
     recording = tl.fastlog.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        out_transform=lambda t: t.float() * 2,
+        activation_transform=lambda t: t.float() * 2,
     )
 
     records = _out_records(recording)
@@ -119,8 +119,8 @@ def test_save_raw_outs_false_drops_raw_payload() -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        out_postfunc=lambda t: t.float() * 0.5,
-        save_raw_outs=False,
+        activation_transform=lambda t: t.float() * 0.5,
+        save_raw_activations=False,
     )
 
     records = _out_records(recording)
@@ -156,7 +156,7 @@ def test_disk_only_mode_persists_transformed_blob(tmp_path: Path) -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        out_postfunc=lambda t: t.float() * 2,
+        activation_transform=lambda t: t.float() * 2,
         streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 
@@ -194,7 +194,7 @@ def test_ram_disk_mirror_populates_both_transformed_payloads(tmp_path: Path) -> 
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        out_postfunc=lambda t: t.float() * 3,
+        activation_transform=lambda t: t.float() * 3,
         streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=True),
     )
 
@@ -223,7 +223,7 @@ def test_train_mode_well_behaved_postfunc_keeps_graph_connected_payload() -> Non
         model,
         torch.ones(1, 3),
         default_op=CaptureSpec(keep_grad=True),
-        out_postfunc=lambda t: t * 2,
+        activation_transform=lambda t: t * 2,
     )
 
     records = _out_records(recording)
@@ -245,7 +245,7 @@ def test_train_mode_detaching_postfunc_rejected() -> None:
             _PostfuncModel(),
             torch.ones(1, 3),
             default_op=CaptureSpec(keep_grad=True),
-            out_postfunc=lambda t: t.detach(),
+            activation_transform=lambda t: t.detach(),
         )
 
 
@@ -257,7 +257,7 @@ def test_train_mode_integer_postfunc_rejected() -> None:
             _PostfuncModel(),
             torch.ones(1, 3),
             default_op=CaptureSpec(keep_grad=True),
-            out_postfunc=lambda t: t.to(torch.int64),
+            activation_transform=lambda t: t.to(torch.int64),
         )
 
 
@@ -269,7 +269,7 @@ def test_source_events_receive_postfunc_outputs() -> None:
         torch.ones(1, 3),
         default_op=True,
         include_source_events=True,
-        out_postfunc=lambda t: t.float() * 4,
+        activation_transform=lambda t: t.float() * 4,
     )
 
     source_records = [record for record in recording.records if record.ctx.kind == "input"]
@@ -303,7 +303,7 @@ def test_predicate_postfunc_invocation_count_matches_kept_events() -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         keep_op=keep_op,
-        out_postfunc=counting_postfunc,
+        activation_transform=counting_postfunc,
     )
 
     selected = _out_records(recording)
@@ -322,7 +322,7 @@ def test_dry_run_does_not_invoke_postfunc() -> None:
         invocations[0] += 1
         return t
 
-    # dry_run does not accept out_postfunc, but it shares the
+    # dry_run does not accept activation_transform, but it shares the
     # storage resolver path. We exercise the same callable via a
     # full Recorder with no_tensor_capture toggled like dry_run does.
     trace = tl.fastlog.dry_run(
@@ -348,7 +348,7 @@ def test_postfunc_error_wrapped_with_event_context() -> None:
             _PostfuncModel(),
             torch.ones(1, 3),
             default_op=True,
-            out_postfunc=boom,
+            activation_transform=boom,
         )
 
     message = str(exc_info.value)
@@ -373,7 +373,7 @@ def test__out_transform_repr_exposed_and_persisted(tmp_path: Path) -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        out_postfunc=named_postfunc,
+        activation_transform=named_postfunc,
     )
     assert recording._out_transform_repr is not None
     assert "named_postfunc" in recording._out_transform_repr
@@ -383,7 +383,7 @@ def test__out_transform_repr_exposed_and_persisted(tmp_path: Path) -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        out_postfunc=named_postfunc,
+        activation_transform=named_postfunc,
         streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
@@ -401,7 +401,7 @@ def test_postfunc_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        out_postfunc=lambda t: t.float() * 2,
+        activation_transform=lambda t: t.float() * 2,
         streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 

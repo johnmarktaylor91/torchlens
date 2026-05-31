@@ -229,7 +229,7 @@ def _normalize_grad_fn_type(grad_fn_handle: Any) -> str:
 
 def _grad_fn_label_parts(
     trace: Any,
-    grad_fn_type: str,
+    type: str,
     layer_label: str | None,
     type_counter: dict[str, int],
     total_num: int,
@@ -240,7 +240,7 @@ def _grad_fn_label_parts(
     ----------
     trace:
         Trace being updated.
-    grad_fn_type:
+    type:
         Normalized grad_fn_handle type.
     layer_label:
         Matching forward layer label, or ``None`` for intervening grad_fns.
@@ -259,9 +259,9 @@ def _grad_fn_label_parts(
         type_num = layer.type_index
         total_num = layer.step_index
     else:
-        type_counter[grad_fn_type] = type_counter.get(grad_fn_type, 0) + 1
-        type_num = type_counter[grad_fn_type]
-    label = f"{grad_fn_type}_back_{type_num}_{total_num}"
+        type_counter[type] = type_counter.get(type, 0) + 1
+        type_num = type_counter[type]
+    label = f"{type}_back_{type_num}_{total_num}"
     return type_num, total_num, label
 
 
@@ -448,8 +448,8 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
     strong_refs = trace.__dict__.setdefault("_backward_gradfn_refs", [])
     strong_refs.append(loss.grad_fn)
     root_grad_fn_id = id(loss.grad_fn)
-    if root_grad_fn_id not in trace.backward_root_grad_fn_ids:
-        trace.backward_root_grad_fn_ids.append(root_grad_fn_id)
+    if root_grad_fn_id not in trace.backward_root_grad_fn_object_ids:
+        trace.backward_root_grad_fn_object_ids.append(root_grad_fn_id)
     trace.has_backward_pass = True
 
     while queue:
@@ -465,13 +465,13 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
         grad_fn_record = trace.grad_fn_logs.get(grad_fn_object_id)
         if grad_fn_record is None:
             grad_fn_type = _normalize_grad_fn_type(grad_fn_handle)
-            grad_fn_total_num = len(trace.grad_fn_order) + 1
-            grad_fn_type_num, grad_fn_total_num, label = _grad_fn_label_parts(
+            ordinal_index = len(trace.grad_fn_order) + 1
+            type_index, ordinal_index, label = _grad_fn_label_parts(
                 trace,
                 grad_fn_type,
                 layer_label,
                 type_counter,
-                grad_fn_total_num,
+                ordinal_index,
             )
             grad_fn_cls = type(grad_fn_handle)
             grad_fn_record = GradFn(
@@ -479,10 +479,10 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 class_name=grad_fn_cls.__name__,
                 class_qualname=f"{grad_fn_cls.__module__}.{grad_fn_cls.__qualname__}",
                 label=label,
-                grad_fn_type=grad_fn_type,
-                grad_fn_type_num=grad_fn_type_num,
-                grad_fn_total_num=grad_fn_total_num,
-                step_index=grad_fn_total_num,
+                type=grad_fn_type,
+                type_index=type_index,
+                ordinal_index=ordinal_index,
+                step_index=ordinal_index,
                 is_custom=_grad_fn_is_custom(grad_fn_handle),
                 has_op=layer_label is not None,
                 op_label=layer_label,
@@ -504,7 +504,7 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
         if layer_label is not None:
             layer = trace[layer_label]
             layer.grad_fn = grad_fn_record
-            parent_layer = trace.layer_logs.get(layer.layer_label_no_pass)
+            parent_layer = trace.layer_logs.get(layer.layer_label)
             if parent_layer is not None:
                 parent_layer.grad_fn = grad_fn_record
         try:
@@ -656,7 +656,7 @@ def _make_recording_grad_hook(
     recording_state: Any,
     recording: Any,
     grad_fn_handle: Any,
-    grad_fn_label: str,
+    label: str,
     *,
     keep_grad: Any,
     default_grad: Any,
@@ -677,7 +677,7 @@ def _make_recording_grad_hook(
             recording_state,
             grad_fn_handle,
             grad,
-            grad_fn_label=grad_fn_label,
+            label=label,
             grad_kind=grad_kind_literal,
             backward_call_index=backward_call_index,
             grad_input_index=grad_index if grad_kind == "grad_input" else None,
@@ -754,16 +754,14 @@ def log_recording_backward(
         for index, grad_fn_handle in enumerate(nodes, start=1):
             forward_ctx = recording_state.grad_fn_to_context.get(grad_fn_handle)
             layer_label = forward_ctx.label if forward_ctx is not None else None
-            grad_fn_label = _recording_grad_fn_label(
-                grad_fn_handle, layer_label, type_counter, index
-            )
+            label = _recording_grad_fn_label(grad_fn_handle, layer_label, type_counter, index)
             handles.append(
                 grad_fn_handle.register_hook(
                     _make_recording_grad_hook(
                         recording_state,
                         recording,
                         grad_fn_handle,
-                        grad_fn_label,
+                        label,
                         keep_grad=effective_keep_grad,
                         default_grad=effective_default_grad,
                         selected_forward_labels=selected_forward_labels,
@@ -870,7 +868,7 @@ def _run_backward_with_capture(
     trace.total_param_gradient_memory = sum(
         param_log.gradient_memory for param_log in getattr(trace, "param_logs", [])
     )
-    trace.backward_num_calls += 1
+    trace.num_backward_passes += 1
     return result
 
 

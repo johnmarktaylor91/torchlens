@@ -109,11 +109,11 @@ def _add_output_layers(
 
         new_output_node.module = None
         new_output_node.modules = []
-        new_output_node.modules_entered = []
-        new_output_node.input_to_module_calls = []
+        new_output_node.module_call_stack = []
+        new_output_node.input_to_modules = []
         new_output_node.output_of_modules = [mod_pass[0] for mod_pass in output_node.modules]
         new_output_node.output_of_module_calls = output_node.modules
-        new_output_node.is_submodule_output = False
+        new_output_node.is_module_output = False
         new_output_node.is_atomic_module = False
 
         # Fix ancestry information:
@@ -150,10 +150,10 @@ def _add_output_layers(
             if output_node.output_device not in [str(actual_output.device), "same"]:
                 actual_output = safe_to(actual_output, output_node.output_device)
             actual_output_raw = actual_output
-            if self.out_postfunc is not None:
+            if self.activation_transform is not None:
                 actual_output = output_node._apply_postfunc(
                     actual_output,
-                    self.out_postfunc,
+                    self.activation_transform,
                     postfunc_kind="out",
                     streaming_active=getattr(self, "_out_writer", None) is not None,
                 )
@@ -249,8 +249,8 @@ def _remove_orphan_nodes(self: "Trace") -> None:
 
     nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen)
     orphan_nodes = orig_nodes - nodes_seen
-    self.orphan_ops = [label for label in self._raw_layer_labels_list if label in orphan_nodes]
-    self.orphan_logs = tuple(self._raw_layer_dict[label] for label in self.orphan_ops)
+    self._orphan_labels = [label for label in self._raw_layer_labels_list if label in orphan_nodes]
+    self._orphan_logs = tuple(self._raw_layer_dict[label] for label in self._orphan_labels)
     if getattr(self, "keep_orphans", False):
         for orphan_label in orphan_nodes:
             self._raw_layer_dict[orphan_label].is_orphan = True

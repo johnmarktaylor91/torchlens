@@ -374,17 +374,17 @@ def test_out_transform_flat_kwarg_routes_to_runner(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
-            out_transform=transform,
+            activation_transform=transform,
         )
 
-    assert captured["out_transform"] is transform
+    assert captured["activation_transform"] is transform
     assert len(_deprecation_messages(records)) == 1
 
 
 def test_out_postfunc_flat_kwarg_warns_and_routes_to_transform(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
 ) -> None:
-    """Deprecated out postfunc kwarg should forward to out_transform."""
+    """Deprecated out postfunc kwarg should forward to activation_transform."""
 
     captured, _dummy_log = stubbed_runner
 
@@ -399,18 +399,18 @@ def test_out_postfunc_flat_kwarg_warns_and_routes_to_transform(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
-            out_postfunc=transform,
+            activation_transform=transform,
         )
 
-    assert captured["out_transform"] is transform
+    assert captured["activation_transform"] is transform
     assert _deprecation_messages(records)[0] == (
-        "`out_postfunc` is deprecated; use `out_transform` instead. "
+        "`activation_transform` is deprecated; use `activation_transform` instead. "
         "The old name continues to work but will be removed in a future release."
     )
 
 
 def test_save_options_out_postfunc_alias_warns() -> None:
-    """Deprecated SaveOptions out_postfunc alias should still work."""
+    """Deprecated SaveOptions activation_transform alias should still work."""
 
     def transform(tensor: torch.Tensor) -> torch.Tensor:
         """Return a transformed tensor for routing assertions."""
@@ -419,11 +419,11 @@ def test_save_options_out_postfunc_alias_warns() -> None:
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        options = SaveOptions(out_postfunc=transform)
+        options = SaveOptions(activation_transform=transform)
 
-    assert options.out_transform is transform
+    assert options.activation_transform is transform
     assert _deprecation_messages(records) == [
-        "`out_postfunc` is deprecated; use `save.out_transform` instead. "
+        "`activation_transform` is deprecated; use `save.activation_transform` instead. "
         "The old name continues to work but will be removed in a future release."
     ]
 

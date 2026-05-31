@@ -159,9 +159,9 @@ def _trace_mlx_model(
     save_visualizations: bool | MissingType,
     keep_orphans: bool | MissingType,
     output_device: OutputDeviceLiteral | MissingType,
-    out_transform: ActivationPostfunc | None | MissingType,
-    gradient_transform: GradientPostfunc | None | MissingType,
-    save_raw_outs: bool | MissingType,
+    activation_transform: ActivationPostfunc | None | MissingType,
+    grad_transform: GradientPostfunc | None | MissingType,
+    save_raw_activations: bool | MissingType,
     save_raw_gradients: bool | MissingType,
     save_arg_values: bool | MissingType,
     save_gradients: bool | MissingType,
@@ -194,10 +194,10 @@ def _trace_mlx_model(
         Captured technical-preview MLX trace.
     """
 
-    if out_transform is MISSING:
+    if activation_transform is MISSING:
         resolved_out_transform = None
     else:
-        resolved_out_transform = out_transform
+        resolved_out_transform = activation_transform
     capture_options = merge_capture_options(
         capture=capture,
         layers_to_save=layers_to_save,
@@ -236,9 +236,9 @@ def _trace_mlx_model(
     )
     save_options = merge_save_options(
         save=save,
-        out_transform=resolved_out_transform,
-        gradient_transform=gradient_transform,
-        save_raw_outs=save_raw_outs,
+        activation_transform=resolved_out_transform,
+        grad_transform=grad_transform,
+        save_raw_activations=save_raw_activations,
         save_raw_gradients=save_raw_gradients,
     )
     if capture_options.intervention_ready:
@@ -278,8 +278,8 @@ def _trace_mlx_model(
         layers_to_save=capture_options.layers_to_save,
         keep_orphans=capture_options.keep_orphans,
         output_device=capture_options.output_device,
-        out_transform=save_options.out_transform,
-        save_raw_outs=save_options.save_raw_outs,
+        activation_transform=save_options.activation_transform,
+        save_raw_activations=save_options.save_raw_activations,
         detach_saved_activations=capture_options.detach_saved_activations,
         save_gradients=capture_options.save_gradients,
         gradients_to_save=capture_options.gradients_to_save,
@@ -904,9 +904,9 @@ def _run_model_and_save_specified_outs(
     layers_to_save: str | list[int | str] | None = "all",
     keep_orphans: bool = False,
     output_device: OutputDeviceLiteral = "same",
-    out_transform: ActivationPostfunc | None = None,
-    gradient_transform: GradientPostfunc | None = None,
-    save_raw_outs: bool = True,
+    activation_transform: ActivationPostfunc | None = None,
+    grad_transform: GradientPostfunc | None = None,
+    save_raw_activations: bool = True,
     save_raw_gradients: bool = True,
     mark_layer_depths: bool = False,
     detach_saved_activations: bool = False,
@@ -959,12 +959,12 @@ def _run_model_and_save_specified_outs(
         keep_orphans: If True, island ops are retained in raw metadata and exposed via
             ``trace.orphans`` while remaining hidden from the main graph.
         output_device: Device for saved tensors: 'same' (default), 'cpu', or 'cuda'.
-        out_transform: Optional transform applied to each out before storage
+        activation_transform: Optional transform applied to each out before storage
             (e.g., channel-wise averaging to reduce memory).
-        gradient_transform: Optional transform applied to each grad before storage.
-        save_raw_outs: Whether raw outs are retained when ``out_transform``
+        grad_transform: Optional transform applied to each grad before storage.
+        save_raw_activations: Whether raw outs are retained when ``activation_transform``
             is set. Metadata always describes the raw out.
-        save_raw_gradients: Whether raw grads are retained when ``gradient_transform`` is set.
+        save_raw_gradients: Whether raw grads are retained when ``grad_transform`` is set.
             Metadata always describes the raw grad.
         mark_layer_depths: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
@@ -1048,9 +1048,9 @@ def _run_model_and_save_specified_outs(
     trace = Trace(
         model_class_name=model_class_name,
         output_device=output_device,
-        out_postfunc=out_transform,
-        gradient_transform=gradient_transform,
-        save_raw_outs=save_raw_outs,
+        activation_transform=activation_transform,
+        grad_transform=grad_transform,
+        save_raw_activations=save_raw_activations,
         save_raw_gradients=save_raw_gradients,
         keep_orphans=keep_orphans,
         save_arg_values=save_arg_values,
@@ -1228,12 +1228,10 @@ def trace(
     save_raw_output: str | bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
-    out_transform: ActivationPostfunc | None | MissingType = MISSING,
-    gradient_transform: GradientPostfunc | None | MissingType = MISSING,
-    gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
-    save_raw_outs: bool | MissingType = MISSING,
+    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    save_raw_activations: bool | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
-    out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
     mark_layer_depths: bool | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
     save_arg_values: bool | MissingType = MISSING,
@@ -1315,17 +1313,17 @@ def trace(
         keep_orphans: If True, retain island ops in raw metadata and expose them via
             ``trace.orphans``. Default False preserves pruning behavior.
         output_device: Device for stored tensors: ``'same'``, ``'cpu'``, or ``'cuda'``.
-        out_transform: Optional function applied to each out before saving. The
+        activation_transform: Optional function applied to each out before saving. The
             raw out remains in ``layer.tensor``/``layer.out`` by default, and
             the transform result is stored in ``layer.transformed_out``.
-        gradient_transform: Optional function applied to each grad before saving. The raw
+        grad_transform: Optional function applied to each grad before saving. The raw
             grad remains in ``layer.grad`` by default, and the postfunc result is stored
             in ``layer.transformed_grad``.
-        gradient_postfunc: Alias for ``gradient_transform``. Passing both names is an error.
-        out_postfunc: Deprecated alias for ``out_transform``.
-        save_raw_outs: When ``False`` and ``out_transform`` is set, do not retain
+        grad_transform: Alias for ``grad_transform``. Passing both names is an error.
+        activation_transform: Deprecated alias for ``activation_transform``.
+        save_raw_activations: When ``False`` and ``activation_transform`` is set, do not retain
             raw out tensors in memory; raw out metadata is still populated.
-        save_raw_gradients: When ``False`` and ``gradient_transform`` is set, do not retain raw
+        save_raw_gradients: When ``False`` and ``grad_transform`` is set, do not retain raw
             grad tensors in memory; raw grad metadata is still populated.
         mark_layer_depths: Deprecated alias for
             ``compute_input_output_distances``.
@@ -1393,7 +1391,7 @@ def trace(
         stop_after: Experimental stop-early site. Unsupported for ``trace``.
 
     Postfunc behavior:
-        ``out_transform`` and ``gradient_transform`` both take a tensor, should return a
+        ``activation_transform`` and ``grad_transform`` both take a tensor, should return a
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
         raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
 
@@ -1420,12 +1418,10 @@ def trace(
             "save_raw_output": save_raw_output,
             "keep_orphans": keep_orphans,
             "output_device": output_device,
-            "out_transform": out_transform,
-            "gradient_transform": gradient_transform,
-            "gradient_postfunc": gradient_postfunc,
-            "save_raw_outs": save_raw_outs,
+            "activation_transform": activation_transform,
+            "grad_transform": grad_transform,
+            "save_raw_activations": save_raw_activations,
             "save_raw_gradients": save_raw_gradients,
-            "out_postfunc": out_postfunc,
             "mark_layer_depths": mark_layer_depths,
             "detach_saved_activations": detach_saved_activations,
             "save_arg_values": save_arg_values,
@@ -1466,13 +1462,13 @@ def trace(
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
     if _is_mlx_module_instance(model):
-        if out_postfunc is not MISSING:
-            if out_transform is not MISSING:
+        if activation_transform is not MISSING:
+            if activation_transform is not MISSING:
                 raise TypeError(
-                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
+                    "kwarg activation_transform deprecated, use activation_transform; do not pass both"
                 )
-            warn_deprecated_alias("out_postfunc", "out_transform")
-            out_transform = out_postfunc
+            warn_deprecated_alias("activation_transform", "activation_transform")
+            activation_transform = activation_transform
         return _trace_mlx_model(
             model,
             input_args,
@@ -1487,9 +1483,9 @@ def trace(
             save_visualizations=MISSING,
             keep_orphans=keep_orphans,
             output_device=output_device,
-            out_transform=out_transform,
-            gradient_transform=gradient_transform,
-            save_raw_outs=save_raw_outs,
+            activation_transform=activation_transform,
+            grad_transform=grad_transform,
+            save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
             save_arg_values=save_arg_values,
             save_gradients=save_gradients,
@@ -1515,16 +1511,6 @@ def trace(
     if not isinstance(model, nn.Module):
         raise ValueError("Unsupported model type for capture")
     model = _unwrap_data_parallel(model)
-
-    if out_postfunc is not MISSING:
-        if out_transform is not MISSING:
-            raise TypeError("kwarg out_postfunc deprecated, use out_transform; do not pass both")
-        warn_deprecated_alias("out_postfunc", "out_transform")
-        out_transform = out_postfunc
-    if gradient_postfunc is not MISSING:
-        if gradient_transform is not MISSING:
-            raise TypeError("kwarg gradient_postfunc aliases gradient_transform; do not pass both")
-        gradient_transform = gradient_postfunc
 
     capture_options = merge_capture_options(
         capture=capture,
@@ -1580,9 +1566,9 @@ def trace(
     check_model_and_input_variants(model, input_args, input_kwargs)
     save_options = merge_save_options(
         save=save,
-        out_transform=out_transform,
-        gradient_transform=gradient_transform,
-        save_raw_outs=save_raw_outs,
+        activation_transform=activation_transform,
+        grad_transform=grad_transform,
+        save_raw_activations=save_raw_activations,
         save_raw_gradients=save_raw_gradients,
     )
     streaming_options = merge_streaming_options(
@@ -1602,9 +1588,9 @@ def trace(
     save_visualizations_value = capture_options.save_visualizations
     keep_orphans = capture_options.keep_orphans
     output_device = capture_options.output_device
-    out_transform = save_options.out_transform
-    gradient_transform = save_options.gradient_transform
-    save_raw_outs = save_options.save_raw_outs
+    activation_transform = save_options.activation_transform
+    grad_transform = save_options.grad_transform
+    save_raw_activations = save_options.save_raw_activations
     save_raw_gradients = save_options.save_raw_gradients
     save_arg_values = capture_options.save_arg_values
     save_gradients = capture_options.save_gradients
@@ -1743,9 +1729,9 @@ def trace(
             layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
-            out_transform=out_transform,
-            gradient_transform=gradient_transform,
-            save_raw_outs=save_raw_outs,
+            activation_transform=activation_transform,
+            grad_transform=grad_transform,
+            save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
@@ -1803,9 +1789,9 @@ def trace(
             layers_to_save=None,
             keep_orphans=keep_orphans,
             output_device=output_device,
-            out_transform=out_transform,
-            gradient_transform=gradient_transform,
-            save_raw_outs=save_raw_outs,
+            activation_transform=activation_transform,
+            grad_transform=grad_transform,
+            save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
@@ -2104,7 +2090,7 @@ def show_model_graph(
         input_args=input_args,
         input_kwargs=input_kwargs,
         layers_to_save=None,
-        out_transform=None,
+        activation_transform=None,
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_gradients=False,
@@ -2714,7 +2700,7 @@ def validate_forward_pass(
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save="all",
-            out_transform=None,
+            activation_transform=None,
             mark_layer_depths=False,
             detach_saved_activations=False,
             save_gradients=False,

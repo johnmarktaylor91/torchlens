@@ -179,7 +179,7 @@ def _build_preview_nodes(trace: Any, predicate: Predicate | None) -> dict[str, P
             op_counts=op_counts,
         )
         preview_node = _evaluate_preview_node(op_log, ctx, predicate)
-        preview_nodes[getattr(op_log, "layer_label_no_pass", ctx.label)] = preview_node
+        preview_nodes[getattr(op_log, "layer_label", ctx.label)] = preview_node
         preview_nodes[getattr(op_log, "layer_label", ctx.label)] = preview_node
         history.append(ctx)
     return preview_nodes
@@ -196,7 +196,7 @@ def _append_predicate_input_lines(lines: list[str], ctx: RecordContext) -> None:
 def _append_module_event_lines(lines: list[str], layer_log: Any) -> None:
     """Append module entry/exit details when available."""
 
-    entered = tuple(getattr(layer_log, "modules_entered", ()) or ())
+    entered = tuple(getattr(layer_log, "module_call_stack", ()) or ())
     exited = tuple(getattr(layer_log, "output_of_modules", ()) or ())
     if entered:
         lines.append("module_enter: " + ", ".join(str(item) for item in entered))

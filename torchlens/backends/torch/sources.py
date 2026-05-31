@@ -277,12 +277,10 @@ def log_source_tensor_exhaustive(
         "_tracing_finished": False,
         "_construction_done": False,
         # Label Info:
+        "label": None,
+        "label_short": None,
         "layer_label": None,
         "layer_label_short": None,
-        "layer_label_w_pass": None,
-        "layer_label_w_pass_short": None,
-        "layer_label_no_pass": None,
-        "layer_label_no_pass_short": None,
         "type": layer_type,
         "type_index": type_index,
         "pass_index": 1,
@@ -292,7 +290,7 @@ def log_source_tensor_exhaustive(
         "out": None,
         "transformed_out": None,
         "has_saved_activation": False,
-        "out_postfunc": self.out_postfunc,
+        "activation_transform": self.activation_transform,
         "annotations": {},
         "interventions": [],
         "intervention_replaced": False,
@@ -321,7 +319,7 @@ def log_source_tensor_exhaustive(
         "grad": None,
         "transformed_grad": None,
         "save_gradients": self.save_gradients,
-        "has_saved_gradient": False,
+        "has_grad": False,
         "grad_shape": None,
         "transformed_grad_shape": None,
         "grad_dtype": None,
@@ -426,12 +424,12 @@ def log_source_tensor_exhaustive(
         # Module info:
         "module": modules[-1] if modules else None,
         "modules": modules,
-        "modules_entered": [],
+        "module_call_stack": [],
         "module_entry_arg_keys": defaultdict(list),
-        "input_to_module_calls": [],
+        "input_to_modules": [],
         "output_of_modules": [],
         "output_of_module_calls": [],
-        "is_submodule_output": False,
+        "is_module_output": False,
         "is_atomic_module": False,
         "atomic_module_call": None,
         # Function config
@@ -443,7 +441,7 @@ def log_source_tensor_exhaustive(
     from .ops import _make_layer_log_entry
 
     # Creates a Buffer if is_buffer=True, else Op.
-    _make_layer_log_entry(self, t, fields_dict, (), {}, self.out_postfunc)
+    _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_transform)
 
     # Tag the live tensor so downstream operations can find this tensor's label.
     set_tensor_label(t, tensor_label)
@@ -479,7 +477,7 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
     _label_raw = f"{layer_type}_{type_index}_raw"
     # Tag tensor for downstream fast-path ops to identify it.
     set_tensor_label(t, _label_raw)
-    if _label_raw in self.orphan_ops:
+    if _label_raw in self._orphan_labels:
         return
     orig_tensor_label = self._raw_to_final_layer_labels.get(_label_raw)
     if orig_tensor_label is None:
@@ -488,11 +486,11 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
             f"This usually means the computational graph changed between the exhaustive pass "
             f"and this fast pass (e.g., dynamic control flow). Use trace() instead."
         )
-    orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
+    orig_layer_entry = self[orig_tensor_label]
     previous_shape = orig_layer_entry.shape
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     if (layer_nums_to_save == "all") or (orig_layer_entry.raw_index in layer_nums_to_save):
-        orig_layer_entry.save_activation(t, [], {}, self.save_arg_values, self.out_postfunc)
+        orig_layer_entry.save_activation(t, [], {}, self.save_arg_values, self.activation_transform)
 
     # Minimal graph consistency validation (#99)
     new_shape = tuple(t.shape)

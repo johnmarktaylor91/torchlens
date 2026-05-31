@@ -74,8 +74,8 @@ def external_overlay_value(node: Any, scores: OverlayScores) -> Any:
 
     candidates = (
         getattr(node, "layer_label", None),
-        getattr(node, "layer_label_w_pass", None),
-        getattr(node, "layer_label_no_pass", None),
+        getattr(node, "label", None),
+        getattr(node, "layer_label", None),
     )
     for candidate in candidates:
         if isinstance(candidate, str) and candidate in scores:

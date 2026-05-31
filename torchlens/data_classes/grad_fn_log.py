@@ -81,7 +81,7 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
         return iter(self._dict)
 
     def _resolve_pass_qualified(self, key: str) -> GradFnCall | None:
-        """Resolve ``grad_fn_label:pass`` notation to a GradFnCall."""
+        """Resolve ``label:pass`` notation to a GradFnCall."""
         base, _, call_index_str = key.rpartition(":")
         if base == self._label:
             try:
@@ -136,9 +136,9 @@ class GradFn:
         "class_qualname": FieldPolicy.KEEP,
         "is_custom": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,
-        "grad_fn_type": FieldPolicy.KEEP,
-        "grad_fn_type_num": FieldPolicy.KEEP,
-        "grad_fn_total_num": FieldPolicy.KEEP,
+        "type": FieldPolicy.KEEP,
+        "type_index": FieldPolicy.KEEP,
+        "ordinal_index": FieldPolicy.KEEP,
         "step_index": FieldPolicy.KEEP,
         "has_op": FieldPolicy.KEEP,
         "op_label": FieldPolicy.KEEP,
@@ -171,9 +171,9 @@ class GradFn:
     class_qualname: str
     is_custom: bool
     label: str
-    grad_fn_type: str
-    grad_fn_type_num: int
-    grad_fn_total_num: int
+    type: str
+    type_index: int
+    ordinal_index: int
     step_index: int = 0
     has_op: bool = False
     op_label: str | None = None
@@ -208,7 +208,7 @@ class GradFn:
         else:
             self.ops._label = self.label
         for call in self.ops.values():
-            call.grad_fn_label = self.label
+            call.label = self.label
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -355,18 +355,6 @@ class GradFn:
         return None
 
     @property
-    def grad_fn_label(self) -> str:
-        """Return the canonical grad_fn_handle label.
-
-        Returns
-        -------
-        str
-            Grad-fn label.
-        """
-
-        return self.label
-
-    @property
     def class_source_location(self) -> str | None:
         """Return the grad-fn class source location.
 
@@ -469,11 +457,11 @@ class GradFn:
         call_index = len(self.ops) + 1
         self.ops[call_index] = GradFnCall(
             call_index=call_index,
-            grad_fn_label=self.label,
+            label=self.label,
             grad_inputs=_clone_grad_value(grad_inputs),
             grad_outputs=_clone_grad_value(grad_outputs),
-            time_started=timestamp,
-            time_finished=timestamp,
+            _time_started=timestamp,
+            _time_finished=timestamp,
         )
 
     def to_pandas(self) -> "pd.DataFrame":
@@ -523,7 +511,7 @@ class GradFnAccessor(Accessor[GradFn]):
         return super().__getitem__(key)
 
     def _resolve_pass_qualified(self, key: str) -> GradFn | None:
-        """Resolve ``grad_fn_label:pass`` notation to the parent GradFn."""
+        """Resolve ``label:pass`` notation to the parent GradFn."""
         base, _, pass_str = key.rpartition(":")
         try:
             int(pass_str)

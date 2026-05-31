@@ -46,7 +46,7 @@ class OutputRef:
     transformed_tensor: TensorRef | None
     has_saved_activation: bool
     output_device: str | None
-    out_postfunc: object | None
+    activation_transform: object | None
     detach_saved_activations: bool
     visualizer_path: str | None
     multi_output_index: int | None

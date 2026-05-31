@@ -362,7 +362,7 @@ def validate_backward_pass(
             check_metadata_invariants(trace)
         if perturb_saved_grads:
             for layer in trace.layer_list:
-                if layer.has_saved_gradient and isinstance(layer.grad, torch.Tensor):
+                if layer.has_grad and isinstance(layer.grad, torch.Tensor):
                     layer.grad = layer.grad + torch.randn_like(layer.grad)
                     break
         observed_param_grads = _param_grads(model)

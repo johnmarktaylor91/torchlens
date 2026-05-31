@@ -138,7 +138,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     self.saved_activation_memory = sum(
         getattr(layer_entry, "memory", 0) for layer_entry in saved_layers
     )
-    self.num_saved_layers = len({layer_entry.layer_label_no_pass for layer_entry in saved_layers})
+    self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
     saved_labels = {layer_entry.layer_label for layer_entry in saved_layers}
     self.num_saved_module_calls = sum(
         1
@@ -319,10 +319,10 @@ def postprocess_fast(self: "Trace") -> None:
     _vprint(self, "Fast-pass postprocessing...")
     # Use layer_dict_main_keys to get Op directly (not Layer)
     for output_layer_label in self.output_layers:
-        output_layer = self.layer_dict_main_keys[output_layer_label]
+        output_layer = self[output_layer_label]
         if not output_layer.parents:
             continue  # Guard for parentless output layers (#152)
-        parent_layer = self.layer_dict_main_keys[output_layer.parents[0]]
+        parent_layer = self[output_layer.parents[0]]
         parent_contents = parent_layer.out
         parent_transformed = parent_layer.transformed_out
         output_layer._internal_set(
@@ -342,7 +342,7 @@ def postprocess_fast(self: "Trace") -> None:
         output_layer.transformed_out_dtype = parent_layer.transformed_out_dtype
         output_layer.transformed_activation_memory = parent_layer.transformed_activation_memory
         output_layer.has_saved_activation = parent_layer.has_saved_activation
-        output_layer.has_saved_gradient = parent_layer.has_saved_gradient
+        output_layer.has_grad = parent_layer.has_grad
         output_layer._internal_set("grad", parent_layer.grad)
         output_layer._internal_set("transformed_grad", parent_layer.transformed_grad)
         output_layer.transformed_grad_shape = parent_layer.transformed_grad_shape

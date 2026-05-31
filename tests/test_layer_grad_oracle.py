@@ -196,7 +196,7 @@ def _synthetic_layer(
     return SimpleNamespace(
         layer_label=label,
         grad=grad,
-        has_saved_gradient=grad is not None,
+        has_grad=grad is not None,
         modules=modules if modules is not None else ["m:1"],
     )
 

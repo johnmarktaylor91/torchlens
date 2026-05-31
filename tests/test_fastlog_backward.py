@@ -126,7 +126,7 @@ def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
 
 
 def test_gradient_postfunc_alias_silent() -> None:
-    """gradient_postfunc silently aliases gradient_transform."""
+    """grad_transform silently aliases grad_transform."""
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -134,11 +134,11 @@ def test_gradient_postfunc_alias_silent() -> None:
             TinyRelu(),
             _input(),
             gradients_to_save="all",
-            gradient_postfunc=lambda grad: torch.zeros_like(grad),
+            grad_transform=lambda grad: torch.zeros_like(grad),
         )
     trace.log_backward(trace[trace.output_layers[-1]].out.sum())
 
-    assert not any("gradient_postfunc" in str(warning.message) for warning in caught)
+    assert not any("grad_transform" in str(warning.message) for warning in caught)
     assert any(
         torch.equal(trace[label].transformed_grad, torch.zeros_like(trace[label].grad))
         for label in trace.saved_grad_ops.keys()

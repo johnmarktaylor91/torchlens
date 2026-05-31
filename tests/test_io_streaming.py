@@ -190,12 +190,12 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
         raise RuntimeError("boom")
 
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensPostfuncError, match="out_postfunc raised"):
+    with pytest.raises(TorchLensPostfuncError, match="activation_transform raised"):
         trace_fn(
             model,
             inputs,
             save_outs_to=bundle_path,
-            out_postfunc=_raise_on_out,
+            activation_transform=_raise_on_out,
             layers_to_save="all",
         )
 
@@ -211,12 +211,12 @@ def test_streaming_rejects_non_tensor_out_postfunc_output(tmp_path: Path) -> Non
 
     bundle_path = tmp_path / "stream_bundle.tl"
     model, inputs = _make_streaming_model()
-    with pytest.raises(TorchLensIOError, match="out_postfunc outputs"):
+    with pytest.raises(TorchLensIOError, match="activation_transform outputs"):
         trace_fn(
             model,
             inputs,
             save_outs_to=bundle_path,
-            out_postfunc=lambda tensor: tensor.detach().cpu().numpy(),
+            activation_transform=lambda tensor: tensor.detach().cpu().numpy(),
             layers_to_save="all",
         )
 
@@ -236,7 +236,7 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
             model,
             inputs,
             save_outs_to=bundle_path,
-            out_postfunc=lambda tensor: tensor.to_sparse(),
+            activation_transform=lambda tensor: tensor.to_sparse(),
             layers_to_save="all",
         )
 

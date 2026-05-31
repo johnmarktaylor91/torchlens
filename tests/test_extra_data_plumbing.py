@@ -45,7 +45,7 @@ def _fresh_log() -> Trace:
 def _first_logs(trace: Trace) -> Tuple[Op, Layer]:
     """Return one layer-pass log and its aggregate layer log."""
     op_log = trace.layer_list[0]
-    layer_log = trace.layer_logs[op_log.layer_label_no_pass]
+    layer_log = trace.layer_logs[op_log.layer_label]
     return op_log, layer_log
 
 
@@ -117,7 +117,7 @@ def test_annotations_fields_roundtrip_through_bundle_save_load(tmp_path: Path) -
     tl.save(trace, bundle_path)
     loaded = tl.load(bundle_path)
     loaded_layer_pass = loaded.layer_list[0]
-    loaded_layer_log = loaded.layer_logs[loaded_layer_pass.layer_label_no_pass]
+    loaded_layer_log = loaded.layer_logs[loaded_layer_pass.layer_label]
 
     assert loaded.input_annotations == {"stimulus": {"word": "torchlens", "index": 7}}
     assert loaded_layer_pass.annotations["custom_metric"] == {

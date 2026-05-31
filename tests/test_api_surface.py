@@ -30,7 +30,7 @@ TARGET_ALL = [
     "func",
     "grad_fn",
     "intervening",
-    "grad_fn_label",
+    "label",
     "module",
     "output",
     "contains",
@@ -89,7 +89,7 @@ def test_all_size_exactly_48() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
-    grad_clamp, grad_fn, intervening, grad_fn_label) = 46; post-backward
+    grad_clamp, grad_fn, intervening, label) = 46; post-backward
     megasprint P1 added `output` (multi-output module selector disambiguation
     per AD-7 / F-Multi) = 47; facets framework adds `facets` = 48.
     """

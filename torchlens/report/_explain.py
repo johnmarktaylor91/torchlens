@@ -251,7 +251,7 @@ def _recurrent_loop_line(log: Any) -> str:
         Recurrent-loop summary.
     """
 
-    max_loops = int(getattr(log, "max_recurrent_loops", 1) or 1)
+    max_loops = int(getattr(log, "max_layer_op_count", 1) or 1)
     if max_loops > 1:
         return f"- Recurrent loops: at least one layer was observed across {max_loops} ops."
     return "- Recurrent loops: no repeated layer ops were detected."

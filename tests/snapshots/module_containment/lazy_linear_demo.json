@@ -236,7 +236,7 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "0:1"
       ],
       "intervention_replaced": false,
@@ -244,7 +244,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-4",
@@ -271,7 +271,7 @@
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "0.linear",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "1:1"
       ],
       "intervention_replaced": false,
@@ -279,7 +279,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "linear_1_1:1",
       "lookup_keys": [
         "-3",
@@ -313,13 +313,13 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": "1.relu",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "relu_1_2:1",
       "lookup_keys": [
         "-2",
@@ -349,13 +349,13 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

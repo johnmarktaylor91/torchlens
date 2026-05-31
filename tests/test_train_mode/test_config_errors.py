@@ -84,5 +84,5 @@ def test_train_mode_integer_out_postfunc_rejected() -> None:
             nn.Linear(4, 2),
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,
-            out_postfunc=lambda tensor: tensor.to(torch.int64),
+            activation_transform=lambda tensor: tensor.to(torch.int64),
         )

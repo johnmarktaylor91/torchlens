@@ -113,9 +113,9 @@ def _hook_trace() -> tuple[_TraceStub, GradFn]:
         class_qualname="torch.autograd.ReluBackward0",
         is_custom=False,
         label="relu_back_1_1",
-        grad_fn_type="relu",
-        grad_fn_type_num=1,
-        grad_fn_total_num=1,
+        type="relu",
+        type_index=1,
+        ordinal_index=1,
         step_index=1,
         has_op=False,
     )
@@ -186,7 +186,7 @@ def test_grad_fn_hook_returns_none_when_no_match() -> None:
     """Grad_fn hook returns None when active hooks do not match."""
 
     trace_stub, _grad_fn_log = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn_label("missing"), tl.grad_clamp(0, 1))
+    _state._active_hook_plan = normalize_hook_plan(tl.label("missing"), tl.grad_clamp(0, 1))
     hook = _make_grad_fn_hook(trace_stub, 1)
     assert hook((torch.ones(1),), (torch.ones(1),)) is None
 
@@ -376,7 +376,7 @@ def test_selector_resolution_direction_grad_fn_and_label() -> None:
 
 @pytest.mark.parametrize(
     "selector",
-    [tl.grad_fn(type="ReluBackward0"), tl.intervening(), tl.grad_fn_label("relu_back_1_1")],
+    [tl.grad_fn(type="ReluBackward0"), tl.intervening(), tl.label("relu_back_1_1")],
 )
 def test_backward_selector_target_spec_round_trip(selector: Any) -> None:
     """Backward selectors round-trip through resolver and hook target specs."""

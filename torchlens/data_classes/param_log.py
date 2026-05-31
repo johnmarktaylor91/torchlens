@@ -12,7 +12,7 @@ is acceptable because the Trace's lifetime is typically shorter than or
 equal to the model's lifetime.  The ``cleanup()`` method on Trace
 deletes all Param references.
 
-**Lazy grad properties**: Gradient metadata (has_saved_gradient, grad_shape, grad_dtype,
+**Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
 gradient_memory) is computed lazily on first access via ``_check_param_grad()``.
 This allows grads computed after ``trace()`` returns (e.g.
 after a ``loss.backward()`` call) to be reflected without re-logging.
@@ -278,7 +278,7 @@ class Param:
             self._grad_memory_str = human_readable_size(self._grad_memory)
 
     @property
-    def has_saved_gradient(self) -> bool:
+    def has_grad(self) -> bool:
         """Return whether this parameter currently has a grad stored.
 
         Returns
@@ -289,8 +289,8 @@ class Param:
         self._check_param_grad()
         return self._has_grad
 
-    @has_saved_gradient.setter
-    def has_saved_gradient(self, value: bool) -> None:
+    @has_grad.setter
+    def has_grad(self, value: bool) -> None:
         """Set cached grad-presence status.
 
         Parameters
@@ -401,7 +401,7 @@ class Param:
             f"  dtype: {self.dtype}",
             f"  size: {self.memory_str}",
             f"  {status}",
-            f"  has_saved_gradient: {self.has_saved_gradient}",
+            f"  has_grad: {self.has_grad}",
             f"  module: {self.address} ({self.module_type})",
         ]
         if self.used_by_layers:

@@ -290,7 +290,7 @@ def xarray(log: Any) -> Any:
         elif flat.shape[0] != presentation_count:
             raise ValueError("All exported outs must share the same presentation count.")
         arrays.append(flat)
-        layer_name = str(getattr(layer, "layer_label_no_pass", getattr(layer, "layer_label", "")))
+        layer_name = str(getattr(layer, "layer_label", getattr(layer, "layer_label", "")))
         label = str(getattr(layer, "layer_label", layer_name))
         layer_coord.extend([layer_name] * flat.shape[1])
         layer_label_coord.extend([label] * flat.shape[1])

@@ -72,7 +72,7 @@ def _non_source_ops(trace: Trace) -> list[Op]:
 
 def _single_layer_log_for_pass(trace: Trace, pass_log: Op) -> Layer:
     """Return the aggregate Layer for a pass log."""
-    return trace.layer_logs[pass_log.layer_label_no_pass]
+    return trace.layer_logs[pass_log.layer_label]
 
 
 def _sum_layer_autograd_bytes(trace: Trace) -> Optional[int]:
@@ -118,7 +118,7 @@ def test_add_op_reports_zero_autograd_memory() -> None:
     assert add_pass.grad_fn_object_id is not None
     assert add_pass.autograd_memory == 0
     assert add_pass.num_autograd_tensors == 0
-    assert trace.layer_logs[add_pass.layer_label_no_pass].autograd_memory == 0
+    assert trace.layer_logs[add_pass.layer_label].autograd_memory == 0
     assert trace.total_autograd_memory == 0
 
 

@@ -429,7 +429,7 @@ def _metric_grad_from_log(log: Any, metric_name: str) -> Any:
         matches = [
             layer
             for layer in log.layer_list
-            if metric_name in str(layer.layer_label) and layer.has_saved_gradient
+            if metric_name in str(layer.layer_label) and layer.has_grad
         ]
         if not matches:
             raise KeyError(f"No saved grad matched metric {metric_name!r}.")

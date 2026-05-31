@@ -310,8 +310,8 @@ class MLXBackend:
         layers_to_save: str | list[Any] | None = "all",
         keep_orphans: bool = False,
         output_device: str = "same",
-        out_transform: object | None = None,
-        save_raw_outs: bool = True,
+        activation_transform: object | None = None,
+        save_raw_activations: bool = True,
         detach_saved_activations: bool = False,
         save_gradients: bool = False,
         gradients_to_save: str | list[Any] | None = "all",
@@ -343,9 +343,9 @@ class MLXBackend:
         trace = Trace(
             model_class_name=type(model).__name__,
             output_device=output_device,
-            out_postfunc=cast("Callable[[Any], Any] | None", out_transform),
-            gradient_transform=None,
-            save_raw_outs=save_raw_outs,
+            activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
+            grad_transform=None,
+            save_raw_activations=save_raw_activations,
             save_raw_gradients=True,
             keep_orphans=keep_orphans,
             save_arg_values=save_arg_values,
@@ -566,27 +566,25 @@ class MLXBackend:
         memory = self._memory(output)
         fields.update(
             {
-                "layer_label": label,
                 "_label_raw": label,
                 "_layer_label_raw": label,
                 "step_index": raw_index + 1,
                 "raw_index": raw_index,
                 "source_trace": trace,
                 "_tracing_finished": True,
+                "label": pass_label,
+                "label_short": pass_label,
+                "layer_label": label,
                 "layer_label_short": label,
-                "layer_label_w_pass": pass_label,
-                "layer_label_w_pass_short": pass_label,
-                "layer_label_no_pass": label,
-                "layer_label_no_pass_short": label,
                 "type": op_name,
                 "type_index": type_index,
                 "pass_index": 1,
                 "num_passes": 1,
                 "lookup_keys": [label, pass_label],
-                "out": output if trace.save_raw_outs else None,
-                "has_saved_activation": trace.save_raw_outs,
+                "out": output if trace.save_raw_activations else None,
+                "has_saved_activation": trace.save_raw_activations,
                 "output_device": "same",
-                "out_postfunc": trace.out_postfunc,
+                "activation_transform": trace.activation_transform,
                 "annotations": {},
                 "detach_saved_activations": trace.detach_saved_activations,
                 "has_saved_args": False,
@@ -595,7 +593,7 @@ class MLXBackend:
                 "memory": memory,
                 "out_versions_by_child": {},
                 "save_gradients": False,
-                "has_saved_gradient": False,
+                "has_grad": False,
                 "func": func,
                 "func_call_id": raw_index + 1,
                 "func_name": op_name,
@@ -668,12 +666,12 @@ class MLXBackend:
                 "conditional_arm_children": {},
                 "module": None,
                 "modules": [],
-                "modules_entered": [],
-                "input_to_module_calls": [],
+                "module_call_stack": [],
+                "input_to_modules": [],
                 "module_entry_arg_keys": [],
                 "output_of_modules": [],
                 "output_of_module_calls": [],
-                "is_submodule_output": False,
+                "is_module_output": False,
                 "is_atomic_module": op_name == "linear",
                 "atomic_module_call": None,
                 "func_config": {},
@@ -698,15 +696,15 @@ class MLXBackend:
         trace.layer_list.append(op_log)
         trace.layer_dict_main_keys[label] = op_log
         trace.layer_dict_all_keys[label] = op_log
-        trace.layer_dict_all_keys[op_log.layer_label_w_pass] = op_log
-        trace.op_labels.append(op_log.layer_label_w_pass)
+        trace.layer_dict_all_keys[op_log.label] = op_log
+        trace.op_labels.append(op_log.label)
         trace.layer_labels.append(label)
         trace.layer_num_calls[label] = 1
         trace._lookup_keys_to_layer_num_dict[label] = raw_index
         trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
         layer_log = Layer(op_log)
         layer_log.ops[1] = op_log
-        layer_log.call_labels.append(op_log.layer_label_w_pass)
+        layer_log.call_labels.append(op_log.label)
         trace.layer_logs[label] = layer_log
 
     def _parent_labels(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[str]:

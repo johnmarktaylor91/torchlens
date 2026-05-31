@@ -127,7 +127,7 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     )
 
     assert restored.has_backward_pass is True
-    assert restored.backward_num_calls == trace.backward_num_calls
+    assert restored.num_backward_passes == trace.num_backward_passes
     assert restored.backward_memory_backend == trace.backward_memory_backend
     assert len(restored.grad_fn_logs) == len(trace.grad_fn_logs)
     assert restored.grad_fn_order == trace.grad_fn_order

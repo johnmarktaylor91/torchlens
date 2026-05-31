@@ -1069,7 +1069,7 @@ def _replay_fire_record(entry: NormalizedHookEntry, site: "Op") -> FireRecord:
     helper_kwargs = dict(entry.helper_spec.kwargs) if entry.helper_spec is not None else {}
     return FireRecord(
         target_label=site.layer_label,
-        call_label=site.layer_label_w_pass,
+        call_label=site.label,
         func_call_id=site.func_call_id,
         container_path=tuple(site.container_path or ()),
         engine="replay",

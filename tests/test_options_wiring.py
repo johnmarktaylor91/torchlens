@@ -88,8 +88,8 @@ def test_trace_save_conflict_raises() -> None:
         tl.trace(
             _TinyModel(),
             _input(),
-            save=SaveOptions(save_raw_outs=True),
-            save_raw_outs=False,
+            save=SaveOptions(save_raw_activations=True),
+            save_raw_activations=False,
         )
 
 

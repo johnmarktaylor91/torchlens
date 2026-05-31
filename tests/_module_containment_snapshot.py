@@ -120,7 +120,7 @@ def _op_label(op: Any) -> str:
         Pass-qualified layer label.
     """
 
-    return str(getattr(op, "label", getattr(op, "layer_label_w_pass")))
+    return str(getattr(op, "label", getattr(op, "label")))
 
 
 def _op_dict(op: Any) -> dict[str, Any]:
@@ -150,12 +150,12 @@ def _op_dict(op: Any) -> dict[str, Any]:
         "is_internal_sink": op.is_internal_sink,
         "is_internal_source": op.is_internal_source,
         "is_orphan": getattr(op, "is_orphan", False),
-        "is_submodule_output": op.is_submodule_output,
+        "is_module_output": op.is_module_output,
         "label": _op_label(op),
         "lookup_keys": _sorted_strings(op.lookup_keys),
         "module": _module_call_string(op.module),
         "module_entry_arg_keys": _normalize_argnames(op.module_entry_arg_keys),
-        "input_to_module_calls": _module_call_list(op.input_to_module_calls),
+        "input_to_modules": _module_call_list(op.input_to_modules),
         "modules": _module_call_list(op.modules),
         "output_of_module_calls": _module_call_list(op.output_of_module_calls),
         "output_of_modules": [str(value) for value in op.output_of_modules],

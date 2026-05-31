@@ -49,7 +49,7 @@ def per_layer(
     scores: dict[str, Any] = {}
     for layer in tensor_layers(log, sites):
         out = getattr(layer, "out")
-        label = str(getattr(layer, "layer_label", getattr(layer, "layer_label_no_pass", "layer")))
+        label = str(getattr(layer, "layer_label", getattr(layer, "layer_label", "layer")))
         # TODO: connect the real Brain-Score Benchmark API once the offline
         # vendored fixtures are available in the launch extras matrix.
         scores[label] = benchmark(out, layer=label, **kwargs)

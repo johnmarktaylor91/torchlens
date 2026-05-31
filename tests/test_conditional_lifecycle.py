@@ -118,16 +118,14 @@ def _make_conditional_event(bool_layers: List[str]) -> ConditionalEvent:
     )
 
 
-def _make_layer_stub(
-    layer_label: str, layer_label_no_pass: Optional[str] = None
-) -> SimpleNamespace:
+def _make_layer_stub(label: str, layer_label: Optional[str] = None) -> SimpleNamespace:
     """Create a minimal layer-like object for rename and cleanup tests.
 
     Parameters
     ----------
-    layer_label:
+    label:
         Layer label stored on the stub.
-    layer_label_no_pass:
+    layer_label:
         Pass-stripped label. Defaults to ``layer_label`` with any pass suffix removed.
 
     Returns
@@ -135,11 +133,11 @@ def _make_layer_stub(
     SimpleNamespace
         Layer-like object with the fields touched by the lifecycle helpers.
     """
-    label_no_pass = layer_label_no_pass or layer_label.split(":", 1)[0]
+    label_no_pass = layer_label or label.split(":", 1)[0]
     return SimpleNamespace(
-        layer_label=layer_label,
-        layer_label_no_pass=label_no_pass,
-        _label_raw=layer_label,
+        label=label,
+        layer_label=label_no_pass,
+        _label_raw=label,
         parents=[],
         root_ancestors=[],
         children=[],

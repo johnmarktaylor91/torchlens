@@ -297,13 +297,13 @@ def make_intervention_node_spec_fn(
 
         matching_labels = {
             str(getattr(layer_log, "layer_label", "")),
-            str(getattr(layer_log, "layer_label_no_pass", "")),
+            str(getattr(layer_log, "layer_label", "")),
         }
         call_labels = getattr(layer_log, "call_indexs", None)
         if call_labels is None:
             call_labels = ()
         for call_index in call_labels:
-            base = str(getattr(layer_log, "layer_label_no_pass", ""))
+            base = str(getattr(layer_log, "layer_label", ""))
             matching_labels.add(f"{base}:{call_index}")
 
         spec = default_spec

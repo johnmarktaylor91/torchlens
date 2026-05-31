@@ -28,7 +28,7 @@
 - In-place ops rely on `safe_copy()` preserving the raw `_tl.label_raw` on clones so the
   mutation is logged as a new operation.
 - Barcode nesting detection distinguishes bottom-level ops from wrapper-level composites.
-- `out_postfunc` must run under `pause_logging()`.
+- `activation_transform` must run under `pause_logging()`.
 - Live intervention hooks run in this layer; hook output validation lives under
   `intervention/runtime.py`.
 - Fast-path validation must check tensor existence, execution order, and parent alignment.

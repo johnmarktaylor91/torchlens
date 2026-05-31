@@ -173,7 +173,7 @@ def _scrub_value(
 
     if isinstance(value, Trace):
         scrubbed_state["_out_transform_repr"] = (
-            repr(value.out_postfunc) if value.out_postfunc is not None else None
+            repr(value.activation_transform) if value.activation_transform is not None else None
         )
         scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
@@ -543,8 +543,8 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
 def _blob_label_for_owner(owner: Any) -> str:
     """Return the human-readable label stored alongside a blob spec."""
 
-    if hasattr(owner, "layer_label_w_pass") and getattr(owner, "layer_label_w_pass") is not None:
-        return str(getattr(owner, "layer_label_w_pass"))
+    if hasattr(owner, "label") and getattr(owner, "label") is not None:
+        return str(getattr(owner, "label"))
     if hasattr(owner, "call_label") and getattr(owner, "call_label") is not None:
         return str(getattr(owner, "call_label"))
     if hasattr(owner, "address") and getattr(owner, "address") is not None:

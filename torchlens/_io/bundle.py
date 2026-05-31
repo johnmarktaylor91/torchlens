@@ -955,7 +955,7 @@ def _attach_fast_copy_specs(
                 tensor_field="grad",
                 ref_field="grad_ref",
                 kind="grad",
-                has_field="has_saved_gradient",
+                has_field="has_grad",
                 used_blob_ids=used_blob_ids,
             )
             if fast_copy_spec is not None:
@@ -1224,7 +1224,7 @@ def _validate_out_postfunc_outputs(
         If a saved out is not a plain tensor.
     """
 
-    if not include_outs or getattr(trace, "out_postfunc", None) is None:
+    if not include_outs or getattr(trace, "activation_transform", None) is None:
         return
     for layer in trace.layer_list:
         if not getattr(layer, "has_saved_activation", False):
@@ -1234,7 +1234,7 @@ def _validate_out_postfunc_outputs(
             continue
         if not isinstance(transformed_out, torch.Tensor):
             raise TorchLensIOError(
-                "Portable bundle save requires out_postfunc outputs to be torch.Tensor "
+                "Portable bundle save requires activation_transform outputs to be torch.Tensor "
                 f"instances, but layer {layer.layer_label} produced "
                 f"{type(transformed_out).__name__}."
             )
@@ -1265,13 +1265,11 @@ def _apply_skipped_blobs_to_scrubbed_state(
             if bool(getattr(layer, "has_saved_activation", False))
         ]
         grad_labels = [
-            layer.layer_label
-            for layer in layer_list
-            if bool(getattr(layer, "has_saved_gradient", False))
+            layer.layer_label for layer in layer_list if bool(getattr(layer, "has_grad", False))
         ]
         scrubbed_state["num_saved_ops"] = len(out_labels)
         scrubbed_state["num_saved_layers"] = len(
-            {getattr(layer, "layer_label_no_pass", layer.layer_label) for layer in layer_list}
+            {getattr(layer, "layer_label", layer.layer_label) for layer in layer_list}
         )
         scrubbed_state["saved_activation_memory"] = sum(
             int(getattr(layer, "memory", 0) or 0)
@@ -1325,8 +1323,8 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
             and hasattr(value, "has_saved_activation")
         ):
             value.has_saved_activation = False
-        if field_name == "grad" and replaced_value is None and hasattr(value, "has_saved_gradient"):
-            value.has_saved_gradient = False
+        if field_name == "grad" and replaced_value is None and hasattr(value, "has_grad"):
+            value.has_grad = False
     return value
 
 

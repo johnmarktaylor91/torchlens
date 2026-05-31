@@ -1481,9 +1481,9 @@ def _entry_name(entry: Any) -> str:
     str
         Display name.
     """
-    base_name = getattr(entry, "layer_label_no_pass", None) or getattr(entry, "layer_label", None)
+    base_name = getattr(entry, "layer_label", None) or getattr(entry, "layer_label", None)
     if base_name is None:
-        base_name = getattr(entry, "layer_label_w_pass", None) or getattr(entry, "layer_label", "?")
+        base_name = getattr(entry, "label", None) or getattr(entry, "layer_label", "?")
     if (
         getattr(entry, "num_calls", 1)
         and getattr(entry, "num_calls", 1) > 1

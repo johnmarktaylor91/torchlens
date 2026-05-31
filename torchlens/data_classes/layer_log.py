@@ -115,8 +115,8 @@ class OpAccessor(Accessor["Op"]):
         if len(self._dict) == 1:
             only_op = next(iter(self._dict.values()))
             if key in {
-                only_op.layer_label_no_pass,
-                only_op.layer_label_no_pass_short,
+                only_op.layer_label,
+                only_op.layer_label_short,
                 only_op.layer_label,
                 only_op.layer_label_short,
             }:
@@ -124,20 +124,20 @@ class OpAccessor(Accessor["Op"]):
         for op_log in self._dict.values():
             if key in {
                 op_log.layer_label,
-                op_log.layer_label_w_pass,
-                op_log.layer_label_no_pass,
+                op_log.label,
+                op_log.layer_label,
                 op_log.layer_label_short,
-                op_log.layer_label_w_pass_short,
-                op_log.layer_label_no_pass_short,
+                op_log.label_short,
+                op_log.layer_label_short,
             }:
                 return op_log
         parent_matches = [
             op_log
             for op_log in self._dict.values()
-            if key in {op_log.layer_label_no_pass, op_log.layer_label_no_pass_short}
+            if key in {op_log.layer_label, op_log.layer_label_short}
         ]
         if len(parent_matches) > 1:
-            parent_label = parent_matches[0].layer_label_no_pass
+            parent_label = parent_matches[0].layer_label
             raise ValueError(
                 f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
                 "integer position or a pass-qualified label like "
@@ -199,7 +199,7 @@ class Layer:
         "total_autograd_memory": FieldPolicy.KEEP,
         "num_autograd_tensors": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
-        "out_postfunc": FieldPolicy.DROP,
+        "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "intervention_replaced": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
@@ -260,8 +260,8 @@ class Layer:
             first_pass: The Op for pass 1 of this layer.
         """
         # Identity & labeling
-        self.layer_label = first_pass.layer_label_no_pass
-        self.layer_label_short = first_pass.layer_label_no_pass_short
+        self.layer_label = first_pass.layer_label
+        self.layer_label_short = first_pass.layer_label_short
         self.layer_type = first_pass.layer_type
         self.type_index = first_pass.type_index
         self.step_index = first_pass.step_index
@@ -305,7 +305,7 @@ class Layer:
 
         # Config
         self.output_device = first_pass.output_device
-        self.out_postfunc = first_pass.out_postfunc
+        self.activation_transform = first_pass.activation_transform
         self.annotations: Dict[str, Any] = {}
         self.intervention_replaced = first_pass.intervention_replaced
         self.detach_saved_activations = first_pass.detach_saved_activations
@@ -375,30 +375,6 @@ class Layer:
         # Pass management
         self.ops = OpAccessor()
         self.call_labels: List[str] = []
-
-    @property
-    def out_transform(self) -> Any:
-        """Canonical out transform callable inherited from the first pass.
-
-        Returns
-        -------
-        Any
-            Transform callable, or ``None`` when outs are stored unchanged.
-        """
-
-        return self.out_postfunc
-
-    @out_transform.setter
-    def out_transform(self, value: Any) -> None:
-        """Set the canonical out transform callable.
-
-        Parameters
-        ----------
-        value:
-            Transform callable, or ``None``.
-        """
-
-        self.out_postfunc = value
 
     @property
     def macs_forward(self) -> Optional[int]:
@@ -627,7 +603,7 @@ class Layer:
         return self._single_pass_or_error("transformed_grad")
 
     @property
-    def has_saved_gradient(self) -> bool:
+    def has_grad(self) -> bool:
         """Return whether the single pass has a saved grad.
 
         Returns
@@ -635,7 +611,7 @@ class Layer:
         bool
             ``True`` when a grad was saved for the only pass.
         """
-        return cast(bool, self._single_pass_or_error("has_saved_gradient"))
+        return cast(bool, self._single_pass_or_error("has_grad"))
 
     @property
     def code_context(self) -> Any:
@@ -707,7 +683,7 @@ class Layer:
         seen = set()
         for pass_log in self.ops.values():
             for label in pass_log.children:
-                no_pass = self.source_trace[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label
                 if no_pass not in seen:
                     seen.add(no_pass)
                     result.append(no_pass)
@@ -720,7 +696,7 @@ class Layer:
         seen = set()
         for pass_log in self.ops.values():
             for label in pass_log.parents:
-                no_pass = self.source_trace[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label
                 if no_pass not in seen:
                     seen.add(no_pass)
                     result.append(no_pass)
@@ -755,7 +731,7 @@ class Layer:
         seen = set()
         for pass_log in self.ops.values():
             for label in pass_log.siblings:
-                no_pass = self.source_trace[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label
                 if no_pass not in seen:
                     seen.add(no_pass)
                     result.append(no_pass)
@@ -779,7 +755,7 @@ class Layer:
         seen = set()
         for pass_log in self.ops.values():
             for label in pass_log.co_parents:
-                no_pass = self.source_trace[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label
                 if no_pass not in seen:
                     seen.add(no_pass)
                     result.append(no_pass)
@@ -848,24 +824,14 @@ class Layer:
     # ********************************************
 
     @property
-    def layer_label_no_pass(self) -> str:
-        """Alias so code expecting layer_label_no_pass works on Layer."""
-        return cast(str, self.layer_label)
-
-    @property
-    def layer_label_no_pass_short(self) -> str:
-        """Alias so code expecting layer_label_no_pass_short works on Layer."""
-        return cast(str, self.layer_label_short)
-
-    @property
-    def layer_label_w_pass(self) -> str:
+    def label(self) -> str:
         """For single-pass layers, return the pass-qualified label."""
-        return cast(str, self._single_pass_or_error("layer_label_w_pass"))
+        return cast(str, self._single_pass_or_error("label"))
 
     @property
-    def layer_label_w_pass_short(self) -> str:
+    def label_short(self) -> str:
         """For single-pass layers, return the short pass-qualified label."""
-        return cast(str, self._single_pass_or_error("layer_label_w_pass_short"))
+        return cast(str, self._single_pass_or_error("label_short"))
 
     @property
     def params(self) -> Any:
@@ -889,7 +855,7 @@ class Layer:
         for call_index, pass_log in self.ops.items():
             children = []
             for label in pass_log.children:
-                no_pass = self.source_trace[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label
                 if no_pass not in children:
                     children.append(no_pass)
             result[call_index] = children
@@ -902,7 +868,7 @@ class Layer:
         for call_index, pass_log in self.ops.items():
             parents = []
             for label in pass_log.parents:
-                no_pass = self.source_trace[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label
                 if no_pass not in parents:
                     parents.append(no_pass)
             result[call_index] = parents
@@ -916,7 +882,7 @@ class Layer:
         result: defaultdict[str, list[int]] = defaultdict(list)
         for call_index, pass_log in self.ops.items():
             for label in pass_log.children:
-                no_pass = self.source_trace[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label
                 if call_index not in result[no_pass]:
                     result[no_pass].append(call_index)
         return dict(result)
@@ -929,7 +895,7 @@ class Layer:
         result: defaultdict[str, list[int]] = defaultdict(list)
         for call_index, pass_log in self.ops.items():
             for label in pass_log.parents:
-                no_pass = self.source_trace[label].layer_label_no_pass
+                no_pass = self.source_trace[label].layer_label
                 if call_index not in result[no_pass]:
                     result[no_pass].append(call_index)
         return dict(result)
@@ -968,7 +934,7 @@ class Layer:
         for pass_log in self.ops.values():
             for arg_type in ["args", "kwargs"]:
                 for arg_key, layer_label in pass_log.parent_arg_positions[arg_type].items():
-                    no_pass = self.source_trace[layer_label].layer_label_no_pass
+                    no_pass = self.source_trace[layer_label].layer_label
                     if arg_key not in result[arg_type]:
                         result[arg_type][arg_key] = no_pass
         return result
@@ -1273,7 +1239,7 @@ class LayerAccessor(Accessor["Layer"]):
         matches = [
             layer
             for layer in self._list
-            if key in {layer.layer_label, layer.layer_label_no_pass, layer.layer_label_short}
+            if key in {layer.layer_label, layer.layer_label, layer.layer_label_short}
         ]
         if len(matches) == 1:
             return matches[0]

@@ -401,7 +401,7 @@ def test_bad_backward_root_grad_fn_id_raises() -> None:
     """An unknown backward root id raises an invariant error."""
 
     log = _make_backward_log()
-    log.backward_root_grad_fn_ids = -1
+    log.backward_root_grad_fn_object_ids = -1
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -455,10 +455,8 @@ def test_corruption_module_back_reference():
             # module may include pass (e.g. 'fc:1'), strip it
             cmo_addr = cmo.split(":")[0] if ":" in cmo else cmo
             mod_log = log.modules._dict[cmo_addr]
-            if lpl.layer_label_no_pass in mod_log.layer_labels:
-                mod_log.layer_labels = [
-                    x for x in mod_log.layer_labels if x != lpl.layer_label_no_pass
-                ]
+            if lpl.layer_label in mod_log.layer_labels:
+                mod_log.layer_labels = [x for x in mod_log.layer_labels if x != lpl.layer_label]
                 # num_layers is a read-only property derived from layer_labels
                 break
     with pytest.raises(MetadataInvariantError, match="module_layer_containment"):
@@ -679,9 +677,9 @@ def test_corruption_connectivity_parentless_layer():
 
 
 def test_corruption_connectivity_orphan_in_layer_list():
-    """Adding a label to orphan_ops that is also in layer_labels triggers error."""
+    """Adding a label to _orphan_labels that is also in layer_labels triggers error."""
     log = _make_clean_log()
-    log.orphan_ops = [log.layer_labels[0]]
+    log._orphan_labels = [log.layer_labels[0]]
     with pytest.raises(MetadataInvariantError, match="graph_connectivity"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -903,7 +901,7 @@ class TestSharedParamDifferentOps:
 
     The param sharing invariant must group by (func_name, param_barcodes),
     not just param_barcodes alone. Otherwise, e.g. isinf(weight) and expand(weight)
-    would be falsely flagged as needing the same layer_label_no_pass.
+    would be falsely flagged as needing the same layer_label.
     """
 
     def test_shared_param_different_ops_ops_validation(self):

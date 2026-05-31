@@ -678,7 +678,7 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "encoders.0:1"
       ],
       "intervention_replaced": false,
@@ -686,7 +686,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-16",
@@ -713,13 +713,13 @@
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "encoders.0.conv2d",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "conv2d_1_1:1",
       "lookup_keys": [
         "-15",
@@ -749,7 +749,7 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "encoders.1:1"
       ],
       "intervention_replaced": false,
@@ -757,7 +757,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "relu_1_2:1",
       "lookup_keys": [
         "-14",
@@ -783,13 +783,13 @@
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "encoders.1.conv2d",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "conv2d_2_3:1",
       "lookup_keys": [
         "-13",
@@ -819,7 +819,7 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "encoders.2:1"
       ],
       "intervention_replaced": false,
@@ -827,7 +827,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "relu_2_4:1",
       "lookup_keys": [
         "-12",
@@ -853,13 +853,13 @@
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "encoders.2.conv2d",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "conv2d_3_5:1",
       "lookup_keys": [
         "-11",
@@ -889,13 +889,13 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "relu_3_6:1",
       "lookup_keys": [
         "-10",
@@ -917,7 +917,7 @@
       "func_name": "cat",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "decoders.0:1"
       ],
       "intervention_replaced": false,
@@ -925,7 +925,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "cat_1_7:1",
       "lookup_keys": [
         "-9",
@@ -951,13 +951,13 @@
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "decoders.0.conv2d",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "conv2d_4_8:1",
       "lookup_keys": [
         "-8",
@@ -987,13 +987,13 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "relu_4_9:1",
       "lookup_keys": [
         "-7",
@@ -1015,7 +1015,7 @@
       "func_name": "cat",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "decoders.1:1"
       ],
       "intervention_replaced": false,
@@ -1023,7 +1023,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "cat_2_10:1",
       "lookup_keys": [
         "-6",
@@ -1049,13 +1049,13 @@
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "decoders.1.conv2d",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "conv2d_5_11:1",
       "lookup_keys": [
         "-5",
@@ -1085,13 +1085,13 @@
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "relu_5_12:1",
       "lookup_keys": [
         "-4",
@@ -1113,7 +1113,7 @@
       "func_name": "cat",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "decoders.2:1"
       ],
       "intervention_replaced": false,
@@ -1121,7 +1121,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "cat_3_13:1",
       "lookup_keys": [
         "-3",
@@ -1147,13 +1147,13 @@
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "decoders.2.conv2d",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "conv2d_6_14:1",
       "lookup_keys": [
         "-2",
@@ -1183,13 +1183,13 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

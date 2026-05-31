@@ -6,7 +6,7 @@ Step 13: torch.cuda.empty_cache() — handled inline in __init__.py.
 Step 14 (_log_time_elapsed): Records wall-clock timing for cleanup and overall pass.
 Step 15 (_finalize_param_logs): Populates Param reverse mappings (used_by_ops,
     used_by_layers, co_parent_params), num_calls, and clears Parameter tensor references.
-Step 15.5 (_build_layer_logs): Groups Op entries by layer_label_no_pass to
+Step 15.5 (_build_layer_logs): Groups Op entries by layer_label to
     create aggregate Layer objects. Static identity fields still use first-pass
     values, while aggregate fields merge across ops, including conditional
     branch signatures, pass maps, and pass-stripped child views.
@@ -110,9 +110,9 @@ def _finalize_param_logs(self: "Trace") -> None:
             continue
         addresses_in_op = [pl.address for pl in layer_entry._param_logs]
         for pl in layer_entry._param_logs:
-            if layer_entry.layer_label_w_pass not in pl.used_by_ops:
-                pl.used_by_ops.append(layer_entry.layer_label_w_pass)
-            layer_label = layer_entry.layer_label_no_pass or layer_entry.layer_label
+            if layer_entry.label not in pl.used_by_ops:
+                pl.used_by_ops.append(layer_entry.label)
+            layer_label = layer_entry.layer_label or layer_entry.layer_label
             if layer_label not in pl.used_by_layers:
                 pl.used_by_layers.append(layer_label)
             # Link to other params in the same operation
@@ -333,7 +333,7 @@ def _assign_output_roles(
         return
     for index, output in enumerate(output_entries):
         if output.multi_output_name is not None:
-            parent_layer = output.source_trace.layer_logs.get(output.layer_label_no_pass)
+            parent_layer = output.source_trace.layer_logs.get(output.layer_label)
             if parent_layer is not None:
                 parent_layer.multi_output_name = output.multi_output_name
             continue
@@ -342,7 +342,7 @@ def _assign_output_roles(
             output.multi_output_index if output.multi_output_index is not None else index,
             hints=hints,
         )
-        parent_layer = output.source_trace.layer_logs.get(output.layer_label_no_pass)
+        parent_layer = output.source_trace.layer_logs.get(output.layer_label)
         if parent_layer is not None:
             parent_layer.multi_output_name = output.multi_output_name
 
@@ -510,9 +510,9 @@ def _build_submodule_call_logs(
         for layer_label in pass_layers:
             if layer_label in self.layer_dict_all_keys:
                 te = self.layer_dict_all_keys[layer_label]
-                if te.is_submodule_input and call_label in te.input_to_module_calls:
+                if te.is_submodule_input and call_label in te.input_to_modules:
                     pass_input_layers.append(layer_label)
-                if te.is_submodule_output and call_label in te.output_of_module_calls:
+                if te.is_module_output and call_label in te.output_of_module_calls:
                     pass_output_layers.append(layer_label)
                     pass_outputs.append(te)
 
@@ -726,7 +726,7 @@ def _build_module_logs(self: "Trace") -> None:
         for label in layers_raw:
             entry = self.layer_dict_all_keys.get(label)
             if entry is not None:
-                no_pass = entry.layer_label_no_pass
+                no_pass = entry.layer_label
                 if no_pass not in seen:
                     seen.add(no_pass)
                     layers.append(no_pass)
@@ -839,7 +839,7 @@ def _build_module_logs(self: "Trace") -> None:
 def _build_layer_logs(self: "Trace") -> None:
     """Step 15.5: Build aggregate Layer objects from per-pass Op entries.
 
-    Groups layer_list entries by layer_label_no_pass and creates a Layer for
+    Groups layer_list entries by layer_label and creates a Layer for
     each unique layer. For single-pass layers, the Layer is a thin wrapper
     delegating attribute access to the sole Op.
 
@@ -872,7 +872,7 @@ def _build_layer_logs(self: "Trace") -> None:
     layer_logs = OrderedDict()
 
     for pass_log in self.layer_list:
-        no_call_label = pass_log.layer_label_no_pass
+        no_call_label = pass_log.layer_label
 
         if no_call_label not in layer_logs:
             # First pass: create Layer from this pass's data.
@@ -903,7 +903,7 @@ def _build_layer_logs(self: "Trace") -> None:
                 layer_log.is_atomic_module = True
 
         layer_log.ops[pass_log.pass_index] = pass_log
-        layer_log.call_labels.append(pass_log.layer_label)
+        layer_log.call_labels.append(pass_log.label)
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 
     autograd_memory = 0

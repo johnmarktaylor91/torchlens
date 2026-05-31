@@ -71,7 +71,7 @@ def cleanup(self: "Trace") -> None:
         "layer_logs",
         "layer_dict_all_keys",
         "layer_dict_main_keys",
-        "orphan_ops",
+        "_orphan_labels",
         "_loaded_from_bundle",
         "_source_bundle_manifest_sha256",
         "_source_bundle_path",

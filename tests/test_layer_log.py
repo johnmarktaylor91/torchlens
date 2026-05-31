@@ -125,7 +125,7 @@ class TestAggregateFields:
     def test_layer_label_is_no_pass(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
             fp = layer_log.ops[0]
-            assert layer_log.layer_label == fp.layer_label_no_pass
+            assert layer_log.layer_label == fp.layer_label
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ class TestMultiPassLayerLog:
                 all_children = set()
                 for pass_log in layer_log.ops.values():
                     for child in pass_log.children:
-                        all_children.add(recurrent_log[child].layer_label_no_pass)
+                        all_children.add(recurrent_log[child].layer_label)
                 assert set(layer_log.children) == all_children
                 break
 
@@ -230,7 +230,7 @@ class TestLayerLogDisplay:
 class TestConvenienceAliases:
     def test_layer_label_no_pass_alias(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
-            assert layer_log.layer_label_no_pass == layer_log.layer_label
+            assert layer_log.layer_label == layer_log.layer_label
 
     def test_params_accessor(self, recurrent_log):
         for layer_log in recurrent_log.layer_logs.values():
@@ -255,13 +255,13 @@ class TestTraceIntegration:
         # Should be in the same order as layer_list (by first appearance)
         seen = []
         for pass_log in simple_log.layer_list:
-            if pass_log.layer_label_no_pass not in seen:
-                seen.append(pass_log.layer_label_no_pass)
+            if pass_log.layer_label not in seen:
+                seen.append(pass_log.layer_label)
         assert labels == seen
 
     def test_len_layer_logs(self, simple_log):
         """Number of LayerLogs equals number of unique no-pass labels."""
-        unique = set(pl.layer_label_no_pass for pl in simple_log.layer_list)
+        unique = set(pl.layer_label for pl in simple_log.layer_list)
         assert len(simple_log.layer_logs) == len(unique)
 
 

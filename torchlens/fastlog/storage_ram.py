@@ -57,7 +57,7 @@ class RamStorageBackend:
             Storage intent resolved from streaming options.
         options:
             Active recording options carrying the out postfunc and
-            ``save_raw_outs`` flag.
+            ``save_raw_activations`` flag.
         ctx:
             Record context used to enrich postfunc error messages.
 
@@ -68,14 +68,14 @@ class RamStorageBackend:
             backend), transformed RAM payload, and transformed disk payload.
         """
 
-        transform = options.gradient_transform if kind == "grad" else options.out_transform
-        save_raw = options.save_raw_gradients if kind == "grad" else options.save_raw_outs
+        transform = options.grad_transform if kind == "grad" else options.activation_transform
+        save_raw = options.save_raw_gradients if kind == "grad" else options.save_raw_activations
         return _resolve_storage(
             tensor,
             spec,
             intent,
-            out_postfunc=transform,
-            save_raw_outs=save_raw,
+            activation_transform=transform,
+            save_raw_activations=save_raw,
             ctx=ctx,
             kind="grad" if kind == "grad" else "activation",
         )

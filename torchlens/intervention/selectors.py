@@ -21,7 +21,7 @@ SelectorKind: TypeAlias = Literal[
     "not",
     "grad_fn",
     "intervening",
-    "grad_fn_label",
+    "label",
 ]
 
 
@@ -350,14 +350,14 @@ class InModuleSelector(BaseSelector):
 class GradFnSelector(BaseSelector):
     """Backward-only selector against grad_fn type, label pattern, or custom flag."""
 
-    grad_fn_type: str | None = None
+    type: str | None = None
     grad_fn_label_pattern: str | None = None
     is_custom: bool | None = None
     direction: Literal["backward"] = "backward"
 
     def __init__(
         self,
-        grad_fn_type: str | type[Any] | None = None,
+        type: str | type[Any] | None = None,
         *,
         label: str | None = None,
         is_custom: bool | None = None,
@@ -366,7 +366,7 @@ class GradFnSelector(BaseSelector):
 
         Parameters
         ----------
-        grad_fn_type:
+        type:
             Autograd class name or normalized grad_fn type to match.
         label:
             Substring to match against the grad_fn label.
@@ -374,16 +374,16 @@ class GradFnSelector(BaseSelector):
             Optional custom-autograd predicate.
         """
 
-        if grad_fn_type is not None and not isinstance(grad_fn_type, str):
-            grad_fn_type = grad_fn_type.__name__
+        if type is not None and not isinstance(type, str):
+            type = type.__name__
         payload = {
-            "grad_fn_type": grad_fn_type,
+            "type": type,
             "grad_fn_label_pattern": label,
             "is_custom": is_custom,
         }
         object.__setattr__(self, "selector_kind", "grad_fn")
         object.__setattr__(self, "selector_value", payload)
-        object.__setattr__(self, "grad_fn_type", grad_fn_type)
+        object.__setattr__(self, "type", type)
         object.__setattr__(self, "grad_fn_label_pattern", label)
         object.__setattr__(self, "is_custom", is_custom)
         object.__setattr__(self, "direction", "backward")
@@ -407,7 +407,7 @@ class InterveningSelector(BaseSelector):
 class GradFnLabelSelector(BaseSelector):
     """Backward-only selector matching a grad_fn label exactly."""
 
-    grad_fn_label: str
+    label: str
     direction: Literal["backward"] = "backward"
 
     def __init__(self, name: str) -> None:
@@ -419,9 +419,9 @@ class GradFnLabelSelector(BaseSelector):
             GradFn label to match.
         """
 
-        object.__setattr__(self, "selector_kind", "grad_fn_label")
+        object.__setattr__(self, "selector_kind", "label")
         object.__setattr__(self, "selector_value", name)
-        object.__setattr__(self, "grad_fn_label", name)
+        object.__setattr__(self, "label", name)
         object.__setattr__(self, "direction", "backward")
 
 
@@ -807,7 +807,7 @@ def _classify_selector_direction(
 
     if isinstance(sel, TargetSpec):
         kind = sel.selector_kind
-        if kind in {"grad_fn", "intervening", "grad_fn_label"}:
+        if kind in {"grad_fn", "intervening", "label"}:
             return "backward"
         if kind == "func":
             return "forward"
@@ -891,7 +891,7 @@ __all__ = [
     "contains",
     "func",
     "grad_fn",
-    "grad_fn_label",
+    "label",
     "in_module",
     "intervening",
     "label",

@@ -422,12 +422,10 @@ class Op:
         "_tracing_finished": FieldPolicy.KEEP,
         "_construction_done": FieldPolicy.DROP,
         "_is_in_conditional_body": FieldPolicy.KEEP,
+        "label": FieldPolicy.KEEP,
+        "label_short": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
         "layer_label_short": FieldPolicy.KEEP,
-        "layer_label_w_pass": FieldPolicy.KEEP,
-        "layer_label_w_pass_short": FieldPolicy.KEEP,
-        "layer_label_no_pass": FieldPolicy.KEEP,
-        "layer_label_no_pass_short": FieldPolicy.KEEP,
         "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
         "pass_index": FieldPolicy.KEEP,
@@ -437,7 +435,7 @@ class Op:
         "transformed_out": FieldPolicy.BLOB,
         "has_saved_activation": FieldPolicy.KEEP,
         "output_device": FieldPolicy.KEEP,
-        "out_postfunc": FieldPolicy.DROP,
+        "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "interventions": FieldPolicy.DROP,
         "intervention_replaced": FieldPolicy.KEEP,
@@ -469,7 +467,7 @@ class Op:
         "grad": FieldPolicy.BLOB,
         "transformed_grad": FieldPolicy.BLOB,
         "save_gradients": FieldPolicy.KEEP,
-        "has_saved_gradient": FieldPolicy.KEEP,
+        "has_grad": FieldPolicy.KEEP,
         "grad_shape": FieldPolicy.KEEP,
         "transformed_grad_shape": FieldPolicy.KEEP,
         "grad_dtype": FieldPolicy.KEEP,
@@ -567,12 +565,12 @@ class Op:
         "modules": FieldPolicy.KEEP,
         "fx_qualpath": FieldPolicy.KEEP,
         "fx_call_index": FieldPolicy.KEEP,
-        "modules_entered": FieldPolicy.KEEP,
+        "module_call_stack": FieldPolicy.KEEP,
         "module_entry_arg_keys": FieldPolicy.KEEP,
-        "input_to_module_calls": FieldPolicy.KEEP,
+        "input_to_modules": FieldPolicy.KEEP,
         "output_of_modules": FieldPolicy.KEEP,
         "output_of_module_calls": FieldPolicy.KEEP,
-        "is_submodule_output": FieldPolicy.KEEP,
+        "is_module_output": FieldPolicy.KEEP,
         "is_atomic_module": FieldPolicy.KEEP,
         "atomic_module_call": FieldPolicy.KEEP,
         "func_config": FieldPolicy.BLOB_RECURSIVE,
@@ -712,10 +710,8 @@ class Op:
         # Label info:
         self.layer_label = fields_dict["layer_label"]
         self.layer_label_short = fields_dict["layer_label_short"]
-        self.layer_label_w_pass = fields_dict["layer_label_w_pass"]
-        self.layer_label_w_pass_short = fields_dict["layer_label_w_pass_short"]
-        self.layer_label_no_pass = fields_dict["layer_label_no_pass"]
-        self.layer_label_no_pass_short = fields_dict["layer_label_no_pass_short"]
+        self.label = fields_dict["label"]
+        self.label_short = fields_dict["label_short"]
         self.type = fields_dict["type"]
         self.type_index = fields_dict["type_index"]
         self.pass_index = fields_dict["pass_index"]
@@ -727,7 +723,7 @@ class Op:
         self.transformed_out = fields_dict["transformed_out"]
         self.has_saved_activation = fields_dict["has_saved_activation"]
         self.output_device = fields_dict["output_device"]
-        self.out_postfunc = fields_dict["out_postfunc"]
+        self.activation_transform = fields_dict["activation_transform"]
         self.annotations: Dict[str, Any] = fields_dict["annotations"]
         self.interventions = fields_dict["interventions"]
         self.intervention_replaced = fields_dict["intervention_replaced"]
@@ -760,7 +756,7 @@ class Op:
         self.grad = fields_dict["grad"]
         self.transformed_grad = fields_dict["transformed_grad"]
         self.save_gradients = fields_dict["save_gradients"]
-        self.has_saved_gradient = fields_dict["has_saved_gradient"]
+        self.has_grad = fields_dict["has_grad"]
         self.grad_shape = fields_dict["grad_shape"]
         self.transformed_grad_shape = fields_dict["transformed_grad_shape"]
         self.grad_dtype = fields_dict["grad_dtype"]
@@ -875,12 +871,12 @@ class Op:
         self.modules = fields_dict["modules"]
         self.fx_qualpath: Optional[str] = fields_dict["fx_qualpath"]
         self.fx_call_index: int = fields_dict["fx_call_index"]
-        self.modules_entered = fields_dict["modules_entered"]
+        self.module_call_stack = fields_dict["module_call_stack"]
         self.module_entry_arg_keys = fields_dict["module_entry_arg_keys"]
-        self.input_to_module_calls = fields_dict["input_to_module_calls"]
+        self.input_to_modules = fields_dict["input_to_modules"]
         self.output_of_modules = fields_dict["output_of_modules"]
         self.output_of_module_calls = fields_dict["output_of_module_calls"]
-        self.is_submodule_output = fields_dict["is_submodule_output"]
+        self.is_module_output = fields_dict["is_module_output"]
         self.is_atomic_module = fields_dict["is_atomic_module"]
         self.atomic_module_call = fields_dict["atomic_module_call"]
 
@@ -1066,7 +1062,7 @@ class Op:
         activations: list[torch.Tensor | None] = []
         child_labels = (
             self.layer_label,
-            self.layer_label_w_pass,
+            self.label,
             self._label_raw,
             self._layer_label_raw,
         )
@@ -1157,7 +1153,7 @@ class Op:
     @property
     def is_submodule_input(self) -> bool:
         """Whether this operation is the first inside a submodule's forward()."""
-        return len(self.modules_entered) > 0
+        return len(self.module_call_stack) > 0
 
     @property
     def memory_str(self) -> str:
@@ -1232,7 +1228,7 @@ class Op:
         """
 
         for candidate in (
-            self.layer_label_w_pass,
+            self.label,
             self.layer_label,
             self._layer_label_raw,
             self._label_raw,
@@ -1512,7 +1508,7 @@ class Op:
             "activation": "out",
             "transformed_activation": "transformed_out",
             "has_saved_activations": "has_saved_activation",
-            "activation_postfunc": "out_postfunc",
+            "activation_postfunc": "activation_transform",
             "activation_shape": "shape",
             "transformed_activation_shape": "transformed_out_shape",
             "activation_dtype": "dtype",
@@ -1530,7 +1526,7 @@ class Op:
             "internally_initialized": "is_internal_source",
             "internally_terminated": "is_internal_sink",
             "parent_param_barcodes": "_param_barcodes",
-            "module_passes_entered": "input_to_module_calls",
+            "module_passes_entered": "input_to_modules",
             "modules_exited": "output_of_modules",
             "module_passes_exited": "output_of_module_calls",
             "is_leaf_module_output": "is_atomic_module",
@@ -1549,30 +1545,6 @@ class Op:
         state.pop("source_trace", None)
         self.__dict__.update(state)
         object.__setattr__(self, "_construction_done", bool(state.get("_construction_done", True)))
-
-    @property
-    def out_transform(self) -> Optional[Callable[..., Any]]:
-        """Canonical out transform callable used for this pass.
-
-        Returns
-        -------
-        Optional[Callable]
-            Transform callable, or ``None`` when outs are stored unchanged.
-        """
-
-        return cast("Callable[..., Any] | None", self.out_postfunc)
-
-    @out_transform.setter
-    def out_transform(self, value: Optional[Callable[..., Any]]) -> None:
-        """Set the canonical out transform callable.
-
-        Parameters
-        ----------
-        value:
-            Transform callable, or ``None``.
-        """
-
-        self._internal_set("out_postfunc", value)
 
     # ********************************************
     # *********** User-Facing Functions **********
@@ -1650,7 +1622,7 @@ class Op:
         t_args: Union[List[Any], Tuple[Any, ...]],
         t_kwargs: Dict[str, Any],
         save_arg_values: bool,
-        out_postfunc: Optional[Callable[..., Any]] = None,
+        activation_transform: Optional[Callable[..., Any]] = None,
     ) -> None:
         """Save the output tensor (and optionally args) for this operation.
 
@@ -1658,7 +1630,7 @@ class Op:
         1. Clone the tensor via ``safe_copy`` (strips tl_ attributes to avoid
            logging the copy operation).
         2. Move to ``output_device`` if different from the tensor's current device.
-        3. Apply ``out_postfunc`` inside ``pause_logging()`` to prevent
+        3. Apply ``activation_transform`` inside ``pause_logging()`` to prevent
            the postfunc's own tensor ops from being logged.
         4. Optionally deep-copy function args/kwargs via ``_recursive_safe_copy``.
 
@@ -1667,7 +1639,7 @@ class Op:
             t_args: Positional arguments passed to the operation.
             t_kwargs: Keyword arguments passed to the operation.
             save_arg_values: Whether to deep-copy and store args/kwargs.
-            out_postfunc: Optional transform applied to the tensor
+            activation_transform: Optional transform applied to the tensor
                 before storing (e.g. detach, to-numpy, normalize).
         """
         trace = self.source_trace
@@ -1683,8 +1655,8 @@ class Op:
             self.dtype = raw_out.dtype
             self.memory = get_memory_amount(raw_out)
 
-            save_raw_outs = getattr(trace, "save_raw_outs", True)
-            store_raw = save_raw_outs or out_postfunc is None
+            save_raw_activations = getattr(trace, "save_raw_activations", True)
+            store_raw = save_raw_activations or activation_transform is None
             if trace is not None and store_raw and not getattr(trace, "save_arg_values", False):
                 hash_cache = getattr(trace, "_out_hash_cache", None)
                 if hash_cache is None:
@@ -1703,12 +1675,12 @@ class Op:
             self.transformed_out_shape = None
             self.transformed_out_dtype = None
             self.transformed_activation_memory = None
-            if out_postfunc is not None:
+            if activation_transform is not None:
                 self._internal_set(
                     "transformed_out",
                     self._apply_postfunc(
                         raw_out,
-                        out_postfunc,
+                        activation_transform,
                         postfunc_kind="out",
                         streaming_active=writer is not None,
                     ),
@@ -1784,18 +1756,18 @@ class Op:
         self.grad_shape = tuple(raw_grad.shape)
         self.grad_dtype = raw_grad.dtype
         self.gradient_memory = get_memory_amount(raw_grad)
-        gradient_transform = getattr(trace, "gradient_transform", None)
+        grad_transform = getattr(trace, "grad_transform", None)
         self._internal_set("transformed_grad", None)
         self.transformed_grad_shape = None
         self.transformed_grad_dtype = None
         self.transformed_gradient_memory = None
         writer = getattr(trace, "_out_writer", None) if trace is not None else None
-        if gradient_transform is not None:
+        if grad_transform is not None:
             self._internal_set(
                 "transformed_grad",
                 self._apply_postfunc(
                     raw_grad,
-                    gradient_transform,
+                    grad_transform,
                     postfunc_kind="grad",
                     streaming_active=writer is not None,
                 ),
@@ -1815,9 +1787,9 @@ class Op:
             self.transformed_gradient_memory = _memory_or_none(self.transformed_grad)
 
         save_raw_gradients = getattr(trace, "save_raw_gradients", True)
-        store_raw = save_raw_gradients or gradient_transform is None
+        store_raw = save_raw_gradients or grad_transform is None
         self._internal_set("grad", raw_grad.detach().clone() if store_raw else None)
-        self.has_saved_gradient = True
+        self.has_grad = True
         if writer is not None and getattr(trace, "_defer_streaming_bundle_finalization", False):
             self._stream_tensor_blob(
                 writer,
@@ -1963,13 +1935,13 @@ class Op:
         if not isinstance(tensor, torch.Tensor):
             if kind == "transformed_out":
                 message = (
-                    "Streaming save requires out_postfunc outputs to be torch.Tensor "
+                    "Streaming save requires activation_transform outputs to be torch.Tensor "
                     f"instances, but layer {self._streaming_label} produced "
                     f"{type(tensor).__name__}."
                 )
             elif kind == "transformed_grad":
                 message = (
-                    "Streaming save requires gradient_transform outputs to be torch.Tensor "
+                    "Streaming save requires grad_transform outputs to be torch.Tensor "
                     f"instances, but layer {self._streaming_label} produced "
                     f"{type(tensor).__name__}."
                 )
@@ -2094,7 +2066,7 @@ class Op:
             pass_str = ", "
         sml = self.source_trace
         num_ops = sml.num_ops if sml is not None else "?"
-        s = f"Layer {self.layer_label_no_pass}{pass_str}operation {self.step_index}/{num_ops}:"
+        s = f"Layer {self.layer_label}{pass_str}operation {self.step_index}/{num_ops}:"
         s += f"\n\tOutput tensor: shape={self.shape}, dype={self.dtype}, size={self.memory_str}"
         if not self.has_saved_activation:
             s += " (not saved)"

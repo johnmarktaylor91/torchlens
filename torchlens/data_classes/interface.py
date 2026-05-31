@@ -165,7 +165,7 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += "\n\tStructure:"
     if self.is_recurrent:
-        s += f"\n\t\t- recurrent (at most {self.max_recurrent_loops} loops)"
+        s += f"\n\t\t- recurrent (at most {self.max_layer_op_count} loops)"
     else:
         s += "\n\t\t- purely feedforward, no recurrence"
 

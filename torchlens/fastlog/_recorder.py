@@ -149,15 +149,13 @@ class Recorder:
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
-        out_transform: ActivationPostfunc | None | MissingType = MISSING,
-        save_raw_outs: bool | MissingType = MISSING,
+        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+        save_raw_activations: bool | MissingType = MISSING,
         keep_grad: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
-        gradient_transform: GradientPostfunc | None | MissingType = MISSING,
+        grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
         backward_ready: bool = False,
-        out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
-        gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -169,13 +167,13 @@ class Recorder:
         include_source_events, max_predicate_failures, on_predicate_error, streaming,
         random_seed:
             Fastlog recording options.
-        out_transform:
+        activation_transform:
             Optional callable applied to each retained out copy after
             dtype/device transforms. The callable runs under ``pause_logging``
             and must return a ``torch.Tensor``. Errors are wrapped in
             :class:`torchlens.TorchLensPostfuncError`.
-        save_raw_outs:
-            When ``False`` and ``out_transform`` is set, only the
+        save_raw_activations:
+            When ``False`` and ``activation_transform`` is set, only the
             transformed payload is retained on the record. Defaults to
             ``True`` to mirror the slow path.
         backward_ready:
@@ -194,13 +192,6 @@ class Recorder:
             value=default_module,
             backward_ready=backward_ready,
         )
-        if out_postfunc is not MISSING:
-            if out_transform is not MISSING:
-                raise TypeError(
-                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
-                )
-            warn_deprecated_alias("out_postfunc", "out_transform")
-            out_transform = out_postfunc
         self.model = unwrapped_model
         self.options = merge_recording_options(
             recording=None,
@@ -214,13 +205,12 @@ class Recorder:
             on_predicate_error=on_predicate_error,
             streaming=streaming,
             random_seed=random_seed,
-            out_transform=out_transform,
-            save_raw_outs=save_raw_outs,
+            activation_transform=activation_transform,
+            save_raw_activations=save_raw_activations,
             keep_grad=keep_grad,
             default_grad=default_grad,
-            gradient_transform=gradient_transform,
+            grad_transform=grad_transform,
             save_raw_gradients=save_raw_gradients,
-            gradient_postfunc=gradient_postfunc,
         )
         validate_recording_options(self.options)
         self._state: RecordingState | None = None
@@ -310,8 +300,8 @@ class Recorder:
             raise RecorderStateError("Recorder.log() requires an active with-block")
         trace = Trace(
             model_class_name=str(type(self.model).__name__),
-            out_postfunc=self.options.out_transform,
-            save_raw_outs=self.options.save_raw_outs,
+            activation_transform=self.options.activation_transform,
+            save_raw_activations=self.options.save_raw_activations,
             detach_saved_activations=False,
             backward_ready=True,
         )

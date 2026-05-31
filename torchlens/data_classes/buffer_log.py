@@ -60,7 +60,7 @@ class Buffer(Op):
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(Op.PORTABLE_STATE_SPEC)
 
     @property
-    def all_buffer_addresses(self) -> list[str]:
+    def all_addresses(self) -> list[str]:
         """Return all addresses associated with this buffer.
 
         Returns
@@ -81,7 +81,7 @@ class Buffer(Op):
             Whether this buffer is shared.
         """
 
-        return len(self.all_buffer_addresses) > 1
+        return len(self.all_addresses) > 1
 
     @property
     def buffer_overwrite_index(self) -> int | None:
@@ -129,8 +129,8 @@ class Buffer(Op):
         if self.buffer_pass is not None:
             lines.append(f"  pass: {self.buffer_pass}")
         lines.append(f"  has_saved_activation: {self.has_saved_activation}")
-        if self.has_saved_gradient:
-            lines.append("  has_saved_gradient: True")
+        if self.has_grad:
+            lines.append("  has_grad: True")
         if self.layer_label is not None:
             lines.append(f"  layer_label: {self.layer_label}")
         return "\n".join(lines)

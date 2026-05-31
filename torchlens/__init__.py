@@ -50,7 +50,6 @@ from .intervention import (
     grad_clamp,
     grad_clip,
     grad_fn,
-    grad_fn_label,
     grad_noise,
     grad_scale,
     grad_zero,
@@ -332,7 +331,7 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
         resolved = trace[pattern]
     except (KeyError, ValueError):
         return []
-    label = getattr(resolved, "layer_label_no_pass", getattr(resolved, "layer_label", pattern))
+    label = getattr(resolved, "layer_label", getattr(resolved, "layer_label", pattern))
     return [str(label)]
 
 
@@ -824,7 +823,7 @@ __all__ = [
     "func",
     "grad_fn",
     "intervening",
-    "grad_fn_label",
+    "label",
     "module",
     "output",
     "contains",

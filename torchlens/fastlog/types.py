@@ -73,16 +73,16 @@ class ActivationRecord:
     ram_payload:
         Raw out copy retained in memory, or ``None`` when not stored
         either because the record is metadata-only or the caller opted out
-        via ``save_raw_outs=False``.
+        via ``save_raw_activations=False``.
     disk_payload:
         Raw out copy persisted to disk, or ``None`` when no disk
         target is active or the caller opted out via
-        ``save_raw_outs=False``.
+        ``save_raw_activations=False``.
     transformed_ram_payload:
-        Output of ``out_postfunc`` retained in memory. ``None`` when
+        Output of ``activation_transform`` retained in memory. ``None`` when
         no postfunc is configured for the recording.
     transformed_disk_payload:
-        Output of ``out_postfunc`` persisted to disk. ``None`` when
+        Output of ``activation_transform`` persisted to disk. ``None`` when
         no postfunc is configured for the recording.
     metadata:
         Auxiliary record metadata, including disk blob entries when present.
@@ -106,7 +106,7 @@ class GradRecordContext:
 
     Parameters
     ----------
-    grad_fn_label:
+    label:
         Label assigned to the autograd node during the backward walk.
     layer_label:
         Forward fastlog label joined by ``grad_fn_handle`` identity, when available.
@@ -120,9 +120,9 @@ class GradRecordContext:
         Whether this backward node has a joined forward op.
     """
 
-    grad_fn_label: str
+    label: str
     grad_fn_class_name: str
-    grad_fn_type: str
+    type: str
     backward_call_index: int
     grad_kind: Literal["grad_input", "grad_output"]
     grad_input_index: int | None = None
@@ -139,10 +139,10 @@ class GradRecordContext:
     tensor_device: torch.device | None = None
 
     @property
-    def label(self) -> str:
-        """Return the gradient event label used by predicate callables."""
+    def effective_label(self) -> str:
+        """Return the forward label when joined, otherwise the grad-fn label."""
 
-        return self.layer_label or self.grad_fn_label
+        return self.layer_label or self.label
 
 
 @dataclass(frozen=True, slots=True)
@@ -410,7 +410,7 @@ class Recording:
         if record.ctx.layer_label is not None:
             self.grad_by_label.setdefault(record.ctx.layer_label, []).append(index)
         self.grad_by_label.setdefault(record.ctx.label, []).append(index)
-        self.grad_by_grad_fn_label.setdefault(record.ctx.grad_fn_label, []).append(index)
+        self.grad_by_grad_fn_label.setdefault(record.ctx.label, []).append(index)
 
     def log_backward(
         self,
@@ -568,7 +568,7 @@ def build_grad_record_context(
     grad_fn_handle: Any,
     grad: torch.Tensor | None,
     *,
-    grad_fn_label: str,
+    label: str,
     grad_kind: Literal["grad_input", "grad_output"],
     backward_call_index: int,
     grad_input_index: int | None = None,
@@ -583,9 +583,9 @@ def build_grad_record_context(
     grad_fn_type = type(grad_fn_handle).__name__.removesuffix("Backward0").lower()
     if forward_ctx is None:
         return GradRecordContext(
-            grad_fn_label=grad_fn_label,
+            label=label,
             grad_fn_class_name=type(grad_fn_handle).__name__,
-            grad_fn_type=grad_fn_type,
+            type=grad_fn_type,
             backward_call_index=backward_call_index,
             grad_kind=grad_kind,
             grad_input_index=grad_input_index,
@@ -595,9 +595,9 @@ def build_grad_record_context(
             tensor_device=tensor_device,
         )
     return GradRecordContext(
-        grad_fn_label=grad_fn_label,
+        label=label,
         grad_fn_class_name=type(grad_fn_handle).__name__,
-        grad_fn_type=grad_fn_type,
+        type=grad_fn_type,
         backward_call_index=backward_call_index,
         grad_kind=grad_kind,
         grad_input_index=grad_input_index,

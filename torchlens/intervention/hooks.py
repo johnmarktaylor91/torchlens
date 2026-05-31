@@ -527,7 +527,7 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
         Selector equivalent to the target spec.
     """
 
-    from .selectors import contains, func, grad_fn, grad_fn_label, intervening, label, module, where
+    from .selectors import contains, func, grad_fn, intervening, label, module, where
 
     if target.selector_kind == "label":
         return label(str(target.selector_value))
@@ -557,14 +557,14 @@ def _selector_from_target_spec(target: TargetSpec) -> BaseSelector:
     if target.selector_kind == "grad_fn":
         payload = dict(target.selector_value or {})
         return grad_fn(
-            payload.get("grad_fn_type"),
+            payload.get("type"),
             label=payload.get("grad_fn_label_pattern"),
             is_custom=payload.get("is_custom"),
         )
     if target.selector_kind == "intervening":
         return intervening()
-    if target.selector_kind == "grad_fn_label":
-        return grad_fn_label(str(target.selector_value))
+    if target.selector_kind == "label":
+        return label(str(target.selector_value))
     if target.selector_kind == "not":
         return ~_normalize_live_selector(target.selector_value)
     raise SiteResolutionError(f"Unsupported live hook selector kind {target.selector_kind!r}.")

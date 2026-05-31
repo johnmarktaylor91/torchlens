@@ -345,7 +345,7 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "cell:1",
         "cell:2",
         "cell:3"
@@ -355,7 +355,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-11",
@@ -388,7 +388,7 @@
       "func_name": "new_zeros",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "cell:1"
       ],
       "intervention_replaced": false,
@@ -396,7 +396,7 @@
       "is_internal_sink": false,
       "is_internal_source": true,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "newzeros_1_1:1",
       "lookup_keys": [
         "-10",
@@ -418,7 +418,7 @@
       "func_name": "new_zeros",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "cell:1"
       ],
       "intervention_replaced": false,
@@ -426,7 +426,7 @@
       "is_internal_sink": false,
       "is_internal_source": true,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "newzeros_2_2:1",
       "lookup_keys": [
         "-9",
@@ -448,7 +448,7 @@
       "func_name": "lstm_cell",
       "fx_call_index": 0,
       "fx_qualpath": "cell.lstm_cell",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "cell:2"
       ],
       "intervention_replaced": false,
@@ -456,7 +456,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "lstmcell_1_3:1",
       "lookup_keys": [
         "-8",
@@ -483,7 +483,7 @@
       "func_name": "lstm_cell",
       "fx_call_index": 1,
       "fx_qualpath": "cell.lstm_cell",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "cell:2"
       ],
       "intervention_replaced": false,
@@ -491,7 +491,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "lstmcell_1_3:2",
       "lookup_keys": [
         "-7",
@@ -518,7 +518,7 @@
       "func_name": "lstm_cell",
       "fx_call_index": 2,
       "fx_qualpath": "cell.lstm_cell",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "cell:3"
       ],
       "intervention_replaced": false,
@@ -526,7 +526,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "lstmcell_1_3:3",
       "lookup_keys": [
         "-6",
@@ -553,7 +553,7 @@
       "func_name": "lstm_cell",
       "fx_call_index": 3,
       "fx_qualpath": "cell.lstm_cell",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "cell:3"
       ],
       "intervention_replaced": false,
@@ -561,7 +561,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "lstmcell_1_3:4",
       "lookup_keys": [
         "-5",
@@ -588,7 +588,7 @@
       "func_name": "lstm_cell",
       "fx_call_index": 4,
       "fx_qualpath": "cell.lstm_cell",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "readout:1"
       ],
       "intervention_replaced": false,
@@ -596,7 +596,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "lstmcell_1_3:5",
       "lookup_keys": [
         "-4",
@@ -627,13 +627,13 @@
       "func_name": "lstm_cell",
       "fx_call_index": 5,
       "fx_qualpath": "cell.lstm_cell",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": true,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "lstmcell_1_3:6",
       "lookup_keys": [
         "-3",
@@ -660,13 +660,13 @@
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "readout.linear",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "linear_1_4:1",
       "lookup_keys": [
         "-2",
@@ -696,13 +696,13 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

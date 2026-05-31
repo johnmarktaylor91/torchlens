@@ -826,8 +826,8 @@ def _record_module_entry_metadata(
         layer_entry = live_record_for_label(trace, label).fields
         input_tensor_labels.add(label)
         trace._mod_entered[mod_id].append(label)
-        layer_entry["modules_entered"].append(address)
-        layer_entry["input_to_module_calls"].append(module_call_label)
+        layer_entry["module_call_stack"].append(address)
+        layer_entry["input_to_modules"].append(module_call_label)
         # Record which arg position this tensor occupies for this module pass.
         for arg_key, arg_val in itertools.chain(enumerate(args), kwargs.items()):
             if arg_val is t:
@@ -944,12 +944,10 @@ def _ensure_module_output_tensor_logged(
             "source_trace": trace,
             "_tracing_finished": False,
             "_construction_done": False,
+            "label": None,
+            "label_short": None,
             "layer_label": None,
             "layer_label_short": None,
-            "layer_label_w_pass": None,
-            "layer_label_w_pass_short": None,
-            "layer_label_no_pass": None,
-            "layer_label_no_pass_short": None,
             "type": "interventionreplacement",
             "type_index": type_index,
             "pass_index": 1,
@@ -958,7 +956,7 @@ def _ensure_module_output_tensor_logged(
             "out": None,
             "transformed_out": None,
             "has_saved_activation": False,
-            "out_postfunc": trace.out_postfunc,
+            "activation_transform": trace.activation_transform,
             "annotations": {},
             "interventions": [],
             "intervention_replaced": True,
@@ -985,7 +983,7 @@ def _ensure_module_output_tensor_logged(
             "grad": None,
             "transformed_grad": None,
             "save_gradients": trace.save_gradients,
-            "has_saved_gradient": False,
+            "has_grad": False,
             "grad_shape": None,
             "transformed_grad_shape": None,
             "grad_dtype": None,
@@ -1088,19 +1086,21 @@ def _ensure_module_output_tensor_logged(
             "module": (address, module_call_index),
             "_address_normalized": None,
             "modules": modules,
-            "modules_entered": [],
+            "module_call_stack": [],
             "module_entry_arg_keys": defaultdict(list),
-            "input_to_module_calls": [],
+            "input_to_modules": [],
             "output_of_modules": [],
             "output_of_module_calls": [],
-            "is_submodule_output": False,
+            "is_module_output": False,
             "is_atomic_module": False,
             "atomic_module_call": None,
             "func_config": {},
         }
     )
     trace.op_equivalence_classes[raw_label].add(raw_label)
-    new_entry = _make_layer_log_entry(trace, tensor, fields_dict, (), {}, trace.out_postfunc)
+    new_entry = _make_layer_log_entry(
+        trace, tensor, fields_dict, (), {}, trace.activation_transform
+    )
     for parent_entry in parent_entries:
         parent_entry["children"].append(raw_label)
         parent_entry["has_children"] = True
@@ -1237,7 +1237,7 @@ def _record_module_exit_metadata(
         layer_entry = live_record_for_label(trace, tensor_label).fields
         if getattr(module, "_forward_hooks", None):
             layer_entry["intervention_replaced"] = True
-        layer_entry["is_submodule_output"] = True
+        layer_entry["is_module_output"] = True
         layer_entry["is_atomic_module"] = _is_bottom_level_submodule_exit(trace, t, module)
         layer_entry["output_of_modules"].append(address)
         layer_entry["output_of_module_calls"].append((address, module_call_index))
@@ -1471,7 +1471,7 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
     1. Already marked — return True immediately (cached from prior check).
     2. Tensor was initialized inside the model (e.g. a buffer) and no tensors
        entered this submodule — it's a leaf-generated tensor.
-    3. All parent tensors' most recent ``modules_entered`` is this submodule —
+    3. All parent tensors' most recent ``module_call_stack`` is this submodule —
        the computation stayed within this module.
     """
     tensor_label = get_tensor_label(t)
@@ -1500,7 +1500,7 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
     # NOT a bottom-level exit.
     for parent_label in layer_entry["parents"]:
         parent_tensor = live_record_for_label(trace, parent_label).fields
-        parent_modules_entered = parent_tensor["modules_entered"]
+        parent_modules_entered = parent_tensor["module_call_stack"]
         if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != subaddress):
             layer_entry["is_atomic_module"] = False
             return False

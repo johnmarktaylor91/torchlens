@@ -491,16 +491,16 @@ class ConditionalAccessor:
 class OrphanAccessor(Accessor[Op]):
     """Dict-like accessor for retained orphan ``Op`` records."""
 
-    def __init__(self, orphan_ops: Mapping[str, Op] | None = None) -> None:
+    def __init__(self, _orphan_labels: Mapping[str, Op] | None = None) -> None:
         """Initialize from raw orphan labels.
 
         Parameters
         ----------
-        orphan_ops:
+        _orphan_labels:
             Mapping from raw orphan labels to retained orphan operation logs.
         """
 
-        super().__init__(orphan_ops or {})
+        super().__init__(_orphan_labels or {})
 
     def _resolve_substring(self, key: str) -> Op | None:
         """Resolve by any orphan label variant or unique substring.
@@ -523,10 +523,10 @@ class OrphanAccessor(Accessor[Op]):
             in {
                 orphan.layer_label,
                 orphan.layer_label_short,
-                orphan.layer_label_w_pass,
-                orphan.layer_label_w_pass_short,
-                orphan.layer_label_no_pass,
-                orphan.layer_label_no_pass_short,
+                orphan.label,
+                orphan.label_short,
+                orphan.layer_label,
+                orphan.layer_label_short,
                 orphan._label_raw,
             }
         ]
@@ -541,10 +541,10 @@ class OrphanAccessor(Accessor[Op]):
                 for label in (
                     orphan.layer_label,
                     orphan.layer_label_short,
-                    orphan.layer_label_w_pass,
-                    orphan.layer_label_w_pass_short,
-                    orphan.layer_label_no_pass,
-                    orphan.layer_label_no_pass_short,
+                    orphan.label,
+                    orphan.label_short,
+                    orphan.layer_label,
+                    orphan.layer_label_short,
                     orphan._label_raw,
                 )
             )
@@ -583,18 +583,16 @@ class TraceOpAccessor(Accessor[Op]):
         for op in self._list:
             if key in {
                 op.layer_label,
-                op.layer_label_w_pass,
+                op.label,
                 op.layer_label_short,
-                op.layer_label_w_pass_short,
+                op.label_short,
             }:
                 return op
-        parent_matches = [
-            op for op in self._list if key in {op.layer_label_no_pass, op.layer_label_no_pass_short}
-        ]
+        parent_matches = [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
         if len(parent_matches) == 1:
             return parent_matches[0]
         if len(parent_matches) > 1:
-            parent_label = parent_matches[0].layer_label_no_pass
+            parent_label = parent_matches[0].layer_label
             raise ValueError(
                 f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
                 "integer position or a pass-qualified Op label."
@@ -635,9 +633,7 @@ class TraceGradFnCallAccessor(Accessor[Any]):
     def _resolve_substring(self, key: str) -> Any | None:
         """Resolve unique bare GradFn label to its only GradFnCall."""
 
-        parent_matches = [
-            call for call in self._list if key == getattr(call, "grad_fn_label", None)
-        ]
+        parent_matches = [call for call in self._list if key == getattr(call, "label", None)]
         if len(parent_matches) == 1:
             return parent_matches[0]
         if len(parent_matches) > 1:
@@ -916,7 +912,7 @@ class Trace:
     last_run: Any | None
     capture_start_time: float
     capture_end_time: float
-    backward_root_grad_fn_ids: list[int]
+    backward_root_grad_fn_object_ids: list[int]
     code_context: list["FuncCallLocation"]
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -945,9 +941,9 @@ class Trace:
         "layer_visualizers": FieldPolicy.DROP,
         "save_visualizations": FieldPolicy.KEEP,
         "_visualizer_dir": FieldPolicy.DROP,
-        "out_postfunc": FieldPolicy.DROP,
+        "activation_transform": FieldPolicy.DROP,
         "_out_transform_repr": FieldPolicy.KEEP,
-        "save_raw_outs": FieldPolicy.KEEP,
+        "save_raw_activations": FieldPolicy.KEEP,
         "input_annotations": FieldPolicy.KEEP,
         "_source_code_blob": FieldPolicy.KEEP,
         "_source_model_ref": FieldPolicy.DROP,
@@ -985,7 +981,7 @@ class Trace:
         "save_gradients": FieldPolicy.KEEP,
         "gradients_to_save": FieldPolicy.KEEP,
         "_grad_layer_nums_to_save": FieldPolicy.KEEP,
-        "gradient_transform": FieldPolicy.DROP,
+        "grad_transform": FieldPolicy.DROP,
         "grad_transform_repr": FieldPolicy.KEEP,
         "save_raw_gradients": FieldPolicy.KEEP,
         "save_code_context": FieldPolicy.KEEP,
@@ -1038,8 +1034,8 @@ class Trace:
         "conditional_arm_entry_edges": FieldPolicy.KEEP,
         "conditional_edge_call_indices": FieldPolicy.KEEP,
         "conditionals": FieldPolicy.KEEP,
-        "orphan_ops": FieldPolicy.KEEP,
-        "orphan_logs": FieldPolicy.KEEP,
+        "_orphan_labels": FieldPolicy.KEEP,
+        "_orphan_logs": FieldPolicy.KEEP,
         "_saved_grads_set": FieldPolicy.DROP,
         "layers_with_params": FieldPolicy.KEEP,
         "ops_with_params": FieldPolicy.KEEP,
@@ -1102,9 +1098,9 @@ class Trace:
         "grad_fn_order": FieldPolicy.KEEP,
         "_grad_fn_param_refs": FieldPolicy.KEEP,
         "_param_log_by_pid": FieldPolicy.DROP,
-        "backward_root_grad_fn_ids": FieldPolicy.KEEP,
+        "backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
         "backward_durations": FieldPolicy.KEEP,
-        "backward_num_calls": FieldPolicy.KEEP,
+        "num_backward_passes": FieldPolicy.KEEP,
         "backward_peak_memory": FieldPolicy.KEEP,
         "backward_memory_backend": FieldPolicy.KEEP,
         "_backward_gradfn_refs": FieldPolicy.DROP,
@@ -1114,9 +1110,9 @@ class Trace:
         self,
         model_class_name: str,
         output_device: str = "same",
-        out_postfunc: Optional[ActivationPostfunc] = None,
-        gradient_transform: Optional[GradientPostfunc] = None,
-        save_raw_outs: bool = True,
+        activation_transform: Optional[ActivationPostfunc] = None,
+        grad_transform: Optional[GradientPostfunc] = None,
+        save_raw_activations: bool = True,
         save_raw_gradients: bool = True,
         keep_orphans: bool = False,
         save_arg_values: bool = False,
@@ -1148,9 +1144,9 @@ class Trace:
         Args:
             model_class_name: Human-readable name of the model being logged.
             output_device: Device to move saved outs to ("same" keeps original device).
-            out_postfunc: Optional function applied to each tensor before saving.
-            gradient_transform: Optional function applied to each grad before saving.
-            save_raw_outs: Whether raw outs are retained when a postfunc is set.
+            activation_transform: Optional function applied to each tensor before saving.
+            grad_transform: Optional function applied to each grad before saving.
+            save_raw_activations: Whether raw outs are retained when a postfunc is set.
             save_raw_gradients: Whether raw grads are retained when a postfunc is set.
             keep_orphans: If True, orphan island ops remain in raw metadata and
                 are exposed via ``trace.orphans``.
@@ -1215,14 +1211,14 @@ class Trace:
         self.layer_visualizers = layer_visualizers
         self.save_visualizations = save_visualizations
         self._visualizer_dir: str | None = None
-        self.out_postfunc = out_postfunc
-        self._out_transform_repr = repr(out_postfunc) if out_postfunc is not None else None
-        self.save_raw_outs = save_raw_outs
-        self.input_annotations: Dict[str, Any] = {}
-        self.gradient_transform = gradient_transform
-        self.grad_transform_repr = (
-            repr(gradient_transform) if gradient_transform is not None else None
+        self.activation_transform = activation_transform
+        self._out_transform_repr = (
+            repr(activation_transform) if activation_transform is not None else None
         )
+        self.save_raw_activations = save_raw_activations
+        self.input_annotations: Dict[str, Any] = {}
+        self.grad_transform = grad_transform
+        self.grad_transform_repr = repr(grad_transform) if grad_transform is not None else None
         self.save_raw_gradients = save_raw_gradients
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
@@ -1292,7 +1288,7 @@ class Trace:
         self._defer_streaming_bundle_finalization: bool = False
         self._out_sink: Optional[Callable[[str, torch.Tensor], None]] = None
         # Model structure info (computed @properties: is_recurrent,
-        # max_recurrent_loops, is_branching, has_conditional_branching)
+        # max_layer_op_count, is_branching, has_conditional_branching)
 
         # Tensor Tracking - post-processed (populated after _tracing_finished=True):
         self.layer_list: List[Op] = []  # ordered list of all layer ops
@@ -1327,8 +1323,8 @@ class Trace:
         self.conditional_arm_entry_edges: Dict[Tuple[int, str], List[Tuple[str, str]]] = {}
         self.conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]] = {}
         self.conditionals = ConditionalAccessor()
-        self.orphan_ops: List[str] = []
-        self.orphan_logs: tuple[Op, ...] = ()
+        self._orphan_labels: List[str] = []
+        self._orphan_logs: tuple[Op, ...] = ()
         self._saved_grads_set: set[str] = set()
         self.layers_with_params: Dict[str, List[Any]] = defaultdict(list)
         # Maps equivalence_class -> set of layer labels that share
@@ -1373,9 +1369,9 @@ class Trace:
         self.grad_fn_order: List[int] = []
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
-        self.backward_root_grad_fn_ids: list[int] = []
+        self.backward_root_grad_fn_object_ids: list[int] = []
         self.backward_durations: list[float] = []
-        self.backward_num_calls: int = 0
+        self.num_backward_passes: int = 0
         self.backward_peak_memory: int = 0
         self.backward_memory_backend: str = "unknown"
         _state._register_log(self)
@@ -2505,7 +2501,7 @@ class Trace:
         state["_out_hash_cache"] = {}
         state.pop("_build_state", None)
         state["_out_transform_repr"] = (
-            repr(self.out_postfunc) if self.out_postfunc is not None else None
+            repr(self.activation_transform) if self.activation_transform is not None else None
         )
         state["tlspec_version"] = TLSPEC_VERSION
         return state
@@ -2519,7 +2515,7 @@ class Trace:
                 **_MODEL_LOG_DEFAULT_FILL,
                 "tlspec_version": TLSPEC_VERSION,
                 "_out_transform_repr": None,
-                "save_raw_outs": True,
+                "save_raw_activations": True,
                 "raw_output": None,
                 "_output_transform": None,
                 "save_raw_output": "small",
@@ -2527,7 +2523,7 @@ class Trace:
                 "save_visualizations": False,
                 "_visualizer_dir": None,
                 "input_annotations": {},
-                "gradient_transform": None,
+                "grad_transform": None,
                 "grad_transform_repr": None,
                 "save_raw_gradients": True,
                 "gradients_to_save": "all",
@@ -2535,9 +2531,9 @@ class Trace:
                 "has_backward_pass": False,
                 "grad_fn_logs": OrderedDict(),
                 "grad_fn_order": [],
-                "backward_root_grad_fn_ids": [],
+                "backward_root_grad_fn_object_ids": [],
                 "backward_durations": [],
-                "backward_num_calls": 0,
+                "num_backward_passes": 0,
                 "backward_peak_memory": 0,
                 "backward_memory_backend": "unknown",
                 "total_autograd_memory": None,
@@ -2823,30 +2819,6 @@ class Trace:
     # ********************************************
 
     @property
-    def out_transform(self) -> Optional[ActivationPostfunc]:
-        """Canonical out transform callable used during capture.
-
-        Returns
-        -------
-        Optional[ActivationPostfunc]
-            Transform callable, or ``None`` when outs are stored unchanged.
-        """
-
-        return self.out_postfunc
-
-    @out_transform.setter
-    def out_transform(self, value: Optional[ActivationPostfunc]) -> None:
-        """Set the canonical out transform callable.
-
-        Parameters
-        ----------
-        value:
-            Transform callable, or ``None``.
-        """
-
-        self.out_postfunc = value
-
-    @property
     def conditional_then_entry_edges(self) -> List[Tuple[str, str]]:
         """Deprecated THEN-edge view derived from ``conditional_arm_entry_edges``.
 
@@ -2953,7 +2925,7 @@ class Trace:
         return any(v > 1 for v in self.layer_num_calls.values())
 
     @property
-    def max_recurrent_loops(self) -> int:
+    def max_layer_op_count(self) -> int:
         """Maximum number of ops for any layer."""
         return max(self.layer_num_calls.values(), default=1)
 
@@ -3090,12 +3062,12 @@ class Trace:
         return f"{self.total_backward_duration:.3f}s"
 
     @property
-    def last_backward_root_grad_fn_id(self) -> int | None:
+    def last_backward_root_grad_fn_object_id(self) -> int | None:
         """Most recent backward root grad_fn_handle object id, if any."""
 
-        if not self.backward_root_grad_fn_ids:
+        if not self.backward_root_grad_fn_object_ids:
             return None
-        return self.backward_root_grad_fn_ids[-1]
+        return self.backward_root_grad_fn_object_ids[-1]
 
     @property
     def overhead_duration(self) -> float:
@@ -3200,7 +3172,7 @@ class Trace:
         return self.total_flops // 2
 
     @property
-    def macs_by_type(self) -> _CallableDict:
+    def macs_by_op_type(self) -> _CallableDict:
         """Group MACs by layer type.
 
         Returns:
@@ -3366,7 +3338,7 @@ class Trace:
         """Access retained orphan island operations by raw or final label."""
 
         orphan_dict = OrderedDict(
-            (log.layer_label, log) for log in self.orphan_logs if getattr(log, "is_orphan", False)
+            (log.layer_label, log) for log in self._orphan_logs if getattr(log, "is_orphan", False)
         )
         return OrphanAccessor(orphan_dict)
 
@@ -3405,7 +3377,7 @@ class Trace:
         """Access Ops with saved gradients."""
 
         return TraceOpAccessor(
-            [op for op in self.layer_list if op.has_saved_gradient],
+            [op for op in self.layer_list if op.has_grad],
             self.layer_num_calls,
         )
 
@@ -3434,7 +3406,7 @@ class Trace:
             OrderedDict(
                 (label, layer)
                 for label, layer in self.layer_logs.items()
-                if any(op.has_saved_gradient for op in layer.ops.values())
+                if any(op.has_grad for op in layer.ops.values())
             ),
             source_trace=self,
         )
@@ -3552,7 +3524,7 @@ class Trace:
             OrderedDict(
                 (label, layer)
                 for label, layer in self.layer_logs.items()
-                if label in {op.layer_label_no_pass for op in self.compute_ops}
+                if label in {op.layer_label for op in self.compute_ops}
             ),
             source_trace=self,
         )
@@ -3589,7 +3561,7 @@ class Trace:
 
         return LayerAccessor(
             OrderedDict(
-                (self[label].layer_label_no_pass, self.layers[self[label].layer_label_no_pass])
+                (self[label].layer_label, self.layers[self[label].layer_label])
                 for label in self.internal_source_ops
             ),
             source_trace=self,
@@ -3609,7 +3581,7 @@ class Trace:
 
         return LayerAccessor(
             OrderedDict(
-                (self[label].layer_label_no_pass, self.layers[self[label].layer_label_no_pass])
+                (self[label].layer_label, self.layers[self[label].layer_label])
                 for label in self.internal_sink_ops
             ),
             source_trace=self,
@@ -4266,11 +4238,11 @@ class Trace:
 
         fields_for_df = [
             "layer_label",
-            "layer_label_w_pass",
-            "layer_label_no_pass",
+            "label",
+            "layer_label",
             "layer_label_short",
-            "layer_label_w_pass_short",
-            "layer_label_no_pass_short",
+            "label_short",
+            "layer_label_short",
             "layer_type",
             "type_index",
             "step_index",
@@ -4311,10 +4283,10 @@ class Trace:
             "param_shapes",
             "param_memory",
             "param_memory_str",
-            "modules_entered",
+            "module_call_stack",
             "output_of_modules",
             "is_submodule_input",
-            "is_submodule_output",
+            "is_module_output",
             "module",
             "modules",
             "conditional_branch_depth",
@@ -4347,7 +4319,7 @@ class Trace:
             "param_memory": int,
             "memory": int,
             "is_submodule_input": bool,
-            "is_submodule_output": bool,
+            "is_module_output": bool,
             "conditional_branch_depth": int,
             "is_terminal_conditional_bool": bool,
         }

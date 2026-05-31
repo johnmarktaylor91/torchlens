@@ -106,9 +106,7 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     assert (
-        restored.layer_logs[first_saved_layer.layer_label_no_pass].ops[
-            first_saved_layer.pass_index - 1
-        ]
+        restored.layer_logs[first_saved_layer.layer_label].ops[first_saved_layer.pass_index - 1]
         is first_saved_layer
     )
 

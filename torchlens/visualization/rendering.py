@@ -957,7 +957,7 @@ def render_backward_graph(
     graph_caption = (
         f"<<B>{self.model_class_name} backward graph</B><br align='left'/>"
         f"{self.num_grad_fns} grad_fn_handle nodes"
-        f"<br align='left'/>{self.backward_num_calls} backward pass(es)<br align='left'/>>"
+        f"<br align='left'/>{self.num_backward_passes} backward pass(es)<br align='left'/>>"
     )
     dot = graphviz.Digraph(
         name=f"{self.model_class_name}_backward",
@@ -1125,7 +1125,7 @@ def render_combined_graph(
     graph_caption = (
         f"<<B>{self.model_class_name} combined forward/backward graph</B><br align='left'/>"
         f"{self.num_tensors} forward nodes, {self.num_grad_fns} grad_fn_handle nodes"
-        f"<br align='left'/>{self.backward_num_calls} backward pass(es)<br align='left'/>>"
+        f"<br align='left'/>{self.num_backward_passes} backward pass(es)<br align='left'/>>"
     )
     dot = graphviz.Digraph(
         name=f"{self.model_class_name}_combined",
@@ -1439,7 +1439,7 @@ def _module_key_for_grad_fn(
     op = grad_fn_handle.op
     if op is not None:
         return _module_key_for_forward_op(op)
-    if grad_fn_handle.grad_fn_type == "accumulategrad":
+    if grad_fn_handle.type == "accumulategrad":
         param_key = _param_module_for_accumulate_grad(trace, grad_fn_handle)
         if param_key is not None:
             return param_key
@@ -1469,7 +1469,7 @@ def _module_key_for_forward_op(op: "Layer") -> str | None:
     """
 
     output_modules = list(getattr(op, "output_of_modules", []) or [])
-    if getattr(op, "is_submodule_output", False) and output_modules:
+    if getattr(op, "is_module_output", False) and output_modules:
         output_module = str(output_modules[0])
         output_calls = list(getattr(op, "output_of_module_calls", []) or [])
         for output_call in output_calls:
@@ -3253,7 +3253,7 @@ def _layer_log_for_node(trace: "Trace", node: GraphNode) -> "Layer":
         raise ValueError("Synthetic boundary nodes do not have Layer metadata.")
     if isinstance(node, Layer):
         return node
-    return trace.layer_logs[node.layer_label_no_pass]
+    return trace.layer_logs[node.layer_label]
 
 
 def _node_spec_to_graphviz_args(spec: NodeSpec) -> dict[str, str]:
@@ -3814,8 +3814,8 @@ def _get_arm_edge_entries(
             if edge_key in edge_list:
                 arm_entries.append((conditional_id, branch_kind, None))
     elif vis_mode == "rolled":
-        parent_no_pass = parent_node.layer_label_no_pass
-        child_no_pass = child_node.layer_label_no_pass
+        parent_no_pass = parent_node.layer_label
+        child_no_pass = child_node.layer_label
         for (
             edge_parent,
             edge_child,
@@ -4097,7 +4097,7 @@ def _edge_is_conditional_branch(
             child_node.layer_label,
         ) in trace.conditional_branch_edges
     if vis_mode == "rolled":
-        edge_key = (parent_node.layer_label_no_pass, child_node.layer_label_no_pass)
+        edge_key = (parent_node.layer_label, child_node.layer_label)
         return any(
             (branch_parent.split(":")[0], branch_child.split(":")[0]) == edge_key
             for branch_parent, branch_child in trace.conditional_branch_edges
@@ -4452,10 +4452,8 @@ def _node_has_grad(layer: Any) -> bool:
 
     ops = getattr(layer, "ops", None)
     if ops is not None and hasattr(ops, "values"):
-        return any(
-            bool(getattr(pass_log, "has_saved_gradient", False)) for pass_log in ops.values()
-        )
-    return bool(getattr(layer, "has_saved_gradient", False))
+        return any(bool(getattr(pass_log, "has_grad", False)) for pass_log in ops.values())
+    return bool(getattr(layer, "has_grad", False))
 
 
 def _grad_node_name(layer: Any) -> str:

@@ -142,10 +142,10 @@ def _empty_recording(options: "RecordingOptions") -> Recording:
         history_size=options.history_size,
         keep_grad_repr=repr(options.keep_grad) if options.keep_grad is not None else None,
         _out_transform_repr=(
-            repr(options.out_transform) if options.out_transform is not None else None
+            repr(options.activation_transform) if options.activation_transform is not None else None
         ),
         _grad_transform_repr=(
-            repr(options.gradient_transform) if options.gradient_transform is not None else None
+            repr(options.grad_transform) if options.grad_transform is not None else None
         ),
     )
 
@@ -545,7 +545,7 @@ def _event_from_record(
             transformed_tensor=transformed_ref,
             has_saved_activation=bool(spec.save_out and (ram_payload is not None)),
             output_device=str(ctx.tensor_device) if ctx.tensor_device is not None else None,
-            out_postfunc=None,
+            activation_transform=None,
             detach_saved_activations=not spec.keep_grad,
             visualizer_path=None,
             multi_output_index=ctx.output_index,
@@ -637,10 +637,10 @@ _OPLOG_FIELDS_KNOWN_LATE = frozenset(
         "final_out",
         "layer_label",
         "layer_label_short",
-        "layer_label_w_pass",
-        "layer_label_w_pass_short",
-        "layer_label_no_pass",
-        "layer_label_no_pass_short",
+        "label",
+        "label_short",
+        "layer_label",
+        "layer_label_short",
     }
 )
 

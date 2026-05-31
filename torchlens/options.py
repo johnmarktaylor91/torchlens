@@ -68,9 +68,9 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "output_dir",
-    "out_transform",
-    "gradient_transform",
-    "save_raw_outs",
+    "activation_transform",
+    "grad_transform",
+    "save_raw_activations",
     "save_raw_gradients",
     "save_level",
     "bundle_format",
@@ -165,11 +165,9 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "raise_on_nan": "raise_on_nan",
 }
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "out_postfunc": "out_transform",
-    "out_transform": "out_transform",
-    "gradient_transform": "gradient_transform",
-    "gradient_postfunc": "gradient_transform",
-    "save_raw_outs": "save_raw_outs",
+    "activation_transform": "activation_transform",
+    "grad_transform": "grad_transform",
+    "save_raw_activations": "save_raw_activations",
     "save_raw_gradients": "save_raw_gradients",
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
@@ -837,11 +835,11 @@ class SaveOptions:
     ----------
     output_dir:
         Future save target directory; currently inert during capture.
-    out_transform:
+    activation_transform:
         Optional transform applied to each out before storage.
-    gradient_transform:
+    grad_transform:
         Optional transform applied to each grad before storage.
-    save_raw_outs:
+    save_raw_activations:
         Whether raw outs remain available when transformed.
     save_raw_gradients:
         Whether raw grads remain available when transformed.
@@ -852,15 +850,15 @@ class SaveOptions:
 
     Examples
     --------
-    >>> opts = SaveOptions(out_transform=lambda x: x.detach())
-    >>> opts.save_raw_outs
+    >>> opts = SaveOptions(activation_transform=lambda x: x.detach())
+    >>> opts.save_raw_activations
     True
     """
 
     output_dir: str | Path | None = None
-    out_transform: ActivationPostfunc | None = None
-    gradient_transform: GradientPostfunc | None = None
-    save_raw_outs: bool = True
+    activation_transform: ActivationPostfunc | None = None
+    grad_transform: GradientPostfunc | None = None
+    save_raw_activations: bool = True
     save_raw_gradients: bool = True
     save_level: str | None = None
     bundle_format: str | None = None
@@ -869,42 +867,26 @@ class SaveOptions:
     def __init__(
         self,
         output_dir: str | Path | None | MissingType = MISSING,
-        out_transform: ActivationPostfunc | None | MissingType = MISSING,
-        gradient_transform: GradientPostfunc | None | MissingType = MISSING,
-        save_raw_outs: bool | MissingType = MISSING,
+        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        save_raw_activations: bool | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
         save_level: str | None | MissingType = MISSING,
         bundle_format: str | None | MissingType = MISSING,
-        *,
-        out_postfunc: ActivationPostfunc | None | MissingType = MISSING,
-        gradient_postfunc: GradientPostfunc | None | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen save option bundle."""
 
-        if out_postfunc is not MISSING:
-            if out_transform is not MISSING:
-                raise TypeError(
-                    "kwarg out_postfunc deprecated, use out_transform; do not pass both"
-                )
-            warn_deprecated_alias("out_postfunc", "save.out_transform")
-            out_transform = out_postfunc
-        if gradient_postfunc is not MISSING:
-            if gradient_transform is not MISSING:
-                raise TypeError(
-                    "kwarg gradient_postfunc aliases gradient_transform; do not pass both"
-                )
-            gradient_transform = gradient_postfunc
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "output_dir": _resolve_option_value("output_dir", output_dir, None, specified_fields),
-            "out_transform": _resolve_option_value(
-                "out_transform", out_transform, None, specified_fields
+            "activation_transform": _resolve_option_value(
+                "activation_transform", activation_transform, None, specified_fields
             ),
-            "gradient_transform": _resolve_option_value(
-                "gradient_transform", gradient_transform, None, specified_fields
+            "grad_transform": _resolve_option_value(
+                "grad_transform", grad_transform, None, specified_fields
             ),
-            "save_raw_outs": _resolve_option_value(
-                "save_raw_outs", save_raw_outs, True, specified_fields
+            "save_raw_activations": _resolve_option_value(
+                "save_raw_activations", save_raw_activations, True, specified_fields
             ),
             "save_raw_gradients": _resolve_option_value(
                 "save_raw_gradients", save_raw_gradients, True, specified_fields
@@ -916,12 +898,6 @@ class SaveOptions:
         }
         _set_frozen_fields(self, _SAVE_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
-
-    @property
-    def out_postfunc(self) -> ActivationPostfunc | None:
-        """Deprecated alias for ``out_transform``."""
-
-        return self.out_transform
 
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
@@ -1555,7 +1531,7 @@ def merge_save_options(*, save: SaveOptions | None, **flat_values: Any) -> SaveO
             conflict_message=(
                 "conflicting save options: pass either SaveOptions or individual kwargs, not both"
             ),
-            deprecated_flat_names=set(_SAVE_FLAT_TO_GROUP) - {"gradient_postfunc"},
+            deprecated_flat_names=set(_SAVE_FLAT_TO_GROUP) - {"grad_transform"},
         ),
     )
 

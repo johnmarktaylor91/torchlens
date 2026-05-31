@@ -86,7 +86,7 @@ def test_user_forward_hook_replacement_logged() -> None:
 
     relu_ops = [op for op in trace.layer_list if op.func_name == "relu"]
     assert relu_ops, "expected at least one relu op"
-    assert any(op.is_submodule_output for op in relu_ops)
+    assert any(op.is_module_output for op in relu_ops)
 
     replacement_ops = [op for op in trace.layer_list if getattr(op, "intervention_replaced", False)]
     assert replacement_ops, "expected at least one intervention_replaced op"

@@ -400,7 +400,7 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "negative:1",
         "negative.0:1"
       ],
@@ -409,7 +409,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-7",
@@ -439,13 +439,13 @@
       "func_name": "mean",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "mean_1_1:1",
       "lookup_keys": [
         "-6",
@@ -467,13 +467,13 @@
       "func_name": "__gt__",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": true,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "gt_1_2:1",
       "lookup_keys": [
         "-5",
@@ -495,7 +495,7 @@
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "negative.0.linear",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "negative.1:1"
       ],
       "intervention_replaced": false,
@@ -503,7 +503,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "linear_1_3:1",
       "lookup_keys": [
         "-4",
@@ -538,7 +538,7 @@
       "func_name": "tanh",
       "fx_call_index": 0,
       "fx_qualpath": "negative.1.tanh",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "negative.2:1"
       ],
       "intervention_replaced": false,
@@ -546,7 +546,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "tanh_1_4:1",
       "lookup_keys": [
         "-3",
@@ -581,13 +581,13 @@
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "negative.2.linear",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "linear_2_5:1",
       "lookup_keys": [
         "-2",
@@ -622,13 +622,13 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

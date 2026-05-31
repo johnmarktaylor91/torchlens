@@ -262,9 +262,8 @@ class SiteTable:
 
         rows = [
             {
-                "layer_label": getattr(site, "layer_label", getattr(site, "label", None)),
-                "layer_label_w_pass": getattr(site, "layer_label_w_pass", None),
-                "layer_label_no_pass": getattr(site, "layer_label_no_pass", None),
+                "label": getattr(site, "label", None),
+                "layer_label": getattr(site, "layer_label", None),
                 "call_index": getattr(site, "call_index", None),
                 "step_index": getattr(site, "step_index", None),
                 "raw_index": getattr(site, "raw_index", None),
@@ -504,7 +503,7 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "predicate":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
-    if kind in {"grad_fn", "grad_fn_handle", "intervening", "grad_fn_label"}:
+    if kind in {"grad_fn", "grad_fn_handle", "intervening", "label"}:
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
 
     raise SiteResolutionError(f"Unsupported selector kind {kind!r}.")
@@ -620,14 +619,14 @@ def _resolve_grad_fn_kind(site: "GradFn", kind: str, value: Any) -> bool:
 
     if kind == "intervening":
         return not site.has_op
-    if kind == "grad_fn_label":
+    if kind == "label":
         return site.label == str(value)
     if kind == "grad_fn":
         payload = value if isinstance(value, dict) else {}
-        grad_fn_type = payload.get("grad_fn_type")
+        type = payload.get("type")
         label_pattern = payload.get("grad_fn_label_pattern")
         is_custom = payload.get("is_custom")
-        if grad_fn_type is not None and not _grad_fn_type_matches(site, str(grad_fn_type)):
+        if type is not None and not _grad_fn_type_matches(site, str(type)):
             return False
         if label_pattern is not None and str(label_pattern) not in site.label:
             return False
@@ -678,7 +677,7 @@ def _grad_fn_type_matches(site: "GradFn", requested: str) -> bool:
     normalized = lowered.removesuffix("backward0").removesuffix("backward")
     candidates = {
         site.class_name.lower(),
-        site.grad_fn_type.lower(),
+        site.type.lower(),
         site.label.lower(),
     }
     return lowered in candidates or normalized in candidates
@@ -742,7 +741,6 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         contains,
         func,
         grad_fn,
-        grad_fn_label,
         intervening,
         label,
         module,
@@ -773,14 +771,14 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
     if kind == "grad_fn":
         payload = dict(value)
         return grad_fn(
-            payload.get("grad_fn_type"),
+            payload.get("type"),
             label=payload.get("grad_fn_label_pattern"),
             is_custom=payload.get("is_custom"),
         )
     if kind == "intervening":
         return intervening()
-    if kind == "grad_fn_label":
-        return grad_fn_label(str(value))
+    if kind == "label":
+        return label(str(value))
     if kind == "not":
         nested = _normalize_query(value)
         return ~nested
@@ -805,11 +803,11 @@ def _label_matches(site: Any, label: str) -> bool:
 
     candidate_labels = (
         getattr(site, "layer_label", None),
-        getattr(site, "layer_label_w_pass", None),
-        getattr(site, "layer_label_no_pass", None),
+        getattr(site, "label", None),
+        getattr(site, "layer_label", None),
         getattr(site, "layer_label_short", None),
-        getattr(site, "layer_label_w_pass_short", None),
-        getattr(site, "layer_label_no_pass_short", None),
+        getattr(site, "label_short", None),
+        getattr(site, "layer_label_short", None),
         getattr(site, "_layer_label_raw", None),
     )
     return label in candidate_labels or label in getattr(site, "lookup_keys", ())

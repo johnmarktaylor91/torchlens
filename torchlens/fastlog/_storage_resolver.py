@@ -43,8 +43,8 @@ def _resolve_storage(
     spec: CaptureSpec,
     intent: StorageIntent,
     *,
-    out_postfunc: "ActivationPostfunc | None" = None,
-    save_raw_outs: bool = True,
+    activation_transform: "ActivationPostfunc | None" = None,
+    save_raw_activations: bool = True,
     ctx: Any | None = None,
     kind: Literal["activation", "grad"] = "activation",
 ) -> tuple[
@@ -69,11 +69,11 @@ def _resolve_storage(
         Capture policy for the tensor.
     intent:
         Storage intent resolved from streaming options.
-    out_postfunc:
+    activation_transform:
         Optional callable applied to RAM/disk payloads after dtype/device
         transforms. Errors are wrapped in :class:`TorchLensPostfuncError`.
-    save_raw_outs:
-        When False and ``out_postfunc`` is set, raw payloads are
+    save_raw_activations:
+        When False and ``activation_transform`` is set, raw payloads are
         suppressed and only the transformed copy is retained.
     ctx:
         Record context used to enrich postfunc error messages.
@@ -101,8 +101,8 @@ def _resolve_storage(
     disk_payload: torch.Tensor | None = None
     transformed_ram: torch.Tensor | None = None
     transformed_disk: torch.Tensor | None = None
-    postfunc = out_postfunc
-    keep_raw = save_raw_outs or postfunc is None
+    postfunc = activation_transform
+    keep_raw = save_raw_activations or postfunc is None
 
     if intent.in_ram:
         raw_ram = safe_copy(tensor, detach_tensor=not spec.keep_grad)
@@ -179,11 +179,11 @@ def _postfunc_error_message(
     storage_target = _describe_storage_target(intent, target)
     if ctx is None:
         return (
-            "out_postfunc raised while resolving a fastlog payload "
+            "activation_transform raised while resolving a fastlog payload "
             f"(storage_target={storage_target}, keep_grad={spec.keep_grad})."
         )
     return (
-        f"out_postfunc raised for fastlog event "
+        f"activation_transform raised for fastlog event "
         f"label={ctx.label!r} kind={ctx.kind} func={ctx.func_name} "
         f"shape={tuple(ctx.shape) if ctx.shape is not None else None} "
         f"dtype={ctx.dtype} storage_target={storage_target} "
@@ -221,18 +221,18 @@ def _validate_train_mode_transformed(
     label = ctx.label if ctx is not None else "<unknown>"
     if not isinstance(transformed, torch.Tensor):
         raise TrainingModeConfigError(
-            "out_postfunc must return a torch.Tensor while keep_grad=True "
+            "activation_transform must return a torch.Tensor while keep_grad=True "
             f"for fastlog event {label!r}."
         )
     if transformed.dtype in _INTEGER_DTYPES:
         raise TrainingModeConfigError(
             f"backward_ready=True with non-grad dtype {transformed.dtype} on fastlog "
             f"event {label!r}. Integer and bool dtypes cannot propagate grads. "
-            "Adjust out_postfunc to return a floating dtype."
+            "Adjust activation_transform to return a floating dtype."
         )
     if raw_tensor.requires_grad and transformed.grad_fn is None:
         raise TrainingModeConfigError(
-            "out_postfunc returned a tensor disconnected from the autograd "
+            "activation_transform returned a tensor disconnected from the autograd "
             "graph (grad_fn is None) while keep_grad=True. The transformed out "
             f"for fastlog event {label!r} must remain differentiable."
         )

@@ -44,11 +44,11 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     - Input/output/buffer: ``{layer_type}_{type_num}:{call_index}``
       e.g., ``input_1:1`` (total_num is always 0 for these types)
     - When num_calls == 1, the ``:call_index`` suffix is omitted in
-      the default ``layer_label`` (but ``layer_label_w_pass`` always includes it).
+      the default ``layer_label`` (but ``label`` always includes it).
 
     For multi-pass layers (call_index > 1), ``layer_type`` AND ``type_index``
     are INHERITED from the first pass's tensor to guarantee that all members of
-    a recurrent_ops group share the same ``layer_label_no_pass``. Using
+    a recurrent_ops group share the same ``layer_label``. Using
     the entry's own layer_type would cause label mismatches when ops have
     different layer types (e.g., SSD300 train with getitem ops {1,3} gap).
 
@@ -74,7 +74,7 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
 
         else:
             # Pass > 1: INHERIT layer_type and numbers from the first pass.
-            # This ensures all ops of the same layer share layer_label_no_pass.
+            # This ensures all ops of the same layer share layer_label.
             first_pass_tensor = self[tensor_log_entry.recurrent_ops[0]]
             layer_type = first_pass_tensor.layer_type
             type_index = first_pass_tensor.type_index
@@ -86,24 +86,21 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
         tensor_log_entry.step_index = step_index
 
         if layer_type not in ["input", "output", "buffer"]:
-            tensor_log_entry.layer_label_w_pass = (
-                f"{layer_type}_{type_index}_{step_index}:{pass_index}"
-            )
-            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}_{step_index}"
+            tensor_log_entry.label = f"{layer_type}_{type_index}_{step_index}:{pass_index}"
+            tensor_log_entry.layer_label = f"{layer_type}_{type_index}_{step_index}"
         else:
-            tensor_log_entry.layer_label_w_pass = f"{layer_type}_{type_index}:{pass_index}"
-            tensor_log_entry.layer_label_no_pass = f"{layer_type}_{type_index}"
+            tensor_log_entry.label = f"{layer_type}_{type_index}:{pass_index}"
+            tensor_log_entry.layer_label = f"{layer_type}_{type_index}"
 
-        tensor_log_entry.layer_label_w_pass_short = f"{layer_type}_{type_index}:{pass_index}"
-        tensor_log_entry.layer_label_no_pass_short = f"{layer_type}_{type_index}"
-        if tensor_log_entry.num_passes == 1:
-            tensor_log_entry.layer_label = tensor_log_entry.layer_label_no_pass
-            tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_no_pass_short
-        else:
-            tensor_log_entry.layer_label = tensor_log_entry.layer_label_w_pass
-            tensor_log_entry.layer_label_short = tensor_log_entry.layer_label_w_pass_short
-        raw_to_final_layer_labels[tensor_log_entry._label_raw] = tensor_log_entry.layer_label
-        final_to_raw_layer_labels[tensor_log_entry.layer_label] = tensor_log_entry._label_raw
+        tensor_log_entry.label_short = f"{layer_type}_{type_index}:{pass_index}"
+        tensor_log_entry.layer_label_short = f"{layer_type}_{type_index}"
+        final_lookup_label = (
+            tensor_log_entry.layer_label
+            if tensor_log_entry.num_passes == 1
+            else tensor_log_entry.label
+        )
+        raw_to_final_layer_labels[tensor_log_entry._label_raw] = final_lookup_label
+        final_to_raw_layer_labels[final_lookup_label] = tensor_log_entry._label_raw
     self._raw_to_final_layer_labels = raw_to_final_layer_labels
     self._final_to_raw_layer_labels = final_to_raw_layer_labels
 
@@ -164,7 +161,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         self.total_activation_memory += layer_entry.memory
 
         # Tally the parameter sizes:
-        if layer_entry.layer_label_no_pass not in unique_layers_seen:  # only count params once
+        if layer_entry.layer_label not in unique_layers_seen:  # only count params once
             if layer_entry.uses_params:
                 self.num_layers_with_params += 1
             self.num_params += layer_entry.num_params
@@ -178,7 +175,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
                 mbd["module_nparams_trainable"][module_name] += layer_entry.num_params_trainable
                 mbd["module_nparams_frozen"][module_name] += layer_entry.num_params_frozen
 
-        unique_layers_seen.add(layer_entry.layer_label_no_pass)
+        unique_layers_seen.add(layer_entry.layer_label)
 
         # Tally elapsed time:
 
@@ -544,7 +541,6 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
     self.layer_list = []
     self.layer_dict_main_keys = {}
     self.layer_labels = []
-    self.layer_labels = []
     self.op_labels = []
     self.layer_num_calls = {}
 
@@ -558,11 +554,11 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
 
         # Log all information:
         self.layer_list.append(layer_entry)
-        self.layer_dict_main_keys[layer_entry.layer_label] = layer_entry
-        self.layer_labels.append(layer_entry.layer_label)
-        self.layer_labels.append(layer_entry.layer_label_no_pass)
-        self.op_labels.append(layer_entry.layer_label_w_pass)
-        self.layer_num_calls[layer_entry.layer_label_no_pass] = layer_entry.num_passes
+        self.layer_dict_main_keys[layer_entry.label] = layer_entry
+        if layer_entry.layer_label not in self.layer_labels:
+            self.layer_labels.append(layer_entry.layer_label)
+        self.op_labels.append(layer_entry.label)
+        self.layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
         if layer_entry.has_saved_activation:
             self.saved_activation_memory += layer_entry.memory
         i += 1
@@ -709,9 +705,7 @@ def _add_lookup_keys_for_layer_entry(
 
     # If just one pass, also allow indexing by pass label.
     if layer_entry.num_passes == 1:
-        lookup_keys_for_tensor.extend(
-            [layer_entry.layer_label_w_pass, layer_entry.layer_label_w_pass_short]
-        )
+        lookup_keys_for_tensor.extend([layer_entry.label, layer_entry.label_short])
 
     # Relabel the module ops if the first pass:
     if self.capture_mode == "exhaustive":
@@ -719,9 +713,9 @@ def _add_lookup_keys_for_layer_entry(
             f"{module_name}:{module_pass}"
             for module_name, module_pass in layer_entry.output_of_module_calls
         ]
-        layer_entry.input_to_module_calls = [
+        layer_entry.input_to_modules = [
             f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.input_to_module_calls
+            for module_name, module_pass in layer_entry.input_to_modules
         ]
         if layer_entry.module is not None:
             layer_entry.module = ":".join([str(i) for i in layer_entry.module])
@@ -789,15 +783,25 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     (no shared-set corruption) — see set() constructor in op_equivalence_classes
     rename.
     """
-    list_fields_to_rename = [
+    layer_list_fields_to_rename = [
         "input_layers",
         "output_layers",
         "buffer_layers",
+    ]
+    for field in layer_list_fields_to_rename:
+        tensor_labels = getattr(self, field)
+        setattr(
+            self,
+            field,
+            [self._raw_layer_dict[tensor_label].layer_label for tensor_label in tensor_labels],
+        )
+
+    op_list_fields_to_rename = [
         "internal_source_ops",
         "internal_sink_ops",
         "internally_terminated_bool_ops",
     ]
-    for field in list_fields_to_rename:
+    for field in op_list_fields_to_rename:
         tensor_labels = getattr(self, field)
         setattr(
             self,
@@ -819,7 +823,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         if getattr(layer_entry, "has_saved_activation", False)
         and not getattr(layer_entry, "is_orphan", False)
     ]
-    self.num_saved_layers = len({layer_entry.layer_label_no_pass for layer_entry in saved_layers})
+    self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
     saved_labels = {layer_entry.layer_label for layer_entry in saved_layers}
     self.num_saved_module_calls = sum(
         1

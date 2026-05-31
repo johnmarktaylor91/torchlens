@@ -625,7 +625,7 @@ def find_executable_save_set(
     candidates: list[tuple[int, str]] = []
     for layer in layers:
         entry = trace[layer]
-        label = str(getattr(entry, "layer_label_no_pass", getattr(entry, "layer_label", layer)))
+        label = str(getattr(entry, "layer_label", getattr(entry, "layer_label", layer)))
         memory = int(
             getattr(entry, "transformed_activation_memory", None)
             or getattr(entry, "memory", None)

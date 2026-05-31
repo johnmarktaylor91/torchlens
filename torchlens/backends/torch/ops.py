@@ -27,7 +27,7 @@ Label format convention:
 pause_logging usage:
     ``pause_logging()`` temporarily disables the logging toggle so that
     utility operations (e.g., ``get_memory_amount``, ``safe_copy``,
-    ``out_postfunc``) don't get logged as model operations.  It is
+    ``activation_transform``) don't get logged as model operations.  It is
     used inside ``save_activation`` and wherever helper functions call
     decorated torch custom_methods on tensors.
 """
@@ -344,7 +344,7 @@ def _op_event_from_log(
             transformed_tensor=transformed_ref,
             has_saved_activation=fields_dict["has_saved_activation"],
             output_device=fields_dict["output_device"],
-            out_postfunc=fields_dict["out_postfunc"],
+            activation_transform=fields_dict["activation_transform"],
             detach_saved_activations=fields_dict["detach_saved_activations"],
             visualizer_path=fields_dict["visualizer_path"],
             multi_output_index=fields_dict["multi_output_index"],
@@ -1389,12 +1389,12 @@ def _build_module_context_fields(
 
     fields_dict["module"] = module
     fields_dict["modules"] = modules
-    fields_dict["modules_entered"] = []
+    fields_dict["module_call_stack"] = []
     fields_dict["module_entry_arg_keys"] = defaultdict(list)
-    fields_dict["input_to_module_calls"] = []
+    fields_dict["input_to_modules"] = []
     fields_dict["output_of_modules"] = []
     fields_dict["output_of_module_calls"] = []
-    fields_dict["is_submodule_output"] = False
+    fields_dict["is_module_output"] = False
     fields_dict["is_atomic_module"] = False
     fields_dict["atomic_module_call"] = None
 
@@ -1462,7 +1462,7 @@ def _build_shared_fields_dict(
     fields_dict["grad"] = None
     fields_dict["transformed_grad"] = None
     fields_dict["save_gradients"] = self.save_gradients
-    fields_dict["has_saved_gradient"] = False
+    fields_dict["has_grad"] = False
     fields_dict["grad_shape"] = None
     fields_dict["transformed_grad_shape"] = None
     fields_dict["grad_dtype"] = None
@@ -1670,7 +1670,7 @@ def log_function_output_tensors_exhaustive(
             fields_dict=fields_dict_onetensor,
             t_args=arg_copies,
             t_kwargs=kwarg_copies,
-            out_postfunc=self.out_postfunc,
+            activation_transform=self.activation_transform,
         )
         new_layer_entry = cast(
             Op,
@@ -1757,7 +1757,7 @@ def log_function_output_tensors_fast(
         type_index = self._raw_layer_type_counter[layer_type]
         _label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
         # Skip orphans — these were pruned from the graph during postprocessing.
-        if _label_raw in self.orphan_ops:
+        if _label_raw in self._orphan_labels:
             continue
         # Map parent raw labels → final labels for graph-change verification.
         parent_layer_labels_raw = get_label_list(arg_tensors)
@@ -1765,10 +1765,10 @@ def log_function_output_tensors_fast(
         for raw_label in parent_layer_labels_raw:
             if raw_label in self._raw_to_final_layer_labels:
                 parent_layer_labels_orig.append(self._raw_to_final_layer_labels[raw_label])
-            elif raw_label not in self.orphan_ops:
+            elif raw_label not in self._orphan_labels:
                 raise ValueError(
                     f"Fast-path parent {raw_label} not found in raw→final label map "
-                    f"and not in orphan_ops. The computational graph may have changed."
+                    f"and not in _orphan_labels. The computational graph may have changed."
                 )
         # Tag tensor so downstream ops can find this tensor's label.
         set_tensor_label(out, _label_raw)
@@ -1780,7 +1780,7 @@ def log_function_output_tensors_fast(
                 "trace with the desired inputs."
             )
         orig_tensor_label = self._raw_to_final_layer_labels[_label_raw]
-        orig_layer_entry = self.layer_dict_main_keys[orig_tensor_label]
+        orig_layer_entry = self[orig_tensor_label]
         previous_shape = orig_layer_entry.shape
 
         if self.save_gradients:
@@ -1810,14 +1810,14 @@ def log_function_output_tensors_fast(
                 arg_copies,
                 kwarg_copies,
                 self.save_arg_values,
-                self.out_postfunc,
+                self.activation_transform,
             )
             # Output layers are identity wrappers whose out come
             # from their parent.  Propagate the parent's saved out to
             # any child that is an output layer so postprocess_fast can find it.
             for child_layer in orig_layer_entry.children:
                 if child_layer in self.output_layers:
-                    child_output = self.layer_dict_main_keys[child_layer]
+                    child_output = self[child_layer]
                     if (
                         orig_layer_entry.has_out_variations
                         and child_layer in orig_layer_entry.out_versions_by_child
@@ -1827,15 +1827,15 @@ def log_function_output_tensors_fast(
                         child_output._internal_set("out", safe_copy(tensor_to_save))
                     else:
                         child_output._internal_set("out", safe_copy(out))
-                        if self.out_postfunc is not None:
-                            # pause_logging prevents out_postfunc from
+                        if self.activation_transform is not None:
+                            # pause_logging prevents activation_transform from
                             # triggering decorated torch ops that would be logged.
                             with pause_logging():
                                 child_output._internal_set(
                                     "transformed_out",
-                                    self.out_postfunc(child_output.out),
+                                    self.activation_transform(child_output.out),
                                 )
-                            if not getattr(self, "save_raw_outs", True):
+                            if not getattr(self, "save_raw_activations", True):
                                 child_output._internal_set("out", None)
                     child_output.has_saved_activation = True
                     if child_output.out is not None:
@@ -2242,10 +2242,10 @@ def _log_output_tensor_info(
     # Other labeling info
     fields_dict["layer_label"] = None
     fields_dict["layer_label_short"] = None
-    fields_dict["layer_label_w_pass"] = None
-    fields_dict["layer_label_w_pass_short"] = None
-    fields_dict["layer_label_no_pass"] = None
-    fields_dict["layer_label_no_pass_short"] = None
+    fields_dict["label"] = None
+    fields_dict["label_short"] = None
+    fields_dict["layer_label"] = None
+    fields_dict["layer_label_short"] = None
     fields_dict["type"] = layer_type
     fields_dict["_layer_label_raw"] = _label_raw
     fields_dict["type_index"] = type_index
@@ -2256,7 +2256,7 @@ def _log_output_tensor_info(
     fields_dict["out"] = None
     fields_dict["transformed_out"] = None
     fields_dict["has_saved_activation"] = False
-    fields_dict["out_postfunc"] = self.out_postfunc
+    fields_dict["activation_transform"] = self.activation_transform
     fields_dict["annotations"] = {}
     fields_dict["intervention_replaced"] = False
     fields_dict["fire_results"] = ()
@@ -2309,7 +2309,7 @@ def _save_activation_fields(
     t: torch.Tensor,
     t_args: tuple[Any, ...],
     t_kwargs: dict[str, Any],
-    out_postfunc: Callable[..., Any] | None,
+    activation_transform: Callable[..., Any] | None,
 ) -> None:
     """Save activation data directly into a live field dictionary.
 
@@ -2325,7 +2325,7 @@ def _save_activation_fields(
         Positional function arguments.
     t_kwargs
         Keyword function arguments.
-    out_postfunc
+    activation_transform
         Optional output transform.
 
     Returns
@@ -2344,8 +2344,8 @@ def _save_activation_fields(
         fields_dict["dtype"] = raw_out.dtype
         fields_dict["memory"] = get_memory_amount(raw_out)
 
-        save_raw_outs = getattr(trace, "save_raw_outs", True)
-        store_raw = save_raw_outs or out_postfunc is None
+        save_raw_activations = getattr(trace, "save_raw_activations", True)
+        store_raw = save_raw_activations or activation_transform is None
         if store_raw and not getattr(trace, "save_arg_values", False):
             hash_cache = getattr(trace, "_out_hash_cache", None)
             if hash_cache is None:
@@ -2363,13 +2363,13 @@ def _save_activation_fields(
         fields_dict["transformed_out_shape"] = None
         fields_dict["transformed_out_dtype"] = None
         fields_dict["transformed_activation_memory"] = None
-        if out_postfunc is not None:
+        if activation_transform is not None:
             transformed_out = apply_postfunc(
                 label=fields_dict.get("_layer_label_raw"),
                 raw_label=fields_dict.get("_label_raw"),
                 func_name=fields_dict.get("func_name"),
                 tensor=raw_out,
-                postfunc=out_postfunc,
+                postfunc=activation_transform,
                 postfunc_kind="out",
                 streaming_active=writer is not None,
             )
@@ -2454,7 +2454,7 @@ def _make_layer_log_entry(
     fields_dict: dict[str, Any],
     t_args: tuple[Any, ...] | None = None,
     t_kwargs: dict[str, Any] | None = None,
-    out_postfunc: Callable[..., Any] | None = None,
+    activation_transform: Callable[..., Any] | None = None,
 ) -> Any:
     """Create a Op (or Buffer) entry and register it in Trace.
 
@@ -2467,7 +2467,7 @@ def _make_layer_log_entry(
         fields_dict: Complete field dictionary (~80 fields) for the log entry.
         t_args: Positional arguments to the function that created the tensor.
         t_kwargs: Keyword arguments to the function that created the tensor.
-        out_postfunc: Optional transform applied to outs before saving.
+        activation_transform: Optional transform applied to outs before saving.
     """
     if t_args is None:
         t_args = ()
@@ -2494,7 +2494,7 @@ def _make_layer_log_entry(
     if keep_by_predicate and (
         (layer_nums_to_save == "all") or (new_entry.raw_index in layer_nums_to_save)
     ):
-        _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, out_postfunc)
+        _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, activation_transform)
     op_event = _op_event_from_log(fields_dict, t, fire_results)
     live_record.event = op_event
     from ...ir import register_live_event

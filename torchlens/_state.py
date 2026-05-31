@@ -469,7 +469,7 @@ def active_logging(trace: "Trace") -> Iterator[None]:
             "another forward pass is already being logged. Nested logging "
             "would silently corrupt the outer Trace. If you need to log a "
             "model's forward pass from inside another trace call "
-            "(e.g., a custom out_postfunc), finish the outer capture "
+            "(e.g., a custom activation_transform), finish the outer capture "
             "before starting another one."
         )
     # Model log must be visible before the toggle flips — wrappers will
@@ -499,7 +499,7 @@ def pause_logging() -> Iterator[None]:
 
     Typical callers:
         - ``safe_copy``: copies tensors without logging the copy op
-        - ``out_postfunc``: applies user post-processing without logging
+        - ``activation_transform``: applies user post-processing without logging
         - ``get_memory_amount``: calls ``nelement()`` / ``element_size()``
           which are themselves decorated tensor custom_methods — without pausing,
           they'd trigger infinite recursive logging.

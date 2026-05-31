@@ -189,7 +189,7 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
                 )
             container_paths.append(container_path)
             pass_indices.add(layer.pass_index)
-            no_call_labels.add(layer.layer_label_no_pass)
+            no_call_labels.add(layer.layer_label)
         if len(pass_indices) > 1 and len(no_call_labels) > 1:
             raise MetadataInvariantError(
                 name,
@@ -222,17 +222,17 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
         missing = sorted(order_ids - grad_fn_ids)
         raise MetadataInvariantError(name, f"grad_fn_order contains unknown ids {missing!r}")
 
-    root_ids = trace.backward_root_grad_fn_ids
+    root_ids = trace.backward_root_grad_fn_object_ids
     if not isinstance(root_ids, list):
         raise MetadataInvariantError(
             name,
-            f"backward_root_grad_fn_ids must be a list, got {type(root_ids).__name__}",
+            f"backward_root_grad_fn_object_ids must be a list, got {type(root_ids).__name__}",
         )
     missing_root_ids = [root_id for root_id in root_ids if root_id not in trace.grad_fn_logs]
     if missing_root_ids:
         raise MetadataInvariantError(
             name,
-            f"backward_root_grad_fn_ids {missing_root_ids!r} are not present in grad_fn_logs",
+            f"backward_root_grad_fn_object_ids {missing_root_ids!r} are not present in grad_fn_logs",
         )
 
     layer_labels = set(trace.layer_labels)
@@ -265,9 +265,7 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                 f"{grad_fn_object_id!r}",
             )
 
-    expected_saved_grad_labels = {
-        layer.layer_label for layer in trace.layer_list if layer.has_saved_gradient
-    }
+    expected_saved_grad_labels = {layer.layer_label for layer in trace.layer_list if layer.has_grad}
     if set(trace.saved_grad_ops.keys()) != expected_saved_grad_labels:
         raise MetadataInvariantError(
             name,
@@ -278,10 +276,10 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
     for grad_fn_handle in trace.grad_fn_logs.values():
         if grad_fn_handle.ops:
             max_call_index = max(max_call_index, max(grad_fn_handle.ops))
-    if max_call_index > trace.backward_num_calls:
+    if max_call_index > trace.num_backward_passes:
         raise MetadataInvariantError(
             name,
-            f"backward_num_calls={trace.backward_num_calls} is less than max grad_fn_handle call "
+            f"num_backward_passes={trace.num_backward_passes} is less than max grad_fn_handle call "
             f"index {max_call_index}",
         )
 
@@ -348,7 +346,7 @@ def _check_trace_self_consistency(ml: "Trace") -> None:
     - num_ops == count of computational (non-input, non-output,
       non-buffer) layers.
     - Param counts (total, trainable, frozen) are consistent and sum correctly.
-      Uses deduplication by layer_label_no_pass to match labeling.py logic.
+      Uses deduplication by layer_label to match labeling.py logic.
     - At least one output layer exists.
     - Timing values are non-negative and ordered.
     - Tensor counts: total >= saved.
@@ -380,17 +378,17 @@ def _check_trace_self_consistency(ml: "Trace") -> None:
             f"num_ops={ml.num_ops} != expected computational layers={expected_ops}",
         )
 
-    # Param counts must be deduplicated by layer_label_no_pass because
+    # Param counts must be deduplicated by layer_label because
     # multi-pass layers share the same params -- counting each pass would
     # double-count.  This matches the summation logic in labeling.py:116-122.
     seen_no_pass: set[str] = set()
     expected_param_sum = 0
     expected_num_params = 0
     for lpl in ml.layer_list:
-        if lpl.layer_label_no_pass not in seen_no_pass:
+        if lpl.layer_label not in seen_no_pass:
             expected_param_sum += lpl.num_param_tensors
             expected_num_params += lpl.num_params
-            seen_no_pass.add(lpl.layer_label_no_pass)
+            seen_no_pass.add(lpl.layer_label)
     if ml.num_param_tensors != expected_param_sum:
         raise MetadataInvariantError(
             name,
@@ -508,24 +506,24 @@ def _check_graph_topology(ml: "Trace") -> None:
 
         # Parent-child bidirectionality
         for p in lpl.parents:
-            if p not in label_set:
+            parent = ml[p]
+            if p not in label_set and parent.layer_label not in label_set:
                 raise MetadataInvariantError(
                     name, f"Layer {label} has parent {p} not in layer_labels"
                 )
-            parent = ml[p]
-            if label not in parent.children:
+            if label not in parent.children and lpl.label not in parent.children:
                 raise MetadataInvariantError(
                     name,
                     f"Layer {label} lists {p} as parent, but {p} does not list {label} as child",
                 )
 
         for c in lpl.children:
-            if c not in label_set:
+            child = ml[c]
+            if c not in label_set and child.layer_label not in label_set:
                 raise MetadataInvariantError(
                     name, f"Layer {label} has child {c} not in layer_labels"
                 )
-            child = ml[c]
-            if label not in child.parents:
+            if label not in child.parents and lpl.label not in child.parents:
                 raise MetadataInvariantError(
                     name,
                     f"Layer {label} lists {c} as child, but {c} does not list {label} as parent",
@@ -651,16 +649,15 @@ def _check_op_log_fields(ml: "Trace") -> None:
             )
 
         # Label format: pass-qualified label has ":" iff multi-pass
-        if lpl.num_passes > 1 and ":" not in lpl.layer_label_w_pass:
+        if lpl.num_passes > 1 and ":" not in lpl.label:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: multi-pass but layer_label_w_pass="
-                f"'{lpl.layer_label_w_pass}' has no ':'",
+                f"Layer {label}: multi-pass but label='{lpl.label}' has no ':'",
             )
-        if ":" in lpl.layer_label_no_pass:
+        if ":" in lpl.layer_label:
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: layer_label_no_pass='{lpl.layer_label_no_pass}' contains ':'",
+                f"Layer {label}: layer_label='{lpl.layer_label}' contains ':'",
             )
 
 
@@ -674,7 +671,7 @@ def _check_recurrence_invariants(ml: "Trace") -> None:
 
     Validates:
     - is_recurrent == True iff any layer has >1 pass.
-    - max_recurrent_loops matches the maximum pass count.
+    - max_layer_op_count matches the maximum pass count.
     - layer_num_calls keys are valid no-pass labels.
     - Layer.ops dict keys are contiguous {1..N}.
     """
@@ -689,10 +686,10 @@ def _check_recurrence_invariants(ml: "Trace") -> None:
 
     if ml.is_recurrent:
         expected_max = max(ml.layer_num_calls.values())
-        if ml.max_recurrent_loops != expected_max:
+        if ml.max_layer_op_count != expected_max:
             raise MetadataInvariantError(
                 name,
-                f"max_recurrent_loops={ml.max_recurrent_loops} != "
+                f"max_layer_op_count={ml.max_layer_op_count} != "
                 f"max(layer_num_calls)={expected_max}",
             )
 
@@ -1399,7 +1396,7 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
     - Layer key matches its layer_label.
     - ops dict keys are contiguous {1..N}.
     - Each Op's call_index matches its dict key.
-    - Each Op's layer_label_no_pass matches the parent Layer's label.
+    - Each Op's layer_label matches the parent Layer's label.
     """
     name = "layer_pass_layer_log_xrefs"
 
@@ -1424,11 +1421,11 @@ def _check_layer_pass_to_layer_log_xrefs(ml: "Trace") -> None:
                     name,
                     f"Layer '{ll_label}' pass key={call_index} but Op.pass_index={lpl.pass_index}",
                 )
-            if lpl.layer_label_no_pass != ll.layer_label:
+            if lpl.layer_label != ll.layer_label:
                 raise MetadataInvariantError(
                     name,
-                    f"Op '{lpl.layer_label}' layer_label_no_pass="
-                    f"'{lpl.layer_label_no_pass}' != "
+                    f"Op '{lpl.layer_label}' layer_label="
+                    f"'{lpl.layer_label}' != "
                     f"parent Layer.layer_label='{ll.layer_label}'",
                 )
 
@@ -1518,10 +1515,10 @@ def _check_module_layer_containment(ml: "Trace") -> None:
                     f"Layer '{lpl.layer_label}' module='{cmo}' "
                     f"(addr='{cmo_addr}') not found in module accessor",
                 )
-            if lpl.layer_label_no_pass not in mod.layer_labels:  # type: ignore[union-attr]
+            if lpl.layer_label not in mod.layer_labels:  # type: ignore[union-attr]
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{lpl.layer_label}' (no_pass='{lpl.layer_label_no_pass}') "
+                    f"Layer '{lpl.layer_label}' (no_pass='{lpl.layer_label}') "
                     f"not in Module '{cmo_addr}'.layers",
                 )
 
@@ -1875,14 +1872,14 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
     Validates per-layer:
     - recurrent_ops is non-empty and includes self.
     - Symmetry: all members agree on the same group.
-    - All members share: layer_label_no_pass, equivalence_class,
+    - All members share: layer_label, equivalence_class,
       func_name (for computational layers).
     - num_passes == len(recurrent_ops).
     - Pass numbering within group is contiguous {1..N}.
 
     Validates cross-layer:
     - Parameter sharing rule: layers with same (func_name,
-      sorted(_param_barcodes)) must share layer_label_no_pass.
+      sorted(_param_barcodes)) must share layer_label.
     - Equivalence group consistency: all members of a recurrent_ops
       group belong to the same Trace.op_equivalence_classes set.
 
@@ -1931,15 +1928,15 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
                     f"{sorted(member.recurrent_ops)}",
                 )
 
-        # All members share layer_label_no_pass
+        # All members share layer_label
         for member_label in slo:
             member = ml[member_label]
-            if member.layer_label_no_pass != lpl.layer_label_no_pass:
+            if member.layer_label != lpl.layer_label:
                 raise MetadataInvariantError(
                     name,
                     f"recurrent_ops inconsistency: '{lpl.layer_label}' "
-                    f"(no_pass='{lpl.layer_label_no_pass}') and '{member_label}' "
-                    f"(no_pass='{member.layer_label_no_pass}') differ",
+                    f"(no_pass='{lpl.layer_label}') and '{member_label}' "
+                    f"(no_pass='{member.layer_label}') differ",
                 )
 
         # All members share equivalence_class
@@ -1991,7 +1988,7 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
 
     # Rule 1: Parameter sharing invariant.
     # Layers with the same func_name, identical sorted(_param_barcodes), and the
-    # same output-specific equivalence class must share layer_label_no_pass. The
+    # same output-specific equivalence class must share layer_label. The
     # equivalence class keeps distinct outputs of a multi-output parameterized op
     # from being collapsed into one logical layer.
     param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
@@ -2002,12 +1999,12 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
 
     for param_key, layers in param_groups.items():
         if len(layers) > 1:
-            no_call_labels = {lpl.layer_label_no_pass for lpl in layers}
+            no_call_labels = {lpl.layer_label for lpl in layers}
             if len(no_call_labels) > 1:
                 raise MetadataInvariantError(
                     name,
                     f"Param sharing violation: layers with same param barcodes "
-                    f"{param_key} have different layer_label_no_pass: {no_call_labels}",
+                    f"{param_key} have different layer_label: {no_call_labels}",
                 )
 
     # Equivalence group ↔ same_layer consistency: all members of a
@@ -2029,7 +2026,7 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
         equiv_keys = set()
         for member_label in slo:
             member = ml[member_label]
-            no_pass = member.layer_label_no_pass
+            no_pass = member.layer_label
             if no_pass in no_pass_to_equiv_key:
                 equiv_keys.add(no_pass_to_equiv_key[no_pass])
         if len(equiv_keys) > 1:
@@ -2159,7 +2156,7 @@ def _check_graph_connectivity(ml: "Trace") -> None:
     Validates:
     - Every non-input, non-buffer, non-internally-initialized, non-output
       layer has at least one parent (no dangling computational nodes).
-    - orphan_ops (removed during postprocessing) do NOT appear in the
+    - _orphan_labels (removed during postprocessing) do NOT appear in the
       active layer_labels (they were pruned from the graph).
     """
     name = "graph_connectivity"
@@ -2184,14 +2181,14 @@ def _check_graph_connectivity(ml: "Trace") -> None:
                 f"internally initialized, or output",
             )
 
-    # orphan_ops is a subset of all known labels (pre-removal)
-    orphan_set = set(ml.orphan_ops)
+    # _orphan_labels is a subset of all known labels (pre-removal)
+    orphan_set = set(ml._orphan_labels)
     # Orphans should NOT appear in the active layer_list (they were removed)
     orphan_in_list = orphan_set & label_set
     if orphan_in_list:
         raise MetadataInvariantError(
             name,
-            f"orphan_ops contains labels still in layer_labels: {orphan_in_list}",
+            f"_orphan_labels contains labels still in layer_labels: {orphan_in_list}",
         )
 
 

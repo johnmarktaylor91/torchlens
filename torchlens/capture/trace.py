@@ -133,7 +133,7 @@ def save_new_outs(
         layer_log_entry.transformed_out_dtype = None
         layer_log_entry.transformed_activation_memory = None
         layer_log_entry.has_saved_activation = False
-        layer_log_entry.has_saved_gradient = False
+        layer_log_entry.has_grad = False
         layer_log_entry._internal_set("grad", None)
         layer_log_entry._internal_set("transformed_grad", None)
         layer_log_entry.transformed_grad_shape = None

@@ -259,13 +259,13 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-5",
@@ -288,7 +288,7 @@
       "func_name": "__add__",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [
+      "input_to_modules": [
         "a:1"
       ],
       "intervention_replaced": false,
@@ -296,7 +296,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "add_1_1:1",
       "lookup_keys": [
         "-4",
@@ -322,7 +322,7 @@
       "func_name": "relu_",
       "fx_call_index": 0,
       "fx_qualpath": "a.relu_",
-      "input_to_module_calls": [
+      "input_to_modules": [
         "b:1"
       ],
       "intervention_replaced": false,
@@ -330,7 +330,7 @@
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "relu_1_2:1",
       "lookup_keys": [
         "-3",
@@ -364,13 +364,13 @@
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "b.linear",
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": true,
+      "is_module_output": true,
       "label": "linear_1_3:1",
       "lookup_keys": [
         "-2",
@@ -400,13 +400,13 @@
       "func_name": "none",
       "fx_call_index": 0,
       "fx_qualpath": null,
-      "input_to_module_calls": [],
+      "input_to_modules": [],
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_orphan": false,
-      "is_submodule_output": false,
+      "is_module_output": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

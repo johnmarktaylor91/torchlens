@@ -90,7 +90,7 @@ def _build_postfunc_log(postfunc: Callable[[torch.Tensor], Any]) -> Trace:
         model,
         x,
         layers_to_save="all",
-        out_postfunc=postfunc,
+        activation_transform=postfunc,
         random_seed=0,
     )
 
@@ -123,7 +123,7 @@ def _build_non_tensor_out_log() -> Trace:
     trace = _build_conv_log()
     first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
     first_saved_layer.transformed_out = 1.0
-    trace.out_postfunc = lambda tensor: float(tensor.mean().item())
+    trace.activation_transform = lambda tensor: float(tensor.mean().item())
     return trace
 
 
@@ -504,12 +504,12 @@ def test_bundle_loaded_log_validation_guard_raises(tmp_path: Path) -> None:
 
 
 def test_bundle_save_rejects_non_tensor_out_postfunc_output(tmp_path: Path) -> None:
-    """Save should fail before writing blobs when out_postfunc returned a non-tensor."""
+    """Save should fail before writing blobs when activation_transform returned a non-tensor."""
 
     trace = _build_non_tensor_out_log()
     bundle_path = tmp_path / "non_tensor_bundle.tl"
 
-    with pytest.raises(TorchLensIOError, match="out_postfunc outputs"):
+    with pytest.raises(TorchLensIOError, match="activation_transform outputs"):
         save(trace, bundle_path)
 
     assert not bundle_path.exists()

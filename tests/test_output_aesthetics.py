@@ -503,14 +503,14 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
             # Show grad fields on a Op that has saved grad
             for entry in grad_log.layer_list:
-                if entry.has_saved_gradient:
+                if entry.has_grad:
                     out.write(
                         _section(
                             f"G.1 Op grad fields — {entry.layer_label}",
                             level=3,
                         )
                     )
-                    out.write(_capture("has_saved_gradient", entry.has_saved_gradient))
+                    out.write(_capture("has_grad", entry.has_grad))
                     out.write(_capture("grad", entry.grad))
                     out.write(_capture("grad_shape", entry.grad_shape))
                     out.write(_capture("grad_dtype", entry.grad_dtype))
@@ -520,22 +520,22 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
             # Show a Op WITHOUT grad for contrast
             for entry in grad_log.layer_list:
-                if not entry.has_saved_gradient:
+                if not entry.has_grad:
                     out.write(
                         _section(
                             f"G.2 Op without grad — {entry.layer_label}",
                             level=3,
                         )
                     )
-                    out.write(_capture("has_saved_gradient", entry.has_saved_gradient))
+                    out.write(_capture("has_grad", entry.has_grad))
                     out.write(_capture("grad", entry.grad))
                     break
 
             # Param grad fields
             for pl in grad_log.params:
-                if pl.has_saved_gradient:
+                if pl.has_grad:
                     out.write(_section(f"G.3 Param grad fields — {pl.address}", level=3))
-                    out.write(_capture("has_saved_gradient", pl.has_saved_gradient))
+                    out.write(_capture("has_grad", pl.has_grad))
                     out.write(_capture("grad_shape", pl.grad_shape))
                     out.write(_capture("grad_dtype", pl.grad_dtype))
                     out.write(_capture("gradient_memory", pl.gradient_memory))
@@ -551,7 +551,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                             level=3,
                         )
                     )
-                    out.write(_capture("has_saved_gradient", pl.has_saved_gradient))
+                    out.write(_capture("has_grad", pl.has_grad))
                     out.write(_capture("trainable", pl.trainable))
                     break
         except Exception as e:

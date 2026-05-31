@@ -31,7 +31,7 @@ MODELLOG_FIELD_USAGE: dict[str, str] = {
     "num_params_frozen": "Graph caption trainable/frozen breakdown.",
     "param_memory": "Graph caption parameter-memory summary.",
     "is_recurrent": "Theme recommendations and recurrent-edge styling.",
-    "max_recurrent_loops": "Reference-gallery and recurrent summaries.",
+    "max_layer_op_count": "Reference-gallery and recurrent summaries.",
     "modules": "Module hierarchy, cluster labels, collapsed summaries.",
     "has_gradients": "Whether to add backward edges in unrolled mode.",
     "layer_dict_main_keys": "Unrolled node inventory.",
@@ -43,8 +43,8 @@ MODELLOG_FIELD_USAGE: dict[str, str] = {
 
 ENTRY_FIELD_USAGE: dict[str, str] = {
     "layer_label": "Stable node ID and default primary label.",
-    "layer_label_no_pass": "Rolled-mode primary label.",
-    "layer_type": "Operation label and type differentiation.",
+    "label": "Pass-qualified Op label.",
+    "type": "Operation label and type differentiation.",
     "func_name": "Operation label and argument-label suppression for commutative ops.",
     "call_index": "Unrolled pass suffix.",
     "num_calls": "Rolled repetition count and recurrent emphasis.",
@@ -70,9 +70,9 @@ ENTRY_FIELD_USAGE: dict[str, str] = {
     "min_distance_from_input": "Skip-edge heuristics.",
     "module": "Leaf-module line in labels.",
     "modules": "Cluster nesting.",
-    "is_submodule_output": "Rectangle/module-output shape override.",
+    "is_module_output": "Rectangle/module-output shape override.",
     "is_atomic_module": "Rectangle/module-output shape override.",
-    "has_saved_gradient": "Backward-edge inclusion in unrolled mode.",
+    "has_grad": "Backward-edge inclusion in unrolled mode.",
     "interventions": "Per-node intervention fire-record summary.",
 }
 
@@ -218,11 +218,11 @@ def _entries_for_mode(trace: Any, vis_mode: str) -> list[Any]:
 
 def _display_label(entry: Any, vis_mode: str) -> str:
     if vis_mode == "rolled":
-        base = getattr(entry, "layer_label_no_pass", None) or getattr(entry, "layer_label", "")
+        base = getattr(entry, "layer_label", None) or getattr(entry, "layer_label", "")
         ops = int(getattr(entry, "num_calls", 1) or 1)
         base_str = str(base)
         return f"{base_str} (x{ops})" if ops > 1 else base_str
-    return str(getattr(entry, "layer_label_w_pass", None) or getattr(entry, "layer_label", ""))
+    return str(getattr(entry, "label", None) or getattr(entry, "layer_label", ""))
 
 
 def _shape_memory_line(entry: Any) -> str | None:
@@ -497,9 +497,7 @@ def trace_to_dagua_graph(
         shape_override = op_shape
         if getattr(entry, "is_buffer", False):
             shape_override = buffer_shape
-        elif getattr(entry, "is_submodule_output", False) or getattr(
-            entry, "is_atomic_module", False
-        ):
+        elif getattr(entry, "is_module_output", False) or getattr(entry, "is_atomic_module", False):
             shape_override = module_shape
 
         if not getattr(entry, "has_input_ancestor", True):
@@ -548,12 +546,12 @@ def trace_to_dagua_graph(
 
     if include_grad_edges and vis_mode == "unrolled":
         for child in entries:
-            if not getattr(child, "has_saved_gradient", False):
+            if not getattr(child, "has_grad", False):
                 continue
             child_id = getattr(child, "layer_label", "")
             for parent_label in getattr(child, "parents", None) or []:
                 parent = entries_by_label.get(parent_label)
-                if parent is None or not getattr(parent, "has_saved_gradient", False):
+                if parent is None or not getattr(parent, "has_grad", False):
                     continue
                 edge_key = (child_id, parent_label, "back")
                 if edge_key in edges_seen:

@@ -177,7 +177,7 @@ def test_recording_backward_context_manager() -> None:
     with trace.recording_backward():
         loss.backward(retain_graph=True)
         (loss * 2).backward()
-    assert trace.backward_num_calls == 2
+    assert trace.num_backward_passes == 2
 
 
 @pytest.mark.smoke
@@ -197,9 +197,9 @@ def test_has_op_storage_field() -> None:
         class_qualname="torch.autograd.AddBackward0",
         is_custom=False,
         label="addbackward0_1_1",
-        grad_fn_type="addbackward0",
-        grad_fn_type_num=1,
-        grad_fn_total_num=1,
+        type="addbackward0",
+        type_index=1,
+        ordinal_index=1,
         step_index=1,
         has_op=True,
     )
@@ -227,7 +227,7 @@ def test_grad_fn_naming_and_indexing() -> None:
     assert "_back_" in first_grad_fn.label
     assert first_grad_fn.label == first_grad_fn.label.lower()
     assert trace.grad_fns[first_grad_fn.label] is first_grad_fn
-    assert trace.grad_fns[first_grad_fn.grad_fn_type] is first_grad_fn
+    assert trace.grad_fns[first_grad_fn.type] is first_grad_fn
     if first_grad_fn.num_calls:
         assert trace.grad_fns[f"{first_grad_fn.label}:1"] is first_grad_fn
         assert trace.grad_fn_calls[f"{first_grad_fn.label}:1"] is first_grad_fn.ops[0]
@@ -272,14 +272,14 @@ def test_auto_train_mode_conflict_with_explicit_false() -> None:
 
 @pytest.mark.smoke
 def test_grad_transform_applied() -> None:
-    """gradient_transform writes transformed grads separately."""
+    """grad_transform writes transformed grads separately."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(
         model,
         x,
         gradients_to_save="all",
-        gradient_transform=lambda grad: torch.zeros_like(grad),
+        grad_transform=lambda grad: torch.zeros_like(grad),
     )
     trace.log_backward(_output_loss(trace))
     assert all(
@@ -312,7 +312,7 @@ def test_param_layer_grad_access() -> None:
     """Param grad metadata still works through the existing hook path."""
     model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
-    assert any(param_log.has_saved_gradient for param_log in trace.params)
+    assert any(param_log.has_grad for param_log in trace.params)
     assert any(parameter.grad is not None for parameter in model.parameters())
 
 
@@ -500,7 +500,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     labels1 = {
         grad_fn_handle.label
         for grad_fn_handle in trace1.grad_fn_logs.values()
-        if grad_fn_handle.grad_fn_type == "accumulategrad"
+        if grad_fn_handle.type == "accumulategrad"
     }
     trace1.cleanup()
 
@@ -509,7 +509,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     labels2 = {
         grad_fn_handle.label
         for grad_fn_handle in trace2.grad_fn_logs.values()
-        if grad_fn_handle.grad_fn_type == "accumulategrad"
+        if grad_fn_handle.type == "accumulategrad"
     }
     trace2.cleanup()
 
@@ -539,4 +539,4 @@ def test_higher_order_grads_basic_support() -> None:
     """create_graph=True backward calls run through capture."""
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace), create_graph=True)
-    assert trace.backward_num_calls == 1
+    assert trace.num_backward_passes == 1

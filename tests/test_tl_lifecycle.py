@@ -67,7 +67,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
         model,
         x,
         save_arg_values=True,
-        out_postfunc=lambda t: t.float().mean(),
+        activation_transform=lambda t: t.float().mean(),
     )
 
     assert not hasattr(x, "_tl")
