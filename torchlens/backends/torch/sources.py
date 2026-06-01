@@ -30,6 +30,7 @@ from torch import nn
 
 from ..._errors import TorchLensPostfuncError
 from ...fastlog._halt import HaltSignal
+from ...quantities import Bytes
 from ._tl import get_tensor_meta, set_tensor_label
 from ..._training_validation import TrainingModeConfigError
 from ...data_classes.buffer_log import Buffer
@@ -305,7 +306,7 @@ def log_source_tensor_exhaustive(
         "transformed_out_shape": None,
         "dtype": t.dtype,
         "transformed_out_dtype": None,
-        "memory": memory,
+        "activation_memory": memory,
         "transformed_activation_memory": None,
         "visualizer_path": None,
         "autograd_memory": None,
@@ -505,4 +506,4 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
     orig_layer_entry.shape = new_shape
     orig_layer_entry.dtype = t.dtype
     memory = get_memory_amount(t)
-    orig_layer_entry.memory = memory
+    orig_layer_entry.activation_memory = Bytes(memory)

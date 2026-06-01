@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cas
 
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
-from ..utils.display import human_readable_size
 from ._accessor_base import Accessor
 from .op_log import Op
 
@@ -140,8 +139,8 @@ class Buffer(Op):
             lines.append(f"  shape: {list(self.shape)}")
         if self.dtype is not None:
             lines.append(f"  dtype: {self.dtype}")
-        if self.memory is not None:
-            lines.append(f"  size: {human_readable_size(self.memory)}")
+        if self.activation_memory is not None:
+            lines.append(f"  size: {self.activation_memory}")
         if self.module:
             lines.append(f"  module: {self.module[0]}")
         if self.buffer_pass is not None:

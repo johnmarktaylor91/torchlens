@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Uni
 
 from .._deprecations import MISSING
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
-from ..utils.display import human_readable_size
+from ..quantities import Bytes, as_bytes
 from ._accessor_base import Accessor
 from ._tabular_export import TabularExportMixin
 
@@ -193,7 +193,7 @@ class Layer(TabularExportMixin):
         "transformed_out_shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
         "transformed_out_dtype": FieldPolicy.KEEP,
-        "memory": FieldPolicy.KEEP,
+        "activation_memory": FieldPolicy.KEEP,
         "transformed_activation_memory": FieldPolicy.KEEP,
         "transformed_out": FieldPolicy.BLOB,
         "autograd_memory": FieldPolicy.KEEP,
@@ -298,10 +298,12 @@ class Layer(TabularExportMixin):
         self.transformed_out_shape = first_pass.transformed_out_shape
         self.dtype = first_pass.dtype
         self.transformed_out_dtype = first_pass.transformed_out_dtype
-        self.memory = first_pass.memory
-        self.transformed_activation_memory = first_pass.transformed_activation_memory
-        self.autograd_memory: Optional[int] = first_pass.autograd_memory
-        self.total_autograd_memory: Optional[int] = first_pass.autograd_memory
+        self.activation_memory: Bytes | None = as_bytes(first_pass.activation_memory)
+        self.transformed_activation_memory: Bytes | None = as_bytes(
+            first_pass.transformed_activation_memory
+        )
+        self.autograd_memory: Bytes | None = as_bytes(first_pass.autograd_memory)
+        self.total_autograd_memory: Bytes | None = as_bytes(first_pass.autograd_memory)
         self.num_autograd_tensors: Optional[int] = first_pass.num_autograd_tensors
 
         # Config
@@ -313,7 +315,9 @@ class Layer(TabularExportMixin):
         self.save_gradients = first_pass.save_gradients
         self.transformed_grad_shape = first_pass.transformed_grad_shape
         self.transformed_grad_dtype = first_pass.transformed_grad_dtype
-        self.transformed_gradient_memory = first_pass.transformed_gradient_memory
+        self.transformed_gradient_memory: Bytes | None = as_bytes(
+            first_pass.transformed_gradient_memory
+        )
 
         # FLOPs
         self.flops_forward = first_pass.flops_forward
@@ -326,7 +330,7 @@ class Layer(TabularExportMixin):
         self.num_params = first_pass.num_params
         self.num_params_trainable = first_pass.num_params_trainable
         self.num_params_frozen = first_pass.num_params_frozen
-        self.total_param_memory = first_pass.param_memory
+        self.total_param_memory: Bytes = Bytes(first_pass.param_memory or 0)
 
         # Function config
         self.func_config = first_pass.func_config
@@ -388,16 +392,16 @@ class Layer(TabularExportMixin):
         return self.flops_backward // 2 if self.flops_backward is not None else None
 
     @property
-    def total_activation_memory(self) -> int:
+    def total_activation_memory(self) -> Bytes:
         """Sum activation memory across all Ops in this Layer."""
 
-        return sum((op.memory or 0) for op in self.ops.values())
+        return Bytes(sum(int(op.activation_memory or 0) for op in self.ops.values()))
 
     @property
-    def total_gradient_memory(self) -> int:
+    def total_gradient_memory(self) -> Bytes:
         """Sum gradient memory across all Ops in this Layer."""
 
-        return sum((op.gradient_memory or 0) for op in self.ops.values())
+        return Bytes(sum(int(op.gradient_memory or 0) for op in self.ops.values()))
 
     @property
     def flops_total(self) -> int:
@@ -540,50 +544,6 @@ class Layer(TabularExportMixin):
         return len(self.modules)
 
     @property
-    def memory_str(self) -> str:
-        """Return the out tensor size in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable tensor memory amount.
-        """
-        return human_readable_size(self.memory)
-
-    @property
-    def total_param_memory_str(self) -> str:
-        """Return the parameter tensor size in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable parameter memory amount.
-        """
-        return human_readable_size(self.total_param_memory)
-
-    @property
-    def autograd_memory_str(self) -> str:
-        """Return representative autograd tensor memory in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable representative autograd tensor memory amount.
-        """
-        return human_readable_size(self.autograd_memory)
-
-    @property
-    def total_autograd_memory_str(self) -> str:
-        """Return total autograd tensor memory in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable total autograd tensor memory amount.
-        """
-        return human_readable_size(self.total_autograd_memory)
-
-    @property
     def source_trace(self) -> "Trace":
         """Back-reference to the owning Trace (stored as weakref)."""
         ref = self.__dict__.get("_source_trace_ref")
@@ -643,6 +603,18 @@ class Layer(TabularExportMixin):
                 "transformed_gradient_memory": None,
             },
         )
+        if "activation_memory" not in state and "memory" in state:
+            state["activation_memory"] = state.pop("memory")
+        for field_name in (
+            "activation_memory",
+            "transformed_activation_memory",
+            "autograd_memory",
+            "total_autograd_memory",
+            "transformed_gradient_memory",
+            "total_param_memory",
+        ):
+            if state.get(field_name) is not None:
+                state[field_name] = Bytes(state[field_name])
         self.__dict__.update(state)
 
     # ********************************************
@@ -1098,7 +1070,6 @@ class Layer(TabularExportMixin):
             raise AttributeError(name)
         if name in {
             "param_memory",
-            "param_memory_str",
         }:
             raise AttributeError(name)
         ops = self.__dict__.get("ops")
@@ -1328,7 +1299,7 @@ class Layer(TabularExportMixin):
         s = f"Layer {self.layer_label}:"
         if self.num_passes > 1:
             s += f" ({self.num_passes} ops)"
-        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.memory_str}"
+        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.activation_memory}"
         if not self.is_input:
             s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name})"
             if self.func_config:
@@ -1340,7 +1311,7 @@ class Layer(TabularExportMixin):
             params_shapes_str = ", ".join(str(ps) for ps in self.param_shapes)
             s += (
                 f"\n\tParams: {params_shapes_str}; "
-                f"{self.num_params} total ({self.total_param_memory_str})"
+                f"{self.num_params} total ({self.total_param_memory})"
             )
         s += "\n\tRelated Layers:"
         s += f"\n\t\t- parents: {', '.join(self.parents) or 'none'}"
@@ -1544,7 +1515,7 @@ class LayerAccessor(Accessor["Layer"]):
                     "func_name": ll.func_name,
                     "shape": ll.shape,
                     "dtype": ll.dtype,
-                    "memory_str": ll.memory_str,
+                    "activation_memory": ll.activation_memory,
                     "num_passes": ll.num_passes,
                     "num_params": ll.num_params,
                     "module": ll.module,

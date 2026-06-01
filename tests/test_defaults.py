@@ -24,7 +24,7 @@ class _DummyLog:
         self.render_calls: list[dict[str, Any]] = []
         self.summary_calls: list[dict[str, Any]] = []
         self.summary_result = "summary output"
-        self.total_activation_memory_str = "0 B"
+        self.total_activation_memory = "0 B"
         self.validate_calls: list[dict[str, Any]] = []
         self.verbose = False
 

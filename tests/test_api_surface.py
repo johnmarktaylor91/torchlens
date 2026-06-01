@@ -25,6 +25,11 @@ TARGET_ALL = [
     "Trace",
     "Layer",
     "Op",
+    "Quantity",
+    "Bytes",
+    "Duration",
+    "Flops",
+    "Macs",
     "Bundle",
     "label",
     "func",
@@ -84,17 +89,17 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_47() -> None:
+def test_all_size_exactly_52() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
     grad_clamp, grad_fn, intervening, label) = 46; post-backward
     megasprint P1 added `output` (multi-output module selector disambiguation
     per AD-7 / F-Multi) = 47; facets framework adds `facets` and B1 removes
-    the duplicate `label` export = 47.
+    the duplicate `label` export = 47; v7 quantity types add 5 = 52.
     """
 
-    assert len(torchlens.__all__) == 47
+    assert len(torchlens.__all__) == 52
     assert torchlens.__all__ == TARGET_ALL
 
 

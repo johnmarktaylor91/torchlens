@@ -222,4 +222,4 @@ def test_live_replacement_metadata_matches_saved_out() -> None:
     assert relu_layer.has_saved_activation is True
     assert relu_layer.shape == tuple(relu_layer.out.shape)
     assert relu_layer.dtype == relu_layer.out.dtype
-    assert relu_layer.memory == relu_layer.out.nelement() * relu_layer.out.element_size()
+    assert relu_layer.activation_memory == relu_layer.out.nelement() * relu_layer.out.element_size()

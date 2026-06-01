@@ -186,7 +186,7 @@ class BoundaryNode:
     type_index: int = 1
     step_index: int = 1
     shape: tuple[Any, ...] = ()
-    memory_str: str = "0 B"
+    activation_memory: str = "0 B"
     io_role: str = ""
     layer_type: str = "input"
 
@@ -669,19 +669,19 @@ def draw(
     if self.num_params == 0:
         params_detail = "0 params"
     elif self.num_params_frozen == 0:
-        params_detail = f"{self.num_params} params (all trainable, {self.total_param_memory_str})"
+        params_detail = f"{self.num_params} params (all trainable, {self.total_param_memory})"
     elif self.num_params_trainable == 0:
-        params_detail = f"{self.num_params} params (all frozen, {self.total_param_memory_str})"
+        params_detail = f"{self.num_params} params (all frozen, {self.total_param_memory})"
     else:
         params_detail = (
             f"{self.num_params} params "
             f"({self.num_params_trainable}/{self.num_params} trainable, "
-            f"{self.total_param_memory_str})"
+            f"{self.total_param_memory})"
         )
 
     graph_caption = (
         f"<<B>{self.model_class_name}</B><br align='left'/>{self.num_tensors} "
-        f"tensors total ({self.total_activation_memory_str})"
+        f"tensors total ({self.total_activation_memory})"
         f"<br align='left'/>{params_detail}<br align='left'/>>"
     )
     if getattr(self, "_has_direct_writes", False):
@@ -2979,9 +2979,9 @@ def _build_collapsed_module_node(
     if module_output_shape is None:
         module_output_shape = getattr(module_output_layer, "out_shape", None)
     module_output_shape = module_output_shape or ()
-    module_output_fsize = getattr(module_output_layer, "memory_str", None)
+    module_output_fsize = getattr(module_output_layer, "activation_memory", None)
     if module_output_fsize is None:
-        module_output_fsize = getattr(module_output_layer, "out_memory_str", "0 B")
+        module_output_fsize = getattr(module_output_layer, "out_memory", "0 B")
     address, call_index = module_tuple
     ml = self.modules[address]
     module_type = ml.class_name  # type: ignore[union-attr]
@@ -3380,7 +3380,7 @@ def compute_default_node_lines(
     if layer_log.is_terminal_bool:
         lines.append(str(layer_log.bool_value).upper())
     lines.append(title)
-    lines.append(f"{format_shape(layer_log.shape)}, {format_memory(layer_log.memory_str)}")
+    lines.append(f"{format_shape(layer_log.shape)}, {format_memory(layer_log.activation_memory)}")
 
     module_kwargs = format_module_kwargs(layer_log)
     if module_kwargs is not None:
@@ -3438,7 +3438,7 @@ def _compute_selected_node_lines(
         elif field_name == "shape":
             rows.append(format_shape(layer_log.shape))
         elif field_name in {"memory", "bytes"}:
-            rows.append(str(getattr(layer_log, "memory_str", "")))
+            rows.append(str(getattr(layer_log, "activation_memory", "")))
         elif field_name == "module":
             rows.append(format_module_path(node_address) or "@root")
         elif field_name == "params":

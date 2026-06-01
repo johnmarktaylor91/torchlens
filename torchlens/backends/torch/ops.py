@@ -50,6 +50,7 @@ from ._tl import get_label_list, get_param_meta, get_tensor_label, set_tensor_la
 from . import module_stack as _mstack
 from ...errors import CaptureError
 from ...fastlog._halt import HaltSignal
+from ...quantities import Bytes
 from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
@@ -180,7 +181,7 @@ def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -
         dtype=str(fields_dict["dtype"]),
         device=str(tensor.device),
         requires_grad=tensor.requires_grad,
-        memory=fields_dict["memory"],
+        memory=fields_dict["activation_memory"],
         payload=fields_dict["out"],
         blob_ref=None,
         backend_handle_id=str(id(tensor)),
@@ -1839,7 +1840,7 @@ def log_function_output_tensors_fast(
                                 child_output._internal_set("out", None)
                     child_output.has_saved_activation = True
                     if child_output.out is not None:
-                        child_output.memory = get_memory_amount(child_output.out)
+                        child_output.activation_memory = Bytes(get_memory_amount(child_output.out))
 
         # Update lightweight metadata that may vary across inputs
         # (shape can differ for dynamic-shape models that still share graph structure).
@@ -1854,7 +1855,7 @@ def log_function_output_tensors_fast(
             )
         orig_layer_entry.shape = new_shape
         orig_layer_entry.dtype = out.dtype
-        orig_layer_entry.memory = get_memory_amount(out)
+        orig_layer_entry.activation_memory = Bytes(get_memory_amount(out))
         (
             orig_layer_entry.autograd_memory,
             orig_layer_entry.num_autograd_tensors,
@@ -2268,7 +2269,7 @@ def _log_output_tensor_info(
     fields_dict["dtype"] = t.dtype
     fields_dict["transformed_out_dtype"] = None
     with pause_logging():
-        fields_dict["memory"] = t.nelement() * t.element_size()
+        fields_dict["activation_memory"] = t.nelement() * t.element_size()
     fields_dict["transformed_activation_memory"] = None
     fields_dict["visualizer_path"] = None
     fields_dict["bytes_delta_at_call"] = 0
@@ -2342,7 +2343,7 @@ def _save_activation_fields(
 
         fields_dict["shape"] = tuple(raw_out.shape)
         fields_dict["dtype"] = raw_out.dtype
-        fields_dict["memory"] = get_memory_amount(raw_out)
+        fields_dict["activation_memory"] = get_memory_amount(raw_out)
 
         save_raw_activations = getattr(trace, "save_raw_activations", True)
         store_raw = save_raw_activations or activation_transform is None

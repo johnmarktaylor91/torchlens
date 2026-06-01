@@ -188,10 +188,10 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += "\n\tTensor info:"
     s += (
-        f"\n\t\t- {self.num_tensors} total tensors ({self.total_activation_memory_str}) "
+        f"\n\t\t- {self.num_tensors} total tensors ({self.total_activation_memory}) "
         f"computed in forward pass."
     )
-    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory_str}) with saved outs."
+    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory}) with saved outs."
     nonfinite = self.first_nonfinite()
     if not nonfinite.startswith("No non-finite"):
         s += f"\n\t\t- NaN/Inf: {nonfinite}"
@@ -200,7 +200,7 @@ def _str_after_pass(self: "Trace") -> str:
 
     s += (
         f"\n\tParameters: {self.num_layers_with_params} parameter operations ({self.num_params} params total; "
-        f"{self.total_param_memory_str})"
+        f"{self.total_param_memory})"
     )
     s += "\n\tFLOP convention: MACs are reported as FLOPs // 2."
 

@@ -230,7 +230,7 @@ def _shape_memory_line(entry: Any) -> str | None:
     if not shape:
         return None
     shape_str = "x".join(str(v) for v in shape)
-    memory = getattr(entry, "memory", None)
+    memory = getattr(entry, "activation_memory", None)
     if memory:
         return f"{shape_str}  {human_readable_size(memory)}"
     return shape_str

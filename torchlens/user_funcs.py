@@ -1850,7 +1850,7 @@ def trace(
         trace,
         f"Done: {len(trace.layer_logs)} layers, "
         f"{trace.num_saved_ops} saved, "
-        f"{trace.total_activation_memory_str}",
+        f"{trace.total_activation_memory}",
     )
 
     if layer_visualizers_value:

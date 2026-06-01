@@ -1272,7 +1272,7 @@ def _apply_skipped_blobs_to_scrubbed_state(
             {getattr(layer, "layer_label", layer.layer_label) for layer in layer_list}
         )
         scrubbed_state["saved_activation_memory"] = sum(
-            int(getattr(layer, "memory", 0) or 0)
+            int(getattr(layer, "activation_memory", 0) or 0)
             for layer in layer_list
             if bool(getattr(layer, "has_saved_activation", False))
         )

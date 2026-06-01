@@ -31,7 +31,7 @@ def execution_trace(log: Any, trace_path: str | Path) -> dict[str, Any]:
                 "name": getattr(layer, "layer_label", None),
                 "op": getattr(layer, "func_name", None),
                 "inputs": list(getattr(layer, "parents", []) or []),
-                "bytes": getattr(layer, "memory", None),
+                "bytes": getattr(layer, "activation_memory", None),
             }
         )
     payload = {"schema": "torchlens.execution_trace.v1", "nodes": nodes}

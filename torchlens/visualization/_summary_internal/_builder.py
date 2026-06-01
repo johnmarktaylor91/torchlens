@@ -1083,7 +1083,7 @@ def _build_memory_rows(
     running_total = 0
     rows: List[Dict[str, str]] = []
     for entry in _iter_operation_entries(trace, mode=mode):
-        memory = int(getattr(entry, "memory", 0) or 0)
+        memory = int(getattr(entry, "activation_memory", 0) or 0)
         running_total += memory
         rows.append(
             {
@@ -1196,7 +1196,7 @@ def _build_waterfall_rows(
     rows: List[Dict[str, str]] = []
     for entry in _iter_operation_entries(trace, mode=mode):
         duration = float(getattr(entry, "func_duration", 0.0) or 0.0)
-        memory = int(getattr(entry, "memory", 0) or 0)
+        memory = int(getattr(entry, "activation_memory", 0) or 0)
         peak_memory = max(peak_memory, memory)
         rows.append(
             {
@@ -1240,7 +1240,7 @@ def _build_operation_rows(
     rows: List[Dict[str, str]] = []
     running_total = 0
     for entry in _iter_operation_entries(trace, mode=mode):
-        memory = int(getattr(entry, "memory", 0) or 0)
+        memory = int(getattr(entry, "activation_memory", 0) or 0)
         running_total += memory
         rows.append(
             {

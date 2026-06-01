@@ -28,7 +28,7 @@ import torch
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import PARAM_LOG_FIELD_ORDER
-from ..utils.display import human_readable_size
+from ..quantities import Bytes
 from ._accessor_base import Accessor
 from ._tabular_export import TabularExportMixin
 
@@ -66,7 +66,7 @@ class Param(TabularExportMixin):
         "shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
-        "memory": FieldPolicy.KEEP,
+        "param_memory": FieldPolicy.KEEP,
         "trainable": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
@@ -83,7 +83,6 @@ class Param(TabularExportMixin):
         "_grad_shape": FieldPolicy.KEEP,
         "_grad_dtype": FieldPolicy.KEEP,
         "_grad_memory": FieldPolicy.KEEP,
-        "_grad_memory_str": FieldPolicy.KEEP,
     }
 
     def __init__(
@@ -93,7 +92,7 @@ class Param(TabularExportMixin):
         shape: Tuple[int, ...],
         dtype: torch.dtype,
         num_params: int,
-        memory: int,
+        param_memory: int,
         trainable: bool,
         address: str,
         barcode: str,
@@ -104,7 +103,7 @@ class Param(TabularExportMixin):
         self.shape = shape
         self.dtype = dtype
         self.num_params = num_params
-        self.memory = memory
+        self.param_memory = Bytes(param_memory)
         self.trainable = trainable
         self.module_address = module_address
         self.all_addresses = [address]
@@ -126,19 +125,7 @@ class Param(TabularExportMixin):
         self._has_grad: bool = False  # one-shot flag: once True, no further checks
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
-        self._grad_memory: int = 0
-        self._grad_memory_str: str = human_readable_size(0)
-
-    @property
-    def memory_str(self) -> str:
-        """Return parameter size in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable parameter memory amount.
-        """
-        return human_readable_size(self.memory)
+        self._grad_memory: Bytes = Bytes(0)
 
     @property
     def is_quantized(self) -> bool:
@@ -295,8 +282,7 @@ class Param(TabularExportMixin):
             self._has_grad = True
             self._grad_shape = tuple(grad.shape)
             self._grad_dtype = grad.dtype
-            self._grad_memory = grad.nelement() * grad.element_size()
-            self._grad_memory_str = human_readable_size(self._grad_memory)
+            self._grad_memory = Bytes(grad.nelement() * grad.element_size())
 
     @property
     def has_grad(self) -> bool:
@@ -368,12 +354,12 @@ class Param(TabularExportMixin):
         self._grad_dtype = value
 
     @property
-    def gradient_memory(self) -> int:
+    def gradient_memory(self) -> Bytes:
         """Return the grad tensor size in bytes.
 
         Returns
         -------
-        int
+        Bytes
             Size of the grad tensor in bytes.
         """
         self._check_param_grad()
@@ -388,30 +374,7 @@ class Param(TabularExportMixin):
         value:
             Cached grad memory amount in bytes.
         """
-        self._grad_memory = value
-
-    @property
-    def gradient_memory_str(self) -> str:
-        """Return grad tensor size in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable grad memory amount.
-        """
-        self._check_param_grad()
-        return self._grad_memory_str
-
-    @gradient_memory_str.setter
-    def gradient_memory_str(self, value: str) -> None:
-        """Set cached grad tensor size in human-readable units.
-
-        Parameters
-        ----------
-        value:
-            Human-readable grad memory amount.
-        """
-        self._grad_memory_str = value
+        self._grad_memory = Bytes(value)
 
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, trainability, and usage."""
@@ -420,7 +383,7 @@ class Param(TabularExportMixin):
             f"Param: {self.address}",
             f"  shape: {self.shape}",
             f"  dtype: {self.dtype}",
-            f"  size: {self.memory_str}",
+            f"  size: {self.param_memory}",
             f"  {status}",
             f"  has_grad: {self.has_grad}",
             f"  module: {self.module_address} ({self._module_display_name()})",
@@ -475,7 +438,11 @@ class Param(TabularExportMixin):
         read_tlspec_version(state, cls_name=type(self).__name__)
         for removed_field in ("module_class_name", "module_class_qualname", "module_type"):
             state.pop(removed_field, None)
+        if "param_memory" not in state and "memory" in state:
+            state["param_memory"] = state.pop("memory")
         default_fill_state(state, defaults={"_param_ref": None, "_source_trace_ref": None})
+        state["param_memory"] = Bytes(state.get("param_memory", 0) or 0)
+        state["_grad_memory"] = Bytes(state.get("_grad_memory", 0) or 0)
         self.__dict__.update(state)
 
 

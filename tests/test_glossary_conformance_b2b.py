@@ -79,7 +79,9 @@ def test_op_and_layer_convenience_properties() -> None:
     assert op.is_compute_op is True
 
     assert layer.num_ops == len(layer.ops)
-    assert layer.total_activation_memory == sum((child.memory or 0) for child in layer.ops.values())
+    assert layer.total_activation_memory == sum(
+        (child.activation_memory or 0) for child in layer.ops.values()
+    )
     assert layer.total_gradient_memory == sum(
         (child.gradient_memory or 0) for child in layer.ops.values()
     )

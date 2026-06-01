@@ -33,6 +33,7 @@ from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
 from .._io.manifest import sha256_of_file
 from .._io.streaming import BundleStreamWriter
+from ..quantities import Bytes
 from ..data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
@@ -158,7 +159,7 @@ def _build_root_module_log(
     root_num_params = sum(pl.num_params for pl in self.param_logs)
     root_num_trainable = sum(pl.num_params for pl in self.param_logs if pl.trainable)
     root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.trainable)
-    root_fsize = sum(pl.memory for pl in self.param_logs)
+    root_fsize = Bytes(sum(int(pl.param_memory) for pl in self.param_logs))
 
     root_module = Module(
         address="self",
@@ -635,7 +636,7 @@ class ModuleParamInfo(NamedTuple):
     num_params: int
     num_trainable: int
     num_frozen: int
-    memory: int
+    memory: Bytes
     buffer_layers: list[str]
 
 
@@ -653,7 +654,7 @@ def _build_module_param_info(
     m_num_params = mbd["module_nparams"].get(address, 0)
     m_num_trainable = mbd["module_nparams_trainable"].get(address, 0)
     m_num_frozen = mbd["module_nparams_frozen"].get(address, 0)
-    m_fsize = sum(pl.memory for pl in module_param_dict.values())
+    m_fsize = Bytes(sum(int(pl.param_memory) for pl in module_param_dict.values()))
 
     if _buffer_layers_by_module is not None:
         module_buffer_layers = list(_buffer_layers_by_module.get(address, []))
@@ -946,7 +947,7 @@ def _build_layer_logs(self: "Trace") -> None:
             if pass_log.num_autograd_tensors is not None
         ]
         if pass_autograd_bytes:
-            layer_log.autograd_memory = sum(pass_autograd_bytes)
+            layer_log.autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
             layer_log.total_autograd_memory = layer_log.autograd_memory
             layer_log.num_autograd_tensors = sum(pass_autograd_tensor_counts)
             autograd_memory += layer_log.autograd_memory
@@ -957,7 +958,7 @@ def _build_layer_logs(self: "Trace") -> None:
             layer_log.num_autograd_tensors = None
         _rebuild_layer_log_conditional_views(layer_log)
 
-    self.total_autograd_memory = autograd_memory if has_autograd_saved_value else None
+    self.total_autograd_memory = Bytes(autograd_memory) if has_autograd_saved_value else None
     self.layer_logs = layer_logs
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)

@@ -105,8 +105,8 @@ def test_tensor_info_fields(small_input):
     assert mh.num_tensors > 0
     assert isinstance(mh.total_activation_memory, (int, float))
     assert mh.total_activation_memory > 0
-    assert isinstance(mh.total_activation_memory_str, str)
-    assert len(mh.total_activation_memory_str) > 0
+    assert isinstance(mh.total_activation_memory, torchlens.Bytes)
+    assert len(str(mh.total_activation_memory)) > 0
 
 
 def test_param_info_fields(small_input):
@@ -226,7 +226,7 @@ def test_entry_tensor_info_fields(small_input):
     entry = mh[0]
     assert isinstance(entry.shape, (tuple, torch.Size))
     assert isinstance(entry.dtype, torch.dtype)
-    assert isinstance(entry.memory, (int, float))
+    assert isinstance(entry.activation_memory, (int, float))
     assert entry.out is not None
 
 

@@ -97,7 +97,7 @@ def profiling_node_mode(layer_log: "Layer", spec: NodeSpec) -> NodeSpec:
     if isinstance(runtime, int | float):
         lines.append(f"t={runtime * 1000:.2f}ms")
 
-    memory = _get_optional_attr(layer_log, "memory")
+    memory = _get_optional_attr(layer_log, "activation_memory")
     if isinstance(memory, int | float):
         lines.append(f"out={_compact_size(float(memory))}")
 
@@ -213,7 +213,7 @@ def profiling_collapsed_node_mode(module_log: "Module", spec: NodeSpec) -> NodeS
         if isinstance(layer_runtime, int | float):
             runtime += float(layer_runtime)
             saw_runtime = True
-        memory = _get_optional_attr(layer_log, "memory")
+        memory = _get_optional_attr(layer_log, "activation_memory")
         if isinstance(memory, int | float):
             output_bytes += float(memory)
             saw_output = True

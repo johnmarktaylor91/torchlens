@@ -590,7 +590,7 @@ class MLXBackend:
                 "has_saved_args": False,
                 "shape": self._shape(output),
                 "dtype": self._dtype(output),
-                "memory": memory,
+                "activation_memory": memory,
                 "out_versions_by_child": {},
                 "save_gradients": False,
                 "has_grad": False,

@@ -105,7 +105,7 @@ def builtin_overlay_value(node: Any, overlay: str) -> Any:
     if name == "time":
         return float(getattr(node, "func_duration", 0.0) or 0.0)
     if name == "bytes":
-        return int(getattr(node, "memory", 0) or 0)
+        return int(getattr(node, "activation_memory", 0) or 0)
     if name == "magnitude":
         return _tensor_magnitude(getattr(node, "out", None))
     if name == "grad_norm":

@@ -27,7 +27,6 @@ from typing import Any, Dict, List, TYPE_CHECKING
 
 from ..constants import MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef
-from ..utils.display import human_readable_size
 from ..data_classes.op_log import Op
 
 if TYPE_CHECKING:
@@ -164,7 +163,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
             layer_entry.atomic_module_call = submodule_pass_nice_name
 
         # Tally the tensor sizes:
-        self.total_activation_memory += layer_entry.memory
+        self.total_activation_memory += layer_entry.activation_memory
 
         # Tally the parameter sizes:
         if layer_entry.layer_label not in unique_layers_seen:  # only count params once
@@ -575,7 +574,7 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
         self.op_labels.append(layer_entry.label)
         self.layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
         if layer_entry.has_saved_activation:
-            self.saved_activation_memory += layer_entry.memory
+            self.saved_activation_memory += layer_entry.activation_memory
         i += 1
 
     self._layers_logged = True

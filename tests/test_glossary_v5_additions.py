@@ -70,7 +70,7 @@ def test_op_input_side_properties() -> None:
     assert op.num_inputs == len(op.parents)
     assert op.input_shapes[0] == parent.shape
     assert op.input_dtypes[0] == parent.dtype
-    assert op.input_memory >= parent.memory
+    assert op.input_memory >= parent.activation_memory
     assert op.input_activations[0] is not None
 
 
@@ -105,8 +105,8 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
     assert block.forward_kwargs_template is None
     assert block.backward_duration is None
     assert block.total_backward_duration is None
-    assert isinstance(block.total_output_activation_memory_str, str)
-    assert isinstance(block.total_internal_activation_memory_str, str)
+    assert isinstance(block.total_output_activation_memory, tl.Bytes)
+    assert isinstance(block.total_internal_activation_memory, tl.Bytes)
 
 
 @pytest.mark.smoke
@@ -129,7 +129,7 @@ def test_module_call_memory_templates_and_call_tree() -> None:
     assert call.internal_gradient_memory == 0
     assert call.autograd_memory >= 0
     assert call.param_memory == trace.modules["block"].param_memory
-    assert isinstance(call.param_memory_str, str)
+    assert isinstance(call.param_memory, tl.Bytes)
     assert descendants[0] is call
     assert len(descendants) == call.num_descendant_calls + 1
     assert call.num_descendant_calls >= 2

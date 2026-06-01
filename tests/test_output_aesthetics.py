@@ -515,7 +515,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("grad_shape", entry.grad_shape))
                     out.write(_capture("grad_dtype", entry.grad_dtype))
                     out.write(_capture("gradient_memory", entry.gradient_memory))
-                    out.write(_capture("gradient_memory_str", entry.gradient_memory_str))
+                    out.write(_capture("gradient_memory", entry.gradient_memory))
                     break
 
             # Show a Op WITHOUT grad for contrast
@@ -539,7 +539,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("grad_shape", pl.grad_shape))
                     out.write(_capture("grad_dtype", pl.grad_dtype))
                     out.write(_capture("gradient_memory", pl.gradient_memory))
-                    out.write(_capture("gradient_memory_str", pl.gradient_memory_str))
+                    out.write(_capture("gradient_memory", str(pl.gradient_memory)))
                     break
 
             # Show frozen param without grad (if applicable)

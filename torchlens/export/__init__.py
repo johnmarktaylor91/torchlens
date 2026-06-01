@@ -218,7 +218,7 @@ def memory_timeline(log: Any, path: str | Path) -> Path:
     live_bytes = 0
     events: list[dict[str, Any]] = []
     for layer in _iter_layers(log):
-        bytes_value = int(getattr(layer, "memory", 0) or 0)
+        bytes_value = int(getattr(layer, "activation_memory", 0) or 0)
         live_bytes += bytes_value
         events.append(
             {
@@ -717,7 +717,7 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
                 "args": {
                     "layer_label": getattr(layer, "layer_label", None),
                     "op_type": getattr(layer, "func_name", None),
-                    "memory": getattr(layer, "memory", None),
+                    "memory": getattr(layer, "activation_memory", None),
                     "module_path": getattr(layer, "module", None),
                 },
             }
@@ -771,7 +771,7 @@ def _chrome_trace_diff_events(bundle: Any) -> list[dict[str, Any]]:
                         "module_path": getattr(node, "module_path", None),
                         "module_type": getattr(node, "module_type", None),
                         "delta": deltas.get(graph_node_label, {}).get(member_name),
-                        "memory": getattr(layer, "memory", None),
+                        "memory": getattr(layer, "activation_memory", None),
                     },
                 }
             )
@@ -936,7 +936,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
                 "label": node_id,
                 "type": _node_type(entry),
                 "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
-                "memory": str(getattr(entry, "memory_str", "")),
+                "memory": str(getattr(entry, "activation_memory", "")),
                 "x": 80 + (index % 8) * 180,
                 "y": 80 + (index // 8) * 110,
             }

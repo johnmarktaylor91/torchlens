@@ -41,6 +41,7 @@ from ..backends.torch._tl import clear_meta, get_tensor_label
 from ..backends.torch.backend import TorchBackend
 from ..fastlog._halt import HaltSignal
 from ..ir import live_record_for_label
+from ..quantities import Bytes
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -150,9 +151,9 @@ def save_new_outs(
     self._saved_grads_set = set()
     self.has_gradients = False
     self.num_saved_ops = 0
-    self.saved_activation_memory = 0
-    self.total_gradient_memory = 0
-    self.saved_gradient_memory = 0
+    self.saved_activation_memory = Bytes(0)
+    self.total_gradient_memory = Bytes(0)
+    self.saved_gradient_memory = Bytes(0)
     self.func_calls_duration = 0  # #87: reset timing
     # Reset counters so fast-pass operations align 1:1 with exhaustive-pass labels.
     # Counter alignment is the mechanism that lets the fast pass verify the graph

@@ -93,6 +93,7 @@ from .io import load_intervention_spec as _moved_load_intervention_spec
 from .observers import record_span, tap
 from .options import CaptureOptions as _CaptureOptions
 from .intervention.sites import sites
+from .quantities import Bytes, Duration, Flops, Macs, Quantity
 from .validation.consolidated import validate
 
 _REMOVED_IN = "v2.NN"
@@ -818,6 +819,11 @@ __all__ = [
     "Trace",
     "Layer",
     "Op",
+    "Quantity",
+    "Bytes",
+    "Duration",
+    "Flops",
+    "Macs",
     "Bundle",
     "label",
     "func",

@@ -55,6 +55,7 @@ from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import LAYER_PASS_LOG_FIELD_FORK_POLICY
 from ..intervention.errors import DirectActivationWriteWarning
+from ..quantities import Bytes, as_bytes
 from .._state import pause_logging
 from ..utils.tensor_utils import (
     concatenate_batch_tensors,
@@ -63,7 +64,6 @@ from ..utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
-from ..utils.display import human_readable_size
 from ..utils.display import tensor_stats_summary
 from ._tabular_export import TabularExportMixin
 
@@ -141,10 +141,10 @@ def _dtype_or_none(value: Any) -> torch.dtype | None:
     return value.dtype if isinstance(value, torch.Tensor) else None
 
 
-def _memory_or_none(value: Any) -> int | None:
+def _memory_or_none(value: Any) -> Bytes | None:
     """Return tensor memory in bytes, or ``None`` for non-tensor values."""
 
-    return get_memory_amount(value) if isinstance(value, torch.Tensor) else None
+    return as_bytes(get_memory_amount(value)) if isinstance(value, torch.Tensor) else None
 
 
 def apply_transform(
@@ -348,7 +348,7 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
 
     entry._internal_set("shape", tuple(tensor.shape))
     entry._internal_set("dtype", tensor.dtype)
-    entry._internal_set("memory", get_memory_amount(tensor))
+    entry._internal_set("activation_memory", Bytes(get_memory_amount(tensor)))
     entry._internal_set("has_saved_activation", True)
     entry._internal_set("transformed_out_shape", _shape_or_none(entry.transformed_out))
     entry._internal_set("transformed_out_dtype", _dtype_or_none(entry.transformed_out))
@@ -458,7 +458,7 @@ class Op(TabularExportMixin):
         "transformed_out_shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
         "transformed_out_dtype": FieldPolicy.KEEP,
-        "memory": FieldPolicy.KEEP,
+        "activation_memory": FieldPolicy.KEEP,
         "transformed_activation_memory": FieldPolicy.KEEP,
         "visualizer_path": FieldPolicy.KEEP,
         "autograd_memory": FieldPolicy.KEEP,
@@ -740,13 +740,15 @@ class Op(TabularExportMixin):
         self.transformed_out_shape = fields_dict["transformed_out_shape"]
         self.dtype = fields_dict["dtype"]
         self.transformed_out_dtype = fields_dict["transformed_out_dtype"]
-        self.memory = fields_dict["memory"]
-        self.transformed_activation_memory = fields_dict["transformed_activation_memory"]
+        self.activation_memory: Bytes | None = as_bytes(fields_dict["activation_memory"])
+        self.transformed_activation_memory: Bytes | None = as_bytes(
+            fields_dict["transformed_activation_memory"]
+        )
         self.visualizer_path: str | None = fields_dict["visualizer_path"]
-        self.autograd_memory: Optional[int] = fields_dict["autograd_memory"]
+        self.autograd_memory: Bytes | None = as_bytes(fields_dict["autograd_memory"])
         self.num_autograd_tensors: Optional[int] = fields_dict["num_autograd_tensors"]
-        self.bytes_delta_at_call: Optional[int] = fields_dict["bytes_delta_at_call"]
-        self.bytes_peak_at_call: Optional[int] = fields_dict["bytes_peak_at_call"]
+        self.bytes_delta_at_call: Bytes | None = as_bytes(fields_dict["bytes_delta_at_call"])
+        self.bytes_peak_at_call: Bytes | None = as_bytes(fields_dict["bytes_peak_at_call"])
 
         # Child tensor variation tracking - stores the raw tensor values that
         # each child operation received as input.  Must store RAW values (not
@@ -764,8 +766,10 @@ class Op(TabularExportMixin):
         self.transformed_grad_shape = fields_dict["transformed_grad_shape"]
         self.grad_dtype = fields_dict["grad_dtype"]
         self.transformed_grad_dtype = fields_dict["transformed_grad_dtype"]
-        self.gradient_memory = fields_dict["gradient_memory"]
-        self.transformed_gradient_memory = fields_dict["transformed_gradient_memory"]
+        self.gradient_memory: Bytes | None = as_bytes(fields_dict["gradient_memory"])
+        self.transformed_gradient_memory: Bytes | None = as_bytes(
+            fields_dict["transformed_gradient_memory"]
+        )
 
         # Function call info:
         self.func = fields_dict["func"]
@@ -806,7 +810,7 @@ class Op(TabularExportMixin):
         self.num_params = fields_dict["num_params"]
         self.num_params_trainable = fields_dict["num_params_trainable"]
         self.num_params_frozen = fields_dict["num_params_frozen"]
-        self.param_memory = fields_dict["param_memory"]
+        self.param_memory: Bytes = Bytes(fields_dict["param_memory"] or 0)
 
         # Loop-detection equivalence info:
         # equivalence_class groups structurally identical operations
@@ -1212,13 +1216,15 @@ class Op(TabularExportMixin):
         """Ignore cleanup deletion for derived input dtypes."""
 
     @property
-    def input_memory(self) -> int:
+    def input_memory(self) -> Bytes:
         """Sum of activation bytes across saved graph-parent Ops."""
 
-        return sum(
-            int(getattr(parent, "memory", 0) or 0)
-            for parent in self.input_ops.values()
-            if parent.has_saved_activation
+        return Bytes(
+            sum(
+                int(getattr(parent, "activation_memory", 0) or 0)
+                for parent in self.input_ops.values()
+                if parent.has_saved_activation
+            )
         )
 
     @input_memory.deleter
@@ -1251,28 +1257,6 @@ class Op(TabularExportMixin):
         return len(self.module_call_stack) > 0
 
     @property
-    def memory_str(self) -> str:
-        """Return out tensor size in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable out memory amount.
-        """
-        return human_readable_size(self.memory)
-
-    @property
-    def gradient_memory_str(self) -> str:
-        """Return grad tensor size in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable grad memory amount.
-        """
-        return human_readable_size(self.gradient_memory)
-
-    @property
     def tensor(self) -> Any:
         """Alias for the raw saved out."""
 
@@ -1289,28 +1273,6 @@ class Op(TabularExportMixin):
         """
 
         return (self,)
-
-    @property
-    def param_memory_str(self) -> str:
-        """Return parameter tensor size in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable parameter memory amount.
-        """
-        return human_readable_size(self.param_memory)
-
-    @property
-    def autograd_memory_str(self) -> str:
-        """Return autograd tensor memory in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable autograd tensor memory amount.
-        """
-        return human_readable_size(self.autograd_memory)
 
     @property
     def _streaming_label(self) -> str:
@@ -1608,7 +1570,8 @@ class Op(TabularExportMixin):
             "transformed_activation_shape": "transformed_out_shape",
             "activation_dtype": "dtype",
             "transformed_activation_dtype": "transformed_out_dtype",
-            "activation_memory": "memory",
+            "memory": "activation_memory",
+            "activation_memory": "activation_memory",
             "transformed_activation_memory": "transformed_activation_memory",
             "in_multi_output": "in_multi_output",
             "iterable_output_index": "multi_output_index",
@@ -1636,6 +1599,18 @@ class Op(TabularExportMixin):
             state,
             defaults=self.DEFAULT_FILL_STATE,
         )
+        for field_name in (
+            "activation_memory",
+            "transformed_activation_memory",
+            "autograd_memory",
+            "gradient_memory",
+            "transformed_gradient_memory",
+            "param_memory",
+            "bytes_delta_at_call",
+            "bytes_peak_at_call",
+        ):
+            if state.get(field_name) is not None:
+                state[field_name] = Bytes(state[field_name])
         object.__setattr__(self, "_construction_done", False)
         state.pop("source_trace", None)
         self.__dict__.update(state)
@@ -1748,7 +1723,7 @@ class Op(TabularExportMixin):
 
             self.shape = tuple(raw_out.shape)
             self.dtype = raw_out.dtype
-            self.memory = get_memory_amount(raw_out)
+            self.activation_memory = Bytes(get_memory_amount(raw_out))
 
             save_raw_activations = getattr(trace, "save_raw_activations", True)
             store_raw = save_raw_activations or activation_transform is None
@@ -1850,7 +1825,7 @@ class Op(TabularExportMixin):
         raw_grad = grad
         self.grad_shape = tuple(raw_grad.shape)
         self.grad_dtype = raw_grad.dtype
-        self.gradient_memory = get_memory_amount(raw_grad)
+        self.gradient_memory = Bytes(get_memory_amount(raw_grad))
         grad_transform = getattr(trace, "grad_transform", None)
         self._internal_set("transformed_grad", None)
         self.transformed_grad_shape = None
@@ -2181,7 +2156,7 @@ class Op(TabularExportMixin):
         sml = self.source_trace
         num_ops = sml.num_ops if sml is not None else "?"
         s = f"Layer {self.layer_label}{pass_str}operation {self.step_index}/{num_ops}:"
-        s += f"\n\tOutput tensor: shape={self.shape}, dype={self.dtype}, size={self.memory_str}"
+        s += f"\n\tOutput tensor: shape={self.shape}, dype={self.dtype}, size={self.activation_memory}"
         if not self.has_saved_activation:
             s += " (not saved)"
         s += self._tensor_contents_str_helper()
@@ -2190,7 +2165,7 @@ class Op(TabularExportMixin):
             params_shapes_str = ", ".join(str(param_shape) for param_shape in self.param_shapes)
             s += (
                 f"\n\tParams: Computed from params with shape {params_shapes_str}; "
-                f"{self.num_params} params total ({self.param_memory_str})"
+                f"{self.num_params} params total ({self.param_memory})"
             )
         else:
             s += "\n\tParams: no params used"

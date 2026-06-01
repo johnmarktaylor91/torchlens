@@ -44,7 +44,7 @@ import torch
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
-from ..utils.display import human_readable_size
+from ..quantities import Bytes
 from ._accessor_base import Accessor
 from ._tabular_export import TabularExportMixin
 
@@ -595,87 +595,56 @@ class ModuleCall(TabularExportMixin):
             cast("Op", trace.ops[label]) for label in self.ops if (label in output_labels) is output
         ]
 
-    def _sum_op_memory(self, field_name: str, *, output: bool) -> int:
+    def _sum_op_memory(self, field_name: str, *, output: bool) -> Bytes:
         """Sum an Op memory field for output or non-output Ops in this call."""
 
-        return sum(
-            int(getattr(op, field_name, 0) or 0) for op in self._ops_by_output_role(output=output)
+        return Bytes(
+            sum(
+                int(getattr(op, field_name, 0) or 0)
+                for op in self._ops_by_output_role(output=output)
+            )
         )
 
     @property
-    def output_activation_memory(self) -> int:
+    def output_activation_memory(self) -> Bytes:
         """Activation bytes for Ops whose outputs form this call's return value."""
 
-        return self._sum_op_memory("memory", output=True)
+        return self._sum_op_memory("activation_memory", output=True)
 
     @property
-    def output_activation_memory_str(self) -> str:
-        """Human-readable output activation memory for this call."""
-
-        return human_readable_size(self.output_activation_memory)
-
-    @property
-    def internal_activation_memory(self) -> int:
+    def internal_activation_memory(self) -> Bytes:
         """Activation bytes for non-output Ops executed inside this call."""
 
-        return self._sum_op_memory("memory", output=False)
+        return self._sum_op_memory("activation_memory", output=False)
 
     @property
-    def internal_activation_memory_str(self) -> str:
-        """Human-readable internal activation memory for this call."""
-
-        return human_readable_size(self.internal_activation_memory)
-
-    @property
-    def output_gradient_memory(self) -> int:
+    def output_gradient_memory(self) -> Bytes:
         """Gradient bytes for Ops whose outputs form this call's return value."""
 
         return self._sum_op_memory("gradient_memory", output=True)
 
     @property
-    def output_gradient_memory_str(self) -> str:
-        """Human-readable output gradient memory for this call."""
-
-        return human_readable_size(self.output_gradient_memory)
-
-    @property
-    def internal_gradient_memory(self) -> int:
+    def internal_gradient_memory(self) -> Bytes:
         """Gradient bytes for non-output Ops executed inside this call."""
 
         return self._sum_op_memory("gradient_memory", output=False)
 
     @property
-    def internal_gradient_memory_str(self) -> str:
-        """Human-readable internal gradient memory for this call."""
-
-        return human_readable_size(self.internal_gradient_memory)
-
-    @property
-    def autograd_memory(self) -> int:
+    def autograd_memory(self) -> Bytes:
         """Autograd-saved tensor bytes for all Ops executed inside this call."""
 
         trace = self._source_trace
         if trace is None:
-            return 0
-        return sum(int(getattr(trace.ops[label], "autograd_memory", 0) or 0) for label in self.ops)
+            return Bytes(0)
+        return Bytes(
+            sum(int(getattr(trace.ops[label], "autograd_memory", 0) or 0) for label in self.ops)
+        )
 
     @property
-    def autograd_memory_str(self) -> str:
-        """Human-readable autograd memory for this call."""
-
-        return human_readable_size(self.autograd_memory)
-
-    @property
-    def param_memory(self) -> int:
+    def param_memory(self) -> Bytes:
         """Address-recursive parameter bytes for the Module invoked by this call."""
 
         return self.module.param_memory
-
-    @property
-    def param_memory_str(self) -> str:
-        """Human-readable address-recursive parameter memory for this call."""
-
-        return human_readable_size(self.param_memory)
 
     @property
     def num_descendant_calls(self) -> int:
@@ -838,25 +807,13 @@ class ModuleCall(TabularExportMixin):
     def out_memories(self) -> list[Any]:
         """Output memories for this module call."""
 
-        return self._output_values("memory")
+        return self._output_values("activation_memory")
 
     @property
     def out_memory(self) -> Any:
         """Output memory for a single-output module call."""
 
-        return self._single_output_value("memory")
-
-    @property
-    def out_memories_str(self) -> list[str]:
-        """Human-readable output memories for this module call."""
-
-        return [human_readable_size(memory or 0) for memory in self.out_memories]
-
-    @property
-    def out_memory_str(self) -> str:
-        """Human-readable output memory for a single-output module call."""
-
-        return human_readable_size(self.out_memory or 0)
+        return self._single_output_value("activation_memory")
 
     @property
     def grads(self) -> list[Any]:
@@ -1378,21 +1335,10 @@ class Module(TabularExportMixin):
         )
 
     @property
-    def param_memory(self) -> int:
+    def param_memory(self) -> Bytes:
         """Address-recursive parameter bytes for this Module and descendants."""
 
-        return sum(int(param.memory or 0) for param in self.recursive_params)
-
-    @property
-    def param_memory_str(self) -> str:
-        """Return address-recursive parameter size in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable recursive parameter memory amount.
-        """
-        return human_readable_size(self.param_memory)
+        return Bytes(sum(int(param.param_memory or 0) for param in self.recursive_params))
 
     @property
     def has_forward_hooks(self) -> bool:
@@ -1649,64 +1595,34 @@ class Module(TabularExportMixin):
         return _duration_str(self.total_func_calls_duration)
 
     @property
-    def total_output_activation_memory(self) -> int:
+    def total_output_activation_memory(self) -> Bytes:
         """Sum of output activation bytes across this Module's calls."""
 
-        return sum(call.output_activation_memory for call in self.ops.values())
+        return Bytes(sum(int(call.output_activation_memory) for call in self.ops.values()))
 
     @property
-    def total_output_activation_memory_str(self) -> str:
-        """Human-readable total output activation memory."""
-
-        return human_readable_size(self.total_output_activation_memory)
-
-    @property
-    def total_internal_activation_memory(self) -> int:
+    def total_internal_activation_memory(self) -> Bytes:
         """Sum of internal activation bytes across this Module's calls."""
 
-        return sum(call.internal_activation_memory for call in self.ops.values())
+        return Bytes(sum(int(call.internal_activation_memory) for call in self.ops.values()))
 
     @property
-    def total_internal_activation_memory_str(self) -> str:
-        """Human-readable total internal activation memory."""
-
-        return human_readable_size(self.total_internal_activation_memory)
-
-    @property
-    def total_output_gradient_memory(self) -> int:
+    def total_output_gradient_memory(self) -> Bytes:
         """Sum of output gradient bytes across this Module's calls."""
 
-        return sum(call.output_gradient_memory for call in self.ops.values())
+        return Bytes(sum(int(call.output_gradient_memory) for call in self.ops.values()))
 
     @property
-    def total_output_gradient_memory_str(self) -> str:
-        """Human-readable total output gradient memory."""
-
-        return human_readable_size(self.total_output_gradient_memory)
-
-    @property
-    def total_internal_gradient_memory(self) -> int:
+    def total_internal_gradient_memory(self) -> Bytes:
         """Sum of internal gradient bytes across this Module's calls."""
 
-        return sum(call.internal_gradient_memory for call in self.ops.values())
+        return Bytes(sum(int(call.internal_gradient_memory) for call in self.ops.values()))
 
     @property
-    def total_internal_gradient_memory_str(self) -> str:
-        """Human-readable total internal gradient memory."""
-
-        return human_readable_size(self.total_internal_gradient_memory)
-
-    @property
-    def total_autograd_memory(self) -> int:
+    def total_autograd_memory(self) -> Bytes:
         """Sum of autograd-saved bytes across this Module's calls."""
 
-        return sum(call.autograd_memory for call in self.ops.values())
-
-    @property
-    def total_autograd_memory_str(self) -> str:
-        """Human-readable total autograd memory across this Module's calls."""
-
-        return human_readable_size(self.total_autograd_memory)
+        return Bytes(sum(int(call.autograd_memory) for call in self.ops.values()))
 
     @property
     def num_descendant_calls(self) -> int:

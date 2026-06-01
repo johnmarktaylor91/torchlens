@@ -69,8 +69,8 @@ class TestParamLogFields:
         assert isinstance(pl.shape, tuple)
         assert isinstance(pl.dtype, torch.dtype)
         assert isinstance(pl.num_params, int)
-        assert isinstance(pl.memory, int)
-        assert isinstance(pl.memory_str, str)
+        assert isinstance(pl.param_memory, int)
+        assert isinstance(str(pl.param_memory), str)
         assert isinstance(pl.trainable, bool)
         assert isinstance(pl.module_address, str)
         assert pl.module is not None
@@ -235,8 +235,8 @@ class TestParamMetadata:
     def test_fsize_positive(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            assert pl.memory > 0
-            assert len(pl.memory_str) > 0
+            assert pl.param_memory > 0
+            assert len(str(pl.param_memory)) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +390,7 @@ class TestGradientTracking:
             assert pl.grad_shape == pl.shape
             assert pl.grad_dtype == pl.dtype
             assert pl.gradient_memory > 0
-            assert len(pl.gradient_memory_str) > 0
+            assert len(str(pl.gradient_memory)) > 0
 
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()

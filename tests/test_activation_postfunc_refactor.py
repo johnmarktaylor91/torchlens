@@ -84,7 +84,7 @@ def test_save_raw_outs_false_keeps_raw_metadata_only() -> None:
     assert layer.tensor is None
     assert layer.shape is not None
     assert layer.dtype is not None
-    assert layer.memory > 0
+    assert layer.activation_memory > 0
     assert layer.transformed_out is not None
 
 

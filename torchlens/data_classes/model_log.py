@@ -106,6 +106,7 @@ from ..intervention.types import (
     TargetSpec,
 )
 from ..types import ActivationPostfunc, GradientPostfunc
+from ..quantities import Bytes
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -116,7 +117,6 @@ from .cleanup import (
 )
 from .module_log import ModuleAccessor
 from .param_log import ParamAccessor
-from ..utils.display import human_readable_size
 from ._accessor_base import Accessor
 from .interface import (
     _format_conditional_branch_stack,
@@ -1353,12 +1353,12 @@ class Trace:
         self.op_equivalence_classes: Dict[str, set[str]] = defaultdict(set)
 
         # Aggregate tensor statistics (computed during postprocessing):
-        self.total_activation_memory: int = 0
-        self.total_gradient_memory: int = 0
-        self.total_autograd_memory: Optional[int] = None
+        self.total_activation_memory: Bytes = Bytes(0)
+        self.total_gradient_memory: Bytes = Bytes(0)
+        self.total_autograd_memory: Bytes | None = None
         self.num_saved_ops: int = 0  # layers with has_saved_activation=True
-        self.saved_activation_memory: int = 0
-        self.saved_gradient_memory: int = 0
+        self.saved_activation_memory: Bytes = Bytes(0)
+        self.saved_gradient_memory: Bytes = Bytes(0)
         self.num_saved_layers: int = 0
         self.num_saved_module_calls: int = 0
         self.num_saved_grad_fns: int = 0
@@ -1371,9 +1371,9 @@ class Trace:
         self.num_params: int = 0
         self.num_params_trainable: int = 0
         self.num_params_frozen: int = 0
-        self.total_param_memory: int = 0
-        self.total_param_gradient_memory: int = 0
-        self.forward_peak_memory: int = 0
+        self.total_param_memory: Bytes = Bytes(0)
+        self.total_param_gradient_memory: Bytes = Bytes(0)
+        self.forward_peak_memory: Bytes = Bytes(0)
 
         # Structured module info:
         self._module_logs: ModuleAccessor = ModuleAccessor({})
@@ -1393,7 +1393,7 @@ class Trace:
         self.backward_root_grad_fn_object_ids: list[int] = []
         self.backward_durations: list[float] = []
         self.num_backward_passes: int = 0
-        self.backward_peak_memory: int = 0
+        self.backward_peak_memory: Bytes = Bytes(0)
         self.backward_memory_backend: str = "unknown"
         _state._register_log(self)
 
@@ -2829,6 +2829,19 @@ class Trace:
                 (parent, child),
             )
         state["conditional_arm_entry_edges"] = conditional_arm_entry_edges
+        for field_name in (
+            "total_activation_memory",
+            "total_gradient_memory",
+            "saved_activation_memory",
+            "saved_gradient_memory",
+            "total_param_memory",
+            "total_param_gradient_memory",
+            "forward_peak_memory",
+            "backward_peak_memory",
+        ):
+            state[field_name] = Bytes(state.get(field_name, 0) or 0)
+        if state.get("total_autograd_memory") is not None:
+            state["total_autograd_memory"] = Bytes(state["total_autograd_memory"])
         self.__dict__.update(state)
         if self.__dict__.get("_module_logs") is None:
             self._module_logs = ModuleAccessor({})
@@ -3006,7 +3019,7 @@ class Trace:
         """
 
         for tensor_field, shape_field, dtype_field, memory_field in (
-            ("out", "shape", "dtype", "memory"),
+            ("out", "shape", "dtype", "activation_memory"),
             (
                 "transformed_out",
                 "transformed_out_shape",
@@ -3027,7 +3040,7 @@ class Trace:
 
                 layer._internal_set(shape_field, tuple(value.shape))
                 layer._internal_set(dtype_field, value.dtype)
-                layer._internal_set(memory_field, get_memory_amount(value))
+                layer._internal_set(memory_field, Bytes(get_memory_amount(value)))
             else:
                 layer._internal_set(shape_field, None)
                 layer._internal_set(dtype_field, None)
@@ -3206,46 +3219,6 @@ class Trace:
         return len(self)
 
     @property
-    def total_activation_memory_str(self) -> str:
-        """Human-readable total tensor size."""
-        return human_readable_size(self.total_activation_memory)
-
-    @property
-    def total_gradient_memory_str(self) -> str:
-        """Human-readable total gradient tensor size."""
-
-        return human_readable_size(self.total_gradient_memory)
-
-    @property
-    def total_autograd_memory_str(self) -> str:
-        """Human-readable total autograd tensor size."""
-
-        return human_readable_size(self.total_autograd_memory)
-
-    @property
-    def saved_activation_memory_str(self) -> str:
-        """Human-readable saved tensor size."""
-        return human_readable_size(self.saved_activation_memory)
-
-    @property
-    def saved_gradient_memory_str(self) -> str:
-        """Human-readable saved gradient tensor size."""
-
-        return human_readable_size(self.saved_gradient_memory)
-
-    @property
-    def total_param_gradient_memory_str(self) -> str:
-        """Human-readable total parameter-gradient memory."""
-
-        return human_readable_size(self.total_param_gradient_memory)
-
-    @property
-    def forward_peak_memory_str(self) -> str:
-        """Human-readable forward peak memory."""
-
-        return human_readable_size(self.forward_peak_memory)
-
-    @property
     def backward_durations_str(self) -> list[str]:
         """Human-readable backward-pass durations in execution order."""
 
@@ -3320,17 +3293,6 @@ class Trace:
     # flops_backward on each Op).  These properties aggregate
     # across the entire model.  Layers with None FLOPs (unknown ops) are
     # skipped, so the totals may undercount.
-
-    @property
-    def total_param_memory_str(self) -> str:
-        """Return total parameter memory in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable total parameter memory amount.
-        """
-        return human_readable_size(self.total_param_memory)
 
     @property
     def total_flops_forward(self) -> int:
@@ -4144,7 +4106,7 @@ class Trace:
                 "pass": int(getattr(entry, "pass_index", index + 1) or index + 1),
                 "label": str(getattr(entry, "layer_label", base_label)),
                 "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
-                "memory": str(getattr(entry, "memory_str", "")),
+                "memory": str(getattr(entry, "activation_memory", "")),
             }
             for index, entry in enumerate(pass_entries)
         ]
@@ -4567,8 +4529,7 @@ class Trace:
             "step_index",
             "shape",
             "dtype",
-            "memory",
-            "memory_str",
+            "activation_memory",
             "func_name",
             "func_config",
             "func_duration",
@@ -4598,7 +4559,6 @@ class Trace:
             "num_params",
             "param_shapes",
             "param_memory",
-            "param_memory_str",
             "module_call_stack",
             "output_of_modules",
             "is_submodule_input",
@@ -4633,7 +4593,7 @@ class Trace:
             "uses_params": bool,
             "num_params": int,
             "param_memory": int,
-            "memory": int,
+            "activation_memory": int,
             "is_submodule_input": bool,
             "is_module_output": bool,
             "conditional_branch_depth": int,

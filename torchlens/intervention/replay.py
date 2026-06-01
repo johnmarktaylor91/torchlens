@@ -557,7 +557,7 @@ def _commit_replay_updates(
                 "transformed_out_shape": site.transformed_out_shape,
                 "dtype": site.dtype,
                 "transformed_out_dtype": site.transformed_out_dtype,
-                "memory": site.memory,
+                "memory": site.activation_memory,
                 "transformed_activation_memory": site.transformed_activation_memory,
                 "interventions": list(site.interventions),
             }

@@ -1170,7 +1170,7 @@ def render_elk_direct(
                     lines=[
                         title.replace("<b>", "").replace("</b>", ""),
                         ml.class_name,
-                        f"{ss}, {format_memory(mod_out.memory_str)}",
+                        f"{ss}, {format_memory(mod_out.activation_memory)}",
                         f"{n_tensors} layers total",
                         pd,
                     ],

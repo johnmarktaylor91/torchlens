@@ -72,6 +72,7 @@ from ._materialize import materialize_from_events
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
 
+from ..quantities import Bytes
 from ..utils.display import _vprint, _vtimed
 
 
@@ -135,8 +136,8 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
         and not getattr(layer_entry, "is_orphan", False)
     ]
     self.num_saved_ops = len(saved_layers)
-    self.saved_activation_memory = sum(
-        getattr(layer_entry, "memory", 0) for layer_entry in saved_layers
+    self.saved_activation_memory = Bytes(
+        sum(int(getattr(layer_entry, "activation_memory", 0) or 0) for layer_entry in saved_layers)
     )
     self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
     saved_labels = {layer_entry.layer_label for layer_entry in saved_layers}
@@ -337,7 +338,7 @@ def postprocess_fast(self: "Trace") -> None:
             if isinstance(parent_transformed, torch.Tensor)
             else parent_transformed,
         )
-        output_layer.memory = parent_layer.memory
+        output_layer.activation_memory = parent_layer.activation_memory
         output_layer.transformed_out_shape = parent_layer.transformed_out_shape
         output_layer.transformed_out_dtype = parent_layer.transformed_out_dtype
         output_layer.transformed_activation_memory = parent_layer.transformed_activation_memory

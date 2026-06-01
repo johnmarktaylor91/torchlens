@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
+from ..quantities import Bytes
 from ..utils.display import identity
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
@@ -88,8 +89,8 @@ def _add_output_layers(
         new_output_node.grad_fn_class_name = None
         new_output_node.autograd_memory = None
         new_output_node.num_autograd_tensors = None
-        new_output_node.bytes_delta_at_call = 0
-        new_output_node.bytes_peak_at_call = 0
+        new_output_node.bytes_delta_at_call = Bytes(0)
+        new_output_node.bytes_peak_at_call = Bytes(0)
         new_output_node._internal_set("saved_args", [output_tensors[i]])
         new_output_node._internal_set("saved_kwargs", {})
 
@@ -103,7 +104,7 @@ def _add_output_layers(
         new_output_node.num_params = int(0)
         new_output_node.num_params_trainable = 0
         new_output_node.num_params_frozen = 0
-        new_output_node.param_memory = 0
+        new_output_node.param_memory = Bytes(0)
 
         # Strip module info:
 
