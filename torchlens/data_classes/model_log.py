@@ -649,6 +649,17 @@ class TraceGradFnCallAccessor(Accessor[Any]):
         return None
 
 
+_TRACE_OP_ACCESSOR_CACHE: weakref.WeakKeyDictionary[Any, tuple[int, TraceOpAccessor]] = (
+    weakref.WeakKeyDictionary()
+)
+_TRACE_LAYER_ACCESSOR_CACHE: weakref.WeakKeyDictionary[Any, tuple[int, Any]] = (
+    weakref.WeakKeyDictionary()
+)
+_TRACE_MODULE_CALL_ACCESSOR_CACHE: weakref.WeakKeyDictionary[
+    Any, tuple[int, TraceModuleCallAccessor]
+] = weakref.WeakKeyDictionary()
+
+
 class _CallableList(list[Any]):
     """List that returns a plain list when called.
 
@@ -3360,14 +3371,26 @@ class Trace:
     def ops(self) -> Accessor[Op]:
         """Access per-invocation Op records by label or index."""
 
-        return TraceOpAccessor(self.layer_list, self.layer_num_calls)
+        cache_key = len(self.layer_list)
+        cache_entry = _TRACE_OP_ACCESSOR_CACHE.get(self)
+        if cache_entry is None or cache_entry[0] != cache_key:
+            accessor = TraceOpAccessor(self.layer_list, self.layer_num_calls)
+            _TRACE_OP_ACCESSOR_CACHE[self] = (cache_key, accessor)
+            return accessor
+        return cache_entry[1]
 
     @property
     def layers(self) -> "LayerAccessor":
         """Access aggregate per-layer metadata by label, index, or pass notation."""
         from .layer_log import LayerAccessor
 
-        return LayerAccessor(self.layer_logs, source_trace=self)
+        cache_key = len(self.layer_logs)
+        cache_entry = _TRACE_LAYER_ACCESSOR_CACHE.get(self)
+        if cache_entry is None or cache_entry[0] != cache_key:
+            accessor = LayerAccessor(self.layer_logs, source_trace=self)
+            _TRACE_LAYER_ACCESSOR_CACHE[self] = (cache_key, accessor)
+            return accessor
+        return cast("LayerAccessor", cache_entry[1])
 
     @property
     def modules(self) -> "ModuleAccessor":
@@ -3394,11 +3417,17 @@ class Trace:
     def module_calls(self) -> TraceModuleCallAccessor:
         """Access per-invocation ModuleCall records by call label or index."""
 
+        num_calls = sum(len(module.calls) for module in self._module_logs)
+        cache_entry = _TRACE_MODULE_CALL_ACCESSOR_CACHE.get(self)
+        if cache_entry is not None and cache_entry[0] == num_calls:
+            return cache_entry[1]
         calls: OrderedDict[str, Any] = OrderedDict()
         for module in self._module_logs:
             for call in module.calls.values():
                 calls[call.call_label] = call
-        return TraceModuleCallAccessor(calls)
+        accessor = TraceModuleCallAccessor(calls)
+        _TRACE_MODULE_CALL_ACCESSOR_CACHE[self] = (num_calls, accessor)
+        return accessor
 
     @property
     def num_module_calls(self) -> int:

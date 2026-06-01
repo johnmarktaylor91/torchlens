@@ -458,6 +458,9 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
     target_ops = _representative_ops_for_replay(self, _validation_ops_for_entry(target_entry))
 
     for target_layer in target_ops:
+        if target_layer.func is None:
+            continue
+
         # Make sure that all parent layers appear in at least one argument and
         # that no extra layers appear:
         parents_in_args = set()
@@ -973,7 +976,10 @@ def _prepare_input_args_for_validating_layer(
             parent_layer_arg,
         ) in layer_to_validate_parents_for.parent_arg_positions[arg_type].items():
             parent_layer = self[parent_layer_arg]
-            if layer_to_validate_parents_for.layer_label in parent_layer.out_versions_by_child:
+            target_op_label = getattr(layer_to_validate_parents_for, "label", None)
+            if target_op_label in parent_layer.out_versions_by_child:
+                parent_values = parent_layer.out_versions_by_child[target_op_label]
+            elif layer_to_validate_parents_for.layer_label in parent_layer.out_versions_by_child:
                 parent_values = parent_layer.out_versions_by_child[
                     layer_to_validate_parents_for.layer_label
                 ]

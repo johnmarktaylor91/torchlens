@@ -495,6 +495,7 @@ def _build_submodule_call_logs(
     _child_to_parent_pass: dict[str, str] | None = None,
     all_addresses: list[str] | None = None,
     module_class: type[torch.nn.Module] | None = None,
+    pass_input_layers_by_call: dict[str, list[str]] | None = None,
 ) -> tuple[dict[int, "ModuleCall"], list[str]]:
     """Build ModuleCall objects for all ops of a single submodule.
 
@@ -513,13 +514,10 @@ def _build_submodule_call_logs(
         pass_layers = list(mbd["module_pass_layers"].get(call_label, []))
 
         # Derive input/output layers per pass from Op fields
-        pass_input_layers = []
+        pass_input_layers = list((pass_input_layers_by_call or {}).get(call_label, []))
         pass_output_layers = []
         pass_output_ops = []
         pass_outputs = []
-        for te in self.layer_list:
-            if te.is_submodule_input and call_label in te.input_to_modules:
-                pass_input_layers.append(te.layer_label)
         for op_label in pass_layers:
             try:
                 te = self.ops[op_label]
@@ -732,6 +730,16 @@ def _build_module_logs(self: "Trace") -> None:
                 module_addr = bl_entry.address.rsplit(".", 1)[0]
                 _buffer_layers_by_module[module_addr].append(bl)
 
+    # Pre-compute input layers for each module call.  Large traces may have
+    # tens of thousands of ModuleCalls; scanning every Op once per call is
+    # quadratic and dominates validation postprocessing.
+    _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
+    for te in self.layer_list:
+        if not te.is_submodule_input:
+            continue
+        for call_label in te.input_to_modules:
+            _pass_input_layers_by_call[call_label].append(te.layer_label)
+
     # --- Build ModuleLogs for each submodule ---
     for address in mbd["addresses"]:
         meta = _metadata_by_alias.get(address, {})
@@ -761,6 +769,7 @@ def _build_module_logs(self: "Trace") -> None:
             _child_to_parent_pass,
             all_addresses=all_addresses,
             module_class=meta.get("cls"),
+            pass_input_layers_by_call=_pass_input_layers_by_call,
         )
         call_children_all, call_parent_addr = _resolve_call_hierarchy(ops)
         param_info = _build_module_param_info(self, address, mbd, _buffer_layers_by_module)

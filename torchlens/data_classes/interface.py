@@ -94,6 +94,11 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             raise
 
     if isinstance(ix, str):
+        if ix in self.layer_dict_all_keys and not (
+            ix in self.layer_logs and self.layer_num_calls.get(ix, 1) > 1
+        ):
+            return self.layer_dict_all_keys[ix]
+
         for accessor in (
             self.ops,
             self.module_calls,
@@ -107,9 +112,6 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
                 return accessor[ix]
             except (AttributeError, KeyError, ValueError, TypeError):
                 pass
-
-        if ix in self.layer_dict_all_keys:
-            return self.layer_dict_all_keys[ix]
 
         lower_ix = ix.lower()
         for key in self.layer_dict_all_keys:

@@ -624,8 +624,12 @@ def _check_op_log_fields(ml: "Trace") -> None:
                 f"Layer {label}: num_passes={lpl.num_passes} < pass_index={lpl.pass_index}",
             )
 
-        # Function applied (non-input, non-buffer, non-output layers)
-        if not (lpl.is_input or lpl.is_buffer or lpl.is_output):
+        is_functionless_replacement = lpl.func_name == "intervention_replacement" and getattr(
+            lpl, "intervention_replaced", False
+        )
+
+        # Function applied (non-input, non-buffer, non-output, non-hook-replacement layers)
+        if not (lpl.is_input or lpl.is_buffer or lpl.is_output or is_functionless_replacement):
             if not callable(lpl.func):
                 raise MetadataInvariantError(name, f"Layer {label}: func is not callable")
             if not lpl.func_name:
@@ -1470,6 +1474,10 @@ def _check_module_layer_containment(ml: "Trace") -> None:
     mod_accessor = ml.modules
     label_set = set(ml.op_labels)
     no_pass_set = set(ml.layer_labels)
+    all_layer_label_set = label_set | no_pass_set
+    module_layer_label_sets = {
+        mod_log.address: set(mod_log.layer_labels) for mod_log in mod_accessor
+    }
 
     for mod_log in mod_accessor:
         addr = mod_log.address
@@ -1510,12 +1518,10 @@ def _check_module_layer_containment(ml: "Trace") -> None:
 
             # input/output layers subset of ops (using both pass-qualified
             # and no-pass labels to handle recurrent models)
-            mpl_layer_set = set(mpl.ops)
-            valid_set = mpl_layer_set | label_set | no_pass_set
             for sub_attr in ("input_layers", "output_layers"):
                 sub_list = getattr(mpl, sub_attr)
                 sub_set = set(sub_list)
-                extra = sub_set - valid_set
+                extra = sub_set - all_layer_label_set
                 if extra:
                     raise MetadataInvariantError(
                         name,
@@ -1530,14 +1536,15 @@ def _check_module_layer_containment(ml: "Trace") -> None:
             # module may include pass suffix (e.g. 'fc:1')
             cmo_addr = cmo.split(":")[0] if ":" in cmo else cmo
             try:
-                mod = mod_accessor[cmo_addr]
+                mod_accessor[cmo_addr]
             except (KeyError, IndexError):
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{lpl.layer_label}' module='{cmo}' "
                     f"(addr='{cmo_addr}') not found in module accessor",
                 )
-            if lpl.layer_label not in mod.layer_labels:  # type: ignore[union-attr]
+            module_layer_labels = module_layer_label_sets.get(cmo_addr, set())
+            if lpl.layer_label not in module_layer_labels:
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{lpl.layer_label}' (no_pass='{lpl.layer_label}') "
