@@ -41,7 +41,7 @@ from ..backends.torch._tl import clear_meta, get_tensor_label
 from ..backends.torch.backend import TorchBackend
 from ..fastlog._halt import HaltSignal
 from ..ir import live_record_for_label
-from ..quantities import Bytes
+from ..quantities import Bytes, Duration
 
 if TYPE_CHECKING:
     from ..data_classes.model_log import Trace
@@ -154,7 +154,7 @@ def save_new_outs(
     self.saved_activation_memory = Bytes(0)
     self.total_gradient_memory = Bytes(0)
     self.saved_gradient_memory = Bytes(0)
-    self.func_calls_duration = 0  # #87: reset timing
+    self.func_calls_duration = Duration(0)  # #87: reset timing
     # Reset counters so fast-pass operations align 1:1 with exhaustive-pass labels.
     # Counter alignment is the mechanism that lets the fast pass verify the graph
     # hasn't changed: same counter value → same raw label → same operation.
@@ -552,8 +552,8 @@ def run_and_log_inputs_through_model(
 
         # Per-session model preparation
         backend.prepare_model_session(self, model)
-        self.setup_duration = time.time() - self.capture_start_time
-        _vprint(self, f"Model prepared ({self.setup_duration:.2f}s)")
+        self.setup_duration = Duration(time.time() - self.capture_start_time)
+        _vprint(self, f"Model prepared ({self.setup_duration:.2f s})")
 
         # Print input summary
         if getattr(self, "verbose", False):
@@ -681,10 +681,12 @@ def run_and_log_inputs_through_model(
         output_transform = getattr(self, "_output_transform", None)
         self.raw_output = output_transform(outputs) if output_transform is not None else None
 
-        self.forward_duration = time.time() - self.capture_start_time - self.setup_duration
+        self.forward_duration = Duration(
+            time.time() - self.capture_start_time - self.setup_duration
+        )
         _vprint(
             self,
-            f"Forward pass complete ({self.forward_duration:.2f}s, "
+            f"Forward pass complete ({self.forward_duration:.2f s}, "
             f"{len(self.capture_events.op_events)} raw operations)",
         )
 

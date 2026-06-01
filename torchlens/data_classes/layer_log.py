@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Uni
 
 from .._deprecations import MISSING
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
-from ..quantities import Bytes, as_bytes
+from ..quantities import Bytes, Duration, Flops, Macs, as_bytes, as_flops, as_macs
 from ._accessor_base import Accessor
 from ._tabular_export import TabularExportMixin
 
@@ -320,8 +320,8 @@ class Layer(TabularExportMixin):
         )
 
         # FLOPs
-        self.flops_forward = first_pass.flops_forward
-        self.flops_backward = first_pass.flops_backward
+        self.flops_forward = as_flops(first_pass.flops_forward)
+        self.flops_backward = as_flops(first_pass.flops_backward)
 
         # Param identity
         self._param_barcodes = first_pass._param_barcodes
@@ -382,14 +382,14 @@ class Layer(TabularExportMixin):
         self.call_labels: List[str] = []
 
     @property
-    def macs_forward(self) -> Optional[int]:
+    def macs_forward(self) -> Optional[Macs]:
         """Forward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
-        return self.flops_forward // 2 if self.flops_forward is not None else None
+        return as_macs(self.flops_forward // 2 if self.flops_forward is not None else None)
 
     @property
-    def macs_backward(self) -> Optional[int]:
+    def macs_backward(self) -> Optional[Macs]:
         """Backward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
-        return self.flops_backward // 2 if self.flops_backward is not None else None
+        return as_macs(self.flops_backward // 2 if self.flops_backward is not None else None)
 
     @property
     def total_activation_memory(self) -> Bytes:
@@ -404,52 +404,52 @@ class Layer(TabularExportMixin):
         return Bytes(sum(int(op.gradient_memory or 0) for op in self.ops.values()))
 
     @property
-    def flops_total(self) -> int:
+    def flops_total(self) -> Flops:
         """Representative total FLOPs for this Layer."""
 
-        return (self.flops_forward or 0) + (self.flops_backward or 0)
+        return Flops((self.flops_forward or 0) + (self.flops_backward or 0))
 
     @property
-    def total_flops_forward(self) -> int:
+    def total_flops_forward(self) -> Flops:
         """Sum forward FLOPs across all Ops in this Layer."""
 
-        return sum((op.flops_forward or 0) for op in self.ops.values())
+        return Flops(sum((op.flops_forward or 0) for op in self.ops.values()))
 
     @property
-    def total_flops_backward(self) -> int:
+    def total_flops_backward(self) -> Flops:
         """Sum backward FLOPs across all Ops in this Layer."""
 
-        return sum((op.flops_backward or 0) for op in self.ops.values())
+        return Flops(sum((op.flops_backward or 0) for op in self.ops.values()))
 
     @property
-    def total_flops_total(self) -> int:
+    def total_flops_total(self) -> Flops:
         """Sum total FLOPs across all Ops in this Layer."""
 
-        return self.total_flops_forward + self.total_flops_backward
+        return Flops(self.total_flops_forward + self.total_flops_backward)
 
     @property
-    def macs_total(self) -> int:
+    def macs_total(self) -> Macs:
         """Representative total MACs for this Layer."""
 
-        return self.flops_total // 2
+        return Macs(self.flops_total // 2)
 
     @property
-    def total_macs_forward(self) -> int:
+    def total_macs_forward(self) -> Macs:
         """Sum forward MACs across all Ops in this Layer."""
 
-        return self.total_flops_forward // 2
+        return Macs(self.total_flops_forward // 2)
 
     @property
-    def total_macs_backward(self) -> int:
+    def total_macs_backward(self) -> Macs:
         """Sum backward MACs across all Ops in this Layer."""
 
-        return self.total_flops_backward // 2
+        return Macs(self.total_flops_backward // 2)
 
     @property
-    def total_macs_total(self) -> int:
+    def total_macs_total(self) -> Macs:
         """Sum total MACs across all Ops in this Layer."""
 
-        return self.total_flops_total // 2
+        return Macs(self.total_flops_total // 2)
 
     @property
     def param_names(self) -> list[str]:
@@ -736,15 +736,15 @@ class Layer(TabularExportMixin):
         return self._single_pass_or_error("code_context")
 
     @property
-    def func_duration(self) -> Any:
+    def func_duration(self) -> Duration:
         """Return function execution time for a single-pass layer.
 
         Returns
         -------
-        Any
+        Duration
             Function timing value from the only pass.
         """
-        return self._single_pass_or_error("func_duration")
+        return cast(Duration, self._single_pass_or_error("func_duration"))
 
     @property
     def func_rng_states(self) -> Any:

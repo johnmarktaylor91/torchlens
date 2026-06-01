@@ -377,8 +377,8 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
     if children_by_cond:
         d["conditional_arm_children"] = _rename_children_by_cond(children_by_cond, layer_mapping)
 
-    if d.get("edge_uses"):
-        d["edge_uses"] = [_rename_label_dataclass(record, mapping) for record in d["edge_uses"]]
+    if d.get("_edge_uses"):
+        d["_edge_uses"] = [_rename_label_dataclass(record, mapping) for record in d["_edge_uses"]]
 
     if d.get("args_template") is not None:
         d["args_template"] = _rename_template_parent_refs(d["args_template"], mapping)
@@ -645,7 +645,7 @@ def _replay_dependency_labels(layer_entry: Op) -> set[str]:
     """
 
     dependency_labels = set(layer_entry.parents)
-    for edge in getattr(layer_entry, "edge_uses", []):
+    for edge in getattr(layer_entry, "_edge_uses", []):
         dependency_labels.add(edge.parent_label)
     for template in (layer_entry.args_template, layer_entry.kwargs_template):
         for parent_ref in _collect_parent_refs(template):

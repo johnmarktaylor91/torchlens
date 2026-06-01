@@ -103,7 +103,7 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     assert all(layer.out is not None for layer in log.layer_list)
     assert all(layer.args_template is None for layer in log.layer_list)
     assert all(layer.kwargs_template is None for layer in log.layer_list)
-    assert all(layer.edge_uses == [] for layer in log.layer_list)
+    assert all(layer._edge_uses == [] for layer in log.layer_list)
     assert all(layer.container_path == () for layer in log.layer_list)
 
 

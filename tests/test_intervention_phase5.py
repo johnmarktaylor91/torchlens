@@ -171,7 +171,7 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
 
     final_labels = set(log.layer_labels)
     for layer in log.layer_list:
-        for edge in layer.edge_uses:
+        for edge in layer._edge_uses:
             assert edge.parent_label in final_labels
             assert edge.child_label in final_labels
         for template in (layer.args_template, layer.kwargs_template):

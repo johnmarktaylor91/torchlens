@@ -20,8 +20,6 @@ For slice keys: returns a list slice of ``layer_list``.
 
 from typing import TYPE_CHECKING, Any, List, Tuple, cast
 
-import numpy as np
-
 if TYPE_CHECKING:
     from .model_log import Trace
     from ..capture.projections import LiveOpView
@@ -156,10 +154,7 @@ def _str_after_pass(self: "Trace") -> str:
     # General info
 
     s += f"\n\tRandom seed: {self.random_seed}"
-    s += (
-        f"\n\tTime elapsed: {np.round(self.capture_duration, 3)}s "
-        f"({np.round(self.overhead_duration, 3)}s spent logging)"
-    )
+    s += f"\n\tTime elapsed: {self.capture_duration} ({self.overhead_duration} spent logging)"
 
     # Overall model structure
 

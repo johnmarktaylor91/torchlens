@@ -49,7 +49,7 @@ def test_tap_records_without_modifying_output() -> None:
 
 
 def test_record_span_and_log_value_metadata() -> None:
-    """Record spans and report values should land on the captured Trace."""
+    """Record spans and logged values should land on the captured Trace."""
 
     with tl.record_span("phase_name"):
         log = tl.trace(MetricModel(), torch.tensor([[-1.0, 2.0]]))
@@ -57,4 +57,5 @@ def test_record_span_and_log_value_metadata() -> None:
     assert log.observer_spans
     assert log.observer_spans[0]["name"] == "phase_name"
     assert log.observer_spans[0]["end"] is not None
-    assert log.report_values["out_sum"] == 2.0
+    assert log.annotations["logged_values"]["out_sum"] == 2.0
+    assert not hasattr(log, "report_values")

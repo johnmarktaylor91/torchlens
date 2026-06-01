@@ -10,6 +10,7 @@ import torch
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
+from ..quantities import Duration
 from ._accessor_base import Accessor
 from ._tabular_export import TabularExportMixin
 from .grad_fn_call_log import GradFnCall
@@ -412,12 +413,12 @@ class GradFn(TabularExportMixin):
         return [f"{self.label}:{call_index}" for call_index in self.calls.keys()]
 
     @property
-    def backward_duration(self) -> float:
+    def backward_duration(self) -> Duration:
         """Return this GradFn's single-call backward duration.
 
         Returns
         -------
-        float
+        Duration
             Backward duration for the only call.
 
         Raises
@@ -434,27 +435,10 @@ class GradFn(TabularExportMixin):
         return next(iter(self.calls.values())).backward_duration
 
     @property
-    def backward_duration_str(self) -> str:
-        """Return this GradFn's single-call backward duration as text."""
-
-        if len(self.calls) != 1:
-            raise ValueError(
-                f"GradFn '{self.label}' has {len(self.calls)} calls. Access "
-                "backward_duration_str on a specific call or use total_backward_duration_str."
-            )
-        return next(iter(self.calls.values())).backward_duration_str
-
-    @property
-    def total_backward_duration(self) -> float:
+    def total_backward_duration(self) -> Duration:
         """Return total backward duration across all calls for this GradFn."""
 
-        return sum(call.backward_duration for call in self.calls.values())
-
-    @property
-    def total_backward_duration_str(self) -> str:
-        """Return total backward duration across all calls as text."""
-
-        return f"{self.total_backward_duration * 1000:.3f} ms"
+        return Duration(sum(call.backward_duration for call in self.calls.values()))
 
     def _log_call(self, grad_inputs: Any, grad_outputs: Any, timestamp: float) -> None:
         """Append one runtime hook firing to this grad_fn_handle log.

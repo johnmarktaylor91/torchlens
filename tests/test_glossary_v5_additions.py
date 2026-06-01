@@ -47,10 +47,9 @@ def test_trace_call_tree_and_num_modules() -> None:
 
     assert trace.num_modules == len(trace.modules)
     assert trace.num_module_calls == len(trace.module_calls)
-    assert trace.root_call.call_label == "self:1"
-    assert trace.max_call_depth >= 3
     assert len(calls) == len(trace.module_calls)
-    assert calls[0] is trace.root_call
+    assert calls[0].call_label == "self:1"
+    assert calls[0].max_descendant_depth >= 2
 
     trace.show_call_tree(file=stream)
     assert "self:1" in stream.getvalue()
@@ -122,7 +121,6 @@ def test_module_call_memory_templates_and_call_tree() -> None:
     assert call.forward_args_template is not None
     assert call.forward_kwargs_template is None
     assert call.backward_duration is None
-    assert call.backward_duration_str is None
     assert call.output_activation_memory >= 0
     assert call.internal_activation_memory > 0
     assert call.output_gradient_memory == 0

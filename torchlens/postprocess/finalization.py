@@ -33,7 +33,7 @@ from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
 from .._io.manifest import sha256_of_file
 from .._io.streaming import BundleStreamWriter
-from ..quantities import Bytes
+from ..quantities import Bytes, Duration
 from ..data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
@@ -84,7 +84,7 @@ def _log_time_elapsed(self: "Trace") -> None:
     as total time minus actual function call time.
     """
     self.capture_end_time = time.time()
-    self.cleanup_duration = (
+    self.cleanup_duration = Duration(
         self.capture_end_time
         - self.capture_start_time
         - self.setup_duration

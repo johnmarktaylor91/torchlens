@@ -55,7 +55,7 @@ from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import LAYER_PASS_LOG_FIELD_FORK_POLICY
 from ..intervention.errors import DirectActivationWriteWarning
-from ..quantities import Bytes, as_bytes
+from ..quantities import Bytes, Flops, Macs, as_bytes, as_duration, as_flops, as_macs
 from .._state import pause_logging
 from ..utils.tensor_utils import (
     concatenate_batch_tensors,
@@ -107,7 +107,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "container_spec": None,
     "args_template": None,
     "kwargs_template": None,
-    "edge_uses": [],
+    "_edge_uses": [],
     "is_orphan": False,
     "_address_normalized": None,
     "_construction_done": True,
@@ -519,7 +519,7 @@ class Op(TabularExportMixin):
         "recurrent_ops": FieldPolicy.KEEP,
         "parents": FieldPolicy.KEEP,
         "parent_arg_positions": FieldPolicy.KEEP,
-        "edge_uses": FieldPolicy.KEEP,
+        "_edge_uses": FieldPolicy.KEEP,
         "root_ancestors": FieldPolicy.KEEP,
         "children": FieldPolicy.KEEP,
         "has_children": FieldPolicy.KEEP,
@@ -534,8 +534,8 @@ class Op(TabularExportMixin):
         "has_output_descendant": FieldPolicy.KEEP,
         "output_descendants": FieldPolicy.KEEP,
         "is_orphan": FieldPolicy.KEEP,
-        "min_distance_from_output": FieldPolicy.KEEP,
-        "max_distance_from_output": FieldPolicy.KEEP,
+        "min_distance_to_output": FieldPolicy.KEEP,
+        "max_distance_to_output": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
@@ -777,9 +777,9 @@ class Op(TabularExportMixin):
         self.func_name = fields_dict["func_name"]
         self.func_qualname = fields_dict["func_qualname"]
         self.code_context: List["FuncCallLocation"] = fields_dict["code_context"]
-        self.func_duration = fields_dict["func_duration"]
-        self.flops_forward = fields_dict["flops_forward"]
-        self.flops_backward = fields_dict["flops_backward"]
+        self.func_duration = as_duration(fields_dict["func_duration"])
+        self.flops_forward = as_flops(fields_dict["flops_forward"])
+        self.flops_backward = as_flops(fields_dict["flops_backward"])
         self.func_rng_states = fields_dict["func_rng_states"]
         self.func_autocast_state = fields_dict["func_autocast_state"]
         self.arg_names = fields_dict["arg_names"]
@@ -825,7 +825,7 @@ class Op(TabularExportMixin):
         # Graph info:
         self.parents = fields_dict["parents"]
         self.parent_arg_positions = fields_dict["parent_arg_positions"]
-        self.edge_uses = fields_dict["edge_uses"]
+        self._edge_uses = fields_dict["_edge_uses"]
         self.root_ancestors = fields_dict["root_ancestors"]
         self.children = fields_dict["children"]
         self.has_children = fields_dict["has_children"]
@@ -840,8 +840,8 @@ class Op(TabularExportMixin):
         self.has_output_descendant = fields_dict["has_output_descendant"]
         self.output_descendants = fields_dict["output_descendants"]
         self.is_orphan: bool = fields_dict["is_orphan"]
-        self.min_distance_from_output = fields_dict["min_distance_from_output"]
-        self.max_distance_from_output = fields_dict["max_distance_from_output"]
+        self.min_distance_to_output = fields_dict["min_distance_to_output"]
+        self.max_distance_to_output = fields_dict["max_distance_to_output"]
         self.io_role = fields_dict["io_role"]
         self.is_buffer = fields_dict["is_buffer"]
         self.address = fields_dict["address"]
@@ -911,38 +911,38 @@ class Op(TabularExportMixin):
         self.type = value
 
     @property
-    def macs_forward(self) -> Optional[int]:
+    def macs_forward(self) -> Optional[Macs]:
         """Forward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
-        return self.flops_forward // 2 if self.flops_forward is not None else None
+        return as_macs(self.flops_forward // 2 if self.flops_forward is not None else None)
 
     @property
-    def macs_backward(self) -> Optional[int]:
+    def macs_backward(self) -> Optional[Macs]:
         """Backward MACs (multiply-accumulate ops). 1 MAC = 2 FLOPs."""
-        return self.flops_backward // 2 if self.flops_backward is not None else None
+        return as_macs(self.flops_backward // 2 if self.flops_backward is not None else None)
 
     @property
-    def flops_total(self) -> int:
+    def flops_total(self) -> Flops:
         """Approximate total FLOPs for this Op.
 
         Returns
         -------
-        int
+        Flops
             Forward plus backward FLOPs, treating unknown halves as zero.
         """
 
-        return (self.flops_forward or 0) + (self.flops_backward or 0)
+        return Flops((self.flops_forward or 0) + (self.flops_backward or 0))
 
     @property
-    def macs_total(self) -> int:
+    def macs_total(self) -> Macs:
         """Approximate total MACs for this Op.
 
         Returns
         -------
-        int
+        Macs
             Forward plus backward MACs.
         """
 
-        return self.flops_total // 2
+        return Macs(self.flops_total // 2)
 
     @property
     def param_names(self) -> list[str]:
@@ -1564,7 +1564,7 @@ class Op(TabularExportMixin):
             "operation_num": "op_num",
             "activation": "out",
             "transformed_activation": "transformed_out",
-            "has_saved_activations": "has_saved_activation",
+            "has_saved_activation": "has_saved_activation",
             "activation_transform": "activation_transform",
             "activation_shape": "shape",
             "transformed_activation_shape": "transformed_out_shape",
@@ -1591,6 +1591,9 @@ class Op(TabularExportMixin):
             "leaf_module_pass": "atomic_module_call",
             "activation_ref": "out_ref",
             "gradient_ref": "grad_ref",
+            "edge_uses": "_edge_uses",
+            "min_distance_from_output": "min_distance_to_output",
+            "max_distance_from_output": "max_distance_to_output",
         }
         for old_key, new_key in old_key_map.items():
             if new_key not in state and old_key in state:
@@ -1611,6 +1614,11 @@ class Op(TabularExportMixin):
         ):
             if state.get(field_name) is not None:
                 state[field_name] = Bytes(state[field_name])
+        if state.get("func_duration") is not None:
+            state["func_duration"] = as_duration(state["func_duration"])
+        for field_name in ("flops_forward", "flops_backward"):
+            if state.get(field_name) is not None:
+                state[field_name] = Flops(state[field_name])
         object.__setattr__(self, "_construction_done", False)
         state.pop("source_trace", None)
         self.__dict__.update(state)
@@ -2141,7 +2149,7 @@ class Op(TabularExportMixin):
         s += f"\n\t\tInternal Ancestors: {self.internal_source_ancestors}"
         s += (
             f"\n\t\tOutput Descendents: {self.output_descendants} "
-            f"(min dist {self.min_distance_from_output} nodes, max dist {self.max_distance_from_output} nodes)"
+            f"(min dist {self.min_distance_to_output} nodes, max dist {self.max_distance_to_output} nodes)"
         )
         if self.out is not None:
             s += f"\n\tTensor contents: \n{print_override(self.out, '__str__')}"

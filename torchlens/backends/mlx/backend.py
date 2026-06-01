@@ -13,6 +13,7 @@ from ...constants import LAYER_PASS_LOG_FIELD_ORDER
 from ...data_classes.layer_log import Layer
 from ...data_classes.model_log import Trace
 from ...data_classes.op_log import Op, _LAYER_PASS_LOG_DEFAULT_FILL
+from ...quantities import Duration
 from ...ir.events import OpEvent, TraceBuildState
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext
@@ -391,7 +392,7 @@ class MLXBackend:
         try:
             with self.active_logging(trace):
                 output = cast(Any, model)(*args, **kwargs)
-            trace.forward_duration = time.time() - trace.capture_start_time
+            trace.forward_duration = Duration(time.time() - trace.capture_start_time)
             trace.raw_output = output_transform(output) if callable(output_transform) else None
             self.finalize_forward_session(trace, trace._ensure_build_state())
             self._mark_outputs(trace, output)
@@ -627,7 +628,7 @@ class MLXBackend:
                 "recurrent_ops": [],
                 "parents": parents,
                 "parent_arg_positions": list(range(len(parents))),
-                "edge_uses": ["arg" for _ in parents],
+                "_edge_uses": ["arg" for _ in parents],
                 "root_ancestors": [],
                 "children": [],
                 "has_children": False,

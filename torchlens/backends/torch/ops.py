@@ -808,9 +808,9 @@ def _build_edge_use_records(
         Edge provenance records.
     """
 
-    edge_uses: list[EdgeUseRecord] = []
+    _edge_uses: list[EdgeUseRecord] = []
     for location, parent_label in parent_arg_positions["args"].items():
-        edge_uses.append(
+        _edge_uses.append(
             EdgeUseRecord(
                 parent_label=parent_label,
                 child_label=child_label,
@@ -824,7 +824,7 @@ def _build_edge_use_records(
             )
         )
     for location, parent_label in parent_arg_positions["kwargs"].items():
-        edge_uses.append(
+        _edge_uses.append(
             EdgeUseRecord(
                 parent_label=parent_label,
                 child_label=child_label,
@@ -837,7 +837,7 @@ def _build_edge_use_records(
                 child_func_call_id=child_func_call_id,
             )
         )
-    return edge_uses
+    return _edge_uses
 
 
 def log_function_output_tensors(
@@ -1284,7 +1284,7 @@ def _build_graph_relationship_fields(
 
     fields_dict["parents"] = parent_layer_labels
     fields_dict["parent_arg_positions"] = parent_arg_positions
-    fields_dict["edge_uses"] = []
+    fields_dict["_edge_uses"] = []
     fields_dict["root_ancestors"] = input_ancestors.union(internal_source_ancestors)
     fields_dict["children"] = []
     fields_dict["has_children"] = False
@@ -1299,8 +1299,8 @@ def _build_graph_relationship_fields(
     fields_dict["has_output_descendant"] = False
     fields_dict["output_descendants"] = set()
     fields_dict["is_orphan"] = False
-    fields_dict["min_distance_from_output"] = None
-    fields_dict["max_distance_from_output"] = None
+    fields_dict["min_distance_to_output"] = None
+    fields_dict["max_distance_to_output"] = None
     fields_dict["io_role"] = None
     fields_dict["is_buffer"] = False
     fields_dict["address"] = None
@@ -1659,7 +1659,7 @@ def log_function_output_tensors_exhaustive(
                 result.replaced for result in fire_results
             )
         if getattr(self, "intervention_ready", False):
-            fields_dict_onetensor["edge_uses"] = _build_edge_use_records(
+            fields_dict_onetensor["_edge_uses"] = _build_edge_use_records(
                 self,
                 fields_dict_onetensor["parent_arg_positions"],
                 fields_dict_onetensor["_label_raw"],

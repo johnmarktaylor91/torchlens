@@ -11,24 +11,8 @@ if TYPE_CHECKING:
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import GRAD_FN_PASS_LOG_FIELD_ORDER
+from ..quantities import Duration
 from ._tabular_export import TabularExportMixin
-
-
-def _duration_str(duration: float) -> str:
-    """Return a human-readable duration string.
-
-    Parameters
-    ----------
-    duration:
-        Duration in seconds.
-
-    Returns
-    -------
-    str
-        Duration formatted in milliseconds.
-    """
-
-    return f"{duration * 1000:.3f} ms"
 
 
 @dataclass
@@ -135,30 +119,18 @@ class GradFnCall(TabularExportMixin):
         return self.grad_inputs is not None or self.grad_outputs is not None
 
     @property
-    def backward_duration(self) -> float:
+    def backward_duration(self) -> Duration:
         """Return the measured backward duration for this call.
 
         Returns
         -------
-        float
+        Duration
             Seconds elapsed between ``_time_started`` and ``_time_finished``.
         """
 
         if self._time_started is None or self._time_finished is None:
-            return 0.0
-        return max(0.0, self._time_finished - self._time_started)
-
-    @property
-    def backward_duration_str(self) -> str:
-        """Return backward duration in human-readable units.
-
-        Returns
-        -------
-        str
-            Human-readable duration.
-        """
-
-        return _duration_str(self.backward_duration)
+            return Duration(0)
+        return Duration(max(0.0, self._time_finished - self._time_started))
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this pass as a one-row DataFrame.

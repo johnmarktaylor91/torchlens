@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
-from ..quantities import Bytes
+from ..quantities import Bytes, Duration
 from ..utils.display import identity
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
@@ -75,7 +75,7 @@ def _add_output_layers(
             source_loading_enabled=self.save_code_context,
             disable_col_offset=False,
         )
-        new_output_node.func_duration = 0
+        new_output_node.func_duration = Duration(0)
         new_output_node.func_rng_states = (
             log_current_rng_states(torch_only=True) if self.save_rng_states else {}
         )
@@ -129,7 +129,7 @@ def _add_output_layers(
             "args": {0: output_node._label_raw},
             "kwargs": {},
         }
-        new_output_node.edge_uses = []
+        new_output_node._edge_uses = []
 
         # Clear func_config on synthetic output nodes:
         new_output_node.func_config = {}
@@ -350,8 +350,8 @@ def _flood_graph_from_input_or_output_nodes(self: "Trace", mode: str) -> None:
         forward_field = "children"
     elif mode == "output":
         starting_nodes = self.output_layers[:]
-        min_field = "min_distance_from_output"
-        max_field = "max_distance_from_output"
+        min_field = "min_distance_to_output"
+        max_field = "max_distance_to_output"
         direction = "backwards"
         marker_field = "has_output_descendant"
         layer_logging_field = "output_descendants"

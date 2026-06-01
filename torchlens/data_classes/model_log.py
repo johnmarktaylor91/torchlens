@@ -106,7 +106,7 @@ from ..intervention.types import (
     TargetSpec,
 )
 from ..types import ActivationPostfunc, GradientPostfunc
-from ..quantities import Bytes
+from ..quantities import Bytes, Duration, Flops, Macs, as_duration
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -173,7 +173,6 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "raise_on_nan": False,
     "keep_orphans": False,
     "annotations": {},
-    "report_values": {},
     "observer_spans": [],
     "manual_tensor_connections": [],
     "forward_source_line": None,
@@ -914,7 +913,7 @@ class Trace:
     state_history: list[Any]
     backward_ready: bool
     save_arg_templates: bool
-    capture_duration: float
+    capture_duration: Duration
     op_equivalence_classes: Dict[str, set[str]]
     last_run: Any | None
     capture_start_time: float
@@ -969,7 +968,6 @@ class Trace:
         "emit_nvtx": FieldPolicy.KEEP,
         "raise_on_nan": FieldPolicy.KEEP,
         "annotations": FieldPolicy.KEEP,
-        "report_values": FieldPolicy.KEEP,
         "observer_spans": FieldPolicy.KEEP,
         "manual_tensor_connections": FieldPolicy.KEEP,
         "forward_source_file": FieldPolicy.KEEP,
@@ -1282,7 +1280,6 @@ class Trace:
         self._intervention_spec: InterventionSpec | None = InterventionSpec()
         self.state_history: list[Any] = []
         self.observer_spans: list[dict[str, Any]] = list(_state._active_record_spans)
-        self.report_values: dict[str, Any] = {}
         self.last_run: Any | None = None
         self.append_history: list[dict[str, Any]] = []
         self._has_direct_writes = False
@@ -1381,17 +1378,17 @@ class Trace:
         # Time elapsed:
         self.capture_start_time: float = 0
         self.capture_end_time: float = 0
-        self.setup_duration: float = 0
-        self.forward_duration: float = 0
-        self.cleanup_duration: float = 0
-        self.func_calls_duration: float = 0
+        self.setup_duration: Duration = Duration(0)
+        self.forward_duration: Duration = Duration(0)
+        self.cleanup_duration: Duration = Duration(0)
+        self.func_calls_duration: Duration = Duration(0)
         self.has_backward_pass: bool = False
         self.grad_fn_logs: Dict[int, GradFn] = OrderedDict()
         self.grad_fn_order: List[int] = []
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
         self.backward_root_grad_fn_object_ids: list[int] = []
-        self.backward_durations: list[float] = []
+        self.backward_durations: list[Duration] = []
         self.num_backward_passes: int = 0
         self.backward_peak_memory: Bytes = Bytes(0)
         self.backward_memory_backend: str = "unknown"
@@ -2770,7 +2767,6 @@ class Trace:
                 "raise_on_nan": False,
                 "keep_orphans": False,
                 "annotations": {},
-                "report_values": {},
                 "observer_spans": [],
                 "manual_tensor_connections": [],
                 "forward_source_file": None,
@@ -2809,6 +2805,16 @@ class Trace:
             }
         if state["backward_ready"] is None:
             state["backward_ready"] = False
+        for field_name in (
+            "setup_duration",
+            "forward_duration",
+            "cleanup_duration",
+            "func_calls_duration",
+        ):
+            state[field_name] = Duration(state.get(field_name) or 0.0)
+        state["backward_durations"] = [
+            Duration(duration) for duration in state.get("backward_durations", [])
+        ]
         conditional_arm_entry_edges = _normalize_conditional_arm_entry_edges(
             state.get("conditional_arm_entry_edges") or {}
         )
@@ -3219,39 +3225,18 @@ class Trace:
         return len(self)
 
     @property
-    def backward_durations_str(self) -> list[str]:
-        """Human-readable backward-pass durations in execution order."""
-
-        return [f"{duration:.3f}s" for duration in self.backward_durations]
-
-    @property
-    def last_backward_duration(self) -> float | None:
+    def last_backward_duration(self) -> Duration | None:
         """Most recent backward-pass duration, if any."""
 
         if not self.backward_durations:
             return None
-        return self.backward_durations[-1]
+        return as_duration(self.backward_durations[-1])
 
     @property
-    def last_backward_duration_str(self) -> str | None:
-        """Human-readable most recent backward-pass duration, if any."""
-
-        duration = self.last_backward_duration
-        if duration is None:
-            return None
-        return f"{duration:.3f}s"
-
-    @property
-    def total_backward_duration(self) -> float:
+    def total_backward_duration(self) -> Duration:
         """Sum of all captured backward-pass durations."""
 
-        return sum(self.backward_durations)
-
-    @property
-    def total_backward_duration_str(self) -> str:
-        """Human-readable sum of all captured backward-pass durations."""
-
-        return f"{self.total_backward_duration:.3f}s"
+        return Duration(sum(self.backward_durations))
 
     @property
     def last_backward_root_grad_fn_object_id(self) -> int | None:
@@ -3262,29 +3247,17 @@ class Trace:
         return self.backward_root_grad_fn_object_ids[-1]
 
     @property
-    def overhead_duration(self) -> float:
+    def overhead_duration(self) -> Duration:
         """Time spent on TorchLens overhead (total minus function calls)."""
         return self.capture_duration - self.func_calls_duration
 
     @property
-    def capture_duration(self) -> float:
+    def capture_duration(self) -> Duration:
         """Total capture-phase duration in seconds."""
 
         if not self.capture_start_time or not self.capture_end_time:
-            return 0
-        return self.capture_end_time - self.capture_start_time
-
-    @property
-    def capture_duration_str(self) -> str:
-        """Human-readable capture-phase duration."""
-
-        return f"{self.capture_duration:.3f}s"
-
-    @property
-    def func_calls_duration_str(self) -> str:
-        """Human-readable aggregate function-call duration."""
-
-        return f"{self.func_calls_duration:.3f}s"
+            return Duration(0)
+        return Duration(self.capture_end_time - self.capture_start_time)
 
     # ********************************************
     # ************* FLOPs Properties *************
@@ -3295,23 +3268,27 @@ class Trace:
     # skipped, so the totals may undercount.
 
     @property
-    def total_flops_forward(self) -> int:
+    def total_flops_forward(self) -> Flops:
         """Total forward FLOPs across all layers (skipping None/unknown)."""
-        return sum(
-            entry.flops_forward for entry in self.layer_list if entry.flops_forward is not None
+        return Flops(
+            sum(entry.flops_forward for entry in self.layer_list if entry.flops_forward is not None)
         )
 
     @property
-    def total_flops_backward(self) -> int:
+    def total_flops_backward(self) -> Flops:
         """Total backward FLOPs across all layers (skipping None/unknown)."""
-        return sum(
-            entry.flops_backward for entry in self.layer_list if entry.flops_backward is not None
+        return Flops(
+            sum(
+                entry.flops_backward
+                for entry in self.layer_list
+                if entry.flops_backward is not None
+            )
         )
 
     @property
-    def total_flops(self) -> int:
+    def total_flops(self) -> Flops:
         """Total FLOPs (forward + backward)."""
-        return self.total_flops_forward + self.total_flops_backward
+        return Flops(self.total_flops_forward + self.total_flops_backward)
 
     @property
     def flops_by_op_type(self) -> _CallableDict:
@@ -3320,11 +3297,11 @@ class Trace:
         Returns:
             Callable dict mapping layer_type to forward/backward/count totals.
         """
-        result: Dict[str, Dict[str, int]] = {}
+        result: Dict[str, Dict[str, int | Flops]] = {}
         for entry in self.layer_list:
             lt = entry.layer_type
             if lt not in result:
-                result[lt] = {"forward": 0, "backward": 0, "count": 0}
+                result[lt] = {"forward": Flops(0), "backward": Flops(0), "count": 0}
             result[lt]["count"] += 1
             if entry.flops_forward is not None:
                 result[lt]["forward"] += entry.flops_forward
@@ -3338,19 +3315,19 @@ class Trace:
     # MACs (multiply-accumulate operations) = FLOPs / 2.
 
     @property
-    def total_macs_forward(self) -> int:
+    def total_macs_forward(self) -> Macs:
         """Total forward MACs across all layers (skipping None/unknown)."""
-        return self.total_flops_forward // 2
+        return Macs(self.total_flops_forward // 2)
 
     @property
-    def total_macs_backward(self) -> int:
+    def total_macs_backward(self) -> Macs:
         """Total backward MACs across all layers (skipping None/unknown)."""
-        return self.total_flops_backward // 2
+        return Macs(self.total_flops_backward // 2)
 
     @property
-    def total_macs(self) -> int:
+    def total_macs(self) -> Macs:
         """Total MACs (forward + backward)."""
-        return self.total_flops // 2
+        return Macs(self.total_flops // 2)
 
     @property
     def macs_by_op_type(self) -> _CallableDict:
@@ -3359,16 +3336,16 @@ class Trace:
         Returns:
             Callable dict mapping layer_type to forward/backward/count totals.
         """
-        result: Dict[str, Dict[str, int]] = {}
+        result: Dict[str, Dict[str, int | Macs]] = {}
         for entry in self.layer_list:
             lt = entry.layer_type
             if lt not in result:
-                result[lt] = {"forward": 0, "backward": 0, "count": 0}
+                result[lt] = {"forward": Macs(0), "backward": Macs(0), "count": 0}
             result[lt]["count"] += 1
             if entry.flops_forward is not None:
-                result[lt]["forward"] += entry.flops_forward // 2
+                result[lt]["forward"] += Macs(entry.flops_forward // 2)
             if entry.flops_backward is not None:
-                result[lt]["backward"] += entry.flops_backward // 2
+                result[lt]["backward"] += Macs(entry.flops_backward // 2)
         return _CallableDict(result)
 
     # ********************************************
@@ -3430,9 +3407,8 @@ class Trace:
 
         return len(self.module_calls)
 
-    @property
-    def root_call(self) -> "ModuleCall":
-        """The top-level ModuleCall for this Trace.
+    def _root_call(self) -> "ModuleCall":
+        """Return the top-level ModuleCall for internal call-tree traversal.
 
         When multiple top-level calls exist, the first one in trace insertion
         order is returned.
@@ -3442,14 +3418,6 @@ class Trace:
             if call.call_parent is None:
                 return cast("ModuleCall", call)
         raise RuntimeError("Trace has no root ModuleCall")
-
-    @property
-    def max_call_depth(self) -> int:
-        """Deepest call-nesting depth across the entire Trace, including root."""
-
-        if not self.module_calls:
-            return 0
-        return self.root_call.max_descendant_depth + 1
 
     def walk_calls(self) -> Iterator["ModuleCall"]:
         """Yield every ModuleCall in call-tree depth-first order.
@@ -3462,7 +3430,7 @@ class Trace:
 
         if not self.module_calls:
             return
-        yield from self.root_call.walk_descendants(include_self=True)
+        yield from self._root_call().walk_descendants(include_self=True)
 
     def show_call_tree(
         self,
@@ -3487,7 +3455,7 @@ class Trace:
 
         if not self.module_calls:
             return
-        self.root_call.show_call_tree(
+        self._root_call().show_call_tree(
             max_depth=max_depth,
             include_atomic=include_atomic,
             show_call_index=show_call_index,
@@ -4553,8 +4521,8 @@ class Trace:
             "is_internal_source",
             "min_distance_from_input",
             "max_distance_from_input",
-            "min_distance_from_output",
-            "max_distance_from_output",
+            "min_distance_to_output",
+            "max_distance_to_output",
             "uses_params",
             "num_params",
             "param_shapes",

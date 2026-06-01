@@ -366,8 +366,8 @@ def test_distances_with_flag(small_input):
         entry = mh[label]
         assert entry.min_distance_from_input is not None
         assert entry.max_distance_from_input is not None
-        assert entry.min_distance_from_output is not None
-        assert entry.max_distance_from_output is not None
+        assert entry.min_distance_to_output is not None
+        assert entry.max_distance_to_output is not None
         assert isinstance(entry.min_distance_from_input, int)
 
 

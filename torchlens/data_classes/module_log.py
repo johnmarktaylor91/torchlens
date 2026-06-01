@@ -44,7 +44,7 @@ import torch
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
-from ..quantities import Bytes
+from ..quantities import Bytes, Duration, Flops, Macs, as_duration
 from ._accessor_base import Accessor
 from ._tabular_export import TabularExportMixin
 
@@ -148,23 +148,6 @@ class HookInfo:
     source_location: "FuncCallLocation | None" = None
 
 
-def _duration_str(duration: float) -> str:
-    """Return a human-readable duration string.
-
-    Parameters
-    ----------
-    duration:
-        Duration in seconds.
-
-    Returns
-    -------
-    str
-        Duration formatted in milliseconds.
-    """
-
-    return f"{duration * 1000:.3f} ms"
-
-
 def _display_call_label(call: "ModuleCall", show_call_index: bool) -> str:
     """Return the display label for a ModuleCall.
 
@@ -203,7 +186,7 @@ def _module_call_summary(call: "ModuleCall") -> str:
     duration = getattr(call, "forward_duration", None)
     if duration is None:
         return ""
-    return f" (forward_duration: {_duration_str(duration)})"
+    return f" (forward_duration: {duration})"
 
 
 def _is_atomic_module_call(call: "ModuleCall") -> bool:
@@ -390,7 +373,7 @@ class ModuleCall(TabularExportMixin):
     num_forward_kwargs: int
     forward_args_summary: str
     forward_kwargs_summary: str
-    forward_duration: float
+    forward_duration: Duration
     code_context: List["FuncCallLocation"]
     module_call_stack: List[str]
     call_parent: Optional[str]
@@ -447,7 +430,7 @@ class ModuleCall(TabularExportMixin):
         self.forward_kwargs_summary = ""
         self.forward_args_template = forward_args_template
         self.forward_kwargs_template = forward_kwargs_template
-        self.forward_duration = forward_duration
+        self.forward_duration = Duration(forward_duration)
         self.code_context = code_context if code_context is not None else []
         self.module_call_stack = module_call_stack if module_call_stack is not None else []
         self.call_parent = call_parent
@@ -552,35 +535,19 @@ class ModuleCall(TabularExportMixin):
         return self.module.has_frozen_params
 
     @property
-    def func_calls_duration(self) -> float:
+    def func_calls_duration(self) -> Duration:
         """Inclusive duration of torch function calls inside this ModuleCall."""
 
         trace = self._source_trace
         if trace is None:
-            return 0.0
-        return sum(getattr(trace.ops[label], "func_duration", 0.0) or 0.0 for label in self.ops)
+            return Duration(0)
+        return Duration(
+            sum(getattr(trace.ops[label], "func_duration", 0.0) or 0.0 for label in self.ops)
+        )
 
     @property
-    def func_calls_duration_str(self) -> str:
-        """Human-readable inclusive torch function duration."""
-
-        return _duration_str(self.func_calls_duration)
-
-    @property
-    def forward_duration_str(self) -> str:
-        """Human-readable wall-clock forward duration."""
-
-        return _duration_str(self.forward_duration)
-
-    @property
-    def backward_duration(self) -> float | None:
+    def backward_duration(self) -> Duration | None:
         """Backward duration placeholder populated in the backward-pass sprint."""
-
-        return None
-
-    @property
-    def backward_duration_str(self) -> str | None:
-        """Human-readable backward duration placeholder for the backward-pass sprint."""
 
         return None
 
@@ -916,6 +883,7 @@ class ModuleCall(TabularExportMixin):
                 "output_structure": None,
             },
         )
+        state["forward_duration"] = Duration(state.get("forward_duration") or 0.0)
         self.__dict__.update(state)
 
 
@@ -1039,10 +1007,10 @@ class Module(TabularExportMixin):
     custom_methods: List[str]
     forward_args_summary: str
     forward_kwargs_summary: str
-    forward_duration: float
-    total_forward_duration: float
-    func_calls_duration: float
-    total_func_calls_duration: float
+    forward_duration: Duration
+    total_forward_duration: Duration
+    func_calls_duration: Duration
+    total_func_calls_duration: Duration
 
     def __init__(
         self,
@@ -1523,76 +1491,40 @@ class Module(TabularExportMixin):
         return next(iter(self.ops.values())).forward_kwargs_template
 
     @property
-    def forward_duration(self) -> float:
+    def forward_duration(self) -> Duration:
         """Wall-clock duration for this Module's single forward call."""
 
-        return cast(float, self._single_pass_or_error("forward_duration"))
+        return cast(Duration, self._single_pass_or_error("forward_duration"))
 
     @property
-    def forward_duration_str(self) -> str:
-        """Human-readable single-call forward duration."""
-
-        return _duration_str(self.forward_duration)
-
-    @property
-    def total_forward_duration(self) -> float:
+    def total_forward_duration(self) -> Duration:
         """Sum of wall-clock forward durations across all calls."""
 
-        return sum(call.forward_duration for call in self.ops.values())
+        return Duration(sum(call.forward_duration for call in self.ops.values()))
 
     @property
-    def total_forward_duration_str(self) -> str:
-        """Human-readable total forward duration."""
-
-        return _duration_str(self.total_forward_duration)
-
-    @property
-    def backward_duration(self) -> float | None:
+    def backward_duration(self) -> Duration | None:
         """Backward duration placeholder populated in the backward-pass sprint."""
 
         return None
 
     @property
-    def backward_duration_str(self) -> str | None:
-        """Human-readable backward duration placeholder for the backward-pass sprint."""
-
-        return None
-
-    @property
-    def total_backward_duration(self) -> float | None:
+    def total_backward_duration(self) -> Duration | None:
         """Cross-call backward duration placeholder for the backward-pass sprint."""
 
         return None
 
     @property
-    def total_backward_duration_str(self) -> str | None:
-        """Human-readable cross-call backward duration placeholder."""
-
-        return None
-
-    @property
-    def func_calls_duration(self) -> float:
+    def func_calls_duration(self) -> Duration:
         """Inclusive torch function duration for this Module's single call."""
 
-        return cast(float, self._single_pass_or_error("func_calls_duration"))
+        return cast(Duration, self._single_pass_or_error("func_calls_duration"))
 
     @property
-    def func_calls_duration_str(self) -> str:
-        """Human-readable single-call torch function duration."""
-
-        return _duration_str(self.func_calls_duration)
-
-    @property
-    def total_func_calls_duration(self) -> float:
+    def total_func_calls_duration(self) -> Duration:
         """Sum of inclusive torch function durations across all calls."""
 
-        return sum(call.func_calls_duration for call in self.ops.values())
-
-    @property
-    def total_func_calls_duration_str(self) -> str:
-        """Human-readable total torch function duration."""
-
-        return _duration_str(self.total_func_calls_duration)
+        return Duration(sum(call.func_calls_duration for call in self.ops.values()))
 
     @property
     def total_output_activation_memory(self) -> Bytes:
@@ -1821,34 +1753,34 @@ class Module(TabularExportMixin):
         return total
 
     @property
-    def flops_forward(self) -> int:
+    def flops_forward(self) -> Flops:
         """Total forward FLOPs across all layers in this module."""
-        return self._sum_layer_field("flops_forward")
+        return Flops(self._sum_layer_field("flops_forward"))
 
     @property
-    def flops_backward(self) -> int:
+    def flops_backward(self) -> Flops:
         """Total backward FLOPs across all layers in this module."""
-        return self._sum_layer_field("flops_backward")
+        return Flops(self._sum_layer_field("flops_backward"))
 
     @property
-    def flops(self) -> int:
+    def flops(self) -> Flops:
         """Total FLOPs (forward + backward) for this module."""
-        return self.flops_forward + self.flops_backward
+        return Flops(self.flops_forward + self.flops_backward)
 
     @property
-    def macs_forward(self) -> int:
+    def macs_forward(self) -> Macs:
         """Total forward MACs for this module. 1 MAC = 2 FLOPs."""
-        return self.flops_forward // 2
+        return Macs(self.flops_forward // 2)
 
     @property
-    def macs_backward(self) -> int:
+    def macs_backward(self) -> Macs:
         """Total backward MACs for this module. 1 MAC = 2 FLOPs."""
-        return self.flops_backward // 2
+        return Macs(self.flops_backward // 2)
 
     @property
-    def macs(self) -> int:
+    def macs(self) -> Macs:
         """Total MACs (forward + backward) for this module."""
-        return self.flops // 2
+        return Macs(self.flops // 2)
 
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""

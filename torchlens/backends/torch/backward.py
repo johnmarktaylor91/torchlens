@@ -13,7 +13,7 @@ from typing import Any, Callable, Iterator, Literal, cast
 import torch
 
 from ..._io.streaming import BundleStreamWriter
-from ...quantities import Bytes
+from ...quantities import Bytes, Duration
 from ..._state import pause_logging
 from ...data_classes.grad_fn_log import GradFn
 from .tensor_tracking import _add_tensor_backward_hook
@@ -865,7 +865,7 @@ def _run_backward_with_capture(
     _backend, after = _memory_snapshot(loss.device)
     trace.backward_memory_backend = backend
     trace.backward_peak_memory += Bytes(max(0, after - before))
-    trace.backward_durations.append(time.time() - backward_start_time)
+    trace.backward_durations.append(Duration(time.time() - backward_start_time))
     trace.total_param_gradient_memory = Bytes(
         sum(int(param_log.gradient_memory) for param_log in getattr(trace, "param_logs", []))
     )

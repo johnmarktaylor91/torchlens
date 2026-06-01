@@ -2098,12 +2098,12 @@ def _check_distance_invariants(ml: "Trace") -> None:
                 )
 
         # min <= max for output distances
-        if lpl.min_distance_from_output is not None and lpl.max_distance_from_output is not None:
-            if lpl.min_distance_from_output > lpl.max_distance_from_output:
+        if lpl.min_distance_to_output is not None and lpl.max_distance_to_output is not None:
+            if lpl.min_distance_to_output > lpl.max_distance_to_output:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{label}': min_distance_from_output="
-                    f"{lpl.min_distance_from_output} > max={lpl.max_distance_from_output}",
+                    f"Layer '{label}': min_distance_to_output="
+                    f"{lpl.min_distance_to_output} > max={lpl.max_distance_to_output}",
                 )
 
         # Input layers: distance from input == 0
@@ -2117,11 +2117,11 @@ def _check_distance_invariants(ml: "Trace") -> None:
 
         # Output layers: distance from output == 0
         if label in output_set:
-            if lpl.min_distance_from_output != 0 or lpl.max_distance_from_output != 0:
+            if lpl.min_distance_to_output != 0 or lpl.max_distance_to_output != 0:
                 raise MetadataInvariantError(
                     name,
                     f"Output layer '{label}': distance_from_output should be 0, got "
-                    f"min={lpl.min_distance_from_output}, max={lpl.max_distance_from_output}",
+                    f"min={lpl.min_distance_to_output}, max={lpl.max_distance_to_output}",
                 )
 
         # has_input_ancestor ↔ input_ancestors non-empty

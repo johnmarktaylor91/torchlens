@@ -346,9 +346,9 @@ def _scrub_intervention_fields_after_removal(
     """
 
     for layer_entry in surviving_entries:
-        layer_entry.edge_uses = [
+        layer_entry._edge_uses = [
             edge
-            for edge in getattr(layer_entry, "edge_uses", [])
+            for edge in getattr(layer_entry, "_edge_uses", [])
             if edge.parent_label not in labels_to_remove
             and edge.child_label not in labels_to_remove
         ]

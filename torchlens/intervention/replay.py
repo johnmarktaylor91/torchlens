@@ -986,7 +986,7 @@ def _check_edge_expectations(site: "Op", *, strict: bool) -> None:
         Whether to raise on divergence.
     """
 
-    edge_parents = {edge.parent_label for edge in getattr(site, "edge_uses", ()) or ()}
+    edge_parents = {edge.parent_label for edge in getattr(site, "_edge_uses", ()) or ()}
     if edge_parents and not edge_parents.issubset(set(site.parents)):
         message = f"edge provenance for {site.layer_label!r} no longer matches parents"
         if strict:

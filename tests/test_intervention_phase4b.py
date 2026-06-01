@@ -208,7 +208,7 @@ def test_replay_templates_classify_parent_literals_and_literal_tensors() -> None
 
 
 @pytest.mark.smoke
-def test_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
+def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
     """Edge provenance agrees with existing parent-layer arg locations."""
 
     class AddRelus(torch.nn.Module):
@@ -236,7 +236,7 @@ def test_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
         intervention_ready=True,
     )
 
-    edge_layers = [layer for layer in log.layer_list if layer.edge_uses]
+    edge_layers = [layer for layer in log.layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:
         loc_labels = set(layer.parent_arg_positions["args"].values()) | set(
@@ -244,15 +244,15 @@ def test_edge_uses_extend_parent_arg_locs_without_replacing_them() -> None:
         )
         edge_labels = {
             log._raw_to_final_layer_labels.get(edge.parent_label, edge.parent_label)
-            for edge in layer.edge_uses
+            for edge in layer._edge_uses
         }
         assert edge_labels == loc_labels
         assert all(
             log._raw_to_final_layer_labels.get(edge.child_label, edge.child_label)
             == layer.layer_label
-            for edge in layer.edge_uses
+            for edge in layer._edge_uses
         )
-        assert all(edge.child_func_call_id == layer.func_call_id for edge in layer.edge_uses)
+        assert all(edge.child_func_call_id == layer.func_call_id for edge in layer._edge_uses)
 
 
 @pytest.mark.smoke
@@ -282,4 +282,4 @@ def test_non_intervention_ready_capture_leaves_templates_and_edges_empty() -> No
 
     assert all(layer.args_template is None for layer in log.layer_list)
     assert all(layer.kwargs_template is None for layer in log.layer_list)
-    assert all(layer.edge_uses == [] for layer in log.layer_list)
+    assert all(layer._edge_uses == [] for layer in log.layer_list)
