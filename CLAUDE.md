@@ -65,6 +65,30 @@ print(tl.compat.report(model, x).to_markdown())
   acceptable.
 - Do not add new top-level API names casually; use submodules and deprecation shims.
 
+## Validation Integrity (LOCKED PRINCIPLE — never violate)
+
+The `validation/` pipeline (forward replay, backward checks, metadata invariants) is a
+**TRIPWIRE, not a formality.** Its entire purpose is to CATCH capture bugs — ops that
+weren't traced, wrong replay inputs, broken metadata, silent corruption.
+
+**NEVER weaken, loosen, exempt, broaden a tolerance, or skip a validation check / invariant
+to make a test pass.** A validation failure is the system *working*: ROOT-CAUSE it and fix
+the actual bug. Silencing a failing check defeats the entire point and lets exactly the kind
+of silent breakage validation exists to prevent ship undetected.
+
+The ONLY legitimate exemption is behavior that is **correct by design and provably outside the
+check's contract** (e.g. a user-injected intervention tensor genuinely has no traceable
+function to replay). Even then the carve-out must be NARROW (only the intended case) and must
+NOT mask the unintended case — e.g. an auto-synthesized placeholder op appearing during PLAIN
+capture is a capture bug, and validation must STILL fail on it.
+
+**Incident (2026-06-02):** `test_mistral` / `test_audio_vits` emitted functionless
+`interventionreplacement` placeholder ops during plain tracing — a real capture gap (ops
+TorchLens failed to wrap). An exemption was added to the metadata invariant to pass them. That
+was backwards: it disarmed the tripwire. The correct fix is to make capture actually trace those
+ops so no placeholder is synthesized during plain capture; any replacement-op exemption must be
+scoped to GENUINE user interventions only.
+
 ## Testing Tiers
 
 ```bash
