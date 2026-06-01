@@ -278,6 +278,19 @@ def _prepare_model_session(
     _state._dir_cache.clear()
     trace._exhaustive_module_stack = []
     trace.model_class_name = str(type(model).__name__)
+    trace.class_docstring = type(model).__doc__
+    init_method = getattr(type(model), "__init__", None)
+    forward_method = getattr(type(model), "forward", None)
+    try:
+        trace.init_signature = str(inspect.signature(init_method)) if init_method else None
+    except (TypeError, ValueError):
+        trace.init_signature = None
+    trace.init_docstring = getattr(init_method, "__doc__", None)
+    try:
+        trace.forward_signature = str(inspect.signature(forward_method)) if forward_method else None
+    except (TypeError, ValueError):
+        trace.forward_signature = None
+    trace.forward_docstring = getattr(forward_method, "__doc__", None)
     try:
         trace.class_source_file = inspect.getfile(type(model))
         trace.class_source_line = inspect.getsourcelines(type(model))[1]

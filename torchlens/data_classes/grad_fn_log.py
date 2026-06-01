@@ -148,7 +148,7 @@ class GradFn(TabularExportMixin):
         "children": FieldPolicy.KEEP,
         "siblings": FieldPolicy.KEEP,
         "co_parents": FieldPolicy.KEEP,
-        "ops": FieldPolicy.KEEP,
+        "calls": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
         "class_source_file": FieldPolicy.KEEP,
         "class_source_line": FieldPolicy.KEEP,
@@ -183,7 +183,7 @@ class GradFn(TabularExportMixin):
     children: list[str] = field(default_factory=list)
     siblings: list[str] = field(default_factory=list)
     co_parents: list[str] = field(default_factory=list)
-    ops: dict[int, GradFnCall] | GradFnCallAccessor = field(default_factory=dict)
+    calls: dict[int, GradFnCall] | GradFnCallAccessor = field(default_factory=dict)
     _source_trace_ref: Any = None
     class_source_file: str | None = None
     class_source_line: int | None = None
@@ -204,11 +204,11 @@ class GradFn(TabularExportMixin):
     def __post_init__(self) -> None:
         """Promote call storage to a scoped accessor."""
 
-        if not isinstance(self.ops, GradFnCallAccessor):
-            self.ops = GradFnCallAccessor(self.ops, self.label)  # type: ignore[assignment]
+        if not isinstance(self.calls, GradFnCallAccessor):
+            self.calls = GradFnCallAccessor(self.calls, self.label)  # type: ignore[assignment]
         else:
-            self.ops._label = self.label
-        for call in self.ops.values():
+            self.calls._label = self.label
+        for call in self.calls.values():
             call.label = self.label
             call.source_trace = self.source_trace
 
@@ -234,7 +234,7 @@ class GradFn(TabularExportMixin):
                 "children": [],
                 "siblings": [],
                 "co_parents": [],
-                "ops": {},
+                "calls": {},
                 "_source_trace_ref": None,
                 "class_source_file": None,
                 "class_source_line": None,
@@ -256,6 +256,10 @@ class GradFn(TabularExportMixin):
         legacy_op = state.pop("op", None)
         if legacy_op is not None and state.get("op_label") is None:
             state["op_label"] = getattr(legacy_op, "layer_label", None)
+        if "calls" not in state and "ops" in state:
+            state["calls"] = state.pop("ops")
+        else:
+            state.pop("ops", None)
         legacy_intervening_key = "is_" + "intervening"
         if legacy_intervening_key in state:
             state["has_op"] = not bool(state.pop(legacy_intervening_key))
@@ -288,7 +292,7 @@ class GradFn(TabularExportMixin):
         """
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
-        for call in self.ops.values():
+        for call in self.calls.values():
             call.source_trace = value
 
     @property
@@ -317,7 +321,7 @@ class GradFn(TabularExportMixin):
     @property
     def num_calls(self) -> int:
         """Number of times this grad_fn_handle has executed during captured backward ops."""
-        return len(self.ops)
+        return len(self.calls)
 
     @property
     def has_parents(self) -> bool:
@@ -349,7 +353,7 @@ class GradFn(TabularExportMixin):
 
         return any(
             call.grad_inputs is not None or call.grad_outputs is not None
-            for call in self.ops.values()
+            for call in self.calls.values()
         )
 
     @property
@@ -405,7 +409,7 @@ class GradFn(TabularExportMixin):
     @property
     def call_labels(self) -> list[str]:
         """Pass-qualified labels for this grad_fn_handle."""
-        return [f"{self.label}:{call_index}" for call_index in self.ops.keys()]
+        return [f"{self.label}:{call_index}" for call_index in self.calls.keys()]
 
     @property
     def backward_duration(self) -> float:
@@ -422,29 +426,29 @@ class GradFn(TabularExportMixin):
             If this GradFn has multiple calls.
         """
 
-        if len(self.ops) != 1:
+        if len(self.calls) != 1:
             raise ValueError(
-                f"GradFn '{self.label}' has {len(self.ops)} calls. Access "
+                f"GradFn '{self.label}' has {len(self.calls)} calls. Access "
                 "backward_duration on a specific call or use total_backward_duration."
             )
-        return next(iter(self.ops.values())).backward_duration
+        return next(iter(self.calls.values())).backward_duration
 
     @property
     def backward_duration_str(self) -> str:
         """Return this GradFn's single-call backward duration as text."""
 
-        if len(self.ops) != 1:
+        if len(self.calls) != 1:
             raise ValueError(
-                f"GradFn '{self.label}' has {len(self.ops)} calls. Access "
+                f"GradFn '{self.label}' has {len(self.calls)} calls. Access "
                 "backward_duration_str on a specific call or use total_backward_duration_str."
             )
-        return next(iter(self.ops.values())).backward_duration_str
+        return next(iter(self.calls.values())).backward_duration_str
 
     @property
     def total_backward_duration(self) -> float:
         """Return total backward duration across all calls for this GradFn."""
 
-        return sum(call.backward_duration for call in self.ops.values())
+        return sum(call.backward_duration for call in self.calls.values())
 
     @property
     def total_backward_duration_str(self) -> str:
@@ -464,8 +468,8 @@ class GradFn(TabularExportMixin):
         timestamp:
             Wall-clock time when the hook fired.
         """
-        call_index = len(self.ops) + 1
-        self.ops[call_index] = GradFnCall(
+        call_index = len(self.calls) + 1
+        self.calls[call_index] = GradFnCall(
             call_index=call_index,
             label=self.label,
             grad_inputs=_clone_grad_value(grad_inputs),

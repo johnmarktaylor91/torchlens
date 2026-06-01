@@ -72,6 +72,11 @@ MODEL_LOG_FIELD_ORDER = [
     "class_source_line",
     "init_source_file",
     "init_source_line",
+    "class_docstring",
+    "init_signature",
+    "init_docstring",
+    "forward_signature",
+    "forward_docstring",
     "code_context",
     "capture_cache_hit",
     "capture_cache_key",
@@ -732,6 +737,7 @@ GRAD_FN_PASS_LOG_FIELD_ORDER = [
     "grad_outputs",
     "_time_started",
     "_time_finished",
+    "is_saved",
 ]
 
 GRAD_FN_LOG_FIELD_ORDER = [
@@ -775,7 +781,7 @@ GRAD_FN_LOG_FIELD_ORDER = [
     "has_children",
     "has_siblings",
     "has_co_parents",
-    "ops",
+    "calls",
     "num_calls",
     "call_labels",
     "backward_duration",

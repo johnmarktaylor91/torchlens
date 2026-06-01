@@ -1646,7 +1646,7 @@ def _format_backward_output_shape(grad_fn_handle: "GradFn") -> str:
         (typical for intervening grad_fns that have no forward counterpart).
     """
 
-    for grad_fn_pass in reversed(list(grad_fn_handle.ops.values())):
+    for grad_fn_pass in reversed(list(grad_fn_handle.calls.values())):
         tensor = _first_tensor_in_obj(grad_fn_pass.grad_outputs)
         if tensor is not None:
             return _format_shape_str(tuple(tensor.shape))

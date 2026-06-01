@@ -307,7 +307,7 @@ def _make_grad_fn_hook(
             stored_grad_outputs = None
         with pause_logging():
             grad_fn_handle._log_call(stored_grad_inputs, stored_grad_outputs, time.time())
-        call_index = len(grad_fn_handle.ops)
+        call_index = len(grad_fn_handle.calls)
         if is_accumulate_grad:
             return None
         from ...intervention.runtime import _apply_live_backward_hooks
@@ -346,7 +346,7 @@ def _make_grad_fn_prehook(
         if grad_fn_handle is None:
             return None
         grad_inputs = hook_args[0] if len(hook_args) >= 1 else ()
-        call_index = len(grad_fn_handle.ops) + 1
+        call_index = len(grad_fn_handle.calls) + 1
         from ...intervention.runtime import _apply_live_backward_prehooks
 
         return _apply_live_backward_prehooks(grad_inputs, grad_fn_handle, call_index)

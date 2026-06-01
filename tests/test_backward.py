@@ -230,7 +230,7 @@ def test_grad_fn_naming_and_indexing() -> None:
     assert trace.grad_fns[first_grad_fn.type] is first_grad_fn
     if first_grad_fn.num_calls:
         assert trace.grad_fns[f"{first_grad_fn.label}:1"] is first_grad_fn
-        assert trace.grad_fn_calls[f"{first_grad_fn.label}:1"] is first_grad_fn.ops[0]
+        assert trace.grad_fn_calls[f"{first_grad_fn.label}:1"] is first_grad_fn.calls[0]
     assert list(trace.grad_fns)
 
 

@@ -29,6 +29,7 @@ Key design patterns:
 """
 
 import copy
+import inspect
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -181,6 +182,11 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "class_source_line": None,
     "init_source_file": None,
     "init_source_line": None,
+    "class_docstring": None,
+    "init_signature": None,
+    "init_docstring": None,
+    "forward_signature": None,
+    "forward_docstring": None,
     "code_context": [],
     "capture_cache_hit": False,
     "capture_cache_key": None,
@@ -972,6 +978,11 @@ class Trace:
         "class_source_line": FieldPolicy.KEEP,
         "init_source_file": FieldPolicy.KEEP,
         "init_source_line": FieldPolicy.KEEP,
+        "class_docstring": FieldPolicy.KEEP,
+        "init_signature": FieldPolicy.KEEP,
+        "init_docstring": FieldPolicy.KEEP,
+        "forward_signature": FieldPolicy.KEEP,
+        "forward_docstring": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
         "capture_cache_hit": FieldPolicy.KEEP,
         "capture_cache_key": FieldPolicy.KEEP,
@@ -1248,6 +1259,11 @@ class Trace:
         self.class_source_line: int | None = None
         self.init_source_file: str | None = None
         self.init_source_line: int | None = None
+        self.class_docstring: str | None = None
+        self.init_signature: str | None = None
+        self.init_docstring: str | None = None
+        self.forward_signature: str | None = None
+        self.forward_docstring: str | None = None
         self.capture_cache_hit: bool = False
         self.capture_cache_key: str | None = None
         self.capture_cache_path: str | None = None
@@ -1516,6 +1532,199 @@ class Trace:
         source_ref = getattr(self, "_source_model_ref", None)
         model = source_ref() if source_ref is not None else None
         return None if model is None else type(model)
+
+    @property
+    def parent_trace(self) -> "Trace | None":
+        """Return the parent Trace in a fork/rerun lineage, if any.
+
+        Returns
+        -------
+        Trace | None
+            Parent Trace resolved from the legacy ``parent_run`` weakref, or
+            ``None`` for root traces and deserialized traces.
+        """
+
+        parent_ref = getattr(self, "parent_run", None)
+        if isinstance(parent_ref, weakref.ReferenceType):
+            parent = parent_ref()
+            return parent if isinstance(parent, Trace) else None
+        return None
+
+    @property
+    def root_trace(self) -> "Trace | None":
+        """Return the ultimate root Trace in this fork/rerun lineage.
+
+        Returns
+        -------
+        Trace | None
+            The oldest reachable Trace ancestor, or ``None`` when this Trace
+            has no parent.
+        """
+
+        parent = self.parent_trace
+        if parent is None:
+            return None
+        root = parent
+        while root.parent_trace is not None:
+            root = root.parent_trace
+        return root
+
+    @property
+    def layers_to_save(self) -> str | list[str]:
+        """Return the public layer-save selection represented by this Trace.
+
+        Returns
+        -------
+        str | list[str]
+            ``"all"`` when all layers were requested, otherwise saved
+            pass-qualified Op labels in execution order.
+        """
+
+        layer_nums = getattr(self, "_layer_nums_to_save", [])
+        if layer_nums == "all":
+            return "all"
+        selected_nums = set(layer_nums)
+        return [op.label for op in self.layer_list if op.raw_index in selected_nums]
+
+    def _source_model_class(self) -> type[Any] | None:
+        """Return the live source model class if it is still retained.
+
+        Returns
+        -------
+        type[Any] | None
+            Source model class, or ``None`` if the weakref is unavailable.
+        """
+
+        source_ref = getattr(self, "_source_model_ref", None)
+        model = source_ref() if source_ref is not None else None
+        return None if model is None else type(model)
+
+    def _inspect_source_attr(self, attr_name: str) -> str | None:
+        """Inspect one source-model attribute when stored metadata is absent.
+
+        Parameters
+        ----------
+        attr_name:
+            One of the Trace source-introspection field names.
+
+        Returns
+        -------
+        str | None
+            Inspected metadata, or ``None`` when the source model is gone or
+            the callable cannot be inspected.
+        """
+
+        model_cls = self._source_model_class()
+        if model_cls is None:
+            return None
+        if attr_name == "class_docstring":
+            return model_cls.__doc__
+        if attr_name in {"init_signature", "init_docstring"}:
+            target = getattr(model_cls, "__init__", None)
+        else:
+            target = getattr(model_cls, "forward", None)
+        if target is None:
+            return None
+        if attr_name.endswith("_docstring"):
+            return getattr(target, "__doc__", None)
+        try:
+            return str(inspect.signature(target))
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def class_docstring(self) -> str | None:
+        """Return the source model class docstring."""
+
+        return self.__dict__.get("class_docstring") or self._inspect_source_attr("class_docstring")
+
+    @class_docstring.setter
+    def class_docstring(self, value: str | None) -> None:
+        """Store the source model class docstring."""
+
+        self.__dict__["class_docstring"] = value
+
+    @class_docstring.deleter
+    def class_docstring(self) -> None:
+        """Delete the stored source model class docstring."""
+
+        self.__dict__.pop("class_docstring", None)
+
+    @property
+    def init_signature(self) -> str | None:
+        """Return the source model ``__init__`` signature."""
+
+        return self.__dict__.get("init_signature") or self._inspect_source_attr("init_signature")
+
+    @init_signature.setter
+    def init_signature(self, value: str | None) -> None:
+        """Store the source model ``__init__`` signature."""
+
+        self.__dict__["init_signature"] = value
+
+    @init_signature.deleter
+    def init_signature(self) -> None:
+        """Delete the stored source model ``__init__`` signature."""
+
+        self.__dict__.pop("init_signature", None)
+
+    @property
+    def init_docstring(self) -> str | None:
+        """Return the source model ``__init__`` docstring."""
+
+        return self.__dict__.get("init_docstring") or self._inspect_source_attr("init_docstring")
+
+    @init_docstring.setter
+    def init_docstring(self, value: str | None) -> None:
+        """Store the source model ``__init__`` docstring."""
+
+        self.__dict__["init_docstring"] = value
+
+    @init_docstring.deleter
+    def init_docstring(self) -> None:
+        """Delete the stored source model ``__init__`` docstring."""
+
+        self.__dict__.pop("init_docstring", None)
+
+    @property
+    def forward_signature(self) -> str | None:
+        """Return the source model ``forward`` signature."""
+
+        return self.__dict__.get("forward_signature") or self._inspect_source_attr(
+            "forward_signature"
+        )
+
+    @forward_signature.setter
+    def forward_signature(self, value: str | None) -> None:
+        """Store the source model ``forward`` signature."""
+
+        self.__dict__["forward_signature"] = value
+
+    @forward_signature.deleter
+    def forward_signature(self) -> None:
+        """Delete the stored source model ``forward`` signature."""
+
+        self.__dict__.pop("forward_signature", None)
+
+    @property
+    def forward_docstring(self) -> str | None:
+        """Return the source model ``forward`` docstring."""
+
+        return self.__dict__.get("forward_docstring") or self._inspect_source_attr(
+            "forward_docstring"
+        )
+
+    @forward_docstring.setter
+    def forward_docstring(self, value: str | None) -> None:
+        """Store the source model ``forward`` docstring."""
+
+        self.__dict__["forward_docstring"] = value
+
+    @forward_docstring.deleter
+    def forward_docstring(self) -> None:
+        """Delete the stored source model ``forward`` docstring."""
+
+        self.__dict__.pop("forward_docstring", None)
 
     def save_intervention(
         self,
@@ -2570,6 +2779,11 @@ class Trace:
                 "class_source_line": None,
                 "init_source_file": None,
                 "init_source_line": None,
+                "class_docstring": None,
+                "init_signature": None,
+                "init_docstring": None,
+                "forward_signature": None,
+                "forward_docstring": None,
                 "code_context": [],
                 "capture_cache_hit": False,
                 "capture_cache_key": None,
@@ -3412,7 +3626,7 @@ class Trace:
 
         calls: OrderedDict[str, Any] = OrderedDict()
         for grad_fn_handle in self.grad_fns:
-            for call_index, call in grad_fn_handle.ops.items():
+            for call_index, call in grad_fn_handle.calls.items():
                 call.source_trace = self
                 calls[f"{grad_fn_handle.label}:{call_index}"] = call
         return TraceGradFnCallAccessor(calls)
@@ -3560,7 +3774,7 @@ class Trace:
             if any(
                 getattr(call, "grad_inputs", None) is not None
                 or getattr(call, "grad_outputs", None) is not None
-                for call in grad_fn_handle.ops.values()
+                for call in grad_fn_handle.calls.values()
             )
         )
         return GradFnAccessor(items, list(items))

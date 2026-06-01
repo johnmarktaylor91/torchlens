@@ -122,6 +122,19 @@ class GradFnCall(TabularExportMixin):
         return f"{self.label}:{self.call_index}" if self.label else str(self.call_index)
 
     @property
+    def is_saved(self) -> bool:
+        """Return whether this GradFnCall has saved gradient payloads.
+
+        Returns
+        -------
+        bool
+            ``True`` when gradient inputs or outputs were retained by the
+            owning Trace's gradient-save selection.
+        """
+
+        return self.grad_inputs is not None or self.grad_outputs is not None
+
+    @property
     def backward_duration(self) -> float:
         """Return the measured backward duration for this call.
 

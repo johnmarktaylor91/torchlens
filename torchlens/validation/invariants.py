@@ -275,8 +275,8 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
 
     max_call_index = 0
     for grad_fn_handle in trace.grad_fn_logs.values():
-        if grad_fn_handle.ops:
-            max_call_index = max(max_call_index, max(grad_fn_handle.ops))
+        if grad_fn_handle.calls:
+            max_call_index = max(max_call_index, max(grad_fn_handle.calls))
     if max_call_index > trace.num_backward_passes:
         raise MetadataInvariantError(
             name,

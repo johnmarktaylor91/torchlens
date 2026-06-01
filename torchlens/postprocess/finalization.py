@@ -232,6 +232,7 @@ def _build_root_module_log(
         _source_trace=self,
     )
     root_module.ops[1] = root_pass
+    root_module._sync_boundary_fields_from_calls()
     pass_dict["self:1"] = root_pass
 
     return root_module

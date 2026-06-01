@@ -1006,6 +1006,11 @@ class Module(TabularExportMixin):
         "ops": FieldPolicy.KEEP,
         "call_labels": FieldPolicy.KEEP,
         "layer_labels": FieldPolicy.KEEP,
+        "input_ops": FieldPolicy.KEEP,
+        "input_layers": FieldPolicy.KEEP,
+        "output_ops": FieldPolicy.KEEP,
+        "output_layers": FieldPolicy.KEEP,
+        "output_structure": FieldPolicy.KEEP,
         "params": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "num_params_trainable": FieldPolicy.KEEP,
@@ -1056,7 +1061,6 @@ class Module(TabularExportMixin):
     input_layers: List[str]
     output_ops: List[str]
     output_layers: List[str]
-    output_structure: "ContainerSpec | None"
     params: "ParamAccessor"
     num_params: int
     num_params_trainable: int
@@ -1172,6 +1176,11 @@ class Module(TabularExportMixin):
         # layer_labels stores NO-PASS labels (e.g. "conv2d_1_1") -> Layer.
         # Contrast with ModuleCall.ops which stores pass-qualified labels.
         self.layer_labels = layer_labels if layer_labels is not None else []
+        self.input_ops: List[str] = []
+        self.input_layers: List[str] = []
+        self.output_ops: List[str] = []
+        self.output_layers: List[str] = []
+        self._sync_boundary_fields_from_calls()
 
         from .param_log import ParamAccessor
 
@@ -1197,6 +1206,37 @@ class Module(TabularExportMixin):
 
         # Store as weakref to break circular reference (Trace -> _module_logs -> Module -> Trace).
         self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
+
+    def _sync_boundary_fields_from_calls(self) -> None:
+        """Populate aggregate boundary fields from this Module's calls.
+
+        Returns
+        -------
+        None
+            Boundary lists are updated in first-seen call order.
+        """
+
+        input_ops: list[str] = []
+        input_layers: list[str] = []
+        output_ops: list[str] = []
+        output_layers: list[str] = []
+        for call in self.ops.values():
+            for label in call.input_ops:
+                if label not in input_ops:
+                    input_ops.append(label)
+            for label in call.input_layers:
+                if label not in input_layers:
+                    input_layers.append(label)
+            for label in call.output_ops:
+                if label not in output_ops:
+                    output_ops.append(label)
+            for label in call.output_layers:
+                if label not in output_layers:
+                    output_layers.append(label)
+        self.input_ops = input_ops
+        self.input_layers = input_layers
+        self.output_ops = output_ops
+        self.output_layers = output_layers
 
     @property
     def name(self) -> str:
@@ -1412,6 +1452,10 @@ class Module(TabularExportMixin):
                 "init_source_line": None,
                 "forward_source_file": None,
                 "forward_source_line": None,
+                "input_ops": [],
+                "input_layers": [],
+                "output_ops": [],
+                "output_layers": [],
                 "training": True,
                 "forward_pre_hooks": [],
                 "forward_hooks": [],
@@ -1422,6 +1466,10 @@ class Module(TabularExportMixin):
             },
         )
         self.__dict__.update(state)
+        if not isinstance(self.ops, ModuleCallAccessor):
+            self.ops = ModuleCallAccessor(self.ops)
+        if not self.input_ops and not self.input_layers and not self.output_ops:
+            self._sync_boundary_fields_from_calls()
 
     # --- Per-call delegating properties ---
     # Mirror the Layer delegation pattern: single-pass modules transparently
