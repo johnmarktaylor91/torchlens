@@ -1008,7 +1008,9 @@ def _build_conditional_records(self: "Trace") -> None:
                 terminal_bool_op_label=terminal_bool,
                 bool_value_at_run=bool_value,
                 condition_evaluated=bool(evaluation_labels) or kind == "else",
-                evaluation_entry_edge=(event.bool_layers[0], event.bool_layers[0])
+                evaluation_entry_edge=_find_conditional_evaluation_entry_edge(
+                    self, event.bool_layers
+                )
                 if event.bool_layers and kind in {"then", "elif"}
                 else None,
                 fired=bool(execution_labels),
@@ -1061,6 +1063,51 @@ def _build_conditional_records(self: "Trace") -> None:
             layer.terminal_bool_for = None
 
     self.conditionals = ConditionalAccessor(conditionals)
+
+
+def _find_conditional_evaluation_entry_edge(
+    self: "Trace",
+    bool_layers: list[str],
+) -> tuple[str, str] | None:
+    """Return the main-graph entry edge for a conditional evaluation chain.
+
+    Parameters
+    ----------
+    self:
+        Trace whose finalized layer graph contains the conditional evaluation.
+    bool_layers:
+        Bool-producing layer labels for one conditional event, in evaluation order.
+
+    Returns
+    -------
+    tuple[str, str] | None
+        Edge from the upstream main-graph parent into the first bool-producing
+        layer, or ``None`` when no distinct upstream parent is available.
+    """
+
+    if not bool_layers:
+        return None
+
+    first_bool_label = bool_layers[0]
+    if first_bool_label not in self.layer_dict_all_keys:
+        return None
+
+    visited_labels: set[str] = set()
+    parent_queue: deque[str] = deque(self.layer_dict_all_keys[first_bool_label].parents)
+    while parent_queue:
+        parent_label = parent_queue.popleft()
+        if parent_label in visited_labels:
+            continue
+        visited_labels.add(parent_label)
+        if parent_label not in self.layer_dict_all_keys:
+            continue
+
+        parent_layer = self.layer_dict_all_keys[parent_label]
+        if parent_label != first_bool_label and parent_layer.has_output_descendant:
+            return (parent_label, first_bool_label)
+        parent_queue.extend(parent_layer.parents)
+
+    return None
 
 
 def _set_tracing_finished(self: "Trace") -> None:

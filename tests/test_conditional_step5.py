@@ -267,6 +267,61 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
         assert layer.conditional_else_children == expected_else_children
 
 
+def _has_upstream_path(trace: Trace, source_label: str, target_label: str) -> bool:
+    """Return whether ``source_label`` is an upstream ancestor of ``target_label``.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose layer graph should be searched.
+    source_label:
+        Candidate upstream ancestor label.
+    target_label:
+        Candidate downstream label.
+
+    Returns
+    -------
+    bool
+        Whether the source can be reached by walking from target to parents.
+    """
+
+    visited_labels: set[str] = set()
+    parent_stack = list(trace[target_label].parents)
+    while parent_stack:
+        parent_label = parent_stack.pop()
+        if parent_label == source_label:
+            return True
+        if parent_label in visited_labels:
+            continue
+        visited_labels.add(parent_label)
+        parent_stack.extend(trace[parent_label].parents)
+    return False
+
+
+def _assert_evaluation_entry_edges_are_upstream(trace: Trace) -> None:
+    """Assert conditional evaluation entry edges point from upstream graph parents.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose public conditional records should be checked.
+    """
+
+    assert len(trace.conditionals) > 0
+    for conditional in trace.conditionals:
+        for arm in conditional.arms:
+            if arm.kind == "else":
+                assert arm.evaluation_entry_edge is None
+                continue
+            source_label, target_label = arm.evaluation_entry_edge or (None, None)
+            assert source_label is not None
+            assert target_label is not None
+            assert source_label != target_label
+            assert source_label in trace.layer_labels
+            assert target_label in trace.layer_labels
+            assert _has_upstream_path(trace, source_label, target_label)
+
+
 @pytest.mark.smoke
 def test_simple_if_else_model_step5_pipeline() -> None:
     """Simple ``if``/``else`` logs events plus THEN and ELSE arm attribution."""
@@ -312,6 +367,29 @@ def test_simple_if_else_model_step5_pipeline() -> None:
 
     _assert_derived_views_consistent(positive_log)
     _assert_derived_views_consistent(negative_log)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("model", "input_tensor"),
+    [
+        (SimpleIfElseModel(), torch.ones(2, 2)),
+        (SimpleIfElseModel(), -torch.ones(2, 2)),
+        (ElifLadderModel(), torch.full((2, 2), -1.0)),
+        (ElifLadderModel(), torch.full((2, 2), -0.25)),
+        (ElifLadderModel(), torch.full((2, 2), 0.25)),
+        (ElifLadderModel(), torch.full((2, 2), 1.0)),
+    ],
+)
+def test_conditional_evaluation_entry_edges_are_distinct_upstream_layers(
+    model: nn.Module,
+    input_tensor: torch.Tensor,
+) -> None:
+    """Evaluation entry edges use an upstream graph source, not a self-loop."""
+
+    trace = _log_model(model, input_tensor)
+
+    _assert_evaluation_entry_edges_are_upstream(trace)
 
 
 @pytest.mark.smoke

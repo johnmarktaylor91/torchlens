@@ -6,6 +6,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.model_log import Trace
 from torchlens.data_classes.op_log import Op
 
 
@@ -44,6 +45,22 @@ def recurrent_log():
     return tl.trace(model, torch.randn(1, 5), layers_to_save="all")
 
 
+def _assert_layer_labels_are_not_doubled(trace: Trace) -> None:
+    """Assert trace-level layer labels correspond one-to-one with layer logs.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose public layer label accessor should be checked.
+    """
+
+    assert len(trace.layer_labels) == len(trace.layers)
+    assert all(
+        previous_label != next_label
+        for previous_label, next_label in zip(trace.layer_labels, trace.layer_labels[1:])
+    )
+
+
 # ---------------------------------------------------------------------------
 # Basic Layer construction
 # ---------------------------------------------------------------------------
@@ -61,12 +78,44 @@ class TestLayerLogConstruction:
             assert ":" not in key
             assert isinstance(layer_log, Layer)
 
+    @pytest.mark.smoke
+    def test_trace_layer_labels_not_doubled_for_recurrent_model(
+        self: "TestLayerLogConstruction",
+        recurrent_log: Trace,
+    ) -> None:
+        """Trace layer labels are not doubled for a multi-call recurrent model."""
+
+        _assert_layer_labels_are_not_doubled(recurrent_log)
+
     def test_single_pass_layer_has_one_pass(self, simple_log):
         """Non-recurrent model: every Layer has exactly one pass."""
         for layer_log in simple_log.layer_logs.values():
             assert layer_log.num_passes == 1
             assert len(layer_log.ops) == 1
             assert 0 in layer_log.ops
+
+    def test_trace_layer_labels_not_doubled_for_tiny_transformers_model(
+        self: "TestLayerLogConstruction",
+    ) -> None:
+        """Trace layer labels are not doubled for an optional tiny Transformers model."""
+
+        transformers = pytest.importorskip("transformers")
+        config = transformers.DistilBertConfig(
+            vocab_size=101,
+            max_position_embeddings=16,
+            n_layers=1,
+            n_heads=2,
+            dim=16,
+            hidden_dim=32,
+            dropout=0.0,
+            attention_dropout=0.0,
+        )
+        model = transformers.DistilBertModel(config)
+        model.eval()
+        input_ids = torch.randint(0, config.vocab_size, (1, 4))
+        trace = tl.trace(model, input_ids, layers_to_save="all")
+
+        _assert_layer_labels_are_not_doubled(trace)
 
 
 # ---------------------------------------------------------------------------
