@@ -1,5 +1,28 @@
 # TorchLens Glossary
 
+> **Reconciliation pass 2026-06-01 (glossary-code-reconcile branch).** A code-vs-glossary
+> diff of the PUBLIC API resolved the locked **bare memory passthrough drop** at module scope
+> (ModuleCall/Module `out_memory`/`out_memories` removed from code; the bare
+> `activation_memory`/`gradient_memory`/`transformed_*_memory` passthrough lines removed from
+> the ModuleCall/Module Output Passthroughs sections — the `output_`/`internal_`-prefixed
+> cluster covers module-scope memory) and removed the false `tl.log_forward_pass` alias claim
+> from the auto-routing section (no such alias exists; the entry point is `tl.trace`).
+> **OPEN FOR JMT (not resolved here):** the diff surfaced a set of LOCK-BACKED naming targets
+> (5/21-era rename-sprint locks) that the shipped code never implemented — e.g.
+> `is_submodule_input`→`is_module_input`, `input_to_modules`→`input_to_module_calls`,
+> `Op.args_summary`/`kwargs_summary`, `grad_fn_label`+`grad_fn`-as-resolver, `multi_output_type`,
+> the `atomic_module`/`atomic_module_address`/`atomic_module_call_label` resolver cluster,
+> `gradient_transform`, `has_saved_gradient` (code: `has_grad`), `Param.is_trainable`
+> (code: `trainable`), the Buffer overwrite cluster, Module `total_flops`/`total_macs`/
+> `internal_param_memory`, and `Module.call_parent_address`/`_module`. These are NOT glossary
+> hallucinations (each is logged `LOCKED` in `glossary_walkthrough_deltas.md`); per
+> spec-drives-code they should be CODE fixes, but the set is large and includes a semantic
+> redefinition (`is_module_input`), so it is a scoped decision pending JMT (implement-in-code
+> sprint vs roll back the locks). The line below ("code conforms") is therefore **aspirational
+> for that residual set**, not yet true.
+
+> **Re-filed to vault 2026-06-02 (v9)** — finalized against the shipped code. Since v8: the **input auto-routing** section, the re-walked 5/21 **parity gaps** (`Op.args_summary`/`kwargs_summary`, the ModuleCall arg-parity cluster), the corrected `Op.grad_fn`/`grad_fn_handle` convention text, and the **5 resolved glossary nits** (phantom `root_call`/`max_call_depth`/`report_values` removed, Layer saved-predicates singular, Op distances `_to_output`). The v7 unit-type family (`tl.Quantity`/`Bytes`/`Duration`/`Flops`/`Macs`, `*_str` deleted, `memory→activation_memory`) is now **implemented in code**. **TorchLens local-main code conforms to this glossary** (modulo the lock-backed residual set flagged in the reconciliation note above). (Supersedes `2026-05-27-glossary-v8`.)
+
 > **v9 (2026-05-31)** — Adds the **Input auto-routing** section (`tl.autoroute.input` priority registry + the HuggingFace `trace_text` / `trace_image` / `trace_multimodal` bridge tracers that `tl.trace` dispatches to by input type). Closes two verified 5-21 parity gaps re-walked from the lock log: `Op.args_summary` / `Op.kwargs_summary`, and the ModuleCall `forward_arg_names` / `num_forward_args_total` / `num_forward_pos_args` / `num_forward_kwargs` / `has_saved_forward_args` cluster. Removes a stale "Op input convenience fields deferred" bullet (those landed under the 5-23 input-tensor lock). Auto-routing carries no walkthrough lock — it documents the shipped code names (no competing locked target exists in the lock log). **OPEN for JMT:** Op `min/max_distance_to_output` vs Layer `min/max_distance_to_output` naming asymmetry — no lock dictates harmonizing, left as-is pending a call.
 >
 > **v8 (2026-05-27)** — Adds the **Facets framework** (`tl.facets.*` + `.facets` field on Op and Module). A general-purpose registry of "recipes" that produce derived semantic views on records — q/k/v/output access on attention modules, normalized/gamma/beta on LayerNorms, intermediate/output on MLPs, and anything users register. Ships with built-in recipes for common HF + torch families. See new "Facets framework" subsection in Conventions for full details, plus new bolded entries under Op, Module, and a dedicated `## Facets` section at the bottom. Lock entry: `## Facets framework ... (LOCKED 2026-05-27)` in `.project-context/glossary_walkthrough_deltas.md`.
@@ -8,7 +31,7 @@
 >
 > **v6 (2026-05-24, superseded by v7)** — Built by restoring the clean v3 (2026-05-19) baseline and applying ONLY decisions logged with a `LOCKED` marker in `.project-context/glossary_walkthrough_deltas.md`. Every new or changed entry is **bolded** and annotated with its lock date so it can be traced back to a specific deltas-log section. v4 (2026-05-21) and v5 (2026-05-23) are DEPRECATED — they contained hallucinated phantom entries (e.g., `report_values`, `orphan_logs`/`OrphanAccessor`, separate `conditional_records` after it had been folded into `conditionals`) introduced by auto-extraction from the dataclasses rather than from the lock log. Do not re-introduce those.
 >
-> **Scope so far (v9):** the v6 5-23 locks, the v7 unit-type cleanup, the v8 facets framework, and a v9 re-walk of the 5-21 rename-sprint locks against the lock log. An adversarial cross-check (Claude + Codex) confirmed the 5-21 locks are substantially already applied in v7/v8; v9 closed the two remaining gaps — `Op.args_summary`/`kwargs_summary` and the ModuleCall arg-parity cluster — corrected the stale `Op.grad_fn`/`grad_fn_handle` convention text, and added the input auto-routing section. A short list of pre-existing v8 inconsistencies the cross-check surfaced (ModuleCall/Module bare memory passthroughs vs the `output_`/`internal_` prefix lock; `root_call`/`max_call_depth`/`report_values` lock-backing) is pending a JMT call.
+> **Scope so far (v9):** the v6 5-23 locks, the v7 unit-type cleanup, the v8 facets framework, and a v9 re-walk of the 5-21 rename-sprint locks against the lock log. An adversarial cross-check (Claude + Codex) confirmed the 5-21 locks are substantially already applied in v7/v8; v9 closed the two remaining gaps — `Op.args_summary`/`kwargs_summary` and the ModuleCall arg-parity cluster — corrected the stale `Op.grad_fn`/`grad_fn_handle` convention text, and added the input auto-routing section. The pre-existing v8 inconsistencies the cross-check surfaced (bare memory passthroughs; `root_call`/`max_call_depth`/`report_values` lock-backing; Layer plural saved-predicates; Op distance naming) were RESOLVED 2026-06-02 (JMT-approved): the unlocked/phantom entries were removed, Layer saved-predicates singular-ized, Op distances harmonized to `_to_output`. The TorchLens local-main code now conforms to this glossary.
 >
 > Public API reference. Reflects the locked naming targets from the rename
 > sprint walkthrough deltas (2026-05-03 through 2026-05-19). This is the v3
@@ -439,7 +462,6 @@ Use `Trace.compute_ops` / `Op.is_compute_op` to filter to compute Ops (includes 
 - `num_saved_grad_fns`: Number of GradFns with at least one saved GradFnCall.
 - `num_module_calls`: Total per-invocation ModuleCall records across all Modules.
 - **`num_modules`**: **Number of registered submodules in the source model. Equals `len(trace.modules)`. (LOCKED 2026-05-23)**
-- **`max_call_depth`** (`@property`): **Deepest call-nesting depth across the trace, including the root call. (LOCKED 2026-05-23 fixup)**
 - `num_grad_fn_calls`: Total per-invocation GradFnCall records across all GradFns.
 - `num_grad_fns`: Number of unique autograd grad-fn nodes captured for backward analysis.
 - `num_grad_fns_with_op`: Number of grad-fn nodes paired with a forward Op.
@@ -667,7 +689,6 @@ Trace-level aggregates.
 
 ### Trace Call-Tree Access (LOCKED 2026-05-23)
 
-- **`root_call`** (`@property`): **Top-level ModuleCall for the model's outermost `forward()` invocation. If multiple top-level calls exist, returns the first in trace insertion order. (LOCKED 2026-05-23 fixup)**
 - **`walk_calls()`**: **Iterate the full call tree from root → leaves. `ModuleCall` itself is the tree node via `call_parent` and `call_children` (no separate `CallTreeNode` wrapper — see drop entry below). (LOCKED 2026-05-23)**
 - **`show_call_tree(max_depth=None, include_atomic=False, show_call_index=False, file=None)`**: **ASCII tree printed to stdout (or `file=` kwarg). (LOCKED 2026-05-23)**
 
@@ -1231,26 +1252,21 @@ Parameter counts on ModuleCall mirror the parent Module's params (parameters are
 
 ### ModuleCall Output Passthroughs
 
-These properties resolve through the output Layers/Ops. Singular forms
+These properties resolve through the output Ops. Singular forms
 require exactly one output and raise `MultiOutputModuleError` on multi-output
 calls; plural forms return lists in container-path order.
+
+Per-output memory is NOT exposed as a bare passthrough here — the
+`output_`/`internal_`-prefixed ModuleCall memory cluster
+(`output_activation_memory`, `internal_activation_memory`,
+`output_gradient_memory`, `internal_gradient_memory`, `autograd_memory`,
+`param_memory`) already covers module-scope memory and is unambiguous about
+the boundary-vs-internal distinction.
 
 - `out` / `outs`: Saved output tensor or output tensors.
 - `out_shape` / `out_shapes`: Output shape or shapes.
 - `out_dtype` / `out_dtypes`: Output dtype or dtypes.
-- `activation_memory` / `activation_memories`: Output memory or memories in bytes.
-- `transformed_out` / `transformed_outs`: Transformed saved output tensor or tensors.
-- `transformed_out_shape` / `_shapes`: Transformed output shape(s).
-- `transformed_out_dtype` / `_dtypes`: Transformed output dtype(s).
-- `transformed_activation_memory` / `_memories`: Transformed output memory(ies).
 - `grad` / `grads`: Saved output gradient or gradients.
-- `grad_shape` / `grad_shapes`: Gradient shape or shapes.
-- `grad_dtype` / `grad_dtypes`: Gradient dtype or dtypes.
-- `gradient_memory` / `gradient_memories`: Gradient memory or memories.
-- `transformed_grad` / `transformed_grads`: Transformed saved gradient or gradients.
-- `transformed_grad_shape` / `_shapes`: Transformed gradient shape(s).
-- `transformed_grad_dtype` / `_dtypes`: Transformed gradient dtype(s).
-- `transformed_gradient_memory` / `_memories`: Transformed gradient memory(ies).
 
 ### Module Identity
 
@@ -1414,23 +1430,13 @@ Boundary input/output collections are bare label lists at Module aggregate scope
 
 These mirror ModuleCall output passthroughs for single-call Modules;
 multi-call Modules raise on singular access and require `module.calls[N]`.
+As at ModuleCall scope, per-output memory is NOT exposed as a bare
+passthrough here — use the cross-call `total_output_*` / `total_internal_*`
+memory cluster (see Module Memory) for module-scope memory.
 
 - `out` / `outs`: Saved output tensor or output tensors.
 - `out_shape` / `out_shapes`: Output shape or shapes.
-- `out_dtype` / `out_dtypes`: Output dtype or dtypes.
-- `activation_memory` / `activation_memories`: Output memory or memories.
-- `transformed_out` / `transformed_outs`: Transformed saved output.
-- `transformed_out_shape` / `_shapes`: Transformed shape(s).
-- `transformed_out_dtype` / `_dtypes`: Transformed dtype(s).
-- `transformed_activation_memory` / `_memories`: Transformed memory(ies).
 - `grad` / `grads`: Saved output gradient or gradients.
-- `grad_shape` / `grad_shapes`: Gradient shape(s).
-- `grad_dtype` / `grad_dtypes`: Gradient dtype(s).
-- `gradient_memory` / `gradient_memories`: Gradient memory(ies).
-- `transformed_grad` / `transformed_grads`: Transformed gradient(s).
-- `transformed_grad_shape` / `_shapes`: Transformed gradient shape(s).
-- `transformed_grad_dtype` / `_dtypes`: Transformed gradient dtype(s).
-- `transformed_gradient_memory` / `_memories`: Transformed gradient memory(ies).
 
 ### Module Methods
 
@@ -2178,7 +2184,7 @@ def distilbert_attention(mod):
 
 ## Input auto-routing (added v9 2026-05-31 — documents shipped API; no walkthrough lock yet)
 
-`tl.trace(model, x)` (and its alias `tl.log_forward_pass`) auto-routes certain
+`tl.trace(model, x)` auto-routes certain
 `(model, input)` combinations to specialized HuggingFace bridge tracers based on
 the input type and the model's resolvability. The mechanism is a priority-ordered
 registry of detector callables. Auto-routing fires ONLY when the user did not
@@ -2259,7 +2265,6 @@ and `.snapshot()` (a context manager for temporary registration).
 - `manual_tensor_connections`: deferred until manual graph-link workflows are reviewed.
 - `observer_spans`: deferred until span recording surface is reviewed.
 - `relationship_evidence`: deferred until rerun relationship reporting is reviewed.
-- `report_values`: deferred and likely unified with `annotations`.
 - `streaming_pass_logs` / `num_streamed_ops` / `num_streamed_passes`: REMOVED pre-launch — redundant with Bundle (`tl.bundle(*[tl.trace(model, x) for x in inputs])` covers the same use case). Activation-streaming during capture (bundle_path streaming, out_callback) is a separate concept and is kept; documented for review separately.
 - `find_sites` and `resolve_sites`: deferred to the integrated intervention `Site` concept survey.
 - `set`, `attach_hooks`, `do`, `clear_hooks`, `remove`, `detach_hooks`, `save_intervention`, and `intervention_spec`: deferred to intervention API review.
