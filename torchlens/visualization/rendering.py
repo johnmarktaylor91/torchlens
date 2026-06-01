@@ -2981,7 +2981,7 @@ def _build_collapsed_module_node(
     module_output_shape = module_output_shape or ()
     module_output_fsize = getattr(module_output_layer, "activation_memory", None)
     if module_output_fsize is None:
-        module_output_fsize = getattr(module_output_layer, "out_memory", "0 B")
+        module_output_fsize = "0 B"
     address, call_index = module_tuple
     ml = self.modules[address]
     module_type = ml.class_name  # type: ignore[union-attr]

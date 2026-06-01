@@ -769,18 +769,6 @@ class ModuleCall:
         return self._single_output_value("dtype")
 
     @property
-    def out_memories(self) -> list[Any]:
-        """Output memories for this module call."""
-
-        return self._output_values("activation_memory")
-
-    @property
-    def out_memory(self) -> Any:
-        """Output memory for a single-output module call."""
-
-        return self._single_output_value("activation_memory")
-
-    @property
     def grads(self) -> list[Any]:
         """Saved output gradients for this module call."""
 
