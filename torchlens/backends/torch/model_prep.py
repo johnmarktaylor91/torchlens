@@ -820,17 +820,18 @@ def _record_module_entry_metadata(
             log_source_tensor(trace, t, "buffer", address)
             label = get_tensor_label(t)
         if label is None:
-            # Raw ``register_forward_hook`` replacements run after this
-            # module-forward wrapper has already handled the replaced module's
-            # exit, so the first recoverable point may be the next downstream
-            # module entry.
-            capture_events = getattr(trace, "capture_events", None)
-            parent_labels = (
-                [capture_events.op_events[-1].label_raw]
-                if capture_events is not None and capture_events.op_events
-                else trace._raw_layer_labels_list[-1:]
+            # An untagged tensor enters a module. A genuine raw
+            # ``register_forward_hook`` output replacement is already tagged at
+            # module exit by ``_make_user_forward_hook_wrapper`` (with
+            # intervention_replaced=True), so anything still untagged here is an
+            # internally generated tensor whose construction TorchLens could not
+            # trace (e.g. an attention mask built inside ``torch.vmap``). Log it
+            # as a clean graph source -- NOT a user intervention -- so it
+            # validates legitimately rather than getting a functionless
+            # intervention-replacement placeholder.
+            _ensure_module_output_tensor_logged(
+                trace, t, module, parent_labels=[], kind="internal_source"
             )
-            _ensure_module_output_tensor_logged(trace, t, module, parent_labels)
             label = get_tensor_label(t)
         if label is None:
             continue  # Skip untracked tensors (e.g. external constants) (#117)
@@ -855,13 +856,25 @@ def _record_module_entry_metadata(
     return input_tensor_labels, input_tensor_labels_at_entry
 
 
-def _next_intervention_replacement_label(trace: "Trace") -> tuple[str, int, int]:
-    """Return a fresh raw label for a user-injected module output tensor.
+def _next_untagged_tensor_label(trace: "Trace", layer_type: str) -> tuple[str, int, int]:
+    """Return a fresh raw label for an untagged tensor surfaced mid-forward.
+
+    Two distinct kinds of untagged tensors reach this helper:
+
+    * ``"interventionreplacement"`` -- a genuine raw ``register_forward_hook``
+      output replacement injected by the user; the tensor lacks traceable
+      provenance because the user substituted it for a module's real output.
+    * ``"internalsource"`` -- an internally generated tensor (e.g. an attention
+      mask built inside ``torch.vmap``, whose construction TorchLens cannot
+      trace) that enters a module untagged during plain capture. It is a
+      legitimate graph source, not a user intervention.
 
     Parameters
     ----------
     trace:
         Active model log whose raw layer counters should be advanced.
+    layer_type:
+        ``"interventionreplacement"`` or ``"internalsource"``.
 
     Returns
     -------
@@ -869,7 +882,6 @@ def _next_intervention_replacement_label(trace: "Trace") -> tuple[str, int, int]
         Raw label, capture index, and per-type index.
     """
 
-    layer_type = "interventionreplacement"
     trace._layer_counter += 1
     trace._raw_layer_type_counter[layer_type] += 1
     raw_index = trace._layer_counter
@@ -902,32 +914,59 @@ def _ensure_module_output_tensor_logged(
     tensor: torch.Tensor,
     module: nn.Module,
     parent_labels: list[str],
+    kind: str = "intervention_replacement",
 ) -> None:
-    """Log a fresh entry for an unlabeled tensor returned from a module hook.
+    """Log a fresh entry for an unlabeled tensor surfaced mid-forward.
+
+    This handles two distinct, legitimately untraceable cases and must keep
+    them distinguishable so validation stays armed (see project CLAUDE.md
+    "Validation Integrity"):
+
+    * ``kind="intervention_replacement"`` -- a genuine raw
+      ``register_forward_hook`` that replaced a module's output with a fresh
+      tensor the user injected. The op is marked ``intervention_replaced`` and
+      is legitimately functionless (the user-supplied callable is opaque).
+    * ``kind="internal_source"`` -- an internally generated tensor (e.g. an
+      attention mask built inside ``torch.vmap``, whose construction TorchLens
+      cannot trace) that enters a module untagged during plain capture. It is a
+      real graph source (like a buffer/constant), NOT a user intervention, so
+      it is logged as an internal source and validates legitimately.
 
     Parameters
     ----------
     trace:
         Active model log.
     tensor:
-        Replacement output tensor that lacks ``_tl.label_raw``.
+        Untagged tensor that lacks ``_tl.label_raw``.
     module:
-        Module whose forward return value was replaced.
+        Module the tensor is associated with (the replaced module for a hook
+        replacement, or the module the tensor first entered for an internal
+        source).
     parent_labels:
-        Raw labels for tensors that entered the module.
+        Raw labels for tensors that entered the module. Only meaningful for the
+        intervention-replacement kind; an internal source has no parents.
+    kind:
+        ``"intervention_replacement"`` or ``"internal_source"``.
 
     Returns
     -------
     None
-        The tensor is tagged and a replacement Op is inserted into the raw
-        graph so downstream module-exit and op logging can continue.
+        The tensor is tagged and an Op is inserted into the raw graph so
+        downstream module-exit and op logging can continue.
     """
 
     from .ops import _make_layer_log_entry
 
+    is_internal_source = kind == "internal_source"
+    if is_internal_source:
+        # An internal source has no real dataflow parents -- the construction
+        # ops are untraceable, so attaching the previous op as a "parent" would
+        # be a fabricated edge. Register it as a clean graph source.
+        parent_labels = []
     parent_entries = [live_record_for_label(trace, label).fields for label in parent_labels]
     template_entry = parent_entries[0] if parent_entries else None
-    raw_label, raw_index, type_index = _next_intervention_replacement_label(trace)
+    layer_type = "internalsource" if is_internal_source else "interventionreplacement"
+    raw_label, raw_index, type_index = _next_untagged_tensor_label(trace, layer_type)
     fields_dict = {
         field_name: _copy_field_value_for_replacement(
             template_entry.get(field_name) if template_entry is not None else None
@@ -945,6 +984,11 @@ def _ensure_module_output_tensor_logged(
         root_ancestors.update(parent_entry["root_ancestors"] or set())
         input_ancestors.update(parent_entry["input_ancestors"] or set())
         internal_source_ancestors.update(parent_entry["internal_source_ancestors"] or set())
+    if is_internal_source:
+        # A self-rooted internal source: it is its own root and internal-source
+        # ancestor, with no input ancestry (mirrors buffer source tagging).
+        root_ancestors = {raw_label}
+        internal_source_ancestors = {raw_label}
 
     fields_dict.update(
         {
@@ -959,7 +1003,7 @@ def _ensure_module_output_tensor_logged(
             "label_short": None,
             "layer_label": None,
             "layer_label_short": None,
-            "type": "interventionreplacement",
+            "type": layer_type,
             "type_index": type_index,
             "pass_index": 1,
             "num_passes": 1,
@@ -970,7 +1014,7 @@ def _ensure_module_output_tensor_logged(
             "activation_transform": trace.activation_transform,
             "annotations": {},
             "interventions": [],
-            "intervention_replaced": True,
+            "intervention_replaced": not is_internal_source,
             "detach_saved_activations": trace.detach_saved_activations,
             "output_device": trace.output_device,
             "has_saved_args": False,
@@ -1003,7 +1047,7 @@ def _ensure_module_output_tensor_logged(
             "transformed_gradient_memory": None,
             "func": None,
             "func_call_id": None,
-            "func_name": "intervention_replacement",
+            "func_name": "none" if is_internal_source else "intervention_replacement",
             "func_qualname": None,
             "code_context": [],
             "func_duration": 0,
@@ -1070,10 +1114,9 @@ def _ensure_module_output_tensor_logged(
             "address": None,
             "buffer_pass": None,
             "buffer_source": None,
-            "is_internal_source": not parent_entries,
-            "has_internal_source_ancestor": any(
-                entry["has_internal_source_ancestor"] for entry in parent_entries
-            ),
+            "is_internal_source": is_internal_source,
+            "has_internal_source_ancestor": is_internal_source
+            or any(entry["has_internal_source_ancestor"] for entry in parent_entries),
             "internal_source_parents": [],
             "internal_source_ancestors": internal_source_ancestors,
             "is_internal_sink": False,
@@ -1112,6 +1155,10 @@ def _ensure_module_output_tensor_logged(
     new_entry = _make_layer_log_entry(
         trace, tensor, fields_dict, (), {}, trace.activation_transform
     )
+    if is_internal_source:
+        # Keep the special-list <-> flag invariant satisfied: every op with
+        # is_internal_source set must appear in trace.internal_source_ops.
+        trace.internal_source_ops.append(new_entry._label_raw)
     for parent_entry in parent_entries:
         parent_entry["children"].append(raw_label)
         parent_entry["has_children"] = True
@@ -1240,8 +1287,20 @@ def _record_module_exit_metadata(
             t = cast(Callable[[torch.Tensor], torch.Tensor], _state._decorated_identity)(t)
             tensor_label = get_tensor_label(t)
         if tensor_label is None:
-            parent_labels = list(dict.fromkeys(input_tensor_labels_at_entry))
-            _ensure_module_output_tensor_logged(trace, t, module, parent_labels)
+            # An untagged module output is a genuine intervention replacement
+            # only when the module has a raw forward hook that could have
+            # substituted it; otherwise it is an internally generated tensor
+            # (e.g. built inside torch.vmap) that should be a clean graph
+            # source, not a functionless intervention placeholder.
+            if getattr(module, "_forward_hooks", None):
+                parent_labels = list(dict.fromkeys(input_tensor_labels_at_entry))
+                _ensure_module_output_tensor_logged(
+                    trace, t, module, parent_labels, kind="intervention_replacement"
+                )
+            else:
+                _ensure_module_output_tensor_logged(
+                    trace, t, module, parent_labels=[], kind="internal_source"
+                )
             tensor_label = get_tensor_label(t)
         if tensor_label is None:
             continue
