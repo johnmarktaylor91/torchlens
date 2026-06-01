@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
 from typing import Any
 
@@ -53,13 +52,11 @@ def record_export_trace() -> tl.Trace:
     return trace
 
 
-def _assert_export_signature(record: Any) -> None:
-    """Assert the glossary path signatures exist on a record object."""
+def _assert_file_exporters_removed(record: Any) -> None:
+    """Assert deprecated record-level file exporters are absent."""
 
     for method_name in ("to_csv", "to_parquet", "to_json"):
-        signature = inspect.signature(getattr(type(record), method_name))
-        assert list(signature.parameters)[1] == "path"
-    assert "orient" not in inspect.signature(type(record).to_json).parameters
+        assert not hasattr(record, method_name)
 
 
 def _assert_round_trip(record: Any, columns: list[str], tmp_path: Path) -> None:
@@ -68,14 +65,14 @@ def _assert_round_trip(record: Any, columns: list[str], tmp_path: Path) -> None:
     expected = record.to_pandas()
     assert len(expected) >= 1
     assert set(columns).issubset(expected.columns)
-    _assert_export_signature(record)
+    _assert_file_exporters_removed(record)
 
     csv_path = tmp_path / f"{type(record).__name__}.csv"
-    record.to_csv(csv_path)
+    tl.export.csv(record, csv_path)
     csv_df = pd.read_csv(csv_path)
 
     json_path = tmp_path / f"{type(record).__name__}.json"
-    record.to_json(json_path, orient="records")
+    tl.export.json(record, json_path, orient="records")
     json_df = pd.read_json(json_path, orient="records")
 
     for actual in (csv_df, json_df):

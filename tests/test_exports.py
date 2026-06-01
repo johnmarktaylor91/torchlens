@@ -6,7 +6,6 @@ import importlib.util
 import json
 from pathlib import Path
 from typing import Any
-import warnings
 
 import pandas as pd
 import pytest
@@ -179,10 +178,8 @@ def test_emit_nvtx_capture_option_does_not_change_capture() -> None:
     assert len(log.layer_list) > 0
 
 
-def test_tabular_exports_round_trip_and_old_custom_methods_warn(
-    export_log: Any, tmp_path: Path
-) -> None:
-    """New tabular exports should round-trip and old Trace writers should warn."""
+def test_tabular_exports_round_trip(export_log: Any, tmp_path: Path) -> None:
+    """Canonical tabular exports should round-trip."""
 
     expected = export_log.to_pandas()
     assert "func_config" in expected.columns
@@ -207,13 +204,6 @@ def test_tabular_exports_round_trip_and_old_custom_methods_warn(
         parquet_df = pd.read_parquet(parquet_path)
         assert list(parquet_df.columns) == list(expected.columns)
         assert len(parquet_df) == len(expected)
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        export_log.to_csv(tmp_path / "legacy.csv")
-        export_log.to_json(tmp_path / "legacy.json")
-    assert any("torchlens.export.csv" in str(warning.message) for warning in caught)
-    assert any("torchlens.export.json" in str(warning.message) for warning in caught)
 
 
 def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) -> None:

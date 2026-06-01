@@ -14,8 +14,7 @@ can access these fields via ``__getattr__`` delegation.
 
 import weakref
 from collections.abc import Iterator
-from os import PathLike
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
@@ -232,60 +231,3 @@ class BufferAccessor(Accessor["Buffer"]):
 
         rows = [_buffer_log_to_row(buffer_log) for buffer_log in self._list]
         return pd.DataFrame(rows, columns=BUFFER_LOG_FIELD_ORDER)
-
-    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write the buffer table to CSV.
-
-        Parameters
-        ----------
-        filepath:
-            Output CSV path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
-        """
-        self.to_pandas().to_csv(filepath, index=False, **kwargs)
-
-    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write the buffer table to Parquet.
-
-        Parameters
-        ----------
-        filepath:
-            Output Parquet path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
-
-        Raises
-        ------
-        ImportError
-            If ``pyarrow`` is unavailable.
-        """
-        try:
-            import pyarrow  # noqa: F401
-        except ImportError as exc:
-            raise ImportError(
-                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
-            ) from exc
-        from ..export import _parquet_safe_dataframe
-
-        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
-
-    def to_json(
-        self,
-        filepath: str | PathLike[str],
-        *,
-        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
-        **kwargs: Any,
-    ) -> None:
-        """Write the buffer table to JSON.
-
-        Parameters
-        ----------
-        filepath:
-            Output JSON path.
-        orient:
-            JSON orientation passed to ``DataFrame.to_json``.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_json``.
-        """
-        self.to_pandas().to_json(filepath, orient=orient, **kwargs)

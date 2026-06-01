@@ -12,9 +12,12 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 
-PARQUET_IMPORT_ERROR = "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
+PARQUET_IMPORT_ERROR = (
+    "Parquet export requires pyarrow. Install with: pip install torchlens[tabular]"
+)
 
 SURFACE_COLUMNS: dict[str, list[str]] = {
     "trace": [
@@ -198,7 +201,7 @@ def _get_surface(log: Any, surface_name: str) -> Any:
     Returns
     -------
     Any
-        Surface exposing ``to_pandas()``, ``to_csv()``, ``to_json()``, and ``to_parquet()``.
+        Surface exposing ``to_pandas()``.
     """
     if surface_name == "trace":
         return log
@@ -261,12 +264,12 @@ def test_tabular_exports_round_trip_csv_and_json(
     stable_columns = SURFACE_COLUMNS[surface_name]
 
     csv_path = tmp_path / f"{surface_name}.csv"
-    surface.to_csv(csv_path)
+    tl.export.csv(surface, csv_path)
     csv_df = pd.read_csv(csv_path)
     _assert_round_trip_matches(expected_df, csv_df, stable_columns)
 
     json_path = tmp_path / f"{surface_name}.json"
-    surface.to_json(json_path, orient="records")
+    tl.export.json(surface, json_path, orient="records")
     json_df = pd.read_json(json_path, orient="records")
     _assert_round_trip_matches(expected_df, json_df, stable_columns)
 
@@ -293,16 +296,16 @@ def test_tabular_exports_round_trip_parquet(
     stable_columns = SURFACE_COLUMNS[surface_name]
 
     parquet_path = tmp_path / f"{surface_name}.parquet"
-    surface.to_parquet(parquet_path)
+    tl.export.parquet(surface, parquet_path)
     parquet_df = pd.read_parquet(parquet_path)
     _assert_round_trip_matches(expected_df, parquet_df, stable_columns)
 
 
 @pytest.mark.parametrize("surface_name", list(SURFACE_COLUMNS))
-def test_to_parquet_requires_pyarrow_when_missing(
+def test_export_parquet_requires_pyarrow_when_missing(
     io_export_log: Any, surface_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """All parquet wrappers should raise the shared install-hint message without pyarrow.
+    """Canonical parquet export should raise the shared install-hint message without pyarrow.
 
     Parameters
     ----------
@@ -319,4 +322,4 @@ def test_to_parquet_requires_pyarrow_when_missing(
     monkeypatch.setitem(sys.modules, "pyarrow", None)
 
     with pytest.raises(ImportError, match=re.escape(PARQUET_IMPORT_ERROR)):
-        surface.to_parquet(tmp_path / f"{surface_name}.parquet")
+        tl.export.parquet(surface, tmp_path / f"{surface_name}.parquet")

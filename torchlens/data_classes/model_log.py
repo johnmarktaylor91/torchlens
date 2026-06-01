@@ -36,7 +36,6 @@ from dataclasses import dataclass, field
 import difflib
 from functools import cached_property
 from html import escape
-from os import PathLike
 from pathlib import Path
 import time
 import uuid
@@ -4586,81 +4585,6 @@ class Trace:
         model_df["terminal_conditional_id"] = model_df["terminal_conditional_id"].astype("Int64")
 
         return model_df
-
-    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write the layer table to CSV.
-
-        Parameters
-        ----------
-        filepath:
-            Output CSV path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
-        """
-        warnings.warn(
-            "Trace.to_csv() is deprecated; use torchlens.export.csv(log, path) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        from ..export import csv as export_csv
-
-        export_csv(self, Path(filepath), **kwargs)
-
-    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write the layer table to Parquet.
-
-        Parameters
-        ----------
-        filepath:
-            Output Parquet path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
-
-        Raises
-        ------
-        ImportError
-            If ``pyarrow`` is unavailable.
-        """
-        warnings.warn(
-            "Trace.to_parquet() is deprecated; use torchlens.export.parquet(log, path) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        from ..export import parquet as export_parquet
-
-        try:
-            export_parquet(self, Path(filepath), **kwargs)
-        except ImportError as exc:
-            raise ImportError(
-                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
-            ) from exc
-
-    def to_json(
-        self,
-        filepath: str | PathLike[str],
-        *,
-        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
-        **kwargs: Any,
-    ) -> None:
-        """Write the layer table to JSON.
-
-        Parameters
-        ----------
-        filepath:
-            Output JSON path.
-        orient:
-            JSON orientation passed to ``DataFrame.to_json``.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_json``.
-        """
-        warnings.warn(
-            "Trace.to_json() is deprecated; use torchlens.export.json(log, path) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        from ..export import json as export_json
-
-        export_json(self, Path(filepath), orient=orient, **kwargs)
 
     def save_new_outs(
         self,

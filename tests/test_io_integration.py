@@ -13,6 +13,7 @@ from torch import nn
 
 pytest.importorskip("safetensors")
 
+import torchlens as tl
 from torchlens import load, trace as trace_fn, rehydrate_nested, save
 from torchlens._io import BlobRef
 from torchlens.data_classes.model_log import Trace
@@ -159,7 +160,7 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
         assert layer.out_ref is not None
 
     parquet_path = tmp_path / "streamed_layers.parquet"
-    lazy_log.to_parquet(parquet_path)
+    tl.export.parquet(lazy_log, parquet_path)
     parquet_df = pd.read_parquet(parquet_path)
     exported_df = lazy_log.to_pandas()
 

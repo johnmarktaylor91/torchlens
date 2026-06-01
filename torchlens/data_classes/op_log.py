@@ -65,7 +65,6 @@ from ..utils.tensor_utils import (
     safe_to,
 )
 from ..utils.display import tensor_stats_summary
-from ._tabular_export import TabularExportMixin
 
 _LAYER_PASS_LOG_FIELD_ORDER_SET = frozenset(LAYER_PASS_LOG_FIELD_ORDER)
 _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
@@ -391,7 +390,7 @@ if TYPE_CHECKING:
     from .model_log import Trace
 
 
-class Op(TabularExportMixin):
+class Op:
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match

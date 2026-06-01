@@ -524,7 +524,7 @@ def json(
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    log.to_pandas().to_json(destination, orient=orient, **kwargs)
+    _parquet_safe_dataframe(log.to_pandas()).to_json(destination, orient=orient, **kwargs)
     return destination
 
 

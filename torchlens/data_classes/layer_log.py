@@ -32,14 +32,12 @@ All other 78+ fields use the first pass's values only.
 
 import weakref
 from collections.abc import Iterator
-from os import PathLike
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union, cast
 
 from .._deprecations import MISSING
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..quantities import Bytes, Duration, Flops, Macs, as_bytes, as_flops, as_macs
 from ._accessor_base import Accessor
-from ._tabular_export import TabularExportMixin
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -147,7 +145,7 @@ class OpAccessor(Accessor["Op"]):
         return None
 
 
-class Layer(TabularExportMixin):
+class Layer:
     """Aggregate per-layer metadata for a logged model operation.
 
     Groups one or more Op objects (one per invocation of this layer).
@@ -1525,60 +1523,3 @@ class LayerAccessor(Accessor["Layer"]):
                 }
             )
         return pd.DataFrame(rows)
-
-    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write the layer table to CSV.
-
-        Parameters
-        ----------
-        filepath:
-            Output CSV path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
-        """
-        self.to_pandas().to_csv(filepath, index=False, **kwargs)
-
-    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write the layer table to Parquet.
-
-        Parameters
-        ----------
-        filepath:
-            Output Parquet path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
-
-        Raises
-        ------
-        ImportError
-            If ``pyarrow`` is unavailable.
-        """
-        try:
-            import pyarrow  # noqa: F401
-        except ImportError as exc:
-            raise ImportError(
-                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
-            ) from exc
-        from ..export import _parquet_safe_dataframe
-
-        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
-
-    def to_json(
-        self,
-        filepath: str | PathLike[str],
-        *,
-        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
-        **kwargs: Any,
-    ) -> None:
-        """Write the layer table to JSON.
-
-        Parameters
-        ----------
-        filepath:
-            Output JSON path.
-        orient:
-            JSON orientation passed to ``DataFrame.to_json``.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_json``.
-        """
-        self.to_pandas().to_json(filepath, orient=orient, **kwargs)

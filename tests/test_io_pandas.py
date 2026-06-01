@@ -9,6 +9,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.constants import (
     BUFFER_LOG_FIELD_ORDER,
@@ -261,23 +262,23 @@ def test_tabular_exports_round_trip(
     expected_df = surface.to_pandas()
 
     csv_path = tmp_path / f"{surface_name}.csv"
-    surface.to_csv(csv_path)
+    tl.export.csv(surface, csv_path)
     csv_df = pd.read_csv(csv_path)
     assert list(csv_df.columns) == list(expected_df.columns)
     assert len(csv_df) == len(expected_df)
 
     json_path = tmp_path / f"{surface_name}.json"
-    surface.to_json(json_path)
+    tl.export.json(surface, json_path)
     json_df = pd.read_json(json_path, orient="records")
     assert list(json_df.columns) == list(expected_df.columns)
     assert len(json_df) == len(expected_df)
 
     parquet_path = tmp_path / f"{surface_name}.parquet"
     if importlib.util.find_spec("pyarrow") is None:
-        with pytest.raises(ImportError, match=r"torchlens\[io\]"):
-            surface.to_parquet(parquet_path)
+        with pytest.raises(ImportError, match=r"torchlens\[tabular\]"):
+            tl.export.parquet(surface, parquet_path)
     else:
-        surface.to_parquet(parquet_path)
+        tl.export.parquet(surface, parquet_path)
         parquet_df = pd.read_parquet(parquet_path)
         assert list(parquet_df.columns) == list(expected_df.columns)
         assert len(parquet_df) == len(expected_df)

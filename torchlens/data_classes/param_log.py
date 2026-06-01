@@ -19,10 +19,9 @@ after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
 """
 
-from os import PathLike
 from collections.abc import Iterator
 import weakref
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
@@ -30,7 +29,6 @@ from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_v
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..quantities import Bytes
 from ._accessor_base import Accessor
-from ._tabular_export import TabularExportMixin
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -52,7 +50,7 @@ def _param_log_to_row(param_log: "Param") -> Dict[str, Any]:
     return {field: getattr(param_log, field) for field in PARAM_LOG_FIELD_ORDER}
 
 
-class Param(TabularExportMixin):
+class Param:
     """Metadata about a single model parameter (weight or bias).
 
     Captures static parameter identity (address, shape, dtype, trainability)
@@ -510,63 +508,6 @@ class ParamAccessor(Accessor["Param"]):
 
         rows = [_param_log_to_row(param_log) for param_log in self._list]
         return pd.DataFrame(rows, columns=PARAM_LOG_FIELD_ORDER)
-
-    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write the parameter table to CSV.
-
-        Parameters
-        ----------
-        filepath:
-            Output CSV path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
-        """
-        self.to_pandas().to_csv(filepath, index=False, **kwargs)
-
-    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write the parameter table to Parquet.
-
-        Parameters
-        ----------
-        filepath:
-            Output Parquet path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
-
-        Raises
-        ------
-        ImportError
-            If ``pyarrow`` is unavailable.
-        """
-        try:
-            import pyarrow  # noqa: F401
-        except ImportError as exc:
-            raise ImportError(
-                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
-            ) from exc
-        from ..export import _parquet_safe_dataframe
-
-        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
-
-    def to_json(
-        self,
-        filepath: str | PathLike[str],
-        *,
-        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
-        **kwargs: Any,
-    ) -> None:
-        """Write the parameter table to JSON.
-
-        Parameters
-        ----------
-        filepath:
-            Output JSON path.
-        orient:
-            JSON orientation passed to ``DataFrame.to_json``.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_json``.
-        """
-        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
 
 setattr(Param, "co_parent_params", [])
