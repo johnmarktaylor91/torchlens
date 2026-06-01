@@ -516,7 +516,6 @@ PARAM_LOG_FIELD_ORDER = [
     "module_address",
     "module_name",
     "module_cls",
-    "module_type",
     "barcode",
     "num_calls",
     "used_by_ops",

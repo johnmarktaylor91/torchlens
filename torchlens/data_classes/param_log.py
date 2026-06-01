@@ -71,9 +71,6 @@ class Param(TabularExportMixin):
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
         "all_module_addresses": FieldPolicy.KEEP,
-        "module_class_name": FieldPolicy.KEEP,
-        "module_class_qualname": FieldPolicy.KEEP,
-        "module_type": FieldPolicy.KEEP,
         "barcode": FieldPolicy.KEEP,
         "has_optimizer": FieldPolicy.KEEP,
         "_param_ref": FieldPolicy.DROP,
@@ -99,7 +96,6 @@ class Param(TabularExportMixin):
         memory: int,
         trainable: bool,
         address: str,
-        module_type: str,
         barcode: str,
         has_optimizer: Optional[bool] = None,
     ) -> None:
@@ -113,9 +109,6 @@ class Param(TabularExportMixin):
         self.module_address = module_address
         self.all_addresses = [address]
         self.all_module_addresses = [module_address]
-        self.module_class_name = module_type
-        self.module_class_qualname = module_type
-        self.module_type = module_type
         self.barcode = barcode
         self.has_optimizer = has_optimizer
 
@@ -265,6 +258,18 @@ class Param(TabularExportMixin):
         if trace is None:
             return []
         return [trace.modules[address] for address in self.all_module_addresses]
+
+    def _module_display_name(self) -> str:
+        """Return the owning module class name for display output.
+
+        Returns
+        -------
+        str
+            The owning module class name, or an empty string when unavailable.
+        """
+
+        module = self.module
+        return "" if module is None else str(getattr(module, "class_name", ""))
 
     @property
     def grad(self) -> torch.Tensor | None:
@@ -418,7 +423,7 @@ class Param(TabularExportMixin):
             f"  size: {self.memory_str}",
             f"  {status}",
             f"  has_grad: {self.has_grad}",
-            f"  module: {self.address} ({self.module_type})",
+            f"  module: {self.module_address} ({self._module_display_name()})",
         ]
         if self.used_by_layers:
             lines.append(f"  used by: {', '.join(self.used_by_layers)}")
@@ -468,6 +473,8 @@ class Param(TabularExportMixin):
     def __setstate__(self, state: Dict[str, Any]) -> None:
         """Restore pickle state without reviving live parameter references."""
         read_tlspec_version(state, cls_name=type(self).__name__)
+        for removed_field in ("module_class_name", "module_class_qualname", "module_type"):
+            state.pop(removed_field, None)
         default_fill_state(state, defaults={"_param_ref": None, "_source_trace_ref": None})
         self.__dict__.update(state)
 

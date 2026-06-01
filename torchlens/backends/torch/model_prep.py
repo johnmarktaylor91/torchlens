@@ -365,7 +365,6 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     param_id_to_address: dict[int, str] = {}
     for module in model.modules():
         address = _module_address(module)
-        module_type = type(module).__name__
         for param_name, param in module._parameters.items():
             if param is None:
                 continue
@@ -406,7 +405,6 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
                 memory=param_fsize,
                 trainable=requires_grad_before,
                 address=param_address,
-                module_type=module_type,
                 barcode=barcode,
                 has_optimizer=id(param) in optimized_param_ids if optimizer is not None else None,
             )

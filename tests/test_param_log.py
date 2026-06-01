@@ -73,7 +73,10 @@ class TestParamLogFields:
         assert isinstance(pl.memory_str, str)
         assert isinstance(pl.trainable, bool)
         assert isinstance(pl.module_address, str)
-        assert isinstance(pl.module_class_name, str)
+        assert pl.module is not None
+        assert not hasattr(pl, "module_class_name")
+        assert not hasattr(pl, "module_class_qualname")
+        assert not hasattr(pl, "module_type")
         assert isinstance(pl.barcode, str)
         assert isinstance(pl.num_calls, int)
         assert isinstance(pl.used_by_ops, list)
@@ -227,7 +230,7 @@ class TestParamMetadata:
         mh = trace_fn(_make_simple_model(), _simple_input())
         pl = mh.params["0.weight"]
         assert pl.module_address == "0"
-        assert pl.module_class_name == "Linear"
+        assert pl.module.class_name == "Linear"
 
     def test_fsize_positive(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
