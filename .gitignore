@@ -170,3 +170,4 @@ notebooks/*.svg
 # Stray scratch render/build artifacts at repo root
 /bundle_diff.svg
 /glossary_appendix*.tex
+notebooks/audit/_artifacts/
