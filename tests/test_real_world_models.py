@@ -4421,12 +4421,11 @@ def test_blip2():
         vision_config=vision_config,
         qformer_config=qformer_config,
         num_query_tokens=8,
-        image_token_id=99,
     )
+    config.image_token_id = 99
     model = Blip2Model(config).eval()
     pixel_values = torch.rand(2, 3, 64, 64)
-    # input_ids go to the language model (OPT, vocab_size=50272 by default)
-    input_ids = torch.randint(0, 98, (2, 8))  # avoid image_token_id=99
+    input_ids = torch.full((2, 8), config.image_token_id, dtype=torch.long)
     model_input = []
     model_kwargs = {"pixel_values": pixel_values, "input_ids": input_ids}
     show_model_graph(
@@ -4452,6 +4451,9 @@ def test_deformable_detr():
     from transformers import DeformableDetrConfig, DeformableDetrModel
 
     config = DeformableDetrConfig(
+        use_timm_backbone=False,
+        use_pretrained_backbone=False,
+        backbone=None,
         d_model=64,
         encoder_layers=2,
         decoder_layers=2,
