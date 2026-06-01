@@ -19,4 +19,13 @@ This folder contains the complete user-facing audit series for checking the majo
 | 12_validation_stats_reporting | Complete | `tl.validate` forward/backward parity, streaming `tl.aggregate` stats, and readable report/summary output. |
 | 13_tabular_export | Complete | `to_pandas`, `to_csv`, `to_parquet`, and `to_json` workflows for traces, records, and accessors. |
 
-> NOTE: These notebooks use the current code as the source of truth. Where the glossary names differ from executable code, the notebooks call that out and use the names that run.
+## API Status
+
+These notebooks execute against the current checkout, and runnable code is the source of truth for this audit series. When glossary/target names differ from the current build, the notebooks use the executable API and call out the gap instead of silently mixing names.
+
+| Topic | Glossary/target name | Current build used here |
+|---|---|---|
+| Quantity classes | `tl.Quantity`, `tl.Bytes`, `tl.Duration`, `tl.Flops`, `tl.Macs` | Not exported yet; examples show numeric fields plus `*_str` display fields. |
+| Activation memory naming | `activation_memory` | Partially migrated; current records still expose `memory` and `memory_str`. |
+| Site lookup | top-level `tl.find_sites(...)` | `Trace.find_sites(...)` with top-level selector helpers such as `tl.func(...)`. |
+| Tabular export | canonical package exporters | `torchlens.export.csv/json/parquet(log, path)` are primary; instance exporters are migration-only. |
