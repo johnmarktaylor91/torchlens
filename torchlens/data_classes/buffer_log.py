@@ -115,6 +115,24 @@ class Buffer(Op):
             return ""
         return cast(str, addr.rsplit(".", 1)[-1])
 
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export this Buffer as a one-row pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One-row DataFrame ordered by ``BUFFER_LOG_FIELD_ORDER``.
+        """
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        return pd.DataFrame([_buffer_log_to_row(self)], columns=BUFFER_LOG_FIELD_ORDER)
+
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, size, module, and pass number."""
         lines = [f"Buffer: {self.address or self.layer_label}"]

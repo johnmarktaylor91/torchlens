@@ -65,6 +65,7 @@ from ..utils.tensor_utils import (
 )
 from ..utils.display import human_readable_size
 from ..utils.display import tensor_stats_summary
+from ._tabular_export import TabularExportMixin
 
 _LAYER_PASS_LOG_FIELD_ORDER_SET = frozenset(LAYER_PASS_LOG_FIELD_ORDER)
 _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
@@ -380,6 +381,8 @@ def _tensor_content_hash(value: torch.Tensor) -> str:
 
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from .._io.lazy import LazyActivationRef
     from .func_call_location import FuncCallLocation
     from .layer_log import Layer
@@ -388,7 +391,7 @@ if TYPE_CHECKING:
     from .model_log import Trace
 
 
-class Op:
+class Op(TabularExportMixin):
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match
@@ -2016,6 +2019,25 @@ class Op:
 
         param_dict = {pl.address: pl for pl in self._param_logs}
         return ParamAccessor(param_dict)
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export this Op as a one-row pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One-row DataFrame ordered by ``LAYER_PASS_LOG_FIELD_ORDER``.
+        """
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        row = {field_name: getattr(self, field_name) for field_name in LAYER_PASS_LOG_FIELD_ORDER}
+        return pd.DataFrame([row], columns=LAYER_PASS_LOG_FIELD_ORDER)
 
     # ********************************************
     # ************* Built-in Methods *************

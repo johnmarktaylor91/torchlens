@@ -46,6 +46,7 @@ from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_v
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 from ._accessor_base import Accessor
+from ._tabular_export import TabularExportMixin
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -321,7 +322,7 @@ def _module_call_log_to_row(module_call_log: "ModuleCall") -> Dict[str, Any]:
 
 
 @dataclass(init=False)
-class ModuleCall:
+class ModuleCall(TabularExportMixin):
     """Per-(module, call_index) data for one invocation of a module.
 
     Lightweight container holding the list of layers computed during
@@ -899,65 +900,6 @@ class ModuleCall:
         row = _module_call_log_to_row(self)
         return pd.DataFrame([row], columns=MODULE_PASS_LOG_FIELD_ORDER)
 
-    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write this module-pass row to CSV.
-
-        Parameters
-        ----------
-        filepath:
-            Output CSV path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
-        """
-        self.to_pandas().to_csv(filepath, index=False, **kwargs)
-
-    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write this module-pass row to Parquet.
-
-        Parameters
-        ----------
-        filepath:
-            Output Parquet path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
-
-        Raises
-        ------
-        ImportError
-            If ``pyarrow`` is unavailable.
-        """
-        try:
-            import pyarrow  # noqa: F401
-        except ImportError as exc:
-            raise ImportError(
-                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
-            ) from exc
-        from ..export import _parquet_safe_dataframe
-
-        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
-
-    def to_json(
-        self,
-        filepath: str | PathLike[str],
-        *,
-        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
-        **kwargs: Any,
-    ) -> None:
-        """Write this module-pass row to JSON.
-
-        Parameters
-        ----------
-        filepath:
-            Output JSON path.
-        orient:
-            JSON orientation passed to ``DataFrame.to_json``.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_json``.
-        """
-        from ..export import _parquet_safe_dataframe
-
-        _parquet_safe_dataframe(self.to_pandas()).to_json(filepath, orient=orient, **kwargs)
-
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state annotated with the current I/O format version."""
         state = self.__dict__.copy()
@@ -1015,7 +957,7 @@ class ModuleCall:
 
 
 @dataclass(init=False)
-class Module:
+class Module(TabularExportMixin):
     """Aggregate metadata for one nn.Module across all its invocations.
 
     The primary user-facing class for module inspection.  Provides both
@@ -2035,63 +1977,6 @@ class Module:
                 }
             )
         return pd.DataFrame(rows)
-
-    def to_csv(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write this module's layer table to CSV.
-
-        Parameters
-        ----------
-        filepath:
-            Output CSV path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_csv``.
-        """
-        self.to_pandas().to_csv(filepath, index=False, **kwargs)
-
-    def to_parquet(self, filepath: str | PathLike[str], **kwargs: Any) -> None:
-        """Write this module's layer table to Parquet.
-
-        Parameters
-        ----------
-        filepath:
-            Output Parquet path.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_parquet``.
-
-        Raises
-        ------
-        ImportError
-            If ``pyarrow`` is unavailable.
-        """
-        try:
-            import pyarrow  # noqa: F401
-        except ImportError as exc:
-            raise ImportError(
-                "to_parquet requires pyarrow. Install with: pip install torchlens[io]"
-            ) from exc
-        from ..export import _parquet_safe_dataframe
-
-        _parquet_safe_dataframe(self.to_pandas()).to_parquet(filepath, **kwargs)
-
-    def to_json(
-        self,
-        filepath: str | PathLike[str],
-        *,
-        orient: Literal["split", "records", "index", "columns", "values", "table"] = "records",
-        **kwargs: Any,
-    ) -> None:
-        """Write this module's layer table to JSON.
-
-        Parameters
-        ----------
-        filepath:
-            Output JSON path.
-        orient:
-            JSON orientation passed to ``DataFrame.to_json``.
-        **kwargs:
-            Additional keyword arguments forwarded to ``DataFrame.to_json``.
-        """
-        self.to_pandas().to_json(filepath, orient=orient, **kwargs)
 
 
 class ModuleAccessor(Accessor["Module"]):

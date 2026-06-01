@@ -39,6 +39,7 @@ from .._deprecations import MISSING
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..utils.display import human_readable_size
 from ._accessor_base import Accessor
+from ._tabular_export import TabularExportMixin
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -146,7 +147,7 @@ class OpAccessor(Accessor["Op"]):
         return None
 
 
-class Layer:
+class Layer(TabularExportMixin):
     """Aggregate per-layer metadata for a logged model operation.
 
     Groups one or more Op objects (one per invocation of this layer).
@@ -1158,6 +1159,26 @@ class Layer:
             prepend=prepend,
             confirm_mutation=confirm_mutation,
         )
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export this Layer as a one-row pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One-row DataFrame ordered by ``LAYER_LOG_FIELD_ORDER``.
+        """
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+        from ..constants import LAYER_LOG_FIELD_ORDER
+
+        row = {field_name: getattr(self, field_name) for field_name in LAYER_LOG_FIELD_ORDER}
+        return pd.DataFrame([row], columns=LAYER_LOG_FIELD_ORDER)
 
     # ********************************************
     # ************* Built-in Methods *************

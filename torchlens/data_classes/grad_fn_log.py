@@ -11,6 +11,7 @@ import torch
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
+from ._tabular_export import TabularExportMixin
 from .grad_fn_call_log import GradFnCall
 
 if TYPE_CHECKING:
@@ -127,7 +128,7 @@ def _clone_grad_value(value: Any) -> Any:
 
 
 @dataclass
-class GradFn:
+class GradFn(TabularExportMixin):
     """Metadata and runtime ops for one autograd ``grad_fn_handle`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {

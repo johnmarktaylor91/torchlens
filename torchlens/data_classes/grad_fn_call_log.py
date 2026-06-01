@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import GRAD_FN_PASS_LOG_FIELD_ORDER
+from ._tabular_export import TabularExportMixin
 
 
 def _duration_str(duration: float) -> str:
@@ -30,7 +31,7 @@ def _duration_str(duration: float) -> str:
 
 
 @dataclass
-class GradFnCall:
+class GradFnCall(TabularExportMixin):
     """Runtime data for one execution of an autograd ``grad_fn_handle`` node."""
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {

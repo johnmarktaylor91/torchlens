@@ -30,6 +30,7 @@ from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_v
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..utils.display import human_readable_size
 from ._accessor_base import Accessor
+from ._tabular_export import TabularExportMixin
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -51,7 +52,7 @@ def _param_log_to_row(param_log: "Param") -> Dict[str, Any]:
     return {field: getattr(param_log, field) for field in PARAM_LOG_FIELD_ORDER}
 
 
-class Param:
+class Param(TabularExportMixin):
     """Metadata about a single model parameter (weight or bias).
 
     Captures static parameter identity (address, shape, dtype, trainability)
@@ -418,6 +419,24 @@ class Param:
         """Cache grad info, then null _param_ref to allow param GC."""
         self._check_param_grad()
         self._param_ref = None
+
+    def to_pandas(self) -> "pd.DataFrame":
+        """Export this Param as a one-row pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            One-row DataFrame ordered by ``PARAM_LOG_FIELD_ORDER``.
+        """
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        return pd.DataFrame([_param_log_to_row(self)], columns=PARAM_LOG_FIELD_ORDER)
 
     def __len__(self) -> int:
         """Return the number of scalar elements in this parameter."""
