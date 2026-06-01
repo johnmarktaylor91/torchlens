@@ -1,17 +1,17 @@
 {
   "equivalence_partition": [
     [
-      "add_1_2"
+      "add_1_2:1"
     ],
     [
-      "input_1"
+      "input_1:1"
     ],
     [
       "linear_1_1:1",
       "linear_1_1:2"
     ],
     [
-      "output_1"
+      "output_1:1"
     ]
   ],
   "fixture_name": "shared_instance_two_addresses",
@@ -41,8 +41,10 @@
         "-4",
         "1",
         "2",
+        "linear_1",
         "linear_1:1",
         "linear_1:2",
+        "linear_1_1",
         "linear_1_1:1",
         "linear_1_1:2",
         "shared:1",
@@ -121,12 +123,14 @@
       "call_label": "shared:1",
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
         "linear_1_1:1"
       ],
       "output_layers": [
-        "linear_1_1:1"
+        "linear_1_1"
       ]
     },
     {
@@ -134,12 +138,14 @@
       "call_label": "shared:2",
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
         "linear_1_1:2"
       ],
       "output_layers": [
-        "linear_1_1:2"
+        "linear_1_1"
       ]
     }
   ],
@@ -182,7 +188,9 @@
         "shared:1",
         "shared:2"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 2,
       "num_param_tensors": 2,
       "num_params": 20,
@@ -192,8 +200,7 @@
         "linear_1_1"
       ],
       "output_layers": [
-        "linear_1_1:1",
-        "linear_1_1:2"
+        "linear_1_1"
       ],
       "training": true
     }
@@ -212,8 +219,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-5",
@@ -248,13 +255,15 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_1_1:1",
       "lookup_keys": [
         "-4",
         "1",
+        "linear_1",
         "linear_1:1",
+        "linear_1_1",
         "linear_1_1:1",
         "shared:1"
       ],
@@ -281,13 +290,15 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_1_1:2",
       "lookup_keys": [
         "-3",
         "2",
+        "linear_1",
         "linear_1:2",
+        "linear_1_1",
         "linear_1_1:2",
         "shared:2"
       ],
@@ -314,8 +325,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "add_1_2:1",
       "lookup_keys": [
         "-2",
@@ -342,8 +353,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

@@ -49,7 +49,7 @@ from ._tl import (
     is_tensor_replacement_wrapped,
     mark_forward_call_decorated,
     mark_tensor_replacement_wrapped,
-    promote_label_to_buffer_parent_and_clear_label,
+    promote_label_to_buffer_source_and_clear_label,
     restore_param_requires_grad,
     set_buffer_address,
     set_module_meta,
@@ -716,7 +716,7 @@ def _tag_untagged_buffers(module: nn.Module) -> None:
     Called during ``_record_module_entry_metadata`` to catch buffers that were created
     dynamically (e.g. in ``forward()``) after the initial ``prepare_buffer_tensors``
     scan. If a buffer already has ``_tl.label_raw`` from being logged as
-    an intermediate tensor, that label is moved to ``_tl.buffer_parent`` and cleared
+    an intermediate tensor, that label is moved to ``_tl.buffer_source`` and cleared
     so the buffer gets a fresh source-tensor entry on next use.
     """
     for buffer_name, buffer_tensor in module.named_buffers():
@@ -730,7 +730,7 @@ def _tag_untagged_buffers(module: nn.Module) -> None:
         set_buffer_address(buffer_tensor, address)
         # If this buffer was already logged as an intermediate tensor, save the
         # old label as parent and reset so it gets a proper buffer source entry.
-        promote_label_to_buffer_parent_and_clear_label(buffer_tensor)
+        promote_label_to_buffer_source_and_clear_label(buffer_tensor)
 
 
 def _record_module_entry_metadata(
@@ -1058,7 +1058,7 @@ def _ensure_module_output_tensor_logged(
             "is_buffer": False,
             "address": None,
             "buffer_pass": None,
-            "buffer_parent": None,
+            "buffer_source": None,
             "is_internal_source": not parent_entries,
             "has_internal_source_ancestor": any(
                 entry["has_internal_source_ancestor"] for entry in parent_entries

@@ -1,4 +1,4 @@
-"""Regression coverage for raw and transformed postfunc storage."""
+"""Regression coverage for raw and transformed transform storage."""
 
 from pathlib import Path
 from typing import Any
@@ -42,8 +42,8 @@ def _output_loss(trace: tl.Trace) -> torch.Tensor:
 
 
 @pytest.mark.smoke
-def test_out_postfunc_keeps_raw_tensor_and_transformed_metadata() -> None:
-    """Activation postfunc stores raw and transformed tensors separately."""
+def test_activation_transform_keeps_raw_tensor_and_transformed_metadata() -> None:
+    """Activation transform stores raw and transformed tensors separately."""
 
     x = torch.randn(2, 4)
     trace = tl.trace(_TinyModel(), x, activation_transform=lambda t: t.mean())
@@ -61,8 +61,8 @@ def test_out_postfunc_keeps_raw_tensor_and_transformed_metadata() -> None:
     )
 
 
-def test_transformed_out_absent_without_postfunc() -> None:
-    """No out postfunc leaves transformed out fields empty."""
+def test_transformed_out_absent_withactivation_transform() -> None:
+    """No out transform leaves transformed out fields empty."""
 
     trace = tl.trace(_TinyModel(), torch.randn(2, 4))
 
@@ -89,7 +89,7 @@ def test_save_raw_outs_false_keeps_raw_metadata_only() -> None:
 
 
 def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
-    """Gradient postfunc stores raw and transformed grads separately."""
+    """Gradient transform stores raw and transformed grads separately."""
 
     trace = tl.trace(
         _TinyModel(),
@@ -130,7 +130,7 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
     assert layer.transformed_grad is not None
 
 
-def test_train_mode_out_postfunc_detach_rejected() -> None:
+def test_train_mode_activation_transform_detach_rejected() -> None:
     """Detached train-mode out transforms are rejected."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="disconnected from the autograd graph"):
@@ -142,7 +142,7 @@ def test_train_mode_out_postfunc_detach_rejected() -> None:
         )
 
 
-def test_train_mode_out_postfunc_int_rejected() -> None:
+def test_train_mode_activation_transform_int_rejected() -> None:
     """Integer train-mode out transforms are rejected."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="non-grad dtype"):
@@ -154,7 +154,7 @@ def test_train_mode_out_postfunc_int_rejected() -> None:
         )
 
 
-def test_train_mode_out_postfunc_connected_ops() -> None:
+def test_train_mode_activation_transform_connected_ops() -> None:
     """Differentiable train-mode out transforms are accepted."""
 
     trace = tl.trace(
@@ -167,7 +167,7 @@ def test_train_mode_out_postfunc_connected_ops() -> None:
     assert _first_transformed_layer(trace).transformed_out.grad_fn is not None
 
 
-def test_postfunc_error_has_context_and_cause() -> None:
+def test_transform_error_has_context_and_cause() -> None:
     """Postfunc failures include layer, op, shape, dtype, and original cause."""
 
     def _raise(_: torch.Tensor) -> torch.Tensor:
@@ -190,7 +190,7 @@ def test_postfunc_error_has_context_and_cause() -> None:
 def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> None:
     """Portable save/load preserves transformed out fields."""
 
-    bundle_path = tmp_path / "postfunc_bundle.tl"
+    bundle_path = tmp_path / "transform_bundle.tl"
     trace = tl.trace(_TinyModel(), torch.randn(2, 4), activation_transform=torch.mean)
     layer = _first_transformed_layer(trace)
 
@@ -204,8 +204,8 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
     assert restored_layer.transformed_activation_memory == layer.transformed_activation_memory
 
 
-def test_postfunc_type_aliases_exported() -> None:
-    """Activation and grad postfunc aliases are importable from torchlens."""
+def test_transform_type_aliases_exported() -> None:
+    """Activation and grad transform aliases are importable from torchlens."""
 
     from torchlens import ActivationPostfunc, GradientPostfunc
 
@@ -216,7 +216,7 @@ def test_postfunc_type_aliases_exported() -> None:
 def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
     """Streaming bundles write transformed out fields."""
 
-    bundle_path = tmp_path / "streamed_postfunc.tl"
+    bundle_path = tmp_path / "streamed_transform.tl"
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4),

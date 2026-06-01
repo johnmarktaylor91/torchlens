@@ -1,10 +1,10 @@
 {
   "equivalence_partition": [
     [
-      "input_1"
+      "input_1:1"
     ],
     [
-      "linear_1_4"
+      "linear_1_4:1"
     ],
     [
       "lstmcell_1_3:1",
@@ -17,11 +17,11 @@
       "lstmcell_1_3:6"
     ],
     [
-      "newzeros_1_1",
-      "newzeros_2_2"
+      "newzeros_1_1:1",
+      "newzeros_2_2:1"
     ],
     [
-      "output_1"
+      "output_1:1"
     ]
   ],
   "fixture_name": "recurrent_lstm_cell",
@@ -98,12 +98,14 @@
         "cell:1",
         "cell:2",
         "cell:3",
+        "lstmcell_1",
         "lstmcell_1:1",
         "lstmcell_1:2",
         "lstmcell_1:3",
         "lstmcell_1:4",
         "lstmcell_1:5",
         "lstmcell_1:6",
+        "lstmcell_1_3",
         "lstmcell_1_3:1",
         "lstmcell_1_3:2",
         "lstmcell_1_3:3",
@@ -200,14 +202,18 @@
       "call_label": "cell:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1",
+        "newzeros_1_1",
+        "newzeros_2_2"
+      ],
       "ops": [
         "lstmcell_1_3:1",
         "lstmcell_1_3:2"
       ],
       "output_layers": [
-        "lstmcell_1_3:1",
-        "lstmcell_1_3:2"
+        "lstmcell_1_3",
+        "lstmcell_1_3"
       ]
     },
     {
@@ -215,14 +221,18 @@
       "call_label": "cell:2",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1",
+        "lstmcell_1_3",
+        "lstmcell_1_3"
+      ],
       "ops": [
         "lstmcell_1_3:3",
         "lstmcell_1_3:4"
       ],
       "output_layers": [
-        "lstmcell_1_3:3",
-        "lstmcell_1_3:4"
+        "lstmcell_1_3",
+        "lstmcell_1_3"
       ]
     },
     {
@@ -230,14 +240,18 @@
       "call_label": "cell:3",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32), [Tensor(shape=(2, 16), dtype=float32), Tensor(shape=(2, 16), dtype=float32)]]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1",
+        "lstmcell_1_3",
+        "lstmcell_1_3"
+      ],
       "ops": [
         "lstmcell_1_3:5",
         "lstmcell_1_3:6"
       ],
       "output_layers": [
-        "lstmcell_1_3:5",
-        "lstmcell_1_3:6"
+        "lstmcell_1_3",
+        "lstmcell_1_3"
       ]
     },
     {
@@ -245,9 +259,11 @@
       "call_label": "readout:1",
       "forward_args_summary": "[Tensor(shape=(2, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "lstmcell_1_3"
+      ],
       "ops": [
-        "linear_1_4"
+        "linear_1_4:1"
       ],
       "output_layers": [
         "linear_1_4"
@@ -296,7 +312,12 @@
         "cell:2",
         "cell:3"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1",
+        "lstmcell_1_3",
+        "newzeros_1_1",
+        "newzeros_2_2"
+      ],
       "num_calls": 3,
       "num_param_tensors": 4,
       "num_params": 1664,
@@ -306,12 +327,7 @@
         "lstmcell_1_3"
       ],
       "output_layers": [
-        "lstmcell_1_3:1",
-        "lstmcell_1_3:2",
-        "lstmcell_1_3:3",
-        "lstmcell_1_3:4",
-        "lstmcell_1_3:5",
-        "lstmcell_1_3:6"
+        "lstmcell_1_3"
       ],
       "training": true
     },
@@ -324,7 +340,9 @@
       "call_labels": [
         "readout:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "lstmcell_1_3"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 68,
@@ -354,8 +372,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-11",
@@ -395,8 +413,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "newzeros_1_1:1",
       "lookup_keys": [
         "-10",
@@ -425,8 +443,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "newzeros_2_2:1",
       "lookup_keys": [
         "-9",
@@ -455,14 +473,16 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "lstmcell_1_3:1",
       "lookup_keys": [
         "-8",
         "3",
         "cell:1",
+        "lstmcell_1",
         "lstmcell_1:1",
+        "lstmcell_1_3",
         "lstmcell_1_3:1"
       ],
       "module": "cell:1",
@@ -490,14 +510,16 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "lstmcell_1_3:2",
       "lookup_keys": [
         "-7",
         "4",
         "cell:1",
+        "lstmcell_1",
         "lstmcell_1:2",
+        "lstmcell_1_3",
         "lstmcell_1_3:2"
       ],
       "module": "cell:1",
@@ -525,14 +547,16 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "lstmcell_1_3:3",
       "lookup_keys": [
         "-6",
         "5",
         "cell:2",
+        "lstmcell_1",
         "lstmcell_1:3",
+        "lstmcell_1_3",
         "lstmcell_1_3:3"
       ],
       "module": "cell:2",
@@ -560,14 +584,16 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "lstmcell_1_3:4",
       "lookup_keys": [
         "-5",
         "6",
         "cell:2",
+        "lstmcell_1",
         "lstmcell_1:4",
+        "lstmcell_1_3",
         "lstmcell_1_3:4"
       ],
       "module": "cell:2",
@@ -595,14 +621,16 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "lstmcell_1_3:5",
       "lookup_keys": [
         "-4",
         "7",
         "cell:3",
+        "lstmcell_1",
         "lstmcell_1:5",
+        "lstmcell_1_3",
         "lstmcell_1_3:5"
       ],
       "module": "cell:3",
@@ -632,14 +660,16 @@
       "is_atomic_module": false,
       "is_internal_sink": true,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "lstmcell_1_3:6",
       "lookup_keys": [
         "-3",
         "8",
         "cell:3",
+        "lstmcell_1",
         "lstmcell_1:6",
+        "lstmcell_1_3",
         "lstmcell_1_3:6"
       ],
       "module": "cell:3",
@@ -665,8 +695,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_1_4:1",
       "lookup_keys": [
         "-2",
@@ -701,8 +731,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

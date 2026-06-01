@@ -437,6 +437,13 @@ def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
     self:
         Model log being finalized.
     """
+    if getattr(self, "conditional_edge_call_indices", None):
+        self.conditional_edge_call_indices = {
+            edge_key: sorted(dict.fromkeys(call_indexs))
+            for edge_key, call_indexs in self.conditional_edge_call_indices.items()
+        }
+        return
+
     conditional_edge_call_indices: Dict[Tuple[str, str, int, str], List[int]] = defaultdict(list)
     for (conditional_id, branch_kind), edge_list in self.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
@@ -506,15 +513,26 @@ def _build_submodule_call_logs(
         # Derive input/output layers per pass from Op fields
         pass_input_layers = []
         pass_output_layers = []
+        pass_output_ops = []
         pass_outputs = []
-        for layer_label in pass_layers:
-            if layer_label in self.layer_dict_all_keys:
-                te = self.layer_dict_all_keys[layer_label]
-                if te.is_submodule_input and call_label in te.input_to_modules:
-                    pass_input_layers.append(layer_label)
-                if te.is_module_output and call_label in te.output_of_module_calls:
-                    pass_output_layers.append(layer_label)
-                    pass_outputs.append(te)
+        for te in self.layer_list:
+            if te.is_submodule_input and call_label in te.input_to_modules:
+                pass_input_layers.append(te.layer_label)
+        for op_label in pass_layers:
+            try:
+                te = self.ops[op_label]
+            except (KeyError, TypeError):
+                continue
+            if (
+                te.is_submodule_input
+                and call_label in te.input_to_modules
+                and te.layer_label not in pass_input_layers
+            ):
+                pass_input_layers.append(te.layer_label)
+            if te.is_module_output and call_label in te.output_of_module_calls:
+                pass_output_layers.append(te.layer_label)
+                pass_output_ops.append(te.label)
+                pass_outputs.append(te)
 
         role_hints = role_hints_for_module_class(module_class)
         _assign_output_roles(pass_outputs, hints=role_hints)
@@ -545,7 +563,7 @@ def _build_submodule_call_logs(
             ops=pass_layers,
             input_layers=pass_input_layers,
             output_layers=pass_output_layers,
-            output_ops=pass_output_layers,
+            output_ops=pass_output_ops,
             output_structure=mbd.get("module_output_structures", {}).get(
                 call_label, _first_output_structure(self, pass_output_layers)
             ),

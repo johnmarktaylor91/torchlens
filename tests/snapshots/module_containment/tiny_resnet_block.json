@@ -1,43 +1,43 @@
 {
   "equivalence_partition": [
     [
-      "add_1_6"
+      "add_1_6:1"
     ],
     [
-      "batchnorm_1_2"
+      "batchnorm_1_2:1"
     ],
     [
-      "batchnorm_2_5"
+      "batchnorm_2_5:1"
     ],
     [
-      "buffer_1"
+      "buffer_1:1"
     ],
     [
-      "buffer_2"
+      "buffer_2:1"
     ],
     [
-      "buffer_3"
+      "buffer_3:1"
     ],
     [
-      "buffer_4"
+      "buffer_4:1"
     ],
     [
-      "conv2d_1_1"
+      "conv2d_1_1:1"
     ],
     [
-      "conv2d_2_4"
+      "conv2d_2_4:1"
     ],
     [
-      "input_1"
+      "input_1:1"
     ],
     [
-      "output_1"
+      "output_1:1"
     ],
     [
-      "relu_1_3"
+      "relu_1_3:1"
     ],
     [
-      "relu_2_7"
+      "relu_2_7:1"
     ]
   ],
   "fixture_name": "tiny_resnet_block",
@@ -387,13 +387,15 @@
       "call_label": "first:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "conv2d_1_1",
-        "buffer_1",
-        "buffer_2",
-        "batchnorm_1_2",
-        "relu_1_3"
+        "conv2d_1_1:1",
+        "buffer_1:1",
+        "buffer_2:1",
+        "batchnorm_1_2:1",
+        "relu_1_3:1"
       ],
       "output_layers": [
         "relu_1_3"
@@ -404,9 +406,11 @@
       "call_label": "first.0:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "conv2d_1_1"
+        "conv2d_1_1:1"
       ],
       "output_layers": [
         "conv2d_1_1"
@@ -417,11 +421,13 @@
       "call_label": "first.1:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "conv2d_1_1"
+      ],
       "ops": [
-        "buffer_1",
-        "buffer_2",
-        "batchnorm_1_2"
+        "buffer_1:1",
+        "buffer_2:1",
+        "batchnorm_1_2:1"
       ],
       "output_layers": [
         "batchnorm_1_2"
@@ -432,9 +438,11 @@
       "call_label": "first.2:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "batchnorm_1_2"
+      ],
       "ops": [
-        "relu_1_3"
+        "relu_1_3:1"
       ],
       "output_layers": [
         "relu_1_3"
@@ -445,12 +453,14 @@
       "call_label": "second:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "relu_1_3"
+      ],
       "ops": [
-        "conv2d_2_4",
-        "buffer_3",
-        "buffer_4",
-        "batchnorm_2_5"
+        "conv2d_2_4:1",
+        "buffer_3:1",
+        "buffer_4:1",
+        "batchnorm_2_5:1"
       ],
       "output_layers": [
         "batchnorm_2_5"
@@ -461,9 +471,11 @@
       "call_label": "second.0:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "relu_1_3"
+      ],
       "ops": [
-        "conv2d_2_4"
+        "conv2d_2_4:1"
       ],
       "output_layers": [
         "conv2d_2_4"
@@ -474,11 +486,13 @@
       "call_label": "second.1:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "conv2d_2_4"
+      ],
       "ops": [
-        "buffer_3",
-        "buffer_4",
-        "batchnorm_2_5"
+        "buffer_3:1",
+        "buffer_4:1",
+        "batchnorm_2_5:1"
       ],
       "output_layers": [
         "batchnorm_2_5"
@@ -489,9 +503,11 @@
       "call_label": "out_relu:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 8, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "add_1_6"
+      ],
       "ops": [
-        "relu_2_7"
+        "relu_2_7:1"
       ],
       "output_layers": [
         "relu_2_7"
@@ -550,7 +566,9 @@
       "call_labels": [
         "first:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 156,
@@ -577,7 +595,9 @@
       "call_labels": [
         "first.0:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 148,
@@ -603,7 +623,9 @@
       "call_labels": [
         "first.1:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "conv2d_1_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 8,
@@ -628,7 +650,9 @@
       "call_labels": [
         "first.2:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "batchnorm_1_2"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 0,
@@ -651,7 +675,9 @@
       "call_labels": [
         "second:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "relu_1_3"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 156,
@@ -677,7 +703,9 @@
       "call_labels": [
         "second.0:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "relu_1_3"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 148,
@@ -703,7 +731,9 @@
       "call_labels": [
         "second.1:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "conv2d_2_4"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 8,
@@ -728,7 +758,9 @@
       "call_labels": [
         "out_relu:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "add_1_6"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 0,
@@ -757,8 +789,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-13",
@@ -795,8 +827,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "conv2d_1_1:1",
       "lookup_keys": [
         "-12",
@@ -836,8 +868,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "buffer_1:1",
       "lookup_keys": [
         "-11",
@@ -869,8 +901,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "buffer_2:1",
       "lookup_keys": [
         "-10",
@@ -904,8 +936,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "batchnorm_1_2:1",
       "lookup_keys": [
         "-9",
@@ -948,8 +980,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "relu_1_3:1",
       "lookup_keys": [
         "-8",
@@ -998,8 +1030,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "conv2d_2_4:1",
       "lookup_keys": [
         "-7",
@@ -1039,8 +1071,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "buffer_3:1",
       "lookup_keys": [
         "-6",
@@ -1072,8 +1104,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "buffer_4:1",
       "lookup_keys": [
         "-5",
@@ -1105,8 +1137,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "batchnorm_2_5:1",
       "lookup_keys": [
         "-4",
@@ -1148,8 +1180,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "add_1_6:1",
       "lookup_keys": [
         "-3",
@@ -1180,8 +1212,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "relu_2_7:1",
       "lookup_keys": [
         "-2",
@@ -1216,8 +1248,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

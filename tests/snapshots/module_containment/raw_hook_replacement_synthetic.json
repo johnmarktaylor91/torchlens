@@ -1,19 +1,19 @@
 {
   "equivalence_partition": [
     [
-      "input_1"
+      "input_1:1"
     ],
     [
-      "interventionreplacement_1_2"
+      "interventionreplacement_1_2:1"
     ],
     [
-      "linear_1_3"
+      "linear_1_3:1"
     ],
     [
-      "output_1"
+      "output_1:1"
     ],
     [
-      "relu_1_1"
+      "relu_1_1:1"
     ]
   ],
   "fixture_name": "raw_hook_replacement_synthetic",
@@ -156,10 +156,12 @@
       "call_label": "relu:1",
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "relu_1_1",
-        "interventionreplacement_1_2"
+        "relu_1_1:1",
+        "interventionreplacement_1_2:1"
       ],
       "output_layers": [
         "relu_1_1"
@@ -170,9 +172,11 @@
       "call_label": "proj:1",
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "interventionreplacement_1_2"
+      ],
       "ops": [
-        "linear_1_3"
+        "linear_1_3:1"
       ],
       "output_layers": [
         "linear_1_3"
@@ -218,7 +222,9 @@
       "call_labels": [
         "relu:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 0,
@@ -242,7 +248,9 @@
       "call_labels": [
         "proj:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "interventionreplacement_1_2"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 20,
@@ -270,8 +278,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-5",
@@ -303,8 +311,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "relu_1_1:1",
       "lookup_keys": [
         "-4",
@@ -341,8 +349,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "interventionreplacement_1_2:1",
       "lookup_keys": [
         "-3",
@@ -375,8 +383,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_1_3:1",
       "lookup_keys": [
         "-2",
@@ -411,8 +419,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

@@ -56,6 +56,8 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     ``self._final_to_raw_layer_labels``.
     """
     raw_to_final_layer_labels = {}
+    raw_to_final_parent_layer_labels = {}
+    raw_to_final_op_labels = {}
     final_to_raw_layer_labels = {}
     layer_type_counter: defaultdict[str, int] = defaultdict(lambda: 1)
     layer_total_counter = 1  # Sequential counter for non-input/buffer/output layers.
@@ -100,8 +102,12 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             else tensor_log_entry.label
         )
         raw_to_final_layer_labels[tensor_log_entry._label_raw] = final_lookup_label
+        raw_to_final_parent_layer_labels[tensor_log_entry._label_raw] = tensor_log_entry.layer_label
+        raw_to_final_op_labels[tensor_log_entry._label_raw] = tensor_log_entry.label
         final_to_raw_layer_labels[final_lookup_label] = tensor_log_entry._label_raw
     self._raw_to_final_layer_labels = raw_to_final_layer_labels
+    self._raw_to_final_parent_layer_labels = raw_to_final_parent_layer_labels
+    self._raw_to_final_op_labels = raw_to_final_op_labels
     self._final_to_raw_layer_labels = final_to_raw_layer_labels
 
 
@@ -330,16 +336,24 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
         layer_entry: Op to rename labels for.
     """
     mapping = self._raw_to_final_layer_labels
+    layer_mapping = self._raw_to_final_parent_layer_labels
+    op_mapping = self._raw_to_final_op_labels
     d = layer_entry.__dict__
 
     for field in _LIST_FIELDS_TO_RENAME:
         orig = d.get(field)
         if not orig:
             continue
+        if field.startswith("conditional_"):
+            field_mapping = layer_mapping
+        elif field in {"recurrent_ops", "op_equivalence_classes"}:
+            field_mapping = op_mapping
+        else:
+            field_mapping = mapping
         if isinstance(orig, list):
-            d[field] = [mapping[raw] for raw in orig]
+            d[field] = [field_mapping[raw] for raw in orig]
         else:  # set
-            d[field] = type(orig)(mapping[raw] for raw in orig)
+            d[field] = type(orig)(field_mapping[raw] for raw in orig)
 
     # Fix the arg locations field:
     arg_locs = d.get("parent_arg_positions")
@@ -358,11 +372,11 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
 
     elif_children = d.get("conditional_elif_children")
     if elif_children:
-        d["conditional_elif_children"] = _rename_elif_children(elif_children, mapping)
+        d["conditional_elif_children"] = _rename_elif_children(elif_children, layer_mapping)
 
     children_by_cond = d.get("conditional_arm_children")
     if children_by_cond:
-        d["conditional_arm_children"] = _rename_children_by_cond(children_by_cond, mapping)
+        d["conditional_arm_children"] = _rename_children_by_cond(children_by_cond, layer_mapping)
 
     if d.get("edge_uses"):
         d["edge_uses"] = [_rename_label_dataclass(record, mapping) for record in d["edge_uses"]]
@@ -478,6 +492,7 @@ def _log_module_hierarchy_info_for_layer(
 
     parent_call_label = None
     layer_label = layer_entry.layer_label
+    op_label = layer_entry.label
     for module_index, raw_module_call_label in enumerate(layer_entry.modules):
         if isinstance(raw_module_call_label, str):
             module_name, module_pass = raw_module_call_label.rsplit(":", 1)
@@ -490,9 +505,9 @@ def _log_module_hierarchy_info_for_layer(
         if layer_label not in _module_labels_seen[module_name]:
             _module_labels_seen[module_name].add(layer_label)
             mbd["module_layers"][module_name].append(layer_label)
-        if layer_label not in _module_call_labels_seen[module_pass_nice_label]:
-            _module_call_labels_seen[module_pass_nice_label].add(layer_label)
-            mbd["module_pass_layers"][module_pass_nice_label].append(layer_label)
+        if op_label not in _module_call_labels_seen[module_pass_nice_label]:
+            _module_call_labels_seen[module_pass_nice_label].add(op_label)
+            mbd["module_pass_layers"][module_pass_nice_label].append(op_label)
         if (module_index == 0) and (module_pass_nice_label not in _top_level_module_ops_seen):
             _top_level_module_ops_seen.add(module_pass_nice_label)
             mbd["top_level_module_ops"].append(module_pass_nice_label)
@@ -698,14 +713,12 @@ def _add_lookup_keys_for_layer_entry(
     lookup_keys_for_tensor = [
         layer_entry.layer_label,
         layer_entry.layer_label_short,
+        layer_entry.label,
+        layer_entry.label_short,
         tensor_index,
         tensor_index - num_tensors_to_keep,
     ]
     layer_entry.ordinal_index = tensor_index
-
-    # If just one pass, also allow indexing by pass label.
-    if layer_entry.num_passes == 1:
-        lookup_keys_for_tensor.extend([layer_entry.label, layer_entry.label_short])
 
     # Relabel the module ops if the first pass:
     if self.capture_mode == "exhaustive":
@@ -806,14 +819,14 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         setattr(
             self,
             field,
-            [self._raw_to_final_layer_labels[tensor_label] for tensor_label in tensor_labels],
+            [self._raw_to_final_op_labels[tensor_label] for tensor_label in tensor_labels],
         )
 
     new_param_tensors = {}
     for key, values in self.layers_with_params.items():
         new_key = self[values[0]].layer_label
         new_param_tensors[new_key] = [
-            self._raw_to_final_layer_labels[tensor_label] for tensor_label in values
+            self._raw_to_final_parent_layer_labels[tensor_label] for tensor_label in values
         ]
     self.layers_with_params = new_param_tensors
 
@@ -834,46 +847,49 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     new_equiv_operations_tensors: dict[Any, set[str]] = {}
     for key, equiv_values in self.op_equivalence_classes.items():
         new_equiv_operations_tensors[key] = set(
-            [self._raw_to_final_layer_labels[tensor_label] for tensor_label in equiv_values]
+            [self._raw_to_final_op_labels[tensor_label] for tensor_label in equiv_values]
         )
     self.op_equivalence_classes = new_equiv_operations_tensors
 
     for t, (child, parent) in enumerate(self.conditional_branch_edges):
         new_child, new_parent = (
-            self._raw_to_final_layer_labels[child],
-            self._raw_to_final_layer_labels[parent],
+            self._raw_to_final_parent_layer_labels[child],
+            self._raw_to_final_parent_layer_labels[parent],
         )
         self.conditional_branch_edges[t] = (new_child, new_parent)
 
     self.conditional_arm_entry_edges = {
         (cond_id, branch_kind): [
             (
-                self._raw_to_final_layer_labels[parent],
-                self._raw_to_final_layer_labels[child],
+                self._raw_to_final_parent_layer_labels[parent],
+                self._raw_to_final_parent_layer_labels[child],
             )
             for parent, child in arm_edges
         ]
         for (cond_id, branch_kind), arm_edges in self.conditional_arm_entry_edges.items()
     }
 
-    self.conditional_edge_call_indices = {
-        (
-            self._raw_to_final_layer_labels[parent],
-            self._raw_to_final_layer_labels[child],
+    conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
+    for (
+        parent,
+        child,
+        cond_id,
+        branch_kind,
+    ), call_indexs in self.conditional_edge_call_indices.items():
+        edge_key = (
+            self._raw_to_final_parent_layer_labels[parent],
+            self._raw_to_final_parent_layer_labels[child],
             cond_id,
             branch_kind,
-        ): call_indexs
-        for (
-            parent,
-            child,
-            cond_id,
-            branch_kind,
-        ), call_indexs in self.conditional_edge_call_indices.items()
-    }
+        )
+        for call_index in call_indexs:
+            if call_index not in conditional_edge_call_indices[edge_key]:
+                conditional_edge_call_indices[edge_key].append(call_index)
+    self.conditional_edge_call_indices = dict(conditional_edge_call_indices)
 
     for conditional_event in self.conditional_records:
         conditional_event.bool_layers = [
-            self._raw_to_final_layer_labels[layer_label]
+            self._raw_to_final_parent_layer_labels[layer_label]
             for layer_label in conditional_event.bool_layers
         ]
 

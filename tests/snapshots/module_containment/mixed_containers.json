@@ -1,37 +1,37 @@
 {
   "equivalence_partition": [
     [
-      "add_1_7"
+      "add_1_7:1"
     ],
     [
-      "input_1"
+      "input_1:1"
     ],
     [
-      "linear_1_1"
+      "linear_1_1:1"
     ],
     [
-      "linear_2_4"
+      "linear_2_4:1"
     ],
     [
-      "linear_3_9"
+      "linear_3_9:1"
     ],
     [
-      "output_1"
+      "output_1:1"
     ],
     [
-      "relu_1_2"
+      "relu_1_2:1"
     ],
     [
-      "relu_2_5"
+      "relu_2_5:1"
     ],
     [
-      "sigmoid_1_8"
+      "sigmoid_1_8:1"
     ],
     [
-      "sin_1_3"
+      "sin_1_3:1"
     ],
     [
-      "zeroslike_1_6"
+      "zeroslike_1_6:1"
     ]
   ],
   "fixture_name": "mixed_containers",
@@ -324,10 +324,12 @@
       "call_label": "seq:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "linear_1_1",
-        "relu_1_2"
+        "linear_1_1:1",
+        "relu_1_2:1"
       ],
       "output_layers": [
         "relu_1_2"
@@ -338,9 +340,11 @@
       "call_label": "seq.0:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "linear_1_1"
+        "linear_1_1:1"
       ],
       "output_layers": [
         "linear_1_1"
@@ -351,9 +355,11 @@
       "call_label": "seq.1:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "linear_1_1"
+      ],
       "ops": [
-        "relu_1_2"
+        "relu_1_2:1"
       ],
       "output_layers": [
         "relu_1_2"
@@ -364,9 +370,11 @@
       "call_label": "layers.0:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "sin_1_3"
+      ],
       "ops": [
-        "linear_2_4"
+        "linear_2_4:1"
       ],
       "output_layers": [
         "linear_2_4"
@@ -377,9 +385,11 @@
       "call_label": "layers.1:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "linear_2_4"
+      ],
       "ops": [
-        "relu_2_5"
+        "relu_2_5:1"
       ],
       "output_layers": [
         "relu_2_5"
@@ -390,9 +400,11 @@
       "call_label": "choices.gate:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "add_1_7"
+      ],
       "ops": [
-        "sigmoid_1_8"
+        "sigmoid_1_8:1"
       ],
       "output_layers": [
         "sigmoid_1_8"
@@ -403,9 +415,11 @@
       "call_label": "choices.proj:1",
       "forward_args_summary": "[Tensor(shape=(2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "sigmoid_1_8"
+      ],
       "ops": [
-        "linear_3_9"
+        "linear_3_9:1"
       ],
       "output_layers": [
         "linear_3_9"
@@ -457,7 +471,9 @@
       "call_labels": [
         "seq:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 72,
@@ -481,7 +497,9 @@
       "call_labels": [
         "seq.0:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 72,
@@ -504,7 +522,9 @@
       "call_labels": [
         "seq.1:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "linear_1_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 0,
@@ -527,7 +547,9 @@
       "call_labels": [
         "layers.0:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "sin_1_3"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 72,
@@ -550,7 +572,9 @@
       "call_labels": [
         "layers.1:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "linear_2_4"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 0,
@@ -573,7 +597,9 @@
       "call_labels": [
         "choices.gate:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "add_1_7"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 0,
@@ -596,7 +622,9 @@
       "call_labels": [
         "choices.proj:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "sigmoid_1_8"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 36,
@@ -625,8 +653,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-11",
@@ -663,8 +691,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_1_1:1",
       "lookup_keys": [
         "-10",
@@ -704,8 +732,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "relu_1_2:1",
       "lookup_keys": [
         "-9",
@@ -747,8 +775,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "sin_1_3:1",
       "lookup_keys": [
         "-8",
@@ -781,8 +809,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_2_4:1",
       "lookup_keys": [
         "-7",
@@ -821,8 +849,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "relu_2_5:1",
       "lookup_keys": [
         "-6",
@@ -857,8 +885,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "zeroslike_1_6:1",
       "lookup_keys": [
         "-5",
@@ -887,8 +915,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "add_1_7:1",
       "lookup_keys": [
         "-4",
@@ -921,8 +949,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "sigmoid_1_8:1",
       "lookup_keys": [
         "-3",
@@ -961,8 +989,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_3_9:1",
       "lookup_keys": [
         "-2",
@@ -997,8 +1025,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

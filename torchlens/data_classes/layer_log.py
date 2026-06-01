@@ -225,7 +225,7 @@ class Layer:
         "is_final_output": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
-        "buffer_parent": FieldPolicy.KEEP,
+        "buffer_source": FieldPolicy.KEEP,
         "is_internal_source": FieldPolicy.KEEP,
         "is_internal_sink": FieldPolicy.KEEP,
         "is_terminal_bool": FieldPolicy.KEEP,
@@ -340,7 +340,7 @@ class Layer:
         self.is_final_output = first_pass.is_final_output
         self.is_buffer = first_pass.is_buffer
         self.address = first_pass.address
-        self.buffer_parent = first_pass.buffer_parent
+        self.buffer_source = first_pass.buffer_source
         self.is_internal_source = first_pass.is_internal_source
         self.is_internal_sink = first_pass.is_internal_sink
         self.is_terminal_bool = first_pass.is_terminal_bool

@@ -1,42 +1,42 @@
 {
   "equivalence_partition": [
     [
-      "cat_1_7",
-      "cat_2_10"
+      "cat_1_7:1",
+      "cat_2_10:1"
     ],
     [
-      "cat_3_13"
+      "cat_3_13:1"
     ],
     [
-      "conv2d_1_1"
+      "conv2d_1_1:1"
     ],
     [
-      "conv2d_2_3"
+      "conv2d_2_3:1"
     ],
     [
-      "conv2d_3_5"
+      "conv2d_3_5:1"
     ],
     [
-      "conv2d_4_8"
+      "conv2d_4_8:1"
     ],
     [
-      "conv2d_5_11"
+      "conv2d_5_11:1"
     ],
     [
-      "conv2d_6_14"
+      "conv2d_6_14:1"
     ],
     [
-      "input_1"
+      "input_1:1"
     ],
     [
-      "output_1"
+      "output_1:1"
     ],
     [
-      "relu_1_2",
-      "relu_2_4",
-      "relu_3_6",
-      "relu_4_9",
-      "relu_5_12"
+      "relu_1_2:1",
+      "relu_2_4:1",
+      "relu_3_6:1",
+      "relu_4_9:1",
+      "relu_5_12:1"
     ]
   ],
   "fixture_name": "branching_unet",
@@ -418,9 +418,11 @@
       "call_label": "encoders.0:1",
       "forward_args_summary": "[Tensor(shape=(1, 4, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "conv2d_1_1"
+        "conv2d_1_1:1"
       ],
       "output_layers": [
         "conv2d_1_1"
@@ -431,9 +433,11 @@
       "call_label": "encoders.1:1",
       "forward_args_summary": "[Tensor(shape=(1, 8, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "relu_1_2"
+      ],
       "ops": [
-        "conv2d_2_3"
+        "conv2d_2_3:1"
       ],
       "output_layers": [
         "conv2d_2_3"
@@ -444,9 +448,11 @@
       "call_label": "encoders.2:1",
       "forward_args_summary": "[Tensor(shape=(1, 8, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "relu_2_4"
+      ],
       "ops": [
-        "conv2d_3_5"
+        "conv2d_3_5:1"
       ],
       "output_layers": [
         "conv2d_3_5"
@@ -457,9 +463,11 @@
       "call_label": "decoders.0:1",
       "forward_args_summary": "[Tensor(shape=(1, 16, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "cat_1_7"
+      ],
       "ops": [
-        "conv2d_4_8"
+        "conv2d_4_8:1"
       ],
       "output_layers": [
         "conv2d_4_8"
@@ -470,9 +478,11 @@
       "call_label": "decoders.1:1",
       "forward_args_summary": "[Tensor(shape=(1, 16, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "cat_2_10"
+      ],
       "ops": [
-        "conv2d_5_11"
+        "conv2d_5_11:1"
       ],
       "output_layers": [
         "conv2d_5_11"
@@ -483,9 +493,11 @@
       "call_label": "decoders.2:1",
       "forward_args_summary": "[Tensor(shape=(1, 12, 16, 16), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "cat_3_13"
+      ],
       "ops": [
-        "conv2d_6_14"
+        "conv2d_6_14:1"
       ],
       "output_layers": [
         "conv2d_6_14"
@@ -542,7 +554,9 @@
       "call_labels": [
         "encoders.0:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 296,
@@ -565,7 +579,9 @@
       "call_labels": [
         "encoders.1:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "relu_1_2"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 584,
@@ -588,7 +604,9 @@
       "call_labels": [
         "encoders.2:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "relu_2_4"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 584,
@@ -611,7 +629,9 @@
       "call_labels": [
         "decoders.0:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "cat_1_7"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 1160,
@@ -634,7 +654,9 @@
       "call_labels": [
         "decoders.1:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "cat_2_10"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 1160,
@@ -657,7 +679,9 @@
       "call_labels": [
         "decoders.2:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "cat_3_13"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 436,
@@ -685,8 +709,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-16",
@@ -718,8 +742,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "conv2d_1_1:1",
       "lookup_keys": [
         "-15",
@@ -756,8 +780,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "relu_1_2:1",
       "lookup_keys": [
         "-14",
@@ -788,8 +812,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "conv2d_2_3:1",
       "lookup_keys": [
         "-13",
@@ -826,8 +850,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "relu_2_4:1",
       "lookup_keys": [
         "-12",
@@ -858,8 +882,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "conv2d_3_5:1",
       "lookup_keys": [
         "-11",
@@ -894,8 +918,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "relu_3_6:1",
       "lookup_keys": [
         "-10",
@@ -924,8 +948,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "cat_1_7:1",
       "lookup_keys": [
         "-9",
@@ -956,8 +980,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "conv2d_4_8:1",
       "lookup_keys": [
         "-8",
@@ -992,8 +1016,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "relu_4_9:1",
       "lookup_keys": [
         "-7",
@@ -1022,8 +1046,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "cat_2_10:1",
       "lookup_keys": [
         "-6",
@@ -1054,8 +1078,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "conv2d_5_11:1",
       "lookup_keys": [
         "-5",
@@ -1090,8 +1114,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "relu_5_12:1",
       "lookup_keys": [
         "-4",
@@ -1120,8 +1144,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "cat_3_13:1",
       "lookup_keys": [
         "-3",
@@ -1152,8 +1176,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "conv2d_6_14:1",
       "lookup_keys": [
         "-2",
@@ -1188,8 +1212,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

@@ -1728,13 +1728,13 @@ def _build_skip_filtered_edge_map(
                 raise ValueError(
                     f"skip_fn cannot skip input or output layer '{layer_log.layer_label}'."
                 )
-            skipped_labels.add(node.layer_label)
+            skipped_labels.add(_render_node_label(node, vis_mode))
 
     edge_map: dict[str, list[RenderEdge]] = {}
     for node in visible_entries.values():
-        if node.layer_label in skipped_labels:
+        if _render_node_label(node, vis_mode) in skipped_labels:
             continue
-        edge_map[node.layer_label] = _expand_edges_through_skipped(
+        edge_map[_render_node_label(node, vis_mode)] = _expand_edges_through_skipped(
             trace,
             node,
             visible_entries,
@@ -1742,6 +1742,27 @@ def _build_skip_filtered_edge_map(
             vis_mode,
         )
     return edge_map, skipped_labels
+
+
+def _render_node_label(node: GraphNode, vis_mode: str) -> str:
+    """Return the graph node label for the active visualization mode.
+
+    Parameters
+    ----------
+    node:
+        Render node.
+    vis_mode:
+        ``"unrolled"`` renders individual Ops, while ``"rolled"`` renders
+        aggregate Layers.
+
+    Returns
+    -------
+    str
+        Stable label used as the DOT node identifier before Graphviz escaping.
+    """
+    if vis_mode == "unrolled" and isinstance(node, Op):
+        return node.label
+    return node.layer_label
 
 
 def _resolve_focus_module(
@@ -1831,6 +1852,7 @@ def _build_module_focus_entries(
         for label, node in entries_to_plot.items()
         if node.layer_label in focus_labels
     }
+    entries_by_layer_label = {node.layer_label: node for node in entries_to_plot.values()}
     input_boundaries: dict[str, BoundaryNode] = {}
     output_boundaries: dict[str, BoundaryNode] = {}
 
@@ -1841,7 +1863,9 @@ def _build_module_focus_entries(
             if parent_label in focus_labels:
                 new_parents.append(parent_label)
                 continue
-            parent_node = entries_to_plot.get(parent_label)
+            parent_node = entries_to_plot.get(parent_label) or entries_by_layer_label.get(
+                parent_label
+            )
             if parent_node is None:
                 continue
             boundary = _get_or_create_boundary_node(
@@ -1862,7 +1886,7 @@ def _build_module_focus_entries(
             if child_label in focus_labels:
                 new_children.append(child_label)
                 continue
-            child_node = entries_to_plot.get(child_label)
+            child_node = entries_to_plot.get(child_label) or entries_by_layer_label.get(child_label)
             if child_node is None:
                 continue
             boundary = _get_or_create_boundary_node(
@@ -2009,9 +2033,12 @@ def _expand_edges_through_skipped(
         Deduplicated non-skipped targets.
     """
 
+    visible_entries_by_layer = {node.layer_label: node for node in visible_entries.values()}
     by_target: dict[str, RenderEdge] = {}
     for child_label in parent_node.children:
-        child_node = visible_entries.get(child_label)
+        child_node = visible_entries.get(child_label) or visible_entries_by_layer.get(child_label)
+        if child_node is None and vis_mode == "unrolled":
+            child_node = trace.layer_dict_all_keys.get(child_label)
         if child_node is None:
             continue
         reached = _walk_skipped_successors(
@@ -2020,15 +2047,16 @@ def _expand_edges_through_skipped(
             visible_entries,
             skipped_labels,
             vis_mode,
-            seen={parent_node.layer_label},
+            seen={_render_node_label(parent_node, vis_mode)},
         )
         for target_node in reached:
             first_child = child_node
-            existing = by_target.get(target_node.layer_label)
+            target_label = _render_node_label(target_node, vis_mode)
+            existing = by_target.get(target_label)
             if existing is None:
-                by_target[target_node.layer_label] = RenderEdge(target_node, first_child)
+                by_target[target_label] = RenderEdge(target_node, first_child)
             elif existing.metadata_child is not first_child:
-                by_target[target_node.layer_label] = RenderEdge(target_node, None)
+                by_target[target_label] = RenderEdge(target_node, None)
     return list(by_target.values())
 
 
@@ -2063,14 +2091,18 @@ def _walk_skipped_successors(
         Non-skipped reachable nodes.
     """
 
-    if node.layer_label in seen:
+    node_label = _render_node_label(node, vis_mode)
+    if node_label in seen:
         return []
-    seen.add(node.layer_label)
-    if node.layer_label not in skipped_labels:
+    seen.add(node_label)
+    if node_label not in skipped_labels:
         return [node]
     reached: list[GraphNode] = []
+    visible_entries_by_layer = {entry.layer_label: entry for entry in visible_entries.values()}
     for child_label in node.children:
-        child_node = visible_entries.get(child_label)
+        child_node = visible_entries.get(child_label) or visible_entries_by_layer.get(child_label)
+        if child_node is None and vis_mode == "unrolled":
+            child_node = trace.layer_dict_all_keys.get(child_label)
         if child_node is None:
             continue
         reached.extend(
@@ -2090,7 +2122,7 @@ def _get_node_by_label(trace: "Trace", label: str, vis_mode: str) -> GraphNode:
     """Return a render node by label for the active visualization mode."""
 
     if vis_mode == "unrolled":
-        return trace.layer_dict_main_keys[label]
+        return trace.layer_dict_main_keys.get(label, trace.layer_dict_all_keys[label])
     if vis_mode == "rolled":
         return trace.layer_logs[label]
     raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
@@ -2425,7 +2457,7 @@ def _build_layer_node(
         raw_output_attrs = _render_raw_output(getattr(self, "raw_output", None))
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
-    node_args["name"] = node.layer_label.replace(":", "pass")
+    node_args["name"] = _render_node_label(node, vis_mode).replace(":", "pass")
     hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
     if hidden_buffer_addresses and not (node.is_input or node.is_output or node.is_buffer):
         node_args["peripheries"] = "2"
@@ -2442,7 +2474,7 @@ def _build_layer_node(
     if node.is_final_output:
         with graphviz_graph.subgraph() as s:
             s.attr(rank="sink")
-            s.node(node.layer_label.replace(":", "pass"))
+            s.node(_render_node_label(node, vis_mode).replace(":", "pass"))
 
     return node_color
 
@@ -3493,7 +3525,7 @@ def _add_edges_for_node(
             for child_layer_label in parent_node.children
         ]
     else:
-        render_edges = edge_map.get(parent_node.layer_label, [])
+        render_edges = edge_map.get(_render_node_label(parent_node, vis_mode), [])
 
     for render_edge in render_edges:
         child_node = render_edge.target
@@ -3522,7 +3554,7 @@ def _add_edges_for_node(
             else:
                 tail_name = module_tuple[0]
         else:
-            tail_name = parent_node.layer_label.replace(":", "pass")
+            tail_name = _render_node_label(parent_node, vis_mode).replace(":", "pass")
 
         child_collapse_address = _collapse_address_for_node(
             self,
@@ -3542,7 +3574,7 @@ def _add_edges_for_node(
             else:
                 head_name = module_tuple[0]
         else:
-            head_name = child_node.layer_label.replace(":", "pass")
+            head_name = _render_node_label(child_node, vis_mode).replace(":", "pass")
 
         both_nodes_collapsed_modules = parent_is_collapsed_module and child_is_collapsed_module
 

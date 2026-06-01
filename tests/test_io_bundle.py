@@ -36,7 +36,7 @@ class _ConvBundleModel(nn.Module):
 
 
 class _ActivationPostfuncModel(nn.Module):
-    """Small linear model for out postfunc policy tests."""
+    """Small linear model for out transform policy tests."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -69,12 +69,12 @@ def _build_conv_log(seed: int = 0) -> Trace:
     return trace_fn(model, x, layers_to_save="all", random_seed=seed)
 
 
-def _build_postfunc_log(postfunc: Callable[[torch.Tensor], Any]) -> Trace:
-    """Create a deterministic log using a custom out postfunc.
+def _build_transform_log(transform: Callable[[torch.Tensor], Any]) -> Trace:
+    """Create a deterministic log using a custom out transform.
 
     Parameters
     ----------
-    postfunc:
+    transform:
         Activation postprocessing function applied during logging.
 
     Returns
@@ -90,7 +90,7 @@ def _build_postfunc_log(postfunc: Callable[[torch.Tensor], Any]) -> Trace:
         model,
         x,
         layers_to_save="all",
-        activation_transform=postfunc,
+        activation_transform=transform,
         random_seed=0,
     )
 
@@ -503,7 +503,7 @@ def test_bundle_loaded_log_validation_guard_raises(tmp_path: Path) -> None:
         restored.validate_forward_pass([])
 
 
-def test_bundle_save_rejects_non_tensor_out_postfunc_output(tmp_path: Path) -> None:
+def test_bundle_save_rejects_non_tensor_activation_transform_output(tmp_path: Path) -> None:
     """Save should fail before writing blobs when activation_transform returned a non-tensor."""
 
     trace = _build_non_tensor_out_log()

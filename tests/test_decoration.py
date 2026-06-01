@@ -754,13 +754,13 @@ class TestPauseLogging:
         cos_layers = [lbl for lbl in result.layer_labels if "cos" in lbl.lower()]
         assert len(cos_layers) == 0, f"cos appeared in graph during pause: {cos_layers}"
 
-    def test_out_postfunc_not_logged(self):
+    def test_activation_transform_not_logged(self):
         """activation_transform runs inside pause_logging, ops should not appear."""
         model = SimpleModel()
         result = trace_fn(model, torch.randn(5), activation_transform=torch.sigmoid)
-        # sigmoid from postfunc should NOT appear in graph
+        # sigmoid from transform should NOT appear in graph
         sigmoid_layers = [lbl for lbl in result.layer_labels if "sigmoid" in lbl.lower()]
-        assert len(sigmoid_layers) == 0, f"postfunc sigmoid leaked into graph: {sigmoid_layers}"
+        assert len(sigmoid_layers) == 0, f"transform sigmoid leaked into graph: {sigmoid_layers}"
 
 
 # =========================================================================

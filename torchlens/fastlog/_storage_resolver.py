@@ -76,14 +76,14 @@ def _resolve_storage(
         When False and ``activation_transform`` is set, raw payloads are
         suppressed and only the transformed copy is retained.
     ctx:
-        Record context used to enrich postfunc error messages.
+        Record context used to enrich transform error messages.
 
     Raises
     ------
     PredicateError
         If the requested storage policy is invalid for the tensor.
     TorchLensPostfuncError
-        If the out postfunc raises while transforming a payload.
+        If the out transform raises while transforming a payload.
     TrainingModeConfigError
         If ``keep_grad=True`` and the transformed RAM payload is not a
         grad-capable tensor connected to the autograd graph.
@@ -101,16 +101,16 @@ def _resolve_storage(
     disk_payload: torch.Tensor | None = None
     transformed_ram: torch.Tensor | None = None
     transformed_disk: torch.Tensor | None = None
-    postfunc = activation_transform
-    keep_raw = save_raw_activations or postfunc is None
+    transform = activation_transform
+    keep_raw = save_raw_activations or transform is None
 
     if intent.in_ram:
         raw_ram = safe_copy(tensor, detach_tensor=not spec.keep_grad)
         raw_ram = _apply_payload_transforms(raw_ram, spec)
-        if postfunc is not None:
-            transformed_ram = _invoke_postfunc(
+        if transform is not None:
+            transformed_ram = _invoke_transform(
                 raw_ram,
-                postfunc,
+                transform,
                 ctx=ctx,
                 spec=spec,
                 intent=intent,
@@ -128,10 +128,10 @@ def _resolve_storage(
     if intent.on_disk:
         raw_disk = safe_copy(tensor, detach_tensor=True)
         raw_disk = _apply_payload_transforms(raw_disk, spec)
-        if postfunc is not None:
-            transformed_disk = _invoke_postfunc(
+        if transform is not None:
+            transformed_disk = _invoke_transform(
                 raw_disk,
-                postfunc,
+                transform,
                 ctx=ctx,
                 spec=spec,
                 intent=intent,
@@ -142,23 +142,23 @@ def _resolve_storage(
     return ram_payload, disk_payload, transformed_ram, transformed_disk
 
 
-def _invoke_postfunc(
+def _invoke_transform(
     tensor: torch.Tensor,
-    postfunc: Callable[[torch.Tensor], torch.Tensor],
+    transform: Callable[[torch.Tensor], torch.Tensor],
     *,
     ctx: Any | None,
     spec: CaptureSpec,
     intent: StorageIntent,
     target: str,
 ) -> torch.Tensor:
-    """Apply a fastlog out postfunc with logging paused."""
+    """Apply a fastlog out transform with logging paused."""
 
     try:
         with pause_logging():
-            return postfunc(tensor)
+            return transform(tensor)
     except Exception as exc:
         raise TorchLensPostfuncError(
-            _postfunc_error_message(
+            _transform_error_message(
                 ctx=ctx,
                 spec=spec,
                 intent=intent,
@@ -167,14 +167,14 @@ def _invoke_postfunc(
         ) from exc
 
 
-def _postfunc_error_message(
+def _transform_error_message(
     *,
     ctx: Any | None,
     spec: CaptureSpec,
     intent: StorageIntent,
     target: str,
 ) -> str:
-    """Build context for an out postfunc failure."""
+    """Build context for an out transform failure."""
 
     storage_target = _describe_storage_target(intent, target)
     if ctx is None:

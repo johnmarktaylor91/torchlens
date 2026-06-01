@@ -5,9 +5,9 @@ documenting the intentional fastlog divergence:
 
 * Fastlog stores transformed payloads on parallel ``ActivationRecord``
   fields (``transformed_ram_payload`` / ``transformed_disk_payload``).
-* The postfunc runs in ``_storage_resolver`` after predicate selection,
+* The transform runs in ``_storage_resolver`` after predicate selection,
   so predicates continue to see raw metadata.
-* ``dry_run()`` does not invoke the postfunc.
+* ``dry_run()`` does not invoke the transform.
 * No ``grad_transform`` is exposed.
 """
 
@@ -66,7 +66,7 @@ def _disk_out_records(
 
 
 @pytest.mark.smoke
-def test_postfunc_replaces_transformed_payload_with_raw_kept() -> None:
+def test_transform_replaces_transformed_payload_with_raw_kept() -> None:
     """Postfunc populates transformed RAM payload while keeping raw."""
 
     recording = tl.fastlog.record(
@@ -91,7 +91,7 @@ def test_postfunc_replaces_transformed_payload_with_raw_kept() -> None:
         assert record.transformed_disk_payload is None
 
 
-def test_out_transform_canonical_name_matches_postfunc_alias() -> None:
+def test_activation_transform_canonical_name_matches_transform_alias() -> None:
     """Fastlog accepts activation_transform as the canonical transform name."""
 
     recording = tl.fastlog.record(
@@ -133,8 +133,8 @@ def test_save_raw_outs_false_drops_raw_payload() -> None:
         assert record.ctx.dtype is not None
 
 
-def test_no_postfunc_leaves_transformed_payload_unset() -> None:
-    """Without a postfunc transformed fields stay None on every record."""
+def test_no_transform_leaves_transformed_payload_unset() -> None:
+    """Without a transform transformed fields stay None on every record."""
 
     recording = tl.fastlog.record(
         _PostfuncModel(),
@@ -142,7 +142,7 @@ def test_no_postfunc_leaves_transformed_payload_unset() -> None:
         default_op=True,
     )
 
-    assert recording._out_transform_repr is None
+    assert recording._activation_transform_repr is None
     for record in recording.records:
         assert record.transformed_ram_payload is None
         assert record.transformed_disk_payload is None
@@ -215,8 +215,8 @@ def test_ram_disk_mirror_populates_both_transformed_payloads(tmp_path: Path) -> 
         )
 
 
-def test_train_mode_well_behaved_postfunc_keeps_graph_connected_payload() -> None:
-    """A graph-preserving postfunc keeps RAM payload differentiable."""
+def test_train_mode_well_behaved_transform_keeps_graph_connected_payload() -> None:
+    """A graph-preserving transform keeps RAM payload differentiable."""
 
     model = _PostfuncModel()
     recording = tl.fastlog.record(
@@ -237,8 +237,8 @@ def test_train_mode_well_behaved_postfunc_keeps_graph_connected_payload() -> Non
     assert model.linear.weight.grad is not None
 
 
-def test_train_mode_detaching_postfunc_rejected() -> None:
-    """A detaching postfunc fails train-mode validation."""
+def test_train_mode_detaching_transform_rejected() -> None:
+    """A detaching transform fails train-mode validation."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="grad_fn is None"):
         tl.fastlog.record(
@@ -249,8 +249,8 @@ def test_train_mode_detaching_postfunc_rejected() -> None:
         )
 
 
-def test_train_mode_integer_postfunc_rejected() -> None:
-    """A postfunc returning integer dtype fails train-mode validation."""
+def test_train_mode_integer_transform_rejected() -> None:
+    """A transform returning integer dtype fails train-mode validation."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="non-grad dtype"):
         tl.fastlog.record(
@@ -261,8 +261,8 @@ def test_train_mode_integer_postfunc_rejected() -> None:
         )
 
 
-def test_source_events_receive_postfunc_outputs() -> None:
-    """``include_source_events`` routes input/buffer events through the postfunc."""
+def test_source_events_receive_transform_outputs() -> None:
+    """``include_source_events`` routes input/buffer events through the transform."""
 
     recording = tl.fastlog.record(
         _PostfuncModel(),
@@ -283,12 +283,12 @@ def test_source_events_receive_postfunc_outputs() -> None:
             )
 
 
-def test_predicate_postfunc_invocation_count_matches_kept_events() -> None:
+def test_predicate_transform_invocation_count_matches_kept_events() -> None:
     """Postfunc runs once per predicate-selected out event."""
 
     invocations: list[int] = [0]
 
-    def counting_postfunc(t: torch.Tensor) -> torch.Tensor:
+    def counting_transform(t: torch.Tensor) -> torch.Tensor:
         """Increment a counter and return the tensor unchanged."""
 
         invocations[0] += 1
@@ -303,7 +303,7 @@ def test_predicate_postfunc_invocation_count_matches_kept_events() -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         keep_op=keep_op,
-        activation_transform=counting_postfunc,
+        activation_transform=counting_transform,
     )
 
     selected = _out_records(recording)
@@ -311,12 +311,12 @@ def test_predicate_postfunc_invocation_count_matches_kept_events() -> None:
     assert invocations[0] == len(selected)
 
 
-def test_dry_run_does_not_invoke_postfunc() -> None:
-    """``dry_run`` never invokes the postfunc since payloads are suppressed."""
+def test_dry_run_does_not_invoke_transform() -> None:
+    """``dry_run`` never invokes the transform since payloads are suppressed."""
 
     invocations: list[int] = [0]
 
-    def counting_postfunc(t: torch.Tensor) -> torch.Tensor:
+    def counting_transform(t: torch.Tensor) -> torch.Tensor:
         """Track invocation count and return the tensor."""
 
         invocations[0] += 1
@@ -335,7 +335,7 @@ def test_dry_run_does_not_invoke_postfunc() -> None:
     assert invocations[0] == 0
 
 
-def test_postfunc_error_wrapped_with_event_context() -> None:
+def test_transform_error_wrapped_with_event_context() -> None:
     """Postfunc exceptions surface as TorchLensPostfuncError with event context."""
 
     def boom(_: torch.Tensor) -> torch.Tensor:
@@ -361,11 +361,11 @@ def test_postfunc_error_wrapped_with_event_context() -> None:
     assert "custom failure" in str(exc_info.value.__cause__)
 
 
-def test__out_transform_repr_exposed_and_persisted(tmp_path: Path) -> None:
-    """Recording exposes ``_out_transform_repr`` and persists it on disk."""
+def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> None:
+    """Recording exposes ``_activation_transform_repr`` and persists it on disk."""
 
-    def named_postfunc(t: torch.Tensor) -> torch.Tensor:
-        """Doubling postfunc with a stable repr."""
+    def named_transform(t: torch.Tensor) -> torch.Tensor:
+        """Doubling transform with a stable repr."""
 
         return t.float() * 2
 
@@ -373,27 +373,27 @@ def test__out_transform_repr_exposed_and_persisted(tmp_path: Path) -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        activation_transform=named_postfunc,
+        activation_transform=named_transform,
     )
-    assert recording._out_transform_repr is not None
-    assert "named_postfunc" in recording._out_transform_repr
+    assert recording._activation_transform_repr is not None
+    assert "named_transform" in recording._activation_transform_repr
 
     bundle_path = tmp_path / "metadata.tlfast"
     persisted = tl.fastlog.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         default_op=True,
-        activation_transform=named_postfunc,
+        activation_transform=named_transform,
         streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
-    assert metadata.get("_out_transform_repr") is not None
-    assert "named_postfunc" in metadata["_out_transform_repr"]
+    assert metadata.get("_activation_transform_repr") is not None
+    assert "named_transform" in metadata["_activation_transform_repr"]
     loaded = tl.fastlog.load(bundle_path)
-    assert loaded._out_transform_repr == persisted._out_transform_repr
+    assert loaded._activation_transform_repr == persisted._activation_transform_repr
 
 
-def test_postfunc_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
+def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
     """Disk bundles roundtrip transformed blob metadata via load/recover."""
 
     bundle_path = tmp_path / "roundtrip.tlfast"

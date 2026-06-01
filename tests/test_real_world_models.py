@@ -1572,6 +1572,7 @@ def test_mamba2() -> None:
     assert validate_forward_pass(model, [], model_kwargs)
 
 
+@pytest.mark.slow
 def test_rwkv():
     """RWKV linear-attention model via HuggingFace transformers (small config)."""
     transformers = pytest.importorskip("transformers")

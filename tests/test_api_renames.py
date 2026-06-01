@@ -356,7 +356,7 @@ def test_trace_new_renamed_kwargs_do_not_warn(
     assert len(_deprecation_messages(records)) == 1
 
 
-def test_out_transform_flat_kwarg_routes_to_runner(
+def test_activation_transform_flat_kwarg_routes_to_runner(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
 ) -> None:
     """Canonical out transform kwarg should route through save options."""
@@ -381,10 +381,10 @@ def test_out_transform_flat_kwarg_routes_to_runner(
     assert len(_deprecation_messages(records)) == 1
 
 
-def test_out_postfunc_flat_kwarg_warns_and_routes_to_transform(
+def test_activation_transform_flat_kwarg_warns_and_routes_to_transform(
     stubbed_runner: tuple[dict[str, Any], _DummyLog],
 ) -> None:
-    """Deprecated out postfunc kwarg should forward to activation_transform."""
+    """Flat activation transform kwarg should warn and route to save options."""
 
     captured, _dummy_log = stubbed_runner
 
@@ -404,13 +404,13 @@ def test_out_postfunc_flat_kwarg_warns_and_routes_to_transform(
 
     assert captured["activation_transform"] is transform
     assert _deprecation_messages(records)[0] == (
-        "`activation_transform` is deprecated; use `activation_transform` instead. "
+        "`activation_transform` is deprecated; use `save.activation_transform` instead. "
         "The old name continues to work but will be removed in a future release."
     )
 
 
-def test_save_options_out_postfunc_alias_warns() -> None:
-    """Deprecated SaveOptions activation_transform alias should still work."""
+def test_save_options_activation_transform_alias_warns() -> None:
+    """SaveOptions activation_transform should set the canonical field."""
 
     def transform(tensor: torch.Tensor) -> torch.Tensor:
         """Return a transformed tensor for routing assertions."""
@@ -422,10 +422,7 @@ def test_save_options_out_postfunc_alias_warns() -> None:
         options = SaveOptions(activation_transform=transform)
 
     assert options.activation_transform is transform
-    assert _deprecation_messages(records) == [
-        "`activation_transform` is deprecated; use `save.activation_transform` instead. "
-        "The old name continues to work but will be removed in a future release."
-    ]
+    assert _deprecation_messages(records) == []
 
 
 @pytest.mark.parametrize(

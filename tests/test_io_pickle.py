@@ -124,14 +124,14 @@ def test_trace_setstate_default_fills_pre_sprint_state() -> None:
     live_log = _build_live_log()
     old_state = live_log.__getstate__()
     old_state.pop("tlspec_version", None)
-    old_state.pop("_out_transform_repr", None)
+    old_state.pop("_activation_transform_repr", None)
 
     restored = Trace.__new__(Trace)
     with pytest.warns(DeprecationWarning):
         restored.__setstate__(old_state)
 
     assert restored.tlspec_version == TLSPEC_VERSION
-    assert restored._out_transform_repr is None
+    assert restored._activation_transform_repr is None
 
 
 def test_trace_setstate_rejects_newer_io_versions() -> None:

@@ -56,10 +56,10 @@ class RamStorageBackend:
         intent:
             Storage intent resolved from streaming options.
         options:
-            Active recording options carrying the out postfunc and
+            Active recording options carrying the out transform and
             ``save_raw_activations`` flag.
         ctx:
-            Record context used to enrich postfunc error messages.
+            Record context used to enrich transform error messages.
 
         Returns
         -------

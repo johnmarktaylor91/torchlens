@@ -65,9 +65,9 @@ from ...data_classes.op_log import (
     _recursive_safe_copy,
     _shape_or_none,
     _tensor_content_hash,
-    apply_postfunc,
-    validate_streaming_postfunc_output,
-    validate_train_mode_postfunc_output,
+    apply_transform,
+    validate_streaming_transform_output,
+    validate_train_mode_transform_output,
 )
 from ...ir.events import (
     ArgTemplateRef,
@@ -1304,7 +1304,7 @@ def _build_graph_relationship_fields(
     fields_dict["is_buffer"] = False
     fields_dict["address"] = None
     fields_dict["buffer_pass"] = None
-    fields_dict["buffer_parent"] = None
+    fields_dict["buffer_source"] = None
     fields_dict["is_internal_source"] = len(parent_layer_labels) == 0
     fields_dict["has_internal_source_ancestor"] = len(internal_source_ancestors) > 0
     fields_dict["internal_source_parents"] = internal_parent_layer_labels
@@ -1822,7 +1822,7 @@ def log_function_output_tensors_fast(
                         orig_layer_entry.has_out_variations
                         and child_layer in orig_layer_entry.out_versions_by_child
                     ):
-                        # out_versions_by_child already has postfunc applied.
+                        # out_versions_by_child already has transform applied.
                         tensor_to_save = orig_layer_entry.out_versions_by_child[child_layer]
                         child_output._internal_set("out", safe_copy(tensor_to_save))
                     else:
@@ -2364,27 +2364,27 @@ def _save_activation_fields(
         fields_dict["transformed_out_dtype"] = None
         fields_dict["transformed_activation_memory"] = None
         if activation_transform is not None:
-            transformed_out = apply_postfunc(
+            transformed_out = apply_transform(
                 label=fields_dict.get("_layer_label_raw"),
                 raw_label=fields_dict.get("_label_raw"),
                 func_name=fields_dict.get("func_name"),
                 tensor=raw_out,
-                postfunc=activation_transform,
-                postfunc_kind="out",
+                transform=activation_transform,
+                transform_kind="activation",
                 streaming_active=writer is not None,
             )
-            validate_train_mode_postfunc_output(
+            validate_train_mode_transform_output(
                 raw_tensor=raw_out,
                 transformed_tensor=transformed_out,
-                postfunc_kind="out",
+                transform_kind="activation",
                 backward_ready=fields_dict.get(
                     "backward_ready", getattr(trace, "backward_ready", False)
                 ),
                 label=fields_dict.get("_layer_label_raw"),
             )
-            validate_streaming_postfunc_output(
+            validate_streaming_transform_output(
                 transformed_tensor=transformed_out,
-                postfunc_kind="out",
+                transform_kind="activation",
                 streaming_active=writer is not None,
                 label=fields_dict.get("_layer_label_raw"),
             )

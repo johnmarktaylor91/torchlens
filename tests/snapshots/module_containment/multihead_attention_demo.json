@@ -1,79 +1,79 @@
 {
   "equivalence_partition": [
     [
-      "bmm_1_18",
-      "bmm_2_20"
+      "bmm_1_18:1",
+      "bmm_2_20:1"
     ],
     [
-      "contiguous_1_6"
+      "contiguous_1_6:1"
     ],
     [
-      "contiguous_2_22"
+      "contiguous_2_22:1"
     ],
     [
-      "getitem_1_7"
+      "getitem_1_7:1"
     ],
     [
-      "getitem_2_8"
+      "getitem_2_8:1"
     ],
     [
-      "getitem_3_9"
+      "getitem_3_9:1"
     ],
     [
-      "input_1"
+      "input_1:1"
     ],
     [
-      "linear_1_1"
+      "linear_1_1:1"
     ],
     [
-      "linear_2_24"
+      "linear_2_24:1"
     ],
     [
-      "mean_1_27"
+      "mean_1_27:1"
     ],
     [
-      "mul_1_16"
+      "mul_1_16:1"
     ],
     [
-      "output_1"
+      "output_1:1"
     ],
     [
-      "softmax_1_19"
+      "softmax_1_19:1"
     ],
     [
-      "squeeze_1_5"
+      "squeeze_1_5:1"
     ],
     [
-      "transpose_1_4"
+      "transpose_1_4:1"
     ],
     [
-      "transpose_2_11",
-      "transpose_3_13",
-      "transpose_4_15",
-      "transpose_6_21"
+      "transpose_2_11:1",
+      "transpose_3_13:1",
+      "transpose_4_15:1",
+      "transpose_6_21:1"
     ],
     [
-      "transpose_5_17"
+      "transpose_5_17:1"
     ],
     [
-      "unflatten_1_2"
+      "unflatten_1_2:1"
     ],
     [
-      "unsqueeze_1_3"
+      "unsqueeze_1_3:1"
     ],
     [
-      "view_1_10",
-      "view_2_12",
-      "view_3_14"
+      "view_1_10:1",
+      "view_2_12:1",
+      "view_3_14:1"
     ],
     [
-      "view_4_23"
+      "view_4_23:1"
     ],
     [
-      "view_5_25"
+      "view_5_25:1"
     ],
     [
-      "view_6_26"
+      "view_6_26:1"
     ]
   ],
   "fixture_name": "multihead_attention_demo",
@@ -720,35 +720,37 @@
       "call_label": "attn:1",
       "forward_args_summary": "[Tensor(shape=(4, 2, 8), dtype=float32), Tensor(shape=(4, 2, 8), dtype=float32), Tensor(shape=(4, 2, 8), dtype=float32)]",
       "forward_kwargs_summary": "{need_weights: True}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "linear_1_1",
-        "unflatten_1_2",
-        "unsqueeze_1_3",
-        "transpose_1_4",
-        "squeeze_1_5",
-        "contiguous_1_6",
-        "getitem_1_7",
-        "getitem_2_8",
-        "getitem_3_9",
-        "view_1_10",
-        "transpose_2_11",
-        "view_2_12",
-        "transpose_3_13",
-        "view_3_14",
-        "transpose_4_15",
-        "mul_1_16",
-        "transpose_5_17",
-        "bmm_1_18",
-        "softmax_1_19",
-        "bmm_2_20",
-        "transpose_6_21",
-        "contiguous_2_22",
-        "view_4_23",
-        "linear_2_24",
-        "view_5_25",
-        "view_6_26",
-        "mean_1_27"
+        "linear_1_1:1",
+        "unflatten_1_2:1",
+        "unsqueeze_1_3:1",
+        "transpose_1_4:1",
+        "squeeze_1_5:1",
+        "contiguous_1_6:1",
+        "getitem_1_7:1",
+        "getitem_2_8:1",
+        "getitem_3_9:1",
+        "view_1_10:1",
+        "transpose_2_11:1",
+        "view_2_12:1",
+        "transpose_3_13:1",
+        "view_3_14:1",
+        "transpose_4_15:1",
+        "mul_1_16:1",
+        "transpose_5_17:1",
+        "bmm_1_18:1",
+        "softmax_1_19:1",
+        "bmm_2_20:1",
+        "transpose_6_21:1",
+        "contiguous_2_22:1",
+        "view_4_23:1",
+        "linear_2_24:1",
+        "view_5_25:1",
+        "view_6_26:1",
+        "mean_1_27:1"
       ],
       "output_layers": [
         "view_5_25",
@@ -819,7 +821,9 @@
       "call_labels": [
         "attn:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 288,
@@ -874,8 +878,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-29",
@@ -909,8 +913,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "linear_1_1:1",
       "lookup_keys": [
         "-28",
@@ -939,8 +943,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "unflatten_1_2:1",
       "lookup_keys": [
         "-27",
@@ -969,8 +973,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "unsqueeze_1_3:1",
       "lookup_keys": [
         "-26",
@@ -999,8 +1003,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "transpose_1_4:1",
       "lookup_keys": [
         "-25",
@@ -1029,8 +1033,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "squeeze_1_5:1",
       "lookup_keys": [
         "-24",
@@ -1059,8 +1063,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "contiguous_1_6:1",
       "lookup_keys": [
         "-23",
@@ -1089,8 +1093,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "getitem_1_7:1",
       "lookup_keys": [
         "-22",
@@ -1119,8 +1123,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "getitem_2_8:1",
       "lookup_keys": [
         "-21",
@@ -1149,8 +1153,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "getitem_3_9:1",
       "lookup_keys": [
         "-20",
@@ -1179,8 +1183,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "view_1_10:1",
       "lookup_keys": [
         "-19",
@@ -1209,8 +1213,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "transpose_2_11:1",
       "lookup_keys": [
         "-18",
@@ -1239,8 +1243,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "view_2_12:1",
       "lookup_keys": [
         "-17",
@@ -1269,8 +1273,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "transpose_3_13:1",
       "lookup_keys": [
         "-16",
@@ -1299,8 +1303,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "view_3_14:1",
       "lookup_keys": [
         "-15",
@@ -1329,8 +1333,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "transpose_4_15:1",
       "lookup_keys": [
         "-14",
@@ -1359,8 +1363,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "mul_1_16:1",
       "lookup_keys": [
         "-13",
@@ -1389,8 +1393,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "transpose_5_17:1",
       "lookup_keys": [
         "-12",
@@ -1419,8 +1423,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "bmm_1_18:1",
       "lookup_keys": [
         "-11",
@@ -1449,8 +1453,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "softmax_1_19:1",
       "lookup_keys": [
         "-10",
@@ -1479,8 +1483,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "bmm_2_20:1",
       "lookup_keys": [
         "-9",
@@ -1509,8 +1513,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "transpose_6_21:1",
       "lookup_keys": [
         "-8",
@@ -1539,8 +1543,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "contiguous_2_22:1",
       "lookup_keys": [
         "-7",
@@ -1569,8 +1573,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "view_4_23:1",
       "lookup_keys": [
         "-6",
@@ -1599,8 +1603,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "linear_2_24:1",
       "lookup_keys": [
         "-5",
@@ -1629,8 +1633,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "view_5_25:1",
       "lookup_keys": [
         "-4",
@@ -1665,8 +1669,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "view_6_26:1",
       "lookup_keys": [
         "-3",
@@ -1695,8 +1699,8 @@
       "is_atomic_module": false,
       "is_internal_sink": true,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "mean_1_27:1",
       "lookup_keys": [
         "-2",
@@ -1731,8 +1735,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

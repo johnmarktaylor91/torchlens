@@ -76,7 +76,7 @@ def test_train_mode_detach_saved_activations_errors() -> None:
         )
 
 
-def test_train_mode_integer_out_postfunc_rejected() -> None:
+def test_train_mode_integer_activation_transform_rejected() -> None:
     """Runtime dtype validation rejects non-grad out transforms."""
 
     with pytest.raises(tl.TrainingModeConfigError, match="non-grad dtype"):

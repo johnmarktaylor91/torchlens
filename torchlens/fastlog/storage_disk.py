@@ -147,7 +147,7 @@ class DiskStorageBackend:
             Recording options carrying ``activation_transform`` /
             ``save_raw_activations``.
         ctx:
-            Record context used to enrich postfunc error messages.
+            Record context used to enrich transform error messages.
 
         Returns
         -------
@@ -394,7 +394,7 @@ def _write_metadata(path: Path, recording: Recording, options: RecordingOptions)
         "halts_by_pass": recording.halts_by_pass,
         "keep_op_repr": recording.keep_op_repr,
         "keep_module_repr": recording.keep_module_repr,
-        "_out_transform_repr": recording._out_transform_repr,
+        "_activation_transform_repr": recording._activation_transform_repr,
         "save_raw_activations": options.save_raw_activations,
         "history_size": options.history_size,
     }

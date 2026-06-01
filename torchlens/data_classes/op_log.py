@@ -16,7 +16,7 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
 2. **Label info** - human-readable labels in various formats (with/without
    pass qualifier, short form, etc.).
 3. **Saved tensor info** - the tensor contents, shape, dtype, size, device
-   transfer settings, out postfunc, and function arguments.
+   transfer settings, out transform, and function arguments.
 4. **Child tensor variations** - tracks per-child input values for
    validation replay (``out_versions_by_child`` stores RAW values
    because validation compares against ``saved_args``).
@@ -146,27 +146,27 @@ def _memory_or_none(value: Any) -> int | None:
     return get_memory_amount(value) if isinstance(value, torch.Tensor) else None
 
 
-def apply_postfunc(
+def apply_transform(
     *,
     label: str | None,
     tensor: torch.Tensor,
-    postfunc: Callable[..., Any],
-    postfunc_kind: str,
+    transform: Callable[..., Any],
+    transform_kind: str,
     streaming_active: bool = False,
     raw_label: str | None = None,
     func_name: str | None = None,
 ) -> Any:
-    """Apply a user postfunc with logging paused and contextual errors.
+    """Apply a user transform with logging paused and contextual errors.
 
     Parameters
     ----------
     label:
         Raw layer label for error context, or ``None`` when unavailable.
     tensor:
-        Raw tensor passed to the user postfunc.
-    postfunc:
+        Raw tensor passed to the user transform.
+    transform:
         Callable applied to ``tensor``.
-    postfunc_kind:
+    transform_kind:
         Transform kind, either ``"out"`` or ``"grad"``.
     streaming_active:
         Whether a streaming bundle writer is active.
@@ -178,35 +178,35 @@ def apply_postfunc(
     Returns
     -------
     Any
-        Value returned by ``postfunc``.
+        Value returned by ``transform``.
     """
 
     try:
         with pause_logging():
-            return postfunc(tensor)
+            return transform(tensor)
     except Exception as exc:
         raise TorchLensPostfuncError(
-            postfunc_error_message(
+            transform_error_message(
                 label=label,
                 raw_label=raw_label,
                 func_name=func_name,
                 tensor=tensor,
-                postfunc_kind=postfunc_kind,
+                transform_kind=transform_kind,
                 streaming_active=streaming_active,
             )
         ) from exc
 
 
-def postfunc_error_message(
+def transform_error_message(
     *,
     label: str | None,
     raw_label: str | None = None,
     func_name: str | None = None,
     tensor: torch.Tensor,
-    postfunc_kind: str,
+    transform_kind: str,
     streaming_active: bool,
 ) -> str:
-    """Build context for an out or grad postfunc failure.
+    """Build context for an out or grad transform failure.
 
     Parameters
     ----------
@@ -217,8 +217,8 @@ def postfunc_error_message(
     func_name:
         Function name for error context.
     tensor:
-        Raw tensor passed to the postfunc.
-    postfunc_kind:
+        Raw tensor passed to the transform.
+    transform_kind:
         Transform kind, either ``"out"`` or ``"grad"``.
     streaming_active:
         Whether a streaming bundle writer is active.
@@ -230,30 +230,30 @@ def postfunc_error_message(
     """
 
     return (
-        f"{postfunc_kind}_postfunc raised for layer {label} "
+        f"{transform_kind}_transform raised for layer {label} "
         f"(raw={raw_label or label}, func={func_name}, "
         f"shape={tuple(tensor.shape)}, dtype={tensor.dtype}, "
         f"streaming_active={streaming_active})."
     )
 
 
-def validate_train_mode_postfunc_output(
+def validate_train_mode_transform_output(
     *,
     raw_tensor: torch.Tensor,
     transformed_tensor: Any,
-    postfunc_kind: str,
+    transform_kind: str,
     backward_ready: bool,
     label: str | None = None,
 ) -> None:
-    """Validate differentiability requirements for train-mode postfunc outputs.
+    """Validate differentiability requirements for train-mode transform outputs.
 
     Parameters
     ----------
     raw_tensor:
-        Raw tensor passed to the postfunc.
+        Raw tensor passed to the transform.
     transformed_tensor:
-        Value returned by the postfunc.
-    postfunc_kind:
+        Value returned by the transform.
+    transform_kind:
         Transform kind, either ``"out"`` or ``"grad"``.
     backward_ready:
         Whether TorchLens is preserving autograd graph connectivity.
@@ -270,7 +270,7 @@ def validate_train_mode_postfunc_output(
         return
     if not isinstance(transformed_tensor, torch.Tensor):
         raise TrainingModeConfigError(
-            f"{postfunc_kind}_postfunc must return a torch.Tensor while backward_ready=True "
+            f"{transform_kind}_transform must return a torch.Tensor while backward_ready=True "
             f"for layer {label}."
         )
     if transformed_tensor.dtype in _NON_GRAD_DTYPES:
@@ -282,16 +282,16 @@ def validate_train_mode_postfunc_output(
         transformed_tensor.grad_fn is None and transformed_tensor is not raw_tensor
     ):
         raise TrainingModeConfigError(
-            f"{postfunc_kind}_postfunc returned a tensor disconnected from the autograd "
+            f"{transform_kind}_transform returned a tensor disconnected from the autograd "
             "graph (grad_fn is None) while backward_ready=True. The transformed out "
             "must remain differentiable."
         )
 
 
-def validate_streaming_postfunc_output(
+def validate_streaming_transform_output(
     *,
     transformed_tensor: Any,
-    postfunc_kind: str,
+    transform_kind: str,
     streaming_active: bool,
     label: str | None = None,
 ) -> None:
@@ -301,7 +301,7 @@ def validate_streaming_postfunc_output(
     ----------
     transformed_tensor:
         Value returned by the user transform.
-    postfunc_kind:
+    transform_kind:
         Transform kind, either ``"out"`` or ``"grad"``.
     streaming_active:
         Whether a streaming bundle writer is active for this trace.
@@ -318,13 +318,13 @@ def validate_streaming_postfunc_output(
         return
     if not isinstance(transformed_tensor, torch.Tensor):
         raise TorchLensIOError(
-            f"Streaming save requires {postfunc_kind}_postfunc outputs to be "
+            f"Streaming save requires {transform_kind}_transform outputs to be "
             f"torch.Tensor instances, but layer {label} produced "
             f"{type(transformed_tensor).__name__}."
         )
     if transformed_tensor.layout != torch.strided:
         raise TorchLensIOError(
-            f"Streaming save does not support sparse {postfunc_kind}_postfunc outputs "
+            f"Streaming save does not support sparse {transform_kind}_transform outputs "
             f"for layer {label}."
         )
 
@@ -537,7 +537,7 @@ class Op:
         "is_buffer": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
-        "buffer_parent": FieldPolicy.KEEP,
+        "buffer_source": FieldPolicy.KEEP,
         "is_internal_source": FieldPolicy.KEEP,
         "has_internal_source_ancestor": FieldPolicy.KEEP,
         "internal_source_parents": FieldPolicy.KEEP,
@@ -839,7 +839,7 @@ class Op:
         self.is_buffer = fields_dict["is_buffer"]
         self.address = fields_dict["address"]
         self.buffer_pass = fields_dict["buffer_pass"]
-        self.buffer_parent = fields_dict["buffer_parent"]
+        self.buffer_source = fields_dict["buffer_source"]
         self.is_internal_source = fields_dict["is_internal_source"]
         self.has_internal_source_ancestor = fields_dict["has_internal_source_ancestor"]
         self.internal_source_parents = fields_dict["internal_source_parents"]
@@ -1508,7 +1508,7 @@ class Op:
             "activation": "out",
             "transformed_activation": "transformed_out",
             "has_saved_activations": "has_saved_activation",
-            "activation_postfunc": "activation_transform",
+            "activation_transform": "activation_transform",
             "activation_shape": "shape",
             "transformed_activation_shape": "transformed_out_shape",
             "activation_dtype": "dtype",
@@ -1631,7 +1631,7 @@ class Op:
            logging the copy operation).
         2. Move to ``output_device`` if different from the tensor's current device.
         3. Apply ``activation_transform`` inside ``pause_logging()`` to prevent
-           the postfunc's own tensor ops from being logged.
+           the transform's own tensor ops from being logged.
         4. Optionally deep-copy function args/kwargs via ``_recursive_safe_copy``.
 
         Args:
@@ -1678,21 +1678,21 @@ class Op:
             if activation_transform is not None:
                 self._internal_set(
                     "transformed_out",
-                    self._apply_postfunc(
+                    self._apply_transform(
                         raw_out,
                         activation_transform,
-                        postfunc_kind="out",
+                        transform_kind="activation",
                         streaming_active=writer is not None,
                     ),
                 )
-                self._validate_train_mode_postfunc_output(
+                self._validate_train_mode_transform_output(
                     raw_out,
                     self.transformed_out,
-                    postfunc_kind="out",
+                    transform_kind="activation",
                 )
-                self._validate_streaming_postfunc_output(
+                self._validate_streaming_transform_output(
                     self.transformed_out,
-                    postfunc_kind="out",
+                    transform_kind="activation",
                     streaming_active=writer is not None,
                 )
                 self.transformed_out_shape = _shape_or_none(self.transformed_out)
@@ -1765,21 +1765,21 @@ class Op:
         if grad_transform is not None:
             self._internal_set(
                 "transformed_grad",
-                self._apply_postfunc(
+                self._apply_transform(
                     raw_grad,
                     grad_transform,
-                    postfunc_kind="grad",
+                    transform_kind="grad",
                     streaming_active=writer is not None,
                 ),
             )
-            self._validate_train_mode_postfunc_output(
+            self._validate_train_mode_transform_output(
                 raw_grad,
                 self.transformed_grad,
-                postfunc_kind="grad",
+                transform_kind="grad",
             )
-            self._validate_streaming_postfunc_output(
+            self._validate_streaming_transform_output(
                 self.transformed_grad,
-                postfunc_kind="grad",
+                transform_kind="grad",
                 streaming_active=writer is not None,
             )
             self.transformed_grad_shape = _shape_or_none(self.transformed_grad)
@@ -1804,67 +1804,67 @@ class Op:
                 kind="transformed_grad",
             )
 
-    def _apply_postfunc(
+    def _apply_transform(
         self,
         tensor: torch.Tensor,
-        postfunc: Callable[..., Any],
+        transform: Callable[..., Any],
         *,
-        postfunc_kind: str,
+        transform_kind: str,
         streaming_active: bool,
     ) -> Any:
-        """Apply a user postfunc with logging paused and rich error context."""
+        """Apply a user transform with logging paused and rich error context."""
 
-        return apply_postfunc(
+        return apply_transform(
             label=self._streaming_label,
             raw_label=self._layer_label_raw,
             func_name=self.func_name,
             tensor=tensor,
-            postfunc=postfunc,
-            postfunc_kind=postfunc_kind,
+            transform=transform,
+            transform_kind=transform_kind,
             streaming_active=streaming_active,
         )
 
-    def _postfunc_error_message(
+    def _transform_error_message(
         self,
         *,
-        postfunc_kind: str,
+        transform_kind: str,
         tensor: torch.Tensor,
         streaming_active: bool,
     ) -> str:
-        """Build context for an out or grad postfunc failure."""
+        """Build context for an out or grad transform failure."""
 
-        return postfunc_error_message(
+        return transform_error_message(
             label=self._streaming_label,
             raw_label=self._layer_label_raw,
             func_name=self.func_name,
             tensor=tensor,
-            postfunc_kind=postfunc_kind,
+            transform_kind=transform_kind,
             streaming_active=streaming_active,
         )
 
-    def _validate_train_mode_postfunc_output(
+    def _validate_train_mode_transform_output(
         self,
         raw_tensor: torch.Tensor,
         output: Any,
         *,
-        postfunc_kind: str,
+        transform_kind: str,
     ) -> None:
-        """Validate differentiability requirements for train-mode postfunc outputs."""
+        """Validate differentiability requirements for train-mode transform outputs."""
 
         trace = self.source_trace
-        validate_train_mode_postfunc_output(
+        validate_train_mode_transform_output(
             raw_tensor=raw_tensor,
             transformed_tensor=output,
-            postfunc_kind=postfunc_kind,
+            transform_kind=transform_kind,
             backward_ready=getattr(trace, "backward_ready", False),
             label=self._streaming_label,
         )
 
-    def _validate_streaming_postfunc_output(
+    def _validate_streaming_transform_output(
         self,
         output: Any,
         *,
-        postfunc_kind: str,
+        transform_kind: str,
         streaming_active: bool,
     ) -> None:
         """Validate transformed tensors before streaming bundle finalization.
@@ -1873,7 +1873,7 @@ class Op:
         ----------
         output:
             Value returned by the user transform.
-        postfunc_kind:
+        transform_kind:
             Transform kind, either ``"out"`` or ``"grad"``.
         streaming_active:
             Whether a streaming bundle writer is active for this trace.
@@ -1890,9 +1890,9 @@ class Op:
         """
 
         try:
-            validate_streaming_postfunc_output(
+            validate_streaming_transform_output(
                 transformed_tensor=output,
-                postfunc_kind=postfunc_kind,
+                transform_kind=transform_kind,
                 streaming_active=streaming_active,
                 label=self._streaming_label,
             )

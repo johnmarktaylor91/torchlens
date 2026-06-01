@@ -172,7 +172,7 @@ def _scrub_value(
         )
 
     if isinstance(value, Trace):
-        scrubbed_state["_out_transform_repr"] = (
+        scrubbed_state["_activation_transform_repr"] = (
             repr(value.activation_transform) if value.activation_transform is not None else None
         )
         scrubbed_state["tlspec_version"] = TLSPEC_VERSION

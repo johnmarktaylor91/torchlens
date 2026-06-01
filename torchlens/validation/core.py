@@ -15,7 +15,7 @@ delegated to the registries in ``exemptions.py``.
 """
 
 from collections import defaultdict, deque
-from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union
+from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union, cast
 
 import torch
 
@@ -189,8 +189,11 @@ def validate_saved_outs(
     _raise_if_portable_bundle_log(self)
 
     # Phase 0: verify logged outputs match a fresh forward pass.
+    output_label_counts: dict[str, int] = defaultdict(int)
     for i, output_layer_label in enumerate(self.output_layers):
-        output_layer = self[output_layer_label]
+        output_layer = _resolve_output_entry_for_index(
+            self, output_layer_label, output_label_counts
+        )
         if output_layer.out is None:
             print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
             return False
@@ -204,7 +207,9 @@ def validate_saved_outs(
     # Edge-counting approach: a parent is enqueued only after ALL its child
     # edges are validated (validated_child_edges == set(children)).
     validated_child_edges_for_each_layer: Dict[str, Set[str]] = defaultdict(set)
-    validated_layers = set(self.output_layers + self.internal_sink_ops)
+    validated_layers = {
+        self[label].layer_label for label in self.output_layers + self.internal_sink_ops
+    }
     layers_to_validate_parents_for = deque(validated_layers)
 
     while len(layers_to_validate_parents_for) > 0:
@@ -278,6 +283,7 @@ def validate_parents_of_saved_layer(
         True if all parent edges are valid, False on the first failure.
     """
     layer_to_validate_parents_for = self[layer_to_validate_parents_for_label]
+    ops_to_validate = _validation_ops_for_entry(layer_to_validate_parents_for)
 
     # Check that the arguments are logged correctly:
     if not _check_layer_arguments_logged_correctly(self, layer_to_validate_parents_for_label):
@@ -288,21 +294,23 @@ def validate_parents_of_saved_layer(
         return False
 
     # Forward replay: re-execute with correct parent values, expect same output.
-    if not _check_whether_func_on_saved_parents_yields_saved_tensor(
-        self, layer_to_validate_parents_for_label, perturb=False
-    ):
-        return False
+    ops_to_replay = _representative_ops_for_replay(self, ops_to_validate)
+    for target_op in ops_to_replay:
+        if not _check_whether_func_on_saved_parents_yields_saved_tensor(
+            self, target_op.label, perturb=False
+        ):
+            return False
 
     # Perturbation: for each parent, substitute random values and expect
     # the output to change, proving that parent genuinely influences this layer.
 
-    func_name = layer_to_validate_parents_for.func_name
-    for perturb_layer in layer_to_validate_parents_for.parents:
-        if func_name in SKIP_PERTURBATION_ENTIRELY:
+    representative_parent_edges = _representative_parent_edges(self, ops_to_replay)
+    for target_op, perturb_layer in representative_parent_edges:
+        if target_op.func_name in SKIP_PERTURBATION_ENTIRELY:
             continue
         if not _check_whether_func_on_saved_parents_yields_saved_tensor(
             self,
-            layer_to_validate_parents_for_label,
+            target_op.label,
             perturb=True,
             layers_to_perturb=[perturb_layer],
             verbose=verbose,
@@ -315,19 +323,125 @@ def validate_parents_of_saved_layer(
         validated_child_edges_for_each_layer[parent_layer_label].add(
             layer_to_validate_parents_for_label
         )
-        # Edge-counting completion: enqueue parent only when ALL its child
-        # edges have been validated.  This correctly handles diamond graphs
-        # where a parent feeds multiple children.
-        if validated_child_edges_for_each_layer[parent_layer_label] == set(parent_layer.children):
+        # Enqueue a parent once at least one validated child proves a path to a
+        # checked output or internal sink. Recurrent multi-pass layers can have
+        # self/side child edges that are valid but not part of the current
+        # representative validation frontier.
+        if parent_layer_label not in validated_layers:
             validated_layers.add(parent_layer_label)
             # Don't enqueue terminal seeds (inputs, parentless buffers) --
             # they have no parents to validate further.
             if (not parent_layer.is_input) and not (
-                parent_layer.is_buffer and (parent_layer.buffer_parent is None)
+                parent_layer.is_buffer and (parent_layer.buffer_source is None)
             ):
                 layers_to_validate_parents_for.append(parent_layer_label)
 
     return True
+
+
+def _resolve_output_entry_for_index(
+    self: "Trace", output_layer_label: str, output_label_counts: dict[str, int]
+) -> Op:
+    """Resolve an output label occurrence to a concrete output Op.
+
+    Parameters
+    ----------
+    output_layer_label:
+        Layer label from ``Trace.output_layers``.
+    output_label_counts:
+        Mutable per-label occurrence counts used to map duplicate output layer
+        labels to their pass-specific output ops.
+
+    Returns
+    -------
+    Op
+        Concrete output op for this output occurrence.
+    """
+
+    output_entry = self[output_layer_label]
+    ops = getattr(output_entry, "ops", None)
+    if not hasattr(ops, "_list"):
+        return cast(Op, output_entry)
+    op_list = cast(list[Op], cast(Any, ops)._list)
+    occurrence_index = output_label_counts[output_layer_label]
+    output_label_counts[output_layer_label] += 1
+    return op_list[occurrence_index]
+
+
+def _representative_ops_for_replay(self: "Trace", ops_to_validate: List[Op]) -> List[Op]:
+    """Return concrete child ops for expensive forward replay validation.
+
+    Parameters
+    ----------
+    ops_to_validate:
+        Concrete op passes for the child Layer currently being validated.
+
+    Returns
+    -------
+    list of Op
+        A stable subset that covers the Layer's distinct parent-layer edges.
+    """
+
+    if len(ops_to_validate) <= 1:
+        return ops_to_validate
+
+    representative_ops: dict[str, Op] = {}
+    fallback_op = ops_to_validate[0]
+    for target_op in ops_to_validate:
+        if not target_op.parents:
+            representative_ops.setdefault(target_op.label, target_op)
+        for parent_label in target_op.parents:
+            parent_layer_label = self[parent_label].layer_label
+            representative_ops.setdefault(parent_layer_label, target_op)
+    if not representative_ops:
+        return [fallback_op]
+    return list(dict.fromkeys(representative_ops.values()))
+
+
+def _representative_parent_edges(self: "Trace", ops_to_validate: List[Op]) -> List[tuple[Op, str]]:
+    """Return one concrete op edge for each parent Layer edge.
+
+    Parameters
+    ----------
+    ops_to_validate:
+        Concrete op passes for the child Layer currently being validated.
+
+    Returns
+    -------
+    list of tuple of Op and str
+        Pairs of child op and pass-qualified parent label to perturb.
+    """
+
+    representative_edges: dict[str, tuple[Op, str]] = {}
+    for target_op in ops_to_validate:
+        for parent_label in target_op.parents:
+            parent_layer_label = self[parent_label].layer_label
+            representative_edges.setdefault(parent_layer_label, (target_op, parent_label))
+    return list(representative_edges.values())
+
+
+def _validation_ops_for_entry(entry: Any) -> List[Op]:
+    """Return pass-specific ops that should be used for validation.
+
+    Parameters
+    ----------
+    entry:
+        Trace entry resolved from a validation queue label. This is usually a
+        ``Layer`` but may already be an ``Op`` for pass-qualified labels.
+
+    Returns
+    -------
+    list of Op
+        The concrete op passes whose saved args and outputs can be replayed.
+    """
+
+    ops = getattr(entry, "ops", None)
+    if not hasattr(ops, "_list"):
+        return [cast(Op, entry)]
+    op_list = cast(list[Op], cast(Any, ops)._list)
+    if len(op_list) == 0:
+        return []
+    return [op_list[0]]
 
 
 def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: str) -> bool:
@@ -340,33 +454,36 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
     Returns:
         True if arguments logged accurately, False otherwise
     """
-    target_layer = self[target_layer_label]
+    target_entry = self[target_layer_label]
+    target_ops = _representative_ops_for_replay(self, _validation_ops_for_entry(target_entry))
 
-    # Make sure that all parent layers appear in at least one argument and that no extra layers appear:
-    parents_in_args = set()
-    for arg_type in ["args", "kwargs"]:
-        parents_in_args.update(list(target_layer.parent_arg_positions[arg_type].values()))
-    if parents_in_args != set(target_layer.parents):
-        return False
-
-    argtype_dict = {
-        "args": (enumerate, "saved_args"),
-        "kwargs": (lambda x: x.items(), "saved_kwargs"),
-    }
-
-    # Check for each parent layer that it is logged as a saved argument when it matches an argument, and
-    # is not logged when it does not match a saved argument.
-
-    for parent_layer_label in target_layer.parents:
-        parent_layer = self[parent_layer_label]
+    for target_layer in target_ops:
+        # Make sure that all parent layers appear in at least one argument and
+        # that no extra layers appear:
+        parents_in_args = set()
         for arg_type in ["args", "kwargs"]:
-            iterfunc, argtype_field = argtype_dict[arg_type]
-            for key, val in iterfunc(getattr(target_layer, argtype_field)):  # type: ignore[operator]
-                validation_correct_for_arg_and_layer = _validate_layer_against_arg(
-                    self, target_layer, parent_layer, arg_type, key, val
-                )
-                if not validation_correct_for_arg_and_layer:
-                    return False
+            parents_in_args.update(list(target_layer.parent_arg_positions[arg_type].values()))
+        if parents_in_args != set(target_layer.parents):
+            return False
+
+        argtype_dict = {
+            "args": (enumerate, "saved_args"),
+            "kwargs": (lambda x: x.items(), "saved_kwargs"),
+        }
+
+        # Check for each parent layer that it is logged as a saved argument when it matches an argument,
+        # and is not logged when it does not match a saved argument.
+
+        for parent_layer_label in target_layer.parents:
+            parent_layer = self[parent_layer_label]
+            for arg_type in ["args", "kwargs"]:
+                iterfunc, argtype_field = argtype_dict[arg_type]
+                for key, val in iterfunc(getattr(target_layer, argtype_field)):  # type: ignore[operator]
+                    validation_correct_for_arg_and_layer = _validate_layer_against_arg(
+                        self, target_layer, parent_layer, arg_type, key, val
+                    )
+                    if not validation_correct_for_arg_and_layer:
+                        return False
     return True
 
 
@@ -422,25 +539,27 @@ def _validate_layer_against_arg(
     return True
 
 
-def _parent_logged_for_any_arg(target_layer: Op, parent_layer_label: str) -> bool:
-    """Return whether ``parent_layer_label`` is logged at any arg location.
+def _parent_logged_for_any_arg_alias(target_layer: Op, parent_layer_labels: set[str]) -> bool:
+    """Return whether any parent label alias is logged at any arg location.
 
     Parameters
     ----------
     target_layer:
-        Child layer whose parent-arg map is being inspected.
-    parent_layer_label:
-        Parent layer label to find.
+        Child op whose parent-arg map is being inspected.
+    parent_layer_labels:
+        Equivalent labels for the same parent, usually pass-qualified op label
+        and bare parent layer label.
 
     Returns
     -------
     bool
-        True when any positional or keyword arg location points to this parent.
+        True when any alias appears in the target arg-position map.
     """
 
     return any(
-        parent_layer_label in target_layer.parent_arg_positions[arg_type].values()
+        logged_parent in parent_layer_labels
         for arg_type in ("args", "kwargs")
+        for logged_parent in target_layer.parent_arg_positions[arg_type].values()
     )
 
 
@@ -475,11 +594,15 @@ def _check_arglocs_correct_for_arg(
         True if the logging is consistent, False if an inconsistency is found.
     """
     target_layer_label = target_layer.layer_label
+    target_op_label = getattr(target_layer, "label", target_layer_label)
     parent_layer_label = parent_layer.layer_label
+    parent_arg_labels = {getattr(parent_layer, "label", parent_layer_label), parent_layer_label}
     # out_versions_by_child stores per-child snapshots when an in-place
     # op modified the tensor between uses.  Fall back to out
     # when no child-specific version exists.
-    if target_layer_label in parent_layer.out_versions_by_child:
+    if target_op_label in parent_layer.out_versions_by_child:
+        parent_outs = parent_layer.out_versions_by_child[target_op_label]
+    elif target_layer_label in parent_layer.out_versions_by_child:
         parent_outs = parent_layer.out_versions_by_child[target_layer_label]
     else:
         parent_outs = parent_layer.out
@@ -490,8 +613,9 @@ def _check_arglocs_correct_for_arg(
         )
     else:
         parent_layer_matches_arg = False
-    parent_layerged_as_arg = (argloc_key in target_layer.parent_arg_positions[arg_type]) and (
-        target_layer.parent_arg_positions[arg_type][argloc_key] == parent_layer_label
+    parent_layerged_as_arg = (
+        argloc_key in target_layer.parent_arg_positions[arg_type]
+        and target_layer.parent_arg_positions[arg_type][argloc_key] in parent_arg_labels
     )
 
     # Case 1: parent matches the arg value but is NOT logged at this position.
@@ -504,7 +628,7 @@ def _check_arglocs_correct_for_arg(
     if (
         parent_layer_matches_arg
         and (not parent_layerged_as_arg)
-        and (not _parent_logged_for_any_arg(target_layer, parent_layer_label))
+        and (not _parent_logged_for_any_arg_alias(target_layer, parent_arg_labels))
         and (parent_outs.numel() != 0)
         and (parent_outs.dtype != torch.bool)
         and (not tensor_all_nan(parent_outs))

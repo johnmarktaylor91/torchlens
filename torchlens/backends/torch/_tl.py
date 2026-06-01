@@ -19,7 +19,7 @@ __all__ = [
     "set_tensor_label",
     "get_tensor_label",
     "clear_tensor_label",
-    "promote_label_to_buffer_parent_and_clear_label",
+    "promote_label_to_buffer_source_and_clear_label",
     "set_buffer_address",
     "get_buffer_address",
     "get_label_list",
@@ -49,7 +49,7 @@ class TensorMeta(TorchLensMeta):
 
     label_raw: Optional[str] = None
     address: Optional[str] = None
-    buffer_parent: Optional[str] = None
+    buffer_source: Optional[str] = None
 
 
 @dataclass
@@ -234,8 +234,8 @@ def clear_tensor_label(t: Any) -> None:
         meta.label_raw = None
 
 
-def promote_label_to_buffer_parent_and_clear_label(t: Any) -> None:
-    """Move a tensor label into ``buffer_parent`` and clear the raw label.
+def promote_label_to_buffer_source_and_clear_label(t: Any) -> None:
+    """Move a tensor label into ``buffer_source`` and clear the raw label.
 
     Parameters
     ----------
@@ -244,7 +244,7 @@ def promote_label_to_buffer_parent_and_clear_label(t: Any) -> None:
     """
     meta = get_tensor_meta(t)
     if meta is not None and meta.label_raw is not None:
-        meta.buffer_parent = meta.label_raw
+        meta.buffer_source = meta.label_raw
         meta.label_raw = None
 
 

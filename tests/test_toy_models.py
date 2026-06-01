@@ -1552,7 +1552,7 @@ def test_trace_save_arg_values(default_input1):
     assert found, "No non-input layer had saved_args populated"
 
 
-def test_trace_out_postfunc(default_input1):
+def test_trace_activation_transform(default_input1):
     """Test activation_transform applies to saved tensors."""
     model = example_models.SimpleFF()
     mh = trace(model, default_input1, activation_transform=torch.mean)
@@ -1561,7 +1561,7 @@ def test_trace_out_postfunc(default_input1):
         entry = mh[label]
         if entry.transformed_out is not None:
             assert entry.transformed_out.dim() == 0, (
-                f"Layer {label} tensor should be scalar after torch.mean postfunc"
+                f"Layer {label} tensor should be scalar after torch.mean transform"
             )
 
 

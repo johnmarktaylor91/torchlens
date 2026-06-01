@@ -1,19 +1,19 @@
 {
   "equivalence_partition": [
     [
-      "add_1_3"
+      "add_1_3:1"
     ],
     [
-      "input_1"
+      "input_1:1"
     ],
     [
-      "linear_1_1"
+      "linear_1_1:1"
     ],
     [
-      "linear_2_2"
+      "linear_2_2:1"
     ],
     [
-      "output_1"
+      "output_1:1"
     ]
   ],
   "fixture_name": "tuple_dict_return",
@@ -158,10 +158,12 @@
       "call_label": "inner:1",
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "linear_1_1",
-        "linear_2_2"
+        "linear_1_1:1",
+        "linear_2_2:1"
       ],
       "output_layers": [
         "linear_1_1",
@@ -173,9 +175,11 @@
       "call_label": "inner.left:1",
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "linear_1_1"
+        "linear_1_1:1"
       ],
       "output_layers": [
         "linear_1_1"
@@ -186,9 +190,11 @@
       "call_label": "inner.right:1",
       "forward_args_summary": "[Tensor(shape=(2, 4), dtype=float32)]",
       "forward_kwargs_summary": "{}",
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "ops": [
-        "linear_2_2"
+        "linear_2_2:1"
       ],
       "output_layers": [
         "linear_2_2"
@@ -234,7 +240,9 @@
       "call_labels": [
         "inner:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 0,
       "num_params": 40,
@@ -259,7 +267,9 @@
       "call_labels": [
         "inner.left:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 20,
@@ -282,7 +292,9 @@
       "call_labels": [
         "inner.right:1"
       ],
-      "input_layers": [],
+      "input_layers": [
+        "input_1"
+      ],
       "num_calls": 1,
       "num_param_tensors": 2,
       "num_params": 20,
@@ -312,8 +324,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "input_1:1",
       "lookup_keys": [
         "-5",
@@ -351,8 +363,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_1_1:1",
       "lookup_keys": [
         "-4",
@@ -392,8 +404,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": true,
+      "is_orphan": false,
       "label": "linear_2_2:1",
       "lookup_keys": [
         "-3",
@@ -433,8 +445,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "add_1_3:1",
       "lookup_keys": [
         "-2",
@@ -461,8 +473,8 @@
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
-      "is_orphan": false,
       "is_module_output": false,
+      "is_orphan": false,
       "label": "output_1:1",
       "lookup_keys": [
         "-1",

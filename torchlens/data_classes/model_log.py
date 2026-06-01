@@ -574,18 +574,19 @@ class TraceOpAccessor(Accessor[Op]):
             Mapping from parent Layer label to number of Op passes.
         """
 
-        super().__init__(OrderedDict((op.layer_label, op) for op in ops), item_list=list(ops))
+        op_lookup: OrderedDict[str, Op] = OrderedDict((op.label, op) for op in ops)
+        super().__init__(op_lookup, item_list=list(ops))
         self._layer_num_calls = dict(layer_num_calls)
 
     def _resolve_substring(self, key: str) -> Op | None:
         """Resolve exact long/short Op labels or unique bare parent labels."""
 
         for op in self._list:
-            if key in {
+            if key in {op.label, op.label_short}:
+                return op
+            if self._layer_num_calls.get(op.layer_label, 0) == 1 and key in {
                 op.layer_label,
-                op.label,
                 op.layer_label_short,
-                op.label_short,
             }:
                 return op
         parent_matches = [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
@@ -942,7 +943,7 @@ class Trace:
         "save_visualizations": FieldPolicy.KEEP,
         "_visualizer_dir": FieldPolicy.DROP,
         "activation_transform": FieldPolicy.DROP,
-        "_out_transform_repr": FieldPolicy.KEEP,
+        "_activation_transform_repr": FieldPolicy.KEEP,
         "save_raw_activations": FieldPolicy.KEEP,
         "input_annotations": FieldPolicy.KEEP,
         "_source_code_blob": FieldPolicy.KEEP,
@@ -1018,6 +1019,8 @@ class Trace:
         "num_ops": FieldPolicy.KEEP,
         "num_modules": FieldPolicy.DROP,
         "_raw_to_final_layer_labels": FieldPolicy.KEEP,
+        "_raw_to_final_parent_layer_labels": FieldPolicy.KEEP,
+        "_raw_to_final_op_labels": FieldPolicy.KEEP,
         "_final_to_raw_layer_labels": FieldPolicy.KEEP,
         "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
         "_layer_num_to_lookup_keys_dict": FieldPolicy.KEEP,
@@ -1146,8 +1149,8 @@ class Trace:
             output_device: Device to move saved outs to ("same" keeps original device).
             activation_transform: Optional function applied to each tensor before saving.
             grad_transform: Optional function applied to each grad before saving.
-            save_raw_activations: Whether raw outs are retained when a postfunc is set.
-            save_raw_gradients: Whether raw grads are retained when a postfunc is set.
+            save_raw_activations: Whether raw outs are retained when a transform is set.
+            save_raw_gradients: Whether raw grads are retained when a transform is set.
             keep_orphans: If True, orphan island ops remain in raw metadata and
                 are exposed via ``trace.orphans``.
             save_arg_values: Whether to deep-copy each operation's input arguments.
@@ -1212,7 +1215,7 @@ class Trace:
         self.save_visualizations = save_visualizations
         self._visualizer_dir: str | None = None
         self.activation_transform = activation_transform
-        self._out_transform_repr = (
+        self._activation_transform_repr = (
             repr(activation_transform) if activation_transform is not None else None
         )
         self.save_raw_activations = save_raw_activations
@@ -1305,6 +1308,8 @@ class Trace:
         # Mapping between raw barcodes and final human-readable labels
         # (populated during postprocessing's label-assignment step):
         self._raw_to_final_layer_labels: Dict[str, str] = {}
+        self._raw_to_final_parent_layer_labels: Dict[str, str] = {}
+        self._raw_to_final_op_labels: Dict[str, str] = {}
         self._final_to_raw_layer_labels: Dict[str, str] = {}
         self._lookup_keys_to_layer_num_dict: Dict[str, int] = {}
         self._layer_num_to_lookup_keys_dict: Dict[int, List[str]] = defaultdict(list)
@@ -2500,7 +2505,7 @@ class Trace:
         state["last_run"] = None
         state["_out_hash_cache"] = {}
         state.pop("_build_state", None)
-        state["_out_transform_repr"] = (
+        state["_activation_transform_repr"] = (
             repr(self.activation_transform) if self.activation_transform is not None else None
         )
         state["tlspec_version"] = TLSPEC_VERSION
@@ -2514,7 +2519,7 @@ class Trace:
             defaults={
                 **_MODEL_LOG_DEFAULT_FILL,
                 "tlspec_version": TLSPEC_VERSION,
-                "_out_transform_repr": None,
+                "_activation_transform_repr": None,
                 "save_raw_activations": True,
                 "raw_output": None,
                 "_output_transform": None,

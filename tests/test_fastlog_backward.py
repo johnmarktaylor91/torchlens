@@ -125,7 +125,7 @@ def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
     assert labels == ["relu_1", "relu_1"]
 
 
-def test_gradient_postfunc_alias_silent() -> None:
+def test_gradient_transform_alias_silent() -> None:
     """grad_transform silently aliases grad_transform."""
 
     with warnings.catch_warnings(record=True) as caught:

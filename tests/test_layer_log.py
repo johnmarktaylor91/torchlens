@@ -186,7 +186,7 @@ class TestMultiPassLayerLog:
         for layer_log in recurrent_log.layer_logs.values():
             if layer_log.num_passes > 1:
                 for pass_index, pass_log in layer_log.ops.items():
-                    result = recurrent_log[pass_log.layer_label]
+                    result = recurrent_log[pass_log.label]
                     assert isinstance(result, Op)
                 break
 
@@ -195,7 +195,7 @@ class TestMultiPassLayerLog:
         for layer_log in recurrent_log.layer_logs.values():
             assert len(layer_log.call_labels) == layer_log.num_passes
             for i, call_label in enumerate(layer_log.call_labels):
-                assert layer_log.ops[i].layer_label == call_label
+                assert layer_log.ops[i].label == call_label
 
 
 # ---------------------------------------------------------------------------

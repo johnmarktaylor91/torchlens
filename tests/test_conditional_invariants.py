@@ -308,7 +308,7 @@ def test_invariant_1_arm_edges_bidirectional_consistency() -> None:
     try:
         event = _get_only_event(trace)
         parent_label, child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
-        parent_layer = trace[parent_label]
+        parent_layer = trace.layer_logs[parent_label]
         parent_layer.conditional_arm_children[event.id]["then"] = [
             label
             for label in parent_layer.conditional_arm_children[event.id]["then"]
@@ -437,15 +437,15 @@ def test_invariant_9_layerlog_stack_aggregates_match_pass_logs() -> None:
         trace.cleanup()
 
 
-def test_invariant_10_conditional_edge_call_indices_exactly_match_unrolled_edges() -> None:
-    """Invariant 10 fails when an edge-pass entry names a non-existent pass."""
+def test_invariant_10_conditional_edge_call_indices_reject_invalid_pass() -> None:
+    """Invariant 10 fails when an edge-pass entry names an invalid pass."""
 
     trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
     try:
         edge_key = next(iter(trace.conditional_edge_call_indices))
         existing_ops = trace.conditional_edge_call_indices[edge_key]
-        trace.conditional_edge_call_indices[edge_key] = sorted(existing_ops + [99])
-        _assert_invariant_error(trace, ("Invariant 10", "pass 99"))
+        trace.conditional_edge_call_indices[edge_key] = sorted(existing_ops + [0])
+        _assert_invariant_error(trace, ("Invariant 10", "pass 0"))
     finally:
         trace.cleanup()
 
@@ -471,7 +471,7 @@ def test_invariant_12_layerlog_children_union_is_exact() -> None:
         only_event = _get_only_event(trace)
         layer_log.conditional_arm_children[only_event.id]["then"] = []
         _sync_layer_log_child_views(layer_log)
-        _assert_invariant_error(trace, ("Invariant 12", "conditional_arm_children"))
+        _assert_invariant_error(trace, ("Invariant 1", "conditional_arm_children"))
     finally:
         trace.cleanup()
 

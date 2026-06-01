@@ -508,7 +508,7 @@ def _iter_batches(stimuli: Any, batch_size: int) -> _Iterable[Any]:
 def _merge_batch_outputs(
     accumulator: dict[str, list[_torch.Tensor]],
     batch_outputs: dict[str, _torch.Tensor],
-    postfunc: _Callable[[_torch.Tensor], _torch.Tensor] | None,
+    transform: _Callable[[_torch.Tensor], _torch.Tensor] | None,
 ) -> None:
     """Append one batch of extracted outs to an accumulator.
 
@@ -518,12 +518,12 @@ def _merge_batch_outputs(
         Mutable mapping from layer label to per-batch tensors.
     batch_outputs:
         Extraction output from one batch.
-    postfunc:
+    transform:
         Optional transform applied to each out before storage.
     """
 
     for layer_name, tensor in batch_outputs.items():
-        stored = postfunc(tensor) if postfunc is not None else tensor
+        stored = transform(tensor) if transform is not None else tensor
         accumulator.setdefault(layer_name, []).append(stored.detach().cpu())
 
 
@@ -534,7 +534,7 @@ def batched_extract(
     batch_size: int = 32,
     device: _torch.device | str | None = None,
     output_dir: str | _Path | None = None,
-    postfunc: _Callable[[_torch.Tensor], _torch.Tensor] | None = None,
+    transform: _Callable[[_torch.Tensor], _torch.Tensor] | None = None,
     progress: bool = True,
 ) -> dict[str, _torch.Tensor] | list[_Path]:
     """Extract outs from an iterable stimulus set in batches.
@@ -554,7 +554,7 @@ def batched_extract(
     output_dir:
         Optional directory. When supplied, each batch output is written as
         ``batch_XXXXX.pt`` and paths are returned.
-    postfunc:
+    transform:
         Optional tensor transform applied to each out before storage.
     progress:
         Whether to wrap batch iteration with ``tqdm``.
@@ -595,14 +595,14 @@ def batched_extract(
         batch_outputs = extract(model, batch, layers)
         if container_path is not None:
             processed = {
-                label: (postfunc(tensor) if postfunc is not None else tensor).detach().cpu()
+                label: (transform(tensor) if transform is not None else tensor).detach().cpu()
                 for label, tensor in batch_outputs.items()
             }
             batch_path = container_path / f"batch_{batch_index:05d}.pt"
             _torch.save(processed, batch_path)
             container_paths.append(batch_path)
         else:
-            _merge_batch_outputs(in_memory, batch_outputs, postfunc)
+            _merge_batch_outputs(in_memory, batch_outputs, transform)
 
     if container_path is not None:
         return container_paths
@@ -823,7 +823,6 @@ __all__ = [
     "func",
     "grad_fn",
     "intervening",
-    "label",
     "module",
     "output",
     "contains",

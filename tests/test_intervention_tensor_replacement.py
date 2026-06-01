@@ -127,7 +127,7 @@ def test_raw_forward_hook_replaces_module_output_does_not_crash() -> None:
 
     assert mul_layer.intervention_replaced is True
     assert mul_layer.parents == [relu_layer.layer_label]
-    assert log.layer_dict_main_keys[mul_layer.layer_label] is mul_layer
+    assert log.layer_dict_main_keys[mul_layer.label] is mul_layer
 
 
 def test_chain_of_interventions_preserves_graph() -> None:

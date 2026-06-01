@@ -37,7 +37,7 @@ def _add_output_layers(
     parent of the new output node.
 
     Also detects child_tensor_variations: if the actual output tensor differs
-    from the parent's saved out (e.g., due to in-place ops or postfunc),
+    from the parent's saved out (e.g., due to in-place ops or transform),
     the difference is recorded for validation.
     """
     new_output_layers = []
@@ -151,15 +151,15 @@ def _add_output_layers(
                 actual_output = safe_to(actual_output, output_node.output_device)
             actual_output_raw = actual_output
             if self.activation_transform is not None:
-                actual_output = output_node._apply_postfunc(
+                actual_output = output_node._apply_transform(
                     actual_output,
                     self.activation_transform,
-                    postfunc_kind="out",
+                    transform_kind="out",
                     streaming_active=getattr(self, "_out_writer", None) is not None,
                 )
-                output_node._validate_streaming_postfunc_output(
+                output_node._validate_streaming_transform_output(
                     actual_output,
-                    postfunc_kind="out",
+                    transform_kind="out",
                     streaming_active=getattr(self, "_out_writer", None) is not None,
                 )
             comparison_output = (

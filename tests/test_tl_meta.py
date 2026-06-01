@@ -35,7 +35,7 @@ from torchlens.backends.torch._tl import (
     mark_decorated_function,
     mark_forward_call_decorated,
     mark_tensor_replacement_wrapped,
-    promote_label_to_buffer_parent_and_clear_label,
+    promote_label_to_buffer_source_and_clear_label,
     restore_param_requires_grad,
     set_buffer_address,
     set_module_meta,
@@ -68,10 +68,10 @@ def test_tensor_helpers_lazy_init_and_field_operations() -> None:
     assert get_tensor_label(t) is None
     assert get_buffer_address(t) == "block.buf"
 
-    set_tensor_label(t, "buffer_parent_raw")
-    promote_label_to_buffer_parent_and_clear_label(t)
+    set_tensor_label(t, "buffer_source_raw")
+    promote_label_to_buffer_source_and_clear_label(t)
     assert t._tl.label_raw is None
-    assert t._tl.buffer_parent == "buffer_parent_raw"
+    assert t._tl.buffer_source == "buffer_source_raw"
     assert t._tl.address == "block.buf"
 
 
@@ -178,7 +178,7 @@ def test_copy_replacement_meta_preserves_subclass_and_is_shallow_copy() -> None:
 @pytest.mark.parametrize(
     "meta",
     [
-        TensorMeta(label_raw="x", address="buf", buffer_parent="parent"),
+        TensorMeta(label_raw="x", address="buf", buffer_source="parent"),
         ParamMeta(
             param_barcode="abc",
             param_address="linear.weight",

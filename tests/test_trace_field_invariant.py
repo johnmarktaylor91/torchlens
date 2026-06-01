@@ -37,7 +37,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_module_logs",
         "_param_logs_by_module",
         "_saved_grads_set",
-        "_out_transform_repr",
+        "_activation_transform_repr",
         "_out_hash_cache",
         "_has_direct_writes",
         "_warned_direct_write",

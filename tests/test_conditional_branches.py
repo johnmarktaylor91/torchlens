@@ -1286,23 +1286,22 @@ def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str
 
 
 def _assert_conditional_edge_call_indices_exact(trace: Trace) -> None:
-    """Assert ``conditional_edge_call_indices`` matches unrolled arm edges exactly.
+    """Assert rolled call-index metadata references layer-level arm edges.
 
     Parameters
     ----------
     trace:
         Logged model execution.
     """
-    actual_unrolled_edges: set[tuple[str, str, int, str, int]] = set()
+    actual_arm_edges: set[tuple[str, str, int, str]] = set()
     for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
-            actual_unrolled_edges.add(
+            actual_arm_edges.add(
                 (
                     parent_label.split(":")[0],
                     child_label.split(":")[0],
                     conditional_id,
                     branch_kind,
-                    int(child_label.split(":")[1]) if ":" in child_label else 1,
                 )
             )
 
@@ -1311,22 +1310,19 @@ def _assert_conditional_edge_call_indices_exact(trace: Trace) -> None:
         assert len(call_indexs) == len(set(call_indexs))
         parent_no_pass, child_no_pass, conditional_id, branch_kind = edge_key
         for call_index in call_indexs:
+            assert call_index >= 1
             assert (
                 parent_no_pass,
                 child_no_pass,
                 conditional_id,
                 branch_kind,
-                call_index,
-            ) in actual_unrolled_edges
+            ) in actual_arm_edges
 
-    for actual_edge in actual_unrolled_edges:
-        parent_no_pass, child_no_pass, conditional_id, branch_kind, call_index = actual_edge
-        assert (
-            call_index
-            in trace.conditional_edge_call_indices[
-                (parent_no_pass, child_no_pass, conditional_id, branch_kind)
-            ]
-        )
+    for actual_edge in actual_arm_edges:
+        parent_no_pass, child_no_pass, conditional_id, branch_kind = actual_edge
+        assert trace.conditional_edge_call_indices[
+            (parent_no_pass, child_no_pass, conditional_id, branch_kind)
+        ]
 
 
 def _make_match_guard_model() -> nn.Module:

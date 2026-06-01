@@ -61,7 +61,7 @@ def test_report_namespace_is_not_top_level_all() -> None:
     assert hasattr(tl.report, "explain")
     assert "report" not in tl.__all__
     assert "explain" not in tl.__all__
-    assert len(tl.__all__) == 48
+    assert len(tl.__all__) == 47
 
 
 def test_explain_returns_sensible_string_for_each_audience() -> None:

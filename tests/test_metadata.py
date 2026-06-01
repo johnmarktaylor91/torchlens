@@ -492,18 +492,18 @@ def test_saved_args_not_populated(small_input):
 
 
 # =============================================================================
-# Activation postfunc
+# Activation transform
 # =============================================================================
 
 
-def test_postfunc(small_input):
+def test_transform(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input, activation_transform=torch.mean)
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.transformed_out is not None:
             assert entry.transformed_out.dim() == 0, (
-                f"Layer {label} should be scalar after torch.mean postfunc"
+                f"Layer {label} should be scalar after torch.mean transform"
             )
 
 

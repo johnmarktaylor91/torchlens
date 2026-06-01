@@ -195,9 +195,9 @@ def _trace_mlx_model(
     """
 
     if activation_transform is MISSING:
-        resolved_out_transform = None
+        resolved_activation_transform = None
     else:
-        resolved_out_transform = activation_transform
+        resolved_activation_transform = activation_transform
     capture_options = merge_capture_options(
         capture=capture,
         layers_to_save=layers_to_save,
@@ -236,7 +236,7 @@ def _trace_mlx_model(
     )
     save_options = merge_save_options(
         save=save,
-        activation_transform=resolved_out_transform,
+        activation_transform=resolved_activation_transform,
         grad_transform=grad_transform,
         save_raw_activations=save_raw_activations,
         save_raw_gradients=save_raw_gradients,
@@ -1317,7 +1317,7 @@ def trace(
             raw out remains in ``layer.tensor``/``layer.out`` by default, and
             the transform result is stored in ``layer.transformed_out``.
         grad_transform: Optional function applied to each grad before saving. The raw
-            grad remains in ``layer.grad`` by default, and the postfunc result is stored
+            grad remains in ``layer.grad`` by default, and the transform result is stored
             in ``layer.transformed_grad``.
         grad_transform: Alias for ``grad_transform``. Passing both names is an error.
         activation_transform: Deprecated alias for ``activation_transform``.
@@ -1395,11 +1395,11 @@ def trace(
         tensor for portable-save and streaming compatibility, run under ``pause_logging()``, and
         raise ``TorchLensPostfuncError`` with layer/function/tensor context if they fail.
 
-        Activation postfuncs run during forward capture. Their result is stored alongside the raw
+        Activation transforms run during forward capture. Their result is stored alongside the raw
         out by default, and ``backward_ready=True`` requires the transformed out to stay
         graph-connected and differentiable when the raw out requires grads.
 
-        Gradient postfuncs run from the backward hook output, so they follow the grad tensor's
+        Gradient transforms run from the backward hook output, so they follow the grad tensor's
         shorter lifetime rather than forward out retention. When the raw grad itself
         requires grads in ``backward_ready=True``, the same differentiability checks apply.
 

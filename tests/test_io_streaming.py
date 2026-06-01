@@ -206,7 +206,7 @@ def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> N
     assert (tmp_dirs[0] / "REASON.txt").exists()
 
 
-def test_streaming_rejects_non_tensor_out_postfunc_output(tmp_path: Path) -> None:
+def test_streaming_rejects_non_tensor_activation_transform_output(tmp_path: Path) -> None:
     """Streaming save should abort when out postprocessing returns a non-tensor."""
 
     bundle_path = tmp_path / "stream_bundle.tl"

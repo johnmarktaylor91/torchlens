@@ -62,6 +62,8 @@ class _StubTrace:
         self.conditional_records: List[ConditionalEvent] = []
 
         self._raw_to_final_layer_labels: Dict[str, str] = {}
+        self._raw_to_final_parent_layer_labels: Dict[str, str] = {}
+        self._raw_to_final_op_labels: Dict[str, str] = {}
         self._module_build_data = {"module_layer_argnames": {}}
 
     def __iter__(self) -> Iterator[SimpleNamespace]:
@@ -181,6 +183,8 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
 
     trace = _StubTrace(layer_list=[parent_layer])
     trace._raw_to_final_layer_labels = mapping
+    trace._raw_to_final_parent_layer_labels = mapping
+    trace._raw_to_final_op_labels = mapping
     trace.conditional_branch_edges = [("raw_bool", "raw_parent")]
     trace.conditional_then_entry_edges = [("raw_parent", "raw_child_then")]
     trace.conditional_elif_entry_edges = [(0, 1, "raw_parent", "raw_child_elif")]

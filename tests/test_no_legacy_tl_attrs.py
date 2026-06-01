@@ -14,7 +14,7 @@ LEGACY_ATTR_RE = re.compile(r"^tl__?[a-z]")
 RETIRED_NAMES = {
     "tl__label_raw",
     "tl_buffer_address",
-    "tl_buffer_parent",
+    "tl_buffer_source",
     "tl_param_barcode",
     "tl_param_address",
     "tl_call_index",

@@ -105,12 +105,14 @@ def _compare_module_output_grads(
         if addr == "self":
             coverage[call_label] = "skipped_root_module"
             continue
-        output_layers = getattr(call_log, "output_layers", None) or []
-        if not output_layers:
+        output_ops = (
+            getattr(call_log, "output_ops", None) or getattr(call_log, "output_layers", None) or []
+        )
+        if not output_ops:
             coverage[call_label] = "skipped_no_first_leaf"
             continue
         try:
-            cand_layer = trace[output_layers[0]]
+            cand_layer = trace[output_ops[0]]
         except (KeyError, IndexError):
             coverage[call_label] = "skipped_no_first_leaf"
             continue

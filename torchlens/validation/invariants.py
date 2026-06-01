@@ -265,8 +265,9 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                 f"{grad_fn_object_id!r}",
             )
 
-    expected_saved_grad_labels = {layer.layer_label for layer in trace.layer_list if layer.has_grad}
-    if set(trace.saved_grad_ops.keys()) != expected_saved_grad_labels:
+    expected_saved_grad_labels = {layer.label for layer in trace.layer_list if layer.has_grad}
+    saved_grad_labels = {op.label for op in trace.saved_grad_ops}
+    if saved_grad_labels != expected_saved_grad_labels:
         raise MetadataInvariantError(
             name,
             "saved_grad_ops does not match layers with saved grad tensors",
@@ -434,11 +435,11 @@ def _check_trace_self_consistency(ml: "Trace") -> None:
 # ---------------------------------------------------------------------------
 
 _SPECIAL_LIST_FLAG_PAIRS = [
-    ("input_layers", "is_input"),
-    ("output_layers", "is_output"),
-    ("buffer_layers", "is_buffer"),
-    ("internal_source_ops", "is_internal_source"),
-    ("internal_sink_ops", "is_internal_sink"),
+    ("input_layers", "is_input", "layer"),
+    ("output_layers", "is_output", "layer"),
+    ("buffer_layers", "is_buffer", "layer"),
+    ("internal_source_ops", "is_internal_source", "op"),
+    ("internal_sink_ops", "is_internal_sink", "op"),
 ]
 
 
@@ -450,17 +451,17 @@ def _check_special_layer_lists(ml: "Trace") -> None:
     - Reverse: every Op with the flag set appears in the list.
     """
     name = "special_layer_lists"
-    label_set = set(ml.layer_labels)
-
-    for list_attr, flag_attr in _SPECIAL_LIST_FLAG_PAIRS:
+    for list_attr, flag_attr, label_kind in _SPECIAL_LIST_FLAG_PAIRS:
         special_list = getattr(ml, list_attr)
         special_set = set(special_list)
+        label_set = set(ml.op_labels if label_kind == "op" else ml.layer_labels)
+        label_field = "op_labels" if label_kind == "op" else "layer_labels"
 
         # All entries must be valid labels
         missing = special_set - label_set
         if missing:
             raise MetadataInvariantError(
-                name, f"{list_attr} contains labels not in layer_labels: {missing}"
+                name, f"{list_attr} contains labels not in {label_field}: {missing}"
             )
 
         # Forward: every label in the list has the flag set
@@ -469,15 +470,16 @@ def _check_special_layer_lists(ml: "Trace") -> None:
             if not getattr(lpl, flag_attr):
                 raise MetadataInvariantError(
                     name,
-                    f"Layer {label} is in {list_attr} but {flag_attr}=False",
+                    f"{label_kind.title()} {label} is in {list_attr} but {flag_attr}=False",
                 )
 
-        # Reverse: every layer with the flag is in the list
+        # Reverse: every layer/op with the flag is in the list.
         for lpl in ml.layer_list:
-            if getattr(lpl, flag_attr) and lpl.layer_label not in special_set:
+            label = lpl.label if label_kind == "op" else lpl.layer_label
+            if getattr(lpl, flag_attr) and label not in special_set:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer {lpl.layer_label} has {flag_attr}=True but is not in {list_attr}",
+                    f"{label_kind.title()} {label} has {flag_attr}=True but is not in {list_attr}",
                 )
 
 
@@ -498,7 +500,7 @@ def _check_graph_topology(ml: "Trace") -> None:
     - out_versions_by_child keys are a subset of children.
     """
     name = "graph_topology"
-    label_set = set(ml.layer_labels)
+    label_set = set(ml.layer_labels) | set(ml.op_labels)
     output_set = set(ml.output_layers)
 
     for lpl in ml.layer_list:
@@ -533,7 +535,9 @@ def _check_graph_topology(ml: "Trace") -> None:
         # Note: has_children/has_parents/has_siblings/has_co_parents are set during
         # capture and don't account for output layers added during postprocessing.
         # So we exclude output layers from the child count for this check.
-        non_output_children = [c for c in lpl.children if c not in output_set]
+        non_output_children = [
+            c for c in lpl.children if c not in output_set and ml[c].layer_label not in output_set
+        ]
         if lpl.has_children != (len(non_output_children) > 0):
             raise MetadataInvariantError(
                 name,
@@ -984,7 +988,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"conditional_arm_entry_edges[{(conditional_id, branch_kind)}] references "
                     f"missing parent layer {parent_label!r}",
                 )
-            parent_layer = ml[parent_label]
+            parent_layer = ml.layer_logs[parent_label]
             branch_children = parent_layer.conditional_arm_children.get(conditional_id, {}).get(
                 branch_kind, []
             )
@@ -998,7 +1002,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"{branch_children}",
                 )
 
-    for parent_layer in ml.layer_list:
+    for parent_layer in ml.layer_logs.values():
         for conditional_id, branch_children in parent_layer.conditional_arm_children.items():
             for branch_kind, child_labels in branch_children.items():
                 model_edges = ml.conditional_arm_entry_edges.get((conditional_id, branch_kind), [])
@@ -1249,13 +1253,25 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     f"ConditionalEvent id={event.id} bool_layers contains missing label "
                     f"{bool_label!r}",
                 )
-            bool_layer = ml[bool_label]
-            if bool_layer.terminal_conditional_id != event.id:
+            try:
+                bool_layer = ml.ops[bool_label]
+            except (KeyError, ValueError, TypeError):
+                bool_layer = ml[bool_label]
+            bool_ops = (
+                list(bool_layer.ops.values())
+                if hasattr(bool_layer, "ops") and not hasattr(bool_layer, "terminal_conditional_id")
+                else [bool_layer]
+            )
+            mismatched_bool_ops = [
+                op for op in bool_ops if getattr(op, "terminal_conditional_id", None) != event.id
+            ]
+            if mismatched_bool_ops:
                 _fail_conditional_invariant(
                     name,
                     8,
                     f"ConditionalEvent id={event.id} bool_layers includes {bool_label!r} but "
-                    f"{bool_label}.terminal_conditional_id={bool_layer.terminal_conditional_id}",
+                    f"{bool_label}.terminal_conditional_id="
+                    f"{getattr(mismatched_bool_ops[0], 'terminal_conditional_id', None)}",
                 )
 
     # Invariant 9: Layer conditional aggregate views match pass-level data.
@@ -1285,17 +1301,18 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{expected_stack_ops}",
             )
 
-    # Invariant 10: conditional_edge_call_indices exactly matches unrolled arm edges.
-    actual_unrolled_edges: set[tuple[str, str, int, str, int]] = set()
+    # Invariant 10: rolled conditional_edge_call_indices reference known
+    # layer-level arm-entry edges. Exact pass lists live only in
+    # conditional_edge_call_indices after the label remap.
+    actual_arm_edges: set[tuple[str, str, int, str]] = set()
     for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
-            actual_unrolled_edges.add(
+            actual_arm_edges.add(
                 (
                     _strip_pass_suffix(parent_label),
                     _strip_pass_suffix(child_label),
                     conditional_id,
                     branch_kind,
-                    _get_label_call_index(child_label),
                 )
             )
 
@@ -1309,29 +1326,34 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{call_indexs}",
             )
         for call_index in call_indexs:
+            if call_index < 1:
+                _fail_conditional_invariant(
+                    name,
+                    10,
+                    f"conditional_edge_call_indices[{edge_key}] includes invalid pass {call_index}",
+                )
             actual_edge = (
                 parent_no_pass,
                 child_no_pass,
                 conditional_id,
                 branch_kind,
-                call_index,
             )
-            if actual_edge not in actual_unrolled_edges:
+            if actual_edge not in actual_arm_edges:
                 _fail_conditional_invariant(
                     name,
                     10,
-                    f"conditional_edge_call_indices[{edge_key}] includes pass {call_index} but "
-                    f"conditional_arm_entry_edges has no matching unrolled edge",
+                    f"conditional_edge_call_indices[{edge_key}] includes pass metadata but "
+                    f"conditional_arm_entry_edges has no matching layer edge",
                 )
 
-    for actual_edge in sorted(actual_unrolled_edges):
-        parent_no_pass, child_no_pass, conditional_id, branch_kind, call_index = actual_edge
+    for actual_edge in sorted(actual_arm_edges):
+        parent_no_pass, child_no_pass, conditional_id, branch_kind = actual_edge
         edge_key = (parent_no_pass, child_no_pass, conditional_id, branch_kind)
-        if call_index not in ml.conditional_edge_call_indices.get(edge_key, []):
+        if edge_key not in ml.conditional_edge_call_indices:
             _fail_conditional_invariant(
                 name,
                 10,
-                f"conditional_arm_entry_edges implies unrolled edge {actual_edge} but "
+                f"conditional_arm_entry_edges implies rolled edge {actual_edge} but "
                 f"conditional_edge_call_indices[{edge_key}]={ml.conditional_edge_call_indices.get(edge_key)}",
             )
 
@@ -1364,7 +1386,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 13,
                 f"conditional_branch_edges references missing parent layer {parent_label!r}",
             )
-        parent_layer = ml[parent_label]
+        parent_layer = ml.layer_logs[parent_label]
         if bool_label not in parent_layer.conditional_entry_children:
             _fail_conditional_invariant(
                 name,
@@ -1373,7 +1395,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 f"{parent_label}.conditional_entry_children={parent_layer.conditional_entry_children}",
             )
 
-    for parent_layer in ml.layer_list:
+    for parent_layer in ml.layer_logs.values():
         for bool_label in parent_layer.conditional_entry_children:
             if (parent_layer.layer_label, bool_label) not in ml.conditional_branch_edges:
                 _fail_conditional_invariant(
@@ -1446,7 +1468,7 @@ def _check_module_layer_containment(ml: "Trace") -> None:
     """
     name = "module_layer_containment"
     mod_accessor = ml.modules
-    label_set = set(ml.layer_labels)
+    label_set = set(ml.op_labels)
     no_pass_set = set(ml.layer_labels)
 
     for mod_log in mod_accessor:
@@ -1744,18 +1766,17 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
 
 
 def _check_equivalence_symmetry(ml: "Trace") -> None:
-    """Check L: op_equivalence_classes groups reference valid layer labels.
+    """Check L: op_equivalence_classes groups reference valid Op labels.
 
     Validates:
     - Each equivalence set value is actually a set.
-    - All labels in equivalence sets exist in layer_labels (pass-qualified
-      or no-pass, since recurrent models may use either form).
+    - All labels in equivalence sets exist in op_labels.
     """
     name = "equivalence_symmetry"
-    label_set = set(ml.layer_labels)
+    label_set = set(ml.op_labels)
 
-    # op_equivalence_classes is keyed by equivalence type descriptors (not layer labels),
-    # with values being sets of layer labels in that equivalence group.
+    # op_equivalence_classes is keyed by equivalence type descriptors (not Op labels),
+    # with values being sets of Op labels in that equivalence group.
     for eq_type, equiv_set in ml.op_equivalence_classes.items():
         if not isinstance(equiv_set, set):
             raise MetadataInvariantError(
@@ -1766,22 +1787,18 @@ def _check_equivalence_symmetry(ml: "Trace") -> None:
             if label not in label_set:
                 raise MetadataInvariantError(
                     name,
-                    f"op_equivalence_classes['{eq_type}'] contains '{label}' not in layer_labels",
+                    f"op_equivalence_classes['{eq_type}'] contains '{label}' not in op_labels",
                 )
 
-    # Each layer that appears in any equivalence group should exist.
-    # Labels may be no-pass or pass-qualified (for recurrent models).
+    # Each Op that appears in any equivalence group should exist.
     all_equiv_labels = set()
     for equiv_set in ml.op_equivalence_classes.values():
         all_equiv_labels.update(equiv_set)
-    no_pass_set = set(ml.layer_labels)
-    pass_set = set(ml.layer_labels)
-    valid_set = no_pass_set | pass_set
-    extra = all_equiv_labels - valid_set
+    extra = all_equiv_labels - label_set
     if extra:
         raise MetadataInvariantError(
             name,
-            f"op_equivalence_classes contains labels not in layer_labels: {extra}",
+            f"op_equivalence_classes contains labels not in op_labels: {extra}",
         )
 
 
@@ -1887,7 +1904,7 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
     be verified post-hoc from metadata alone.
     """
     name = "loop_detection"
-    label_set = set(ml.layer_labels)
+    label_set = set(ml.op_labels)
 
     # Build same-layer groups from the authoritative recurrent_ops lists
     # Key: frozenset of labels, Value: list of OpLogs in the group
@@ -1906,15 +1923,14 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
             if member not in label_set:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{lpl.layer_label}' recurrent_ops contains "
-                    f"'{member}' not in layer_labels",
+                    f"Layer '{lpl.layer_label}' recurrent_ops contains '{member}' not in op_labels",
                 )
 
         # Self-inclusion
-        if lpl.layer_label not in slo:
+        if lpl.label not in slo:
             raise MetadataInvariantError(
                 name,
-                f"Layer '{lpl.layer_label}' not in its own recurrent_ops",
+                f"Op '{lpl.label}' not in its own recurrent_ops",
             )
 
         # Symmetry: all members agree on the group
@@ -2013,10 +2029,10 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
     # (from loop_detection), while per-layer equivalence_class has
     # a module suffix appended by control_flow.py. So we check group membership
     # consistency, not exact key matching.
-    no_pass_to_equiv_key: dict[str, str] = {}
+    op_label_to_equiv_key: dict[str, str] = {}
     for eq_type, equiv_set in ml.op_equivalence_classes.items():
         for label in equiv_set:
-            no_pass_to_equiv_key[label] = eq_type
+            op_label_to_equiv_key[label] = eq_type
 
     for group_key in groups_seen:
         slo = list(group_key)
@@ -2026,10 +2042,10 @@ def _check_loop_detection_invariants(ml: "Trace") -> None:
         equiv_keys = set()
         for member_label in slo:
             member = ml[member_label]
-            no_pass = member.layer_label
-            if no_pass in no_pass_to_equiv_key:
-                equiv_keys.add(no_pass_to_equiv_key[no_pass])
-        if len(equiv_keys) > 1:
+            if member.label in op_label_to_equiv_key:
+                equiv_keys.add(op_label_to_equiv_key[member.label])
+        equiv_stems = {re.sub(r"_outindex\d+$", "", equiv_key) for equiv_key in equiv_keys}
+        if len(equiv_keys) > 1 and len(equiv_stems) > 1:
             raise MetadataInvariantError(
                 name,
                 f"recurrent_ops group {sorted(slo)} spans multiple equivalence types: {equiv_keys}",
@@ -2371,11 +2387,13 @@ def _check_lookup_key_consistency(ml: "Trace") -> None:
                 f"'{raw}' not in _raw_to_final_layer_labels",
             )
 
-    # All final labels are valid layer labels
-    label_set = set(ml.layer_labels)
+    # All final labels are valid lookup labels. Multi-pass raw labels map to
+    # pass-qualified Op labels, while single-pass raw labels may map to Layer
+    # labels for compatibility lookup.
+    label_set = set(ml.layer_labels) | set(ml.op_labels)
     for final in raw_fwd.values():
         if final not in label_set:
             raise MetadataInvariantError(
                 name,
-                f"_raw_to_final_layer_labels maps to '{final}' which is not in layer_labels",
+                f"_raw_to_final_layer_labels maps to '{final}' which is not a valid label",
             )

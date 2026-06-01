@@ -126,10 +126,11 @@ def _node_line(dot_source: str, graph_node_label: str) -> str:
         Node definition line.
     """
 
-    prefix = f"\t{graph_node_label} ["
+    candidate_labels = [graph_node_label, f"{graph_node_label}pass1"]
     for line in dot_source.splitlines():
-        if line.startswith(prefix):
-            return line
+        for candidate_label in candidate_labels:
+            if line.startswith(f"\t{candidate_label} ["):
+                return line
     raise AssertionError(f"Node {graph_node_label!r} was not found in DOT source.")
 
 
@@ -178,7 +179,7 @@ def _child_ops_for_buffer(log: Trace, address: str) -> list[str]:
 
 @pytest.mark.smoke
 def test_never_hides_all_and_marks_parents(tmp_path: Path) -> None:
-    """Mode ``never`` hides all buffers and marks ops with hidden buffer parents."""
+    """Mode ``never`` hides all buffers and marks ops with hidden buffer sources."""
 
     log = _log_model(_BatchNormOnly())
     try:

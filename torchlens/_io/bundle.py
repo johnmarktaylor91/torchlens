@@ -191,7 +191,7 @@ def save(
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
-    _validate_out_postfunc_outputs(trace, include_outs=include_outs)
+    _validate_activation_transform_outputs(trace, include_outs=include_outs)
 
     backup_path: Path | None = None
     tmp_path = _make_tmp_bundle_path(bundle_path)
@@ -1204,7 +1204,7 @@ def _build_manifest(
     )
 
 
-def _validate_out_postfunc_outputs(
+def _validate_activation_transform_outputs(
     trace: Trace,
     *,
     include_outs: bool,

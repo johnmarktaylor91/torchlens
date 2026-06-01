@@ -113,7 +113,7 @@ def test_failed_capture_cleans_partial_outputs_buffers_and_params() -> None:
 
 @pytest.mark.smoke
 def test_tag_untagged_buffers_promotes_prior_label_mid_session() -> None:
-    """Dynamic buffer tagging should preserve prior label as buffer_parent."""
+    """Dynamic buffer tagging should preserve prior label as buffer_source."""
     module = nn.Module()
     module.register_buffer("buf", torch.ones(2))
     set_module_meta(module, address="block", module_type="Module")
@@ -124,7 +124,7 @@ def test_tag_untagged_buffers_promotes_prior_label_mid_session() -> None:
     assert get_tensor_label(module.buf) is None
     assert get_buffer_address(module.buf) == "block.buf"
     assert isinstance(module.buf._tl, TensorMeta)
-    assert module.buf._tl.buffer_parent == "mul_1_2_raw"
+    assert module.buf._tl.buffer_source == "mul_1_2_raw"
 
 
 @pytest.mark.smoke

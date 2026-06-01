@@ -80,10 +80,10 @@ class ActivationRecord:
         ``save_raw_activations=False``.
     transformed_ram_payload:
         Output of ``activation_transform`` retained in memory. ``None`` when
-        no postfunc is configured for the recording.
+        no transform is configured for the recording.
     transformed_disk_payload:
         Output of ``activation_transform`` persisted to disk. ``None`` when
-        no postfunc is configured for the recording.
+        no transform is configured for the recording.
     metadata:
         Auxiliary record metadata, including disk blob entries when present.
     recorded_at:
@@ -282,7 +282,7 @@ class Recording:
     grad_by_grad_fn_label: dict[str, list[int]] = field(default_factory=dict)
     keep_grad_repr: str | None = None
     _grad_transform_repr: str | None = None
-    _out_transform_repr: str | None = None
+    _activation_transform_repr: str | None = None
     recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
     _capture_events: Any | None = field(default=None, repr=False, compare=False)
@@ -383,7 +383,7 @@ class Recording:
         return trace
 
     @property
-    def out_transform_repr(self) -> str | None:
+    def activation_transform_repr(self) -> str | None:
         """Canonical repr for the out transform callable.
 
         Returns
@@ -392,7 +392,7 @@ class Recording:
             Callable repr captured at recording time, if any.
         """
 
-        return self._out_transform_repr
+        return self._activation_transform_repr
 
     @property
     def grad_transform_repr(self) -> str | None:

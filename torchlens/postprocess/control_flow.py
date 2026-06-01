@@ -7,7 +7,7 @@ Step 5 (_mark_conditional_branches) now runs a six-phase conditional pipeline:
     5d. Backward-flood IF edges from branch-participating bools only.
     5e. Attribute executed ops to THEN/ELIF/ELSE arms across every forward edge.
     5f. Materialize derived compatibility views from the new primary structures.
-Step 6 (_fix_buffer_layers): Connects buffer parents, deduplicates identical
+Step 6 (_fix_buffer_layers): Connects buffer sources, deduplicates identical
     buffers (same module, same value, same parent), and assigns buffer pass numbers.
 """
 
@@ -375,7 +375,7 @@ def _attribute_branches_forward(
                         conditional_id,
                         branch_kind,
                     )
-                ].append(parent_layer.pass_index)
+                ].append(child_layer.pass_index)
 
     self.conditional_arm_entry_edges = dict(conditional_arm_entry_edges)
     self.conditional_edge_call_indices = dict(conditional_edge_call_indices)
@@ -633,16 +633,16 @@ def _get_gained_branch_entries(
 
 
 def _fix_buffer_layers(self: "Trace") -> None:
-    """Step 6: Connect buffer parents, merge duplicates, and assign pass numbers.
+    """Step 6: Connect buffer sources, merge duplicates, and assign pass numbers.
 
     Buffer tensors (nn.Module registered buffers) are logged as source tensors
     during the forward pass but may lack proper parent connections. This function:
 
-    1. Connects each buffer to its buffer_parent (the tensor that produced the
+    1. Connects each buffer to its buffer_source (the tensor that produced the
        buffer's value), updating parent/child links and ancestry.
     2. Deduplicates buffers: buffers with the same containing module, same parent,
        same address, AND same tensor value are merged into a single node.
-       The dedup hash is (modules + buffer_parent + address).
+       The dedup hash is (modules + buffer_source + address).
     3. Assigns sequential buffer_pass numbers per address.
 
     Note: Buffer siblings are always empty — the sibling iteration in
@@ -653,23 +653,23 @@ def _fix_buffer_layers(self: "Trace") -> None:
 
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
-        if layer.buffer_parent is not None:
-            layer.parents.append(layer.buffer_parent)
-            self[layer.buffer_parent].children.append(layer_label)
-            self[layer.buffer_parent].has_children = True
+        if layer.buffer_source is not None:
+            layer.parents.append(layer.buffer_source)
+            self[layer.buffer_source].children.append(layer_label)
+            self[layer.buffer_source].has_children = True
             layer.func = identity
             layer.func_name = "identity"
             layer.has_input_ancestor = True
-            layer.input_ancestors.update(self[layer.buffer_parent].input_ancestors)
+            layer.input_ancestors.update(self[layer.buffer_source].input_ancestors)
             layer.root_ancestors.remove(layer._label_raw)
-            layer.root_ancestors.update(self[layer.buffer_parent].root_ancestors)
-            layer.parent_arg_positions["args"][0] = layer.buffer_parent
-            if (self[layer.buffer_parent].out is not None) and (layer.saved_args is not None):
+            layer.root_ancestors.update(self[layer.buffer_source].root_ancestors)
+            layer.parent_arg_positions["args"][0] = layer.buffer_source
+            if (self[layer.buffer_source].out is not None) and (layer.saved_args is not None):
                 layer.saved_args.append(
-                    safe_copy(self[layer.buffer_parent].out, detach_tensor=True)
+                    safe_copy(self[layer.buffer_source].out, detach_tensor=True)
                 )
 
-        buffer_hash = str(layer.modules) + str(layer.buffer_parent) + layer.address
+        buffer_hash = str(layer.modules) + str(layer.buffer_source) + layer.address
         buffer_hash_groups[buffer_hash].append(layer_label)
 
     # Merge buffers with the same hash AND the same tensor value.

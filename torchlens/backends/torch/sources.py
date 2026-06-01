@@ -10,7 +10,7 @@ Source tensors differ from function-output tensors in several ways:
     initialized with ``has_internal_source_ancestor=True``.
   - Their ``func`` is None and ``func_name`` is ``"none"``.
   - Buffer labels follow ``"buffer_{N}_raw"``; input labels follow ``"input_{N}_raw"``.
-  - Buffers may carry ``_tl.buffer_parent`` metadata (set during model prep)
+  - Buffers may carry ``_tl.buffer_source`` metadata (set during model prep)
     identifying the module that owns them.
   - Buffer entries are instantiated as ``Buffer`` (a Op subclass
     that adds ``name`` and ``address`` fields).
@@ -234,7 +234,7 @@ def log_source_tensor_exhaustive(
         io_role = extra_addr
         is_buffer = False
         address = None
-        buffer_parent = None
+        buffer_source = None
         is_internal_source = False
         has_internal_source_ancestor = False
         input_ancestors = {tensor_label}
@@ -255,10 +255,10 @@ def log_source_tensor_exhaustive(
         # Buffer equivalence keyed by module address so the same buffer
         # is recognized as the same layer across loop iterations.
         equivalence_class = f"buffer_{extra_addr}"
-        # _tl.buffer_parent is set during model_prep on buffers that belong
+        # _tl.buffer_source is set during model_prep on buffers that belong
         # to a specific module; None for detached or anonymous buffers.
         tensor_meta = get_tensor_meta(t)
-        buffer_parent = None if tensor_meta is None else tensor_meta.buffer_parent
+        buffer_source = None if tensor_meta is None else tensor_meta.buffer_source
     else:
         raise ValueError("source must be either 'input' or 'buffer'")
 
@@ -397,7 +397,7 @@ def log_source_tensor_exhaustive(
         "is_buffer": is_buffer,
         "address": address,
         "buffer_pass": None,
-        "buffer_parent": buffer_parent,
+        "buffer_source": buffer_source,
         "is_internal_source": is_internal_source,
         "has_internal_source_ancestor": has_internal_source_ancestor,
         "internal_source_parents": [],

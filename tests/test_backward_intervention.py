@@ -186,7 +186,7 @@ def test_grad_fn_hook_returns_none_when_no_match() -> None:
     """Grad_fn hook returns None when active hooks do not match."""
 
     trace_stub, _grad_fn_log = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.label("missing"), tl.grad_clamp(0, 1))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(type="missing"), tl.grad_clamp(0, 1))
     hook = _make_grad_fn_hook(trace_stub, 1)
     assert hook((torch.ones(1),), (torch.ones(1),)) is None
 
