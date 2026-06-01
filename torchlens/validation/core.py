@@ -458,7 +458,21 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
     target_ops = _representative_ops_for_replay(self, _validation_ops_for_entry(target_entry))
 
     for target_layer in target_ops:
-        if target_layer.func is None:
+        # Genuine functionless ops have no torch function whose arguments could
+        # be reconstructed: graph sources (inputs, buffers, internally generated
+        # sources such as a torch.vmap-built attention mask) and GENUINE raw
+        # forward-hook output replacements injected by the user. This skip is
+        # deliberately narrow -- it must NOT swallow a real op that merely lost
+        # its func, which would mask a capture bug.
+        is_genuine_replacement = getattr(
+            target_layer, "intervention_replaced", False
+        ) and not getattr(target_layer, "is_internal_source", False)
+        if target_layer.func is None and (
+            target_layer.is_input
+            or getattr(target_layer, "is_buffer", False)
+            or getattr(target_layer, "is_internal_source", False)
+            or is_genuine_replacement
+        ):
             continue
 
         # Make sure that all parent layers appear in at least one argument and

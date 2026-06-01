@@ -624,12 +624,36 @@ def _check_op_log_fields(ml: "Trace") -> None:
                 f"Layer {label}: num_passes={lpl.num_passes} < pass_index={lpl.pass_index}",
             )
 
-        is_functionless_replacement = lpl.func_name == "intervention_replacement" and getattr(
-            lpl, "intervention_replaced", False
+        # A GENUINE raw-forward-hook output replacement is legitimately
+        # functionless: the user substituted an opaque tensor for a module's
+        # output, so there is no torch function to validate. This exemption is
+        # deliberately narrow -- it must NOT cover auto-synthesized placeholders
+        # during plain capture (a previous band-aid widened it to silence the
+        # vmap-built attention mask, disarming this tripwire).
+        is_functionless_replacement = (
+            lpl.func_name == "intervention_replacement"
+            and getattr(lpl, "intervention_replaced", False)
+            and not getattr(lpl, "is_internal_source", False)
         )
 
-        # Function applied (non-input, non-buffer, non-output, non-hook-replacement layers)
-        if not (lpl.is_input or lpl.is_buffer or lpl.is_output or is_functionless_replacement):
+        # An internally generated *source* tensor whose construction TorchLens
+        # could not trace (e.g. an attention mask built inside torch.vmap) is a
+        # genuine functionless graph source, exactly like a buffer: func is None
+        # and func_name is "none". Traced ops that merely have an internal-source
+        # ancestor still carry a real callable func and are NOT exempted here.
+        is_functionless_internal_source = (
+            getattr(lpl, "is_internal_source", False) and lpl.func is None
+        )
+
+        # Function applied (non-input, non-buffer, non-output, non-source,
+        # non-hook-replacement layers).
+        if not (
+            lpl.is_input
+            or lpl.is_buffer
+            or lpl.is_output
+            or is_functionless_internal_source
+            or is_functionless_replacement
+        ):
             if not callable(lpl.func):
                 raise MetadataInvariantError(name, f"Layer {label}: func is not callable")
             if not lpl.func_name:
