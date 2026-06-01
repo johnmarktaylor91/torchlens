@@ -44,7 +44,7 @@ def main() -> None:
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
     probe = nn.Linear(8, 1, bias=False).eval()
-    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, intervention_ready=True)
 
     def readout(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
         """Store probe scores and leave the out unchanged."""
@@ -55,7 +55,7 @@ def main() -> None:
     edited = log.fork("probe")
     edited.attach_hooks(tl.func("relu"), readout).replay()
 
-    scores = edited.last_run_ctx["probe_scores"]
+    scores = edited.last_run["probe_scores"]
     assert len(scores) == 1
     assert scores[0].shape == (2, 1)
     assert torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)

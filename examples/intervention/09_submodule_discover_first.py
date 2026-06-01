@@ -57,7 +57,7 @@ def main() -> None:
     torch.manual_seed(9)
     model = Model().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, intervention_ready=True)
 
     block_sites = log.find_sites(tl.in_module("block"), max_fanout=4)
     target = tl.label(block_sites.where(lambda site: site.func_name == "relu").labels()[0])

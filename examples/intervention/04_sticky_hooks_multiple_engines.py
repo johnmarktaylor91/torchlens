@@ -42,7 +42,7 @@ def main() -> None:
     torch.manual_seed(4)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    clean = tl.trace(model, x, vis_opt="none", intervention_ready=True)
+    clean = tl.trace(model, x, intervention_ready=True)
 
     replayed = clean.fork("replay")
     replayed.attach_hooks(tl.func("relu"), tl.zero_ablate())

@@ -33,7 +33,7 @@ def main() -> None:
     """Run a top-level ``tl.do`` replay intervention."""
 
     x = torch.tensor([[-1.0, 2.0]])
-    clean = tl.trace(ReluAdd(), x, vis_opt="none", intervention_ready=True)
+    clean = tl.trace(ReluAdd(), x, intervention_ready=True)
     edited = clean.fork("top_level_do")
 
     result = tl.do(edited, tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)

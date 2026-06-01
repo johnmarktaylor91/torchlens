@@ -42,7 +42,7 @@ def main() -> None:
     torch.manual_seed(5)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, vis_opt="none", intervention_ready=True)
+    log = tl.trace(model, x, intervention_ready=True)
     relu_shape = log.find_sites(tl.func("relu")).first().out.shape
 
     set_log = log.fork("set")
@@ -52,8 +52,8 @@ def main() -> None:
     hook_log.attach_hooks(tl.func("relu"), tl.zero_ablate()).replay()
 
     assert torch.allclose(set_log.layer_list[-1].out, hook_log.layer_list[-1].out)
-    assert set_log.ledger[-2]["op"] == "set"
-    assert hook_log.ledger[-2]["op"] == "attach_hooks"
+    assert set_log.state_history[-2]["op"] == "set"
+    assert hook_log.state_history[-2]["op"] == "attach_hooks"
 
 
 if __name__ == "__main__":

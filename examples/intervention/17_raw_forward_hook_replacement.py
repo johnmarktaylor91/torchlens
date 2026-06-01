@@ -58,7 +58,7 @@ def main() -> None:
     x = torch.randn(3, 4)
     handle = model.relu.register_forward_hook(halve_relu)
     try:
-        log = tl.trace(model, x, vis_opt="none")
+        log = tl.trace(model, x)
     finally:
         handle.remove()
 
