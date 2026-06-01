@@ -43,7 +43,7 @@ import torch
 
 import importlib
 
-from .._deprecations import MISSING, warn_deprecated_alias
+from .._deprecations import MISSING
 from .._io import (
     FieldPolicy,
     TLSPEC_VERSION,
@@ -1509,26 +1509,6 @@ class Op:
         """
 
         return bool(self.has_grad)
-
-    @property
-    def is_submodule_input(self) -> bool:
-        """Deprecated alias retained for backward compatibility.
-
-        The glossary redefines ``is_module_input`` with feed-INTO-a-module
-        semantics (``bool(input_to_module_calls)``); the old
-        ``is_submodule_input`` meant "computed inside a submodule", now spelled
-        ``in_submodule``. Returns the legacy in-a-submodule meaning.
-        """
-
-        warn_deprecated_alias("is_submodule_input", "in_submodule")
-        return len(self.module_call_stack) > 0
-
-    @property
-    def is_submodule_output(self) -> bool:
-        """Deprecated alias for ``is_module_output``."""
-
-        warn_deprecated_alias("is_submodule_output", "is_module_output")
-        return bool(self.is_module_output)
 
     @property
     def tensor(self) -> Any:

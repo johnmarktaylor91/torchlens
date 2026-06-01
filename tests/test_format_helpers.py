@@ -76,8 +76,8 @@ def test_visualization_format_param_list_uses_middle_dot() -> None:
     """Visualization param lists use tuple shapes and the locked separator."""
 
     params = [
-        SimpleNamespace(name="weight", shape=(3072, 768), trainable=True),
-        SimpleNamespace(name="bias", shape=(3072,), trainable=True),
+        SimpleNamespace(name="weight", shape=(3072, 768), is_trainable=True),
+        SimpleNamespace(name="bias", shape=(3072,), is_trainable=True),
     ]
 
     assert format_param_list(params) == "params: weight (3072, 768) · bias (3072,)"
@@ -87,8 +87,8 @@ def test_visualization_format_param_list_marks_frozen_shapes() -> None:
     """Visualization param lists use square brackets for frozen params."""
 
     params = [
-        SimpleNamespace(name="weight", shape=(3072, 768), trainable=False),
-        SimpleNamespace(name="bias", shape=(3072,), trainable=False),
+        SimpleNamespace(name="weight", shape=(3072, 768), is_trainable=False),
+        SimpleNamespace(name="bias", shape=(3072,), is_trainable=False),
     ]
 
     assert format_param_list(params) == "params: weight [3072, 768] · bias [3072,]"
@@ -98,9 +98,9 @@ def test_visualization_format_param_list_handles_mixed_and_anonymous_params() ->
     """Visualization param lists support mixed trainability and anonymous params."""
 
     params = [
-        SimpleNamespace(name="weight", shape=(3072, 768), trainable=True),
-        SimpleNamespace(shape=(3072,), trainable=False),
-        SimpleNamespace(shape=(3072,), trainable=True),
+        SimpleNamespace(name="weight", shape=(3072, 768), is_trainable=True),
+        SimpleNamespace(shape=(3072,), is_trainable=False),
+        SimpleNamespace(shape=(3072,), is_trainable=True),
     ]
 
     assert format_param_list(params) == "params: weight (3072, 768) · [3072,] · (3072,)"

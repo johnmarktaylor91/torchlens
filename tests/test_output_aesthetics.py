@@ -260,10 +260,10 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
             )
 
     # Show frozen vs trainable params explicitly (for AestheticFrozenMix)
-    if any(not pl.trainable for pl in log.params):
+    if any(not pl.is_trainable for pl in log.params):
         out.write(_section("C.1 Frozen vs Trainable Parameters", level=3))
         for pl in log.params:
-            status = "FROZEN" if not pl.trainable else "TRAINABLE"
+            status = "FROZEN" if not pl.is_trainable else "TRAINABLE"
             out.write(f"  [{status}] {pl.address}\n")
             out.write(f"  {repr(pl)}\n\n")
         out.write(f"  Total frozen: {log.num_params_frozen}\n")
@@ -544,7 +544,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
 
             # Show frozen param without grad (if applicable)
             for pl in grad_log.params:
-                if not pl.trainable:
+                if not pl.is_trainable:
                     out.write(
                         _section(
                             f"G.4 Frozen Param — no grad — {pl.address}",
@@ -552,7 +552,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                         )
                     )
                     out.write(_capture("has_grad", pl.has_grad))
-                    out.write(_capture("trainable", pl.trainable))
+                    out.write(_capture("trainable", pl.is_trainable))
                     break
         except Exception as e:
             out.write(f"  (grad capture failed: {type(e).__name__}: {e})\n")
@@ -1040,10 +1040,10 @@ def _build_latex_report() -> str:
             doc.write(_verbatim_box("C. Parameters — repr(log.params)", repr(log.params)))
 
         # Frozen vs trainable highlight
-        if any(not pl.trainable for pl in log.params):
+        if any(not pl.is_trainable for pl in log.params):
             frozen_text = ""
             for pl in log.params:
-                status = "FROZEN" if not pl.trainable else "TRAINABLE"
+                status = "FROZEN" if not pl.is_trainable else "TRAINABLE"
                 frozen_text += f"[{status}] {pl.address}\n{repr(pl)}\n\n"
             frozen_text += f"Total frozen: {log.num_params_frozen}\n"
             frozen_text += f"Total trainable: {log.num_params_trainable}\n"

@@ -54,8 +54,12 @@ def test_trace_derived_counts_match_accessors() -> None:
     assert trace.num_internal_source_ops == len(trace.internal_source_ops)
     assert trace.num_internal_sink_ops == len(trace.internal_sink_ops)
     assert trace.num_uncalled_modules == len(trace.uncalled_modules)
-    assert trace.num_param_tensors_trainable == sum(1 for param in trace.params if param.trainable)
-    assert trace.num_param_tensors_frozen == sum(1 for param in trace.params if not param.trainable)
+    assert trace.num_param_tensors_trainable == sum(
+        1 for param in trace.params if param.is_trainable
+    )
+    assert trace.num_param_tensors_frozen == sum(
+        1 for param in trace.params if not param.is_trainable
+    )
     assert trace.has_trainable_params is True
     assert trace.has_frozen_params is True
 
@@ -72,8 +76,8 @@ def test_op_and_layer_convenience_properties() -> None:
     assert op.macs_total == op.flops_total // 2
     assert op.param_names == [param.name for param in op.params]
     assert op.param_dtypes == [param.dtype for param in op.params]
-    assert op.num_param_tensors_trainable == sum(1 for param in op.params if param.trainable)
-    assert op.num_param_tensors_frozen == sum(1 for param in op.params if not param.trainable)
+    assert op.num_param_tensors_trainable == sum(1 for param in op.params if param.is_trainable)
+    assert op.num_param_tensors_frozen == sum(1 for param in op.params if not param.is_trainable)
     assert op.has_trainable_params == (op.num_params_trainable > 0)
     assert op.has_frozen_params == (op.num_params_frozen > 0)
     assert op.is_compute_op is True

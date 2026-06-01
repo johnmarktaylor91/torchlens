@@ -71,7 +71,7 @@ class TestParamLogFields:
         assert isinstance(pl.num_params, int)
         assert isinstance(pl.param_memory, int)
         assert isinstance(str(pl.param_memory), str)
-        assert isinstance(pl.trainable, bool)
+        assert isinstance(pl.is_trainable, bool)
         assert isinstance(pl.module_address, str)
         assert pl.module is not None
         assert not hasattr(pl, "module_class_name")
@@ -217,14 +217,14 @@ class TestParamMetadata:
     def test_trainable_flag_true(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         for pl in mh.params:
-            assert pl.trainable is True
+            assert pl.is_trainable is True
 
     def test_trainable_flag_frozen(self):
         mh = trace_fn(_make_frozen_first_layer(), _simple_input())
-        assert mh.params["0.weight"].trainable is False
-        assert mh.params["0.bias"].trainable is False
-        assert mh.params["2.weight"].trainable is True
-        assert mh.params["2.bias"].trainable is True
+        assert mh.params["0.weight"].is_trainable is False
+        assert mh.params["0.bias"].is_trainable is False
+        assert mh.params["2.weight"].is_trainable is True
+        assert mh.params["2.bias"].is_trainable is True
 
     def test_module_info(self):
         mh = trace_fn(_make_simple_model(), _simple_input())

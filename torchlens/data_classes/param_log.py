@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
-from .._deprecations import warn_deprecated_alias
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..quantities import Bytes
@@ -125,13 +124,6 @@ class Param:
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
         self._grad_memory: Bytes = Bytes(0)
-
-    @property
-    def trainable(self) -> bool:
-        """Deprecated alias for :attr:`is_trainable`."""
-
-        warn_deprecated_alias("Param.trainable", "Param.is_trainable")
-        return self.is_trainable
 
     @property
     def is_quantized(self) -> bool:

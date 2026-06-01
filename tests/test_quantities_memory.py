@@ -155,8 +155,8 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
         layer.total_flops_forward,
         trace.total_flops_forward,
         trace.total_flops,
-        module.flops_forward,
-        module.flops,
+        module.total_flops_forward,
+        module.total_flops,
         trace.flops_by_op_type()[op.layer_type]["forward"],
     ]
     macs_fields = [
@@ -166,8 +166,8 @@ def test_duration_flops_and_macs_fields_are_quantity_types() -> None:
         layer.total_macs_forward,
         trace.total_macs_forward,
         trace.total_macs,
-        module.macs_forward,
-        module.macs,
+        module.total_macs_forward,
+        module.total_macs,
         trace.macs_by_op_type()[op.layer_type]["forward"],
     ]
 

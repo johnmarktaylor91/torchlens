@@ -41,7 +41,6 @@ from typing import (
 
 import torch
 
-from .._deprecations import warn_deprecated_alias
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..quantities import Bytes, Duration, Flops, Macs, as_duration
@@ -1823,42 +1822,6 @@ class Module:
     def total_macs(self) -> Macs:
         """Approximate total MACs (forward + backward) for this Module."""
         return Macs(self.total_flops // 2)
-
-    @property
-    def flops_forward(self) -> Flops:
-        """Deprecated alias for :attr:`total_flops_forward`."""
-        warn_deprecated_alias("Module.flops_forward", "Module.total_flops_forward")
-        return self.total_flops_forward
-
-    @property
-    def flops_backward(self) -> Flops:
-        """Deprecated alias for :attr:`total_flops_backward`."""
-        warn_deprecated_alias("Module.flops_backward", "Module.total_flops_backward")
-        return self.total_flops_backward
-
-    @property
-    def flops(self) -> Flops:
-        """Deprecated alias for :attr:`total_flops`."""
-        warn_deprecated_alias("Module.flops", "Module.total_flops")
-        return self.total_flops
-
-    @property
-    def macs_forward(self) -> Macs:
-        """Deprecated alias for :attr:`total_macs_forward`."""
-        warn_deprecated_alias("Module.macs_forward", "Module.total_macs_forward")
-        return self.total_macs_forward
-
-    @property
-    def macs_backward(self) -> Macs:
-        """Deprecated alias for :attr:`total_macs_backward`."""
-        warn_deprecated_alias("Module.macs_backward", "Module.total_macs_backward")
-        return self.total_macs_backward
-
-    @property
-    def macs(self) -> Macs:
-        """Deprecated alias for :attr:`total_macs`."""
-        warn_deprecated_alias("Module.macs", "Module.total_macs")
-        return self.total_macs
 
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""
