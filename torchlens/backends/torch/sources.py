@@ -427,7 +427,7 @@ def log_source_tensor_exhaustive(
         "modules": modules,
         "module_call_stack": [],
         "module_entry_arg_keys": defaultdict(list),
-        "input_to_modules": [],
+        "input_to_module_calls": [],
         "output_of_modules": [],
         "output_of_module_calls": [],
         "is_module_output": False,

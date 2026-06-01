@@ -173,7 +173,7 @@ def _op_dict(op: Any) -> dict[str, Any]:
         "lookup_keys": _sorted_strings(_containment_lookup_keys(op)),
         "module": _module_call_string(op.module),
         "module_entry_arg_keys": _normalize_argnames(op.module_entry_arg_keys),
-        "input_to_modules": _module_call_list(op.input_to_modules),
+        "input_to_modules": _module_call_list(op.input_to_module_calls),
         "modules": _module_call_list(op.modules),
         "output_of_module_calls": _module_call_list(op.output_of_module_calls),
         "output_of_modules": [str(value) for value in op.output_of_modules],

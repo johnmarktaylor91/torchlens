@@ -668,7 +668,7 @@ class MLXBackend:
                 "module": None,
                 "modules": [],
                 "module_call_stack": [],
-                "input_to_modules": [],
+                "input_to_module_calls": [],
                 "module_entry_arg_keys": [],
                 "output_of_modules": [],
                 "output_of_module_calls": [],

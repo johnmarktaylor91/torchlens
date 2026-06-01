@@ -41,7 +41,9 @@ from typing import Any, Callable, Dict, List, Literal, Optional, TYPE_CHECKING, 
 
 import torch
 
-from .._deprecations import MISSING
+import importlib
+
+from .._deprecations import MISSING, warn_deprecated_alias
 from .._io import (
     FieldPolicy,
     TLSPEC_VERSION,
@@ -144,6 +146,96 @@ def _memory_or_none(value: Any) -> Bytes | None:
     """Return tensor memory in bytes, or ``None`` for non-tensor values."""
 
     return as_bytes(get_memory_amount(value)) if isinstance(value, torch.Tensor) else None
+
+
+def _summarize_value(value: Any) -> str:
+    """Return a compact, human-readable string for one argument value."""
+
+    if isinstance(value, torch.Tensor):
+        shape = "x".join(str(int(d)) for d in value.shape) or "scalar"
+        return f"Tensor({shape}, {str(value.dtype).replace('torch.', '')})"
+    text = repr(value)
+    if len(text) > 60:
+        text = text[:57] + "..."
+    return text
+
+
+def _summarize_call_args(saved_args: Any, non_tensor_pos_args: Any) -> str | None:
+    """Build a human-readable summary of an Op's positional arguments.
+
+    Prefers the fully-saved positional args when available; otherwise falls
+    back to the captured non-tensor positional args. Returns ``None`` when no
+    positional-argument information was captured.
+    """
+
+    source = saved_args if saved_args is not None else non_tensor_pos_args
+    if source is None:
+        return None
+    try:
+        items = list(source)
+    except TypeError:
+        return _summarize_value(source)
+    if not items:
+        return ""
+    return ", ".join(_summarize_value(item) for item in items)
+
+
+def _summarize_call_kwargs(saved_kwargs: Any, non_tensor_kwargs: Any) -> str | None:
+    """Build a human-readable summary of an Op's keyword arguments.
+
+    Prefers the fully-saved keyword args when available; otherwise falls back to
+    the captured non-tensor keyword args. Returns ``None`` when no
+    keyword-argument information was captured.
+    """
+
+    source = saved_kwargs if saved_kwargs is not None else non_tensor_kwargs
+    if source is None:
+        return None
+    if isinstance(source, dict):
+        pairs = source.items()
+    else:
+        try:
+            pairs = list(source)  # type: ignore[assignment]
+        except TypeError:
+            return _summarize_value(source)
+    rendered = []
+    for pair in pairs:
+        try:
+            key, value = pair
+        except (TypeError, ValueError):
+            rendered.append(_summarize_value(pair))
+            continue
+        rendered.append(f"{key}={_summarize_value(value)}")
+    if not rendered:
+        return ""
+    return ", ".join(rendered)
+
+
+def _resolve_container_type(
+    type_module: str | None, type_qualname: str | None
+) -> type | str | None:
+    """Resolve a stored container type reference to a runtime class.
+
+    Falls back to the qualified name string when the class cannot be imported
+    (e.g. after ``.tlspec`` load with the defining module unavailable). Returns
+    ``None`` when no type reference was captured.
+    """
+
+    if type_qualname is None:
+        return None
+    if type_module:
+        try:
+            module = importlib.import_module(type_module)
+            obj: Any = module
+            for part in type_qualname.split("."):
+                obj = getattr(obj, part)
+            if isinstance(obj, type):
+                return obj
+        except (ImportError, AttributeError):
+            pass
+    if type_module:
+        return f"{type_module}.{type_qualname}"
+    return type_qualname
 
 
 def apply_transform(
@@ -386,6 +478,7 @@ if TYPE_CHECKING:
     from .func_call_location import FuncCallLocation
     from .layer_log import Layer
     from .layer_log import OpAccessor
+    from .module_log import Module
     from .param_log import Param
     from .model_log import Trace
 
@@ -569,7 +662,7 @@ class Op:
         "fx_call_index": FieldPolicy.KEEP,
         "module_call_stack": FieldPolicy.KEEP,
         "module_entry_arg_keys": FieldPolicy.KEEP,
-        "input_to_modules": FieldPolicy.KEEP,
+        "input_to_module_calls": FieldPolicy.KEEP,
         "output_of_modules": FieldPolicy.KEEP,
         "output_of_module_calls": FieldPolicy.KEEP,
         "is_module_output": FieldPolicy.KEEP,
@@ -879,7 +972,7 @@ class Op:
         self.fx_call_index: int = fields_dict["fx_call_index"]
         self.module_call_stack = fields_dict["module_call_stack"]
         self.module_entry_arg_keys = fields_dict["module_entry_arg_keys"]
-        self.input_to_modules = fields_dict["input_to_modules"]
+        self.input_to_module_calls = fields_dict["input_to_module_calls"]
         self.output_of_modules = fields_dict["output_of_modules"]
         self.output_of_module_calls = fields_dict["output_of_module_calls"]
         self.is_module_output = fields_dict["is_module_output"]
@@ -971,13 +1064,13 @@ class Op:
     def num_param_tensors_trainable(self) -> int:
         """Number of trainable parameter tensors consumed by this Op."""
 
-        return sum(1 for param in self._param_logs if param.trainable)
+        return sum(1 for param in self._param_logs if param.is_trainable)
 
     @property
     def num_param_tensors_frozen(self) -> int:
         """Number of frozen parameter tensors consumed by this Op."""
 
-        return sum(1 for param in self._param_logs if not param.trainable)
+        return sum(1 for param in self._param_logs if not param.is_trainable)
 
     @property
     def has_trainable_params(self) -> bool:
@@ -1023,6 +1116,125 @@ class Op:
 
         grad_fn_handle = self.grad_fn_handle
         return None if grad_fn_handle is None else type(grad_fn_handle)
+
+    @property
+    def grad_fn_label(self) -> str | None:
+        """Stable GradFn label for this Op, or ``None`` when no GradFn was captured.
+
+        Stored form of the cross-class reference: ``grad_fn`` resolves the
+        TorchLens GradFn record, while ``grad_fn_label`` is the portable label.
+        """
+
+        grad_fn = self.grad_fn
+        if grad_fn is None:
+            return None
+        return cast("Optional[str]", getattr(grad_fn, "label", None))
+
+    @property
+    def layer(self) -> "Layer":
+        """Parent Layer record resolved via ``self.trace.layers[self.layer_label]``.
+
+        Raises
+        ------
+        KeyError
+            When the parent Layer label cannot be resolved on the owning Trace.
+        """
+
+        trace = self._source_trace_or_error()
+        return cast("Layer", trace.layers[self.layer_label])
+
+    @property
+    def args_summary(self) -> str | None:
+        """Human-readable summary of this Op's positional arguments.
+
+        The Op-level source for ``Layer.args_summary``. Returns ``None`` when no
+        positional-argument information was captured.
+        """
+
+        return _summarize_call_args(self.saved_args, self.non_tensor_pos_args)
+
+    @property
+    def kwargs_summary(self) -> str | None:
+        """Human-readable summary of this Op's keyword arguments.
+
+        Op-level source for ``Layer.kwargs_summary``. Returns ``None`` when no
+        keyword-argument information was captured.
+        """
+
+        return _summarize_call_kwargs(self.saved_kwargs, self.non_tensor_kwargs)
+
+    @property
+    def multi_output_type(self) -> type | str | None:
+        """Python class of the multi-output container this Op came from.
+
+        Resolves ``container_spec.type_module``/``type_qualname`` to a runtime
+        class when importable, falling back to the qualified name string when the
+        class cannot be imported (e.g. after ``.tlspec`` load). ``None`` when this
+        Op is not from a multi-output container.
+        """
+
+        if not self.in_multi_output:
+            return None
+        spec = self.container_spec
+        if spec is None:
+            return None
+        return _resolve_container_type(
+            getattr(spec, "type_module", None),
+            getattr(spec, "type_qualname", None),
+        )
+
+    @property
+    def is_module_input(self) -> bool:
+        """Whether this Op's output feeds into at least one ModuleCall as an input.
+
+        The Op itself is OUTSIDE the module (the upstream producer). Equivalent to
+        ``bool(self.input_to_module_calls)``. Direction-of-data-flow framing:
+        inputs come FROM outside the module.
+        """
+
+        return bool(self.input_to_module_calls)
+
+    @property
+    def atomic_module_call_label(self) -> str | None:
+        """Stable ModuleCall label for an atomic-module output Op, else ``None``.
+
+        Stored form of the cross-class reference; ``atomic_module_call`` resolves
+        the ModuleCall record.
+        """
+
+        return cast("Optional[str]", self.atomic_module_call)
+
+    @property
+    def atomic_module_address(self) -> str | None:
+        """Module address (no ``:N``) for an atomic-module output Op, else ``None``.
+
+        Derived from ``atomic_module_call_label`` by stripping the ``:N`` pass
+        suffix; pairs with the ``atomic_module`` resolver.
+        """
+
+        label = self.atomic_module_call_label
+        if label is None:
+            return None
+        return label.rsplit(":", 1)[0]
+
+    @property
+    def atomic_module(self) -> "Module | None":
+        """Module record resolved from ``atomic_module_address``, or ``None``.
+
+        Returns ``None`` when this Op is not an atomic-module output or when the
+        owning Trace is unavailable.
+        """
+
+        address = self.atomic_module_address
+        if address is None:
+            return None
+        trace = self.source_trace
+        if trace is None:
+            return None
+        try:
+            return cast("Module", trace.modules[address])
+        except (KeyError, TypeError):
+            return None
 
     @property
     def has_parents(self) -> bool:
@@ -1251,9 +1463,72 @@ class Op:
         return len(self.modules)
 
     @property
+    def input_to_modules(self) -> list[str]:
+        """Module addresses (no ``:N``) whose input this Op's output fed.
+
+        Derived from ``input_to_module_calls`` by stripping the ``:N`` pass suffix
+        and de-duplicating, mirroring the ``output_of_modules`` /
+        ``output_of_module_calls`` split. Use ``input_to_module_calls`` for the
+        ModuleCall-label list.
+        """
+
+        seen: dict[str, None] = {}
+        for call_label in self.input_to_module_calls:
+            address = str(call_label).rsplit(":", 1)[0]
+            seen.setdefault(address, None)
+        return list(seen)
+
+    @property
+    def gradient_transform(self) -> Callable[..., Any] | None:
+        """Transform used for this Op's saved gradient, or ``None`` when unset.
+
+        Mirrors ``activation_transform`` for the backward side. Reads the
+        trace-level ``grad_transform`` that was applied to this Op's gradient.
+        """
+
+        trace = self.source_trace
+        if trace is None:
+            return None
+        return cast("Optional[Callable[..., Any]]", getattr(trace, "grad_transform", None))
+
+    @property
+    def is_buffer_source(self) -> bool:
+        """Whether this Op represents a buffer boundary (overwrites a buffer).
+
+        Glossary name for the stored ``is_buffer`` flag.
+        """
+
+        return bool(self.is_buffer)
+
+    @property
+    def has_saved_gradient(self) -> bool:
+        """Whether this Op's gradient was saved.
+
+        Glossary name for the backward-side saved predicate; mirrors
+        ``has_saved_activation``.
+        """
+
+        return bool(self.has_grad)
+
+    @property
     def is_submodule_input(self) -> bool:
-        """Whether this operation is the first inside a submodule's forward()."""
+        """Deprecated alias retained for backward compatibility.
+
+        The glossary redefines ``is_module_input`` with feed-INTO-a-module
+        semantics (``bool(input_to_module_calls)``); the old
+        ``is_submodule_input`` meant "computed inside a submodule", now spelled
+        ``in_submodule``. Returns the legacy in-a-submodule meaning.
+        """
+
+        warn_deprecated_alias("is_submodule_input", "in_submodule")
         return len(self.module_call_stack) > 0
+
+    @property
+    def is_submodule_output(self) -> bool:
+        """Deprecated alias for ``is_module_output``."""
+
+        warn_deprecated_alias("is_submodule_output", "is_module_output")
+        return bool(self.is_module_output)
 
     @property
     def tensor(self) -> Any:
@@ -1583,7 +1858,8 @@ class Op:
             "internally_initialized": "is_internal_source",
             "internally_terminated": "is_internal_sink",
             "parent_param_barcodes": "_param_barcodes",
-            "module_passes_entered": "input_to_modules",
+            "module_passes_entered": "input_to_module_calls",
+            "input_to_modules": "input_to_module_calls",
             "modules_exited": "output_of_modules",
             "module_passes_exited": "output_of_module_calls",
             "is_leaf_module_output": "is_atomic_module",

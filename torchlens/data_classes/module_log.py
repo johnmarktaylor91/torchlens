@@ -41,6 +41,7 @@ from typing import (
 
 import torch
 
+from .._deprecations import warn_deprecated_alias
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import MODULE_PASS_LOG_FIELD_ORDER
 from ..quantities import Bytes, Duration, Flops, Macs, as_duration
@@ -607,9 +608,27 @@ class ModuleCall:
 
     @property
     def param_memory(self) -> Bytes:
-        """Address-recursive parameter bytes for the Module invoked by this call."""
+        """Own-address parameter bytes of the Module invoked by this call."""
 
         return self.module.param_memory
+
+    @property
+    def internal_param_memory(self) -> Bytes:
+        """Address-recursive sum of ``param_memory`` under the invoked Module's subtree."""
+
+        return self.module.internal_param_memory
+
+    @property
+    def call_parent_label(self) -> str | None:
+        """Parent ModuleCall label in the dynamic call tree (glossary stored-form name)."""
+
+        return cast("Optional[str]", self.call_parent)
+
+    @property
+    def call_children_labels(self) -> list[str]:
+        """Child ModuleCall labels in the dynamic call tree (glossary stored-form name)."""
+
+        return list(self.call_children)
 
     @property
     def num_descendant_calls(self) -> int:
@@ -1181,6 +1200,24 @@ class Module:
         return [trace.layers[label] for label in self.layer_labels]
 
     @property
+    def call_parent_address(self) -> str | None:
+        """Parent Module address (label string) in the dynamic call tree.
+
+        Glossary stored-form name; ``call_parent_module`` resolves the record.
+        """
+
+        return cast("Optional[str]", self.call_parent)
+
+    @property
+    def call_children_addresses(self) -> list[str]:
+        """Child Module addresses (label strings) in the dynamic call tree.
+
+        Glossary stored-form name; ``call_children_modules`` resolves the records.
+        """
+
+        return list(self.call_children)
+
+    @property
     def call_parent_module(self) -> "Module | None":
         """Parent Module in the dynamic call tree, if any."""
 
@@ -1254,13 +1291,13 @@ class Module:
     def num_recursive_params_trainable(self) -> int:
         """Number of trainable address-recursive parameter records."""
 
-        return sum(1 for param in self.recursive_params if param.trainable)
+        return sum(1 for param in self.recursive_params if param.is_trainable)
 
     @property
     def num_recursive_params_frozen(self) -> int:
         """Number of frozen address-recursive parameter records."""
 
-        return sum(1 for param in self.recursive_params if not param.trainable)
+        return sum(1 for param in self.recursive_params if not param.is_trainable)
 
     @property
     def num_recursive_param_tensors(self) -> int:
@@ -1275,7 +1312,7 @@ class Module:
         return sum(
             int(getattr(param, "num_tensors", 1) or 1)
             for param in self.recursive_params
-            if param.trainable
+            if param.is_trainable
         )
 
     @property
@@ -1285,12 +1322,31 @@ class Module:
         return sum(
             int(getattr(param, "num_tensors", 1) or 1)
             for param in self.recursive_params
-            if not param.trainable
+            if not param.is_trainable
         )
 
     @property
     def param_memory(self) -> Bytes:
-        """Address-recursive parameter bytes for this Module and descendants."""
+        """Own-address parameter bytes for this Module (call-invariant).
+
+        Glossary: bare ``param_memory`` is own-address; use
+        ``internal_param_memory`` for the address-recursive sum.
+        """
+
+        return Bytes(sum(int(param.param_memory or 0) for param in self.params))
+
+    @property
+    def total_param_memory(self) -> Bytes:
+        """Bytes used by this Module's own-address parameters."""
+
+        return self.param_memory
+
+    @property
+    def internal_param_memory(self) -> Bytes:
+        """Address-recursive sum of ``param_memory`` under this Module's subtree.
+
+        Shares its computation path with the ``recursive_params`` accessor.
+        """
 
         return Bytes(sum(int(param.param_memory or 0) for param in self.recursive_params))
 
@@ -1613,13 +1669,13 @@ class Module:
     def num_param_tensors_trainable(self) -> int:
         """Number of trainable parameter tensors owned by this Module."""
 
-        return sum(1 for param in self.params if param.trainable)
+        return sum(1 for param in self.params if param.is_trainable)
 
     @property
     def num_param_tensors_frozen(self) -> int:
         """Number of frozen parameter tensors owned by this Module."""
 
-        return sum(1 for param in self.params if not param.trainable)
+        return sum(1 for param in self.params if not param.is_trainable)
 
     @property
     def has_trainable_params(self) -> bool:
@@ -1739,34 +1795,70 @@ class Module:
         return total
 
     @property
-    def flops_forward(self) -> Flops:
-        """Total forward FLOPs across all layers in this module."""
+    def total_flops_forward(self) -> Flops:
+        """Sum of forward FLOPs across all Layers in this Module."""
         return Flops(self._sum_layer_field("flops_forward"))
 
     @property
-    def flops_backward(self) -> Flops:
-        """Total backward FLOPs across all layers in this module."""
+    def total_flops_backward(self) -> Flops:
+        """Sum of backward FLOPs across all Layers in this Module."""
         return Flops(self._sum_layer_field("flops_backward"))
 
     @property
+    def total_flops(self) -> Flops:
+        """Sum of forward and backward FLOPs for this Module."""
+        return Flops(self.total_flops_forward + self.total_flops_backward)
+
+    @property
+    def total_macs_forward(self) -> Macs:
+        """Approximate forward MACs across this Module. 1 MAC = 2 FLOPs."""
+        return Macs(self.total_flops_forward // 2)
+
+    @property
+    def total_macs_backward(self) -> Macs:
+        """Approximate backward MACs across this Module. 1 MAC = 2 FLOPs."""
+        return Macs(self.total_flops_backward // 2)
+
+    @property
+    def total_macs(self) -> Macs:
+        """Approximate total MACs (forward + backward) for this Module."""
+        return Macs(self.total_flops // 2)
+
+    @property
+    def flops_forward(self) -> Flops:
+        """Deprecated alias for :attr:`total_flops_forward`."""
+        warn_deprecated_alias("Module.flops_forward", "Module.total_flops_forward")
+        return self.total_flops_forward
+
+    @property
+    def flops_backward(self) -> Flops:
+        """Deprecated alias for :attr:`total_flops_backward`."""
+        warn_deprecated_alias("Module.flops_backward", "Module.total_flops_backward")
+        return self.total_flops_backward
+
+    @property
     def flops(self) -> Flops:
-        """Total FLOPs (forward + backward) for this module."""
-        return Flops(self.flops_forward + self.flops_backward)
+        """Deprecated alias for :attr:`total_flops`."""
+        warn_deprecated_alias("Module.flops", "Module.total_flops")
+        return self.total_flops
 
     @property
     def macs_forward(self) -> Macs:
-        """Total forward MACs for this module. 1 MAC = 2 FLOPs."""
-        return Macs(self.flops_forward // 2)
+        """Deprecated alias for :attr:`total_macs_forward`."""
+        warn_deprecated_alias("Module.macs_forward", "Module.total_macs_forward")
+        return self.total_macs_forward
 
     @property
     def macs_backward(self) -> Macs:
-        """Total backward MACs for this module. 1 MAC = 2 FLOPs."""
-        return Macs(self.flops_backward // 2)
+        """Deprecated alias for :attr:`total_macs_backward`."""
+        warn_deprecated_alias("Module.macs_backward", "Module.total_macs_backward")
+        return self.total_macs_backward
 
     @property
     def macs(self) -> Macs:
-        """Total MACs (forward + backward) for this module."""
-        return Macs(self.flops // 2)
+        """Deprecated alias for :attr:`total_macs`."""
+        warn_deprecated_alias("Module.macs", "Module.total_macs")
+        return self.total_macs
 
     def __repr__(self) -> str:
         """Show address, class, depth, param count, layer count, and pass count."""

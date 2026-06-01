@@ -111,7 +111,7 @@ def _add_output_layers(
         new_output_node.module = None
         new_output_node.modules = []
         new_output_node.module_call_stack = []
-        new_output_node.input_to_modules = []
+        new_output_node.input_to_module_calls = []
         new_output_node.output_of_modules = [mod_pass[0] for mod_pass in output_node.modules]
         new_output_node.output_of_module_calls = output_node.modules
         new_output_node.is_module_output = False

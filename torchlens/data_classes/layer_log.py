@@ -475,13 +475,13 @@ class Layer:
     def num_param_tensors_trainable(self) -> int:
         """Number of trainable parameter tensors used by this Layer."""
 
-        return sum(1 for param in self._param_logs if param.trainable)
+        return sum(1 for param in self._param_logs if param.is_trainable)
 
     @property
     def num_param_tensors_frozen(self) -> int:
         """Number of frozen parameter tensors used by this Layer."""
 
-        return sum(1 for param in self._param_logs if not param.trainable)
+        return sum(1 for param in self._param_logs if not param.is_trainable)
 
     @property
     def has_trainable_params(self) -> bool:
@@ -540,6 +540,41 @@ class Layer:
     def module_call_depth(self) -> int:
         """Depth of module nesting for this layer."""
         return len(self.modules)
+
+    @property
+    def op_labels(self) -> List[str]:
+        """Op labels belonging to this Layer (glossary name for ``call_labels``)."""
+
+        return self.call_labels
+
+    @property
+    def is_buffer_source(self) -> bool:
+        """Whether this Layer represents a buffer overwrite boundary.
+
+        Glossary name for the stored ``is_buffer`` flag; aggregate over the
+        Layer (true when its representative Op is a buffer source).
+        """
+
+        return bool(self.is_buffer)
+
+    @property
+    def buffer_overwrite_index(self) -> Any:
+        """Which overwrite of the buffer this Layer represents.
+
+        Glossary name for the stored ``buffer_pass`` index.
+        """
+
+        return self.buffer_pass
+
+    @property
+    def is_module_input(self) -> bool:
+        """Whether this Layer's representative Op feeds into at least one ModuleCall.
+
+        Delegates from ``Op.is_module_input`` semantics for single-Op Layers.
+        Raises ``ValueError`` for multi-Op Layers.
+        """
+
+        return cast(bool, self._single_pass_or_error("is_module_input"))
 
     @property
     def source_trace(self) -> "Trace":
@@ -743,6 +778,12 @@ class Layer:
             Function timing value from the only pass.
         """
         return cast(Duration, self._single_pass_or_error("func_duration"))
+
+    @property
+    def total_func_duration(self) -> Duration:
+        """Sum of function-call duration across all Ops in this Layer."""
+
+        return Duration(sum(float(op.func_duration or 0) for op in self.ops.values()))
 
     @property
     def func_rng_states(self) -> Any:

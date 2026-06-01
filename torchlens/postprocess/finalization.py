@@ -157,8 +157,8 @@ def _build_root_module_log(
     root_param_dict = {pl.address: pl for pl in self.param_logs}
     root_params = ParamAccessor(root_param_dict)
     root_num_params = sum(pl.num_params for pl in self.param_logs)
-    root_num_trainable = sum(pl.num_params for pl in self.param_logs if pl.trainable)
-    root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.trainable)
+    root_num_trainable = sum(pl.num_params for pl in self.param_logs if pl.is_trainable)
+    root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.is_trainable)
     root_fsize = Bytes(sum(int(pl.param_memory) for pl in self.param_logs))
 
     root_module = Module(
@@ -524,8 +524,8 @@ def _build_submodule_call_logs(
             except (KeyError, TypeError):
                 continue
             if (
-                te.is_submodule_input
-                and call_label in te.input_to_modules
+                len(te.module_call_stack) > 0
+                and call_label in te.input_to_module_calls
                 and te.layer_label not in pass_input_layers
             ):
                 pass_input_layers.append(te.layer_label)
@@ -735,9 +735,9 @@ def _build_module_logs(self: "Trace") -> None:
     # quadratic and dominates validation postprocessing.
     _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
     for te in self.layer_list:
-        if not te.is_submodule_input:
+        if len(te.module_call_stack) == 0:
             continue
-        for call_label in te.input_to_modules:
+        for call_label in te.input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
 
     # --- Build ModuleLogs for each submodule ---

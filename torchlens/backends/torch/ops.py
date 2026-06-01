@@ -1371,8 +1371,12 @@ def _build_param_fields(
     fields_dict["_param_logs"] = _param_logs
     fields_dict["param_shapes"] = [tuple(param.shape) for param in arg_parameters]
     fields_dict["num_params"] = sum(prod(shape) for shape in fields_dict["param_shapes"])
-    fields_dict["num_params_trainable"] = sum(pl.num_params for pl in _param_logs if pl.trainable)
-    fields_dict["num_params_frozen"] = sum(pl.num_params for pl in _param_logs if not pl.trainable)
+    fields_dict["num_params_trainable"] = sum(
+        pl.num_params for pl in _param_logs if pl.is_trainable
+    )
+    fields_dict["num_params_frozen"] = sum(
+        pl.num_params for pl in _param_logs if not pl.is_trainable
+    )
     with pause_logging():
         fields_dict["param_memory"] = sum(p.nelement() * p.element_size() for p in arg_parameters)
     return parent_param_ops
@@ -1392,7 +1396,7 @@ def _build_module_context_fields(
     fields_dict["modules"] = modules
     fields_dict["module_call_stack"] = []
     fields_dict["module_entry_arg_keys"] = defaultdict(list)
-    fields_dict["input_to_modules"] = []
+    fields_dict["input_to_module_calls"] = []
     fields_dict["output_of_modules"] = []
     fields_dict["output_of_module_calls"] = []
     fields_dict["is_module_output"] = False

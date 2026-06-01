@@ -3529,13 +3529,13 @@ class Trace:
     def num_param_tensors_trainable(self) -> int:
         """Number of trainable parameter tensors in this Trace."""
 
-        return sum(1 for param in self.params if param.trainable)
+        return sum(1 for param in self.params if param.is_trainable)
 
     @property
     def num_param_tensors_frozen(self) -> int:
         """Number of frozen parameter tensors in this Trace."""
 
-        return sum(1 for param in self.params if not param.trainable)
+        return sum(1 for param in self.params if not param.is_trainable)
 
     @property
     def has_trainable_params(self) -> bool:
@@ -4557,7 +4557,7 @@ class Trace:
             "param_memory",
             "module_call_stack",
             "output_of_modules",
-            "is_submodule_input",
+            "is_module_input",
             "is_module_output",
             "module",
             "modules",
@@ -4590,7 +4590,7 @@ class Trace:
             "num_params": int,
             "param_memory": int,
             "activation_memory": int,
-            "is_submodule_input": bool,
+            "is_module_input": bool,
             "is_module_output": bool,
             "conditional_branch_depth": int,
             "is_terminal_conditional_bool": bool,

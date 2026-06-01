@@ -1156,8 +1156,8 @@ def _build_compute_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]
             {
                 "name": module.address,
                 "params": _human_count(module.num_params),
-                "flops": _human_flops(module.flops_forward),
-                "macs": _human_flops(module.macs_forward),
+                "flops": _human_flops(module.total_flops_forward),
+                "macs": _human_flops(module.total_macs_forward),
                 "time_ms": f"{_module_time_ms(trace, module):.2f}",
                 "dtype": _module_dtype(trace, module),
             }

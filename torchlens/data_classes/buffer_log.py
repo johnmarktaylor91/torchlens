@@ -106,6 +106,76 @@ class Buffer(Op):
         return self.buffer_pass
 
     @property
+    def buffer_source_label(self) -> str | None:
+        """Stable Op label for the Op that overwrote this buffer value.
+
+        Glossary stored-form name; ``buffer_source`` resolves the Op record.
+        ``None`` for static buffers (no overwriting Op).
+        """
+
+        source = self.buffer_source
+        return None if source is None else str(source)
+
+    def _address_buffers(self) -> list["Buffer"]:
+        """Return all Buffer records sharing this buffer's address, in order."""
+
+        trace = self.source_trace
+        if trace is None or self.address is None:
+            return [self]
+        try:
+            buffers = list(trace.buffers)
+        except Exception:  # noqa: BLE001 - defensive: detached/partial trace
+            return [self]
+        same = [b for b in buffers if getattr(b, "address", None) == self.address]
+        return same or [self]
+
+    @property
+    def is_overwritten(self) -> bool:
+        """True when this buffer is overwritten during forward (vs. static)."""
+
+        return self.buffer_source_label is not None or self.num_overwrites > 0
+
+    @property
+    def num_overwrites(self) -> int:
+        """Total overwrites of this buffer's address during the trace.
+
+        Counts the Buffer boundary records sharing this address that carry an
+        overwriting Op source. Static buffers (no overwriting Op) yield ``0``.
+        """
+
+        return sum(1 for b in self._address_buffers() if b.buffer_source is not None)
+
+    @property
+    def last_overwrite_source_label(self) -> str | None:
+        """Stable Op label of the most recent Op that overwrote this address.
+
+        Glossary stored-form name; ``last_overwrite_source`` resolves the record.
+        ``None`` for static buffers.
+        """
+
+        last: str | None = None
+        for b in self._address_buffers():
+            source = b.buffer_source
+            if source is not None:
+                last = str(source)
+        return last
+
+    @property
+    def last_overwrite_source(self) -> "Op | None":
+        """Op record that most recently overwrote this buffer's address, or ``None``."""
+
+        label = self.last_overwrite_source_label
+        if label is None:
+            return None
+        trace = self.source_trace
+        if trace is None:
+            return None
+        try:
+            return cast("Op", trace.ops[label])
+        except (KeyError, TypeError):
+            return None
+
+    @property
     def name(self) -> str:
         """Buffer name (last segment of address), e.g. 'running_mean'."""
         addr = self.address

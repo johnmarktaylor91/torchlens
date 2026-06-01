@@ -839,7 +839,7 @@ def _record_module_entry_metadata(
         input_tensor_labels.add(label)
         trace._mod_entered[mod_id].append(label)
         layer_entry["module_call_stack"].append(address)
-        layer_entry["input_to_modules"].append(module_call_label)
+        layer_entry["input_to_module_calls"].append(module_call_label)
         # Record which arg position this tensor occupies for this module pass.
         for arg_key, arg_val in itertools.chain(enumerate(args), kwargs.items()):
             if arg_val is t:
@@ -1142,7 +1142,7 @@ def _ensure_module_output_tensor_logged(
             "modules": modules,
             "module_call_stack": [],
             "module_entry_arg_keys": defaultdict(list),
-            "input_to_modules": [],
+            "input_to_module_calls": [],
             "output_of_modules": [],
             "output_of_module_calls": [],
             "is_module_output": False,

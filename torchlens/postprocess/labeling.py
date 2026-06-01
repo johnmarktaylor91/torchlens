@@ -725,9 +725,9 @@ def _add_lookup_keys_for_layer_entry(
             f"{module_name}:{module_pass}"
             for module_name, module_pass in layer_entry.output_of_module_calls
         ]
-        layer_entry.input_to_modules = [
+        layer_entry.input_to_module_calls = [
             f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.input_to_modules
+            for module_name, module_pass in layer_entry.input_to_module_calls
         ]
         if layer_entry.module is not None:
             layer_entry.module = ":".join([str(i) for i in layer_entry.module])

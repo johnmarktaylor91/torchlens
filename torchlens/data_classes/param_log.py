@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
+from .._deprecations import warn_deprecated_alias
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..quantities import Bytes
@@ -65,7 +66,7 @@ class Param:
         "dtype": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "param_memory": FieldPolicy.KEEP,
-        "trainable": FieldPolicy.KEEP,
+        "is_trainable": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
         "all_module_addresses": FieldPolicy.KEEP,
@@ -102,7 +103,7 @@ class Param:
         self.dtype = dtype
         self.num_params = num_params
         self.param_memory = Bytes(param_memory)
-        self.trainable = trainable
+        self.is_trainable = trainable
         self.module_address = module_address
         self.all_addresses = [address]
         self.all_module_addresses = [module_address]
@@ -124,6 +125,13 @@ class Param:
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
         self._grad_memory: Bytes = Bytes(0)
+
+    @property
+    def trainable(self) -> bool:
+        """Deprecated alias for :attr:`is_trainable`."""
+
+        warn_deprecated_alias("Param.trainable", "Param.is_trainable")
+        return self.is_trainable
 
     @property
     def is_quantized(self) -> bool:
@@ -376,7 +384,7 @@ class Param:
 
     def __repr__(self) -> str:
         """Multi-line summary showing address, shape, dtype, trainability, and usage."""
-        status = "trainable" if self.trainable else "frozen"
+        status = "trainable" if self.is_trainable else "frozen"
         lines = [
             f"Param: {self.address}",
             f"  shape: {self.shape}",
@@ -438,6 +446,8 @@ class Param:
             state.pop(removed_field, None)
         if "param_memory" not in state and "memory" in state:
             state["param_memory"] = state.pop("memory")
+        if "is_trainable" not in state and "trainable" in state:
+            state["is_trainable"] = state.pop("trainable")
         default_fill_state(state, defaults={"_param_ref": None, "_source_trace_ref": None})
         state["param_memory"] = Bytes(state.get("param_memory", 0) or 0)
         state["_grad_memory"] = Bytes(state.get("_grad_memory", 0) or 0)
@@ -486,7 +496,7 @@ class ParamAccessor(Accessor["Param"]):
             return "{}"
         items = []
         for pl in self._list:
-            status = "trainable" if pl.trainable else "frozen"
+            status = "trainable" if pl.is_trainable else "frozen"
             items.append(f"'{pl.address}': Param {pl.shape} {pl.dtype} {status}")
         inner = ",\n ".join(items)
         return "{" + inner + "}"

@@ -255,7 +255,11 @@ def format_param_list(params: Any) -> str | None:
     for item in param_items:
         name = getattr(item, "name", None)
         shape = getattr(item, "shape", item)
-        trainable = getattr(item, "trainable", getattr(item, "requires_grad", None))
+        trainable = getattr(
+            item,
+            "is_trainable",
+            getattr(item, "trainable", getattr(item, "requires_grad", None)),
+        )
         shape_text = _shape_with_trainability(shape, trainable)
         if name:
             parts.append(f"{name} {shape_text}")
