@@ -48,6 +48,24 @@ def _sorted_strings(values: Iterable[Any]) -> list[str]:
     return sorted(str(_stringify(value)) for value in values)
 
 
+def _containment_lookup_keys(record: Any) -> list[Any]:
+    """Return lookup keys relevant to module-containment snapshots.
+
+    Parameters
+    ----------
+    record:
+        Op-like record with ``lookup_keys`` and optional ``fx_label``.
+
+    Returns
+    -------
+    list[Any]
+        Lookup keys with alias-only FX labels removed.
+    """
+
+    fx_label = getattr(record, "fx_label", None)
+    return [key for key in getattr(record, "lookup_keys", []) if key != fx_label]
+
+
 def _module_call_string(value: Any) -> str | None:
     """Normalize a module call label to ``address:pass`` text.
 
@@ -152,7 +170,7 @@ def _op_dict(op: Any) -> dict[str, Any]:
         "is_orphan": getattr(op, "is_orphan", False),
         "is_module_output": op.is_module_output,
         "label": _op_label(op),
-        "lookup_keys": _sorted_strings(op.lookup_keys),
+        "lookup_keys": _sorted_strings(_containment_lookup_keys(op)),
         "module": _module_call_string(op.module),
         "module_entry_arg_keys": _normalize_argnames(op.module_entry_arg_keys),
         "input_to_modules": _module_call_list(op.input_to_modules),
@@ -178,7 +196,7 @@ def _layer_dict(layer: Any) -> dict[str, Any]:
     """
 
     lookup_keys = {
-        str(_stringify(key)) for op in layer.ops.values() for key in getattr(op, "lookup_keys", [])
+        str(_stringify(key)) for op in layer.ops.values() for key in _containment_lookup_keys(op)
     }
     return {
         "in_submodule": layer.in_submodule,

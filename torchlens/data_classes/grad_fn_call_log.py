@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
+import weakref
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -41,6 +42,7 @@ class GradFnCall(TabularExportMixin):
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
         "_time_started": FieldPolicy.KEEP,
         "_time_finished": FieldPolicy.KEEP,
+        "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
 
     call_index: int
@@ -49,11 +51,13 @@ class GradFnCall(TabularExportMixin):
     grad_outputs: Any = None
     _time_started: float | None = None
     _time_finished: float | None = None
+    _source_trace_ref: Any = None
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
 
         state = self.__dict__.copy()
+        state["_source_trace_ref"] = None
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 
@@ -69,12 +73,41 @@ class GradFnCall(TabularExportMixin):
                 "grad_outputs": None,
                 "_time_started": None,
                 "_time_finished": None,
+                "_source_trace_ref": None,
             },
         )
         if "duration" in state and "_time_started" not in state and "_time_finished" not in state:
             state["_time_started"] = 0.0
             state["_time_finished"] = float(state.pop("duration"))
         self.__dict__.update(state)
+
+    @property
+    def source_trace(self) -> Any:
+        """Return the owning Trace if it is still alive."""
+
+        ref = self._source_trace_ref
+        return None if ref is None else ref()
+
+    @source_trace.setter
+    def source_trace(self, value: Any) -> None:
+        """Set the owning Trace weakref."""
+
+        self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    @property
+    def trace(self) -> Any:
+        """Alias for the owning Trace."""
+
+        return self.source_trace
+
+    @property
+    def ordinal_index(self) -> int:
+        """Return this GradFnCall's 0-based position in ``trace.grad_fn_calls``."""
+
+        trace = self.source_trace
+        if trace is None:
+            return -1
+        return list(trace.grad_fn_calls).index(self)
 
     @property
     def call_label(self) -> str:

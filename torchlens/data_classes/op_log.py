@@ -917,6 +917,98 @@ class Op(TabularExportMixin):
         return self.flops_backward // 2 if self.flops_backward is not None else None
 
     @property
+    def flops_total(self) -> int:
+        """Approximate total FLOPs for this Op.
+
+        Returns
+        -------
+        int
+            Forward plus backward FLOPs, treating unknown halves as zero.
+        """
+
+        return (self.flops_forward or 0) + (self.flops_backward or 0)
+
+    @property
+    def macs_total(self) -> int:
+        """Approximate total MACs for this Op.
+
+        Returns
+        -------
+        int
+            Forward plus backward MACs.
+        """
+
+        return self.flops_total // 2
+
+    @property
+    def param_names(self) -> list[str]:
+        """Return short names of parameters consumed by this Op.
+
+        Returns
+        -------
+        list[str]
+            Parameter names in consumed-parameter order.
+        """
+
+        return [param.name for param in self._param_logs]
+
+    @property
+    def param_dtypes(self) -> list[torch.dtype]:
+        """Return dtypes of parameters consumed by this Op.
+
+        Returns
+        -------
+        list[torch.dtype]
+            Parameter dtypes in consumed-parameter order.
+        """
+
+        return [param.dtype for param in self._param_logs]
+
+    @property
+    def num_param_tensors_trainable(self) -> int:
+        """Number of trainable parameter tensors consumed by this Op."""
+
+        return sum(1 for param in self._param_logs if param.trainable)
+
+    @property
+    def num_param_tensors_frozen(self) -> int:
+        """Number of frozen parameter tensors consumed by this Op."""
+
+        return sum(1 for param in self._param_logs if not param.trainable)
+
+    @property
+    def has_trainable_params(self) -> bool:
+        """Whether this Op consumes at least one trainable parameter."""
+
+        return self.num_params_trainable > 0
+
+    @property
+    def has_frozen_params(self) -> bool:
+        """Whether this Op consumes at least one frozen parameter."""
+
+        return self.num_params_frozen > 0
+
+    @property
+    def is_compute_op(self) -> bool:
+        """Whether this Op executed a torch function rather than a boundary sentinel."""
+
+        return not (self.is_input or self.is_output or self.is_buffer)
+
+    @property
+    def fx_label(self) -> str | None:
+        """Return a torch.fx-style label for this Op when module context is available."""
+
+        if self.fx_qualpath is None:
+            return None
+        return f"{self.fx_qualpath.replace('.', '_')}_{self.fx_call_index}"
+
+    @property
+    def trace(self) -> "Trace":
+        """Alias for the owning Trace back-reference."""
+
+        return self.source_trace
+
+    @property
     def grad_fn_cls(self) -> type[Any] | None:
         """Return the live grad_fn_handle class when the autograd object is retained.
 

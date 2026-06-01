@@ -388,6 +388,78 @@ class Layer(TabularExportMixin):
         return self.flops_backward // 2 if self.flops_backward is not None else None
 
     @property
+    def total_activation_memory(self) -> int:
+        """Sum activation memory across all Ops in this Layer."""
+
+        return sum((op.memory or 0) for op in self.ops.values())
+
+    @property
+    def total_gradient_memory(self) -> int:
+        """Sum gradient memory across all Ops in this Layer."""
+
+        return sum((op.gradient_memory or 0) for op in self.ops.values())
+
+    @property
+    def flops_total(self) -> int:
+        """Representative total FLOPs for this Layer."""
+
+        return (self.flops_forward or 0) + (self.flops_backward or 0)
+
+    @property
+    def total_flops_forward(self) -> int:
+        """Sum forward FLOPs across all Ops in this Layer."""
+
+        return sum((op.flops_forward or 0) for op in self.ops.values())
+
+    @property
+    def total_flops_backward(self) -> int:
+        """Sum backward FLOPs across all Ops in this Layer."""
+
+        return sum((op.flops_backward or 0) for op in self.ops.values())
+
+    @property
+    def total_flops_total(self) -> int:
+        """Sum total FLOPs across all Ops in this Layer."""
+
+        return self.total_flops_forward + self.total_flops_backward
+
+    @property
+    def macs_total(self) -> int:
+        """Representative total MACs for this Layer."""
+
+        return self.flops_total // 2
+
+    @property
+    def total_macs_forward(self) -> int:
+        """Sum forward MACs across all Ops in this Layer."""
+
+        return self.total_flops_forward // 2
+
+    @property
+    def total_macs_backward(self) -> int:
+        """Sum backward MACs across all Ops in this Layer."""
+
+        return self.total_flops_backward // 2
+
+    @property
+    def total_macs_total(self) -> int:
+        """Sum total MACs across all Ops in this Layer."""
+
+        return self.total_flops_total // 2
+
+    @property
+    def param_names(self) -> list[str]:
+        """Return short names of parameters used by this Layer."""
+
+        return [param.name for param in self._param_logs]
+
+    @property
+    def param_dtypes(self) -> list[Any]:
+        """Return dtypes of parameters used by this Layer."""
+
+        return [param.dtype for param in self._param_logs]
+
+    @property
     def uses_params(self) -> bool:
         """Whether this layer uses model parameters."""
         return len(self._param_barcodes) > 0
@@ -396,6 +468,66 @@ class Layer(TabularExportMixin):
     def num_param_tensors(self) -> int:
         """Number of parameter tensors used by this layer."""
         return len(self._param_barcodes)
+
+    @property
+    def num_param_tensors_trainable(self) -> int:
+        """Number of trainable parameter tensors used by this Layer."""
+
+        return sum(1 for param in self._param_logs if param.trainable)
+
+    @property
+    def num_param_tensors_frozen(self) -> int:
+        """Number of frozen parameter tensors used by this Layer."""
+
+        return sum(1 for param in self._param_logs if not param.trainable)
+
+    @property
+    def has_trainable_params(self) -> bool:
+        """Whether this Layer uses at least one trainable parameter."""
+
+        return self.num_params_trainable > 0
+
+    @property
+    def has_frozen_params(self) -> bool:
+        """Whether this Layer uses at least one frozen parameter."""
+
+        return self.num_params_frozen > 0
+
+    @property
+    def is_compute_layer(self) -> bool:
+        """Whether this Layer's representative Op is a compute Op."""
+
+        return bool(self.ops and self.ops[0].is_compute_op)
+
+    @property
+    def is_orphan(self) -> bool:
+        """Whether any Op in this Layer is disconnected from the main graph."""
+
+        return any(op.is_orphan for op in self.ops.values())
+
+    @property
+    def num_ops(self) -> int:
+        """Number of Ops aggregated by this Layer."""
+
+        return len(self.ops)
+
+    @property
+    def fx_label(self) -> str | None:
+        """Return a torch.fx-style label for a single-Op Layer."""
+
+        return cast(str | None, self._single_pass_or_error("fx_label"))
+
+    @property
+    def fx_qualpath(self) -> str | None:
+        """Return the FX-style qualified path for a single-Op Layer."""
+
+        return cast(str | None, self._single_pass_or_error("fx_qualpath"))
+
+    @property
+    def fx_call_index(self) -> int:
+        """Return the FX-style call index for a single-Op Layer."""
+
+        return cast(int, self._single_pass_or_error("fx_call_index"))
 
     @property
     def in_submodule(self) -> bool:
@@ -472,6 +604,12 @@ class Layer(TabularExportMixin):
             Owning model log, or ``None`` to clear the reference.
         """
         self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    @property
+    def trace(self) -> "Trace":
+        """Alias for the owning Trace back-reference."""
+
+        return self.source_trace
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""

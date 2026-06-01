@@ -465,13 +465,13 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
         grad_fn_record = trace.grad_fn_logs.get(grad_fn_object_id)
         if grad_fn_record is None:
             grad_fn_type = _normalize_grad_fn_type(grad_fn_handle)
-            ordinal_index = len(trace.grad_fn_order) + 1
-            type_index, ordinal_index, label = _grad_fn_label_parts(
+            step_index = len(trace.grad_fn_order) + 1
+            type_index, step_index, label = _grad_fn_label_parts(
                 trace,
                 grad_fn_type,
                 layer_label,
                 type_counter,
-                ordinal_index,
+                step_index,
             )
             grad_fn_cls = type(grad_fn_handle)
             grad_fn_record = GradFn(
@@ -481,8 +481,8 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
                 label=label,
                 type=grad_fn_type,
                 type_index=type_index,
-                ordinal_index=ordinal_index,
-                step_index=ordinal_index,
+                ordinal_index=len(trace.grad_fn_order),
+                step_index=step_index,
                 is_custom=_grad_fn_is_custom(grad_fn_handle),
                 has_op=layer_label is not None,
                 op_label=layer_label,

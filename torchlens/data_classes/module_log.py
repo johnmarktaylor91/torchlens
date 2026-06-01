@@ -771,6 +771,12 @@ class ModuleCall(TabularExportMixin):
     def _source_trace(self, value: "Trace | None") -> None:
         self._source_trace_ref = weakref.ref(value) if value is not None else None
 
+    @property
+    def trace(self) -> "Trace | None":
+        """Alias for the owning Trace."""
+
+        return self._source_trace
+
     def _output_values(self, field_name: str) -> list[Any]:
         """Return one field from all output layers."""
 
@@ -1376,6 +1382,12 @@ class Module(TabularExportMixin):
     @_source_trace.setter
     def _source_trace(self, value: "Trace | None") -> None:
         self._source_trace_ref = weakref.ref(value) if value is not None else None
+
+    @property
+    def trace(self) -> "Trace | None":
+        """Alias for the owning Trace."""
+
+        return self._source_trace
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""

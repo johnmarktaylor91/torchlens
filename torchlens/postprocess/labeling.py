@@ -753,6 +753,9 @@ def _add_lookup_keys_for_layer_entry(
     elif layer_entry.is_input or layer_entry.is_output:
         lookup_keys_for_tensor.append(layer_entry.io_role)
 
+    if layer_entry.fx_label is not None:
+        lookup_keys_for_tensor.append(layer_entry.fx_label)
+
     lookup_keys_for_tensor = sorted(lookup_keys_for_tensor, key=str)
 
     # Log in both the tensor and in the Trace object.

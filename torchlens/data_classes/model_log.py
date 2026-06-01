@@ -3324,6 +3324,60 @@ class Trace:
         return cast("Module", self._module_logs["self"])
 
     @property
+    def num_layers(self) -> int:
+        """Number of distinct Layer records in this Trace."""
+
+        return len(self.layers)
+
+    @property
+    def num_compute_layers(self) -> int:
+        """Number of compute Layers in this Trace."""
+
+        return len(self.compute_layers)
+
+    @property
+    def num_compute_ops(self) -> int:
+        """Number of compute Ops in this Trace."""
+
+        return len(self.compute_ops)
+
+    @property
+    def num_saved_grad_ops(self) -> int:
+        """Number of Ops with saved gradients."""
+
+        return len(self.saved_grad_ops)
+
+    @property
+    def num_saved_grad_layers(self) -> int:
+        """Number of Layers containing at least one saved-gradient Op."""
+
+        return len(self.saved_grad_layers)
+
+    @property
+    def num_param_tensors_trainable(self) -> int:
+        """Number of trainable parameter tensors in this Trace."""
+
+        return sum(1 for param in self.params if param.trainable)
+
+    @property
+    def num_param_tensors_frozen(self) -> int:
+        """Number of frozen parameter tensors in this Trace."""
+
+        return sum(1 for param in self.params if not param.trainable)
+
+    @property
+    def has_trainable_params(self) -> bool:
+        """Whether this Trace contains at least one trainable parameter."""
+
+        return self.num_params_trainable > 0
+
+    @property
+    def has_frozen_params(self) -> bool:
+        """Whether this Trace contains at least one frozen parameter."""
+
+        return self.num_params_frozen > 0
+
+    @property
     def buffers(self) -> "BufferAccessor":
         """Access buffer metadata by address, short name, or index."""
         return self._buffer_accessor  # type: ignore[return-value]
@@ -3359,6 +3413,7 @@ class Trace:
         calls: OrderedDict[str, Any] = OrderedDict()
         for grad_fn_handle in self.grad_fns:
             for call_index, call in grad_fn_handle.ops.items():
+                call.source_trace = self
                 calls[f"{grad_fn_handle.label}:{call_index}"] = call
         return TraceGradFnCallAccessor(calls)
 
@@ -3541,6 +3596,12 @@ class Trace:
         return TraceOpAccessor([self[label] for label in self.input_layers], self.layer_num_calls)
 
     @property
+    def num_input_layers(self) -> int:
+        """Number of input-boundary Layers."""
+
+        return len(self.input_layers)
+
+    @property
     def num_input_ops(self) -> int:
         """Number of flat input-boundary Ops."""
 
@@ -3553,10 +3614,22 @@ class Trace:
         return TraceOpAccessor([self[label] for label in self.output_layers], self.layer_num_calls)
 
     @property
+    def num_output_layers(self) -> int:
+        """Number of output-boundary Layers."""
+
+        return len(self.output_layers)
+
+    @property
     def num_output_ops(self) -> int:
         """Number of flat output-boundary Ops."""
 
         return len(self.output_ops)
+
+    @property
+    def num_buffer_layers(self) -> int:
+        """Number of buffer-boundary Layers."""
+
+        return len(self.buffer_layers)
 
     @property
     def internal_source_layers(self) -> Accessor[Layer]:
@@ -3579,6 +3652,12 @@ class Trace:
         return len(self.internal_source_layers)
 
     @property
+    def num_internal_source_ops(self) -> int:
+        """Number of internal-source Ops."""
+
+        return len(self.internal_source_ops)
+
+    @property
     def internal_sink_layers(self) -> Accessor[Layer]:
         """Access Layers representing internal-sink positions."""
 
@@ -3599,6 +3678,18 @@ class Trace:
         return len(self.internal_sink_layers)
 
     @property
+    def num_internal_sink_ops(self) -> int:
+        """Number of internal-sink Ops."""
+
+        return len(self.internal_sink_ops)
+
+    @property
+    def num_uncalled_modules(self) -> int:
+        """Number of registered source-model modules not called in this Trace."""
+
+        return len(self.uncalled_modules)
+
+    @property
     def ops_with_params(self) -> Accessor[Op]:
         """Access Ops that use at least one parameter tensor."""
 
@@ -3617,6 +3708,12 @@ class Trace:
     def num_grad_fns(self) -> int:
         """Number of unique autograd grad_fn_handle nodes discovered."""
         return len(self.grad_fn_logs)
+
+    @property
+    def num_grad_fns_with_op(self) -> int:
+        """Number of GradFn records paired with a forward Op."""
+
+        return sum(1 for grad_fn_handle in self.grad_fn_logs.values() if grad_fn_handle.has_op)
 
     @property
     def num_grad_fns_without_op(self) -> int:

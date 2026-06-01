@@ -210,6 +210,7 @@ class GradFn(TabularExportMixin):
             self.ops._label = self.label
         for call in self.ops.values():
             call.label = self.label
+            call.source_trace = self.source_trace
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -287,6 +288,14 @@ class GradFn(TabularExportMixin):
         """
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
+        for call in self.ops.values():
+            call.source_trace = value
+
+    @property
+    def trace(self) -> Any:
+        """Alias for the owning Trace."""
+
+        return self.source_trace
 
     @property
     def op(self) -> "Layer | None":

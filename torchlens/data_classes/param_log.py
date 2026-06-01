@@ -209,6 +209,21 @@ class Param(TabularExportMixin):
         self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     @property
+    def trace(self) -> Any:
+        """Alias for the owning Trace."""
+
+        return self.source_trace
+
+    @property
+    def ordinal_index(self) -> int:
+        """Return this Param's 0-based position in ``trace.params``."""
+
+        trace = self.source_trace
+        if trace is None:
+            return -1
+        return list(trace.params).index(self)
+
+    @property
     def module(self) -> Any:
         """Primary owning Module."""
 
