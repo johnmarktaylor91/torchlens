@@ -916,3 +916,127 @@ class TestSharedParamDifferentOps:
         x = torch.randn(2, 10)
         log = trace_fn(model, x)
         check_metadata_invariants(log)
+
+
+# =============================================================================
+# Tripwire: plain capture must NOT emit functionless intervention placeholders
+# =============================================================================
+
+
+class _VmapMaskConsumer(nn.Module):
+    """Submodule that consumes an externally built mask tensor."""
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Add the mask to ``x``."""
+
+        return x + mask
+
+
+class _VmapMaskModel(nn.Module):
+    """Build a fresh mask tensor via ``torch.vmap`` and feed it to a submodule.
+
+    This mirrors how HuggingFace transformers (Mistral, VITS, etc.) construct
+    the 4D causal/sliding-window attention mask: the mask is materialized inside
+    a ``torch.vmap`` transform, whose internal operations TorchLens cannot trace.
+    The fully-formed mask then enters a downstream module untagged. Plain capture
+    must register it as a clean internal source -- NOT a functionless
+    ``intervention_replacement`` placeholder (which would be a silent capture gap
+    papered over by a validation exemption).
+    """
+
+    def __init__(self) -> None:
+        """Initialize the mask-consuming submodule."""
+
+        super().__init__()
+        self.consumer = _VmapMaskConsumer()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Build a vmap mask and route it through the consumer submodule."""
+
+        q_idx = torch.arange(x.shape[-1])
+        kv_idx = torch.arange(x.shape[-1])
+
+        def cell(i: torch.Tensor, j: torch.Tensor) -> torch.Tensor:
+            return (j <= i).float()
+
+        mask = torch.vmap(torch.vmap(cell, in_dims=(None, 0)), in_dims=(0, None))(q_idx, kv_idx)
+        return self.consumer(x, mask)
+
+
+def _functionless_replacement_ops(log: "Trace") -> list:
+    """Return ops that are auto-synthesized functionless intervention placeholders.
+
+    A GENUINE raw forward-hook output replacement is legitimately functionless,
+    but it carries ``func_name == "intervention_replacement"``. This helper
+    targets exactly that placeholder shape so a capture gap (an untraced source
+    surfacing as an intervention placeholder during plain tracing) is caught.
+    """
+
+    return [
+        op
+        for op in log.ops
+        if getattr(op, "func_name", None) == "intervention_replacement"
+        and getattr(op, "intervention_replaced", False)
+    ]
+
+
+def test_plain_trace_vmap_mask_has_no_functionless_replacement():
+    """TRIPWIRE: an untraced vmap-built mask must not become a placeholder.
+
+    Reintroducing the old behavior (logging the untagged mask as a functionless
+    ``intervention_replacement`` op during plain capture) makes this fail loudly.
+    """
+
+    from torchlens import trace as trace_fn
+
+    model = _VmapMaskModel().eval()
+    x = torch.randn(4, 4)
+    log = trace_fn(model, [x], {})
+
+    # No genuine user intervention happened, so there must be zero functionless
+    # intervention placeholders.
+    assert _functionless_replacement_ops(log) == []
+    assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+
+    # The mask is instead logged as a legitimate internal source.
+    internal_sources = [
+        op
+        for op in log.ops
+        if getattr(op, "is_internal_source", False)
+        and op.func is None
+        and not getattr(op, "is_buffer", False)
+    ]
+    assert any(op.type == "internalsource" for op in internal_sources)
+
+    # Validation passes legitimately (not via an exemption hiding the gap).
+    check_metadata_invariants(log)
+    assert validate_forward_pass(model, [x], input_kwargs={})
+
+
+def test_plain_trace_mistral_has_no_functionless_replacement():
+    """TRIPWIRE on the real reproducer: tiny Mistral must trace cleanly.
+
+    The HuggingFace Mistral attention mask is built inside ``torch.vmap``; plain
+    tracing must surface it as an internal source, never a functionless
+    intervention placeholder.
+    """
+
+    transformers = pytest.importorskip("transformers")
+    from torchlens import trace as trace_fn
+
+    cfg = transformers.MistralConfig(
+        hidden_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        intermediate_size=128,
+        vocab_size=100,
+        max_position_embeddings=32,
+        sliding_window=16,
+    )
+    model = transformers.MistralForCausalLM(cfg).eval()
+    log = trace_fn(model, [], {"input_ids": torch.randint(0, 100, (1, 16))})
+
+    assert _functionless_replacement_ops(log) == []
+    assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
+    check_metadata_invariants(log)
