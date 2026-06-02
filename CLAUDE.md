@@ -1,7 +1,7 @@
 # TorchLens Agent Guide
 
 TorchLens logs PyTorch eager execution: run a normal forward pass, record operation
-metadata and activations, then inspect the resulting `ModelLog`. Torch function
+metadata and activations, then inspect the resulting `Trace`. Torch function
 wrapping is lazy in 2.x: `import torchlens` keeps torch clean, and the first capture
 calls `wrap_torch()` through model preparation. The wrappers then stay installed until
 an explicit `torchlens.decoration.unwrap_torch()`.
@@ -21,8 +21,8 @@ extras gate appliance and bridge namespaces; see `pyproject.toml` for the curren
 ```python
 import torchlens as tl
 
-log = tl.log_forward_pass(model, x, vis_opt="none")
-activation = log["linear_1_1"].activation
+log = tl.trace(model, x)
+activation = log["linear_1_1"].out
 print(log.summary())
 print(tl.report.explain(log))
 ```
@@ -30,10 +30,10 @@ print(tl.report.explain(log))
 Use selectors for intervention discovery:
 
 ```python
-log = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
-site = log.find_sites(tl.func("relu")).first()
+log = tl.trace(model, x, intervention_ready=True)
+sites = log.find_sites(tl.func("relu"))
 edited = log.fork("zero_relu")
-edited.attach_hooks(tl.label(site.layer_label), tl.zero_ablate())
+edited.attach_hooks(tl.func("relu"), tl.zero_ablate())
 edited.rerun(model, x)
 ```
 
@@ -48,7 +48,7 @@ print(tl.compat.report(model, x).to_markdown())
 - Top-level `torchlens.__all__` has 40 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - `torchlens.fastlog` is the sparse predicate recorder; it returns `Recording`, not a
-  faithful `ModelLog`.
+  faithful `Trace`.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,
   profiler, and related tools.
@@ -88,6 +88,14 @@ TorchLens failed to wrap). An exemption was added to the metadata invariant to p
 was backwards: it disarmed the tripwire. The correct fix is to make capture actually trace those
 ops so no placeholder is synthesized during plain capture; any replacement-op exemption must be
 scoped to GENUINE user interventions only.
+
+## Keep the glossary + docs in lockstep with code (LOCKED)
+
+The glossary is the **canonical** API spec (vault `brain/projects/torchlens/reports/<date>-glossary-vN/torchlens_glossary.md`); code conforms to it (spec-drives-code). A rename is not *done* until the docs match too:
+
+- **Rename / add / remove any PUBLIC name** (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) → in the SAME change, update: (1) the **glossary** entry (canonical), (2) this `CLAUDE.md` + `AGENTS.md` examples, (3) the audit notebooks (`notebooks/audit/`) and `examples/` that use it.
+- A change that touches code but leaves the glossary/docs stale is **INCOMPLETE.** This is exactly how the v7 `memory → activation_memory` gap and the stale `log_forward_pass`/`vis_opt` examples slipped through.
+- After a rename/conformance sprint: re-file the updated glossary to the vault (it supersedes the prior dated version), and confirm a `grep` of every old name is clean across `torchlens/`, `tests/`, `examples/`, `notebooks/`, AND the glossary itself.
 
 ## Testing Tiers
 

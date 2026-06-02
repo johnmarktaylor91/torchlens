@@ -4,7 +4,7 @@
 TorchLens extracts activations and computational graph metadata from PyTorch eager
 models. It lazily wraps PyTorch functions with toggle-gated wrappers on first capture,
 runs forward passes with the logging toggle enabled, and logs operations into
-`ModelLog`, `LayerLog`, and `LayerPassLog` objects.
+`Trace`, `Layer`, and `Op` objects.
 
 ## Architecture
 See `.project-context/architecture.md` for the older full map and
@@ -12,8 +12,8 @@ See `.project-context/architecture.md` for the older full map and
 `CLAUDE.md` files for per-module details.
 
 Key entry points:
-- Main capture: `torchlens/user_funcs.py` - `log_forward_pass()`, `show_model_graph()`,
-  `show_backward_graph()`, `validate_forward_pass()`
+- Main capture: `torchlens/user_funcs.py` - `trace()`, `show_model_graph()`,
+  `draw_backward()`, `validate_forward_pass()`
 - Lazy decoration: `torchlens/decoration/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and `patch_detached_references()`
 - Forward-pass orchestration: `torchlens/capture/trace.py`
@@ -73,7 +73,7 @@ pytest tests/ -m "not slow" -x --tb=short
   `element_size()` are decorated.
 - If a `@property` raises `AttributeError`, Python falls through to `__getattr__`; use
   `ValueError` for TorchLens multi-pass access errors.
-- `copy()` on `LayerPassLog` shallow-copies selected graph fields and deep-copies the rest.
+- `copy()` on `Op` shallow-copies selected graph fields and deep-copies the rest.
 - `torchlens.__version__` and `pyproject.toml` are release-pipeline state; do not update them
   in feature/docs tasks unless release work explicitly asks for it.
 
