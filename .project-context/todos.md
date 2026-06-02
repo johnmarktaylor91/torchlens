@@ -96,6 +96,8 @@ Filed 2026-05-14 from JMT spotting the halt-implies-sub-baseline-perf insight du
 
 ### Capture + surface input preprocessing pipeline (filed 2026-05-28)
 
+[PARTIAL -- core shipped (`tl.trace` has live `transform=`/`save_raw_input`/`output_transform` kwargs; `Trace.raw_input`/`raw_output` instance fields exist + are KEEP in portable spec; `tl.autoroute.input`/`output` registries + HF `trace_text`/`trace_image`/`trace_multimodal` bridge tracers shipped; `_render_raw_input` + image=/imagescale in rendering.py). STILL OPEN: a structured `trace.input_preprocessing` record (tokenizer/processor descriptor for portable serialization) -- only the small raw-input thumbnail/repr is saved today, not a serialized transform descriptor.]
+
 **Status:** filed during the `tl.trace(hf_model, "text")` auto-routing sprint. When the input to `tl.trace` isn't already a tensor (e.g. raw text, PIL image, audio waveform), there's a preprocessing step that converts it to the actual tensor the model consumes. Today that preprocessing is opaque to the trace — once tokenization runs, only the resulting token-ID tensor is visible. Users lose the link back to the source text / image / audio.
 
 **Idea:** explicitly capture the preprocessing step and surface it on the Trace:
@@ -422,6 +424,7 @@ Already filed at `.project-context/buffer_refactor_proposal.md` — promote Buff
 Decided NOT to add Op/Layer sub-config objects pre-launch (only ~5 fields per scope; below the bloat threshold). Trace.capture_config namespace migration is already deferred in the v3 deltas. Post-launch: re-audit ALL classes for "is this attribute count a problem?" — Op has ~70 fields; some natural clusters (function-call cluster, output-tensor cluster, output-gradient cluster, etc.) might earn sub-config dataclasses. Decide per-cluster only when a clear sub-object naming + boundary is evident.
 
 **c. Convenience fields for Op/Layer INPUTS (currently output-focused).**
+[DONE verified 2026-06-01 -- the full locked cluster `op.input_ops`/`input_activations`/`input_shapes`/`input_dtypes`/`input_memory`/`num_inputs` is present on a real Op instance (verified via `tl.trace` of a toy model).]
 **STATUS 2026-05-23: NAMES LOCKED (see deltas log `Op input-side @property cluster`). Implementation pending.** Final cluster: `op.input_ops`, `op.input_activations`, `op.input_shapes`, `op.input_dtypes`, `op.input_memory`, `op.num_inputs`. Graph-parents only; Param/Buffer flows deferred to follow-on. Notes below preserved for archaeology.
 
 Op fields default to OUTPUT (locked convention). But users often want input-side info too — input shapes, input dtypes, input memory aggregate. Currently accessible via `op.parents` (label list) + per-parent Op lookup. Convenience fields like `Op.input_shapes`, `Op.input_dtypes`, `Op.input_memory_total` (`@property` derivations) would be ergonomic for inspection. Discussion topic: which inputs do users actually want, what's the right level of derivation, do these conflict with the OUTPUT convention. Defer until use cases mature.
@@ -451,12 +454,15 @@ When an Op's output is passed as MULTIPLE args to a child Op (e.g., `add(x, x)`)
 When an Op's output was modified in-place between children, the children see different tensor versions. Currently captured in data (`out_versions_by_child`) but unclear if visualization marks this. Should be a visual cue (color, annotation, branching) so users notice. Defer to vis sprint.
 
 **m. `num_modules` on Trace — total submodule count for the model.**
+[DONE verified 2026-06-01 -- `Trace.num_modules` present on a real Trace instance.]
 **STATUS 2026-05-23: NAMED LOCKED as `Trace.num_modules` (bare).** Implementation pending. See deltas log `Trace.num_modules`.
 
 **n. Module descendant call count + call-depth-from-beneath.**
+[DONE verified 2026-06-01 -- `Module.num_descendant_calls`/`max_descendant_depth` AND `ModuleCall.num_descendant_calls`/`max_descendant_depth` all present (hasattr on the classes).]
 **STATUS 2026-05-23: NAMES LOCKED.** Final: `Module.num_descendant_calls`, `Module.max_descendant_depth` (and same on ModuleCall, per-call). Folded into the call-tree accessor lock — see deltas log `Module / ModuleCall call-tree accessor + display`.
 
 **o. Op vs Module parity for `args_summary` / `kwargs_summary` / `args_template` / `kwargs_template`.**
+[DONE verified 2026-06-01 -- `ModuleCall.forward_args_summary`/`forward_kwargs_summary` (instance attrs, set in __init__ + FieldPolicy.KEEP in module.py) and `forward_args_template`/`forward_kwargs_template` (class attrs) all present; `Op.args_summary`/`kwargs_summary` present too. Full quartet shipped.]
 **STATUS 2026-05-23: NAMES LOCKED.** ModuleCall gets the full quartet: `forward_args_summary` + `forward_kwargs_summary` + `forward_args_template` + `forward_kwargs_template`. See deltas log `Module / ModuleCall args/kwargs template parity`.
 
 **p. Unified handles/references sprint — Param handles + all other runtime PyTorch object handles.**
@@ -546,6 +552,7 @@ Filed 2026-05-21 during glossary v3 rename pass. Park until post-rename. The v3 
 
 ### Recursive params accessor on Module (PyTorch parity gap)
 
+[DONE verified 2026-06-01 -- `Module.recursive_params`, `Module.num_recursive_params`, `Module.recursive_param_addresses` all present (hasattr on Module). The locked companion-count family shipped.]
 **STATUS 2026-05-23: NAMES LOCKED (see deltas log `Recursive params accessor on Module`). Implementation pending.**
 
 Currently `Module.params` returns only directly-owned Params (this Module's address only). PyTorch's `nn.Module.parameters()` defaults to RECURSIVE (this module + all address-based sub-modules). TorchLens lacks the recursive equivalent.
@@ -586,6 +593,7 @@ Filed 2026-05-21 during glossary v3 rename pass. Post-documentation-sprint addit
 
 ### Call-tree fetching/display on Trace/Module/ModuleCall
 
+[PARTIAL -- the DISPLAY method `show_call_tree(max_depth, include_atomic, show_call_index, file)` is shipped on Trace, Module, and ModuleCall (verified present on instances; matches glossary v9 lines 694/1206/1325). STILL OPEN: the structured DATA accessor `call_tree` / `CallTreeNode` (the `node.call` + `node.children` object form) -- `call_tree` is absent on Trace, Module, and ModuleCall, and is NOT in glossary v9. Only the ASCII display landed.]
 **STATUS 2026-05-23: NAMES LOCKED (see deltas log `Module / ModuleCall call-tree accessor + display`). API + companion fields fully locked. Display method body pending implementation.**
 
 Currently the call tree is accessible only one-hop at a time (`ModuleCall.call_parent`, `call_children`). Reconstructing the full subtree requires manual recursion. Should be a first-class accessor + display method.
@@ -650,6 +658,7 @@ Filed 2026-05-21 during glossary v3 rename pass. Post-documentation-sprint addit
 
 ### Module-scope memory aggregate naming — three quantities need disambiguating field family
 
+[DONE verified 2026-06-01 -- the Option-3 principled refactor shipped: `ModuleCall.output_activation_memory`/`internal_activation_memory`/`output_gradient_memory`/`internal_gradient_memory` (single-call quadrants) and `Module.total_output_activation_memory`/`total_internal_activation_memory` (cross-call) all present on instances; the legacy bare `activation_memory` is GONE from both ModuleCall and Module. The `output_`/`internal_` prefix family + `total_` cross-call convention landed.]
 **STATUS 2026-05-23: NAMES LOCKED (see deltas log `Module / ModuleCall internal-memory cluster + output_/internal_ prefixes`). Implementation pending.** Final convention: `output_` and `internal_` prefixes at ModuleCall (single-call quadrants) and Module (cross-call `total_` versions only — drill into ModuleCall for per-call values). Notes below preserved for archaeology.
 
 Module/ModuleCall have THREE distinct legitimate "memory" quantities that current v3 naming doesn't cleanly disambiguate:
@@ -1046,6 +1055,8 @@ Filed 2026-05-21 during glossary v3 rename pass. Lands with the universal-access
 
 ### Kill `streaming_pass_logs` / `num_streamed_ops` / `streamed_trace()` (redundant with Bundle)
 
+[DONE verified 2026-06-01 -- grep across torchlens/ finds ZERO non-pycache hits for `streaming_pass_logs` / `num_streamed_ops` / `num_streamed_passes` / `streamed_trace`; the entire streaming-pass surface is removed. (Separate "activation streaming during capture" surface intentionally KEPT per the note below.)]
+
 Pre-launch removal. The streaming-pass surface is a pre-Bundle hack that survived: a utility iterates inputs, captures one Trace per input, stashes the list on the first Trace as `streaming_pass_logs: List[Trace]` with companion count `num_streamed_ops`. Bundle handles this use case cleanly (named members, Super* alignment, proper container management).
 
 **Remove:**
@@ -1159,6 +1170,8 @@ The 2026-05-14 perf benchmarks (commits `3409c25` + `30dc452`) surface concrete 
 Filed 2026-05-14 from JMT pointing out that power-user perf guidance needs a concentrated docs surface.
 
 ### Ergonomic: string input to `log_forward_pass` (auto-tokenize)
+
+[DONE verified 2026-06-01 -- delivered via the input auto-routing system rather than the duck-typed dispatch sketched here: `tl.autoroute.input` is a priority registry and `tl.trace` dispatches non-tensor inputs (text/image/multimodal) to the HF bridge tracers (`trace_text`/`trace_image`/`trace_multimodal`). String-input auto-tokenize is shipped (architecture differs from this entry's sketch but the user-facing ergonomic is delivered).]
 
 Allow `tl.log_forward_pass(model, "Hello world")` to auto-tokenize when the model exposes a tokenizer. Matches TransformerLens UX; lowers cognitive friction for the dominant interp workflow; doesn't leak HF into core.
 
@@ -2178,6 +2191,8 @@ Tier 2 (grad_fn-level) in v1. The following are explicitly deferred:
 
 ### Retire ELK from visualization (raised 2026-04-28)
 
+[PARTIAL -- the top-level `torchlens/visualization/elk_layout.py` file is GONE. But ELK is NOT fully retired: an `_elk_internal/layout.py` backend still exists and is wired into `rendering.py` as an escape-hatch engine (`vis_node_placement='elk'`, `render_elk_direct`, `render_with_sfdp` all import from `._elk_internal.layout`). The dedicated "delete all ELK" cleanup PR has NOT happened -- only the file was relocated/renamed.]
+
 Policy decision: visualization is **graphviz now, dagua later** — no more
 ELK work. `torchlens/visualization/elk_layout.py` (~1276 lines) and any
 graphviz-side ELK plumbing should be deleted in a dedicated cleanup PR.
@@ -2616,7 +2631,7 @@ but are natural follow-ons. Pick up after MVP ships.
   Each rename ships with a deprecation alias for one minor cycle.
   Coordinated batch pass — users update once, not five times.
 
-- Generic `transform=` kwarg on `tl.trace` + raw-input rendering
+- [PARTIAL -- the core primitive shipped: `tl.trace` has live `transform=` (user_input->model_input), `save_raw_input`, `output_transform`, `save_raw_output` kwargs; `Trace.raw_input`/`raw_output` are real instance fields (KEEP in portable spec, default save mode "small"); `rendering.py` has `_render_raw_input` + `image=`/`imagescale=true` for raw-input node rendering + a per-layer `visualizer_path` (image=) path. STILL OPEN: a dedicated `tl.transforms.*` built-in library (`hf_tokenize`/`image_preprocess`/etc.) does NOT exist (no `torchlens.transforms` module); the full per-modality batch-summary helpers (`tl.viz.batch_summary`, montage/text-table/waveform-stack) and `tl.register_input_renderer` aren't surfaced. Primitive + basic rendering done; the transforms-library + viz-polish tail is open.] Generic `transform=` kwarg on `tl.trace` + raw-input rendering
   (raised 2026-05-07). Refines the text-input idea below into a
   cleaner architecture: instead of putting tokenization in a bridge,
   add a generic preprocessing primitive to core that ANY domain can
@@ -2875,7 +2890,7 @@ but are natural follow-ons. Pick up after MVP ships.
   an afternoon for the primitive; another afternoon-or-two for the
   built-ins.
 
-- HuggingFace bridge: text-input ergonomics for language models
+- [DONE verified 2026-06-01 -- `torchlens.bridge.hf.trace_text` (and `trace_image` / `trace_multimodal`) all exist and import cleanly; `tl.autoroute.input` is the priority registry `tl.trace` dispatches through by input type. Glossary v9 documents the shipped auto-routing + HF bridge tracers. The text-input ergonomic landed in the bridge as designed (core `tl.trace` stays domain-clean).] HuggingFace bridge: text-input ergonomics for language models
   (raised 2026-05-07). TransformerLens lets users feed raw text to a
   language model and auto-applies tokenization + embedding lookup.
   Pleasant UX. We can match the ergonomics WITHOUT TransformerLens's
@@ -3279,7 +3294,7 @@ but are natural follow-ons. Pick up after MVP ships.
   the snapshot/demo SVGs. Surfaced during the 2026-05-07 demo notebook
   push.
 
-- Rethink the parameter name `activation_postfunc` itself. Current name is
+- [DONE verified 2026-06-01 -- the canonical kwarg on `tl.trace` / `SaveOptions` is now `activation_transform` (and `grad_transform`); `activation_postfunc` is NOT a live kwarg anywhere in torchlens/ (only the `ActivationPostfunc` type-alias NAME survives). The rename landed.] Rethink the parameter name `activation_postfunc` itself. Current name is
   awkward (`-postfunc` suffix) and the semantic now reads as a "transform"
   hook, not a "post-processing function" (after the raw-vs-transformed
   split landed in PR #166). Candidates: `activation_transform`,
