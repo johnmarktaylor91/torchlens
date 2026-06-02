@@ -7,21 +7,22 @@
 > the ModuleCall/Module Output Passthroughs sections — the `output_`/`internal_`-prefixed
 > cluster covers module-scope memory) and removed the false `tl.log_forward_pass` alias claim
 > from the auto-routing section (no such alias exists; the entry point is `tl.trace`).
-> **OPEN FOR JMT (not resolved here):** the diff surfaced a set of LOCK-BACKED naming targets
-> (5/21-era rename-sprint locks) that the shipped code never implemented — e.g.
-> `is_submodule_input`→`is_module_input`, `input_to_modules`→`input_to_module_calls`,
-> `Op.args_summary`/`kwargs_summary`, `grad_fn_label`+`grad_fn`-as-resolver, `multi_output_type`,
+> **RESOLVED (conformance sprint, commits `bdf4f23`..`3858711` on local main):** the
+> implement-in-code path was chosen (per spec-drives-code). The LOCK-BACKED residual set is now
+> shipped in code: `is_submodule_input`→`is_module_input`/`is_module_output` (the semantic
+> redefinition), `input_to_modules` (distinct from `input_to_module_calls`),
+> `Op.args_summary`/`kwargs_summary`, `grad_fn_label` + `grad_fn`-as-resolver, `multi_output_type`,
 > the `atomic_module`/`atomic_module_address`/`atomic_module_call_label` resolver cluster,
-> `gradient_transform`, `has_saved_gradient` (code: `has_grad`), `Param.is_trainable`
-> (code: `trainable`), the Buffer overwrite cluster, Module `total_flops`/`total_macs`/
-> `internal_param_memory`, and `Module.call_parent_address`/`_module`. These are NOT glossary
-> hallucinations (each is logged `LOCKED` in `glossary_walkthrough_deltas.md`); per
-> spec-drives-code they should be CODE fixes, but the set is large and includes a semantic
-> redefinition (`is_module_input`), so it is a scoped decision pending JMT (implement-in-code
-> sprint vs roll back the locks). The line below ("code conforms") is therefore **aspirational
-> for that residual set**, not yet true.
+> `gradient_transform`, `has_saved_gradient`, `Param.is_trainable`, the Buffer overwrite cluster
+> (`is_overwritten`/`num_overwrites`/`last_overwrite_source`), Module
+> `total_flops`/`total_macs`/`internal_param_memory`, and
+> `Module.call_parent_address`/`call_children_addresses`. The **clean-break** decision was honored
+> (no deprecation shims — old names removed outright; callers migrated), and the internal record
+> module files were de-`_log`'d (`op_log.py`→`op.py`, …, `model_log.py`→`trace.py`). tier-2 green
+> (2312 passed, 0 failed). **TorchLens local-main code now FULLY conforms to this glossary** — the
+> "code conforms" line below is no longer aspirational.
 
-> **Re-filed to vault 2026-06-02 (v9)** — finalized against the shipped code. Since v8: the **input auto-routing** section, the re-walked 5/21 **parity gaps** (`Op.args_summary`/`kwargs_summary`, the ModuleCall arg-parity cluster), the corrected `Op.grad_fn`/`grad_fn_handle` convention text, and the **5 resolved glossary nits** (phantom `root_call`/`max_call_depth`/`report_values` removed, Layer saved-predicates singular, Op distances `_to_output`). The v7 unit-type family (`tl.Quantity`/`Bytes`/`Duration`/`Flops`/`Macs`, `*_str` deleted, `memory→activation_memory`) is now **implemented in code**. **TorchLens local-main code conforms to this glossary** (modulo the lock-backed residual set flagged in the reconciliation note above). (Supersedes `2026-05-27-glossary-v8`.)
+> **Re-filed to vault 2026-06-02 (v9)** — finalized against the shipped code. Since v8: the **input auto-routing** section, the re-walked 5/21 **parity gaps** (`Op.args_summary`/`kwargs_summary`, the ModuleCall arg-parity cluster), the corrected `Op.grad_fn`/`grad_fn_handle` convention text, and the **5 resolved glossary nits** (phantom `root_call`/`max_call_depth`/`report_values` removed, Layer saved-predicates singular, Op distances `_to_output`). The v7 unit-type family (`tl.Quantity`/`Bytes`/`Duration`/`Flops`/`Macs`, `*_str` deleted, `memory→activation_memory`) is now **implemented in code**. **TorchLens local-main code FULLY conforms to this glossary** — the lock-backed residual set was implemented in the 2026-06 conformance sprint (commits `bdf4f23`..`3858711`); see the reconciliation note above. (Supersedes `2026-05-27-glossary-v8`.)
 
 > **v9 (2026-05-31)** — Adds the **Input auto-routing** section (`tl.autoroute.input` priority registry + the HuggingFace `trace_text` / `trace_image` / `trace_multimodal` bridge tracers that `tl.trace` dispatches to by input type). Closes two verified 5-21 parity gaps re-walked from the lock log: `Op.args_summary` / `Op.kwargs_summary`, and the ModuleCall `forward_arg_names` / `num_forward_args_total` / `num_forward_pos_args` / `num_forward_kwargs` / `has_saved_forward_args` cluster. Removes a stale "Op input convenience fields deferred" bullet (those landed under the 5-23 input-tensor lock). Auto-routing carries no walkthrough lock — it documents the shipped code names (no competing locked target exists in the lock log). **OPEN for JMT:** Op `min/max_distance_to_output` vs Layer `min/max_distance_to_output` naming asymmetry — no lock dictates harmonizing, left as-is pending a call.
 >
