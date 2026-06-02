@@ -55,9 +55,13 @@ def gpt2_mlp(module: Any) -> dict[str, Any]:
     return result
 
 
-@register(class_name="DistilBertFFN", target_scope="module", facets=_MLP_FACETS)
+@register(class_name=("FFN", "DistilBertFFN"), target_scope="module", facets=_MLP_FACETS)
 def distilbert_ffn(module: Any) -> dict[str, Any]:
-    """Return facets for DistilBERT FFN modules."""
+    """Return facets for DistilBERT FFN modules.
+
+    transformers >= 4.57 renamed the module class from ``DistilBertFFN`` to ``FFN``;
+    both exact names are matched so facets populate across transformers versions.
+    """
 
     result: dict[str, Any] = {}
     up_out = child_out(module, "lin1")
