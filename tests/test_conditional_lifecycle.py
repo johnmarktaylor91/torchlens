@@ -12,7 +12,7 @@ import torch.nn as nn
 from torchlens import trace as trace_fn
 from torchlens._deprecations import _WARNED_DEPRECATIONS
 from torchlens.data_classes.cleanup import _remove_log_entry_references
-from torchlens.data_classes.model_log import ConditionalEvent, Trace
+from torchlens.data_classes.trace import ConditionalEvent, Trace
 from torchlens.postprocess.labeling import (
     _rename_model_history_layer_names,
     _replace_layer_names_for_layer_entry,

@@ -31,9 +31,9 @@ from test_conditional_multipass import (
 from test_conditional_rendering import BranchEntryWithArgLabelModel
 from test_conditional_step5 import ElifLadderModel, SimpleIfElseModel
 from torchlens import check_metadata_invariants, trace as trace_fn
-from torchlens.data_classes.layer_log import Layer
-from torchlens.data_classes.op_log import Op
-from torchlens.data_classes.model_log import ConditionalEvent, Trace
+from torchlens.data_classes.layer import Layer
+from torchlens.data_classes.op import Op
+from torchlens.data_classes.trace import ConditionalEvent, Trace
 
 
 @pytest.fixture(autouse=True)

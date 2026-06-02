@@ -4,8 +4,8 @@ import random
 from typing import TYPE_CHECKING, Union, cast
 
 if TYPE_CHECKING:
-    from .model_log import Trace
-    from .module_log import Module
+    from .trace import Trace
+    from .module import Module
 
 
 def _give_user_feedback_about_lookup_key(

@@ -57,7 +57,7 @@ from .ir import live_record_for_label
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
 from .types import ActivationPostfunc, GradientPostfunc
-from .data_classes.model_log import (
+from .data_classes.trace import (
     Trace,
 )
 from .options import (
@@ -744,7 +744,7 @@ def _detach_nested_for_cache(value: Any) -> Any:
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .data_classes.module_log import Module
+    from .data_classes.module import Module
 
 
 def _unwrap_data_parallel(model: nn.Module) -> nn.Module:
@@ -2103,7 +2103,7 @@ def show_model_graph(
     try:
         render_kwargs = visualization_to_render_kwargs(visualization_options)
         if module is not None:
-            from .data_classes.module_log import Module
+            from .data_classes.module import Module
 
             render_kwargs["module"] = module.address if isinstance(module, Module) else module
         if code_panel is not False:

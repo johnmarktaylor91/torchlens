@@ -66,10 +66,10 @@ from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
-from ..data_classes.op_log import Op
+from ..data_classes.op import Op
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
 
 
 @dataclass

@@ -70,7 +70,7 @@ from .loop_detection import _detect_and_label_loops, _group_by_shared_params
 from ._materialize import materialize_from_events
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
 
 from ..quantities import Bytes
 from ..utils.display import _vprint, _vtimed

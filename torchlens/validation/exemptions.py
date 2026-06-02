@@ -33,11 +33,11 @@ from typing import Any, Callable, Dict, List, Set, TYPE_CHECKING, Union
 
 import torch
 
-from ..data_classes.op_log import Op
+from ..data_classes.op import Op
 from ..utils.tensor_utils import tensor_all_nan
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
 
 
 # ---------------------------------------------------------------------------

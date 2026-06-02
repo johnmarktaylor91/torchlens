@@ -69,8 +69,8 @@ from .._literals import (
 )
 from ..data_classes.internal_types import VisualizationOverrides
 from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
-from ..data_classes.op_log import Op
-from ..data_classes.layer_log import Layer
+from ..data_classes.op import Op
+from ..data_classes.layer import Layer
 from ..viz import batch_summary
 from .modes import COLLAPSED_MODE_REGISTRY, DOMAIN_NODE_MODES, MODE_REGISTRY
 from ._label_format import (
@@ -109,9 +109,9 @@ from ._render_utils import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.grad_fn_log import GradFn
-    from ..data_classes.model_log import Trace
-    from ..data_classes.module_log import Module
+    from ..data_classes.grad_fn import GradFn
+    from ..data_classes.trace import Trace
+    from ..data_classes.module import Module
 
 BaseGraphNode = Union["Op", "Layer"]
 
@@ -1789,7 +1789,7 @@ def _resolve_focus_module(
         If the module cannot be found or belongs to a different Trace.
     """
 
-    from ..data_classes.module_log import Module
+    from ..data_classes.module import Module
 
     if isinstance(module, str):
         if module not in trace.modules:

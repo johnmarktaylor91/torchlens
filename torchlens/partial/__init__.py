@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.op_log import Op
-    from torchlens.data_classes.model_log import Trace
+    from torchlens.data_classes.op import Op
+    from torchlens.data_classes.trace import Trace
 
 
 @dataclass(frozen=True)

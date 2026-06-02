@@ -10,12 +10,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..data_classes.buffer_log import BufferAccessor
-from ..data_classes.module_log import ModuleAccessor
+from ..data_classes.buffer import BufferAccessor
+from ..data_classes.module import ModuleAccessor
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
-    from ..data_classes.module_log import Module, ModuleCall
+    from ..data_classes.trace import Trace
+    from ..data_classes.module import Module, ModuleCall
 
 
 def rebuild_trace_accessors(

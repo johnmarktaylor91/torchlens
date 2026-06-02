@@ -10,8 +10,8 @@ import torch
 import torchlens as tl
 from torchlens._trace_state import TraceState
 from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.op_log import Op
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.op import Op
+from torchlens.data_classes.trace import Trace
 from torchlens.intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     MODEL_LOG_FIELD_FORK_POLICY,

@@ -3,7 +3,7 @@
 import ast
 import inspect
 
-import torchlens.data_classes.model_log as trace_module
+import torchlens.data_classes.trace as trace_module
 
 
 EXPECTED_MODELLOG_METHODS = {

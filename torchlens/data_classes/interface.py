@@ -21,11 +21,11 @@ For slice keys: returns a list slice of ``layer_list``.
 from typing import TYPE_CHECKING, Any, List, Tuple, cast
 
 if TYPE_CHECKING:
-    from .model_log import Trace
+    from .trace import Trace
     from ..capture.projections import LiveOpView
 
 from ._lookup_keys import _give_user_feedback_about_lookup_key
-from .op_log import Op
+from .op import Op
 from ..capture.projections import LiveOpView
 from ..intervention.errors import SiteAmbiguityError
 from ..intervention.selectors import BaseSelector

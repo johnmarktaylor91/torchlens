@@ -37,10 +37,10 @@ from typing import TYPE_CHECKING
 from ..errors._base import ValidationError
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_log import Layer
-    from ..data_classes.op_log import Op
-    from ..data_classes.model_log import Trace
-    from ..data_classes.module_log import Module
+    from ..data_classes.layer import Layer
+    from ..data_classes.op import Op
+    from ..data_classes.trace import Trace
+    from ..data_classes.module import Module
 
 
 class MetadataInvariantError(ValidationError, ValueError):

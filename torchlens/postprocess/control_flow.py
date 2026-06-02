@@ -19,14 +19,14 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 import torch
 
-from ..data_classes.op_log import Op
+from ..data_classes.op import Op
 from ..utils.display import identity
 from ..utils.tensor_utils import safe_copy
 from . import ast_branches
 
 if TYPE_CHECKING:
     from ..data_classes.func_call_location import FuncCallLocation
-    from ..data_classes.model_log import ConditionalEvent, Trace
+    from ..data_classes.trace import ConditionalEvent, Trace
 
 
 _BRANCH_CONTEXT_KINDS = frozenset({"if_test", "elif_test", "ifexp"})
@@ -218,7 +218,7 @@ def _materialize_conditional_records(
         Mapping from structural conditional key to the dense event object.
     """
 
-    from ..data_classes.model_log import ConditionalEvent
+    from ..data_classes.trace import ConditionalEvent
 
     record_lookup = _build_conditional_record_lookup(file_indexes)
     self.conditional_records = []

@@ -26,7 +26,7 @@ from .hooks import normalize_hooks_from_spec
 from .runtime import active_intervention_context
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
     from .hooks import NormalizedHookEntry
 
 

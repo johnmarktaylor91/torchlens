@@ -476,11 +476,11 @@ if TYPE_CHECKING:
 
     from .._io.lazy import LazyActivationRef
     from .func_call_location import FuncCallLocation
-    from .layer_log import Layer
-    from .layer_log import OpAccessor
-    from .module_log import Module
-    from .param_log import Param
-    from .model_log import Trace
+    from .layer import Layer
+    from .layer import OpAccessor
+    from .module import Module
+    from .param import Param
+    from .trace import Trace
 
 
 class Op:
@@ -1343,7 +1343,7 @@ class Op:
     def input_ops(self) -> "OpAccessor":
         """Accessor over graph-parent Op records in ``parents`` order."""
 
-        from .layer_log import OpAccessor
+        from .layer import OpAccessor
 
         trace = self._source_trace_or_error()
         parent_ops = {}
@@ -2345,7 +2345,7 @@ class Op:
     @property
     def params(self) -> Any:
         """Access parameter metadata by address, short name, or index."""
-        from .param_log import ParamAccessor
+        from .param import ParamAccessor
 
         param_dict = {pl.address: pl for pl in self._param_logs}
         return ParamAccessor(param_dict)

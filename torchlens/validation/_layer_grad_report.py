@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal
 import torch
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
 
 MIN_MODULE_OUTPUT_COVERAGE: float = 0.80
 

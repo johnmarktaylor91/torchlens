@@ -12,7 +12,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens.backends.torch.backward import _make_grad_fn_hook, _make_grad_fn_prehook
-from torchlens.data_classes.grad_fn_log import GradFn
+from torchlens.data_classes.grad_fn import GradFn
 from torchlens.intervention.errors import HelperMountError, SelectorCompositionError
 from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import _selector_from_target_spec, normalize_hook_plan

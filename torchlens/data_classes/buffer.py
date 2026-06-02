@@ -19,12 +19,12 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
-from .op_log import Op
+from .op import Op
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .model_log import Trace
+    from .trace import Trace
 
 
 def _buffer_log_to_row(buffer_log: "Buffer") -> Dict[str, Any]:

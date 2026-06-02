@@ -17,7 +17,7 @@ pytest.importorskip("safetensors")
 from torchlens import load, trace as trace_fn, save
 from torchlens._io import TorchLensIOError
 from torchlens._io.manifest import sha256_of_file
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.trace import Trace
 
 
 class _CorruptionModel(nn.Module):

@@ -39,7 +39,7 @@ from ..ir.semantics import BackendSemantics, CapturePolicy
 
 if TYPE_CHECKING:
     from ..fastlog.options import RecordingOptions
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
     from ..ir import LiveOpRecord
 
 _active_recording_state: "RecordingState | None" = None

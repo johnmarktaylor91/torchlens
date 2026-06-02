@@ -69,10 +69,10 @@ if TYPE_CHECKING:
     from ..fastlog.types import ModuleStackFrame
     from ..intervention.types import FireRecord
     from ..visualization.code_panel import CodePanelOption
-    from .buffer_log import BufferAccessor
+    from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
-    from .layer_log import LayerAccessor
-    from .module_log import Module, ModuleCall
+    from .layer import LayerAccessor
+    from .module import Module, ModuleCall
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .. import _state
@@ -114,8 +114,8 @@ from .cleanup import (
     _scrub_conditional_fields_after_removal,
     cleanup,
 )
-from .module_log import ModuleAccessor
-from .param_log import ParamAccessor
+from .module import ModuleAccessor
+from .param import ParamAccessor
 from ._accessor_base import Accessor
 from .interface import (
     _format_conditional_branch_stack,
@@ -124,9 +124,9 @@ from .interface import (
     _str_after_pass,
     _str_during_pass,
 )
-from .grad_fn_log import GradFnAccessor, GradFn
-from .layer_log import Layer, OpAccessor
-from .op_log import Op, TensorLog
+from .grad_fn import GradFnAccessor, GradFn
+from .layer import Layer, OpAccessor
+from .op import Op, TensorLog
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
 _USE_STORED_TRANSFORM = object()
@@ -3382,7 +3382,7 @@ class Trace:
     @property
     def layers(self) -> "LayerAccessor":
         """Access aggregate per-layer metadata by label, index, or pass notation."""
-        from .layer_log import LayerAccessor
+        from .layer import LayerAccessor
 
         cache_key = len(self.layer_logs)
         cache_entry = _TRACE_LAYER_ACCESSOR_CACHE.get(self)
@@ -3617,7 +3617,7 @@ class Trace:
     def saved_layers(self) -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved activation."""
 
-        from .layer_log import LayerAccessor
+        from .layer import LayerAccessor
 
         return LayerAccessor(
             OrderedDict(
@@ -3632,7 +3632,7 @@ class Trace:
     def saved_grad_layers(self) -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved gradient."""
 
-        from .layer_log import LayerAccessor
+        from .layer import LayerAccessor
 
         return LayerAccessor(
             OrderedDict(
@@ -3750,7 +3750,7 @@ class Trace:
     def compute_layers(self) -> Accessor[Layer]:
         """Access Layers whose representative Op is not a boundary sentinel."""
 
-        from .layer_log import LayerAccessor
+        from .layer import LayerAccessor
 
         return LayerAccessor(
             OrderedDict(
@@ -3807,7 +3807,7 @@ class Trace:
     def internal_source_layers(self) -> Accessor[Layer]:
         """Access Layers representing internal-source positions."""
 
-        from .layer_log import LayerAccessor
+        from .layer import LayerAccessor
 
         return LayerAccessor(
             OrderedDict(
@@ -3833,7 +3833,7 @@ class Trace:
     def internal_sink_layers(self) -> Accessor[Layer]:
         """Access Layers representing internal-sink positions."""
 
-        from .layer_log import LayerAccessor
+        from .layer import LayerAccessor
 
         return LayerAccessor(
             OrderedDict(

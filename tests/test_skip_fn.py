@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer_log import Layer
+from torchlens.data_classes.layer import Layer
 from torchlens.visualization.rendering import GRADIENT_ARROW_COLOR
 
 

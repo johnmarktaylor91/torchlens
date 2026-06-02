@@ -19,10 +19,10 @@ from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union, cast
 
 import torch
 
-from ..data_classes.op_log import Op
+from ..data_classes.op import Op
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
 
 from ..utils.rng import execute_with_restored_rng_autocast
 from ..utils.collections import assign_to_sequence_or_dict

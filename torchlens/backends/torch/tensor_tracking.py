@@ -37,11 +37,11 @@ import torch
 
 from ._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
 from ...ir import live_record_for_label
-from ...data_classes.op_log import Op
+from ...data_classes.op import Op
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 
 if TYPE_CHECKING:
-    from ...data_classes.model_log import Trace
+    from ...data_classes.trace import Trace
 
 
 def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str) -> None:

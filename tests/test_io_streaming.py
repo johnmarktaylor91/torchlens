@@ -17,7 +17,7 @@ pytest.importorskip("safetensors")
 from torchlens import TorchLensPostfuncError, cleanup_tmp, trace as trace_fn
 from torchlens._io import TorchLensIOError
 from torchlens._io.manifest import Manifest
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.trace import Trace
 
 
 class _StreamingModel(nn.Module):

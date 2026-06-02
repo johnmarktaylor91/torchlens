@@ -11,9 +11,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch.ops import _get_autograd_saved_stats_for_tensor
-from torchlens.data_classes.layer_log import Layer
-from torchlens.data_classes.op_log import Op
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.layer import Layer
+from torchlens.data_classes.op import Op
+from torchlens.data_classes.trace import Trace
 
 
 class TinySequentialModel(nn.Module):

@@ -21,7 +21,7 @@ from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .paths import resolve_bundle_blob_path
-from ..data_classes.model_log import Trace
+from ..data_classes.trace import Trace
 
 _LEGACY_CAPTURE_TRACE_KEYS = {
     "_raw_layer_dict",

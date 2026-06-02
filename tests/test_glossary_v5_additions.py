@@ -9,9 +9,9 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.data_classes import ParamAccessor
-from torchlens.data_classes.layer_log import OpAccessor
-from torchlens.data_classes.module_log import Module, ModuleCall
-from torchlens.data_classes.op_log import Op
+from torchlens.data_classes.layer import OpAccessor
+from torchlens.data_classes.module import Module, ModuleCall
+from torchlens.data_classes.op import Op
 
 
 class _NestedModel(nn.Module):

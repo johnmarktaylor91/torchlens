@@ -16,7 +16,7 @@ pytest.importorskip("safetensors")
 import torchlens as tl
 from torchlens import load, trace as trace_fn, rehydrate_nested, save
 from torchlens._io import BlobRef
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.trace import Trace
 
 PYARROW_AVAILABLE = importlib.util.find_spec("pyarrow") is not None
 

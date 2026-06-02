@@ -39,7 +39,7 @@ layer.ops             # dict[int, Op]
 - `out` for some output/getitem cases may reference parent saved data directly.
 - `grad` is a bare reference; do not mutate it in-place.
 - `save_activation()` must route through `safe_copy()` and respect `backward_ready`.
-- `TensorLog` is a compatibility alias from `op_log.py`; new docs should prefer
+- `TensorLog` is a compatibility alias from `op.py`; new docs should prefer
   `Op` unless referring to the alias itself.
 
 ## Layer Gotchas

@@ -28,10 +28,10 @@ from ..constants import MODEL_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef, Unsupported
 from ..utils.collections import remove_entry_from_list
 from ..utils.tensor_utils import _is_cuda_available
-from .op_log import Op
+from .op import Op
 
 if TYPE_CHECKING:
-    from .model_log import Trace
+    from .trace import Trace
 
 
 def cleanup(self: "Trace") -> None:

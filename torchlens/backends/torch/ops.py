@@ -59,7 +59,7 @@ from ...utils.tensor_utils import get_memory_amount, safe_copy, safe_to, tensor_
 from ...utils.collections import index_nested, ensure_iterable
 from ...capture.flops import compute_backward_flops, compute_forward_flops
 from ...capture.projections import LiveOpView
-from ...data_classes.op_log import (
+from ...data_classes.op import (
     Op,
     _dtype_or_none,
     _memory_or_none,
@@ -132,7 +132,7 @@ from ...fastlog.types import ActivationRecord, CaptureSpec
 from ...capture.salient_args import extract_salient_args
 
 if TYPE_CHECKING:
-    from ...data_classes.model_log import Trace
+    from ...data_classes.trace import Trace
 
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()

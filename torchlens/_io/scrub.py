@@ -17,7 +17,7 @@ from typing import Any, TypeAlias
 import torch
 
 from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
-from ..data_classes.model_log import Trace
+from ..data_classes.trace import Trace
 
 BlobSpec: TypeAlias = tuple[str, torch.Tensor, str, str]
 

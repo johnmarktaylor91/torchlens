@@ -45,8 +45,8 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op_log import Op
-    from ..data_classes.model_log import Trace
+    from ..data_classes.op import Op
+    from ..data_classes.trace import Trace
     from .selectors import SelectorLike
 
 
@@ -583,7 +583,7 @@ def _apply_out_update(site: "Op", tensor: torch.Tensor) -> None:
         Replacement out.
     """
 
-    from ..data_classes.op_log import _set_saved_out_metadata
+    from ..data_classes.op import _set_saved_out_metadata
 
     site._internal_set("out", tensor)
     site._internal_set("transformed_out", None)

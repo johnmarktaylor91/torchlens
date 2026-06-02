@@ -11,7 +11,7 @@ import torchlens as tl
 import torchlens.validation as tl_validation
 import torchlens.validation.backward as backward_validation
 import torchlens.validation.consolidated as consolidated_validation
-from torchlens.data_classes.grad_fn_log import GradFn
+from torchlens.data_classes.grad_fn import GradFn
 
 
 class _TinyBackwardModel(nn.Module):

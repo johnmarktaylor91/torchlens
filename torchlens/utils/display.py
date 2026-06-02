@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Iterator, List, TypeVar, cast
 import torch
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
 
 _T = TypeVar("_T")
 

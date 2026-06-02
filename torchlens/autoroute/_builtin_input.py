@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from torchlens.autoroute.input import register
 from torchlens.bridge import hf as _hf
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.trace import Trace
 
 
 @register(name="hf_text", priority=10)

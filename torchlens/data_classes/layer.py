@@ -42,9 +42,9 @@ from ._accessor_base import Accessor
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .op_log import Op
-    from .model_log import Trace
-    from .param_log import Param
+    from .op import Op
+    from .trace import Trace
+    from .param import Param
 
 
 class OpAccessor(Accessor["Op"]):
@@ -986,7 +986,7 @@ class Layer:
     @property
     def params(self) -> Any:
         """Access parameter metadata by address, short name, or index."""
-        from .param_log import ParamAccessor
+        from .param import ParamAccessor
 
         param_dict = {pl.address: pl for pl in self._param_logs}
         return ParamAccessor(param_dict)

@@ -11,8 +11,8 @@ import torch
 import torch.nn as nn
 
 from torchlens import trace as trace_fn
-from torchlens.data_classes.layer_log import Layer
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.layer import Layer
+from torchlens.data_classes.trace import Trace
 
 
 class AlternatingBranchBlock(nn.Module):

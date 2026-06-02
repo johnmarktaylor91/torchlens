@@ -8,8 +8,8 @@ from torchlens.ir import CaptureEvents, LiveOpRecord
 from torchlens.ir.events import OpEvent
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.model_log import Trace
-    from torchlens.data_classes.op_log import Op
+    from torchlens.data_classes.trace import Trace
+    from torchlens.data_classes.op import Op
 
 
 def materialize_log_from_fields(fields_dict: dict[str, object]) -> "Op":
@@ -26,8 +26,8 @@ def materialize_log_from_fields(fields_dict: dict[str, object]) -> "Op":
         Materialized operation or buffer log.
     """
 
-    from torchlens.data_classes.buffer_log import Buffer
-    from torchlens.data_classes.op_log import Op
+    from torchlens.data_classes.buffer import Buffer
+    from torchlens.data_classes.op import Op
 
     pending_blob_ids = _pop_pending_blob_ids(fields_dict)
     if fields_dict.get("is_buffer"):

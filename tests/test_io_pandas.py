@@ -17,9 +17,9 @@ from torchlens.constants import (
     PARAM_LOG_FIELD_ORDER,
 )
 from torchlens.data_classes._summary import format_call_arg
-from torchlens.data_classes.buffer_log import BufferAccessor
-from torchlens.data_classes.module_log import ModuleCall
-from torchlens.data_classes.param_log import ParamAccessor
+from torchlens.data_classes.buffer import BufferAccessor
+from torchlens.data_classes.module import ModuleCall
+from torchlens.data_classes.param import ParamAccessor
 
 
 class _SummaryBlock(nn.Module):

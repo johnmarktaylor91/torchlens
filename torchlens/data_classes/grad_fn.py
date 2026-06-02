@@ -12,12 +12,12 @@ from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_v
 from ..constants import GRAD_FN_LOG_FIELD_ORDER
 from ..quantities import Duration
 from ._accessor_base import Accessor
-from .grad_fn_call_log import GradFnCall
+from .grad_fn_call import GradFnCall
 
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .layer_log import Layer
+    from .layer import Layer
 
 
 class GradFnCallAccessor(Accessor[GradFnCall]):

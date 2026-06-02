@@ -14,8 +14,8 @@ from ._label_format import format_shape
 from .node_spec import NodeSpec
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_log import Layer
-    from ..data_classes.module_log import Module
+    from ..data_classes.layer import Layer
+    from ..data_classes.module import Module
 
 NodeModeFn = Callable[["Layer", NodeSpec], NodeSpec]
 CollapsedNodeModeFn = Callable[["Module", NodeSpec], NodeSpec]

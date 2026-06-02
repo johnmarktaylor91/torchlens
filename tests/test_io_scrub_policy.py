@@ -6,13 +6,13 @@ import torch
 from torch import nn
 
 from torchlens import trace as trace_fn
-from torchlens.data_classes.buffer_log import Buffer
+from torchlens.data_classes.buffer import Buffer
 from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.data_classes.layer_log import Layer
-from torchlens.data_classes.op_log import Op
-from torchlens.data_classes.model_log import Trace
-from torchlens.data_classes.module_log import Module, ModuleCall
-from torchlens.data_classes.param_log import Param
+from torchlens.data_classes.layer import Layer
+from torchlens.data_classes.op import Op
+from torchlens.data_classes.trace import Trace
+from torchlens.data_classes.module import Module, ModuleCall
+from torchlens.data_classes.param import Param
 
 
 class _TinyIOModel(nn.Module):

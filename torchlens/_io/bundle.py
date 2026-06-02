@@ -36,7 +36,7 @@ from .scrub import scrub_for_save
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 from .. import __version__ as TORCHLENS_VERSION
-from ..data_classes.model_log import Trace
+from ..data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from ..intervention.bundle import Bundle
@@ -48,23 +48,43 @@ _BLOB_TENSOR_KEY = "data"
 
 _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     ("torchlens.data_classes.model_log", "ModelLog"): (
-        "torchlens.data_classes.model_log",
+        "torchlens.data_classes.trace",
+        "Trace",
+    ),
+    ("torchlens.data_classes.model_log", "Trace"): (
+        "torchlens.data_classes.trace",
         "Trace",
     ),
     ("torchlens.data_classes.layer_pass_log", "LayerPassLog"): (
-        "torchlens.data_classes.op_log",
+        "torchlens.data_classes.op",
         "Op",
     ),
     ("torchlens.data_classes.layer_pass_log", "TensorLog"): (
-        "torchlens.data_classes.op_log",
+        "torchlens.data_classes.op",
+        "TensorLog",
+    ),
+    ("torchlens.data_classes.op_log", "Op"): (
+        "torchlens.data_classes.op",
+        "Op",
+    ),
+    ("torchlens.data_classes.op_log", "TensorLog"): (
+        "torchlens.data_classes.op",
         "TensorLog",
     ),
     ("torchlens.data_classes.module_log", "ModulePassLog"): (
-        "torchlens.data_classes.module_log",
+        "torchlens.data_classes.module",
+        "ModuleCall",
+    ),
+    ("torchlens.data_classes.module_log", "ModuleCall"): (
+        "torchlens.data_classes.module",
         "ModuleCall",
     ),
     ("torchlens.data_classes.grad_fn_pass_log", "GradFnPassLog"): (
-        "torchlens.data_classes.grad_fn_call_log",
+        "torchlens.data_classes.grad_fn_call",
+        "GradFnCall",
+    ),
+    ("torchlens.data_classes.grad_fn_call_log", "GradFnCall"): (
+        "torchlens.data_classes.grad_fn_call",
         "GradFnCall",
     ),
     ("torchlens." + "multi_trace.node_view", "NodeView"): (

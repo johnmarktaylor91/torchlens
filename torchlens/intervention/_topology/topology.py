@@ -31,8 +31,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ...data_classes.layer_log import Layer
-    from ...data_classes.model_log import Trace
+    from ...data_classes.layer import Layer
+    from ...data_classes.trace import Trace
 
 
 # A fingerprint is (module, func_name).  Both fields normalize to

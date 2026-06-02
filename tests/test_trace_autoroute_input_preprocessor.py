@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.model_log import ResolvedPreprocessing
+from torchlens.data_classes.trace import ResolvedPreprocessing
 
 
 class _TinyModel(nn.Module):

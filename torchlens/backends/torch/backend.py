@@ -25,7 +25,7 @@ from .ops import (
 from .wrappers import unwrap_torch, wrap_torch
 
 if TYPE_CHECKING:
-    from ...data_classes.model_log import Trace
+    from ...data_classes.trace import Trace
 
 
 class TorchBackend:

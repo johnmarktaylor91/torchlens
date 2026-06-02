@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Iterator
 # TYPE_CHECKING is False at runtime, so this import only exists for static
 # analysis / IDE support — it will never trigger the circular-import problem.
 if TYPE_CHECKING:
-    from .data_classes.model_log import Trace
+    from .data_classes.trace import Trace
     from .intervention.types import InterventionSpec
 
 # ---------------------------------------------------------------------------

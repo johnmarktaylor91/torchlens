@@ -8,8 +8,8 @@ from ._accessor_base import SuperAccessor
 from ._base import Super, _TensorBearing
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only
-    from ...data_classes.layer_log import Layer
-    from ...data_classes.op_log import Op
+    from ...data_classes.layer import Layer
+    from ...data_classes.op import Op
     from .._topology.topology import SupergraphNode
 
 

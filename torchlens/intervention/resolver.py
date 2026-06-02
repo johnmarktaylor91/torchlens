@@ -29,10 +29,10 @@ from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 if TYPE_CHECKING:
     import pandas as pd
 
-    from torchlens.data_classes.grad_fn_log import GradFn
-    from torchlens.data_classes.layer_log import Layer
-    from torchlens.data_classes.op_log import Op
-    from torchlens.data_classes.model_log import Trace
+    from torchlens.data_classes.grad_fn import GradFn
+    from torchlens.data_classes.layer import Layer
+    from torchlens.data_classes.op import Op
+    from torchlens.data_classes.trace import Trace
 
 SelectorInput = BaseSelector | TargetSpec | FrozenTargetSpec | str
 if TYPE_CHECKING:
@@ -568,7 +568,7 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
         Whether the selector matches.
     """
 
-    from torchlens.data_classes.grad_fn_log import GradFn
+    from torchlens.data_classes.grad_fn import GradFn
 
     if isinstance(site, GradFn):
         if kind in DIRECTION_AGNOSTIC_KINDS:

@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import torch
 
-from torchlens.data_classes.model_log import ResolvedPreprocessing, Trace
+from torchlens.data_classes.trace import ResolvedPreprocessing, Trace
 
 
 _MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})

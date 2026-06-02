@@ -27,10 +27,10 @@ from typing import Any, Dict, List, TYPE_CHECKING
 
 from ..constants import MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef
-from ..data_classes.op_log import Op
+from ..data_classes.op import Op
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
 
 
 def _map_raw_labels_to_final_labels(self: "Trace") -> None:

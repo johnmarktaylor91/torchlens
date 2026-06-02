@@ -1558,8 +1558,8 @@ def _add_arg_label(
     Simplified version of ``rendering._label_node_arguments_if_needed`` for the
     fast ELK path.
     """
-    from ...data_classes.layer_log import Layer
-    from ...data_classes.op_log import Op
+    from ...data_classes.layer import Layer
+    from ...data_classes.op import Op
 
     # Count visible parents
     num_parents = len(child_node.parents)

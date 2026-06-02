@@ -7,9 +7,9 @@ from html import escape
 from typing import TYPE_CHECKING, Any, Callable, cast
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from ..data_classes.layer_log import Layer
-    from ..data_classes.op_log import Op
-    from ..data_classes.model_log import Trace
+    from ..data_classes.layer import Layer
+    from ..data_classes.op import Op
+    from ..data_classes.trace import Trace
 
 INTERVENTION_SITE_COLOR = "#FF00FF"
 INTERVENTION_CONE_COLOR = "#FFB3FF"

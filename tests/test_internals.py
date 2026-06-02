@@ -74,7 +74,7 @@ class TestFieldOrderSync:
     @pytest.mark.smoke
     def test_op_log_field_order_covers_init(self):
         """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in Op.__init__."""
-        from torchlens.data_classes.op_log import Op
+        from torchlens.data_classes.op import Op
 
         init_attrs = self._init_assigned_attrs(Op)
         # Private fields (prefixed _) are intentionally excluded from some FIELD_ORDERs,
@@ -87,7 +87,7 @@ class TestFieldOrderSync:
 
     def test_trace_field_order_covers_init(self):
         """MODEL_LOG_FIELD_ORDER should cover all public self.X assignments in Trace.__init__."""
-        from torchlens.data_classes.model_log import Trace
+        from torchlens.data_classes.trace import Trace
 
         init_attrs = self._init_assigned_attrs(Trace)
         order_set = set(MODEL_LOG_FIELD_ORDER)
@@ -97,7 +97,7 @@ class TestFieldOrderSync:
         assert not missing, f"Trace public fields missing from FIELD_ORDER: {missing}"
 
     def test_module_call_log_field_order_covers_init(self):
-        from torchlens.data_classes.module_log import ModuleCall
+        from torchlens.data_classes.module import ModuleCall
 
         init_attrs = self._init_assigned_attrs(ModuleCall)
         order_set = set(MODULE_PASS_LOG_FIELD_ORDER)
@@ -106,7 +106,7 @@ class TestFieldOrderSync:
         assert not missing, f"ModuleCall public fields missing from FIELD_ORDER: {missing}"
 
     def test_module_log_field_order_covers_init(self):
-        from torchlens.data_classes.module_log import Module
+        from torchlens.data_classes.module import Module
 
         init_attrs = self._init_assigned_attrs(Module)
         order_set = set(MODULE_LOG_FIELD_ORDER)

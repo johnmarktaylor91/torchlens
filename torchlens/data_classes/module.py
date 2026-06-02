@@ -49,11 +49,11 @@ from ._accessor_base import Accessor
 if TYPE_CHECKING:
     import pandas as pd
 
-    from .buffer_log import BufferAccessor
+    from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
-    from .model_log import Trace
-    from .op_log import Op
-    from .param_log import ParamAccessor
+    from .trace import Trace
+    from .op import Op
+    from .param import ParamAccessor
     from ..intervention.types import ContainerSpec
 
 
@@ -1111,7 +1111,7 @@ class Module:
         self.output_layers: List[str] = []
         self._sync_boundary_fields_from_calls()
 
-        from .param_log import ParamAccessor
+        from .param import ParamAccessor
 
         self.params = params if params is not None else ParamAccessor({})
         self.num_params = num_params
@@ -1257,7 +1257,7 @@ class Module:
     def recursive_params(self) -> "ParamAccessor":
         """Parameters owned by this Module address and all address descendants."""
 
-        from .param_log import ParamAccessor
+        from .param import ParamAccessor
 
         trace = self._source_trace
         if trace is None:
@@ -1769,7 +1769,7 @@ class Module:
         if self._buffer_accessor is not None:
             return cast("BufferAccessor", self._buffer_accessor)
         # Build on first access from the source Trace
-        from .buffer_log import BufferAccessor
+        from .buffer import BufferAccessor
 
         if self._source_trace is None or self._source_trace._buffer_accessor is None:
             self._buffer_accessor = BufferAccessor({})

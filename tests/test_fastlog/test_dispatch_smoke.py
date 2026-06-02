@@ -9,7 +9,7 @@ from torch import nn
 
 from torchlens import _state
 from torchlens.backends.torch.sources import log_source_tensor
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.trace import Trace
 from torchlens.backends.torch.model_prep import (
     _cleanup_model_session,
     _ensure_model_prepared,

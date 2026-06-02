@@ -10,9 +10,9 @@ from typing import Any, Callable, cast
 
 from ... import _state
 from ...constants import LAYER_PASS_LOG_FIELD_ORDER
-from ...data_classes.layer_log import Layer
-from ...data_classes.model_log import Trace
-from ...data_classes.op_log import Op, _LAYER_PASS_LOG_DEFAULT_FILL
+from ...data_classes.layer import Layer
+from ...data_classes.trace import Trace
+from ...data_classes.op import Op, _LAYER_PASS_LOG_DEFAULT_FILL
 from ...quantities import Duration
 from ...ir.events import OpEvent, TraceBuildState
 from ...ir.intervention import FireResult, FunctionEventInput

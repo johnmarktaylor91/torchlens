@@ -22,9 +22,9 @@ import torchlens.postprocess.ast_branches as ast_branches
 import torchlens.postprocess.graph_traversal as graph_traversal
 import torchlens.utils.introspection as introspection
 from torchlens import trace as trace_fn
-from torchlens.data_classes.layer_log import Layer
-from torchlens.data_classes.op_log import Op
-from torchlens.data_classes.model_log import ConditionalEvent, Trace
+from torchlens.data_classes.layer import Layer
+from torchlens.data_classes.op import Op
+from torchlens.data_classes.trace import ConditionalEvent, Trace
 
 
 class NestedIfThenIfModel(nn.Module):

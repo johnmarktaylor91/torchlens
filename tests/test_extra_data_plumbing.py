@@ -16,9 +16,9 @@ from torchlens.constants import (
     LAYER_PASS_LOG_FIELD_ORDER,
     MODEL_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.layer_log import Layer
-from torchlens.data_classes.op_log import Op
-from torchlens.data_classes.model_log import Trace
+from torchlens.data_classes.layer import Layer
+from torchlens.data_classes.op import Op
+from torchlens.data_classes.trace import Trace
 
 
 class TinyExtraDataModel(nn.Module):

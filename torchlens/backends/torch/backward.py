@@ -15,7 +15,7 @@ import torch
 from ..._io.streaming import BundleStreamWriter
 from ...quantities import Bytes, Duration
 from ..._state import pause_logging
-from ...data_classes.grad_fn_log import GradFn
+from ...data_classes.grad_fn import GradFn
 from .tensor_tracking import _add_tensor_backward_hook
 
 

@@ -12,9 +12,9 @@ import torch
 import torch.nn as nn
 
 from torchlens import MetadataInvariantError, check_metadata_invariants, trace as trace_fn
-from torchlens.data_classes.layer_log import Layer
-from torchlens.data_classes.op_log import Op
-from torchlens.data_classes.model_log import ConditionalEvent, Trace
+from torchlens.data_classes.layer import Layer
+from torchlens.data_classes.op import Op
+from torchlens.data_classes.trace import ConditionalEvent, Trace
 
 
 class SimpleIfElseModel(nn.Module):

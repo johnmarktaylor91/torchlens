@@ -33,8 +33,8 @@ from ...fastlog._halt import HaltSignal
 from ...quantities import Bytes
 from ._tl import get_tensor_meta, set_tensor_label
 from ..._training_validation import TrainingModeConfigError
-from ...data_classes.buffer_log import Buffer
-from ...data_classes.op_log import Op
+from ...data_classes.buffer import Buffer
+from ...data_classes.op import Op
 from . import module_stack as _mstack
 from ...capture.predicates import _evaluate_keep_op
 from ...capture.projections import (
@@ -50,7 +50,7 @@ from ...utils.tensor_utils import get_memory_amount
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
 
 if TYPE_CHECKING:
-    from ...data_classes.model_log import Trace
+    from ...data_classes.trace import Trace
 
 
 def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:

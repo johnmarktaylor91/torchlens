@@ -39,13 +39,13 @@ from ..data_classes._module_role_hints import (
     role_hints_for_module_class,
 )
 from ..data_classes._summary import format_call_arg
-from ..data_classes.module_log import Module, ModuleCall
+from ..data_classes.module import Module, ModuleCall
 from ..utils.introspection import get_vars_of_type_from_obj
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_log import Layer
-    from ..data_classes.op_log import Op
-    from ..data_classes.model_log import Trace
+    from ..data_classes.layer import Layer
+    from ..data_classes.op import Op
+    from ..data_classes.trace import Trace
 
 
 def _undecorate_all_saved_tensors(self: "Trace") -> None:
@@ -148,7 +148,7 @@ def _build_root_module_log(
     only direct children (no dots in address), while call_children may include
     grandchildren called directly (e.g., self.level21.level12(x)).
     """
-    from ..data_classes.param_log import ParamAccessor
+    from ..data_classes.param import ParamAccessor
 
     module_metadata = cast(dict[str, dict[str, Any]], self._module_metadata)
     root_meta = module_metadata.get("self", {})
@@ -645,7 +645,7 @@ def _build_module_param_info(
     _buffer_layers_by_module: dict[str, list[str]] | None = None,
 ) -> ModuleParamInfo:
     """Gather parameter counts, sizes, and buffer layers for a single module."""
-    from ..data_classes.param_log import ParamAccessor
+    from ..data_classes.param import ParamAccessor
 
     module_param_dict = {pl.address: pl for pl in self._param_logs_by_module.get(address, [])}  # type: ignore[attr-defined]
     module_params = ParamAccessor(module_param_dict)
@@ -852,7 +852,7 @@ def _build_module_logs(self: "Trace") -> None:
     # needed during construction and are not part of the user-facing API.
     self._module_metadata = {}
     self._module_forward_args = {}
-    from ..data_classes.model_log import _init_module_hierarchy_data
+    from ..data_classes.trace import _init_module_hierarchy_data
 
     self._module_build_data = _init_module_hierarchy_data()
 
@@ -896,7 +896,7 @@ def _build_layer_logs(self: "Trace") -> None:
     """
     from collections import OrderedDict
 
-    from ..data_classes.layer_log import Layer
+    from ..data_classes.layer import Layer
 
     layer_logs = OrderedDict()
 
@@ -976,7 +976,7 @@ def _build_layer_logs(self: "Trace") -> None:
 def _build_conditional_records(self: "Trace") -> None:
     """Build the public ConditionalAccessor from conditional postprocess data."""
 
-    from ..data_classes.model_log import (
+    from ..data_classes.trace import (
         Conditional,
         ConditionalAccessor,
         ConditionalArm,

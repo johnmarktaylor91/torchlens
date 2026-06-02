@@ -19,10 +19,10 @@ from ..utils.display import identity
 from ..utils.rng import log_current_rng_states
 from ..utils.tensor_utils import safe_copy, safe_to, tensor_nanequal
 from ..utils.introspection import _get_code_context
-from ..data_classes.op_log import Op
+from ..data_classes.op import Op
 
 if TYPE_CHECKING:
-    from ..data_classes.model_log import Trace
+    from ..data_classes.trace import Trace
 
 
 def _add_output_layers(

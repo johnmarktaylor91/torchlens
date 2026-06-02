@@ -14,8 +14,8 @@ import torch
 import torch.nn as nn
 
 from torchlens import trace as trace_fn
-from torchlens.data_classes.op_log import Op
-from torchlens.data_classes.model_log import ConditionalEvent, Trace
+from torchlens.data_classes.op import Op
+from torchlens.data_classes.trace import ConditionalEvent, Trace
 
 
 class SimpleIfElseModel(nn.Module):

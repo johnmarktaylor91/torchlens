@@ -56,9 +56,9 @@ from ._tl import (
     set_param_meta,
     set_tensor_label,
 )
-from ...data_classes.param_log import ParamAccessor, Param
+from ...data_classes.param import ParamAccessor, Param
 from ...data_classes.func_call_location import FuncCallLocation
-from ...data_classes.module_log import HookInfo
+from ...data_classes.module import HookInfo
 from ...data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
 from ...ir import live_record_for_label
 from ...utils.tensor_utils import get_memory_amount
@@ -106,7 +106,7 @@ _PYTORCH_INTERNAL = frozenset(
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.model_log import Trace
+    from ...data_classes.trace import Trace
 
 
 # ---------------------------------------------------------------------------

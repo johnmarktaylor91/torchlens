@@ -20,10 +20,10 @@ from ...utils.display import format_flops, human_readable_size
 from ..._source_links import terminal_file_line_link
 
 if TYPE_CHECKING:
-    from ..data_classes.layer_log import Layer
-    from ..data_classes.op_log import Op
-    from ..data_classes.model_log import ConditionalEvent, Trace
-    from ..data_classes.module_log import Module
+    from ..data_classes.layer import Layer
+    from ..data_classes.op import Op
+    from ..data_classes.trace import ConditionalEvent, Trace
+    from ..data_classes.module import Module
 
 
 SummaryLevel = Literal[

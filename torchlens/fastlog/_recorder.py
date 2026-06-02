@@ -17,7 +17,7 @@ from ..capture.projections import (
     _empty_recording,
     active_recording_state,
 )
-from ..data_classes.model_log import Trace
+from ..data_classes.trace import Trace
 from ..ir import CaptureEvents
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc

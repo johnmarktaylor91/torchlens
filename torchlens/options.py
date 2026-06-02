@@ -23,8 +23,8 @@ from ._literals import (
 from .visualization.node_spec import NodeSpec
 
 if TYPE_CHECKING:
-    from .data_classes.layer_log import Layer
-    from .data_classes.module_log import Module
+    from .data_classes.layer import Layer
+    from .data_classes.module import Module
 
 T = TypeVar("T")
 ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
