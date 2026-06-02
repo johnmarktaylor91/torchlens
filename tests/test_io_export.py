@@ -62,7 +62,7 @@ SURFACE_COLUMNS: dict[str, list[str]] = {
         "address",
         "name",
         "num_params",
-        "trainable",
+        "is_trainable",
         "address",
     ],
     "buffers": [
