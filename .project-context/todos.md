@@ -1779,14 +1779,15 @@ implementation-spec maintenance list were resolved in `da15b5f`.
 
 ## Bugs
 
-### distilbert_ffn facet recipe targets a stale transformers class name (filed 2026-06-01)
+### [FIXED 2026-06-01, commit ea5dd69] distilbert_ffn facet recipe targets a stale transformers class name (filed 2026-06-01)
 
-The built-in MLP facet recipe at `torchlens/semantic/recipes/mlp.py:58` registers against
+The built-in MLP facet recipe at `torchlens/semantic/recipes/mlp.py:58` registered against
 `class_name="DistilBertFFN"`, but transformers >= 4.57 renamed that module class to `FFN`.
-On current transformers the recipe matches NOTHING, so DistilBERT FFN facets silently fail to
-populate. Fix: update the recipe's target class name in `torchlens/` (likely register both
-`FFN` and the legacy `DistilBertFFN` for back-compat, or detect the version). Surfaced
-2026-06-01 during HF notebook finalization.
+On current transformers the recipe matched NOTHING, so DistilBERT FFN facets silently failed to
+populate. FIXED: changed to `class_name=("FFN", "DistilBertFFN")` (exact-match tuple, mirrors the
+existing `distilbert_attention` convention) so both current and legacy names resolve. Verified on
+a real DistilBERT (facets populate non-empty); added `tests/semantic/test_mlp_recipes.py` (current
+class + legacy class + real-model regression guards). Surfaced 2026-06-01 during HF notebook finalization.
 
 ## Creative utility ideas from exhaustive metadata (filed 2026-05-23)
 
