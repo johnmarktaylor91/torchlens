@@ -2542,13 +2542,18 @@ but are natural follow-ons. Pick up after MVP ships.
     `tl.between("conv2d_1", "conv2d_5")`, `tl.where(predicate)`,
     `tl.everything()`. Compose with existing func/module selectors.
     Single biggest tidyverse-flavored move available.
-  - **`OpLog` / `LayerLog` / `ModuleLog` etc.** — `-Log` suffix is a
-    tell that we're naming from the implementation outward (records
-    in a log). User thinks "the layer," "the op." We renamed
-    `ModelLog` -> `Trace`; consider whether `OpLog` -> `Op`,
-    `LayerLog` -> `Layer` follows. Tradeoff: `Module` collides with
-    `nn.Module`; `Op` and `Layer` are general English/PyTorch words.
-    The qualifier may be load-bearing for clarity. Decide deliberately.
+  - **`OpLog` / `LayerLog` / `ModuleLog` etc. — DONE (shipped).** The
+    `-Log` suffix was dropped from EVERY data class: `OpLog`->`Op`,
+    `LayerLog`->`Layer`, `ModelLog`->`Trace`, plus `Module`,
+    `ModuleCall`, `Param`, `Buffer`, `GradFn`, `GradFnCall`. The
+    `nn.Module` collision was resolved by going with `Module` anyway
+    (it reads as "the module" and is namespaced under `tl.`).
+    `TensorLog = Op` is kept as a back-compat alias. The internal
+    record module FILES were also de-`_log`'d this session
+    (`op_log.py`->`op.py`, ..., `model_log.py`->`trace.py`). `tl.do`
+    (do-operator) also already exists. Remaining naming work is the
+    other bullets in this item (peek->pluck, poetic selectors,
+    comparison-verb coherence, symmetric-pair audit).
   - **Comparison/aggregation verbs** — `most_changed`, `compare_at`,
     `relationship`, `aligned_pairs`, `delta_map` reads as a
     grab-bag. Tidyverse-shaped would be a single `compare()` verb
