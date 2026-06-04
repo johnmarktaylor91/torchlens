@@ -3840,6 +3840,12 @@ def _add_edges_for_node(
                 both_nodes_collapsed_modules,
                 vis_call_depth,
             )
+        # Preserve the edge's LCA cluster key BEFORE the has_input_ancestor loops
+        # below clobber the ``module`` loop variable (they reassign it to each
+        # node's own module path). Without this, the captured forward edge would
+        # record the wrong cluster key and sibling rank-groups would never resolve
+        # to a common cluster (always falling back to top-level emission).
+        edge_module_key: str | int = module
         if module != -1:
             module_key = cast(str, module)
             module_edge_dict[module_key]["edges"].append(edge_dict)
@@ -3869,7 +3875,7 @@ def _add_edges_for_node(
                     target_step=int(getattr(child_node, "step_index", 0) or 0),
                     source_node=parent_node,
                     target_node=child_node,
-                    module_key=module,
+                    module_key=edge_module_key,
                 )
             )
 
@@ -4972,7 +4978,7 @@ def _inject_sibling_rank_groups(source: str, chains: tuple[SiblingOrderChain, ..
     for chain in chains:
         if chain.lca_key != -1:
             by_cluster[cast(str, chain.lca_key)].append(chain)
-    emitted = len(top_level_groups)
+    fallback_chains: list[SiblingOrderChain] = []
     for cluster_key, cluster_chains in by_cluster.items():
         cluster_name = f"cluster_{cluster_key.replace(':', '_pass')}"
         result, did_emit = _insert_into_cluster(
@@ -4980,9 +4986,14 @@ def _inject_sibling_rank_groups(source: str, chains: tuple[SiblingOrderChain, ..
             cluster_name,
             _rank_group_lines(cluster_chains, "    "),
         )
-        if did_emit:
-            emitted += len(cluster_chains)
-    assert emitted == len(chains)
+        if not did_emit:
+            # Cluster-name string surgery missed (e.g. an unexpected rendered key).
+            # Fall back to top-level emission, which is verify-safe (a distorting
+            # chain is dropped by the per-chain stretch check), rather than crash
+            # the render with a bare assert.
+            fallback_chains.extend(cluster_chains)
+    if fallback_chains:
+        result = _insert_before_final_brace(result, _rank_group_lines(fallback_chains, ""))
     return result
 
 
@@ -5009,9 +5020,12 @@ def _rank_group_lines(chains: Sequence[SiblingOrderChain], indent: str) -> str:
 def _emit_sibling_rank_group(graph: graphviz.Digraph, chain: SiblingOrderChain) -> None:
     """Emit one sibling rank group into ``graph``."""
 
+    # Bracket the markers AROUND the whole subgraph (in the parent body) so that
+    # ``_strip_sibling_rank_groups`` removes the entire ``{ rank=same ... }`` block,
+    # not just its interior (which would leave an orphan empty wrapper).
+    graph.body.append("\t// tl:sibling-order:start\n")
     with graph.subgraph() as rank_group:
         rank_group.attr(rank="same")
-        rank_group.body.append("\t// tl:sibling-order:start\n")
         for target in chain.targets:
             rank_group.node(target)
         for left, right in zip(chain.targets, chain.targets[1:]):
@@ -5022,7 +5036,7 @@ def _emit_sibling_rank_group(graph: graphviz.Digraph, chain: SiblingOrderChain) 
                 weight="100",
                 comment="tl:sibling-order",
             )
-        rank_group.body.append("\t// tl:sibling-order:end\n")
+    graph.body.append("\t// tl:sibling-order:end\n")
 
 
 def _insert_before_final_brace(source: str, insertion: str) -> str:
