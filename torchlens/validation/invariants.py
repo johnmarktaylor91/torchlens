@@ -32,7 +32,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from ..errors._base import ValidationError
 
@@ -1031,8 +1031,8 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                 )
 
     for parent_layer in ml.layer_logs.values():
-        for conditional_id, branch_children in parent_layer.conditional_arm_children.items():
-            for branch_kind, child_labels in branch_children.items():
+        for conditional_id, branch_map in parent_layer.conditional_arm_children.items():
+            for branch_kind, child_labels in branch_map.items():
                 model_edges = ml.conditional_arm_entry_edges.get((conditional_id, branch_kind), [])
                 for child_label in child_labels:
                     if (parent_layer.layer_label, child_label) not in model_edges:
@@ -1231,26 +1231,26 @@ def _check_conditional_invariants(ml: "Trace") -> None:
             )
 
     # Invariant 6: parent->child stacks are monotone by prefix relation.
-    for parent_layer in ml.layer_list:
-        for child_label in parent_layer.children:
+    for parent_op in ml.layer_list:
+        for child_label in parent_op.children:
             child_layer = ml[child_label]
-            if parent_layer.pass_index != child_layer.pass_index:
+            if parent_op.pass_index != child_layer.pass_index:
                 continue
-            if parent_layer.conditional_branch_stack == child_layer.conditional_branch_stack:
+            if parent_op.conditional_branch_stack == child_layer.conditional_branch_stack:
                 continue
             if _is_prefix_stack(
-                parent_layer.conditional_branch_stack, child_layer.conditional_branch_stack
+                parent_op.conditional_branch_stack, child_layer.conditional_branch_stack
             ):
                 continue
             if _is_prefix_stack(
-                child_layer.conditional_branch_stack, parent_layer.conditional_branch_stack
+                child_layer.conditional_branch_stack, parent_op.conditional_branch_stack
             ):
                 continue
             _fail_conditional_invariant(
                 name,
                 6,
-                f"Edge ({parent_layer.layer_label!r}, {child_label!r}) has non-prefix "
-                f"conditional stacks parent={parent_layer.conditional_branch_stack} "
+                f"Edge ({parent_op.layer_label!r}, {child_label!r}) has non-prefix "
+                f"conditional stacks parent={parent_op.conditional_branch_stack} "
                 f"child={child_layer.conditional_branch_stack}",
             )
 
@@ -1286,7 +1286,7 @@ def _check_conditional_invariants(ml: "Trace") -> None:
             except (KeyError, ValueError, TypeError):
                 bool_layer = ml[bool_label]
             bool_ops = (
-                list(bool_layer.ops.values())
+                list(cast("Layer", bool_layer).ops.values())
                 if hasattr(bool_layer, "ops") and not hasattr(bool_layer, "terminal_conditional_id")
                 else [bool_layer]
             )

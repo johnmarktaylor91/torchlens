@@ -994,11 +994,6 @@ class Module:
     num_params: int
     num_params_trainable: int
     num_params_frozen: int
-    num_param_tensors: int
-    num_param_tensors_trainable: int
-    num_param_tensors_frozen: int
-    has_trainable_params: bool
-    has_frozen_params: bool
     buffer_layers: List[str]
     training: bool
     forward_pre_hooks: List[HookInfo]
@@ -1009,12 +1004,6 @@ class Module:
     full_backward_hooks: List[HookInfo]
     custom_attributes: Dict[str, Any]
     custom_methods: List[str]
-    forward_args_summary: str
-    forward_kwargs_summary: str
-    forward_duration: Duration
-    total_forward_duration: Duration
-    func_calls_duration: Duration
-    total_func_calls_duration: Duration
 
     def __init__(
         self,

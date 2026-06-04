@@ -6,7 +6,7 @@ import random
 import time
 from collections import OrderedDict, defaultdict
 from contextlib import AbstractContextManager, contextmanager
-from typing import Any, Callable, cast
+from typing import Any, Callable, Literal, cast
 
 from ... import _state
 from ...constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -373,7 +373,7 @@ class MLXBackend:
             save_visualizations=save_visualizations,
         )
         trace.trace_label = name
-        trace.backend = self.name
+        trace.backend = cast('Literal["torch", "mlx"]', self.name)
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
         trace._pre_forward_rng_states = None
@@ -543,7 +543,7 @@ class MLXBackend:
         trace._tracing_finished = True
         trace.has_backward_pass = False
         trace.capture_end_time = time.time()
-        trace.backend = self.name
+        trace.backend = cast('Literal["torch", "mlx"]', self.name)
 
     def _build_op_log(
         self,

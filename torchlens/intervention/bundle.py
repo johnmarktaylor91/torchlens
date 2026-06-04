@@ -1498,7 +1498,7 @@ class Bundle:
             if count != 1:
                 raise ValueError("A single Bundle name can only be used with one Trace.")
             return [names]
-        name_list = [str(name) for name in names]
+        name_list: list[str | None] = [str(name) for name in names]
         if len(name_list) != count:
             raise ValueError("names length must match added log count.")
         return name_list

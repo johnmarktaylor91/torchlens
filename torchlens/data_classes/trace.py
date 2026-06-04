@@ -914,7 +914,6 @@ class Trace:
     backend: Literal["torch", "mlx"]
     state: TraceState
     tlspec_version: int
-    flops_by_op_type: Any
     annotations: Dict[str, Any]
     input_preprocessor: ResolvedPreprocessing | None
     input_object_id: int | None
@@ -923,7 +922,6 @@ class Trace:
     state_history: list[Any]
     backward_ready: bool
     save_arg_templates: bool
-    capture_duration: Duration
     op_equivalence_classes: Dict[str, set[str]]
     last_run: Any | None
     capture_start_time: float

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, Union
 import weakref
@@ -357,7 +358,7 @@ class GradFn:
         )
 
     @property
-    def cls(self) -> type[Any] | None:
+    def cls(self) -> builtins.type[Any] | None:
         """Return the runtime Python class for this grad_fn_handle when available.
 
         Returns

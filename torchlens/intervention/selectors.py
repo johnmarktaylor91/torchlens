@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, overload
@@ -357,7 +358,7 @@ class GradFnSelector(BaseSelector):
 
     def __init__(
         self,
-        type: str | type[Any] | None = None,
+        type: str | builtins.type[Any] | None = None,
         *,
         label: str | None = None,
         is_custom: bool | None = None,
