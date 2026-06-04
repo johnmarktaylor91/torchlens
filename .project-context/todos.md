@@ -155,6 +155,12 @@ params: weight (3072, 768) · bias (3072,)
 
 6. **Notebook gotcha worth documenting:** users registering recipes for module classes that already have a built-in recipe (e.g., adding extra facets to `DistilBertSdpaAttention`) will see `recipe_source` become a tuple. That's correct multi-recipe-merge behavior, but worth showing in the docs.
 
+7. **[DESIGN, raised 2026-06-02] Integrated treatment of slices / facets / outs / multi-output.** JMT takeaway: these are currently three+ disjoint concepts that overlap at the edges and should be presented as ONE coherent addressing model rather than bolted-on siblings. Verified state as of 2026-06-02:
+   - `facets` (v8, SHIPPED) already covers **semantic, recipe-driven** named views, and the built-in attention recipes ALREADY slice fused QKV internally (`recipes/attention.py:134` GPT-2: `c_attn_out.split(...)` -> `q`/`k`/`v` reshaped into heads; GQA handled). So `module.facets.q/k/v` is the 80% mech-interp read case and it's DONE.
+   - `multi_output_*` / `container_path` (SHIPPED) covers ops returning a **container of separate tensors** (split, max->values+indices, RNN out+hidden). Structural.
+   - The proposed `op.outs` (2.1, NOT BUILT) was partly justified by "named QKV read access" -- **that justification is now redundant with facets.** What `op.outs` genuinely adds beyond facets: (a) recipe-free **raw/positional tensor-slice addressing** (`op.outs[:, :, 768:1536]`) that works with no registered recipe, and (b) **slice-level INTERVENTION write-back** -- patch a sub-region of a fused tensor and have it flow forward. Facets are a read-only derived view and structurally cannot do (b).
+   - **Action:** before building 2.1, design a UNIFIED slice/facet/outs/multi-output addressing surface (one mental model: "how do I name and access a sub-piece of what an op/module produced, for both read AND intervention"), rather than shipping `op.outs` as a fourth parallel concept. Re-scope 2.1 down to the genuinely net-new parts (raw-slice addressing + slice intervention).
+
 **Recommendation:** items 1 and 2 are worth resolving before 2.0 launch since they affect contract semantics. Items 3-6 are documentation / polish that can ride a later cleanup. Estimated scope: 1 day for 1+2 (small surface, clear options), half day for 3-6 (mostly docs + a few small ergonomic additions).
 
 ### Harmonize scoped accessors to 0-based integer indexing + short/long label form support
@@ -1806,6 +1812,9 @@ class + legacy class + real-model regression guards). Surfaced 2026-06-01 during
 
 Ideas surfaced during a riff session with JMT about what becomes possible once every Op carries full provenance + topology + memory + autograd + source-code metadata. Organized by ambition tier so near-term and strategic items are visible. Each entry names the TL primitives it builds on so the gap-to-ship is obvious.
 
+### [SMALL, raised 2026-06-02] Trace should expose an edge count (`num_edges`)
+Trace has `num_ops` / `num_layers` / `num_layers_with_params` etc. but NO edge count. Edge count is a genuinely useful quantity (graph density, layout-cost estimation — DOT's cost tracks edges far more than nodes, complexity reporting). Add a `num_edges` field/`@property` on Trace (and likely the equivalent on Module / Layer where it's meaningful). Decide: count graph edges (op->op adjacency) vs something richer. Glossary entry + `constants.py` FIELD_ORDER if it's a stored field. Cheap to derive.
+
 ### Tier 1 — could ship in a week, ~50-200 lines each
 
 #### `tl.bisect_nan(trace)` — first-NaN-op locator
@@ -2204,6 +2213,65 @@ Audit and remove:
 Time the deletion to not collide with the intervention API work — neither
 work touches ELK by intent, but a cleanup pass makes the codebase smaller
 before the dagua bridge fully takes over.
+
+**[2026-06-02 code-verified findings + strengthened removal case]** Inspected
+`_elk_internal/layout.py`. Key facts that sharpen the decision:
+- ELK's PRIMARY path uses `elk.algorithm = "layered"` (`elk.direction="UP"`,
+  `edgeRouting="ORTHOGONAL"`) — i.e. Sugiyama-style **directed** layered layout,
+  the SAME family as graphviz `dot`. So "ELK is undirected" is NOT the right
+  critique; layered is actually appropriate for directed graphs.
+- BUT there's a `stress` sub-path (`_seed_stress_positions`) that IS
+  undirected-family (force/MDS) and has to FAKE directionality by seeding
+  positions, because "stress doesn't natively support elk.direction." And the
+  no-Node.js fallback is graphviz `sfdp` (force-directed / undirected). So the
+  degraded paths are the clunky ones.
+- The real problem is architectural, not algorithmic: ELK is a **heavyweight,
+  JS-dependent (Node.js + elkjs npm), one-off escape hatch** (subprocess
+  fork+exec, RLIMIT_STACK hacks to avoid COW memory doubling, 120s timeouts,
+  temp-file marshalling) that only fires above `_ELK_NODE_THRESHOLD = 3500`
+  nodes — a regime where NO static single-image layout is actually readable.
+- There is ALREADY a pure-Python, dependency-free, O(n+m) directed
+  topological-rank layout (Kahn's algorithm) used for the `>100k` node tier
+  (`_ELK_STRESS_LIMIT = 100_000`, above which ELK's two O(n^2) stress distance
+  matrices blow up — "16 TB at 1M nodes").
+- **Recommended plan (JMT hot take 2026-06-02): rip ELK out entirely.** Promote
+  the existing pure-Python Kahn topological-rank layout UP the ladder to cover
+  the whole 3500–100k band (it's directed, zero-dep, already written). Collapse
+  four layout paths (dot / elk-layered / elk-stress / sfdp-fallback + python-kahn)
+  down to TWO: graphviz `dot` for small graphs, python-kahn rank layout for all
+  large graphs. Delete the entire `_elk_internal` ELK pipeline + the Node.js
+  script + elkjs dependency. Defer the *actually good* huge-graph experience
+  (interactive / zoomable) to dagua, which is the only real answer for that
+  regime. Counter-arg acknowledged: ELK-layered produces prettier crossing-min +
+  orthogonal routing than naive Kahn ranks in the narrow 3500–~20k band — but on
+  an already-marginal-readability graph that delta isn't worth a whole JS runtime
+  dependency and 4 code paths, and dagua subsumes it anyway.
+
+---
+
+### More built-in visualization themes + revisit "custom visuals" interface (raised 2026-06-02)
+
+Two related viz-UX asks from JMT:
+
+1. **Ship more built-in visualization themes/presets.** Today the mode presets
+   are limited. Add purpose-built themes, e.g.:
+   - A **debugging-focused** theme — surface the metadata you actually want when
+     hunting a capture/shape bug: shapes, dtypes, device, grad_fn, in/out
+     mismatches, NaN/inf flags, untraced-op markers, highlighted boundaries.
+   - Plausible others: a **minimal/publication** theme (clean, few labels, good
+     for papers), a **memory/perf** theme (activation_memory + FLOPs/MACs heat),
+     an **intervention** theme (highlight hook sites / edited tensors / forks),
+     a **module-structure** theme (collapse to nn.Module tree, de-emphasize ops).
+   - These should be named presets selectable via the visualization options, not
+     hand-assembled NodeSpec callbacks each time.
+
+2. **Revisit the "custom visuals" interface more generally.** Audit the
+   NodeSpec / callback / mode-preset surface end to end: is it discoverable, is
+   it composable (theme + user overrides), is the API ergonomic, are the
+   built-in themes just well-chosen sets of the same primitives a user could
+   reach for? Goal: a clean layered model where built-in themes and user custom
+   visuals are the SAME mechanism, not two systems. Tie-in with the slice/facet
+   integrated-treatment thinking (one coherent customization model).
 
 ---
 
