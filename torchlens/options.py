@@ -104,6 +104,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "dpi",
     "for_paper",
     "return_graph",
+    "order_siblings",
 )
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
     "strict",
@@ -193,6 +194,7 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "vis_theme": "theme",
     "vis_intervention_mode": "intervention_mode",
     "vis_show_cone": "show_cone",
+    "order_siblings": "order_siblings",
 }
 _VISUALIZATION_DEPRECATED_FLAT: Final[set[str]] = {
     "vis_mode",
@@ -984,6 +986,9 @@ class VisualizationOptions:
         Convenience toggle forcing the paper theme preset.
     return_graph:
         Whether rendering returns the renderer object instead of DOT source.
+    order_siblings:
+        Whether Graphviz ``dot`` renders should verify and apply execution-order
+        placement for true parallel siblings.
 
     Examples
     --------
@@ -1020,6 +1025,7 @@ class VisualizationOptions:
     dpi: int | None = None
     for_paper: bool = False
     return_graph: bool = False
+    order_siblings: bool = True
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -1056,6 +1062,7 @@ class VisualizationOptions:
         dpi: int | None | MissingType = MISSING,
         for_paper: bool | MissingType = MISSING,
         return_graph: bool | MissingType = MISSING,
+        order_siblings: bool | MissingType = MISSING,
         *,
         mode: VisModeLiteral | MissingType = MISSING,
         max_module_depth: int | MissingType = MISSING,
@@ -1148,6 +1155,9 @@ class VisualizationOptions:
             "for_paper": _resolve_option_value("for_paper", for_paper, False, specified_fields),
             "return_graph": _resolve_option_value(
                 "return_graph", return_graph, False, specified_fields
+            ),
+            "order_siblings": _resolve_option_value(
+                "order_siblings", order_siblings, True, specified_fields
             ),
         }
         _validate_buffer_visibility(values["show_buffers"])
@@ -1562,6 +1572,7 @@ def merge_visualization_options(
     vis_theme: str | MissingType = MISSING,
     vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
     vis_show_cone: bool | MissingType = MISSING,
+    order_siblings: bool | MissingType = MISSING,
 ) -> VisualizationOptions:
     """Merge flat visualization kwargs into a grouped options object."""
 
@@ -1596,6 +1607,7 @@ def merge_visualization_options(
         "vis_theme": vis_theme,
         "vis_intervention_mode": vis_intervention_mode,
         "vis_show_cone": vis_show_cone,
+        "order_siblings": order_siblings,
     }
     for flat_name, group_name in _VISUALIZATION_FLAT_TO_GROUP.items():
         flat_value = flat_values[flat_name]
@@ -1722,11 +1734,16 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "dpi": visualization.dpi,
         "for_paper": visualization.for_paper,
         "return_graph": visualization.return_graph,
+        "order_siblings": visualization.order_siblings,
     }
     for field_name, value in phase7_kwargs.items():
-        if visualization.is_field_explicit(field_name) or (
-            value is not None and value is not False
-        ):
+        if field_name == "order_siblings":
+            should_include = visualization.is_field_explicit(field_name) or value is False
+        else:
+            should_include = visualization.is_field_explicit(field_name) or (
+                value is not None and value is not False
+            )
+        if should_include:
             kwargs[field_name] = value
     return kwargs
 

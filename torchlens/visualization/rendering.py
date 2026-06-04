@@ -56,6 +56,7 @@ from typing import (
 
 import graphviz
 import torch
+from graphviz.quoting import quote as quote_dot_id
 from PIL import Image
 
 from .._literals import (
@@ -227,6 +228,9 @@ _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tra
 # Commutative functions: argument order doesn't matter, so we skip arg-position
 # labels on their incoming edges to reduce visual clutter.
 COMMUTE_FUNCS = ["add", "mul", "cat", "eq", "ne"]
+SIBLING_ORDER_NODE_CAP = 2000
+SIBLING_ORDER_STRETCH_CAP = 4.5
+SIBLING_ORDER_EPSILON = 1e-9
 
 
 def _view_rendered_file(filepath: str) -> None:
@@ -431,6 +435,94 @@ class RenderEdge:
     metadata_child: Optional[GraphNode]
 
 
+@dataclass(frozen=True)
+class CapturedForwardEdge:
+    """Rendered forward edge captured at Graphviz edge-emission time.
+
+    Parameters
+    ----------
+    source_label:
+        TorchLens label for the parent node.
+    target_label:
+        TorchLens label for the child node.
+    tail_name:
+        Rendered Graphviz tail node name.
+    head_name:
+        Rendered Graphviz head node name.
+    source_step:
+        Execution step index for the parent node.
+    target_step:
+        Execution step index for the child node.
+    source_node:
+        Parent render node.
+    target_node:
+        Child render node.
+    module_key:
+        Cluster key where the real edge is emitted, or ``-1`` for top level.
+    """
+
+    source_label: str
+    target_label: str
+    tail_name: str
+    head_name: str
+    source_step: int
+    target_step: int
+    source_node: GraphNode
+    target_node: GraphNode
+    module_key: str | int
+
+
+@dataclass(frozen=True)
+class SiblingOrderChain:
+    """Candidate same-rank sibling chain for one rendered fanout.
+
+    Parameters
+    ----------
+    source_label:
+        TorchLens label for the fanout source.
+    source_name:
+        Rendered Graphviz source node name.
+    targets:
+        Rendered child node names in execution order.
+    target_labels:
+        TorchLens child labels in execution order.
+    lca_key:
+        Cluster key where the rank group should be emitted, or ``-1`` for top level.
+    """
+
+    source_label: str
+    source_name: str
+    targets: tuple[str, ...]
+    target_labels: tuple[str, ...]
+    lca_key: str | int
+
+
+@dataclass(frozen=True)
+class PlainLayout:
+    """Subset of ``dot -Tplain`` layout data needed by the verifier.
+
+    Parameters
+    ----------
+    nodes:
+        Mapping from rendered node name to ``(x, y)`` coordinates.
+    edge_spans:
+        Mapping from rendered real edge ``(tail, head)`` to flow-axis span.
+    """
+
+    nodes: dict[str, tuple[float, float]]
+    edge_spans: dict[tuple[str, str], float]
+
+
+@dataclass(frozen=True)
+class SiblingOrderDecision:
+    """Recorded sibling-ordering decision for one draw call."""
+
+    candidate_count: int
+    survivor_count: int
+    ratios: dict[tuple[str, tuple[str, ...]], float]
+    surviving_keys: tuple[tuple[str, tuple[str, ...]], ...]
+
+
 def draw(
     self: "Trace",
     vis_mode: VisModeLiteral = "unrolled",
@@ -463,6 +555,7 @@ def draw(
     dpi: int | None = None,
     for_paper: bool = False,
     return_graph: bool = False,
+    order_siblings: bool = True,
 ) -> Any:
     """Render the computational graph as a Graphviz Digraph.
 
@@ -532,6 +625,8 @@ def draw(
         for_paper: Whether to force the paper theme preset.
         return_graph: If True, return the underlying ``graphviz.Digraph`` on
             the Graphviz path or DOT text for direct text renderers.
+        order_siblings: Whether Graphviz ``dot`` renders should add verified invisible
+            rank constraints so true parallel sibling fanouts follow execution order.
 
     Returns:
         The Graphviz DOT source string.
@@ -750,8 +845,9 @@ def draw(
     # Accumulate edges per module cluster; actual Graphviz subgraphs are
     # created at the end in _setup_subgraphs to ensure proper nesting.
     module_cluster_dict: Dict[str, Any] = defaultdict(
-        lambda: {"edges": [], "has_input_ancestor": False}
+        lambda: {"edges": [], "has_input_ancestor": False, "rank_groups": []}
     )
+    top_level_sibling_rank_groups: list[SiblingOrderChain] = []
     # Track which collapsed module nodes have been added to avoid duplicates
     # (multiple layers in the same collapsed module would otherwise each try
     # to create the same box3d node).
@@ -760,6 +856,7 @@ def draw(
     # Critical when collapsed modules cause many layers to map to the same
     # node name -- without this, we'd get duplicate edges.
     edges_used: Set[tuple[str, str]] = set()
+    captured_forward_edges: list[CapturedForwardEdge] = []
 
     for node_barcode, node in entries_to_plot.items():
         if node.layer_label in skipped_labels:
@@ -787,13 +884,41 @@ def draw(
             theme,
             node_overlay,
             node_label_fields,
+            captured_forward_edges,
         )
 
     if vis_intervention_mode == "as_node":
         _add_intervention_hook_nodes(dot, site_labels, vis_graph_overrides)
 
+    sibling_order_chains: tuple[SiblingOrderChain, ...] = ()
+    if _should_order_siblings(
+        order_siblings=order_siblings,
+        engine=engine,
+        vis_mode=vis_mode,
+        num_nodes=num_nodes,
+        module=module,
+        vis_intervention_mode=vis_intervention_mode,
+        collapse_fn=collapse_fn,
+        vis_call_depth=vis_call_depth,
+    ):
+        sibling_order_chains = _build_sibling_order_chains(captured_forward_edges)
+        if sibling_order_chains:
+            for chain in sibling_order_chains:
+                _queue_sibling_rank_group(
+                    module_cluster_dict,
+                    top_level_sibling_rank_groups,
+                    chain,
+                )
+
     # Finally, set up the subgraphs.
-    _setup_subgraphs(self, dot, vis_mode, module_cluster_dict, overrides)
+    _setup_subgraphs(
+        self,
+        dot,
+        vis_mode,
+        module_cluster_dict,
+        overrides,
+        top_level_sibling_rank_groups,
+    )
     if show_legend:
         _add_legend_to_graphviz(dot, theme)
     if source_text is not None:
@@ -815,7 +940,23 @@ def draw(
     from ._elk_internal.layout import render_with_sfdp
 
     _RENDER_TIMEOUT = 120  # seconds
-    source_path = dot.save(vis_outpath)
+    source_override = None
+    self._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
+    if sibling_order_chains:
+        source_override, decision = _verify_and_apply_sibling_ordering(
+            dot.source,
+            sibling_order_chains,
+            captured_forward_edges,
+            rankdir,
+        )
+        self._last_sibling_ordering_decision = decision
+
+    if source_override is None:
+        source_path = dot.save(vis_outpath)
+    else:
+        source_path = dot.save(vis_outpath)
+        with open(source_path, "w", encoding="utf-8") as source_file:
+            source_file.write(source_override)
     try:
         if engine == "sfdp":
             render_with_sfdp(source_path, vis_outpath, vis_fileformat, vis_save_only)
@@ -843,7 +984,7 @@ def draw(
             os.remove(source_path)
     if return_graph:
         return dot
-    return dot.source
+    return source_override or dot.source
 
 
 def _add_legend_to_graphviz(dot: graphviz.Digraph, theme: VisualizationTheme) -> None:
@@ -2149,6 +2290,7 @@ def _add_node_to_graphviz(
     theme: VisualizationTheme | None = None,
     node_overlay: str | OverlayScores | None = None,
     node_label_fields: list[str] | None = None,
+    captured_forward_edges: list[CapturedForwardEdge] | None = None,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -2216,6 +2358,7 @@ def _add_node_to_graphviz(
         edge_map,
         vis_intervention_mode,
         intervention_site_labels,
+        captured_forward_edges,
     )
 
 
@@ -3484,6 +3627,7 @@ def _add_edges_for_node(
     edge_map: Optional[dict[str, list[RenderEdge]]] = None,
     vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
     intervention_site_labels: set[str] | None = None,
+    captured_forward_edges: list[CapturedForwardEdge] | None = None,
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -3713,6 +3857,21 @@ def _add_edges_for_node(
                         break
         else:
             graphviz_graph.edge(**edge_dict)
+
+        if captured_forward_edges is not None:
+            captured_forward_edges.append(
+                CapturedForwardEdge(
+                    source_label=parent_node.layer_label,
+                    target_label=child_node.layer_label,
+                    tail_name=tail_name,
+                    head_name=head_name,
+                    source_step=int(getattr(parent_node, "step_index", 0) or 0),
+                    target_step=int(getattr(child_node, "step_index", 0) or 0),
+                    source_node=parent_node,
+                    target_node=child_node,
+                    module_key=module,
+                )
+            )
 
         # Finally, add a backwards edge if both tensors have stored grads.
         if not (isinstance(parent_node, BoundaryNode) or isinstance(child_node, BoundaryNode)):
@@ -4505,12 +4664,400 @@ def _grad_node_name(layer: Any) -> str:
     return str(layer.layer_label).replace(":", "pass")
 
 
+def _should_order_siblings(
+    *,
+    order_siblings: bool,
+    engine: str,
+    vis_mode: str,
+    num_nodes: int,
+    module: "Module | str | None",
+    vis_intervention_mode: VisInterventionModeLiteral,
+    collapse_fn: CollapseFn | None,
+    vis_call_depth: int,
+) -> bool:
+    """Return whether sibling ordering is in scope for this render."""
+
+    return (
+        order_siblings
+        and engine == "dot"
+        and vis_mode == "unrolled"
+        and num_nodes <= SIBLING_ORDER_NODE_CAP
+        and module is None
+        and vis_intervention_mode == "node_mark"
+        and collapse_fn is None
+        and vis_call_depth >= 1000
+    )
+
+
+def _build_sibling_order_chains(
+    captured_edges: list[CapturedForwardEdge],
+) -> tuple[SiblingOrderChain, ...]:
+    """Build candidate sibling chains from captured rendered edges."""
+
+    if not _has_rendered_fanout(captured_edges):
+        return ()
+
+    rendered_parents: dict[str, set[str]] = defaultdict(set)
+    by_source: dict[tuple[str, str], list[CapturedForwardEdge]] = defaultdict(list)
+    for edge in captured_edges:
+        rendered_parents[edge.head_name].add(edge.tail_name)
+        by_source[(edge.source_label, edge.tail_name)].append(edge)
+
+    chains: list[SiblingOrderChain] = []
+    for (source_label, source_name), source_edges in sorted(by_source.items()):
+        distinct_targets: dict[str, CapturedForwardEdge] = {}
+        source_node = source_edges[0].source_node
+        if _has_conditional_fanout(source_node):
+            continue
+        for edge in source_edges:
+            distinct_targets.setdefault(edge.head_name, edge)
+        if len(distinct_targets) < 2:
+            continue
+        kept_edges = [
+            edge
+            for target_name, edge in distinct_targets.items()
+            if rendered_parents[target_name] == {source_name}
+        ]
+        if len(kept_edges) < 2:
+            continue
+        kept_edges.sort(key=lambda edge: (edge.target_step, edge.head_name))
+        chains.append(
+            SiblingOrderChain(
+                source_label=source_label,
+                source_name=source_name,
+                targets=tuple(edge.head_name for edge in kept_edges),
+                target_labels=tuple(edge.target_label for edge in kept_edges),
+                lca_key=_sibling_chain_lca_key(kept_edges),
+            )
+        )
+    return tuple(chains)
+
+
+def _has_rendered_fanout(captured_edges: list[CapturedForwardEdge]) -> bool:
+    """Return whether any rendered source has at least two distinct children."""
+
+    children_by_source: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for edge in captured_edges:
+        key = (edge.source_label, edge.tail_name)
+        children_by_source[key].add(edge.head_name)
+        if len(children_by_source[key]) >= 2:
+            return True
+    return False
+
+
+def _has_conditional_fanout(node: GraphNode) -> bool:
+    """Return whether a fanout source has conditional branch-child metadata."""
+
+    for field_name in (
+        "conditional_entry_children",
+        "conditional_then_children",
+        "conditional_elif_children",
+        "conditional_else_children",
+        "conditional_arm_children",
+    ):
+        if getattr(node, field_name, None):
+            return True
+    return False
+
+
+def _sibling_chain_lca_key(edges: list[CapturedForwardEdge]) -> str | int:
+    """Return the rendered module key shared by all sibling edges."""
+
+    if not edges:
+        return -1
+    first_key = edges[0].module_key
+    if all(edge.module_key == first_key for edge in edges):
+        return first_key
+    return -1
+
+
+def _queue_sibling_rank_group(
+    module_edge_dict: Dict[str, Any],
+    top_level_rank_groups: list[SiblingOrderChain],
+    chain: SiblingOrderChain,
+) -> None:
+    """Queue a sibling rank group in the cluster dictionary."""
+
+    if chain.lca_key == -1:
+        top_level_rank_groups.append(chain)
+    else:
+        module_edge_dict[cast(str, chain.lca_key)]["rank_groups"].append(chain)
+
+
+def _verify_and_apply_sibling_ordering(
+    source: str,
+    chains: tuple[SiblingOrderChain, ...],
+    captured_edges: list[CapturedForwardEdge],
+    rankdir: str,
+) -> tuple[str, SiblingOrderDecision]:
+    """Verify sibling rank chains and return final DOT source."""
+
+    baseline_source = _strip_sibling_rank_groups(source)
+    baseline = _layout_dot_plain(baseline_source, rankdir, captured_edges)
+    injected = _layout_dot_plain(source, rankdir, captured_edges)
+    _assert_sibling_backstops(baseline, injected, chains, captured_edges)
+
+    ratios = {
+        _sibling_chain_key(chain): _sibling_chain_stretch_ratio(
+            chain, captured_edges, baseline, injected
+        )
+        for chain in chains
+    }
+    survivors = tuple(
+        chain for chain in chains if ratios[_sibling_chain_key(chain)] <= SIBLING_ORDER_STRETCH_CAP
+    )
+    current_source = (
+        source if survivors == chains else _inject_sibling_rank_groups(baseline_source, survivors)
+    )
+    current_layout = (
+        injected
+        if survivors == chains
+        else _layout_dot_plain(current_source, rankdir, captured_edges)
+    )
+
+    for _ in range(2):
+        bad_chains = tuple(
+            chain
+            for chain in survivors
+            if _sibling_chain_stretch_ratio(chain, captured_edges, baseline, current_layout)
+            > SIBLING_ORDER_STRETCH_CAP
+        )
+        if not bad_chains:
+            return current_source, _sibling_order_decision(chains, survivors, ratios)
+        survivors = tuple(chain for chain in survivors if chain not in bad_chains)
+        current_source = _inject_sibling_rank_groups(baseline_source, survivors)
+        current_layout = _layout_dot_plain(current_source, rankdir, captured_edges)
+    return current_source, _sibling_order_decision(chains, survivors, ratios)
+
+
+def _sibling_chain_key(chain: SiblingOrderChain) -> tuple[str, tuple[str, ...]]:
+    """Return a stable key for decision reporting."""
+
+    return chain.source_name, chain.targets
+
+
+def _sibling_order_decision(
+    chains: tuple[SiblingOrderChain, ...],
+    survivors: tuple[SiblingOrderChain, ...],
+    ratios: dict[tuple[str, tuple[str, ...]], float],
+) -> SiblingOrderDecision:
+    """Build a sibling-order decision record."""
+
+    return SiblingOrderDecision(
+        candidate_count=len(chains),
+        survivor_count=len(survivors),
+        ratios=ratios,
+        surviving_keys=tuple(_sibling_chain_key(chain) for chain in survivors),
+    )
+
+
+def _layout_dot_plain(
+    source: str,
+    rankdir: str,
+    captured_edges: list[CapturedForwardEdge],
+) -> PlainLayout:
+    """Run ``dot -Tplain`` and parse coordinates and real-edge spans."""
+
+    real_edges = {(edge.tail_name, edge.head_name) for edge in captured_edges}
+    with tempfile.NamedTemporaryFile("w", suffix=".dot", delete=False) as source_file:
+        source_file.write(source)
+        source_path = source_file.name
+    try:
+        proc = subprocess.run(
+            ["dot", "-Tplain", source_path],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    finally:
+        os.remove(source_path)
+
+    nodes: dict[str, tuple[float, float]] = {}
+    pending_edges: list[tuple[str, str]] = []
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == "node" and len(parts) >= 4:
+            nodes[parts[1]] = (float(parts[2]), float(parts[3]))
+        elif parts[0] == "edge" and len(parts) >= 4:
+            edge_key = (parts[1], parts[2])
+            if edge_key in real_edges:
+                pending_edges.append(edge_key)
+
+    edge_spans: dict[tuple[str, str], float] = {}
+    for edge_key in pending_edges:
+        if edge_key[0] in nodes and edge_key[1] in nodes:
+            edge_spans[edge_key] = _flow_span(nodes[edge_key[0]], nodes[edge_key[1]], rankdir)
+    return PlainLayout(nodes=nodes, edge_spans=edge_spans)
+
+
+def _flow_span(tail_xy: tuple[float, float], head_xy: tuple[float, float], rankdir: str) -> float:
+    """Return flow-axis span between two node coordinates."""
+
+    if rankdir in {"LR", "RL"}:
+        return abs(tail_xy[0] - head_xy[0])
+    return abs(tail_xy[1] - head_xy[1])
+
+
+def _sibling_chain_stretch_ratio(
+    chain: SiblingOrderChain,
+    captured_edges: list[CapturedForwardEdge],
+    baseline: PlainLayout,
+    candidate: PlainLayout,
+) -> float:
+    """Return the local incident-edge stretch ratio for ``chain``."""
+
+    local_nodes = {chain.source_name, *chain.targets}
+    ratios: list[float] = []
+    for edge in captured_edges:
+        edge_key = (edge.tail_name, edge.head_name)
+        if edge.tail_name not in local_nodes and edge.head_name not in local_nodes:
+            continue
+        if edge_key not in baseline.edge_spans or edge_key not in candidate.edge_spans:
+            continue
+        ratios.append(
+            candidate.edge_spans[edge_key]
+            / max(SIBLING_ORDER_EPSILON, baseline.edge_spans[edge_key])
+        )
+    return max(ratios, default=1.0)
+
+
+def _assert_sibling_backstops(
+    baseline: PlainLayout,
+    injected: PlainLayout,
+    chains: tuple[SiblingOrderChain, ...],
+    captured_edges: list[CapturedForwardEdge],
+) -> None:
+    """Assert sibling-ordering structural backstops."""
+
+    real_edges = {(edge.tail_name, edge.head_name) for edge in captured_edges}
+    assert len(baseline.nodes) == len(injected.nodes)
+    for chain in chains:
+        for target in chain.targets:
+            assert target in baseline.nodes
+        for left, right in zip(chain.targets, chain.targets[1:]):
+            assert (left, right) not in real_edges
+            assert (right, left) not in real_edges
+
+
+def _strip_sibling_rank_groups(source: str) -> str:
+    """Remove TorchLens sibling-order rank-group blocks from DOT source."""
+
+    lines = source.splitlines()
+    stripped: list[str] = []
+    skipping = False
+    for line in lines:
+        if "tl:sibling-order:start" in line:
+            skipping = True
+            continue
+        if "tl:sibling-order:end" in line:
+            skipping = False
+            continue
+        if not skipping:
+            stripped.append(line)
+    return "\n".join(stripped) + "\n"
+
+
+def _inject_sibling_rank_groups(source: str, chains: tuple[SiblingOrderChain, ...]) -> str:
+    """Inject surviving sibling rank groups into baseline DOT source."""
+
+    result = source
+    top_level_groups = [chain for chain in chains if chain.lca_key == -1]
+    if top_level_groups:
+        result = _insert_before_final_brace(result, _rank_group_lines(top_level_groups, ""))
+
+    by_cluster: dict[str, list[SiblingOrderChain]] = defaultdict(list)
+    for chain in chains:
+        if chain.lca_key != -1:
+            by_cluster[cast(str, chain.lca_key)].append(chain)
+    emitted = len(top_level_groups)
+    for cluster_key, cluster_chains in by_cluster.items():
+        cluster_name = f"cluster_{cluster_key.replace(':', '_pass')}"
+        result, did_emit = _insert_into_cluster(
+            result,
+            cluster_name,
+            _rank_group_lines(cluster_chains, "    "),
+        )
+        if did_emit:
+            emitted += len(cluster_chains)
+    assert emitted == len(chains)
+    return result
+
+
+def _rank_group_lines(chains: Sequence[SiblingOrderChain], indent: str) -> str:
+    """Return DOT lines for sibling rank groups."""
+
+    lines: list[str] = []
+    for chain in chains:
+        lines.append(f"{indent}// tl:sibling-order:start")
+        lines.append(f"{indent}{{")
+        lines.append(f"{indent}    rank=same")
+        for target in chain.targets:
+            lines.append(f"{indent}    {quote_dot_id(target)}")
+        for left, right in zip(chain.targets, chain.targets[1:]):
+            lines.append(
+                f"{indent}    {quote_dot_id(left)} -> {quote_dot_id(right)} "
+                '[style=invis weight=100 comment="tl:sibling-order"]'
+            )
+        lines.append(f"{indent}}}")
+        lines.append(f"{indent}// tl:sibling-order:end")
+    return "\n".join(lines) + "\n"
+
+
+def _emit_sibling_rank_group(graph: graphviz.Digraph, chain: SiblingOrderChain) -> None:
+    """Emit one sibling rank group into ``graph``."""
+
+    with graph.subgraph() as rank_group:
+        rank_group.attr(rank="same")
+        rank_group.body.append("\t// tl:sibling-order:start\n")
+        for target in chain.targets:
+            rank_group.node(target)
+        for left, right in zip(chain.targets, chain.targets[1:]):
+            rank_group.edge(
+                left,
+                right,
+                style="invis",
+                weight="100",
+                comment="tl:sibling-order",
+            )
+        rank_group.body.append("\t// tl:sibling-order:end\n")
+
+
+def _insert_before_final_brace(source: str, insertion: str) -> str:
+    """Insert text before the final top-level DOT brace."""
+
+    index = source.rfind("}")
+    if index == -1:
+        return source + insertion
+    return source[:index] + insertion + source[index:]
+
+
+def _insert_into_cluster(source: str, cluster_name: str, insertion: str) -> tuple[str, bool]:
+    """Insert text immediately after a cluster's opening brace."""
+
+    markers = (f"subgraph {cluster_name} {{", f"subgraph {quote_dot_id(cluster_name)} {{")
+    index = -1
+    for marker in markers:
+        index = source.find(marker)
+        if index != -1:
+            break
+    if index == -1:
+        return source, False
+    insert_at = source.find("\n", index)
+    if insert_at == -1:
+        return source, False
+    return source[: insert_at + 1] + insertion + source[insert_at + 1 :], True
+
+
 def _setup_subgraphs(
     self: "Trace",
     graphviz_graph: graphviz.Digraph,
     vis_mode: str,
     module_edge_dict: Dict[str, Any],
     overrides: Optional[VisualizationOverrides] = None,
+    top_level_rank_groups: Sequence[SiblingOrderChain] = (),
 ) -> None:
     """Build nested Graphviz subgraphs for module clusters.
 
@@ -4553,9 +5100,10 @@ def _setup_subgraphs(
 
     subgraph_stack = [[subgraph] for subgraph in subgraphs]
     call_depth = 0
+    emitted_rank_groups = 0
     while len(subgraph_stack) > 0:
         parent_graph_list = subgraph_stack.pop(0)
-        _setup_subgraphs_recurse(
+        emitted_rank_groups += _setup_subgraphs_recurse(
             self,
             graphviz_graph,
             parent_graph_list,
@@ -4567,6 +5115,13 @@ def _setup_subgraphs(
             vis_mode,
             overrides,  # type: ignore[arg-type]
         )
+    for chain in top_level_rank_groups:
+        _emit_sibling_rank_group(graphviz_graph, chain)
+        emitted_rank_groups += 1
+    queued_rank_groups = len(top_level_rank_groups) + sum(
+        len(data.get("rank_groups", [])) for data in module_edge_dict.values()
+    )
+    assert queued_rank_groups == emitted_rank_groups
 
 
 def _setup_subgraphs_recurse(
@@ -4580,7 +5135,7 @@ def _setup_subgraphs_recurse(
     max_call_depth: int,
     vis_mode: str,
     overrides: VisualizationOverrides,
-) -> None:
+) -> int:
     """Recursively build a single branch of the module subgraph hierarchy.
 
     Walks down ``parent_graph_list`` (a path from root to leaf module),
@@ -4623,7 +5178,7 @@ def _setup_subgraphs_recurse(
 
     if call_depth < len(parent_graph_list) - 1:  # we haven't gotten to the bottom yet, keep going.
         with starting_subgraph.subgraph(name=cluster_name) as s:
-            _setup_subgraphs_recurse(
+            return _setup_subgraphs_recurse(
                 self,
                 s,
                 parent_graph_list,
@@ -4637,6 +5192,7 @@ def _setup_subgraphs_recurse(
             )
 
     else:  # Leaf of this branch: create the subgraph and add all edges.
+        emitted_rank_groups = 0
         with starting_subgraph.subgraph(name=cluster_name) as s:
             # Penwidth + cluster attrs come from ``_render_utils`` so the
             # bundle renderer in ``multi_trace/visualization.py`` can build
@@ -4664,6 +5220,9 @@ def _setup_subgraphs_recurse(
                 else:
                     module_args[arg_name] = str(arg_val)
             s.attr(**module_args)
+            for chain in module_edge_dict[subgraph_name].get("rank_groups", []):
+                _emit_sibling_rank_group(s, chain)
+                emitted_rank_groups += 1
             subgraph_nodes = module_edge_dict[subgraph_name].get("nodes", [])
             for node_args in subgraph_nodes:
                 s.node(**node_args)
@@ -4673,6 +5232,7 @@ def _setup_subgraphs_recurse(
             subgraph_children = module_submodule_dict[subgraph_name_w_pass]
             for subgraph_child in subgraph_children:  # it's weird but have to go in reverse order.
                 subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
+        return emitted_rank_groups
 
 
 def _get_max_call_depth(

@@ -3968,6 +3968,7 @@ class Trace:
         dpi: int | None = None,
         for_paper: bool = False,
         return_graph: bool = False,
+        order_siblings: bool = True,
     ) -> Any:
         """Render the computational graph for this model log.
 
@@ -3977,7 +3978,7 @@ class Trace:
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
         vis_grad_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
         show_buffer_layers, direction, vis_node_placement, vis_renderer, vis_theme, \
-        vis_intervention_mode, vis_show_cone, code_panel:
+        vis_intervention_mode, vis_show_cone, code_panel, order_siblings:
             Forwarded unchanged to :func:`torchlens.visualization.rendering.draw`.
             ``show_buffer_layers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. Legacy bools are deprecated but supported by the
@@ -4042,6 +4043,7 @@ class Trace:
             dpi=dpi,
             for_paper=for_paper,
             return_graph=return_graph,
+            order_siblings=order_siblings,
         )
 
     def add_node_overlay(

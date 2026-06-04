@@ -701,6 +701,8 @@ Trace-level aggregates.
 - `rerun(model, x, **kwargs)`: Re-execute the model and update or append Trace state.
 - `replay(**kwargs)`: Replay saved activations without re-executing the model.
 - `draw(**kwargs)`: Draw the forward graph. All vis params live here (no longer on `tl.trace()`).
+  `order_siblings=True` is the default Graphviz/dot unrolled post-pass that verifies and
+  applies execution-order placement for true parallel sibling fanouts.
 - `draw_backward(**kwargs)`: Draw the backward grad-fn graph.
 - `draw_combined(**kwargs)`: Render forward ops and backward grad_fns in a single graph.
 - `cleanup()`: Clear circular references and runtime-only heavyweight objects.
@@ -1947,6 +1949,8 @@ All visualization lives on `Trace.draw()` (and friends), not on `tl.trace()`.
 - `Trace.replay_from(site, *, strict=MISSING, replay=None)`: Replay starting from a site.
 - `Trace.rerun(model=None, x=None, *, append=MISSING, strict=MISSING, replay=None, transform=USE_STORED, output_transform=USE_STORED)`: Re-execute and update or append Trace state.
 - `Trace.draw(**kwargs)`: Draw the forward graph. All vis params live here.
+  `order_siblings=True` orders true parallel sibling fanouts in execution order for
+  forward unrolled Graphviz/dot renders after local edge-stretch verification.
 - `Trace.draw_backward(**kwargs)`: Draw the backward grad-fn graph.
 - `Trace.draw_combined(**kwargs)`: Render forward + backward in a single graph.
 - `Trace.log_backward(loss, **backward_kwargs)`: Backward capture implementation method.

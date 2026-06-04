@@ -1981,6 +1981,7 @@ def show_model_graph(
     vis_intervention_mode: VisInterventionModeLiteral | MissingType = MISSING,
     vis_show_cone: bool | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
+    order_siblings: bool | MissingType = MISSING,
     code_panel: CodePanelOption = False,
     random_seed: int | None = None,
     verbose: bool = False,
@@ -2027,6 +2028,8 @@ def show_model_graph(
             inserts a small hook node after each intervention site.
         vis_show_cone: Whether ``"node_mark"`` mode also marks downstream
             cone-of-effect members.
+        order_siblings: Whether Graphviz ``dot`` renders should verify and apply
+            execution-order placement for true parallel siblings.
         code_panel: Optional source-code panel mode. ``True`` is equivalent to
             ``"forward"``. Built-in modes use source captured at log time;
             callable modes receive the live model object and are only available
@@ -2079,6 +2082,7 @@ def show_model_graph(
         vis_theme=vis_theme,
         vis_intervention_mode=vis_intervention_mode,
         vis_show_cone=vis_show_cone,
+        order_siblings=order_siblings,
     )
 
     if visualization_options.mode not in ["none", "rolled", "unrolled"]:

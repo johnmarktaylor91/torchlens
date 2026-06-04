@@ -22,6 +22,9 @@ Renders `GradFn` nodes and grad edges captured by `capture/backward.py`.
 - `_get_arm_edge_entries()` reads cond-id-aware conditional metadata.
 - Duplicate-edge filtering can affect labels; check conditional and collapsed-module tests
   when editing edge construction.
+- `order_siblings=True` captures rendered forward edges at emission time, queues same-rank
+  invisible chains for sole-parent sibling fanouts, verifies local edge-stretch with
+  `dot -Tplain`, and drops chains above the cap.
 
 ### NodeSpec and Modes
 - `compute_default_node_lines()` builds default label rows.
@@ -44,6 +47,9 @@ sizing, topological seeding, and fallback layout for unavailable ELK.
 
 ## Gotchas
 - Graphviz render writes a DOT source file alongside rendered output.
+- Sibling ordering is intentionally scoped to forward unrolled Graphviz dot renders under
+  the node cap. Rolled, collapsed, focused, backward, conditional, ELK, Dagua, and large
+  graph paths should no-op.
 - ELK paths do not support every Graphviz feature; verify conditional labels, module clusters,
   and code panels after layout changes.
 - `show_model_graph()` should cleanup temporary logs in `finally`.

@@ -20,6 +20,8 @@ Key entry points:
 - Postprocess: `torchlens/postprocess/__init__.py` current 20-step pipeline
 - Portable I/O: `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py`, `torchlens/io/__init__.py`
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases
+- Visualization: `Trace.draw(order_siblings=True)` applies a Graphviz-only verified
+  sibling-ordering post-pass for forward unrolled graphs under the node cap.
 
 ## Conventions
 - Conventional commits: prefer `docs(scope):`, `chore(scope):`, `test(scope):` for
@@ -63,6 +65,8 @@ pytest tests/ -m "not slow" -x --tb=short
 9. Portable `.tlspec` public schema is manifest-only; executable callables are not portable.
 10. `backward_ready=True` rejects contradictory detaching/disk-save settings and preserves user
     `requires_grad` choices.
+11. Sibling ordering is forward/unrolled/dot-only; collapsed, rolled, backward, focused,
+    conditional, and large graphs must conservatively no-op.
 
 ## Known Gotchas
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`

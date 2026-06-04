@@ -39,6 +39,8 @@ rendering byops this path.
 - `module=...` focuses a submodule and inserts synthetic boundary nodes.
 - `skip_fn` can hide layers while chaining edges through them.
 - `collapse_fn` or module-depth options collapse module subgraphs.
+- `order_siblings=True` (default) applies a Graphviz `dot` post-pass in forward unrolled
+  mode to place true parallel siblings in execution order after local stretch verification.
 
 ## Node Customization
 `VisualizationOptions.node_spec_fn` receives `(layer_log, default_spec)` and returns a

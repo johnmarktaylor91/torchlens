@@ -162,7 +162,7 @@ def test_trace_defaults_are_stable(
     assert captured_calls[-1]["layers_to_save"] is None
     assert captured_calls[-1]["output_device"] == "same"
     assert captured_calls[-1]["activation_transform"] is None
-    assert captured_calls[-1]["mark_layer_depths"] is False
+    assert captured_calls[-1]["mark_layer_depths"] is True
     assert captured_calls[-1]["detach_saved_activations"] is False
     assert captured_calls[-1]["save_arg_values"] is False
     assert captured_calls[-1]["save_gradients"] is False

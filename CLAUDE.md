@@ -25,6 +25,7 @@ log = tl.trace(model, x)
 activation = log["linear_1_1"].out
 print(log.summary())
 print(tl.report.explain(log))
+log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
 ```
 
 Use selectors for intervention discovery:
@@ -49,6 +50,8 @@ print(tl.compat.report(model, x).to_markdown())
   selectors, helper transforms, observers, validation, and the three main log classes.
 - `torchlens.fastlog` is the sparse predicate recorder; it returns `Recording`, not a
   faithful `Trace`.
+- `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
+  forward unrolled graphs; set it to `False` to render the raw dot layout.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,
   profiler, and related tools.
