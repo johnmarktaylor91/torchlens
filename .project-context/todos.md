@@ -2275,6 +2275,30 @@ Two related viz-UX asks from JMT:
 
 ---
 
+### Revisit DenseNet visualization (ugly layout + sibling-ordering inert) (raised 2026-06-04)
+
+Two related DenseNet rendering issues to revisit later:
+
+1. **DenseNet renders ugly** (JMT recollection, 2026-06-04). Dense connectivity
+   (every layer feeds every later layer in a block) produces a visually messy graph
+   under the current Graphviz layout. Worth a dedicated pass on how to render dense
+   connectivity readably (module collapse defaults? edge bundling? a DenseNet-aware
+   preset?). Not yet diagnosed in detail.
+
+2. **The sibling-ordering feature (2026-06-04 sprint) is conservatively INERT on
+   DenseNet.** Measured during the adversarial design review: DenseNet121 = 0/58 fanouts
+   ordered (4/593 siblings kept), because the sole-parent guard skips any sibling with
+   more than one rendered parent, and dense connectivity means almost every consumer has
+   multiple parents. This is CORRECT (skipped = today's layout, never wrong) but means
+   the ordering feature does nothing for DenseNet. ResNet18 was 3/8 fanouts, transformer
+   2/6, GoogLeNet 9/9 (the target case). If DenseNet ordering is later deemed valuable,
+   it needs a different (non-sole-parent) safety story — revisit alongside (1).
+
+See the sibling-ordering design docs (`/tmp/ordering_design_v3.md` + findings; should be
+preserved to vault/.research) for the full guard rationale.
+
+---
+
 ### Stacked multi-pass single-ModelLog (raised 2026-04-28, separate from intervention API)
 
 Workflow gap: user has 1000 prompts, model fits batch=4 in memory. Today
