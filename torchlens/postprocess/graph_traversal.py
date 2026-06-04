@@ -314,8 +314,7 @@ def _mark_layer_depths(self: "Trace") -> None:
     every reachable node.
 
     This step is CONDITIONAL on ``self.mark_layer_depths`` — it is
-    skipped when the user doesn't need distance metadata, saving time on
-    large graphs.
+    skipped when the user doesn't need distance metadata.
     """
     _flood_graph_from_input_or_output_nodes(self, "input")
     _flood_graph_from_input_or_output_nodes(self, "output")
@@ -333,9 +332,9 @@ def _flood_graph_from_input_or_output_nodes(self: "Trace", mode: str) -> None:
     parents (backward). This ensures hop counts reflect actual data-flow
     distance, not arbitrary graph traversal paths.
 
-    A node may be revisited if a new path provides a shorter min or longer max
-    distance, or adds a new ancestor/descendent — see
-    ``_check_whether_to_add_node_to_flood_stack`` for the pruning logic.
+    Nodes are processed once in topological order: forward from inputs, or
+    backward from outputs. Each visited node propagates finalized distance and
+    lineage state to its data-flow successors.
 
     Args:
         mode: 'input' to flood forward from inputs, 'output' to flood backward from outputs.
@@ -344,61 +343,41 @@ def _flood_graph_from_input_or_output_nodes(self: "Trace", mode: str) -> None:
         starting_nodes = self.input_layers[:]
         min_field = "min_distance_from_input"
         max_field = "max_distance_from_input"
-        direction = "forwards"
         marker_field = "has_input_ancestor"
         layer_logging_field = "input_ancestors"
         forward_field = "children"
+        traversal_order = self._raw_layer_labels_list
     elif mode == "output":
         starting_nodes = self.output_layers[:]
         min_field = "min_distance_to_output"
         max_field = "max_distance_to_output"
-        direction = "backwards"
         marker_field = "has_output_descendant"
         layer_logging_field = "output_descendants"
         forward_field = "parents"
+        traversal_order = reversed(self._raw_layer_labels_list)
     else:
         raise ValueError("Mode but be either 'input' or 'output'")
 
-    nodes_seen = set()
+    for starting_node_label in starting_nodes:
+        starting_node = self[starting_node_label]
+        _update_node_distance_vals(starting_node, min_field, max_field, 0)
+        setattr(starting_node, marker_field, True)
+        getattr(starting_node, layer_logging_field).add(starting_node_label)
 
-    # Tuples in format node_label, nodes_since_start, traversal_direction
-    node_stack = [
-        (starting_node_label, starting_node_label, 0, direction)
-        for starting_node_label in starting_nodes
-    ]
-    while len(node_stack) > 0:
-        (
-            current_node_label,
-            orig_node,
-            nodes_since_start,
-            traversal_direction,
-        ) = node_stack.pop()
-        nodes_seen.add(current_node_label)
+    for current_node_label in traversal_order:
         current_node = self[current_node_label]
-        _update_node_distance_vals(current_node, min_field, max_field, nodes_since_start)
+        current_min = getattr(current_node, min_field)
+        current_max = getattr(current_node, max_field)
+        if current_min is None or current_max is None:
+            continue
 
-        setattr(current_node, marker_field, True)
-        getattr(current_node, layer_logging_field).add(orig_node)
-
+        current_lineage = getattr(current_node, layer_logging_field)
         for next_node_label in getattr(current_node, forward_field):
-            if _check_whether_to_add_node_to_flood_stack(
-                self,
-                next_node_label,
-                orig_node,
-                nodes_since_start,
-                min_field,
-                max_field,
-                layer_logging_field,
-                nodes_seen,
-            ):
-                node_stack.append(
-                    (
-                        next_node_label,
-                        orig_node,
-                        nodes_since_start + 1,
-                        traversal_direction,
-                    )
-                )
+            next_node = self[next_node_label]
+            _update_node_distance_vals(next_node, min_field, max_field, current_min + 1)
+            _update_node_distance_vals(next_node, min_field, max_field, current_max + 1)
+            setattr(next_node, marker_field, True)
+            getattr(next_node, layer_logging_field).update(current_lineage)
 
 
 def _update_node_distance_vals(
@@ -425,45 +404,6 @@ def _update_node_distance_vals(
             max_field,
             max(nodes_since_start, getattr(current_node, max_field)),
         )
-
-
-def _check_whether_to_add_node_to_flood_stack(
-    self: "Trace",
-    candidate_node_label: str,
-    orig_node_label: str,
-    nodes_since_start: int,
-    min_field: str,
-    max_field: str,
-    layer_logging_field: str,
-    nodes_seen: set[str],
-) -> bool:
-    """Decide whether to push a candidate node onto the flood stack.
-
-    Returns True (re-visit needed) if any of:
-    - Node has never been visited.
-    - The current path provides a new minimum distance.
-    - The current path provides a new maximum distance.
-    - The originating input/output node is not yet recorded in the candidate's
-      ancestor/descendent set (adds new lineage information).
-
-    This pruning prevents redundant BFS expansion while ensuring all
-    distance extremes and lineage relationships are captured.
-    """
-    candidate_node = self[candidate_node_label]
-
-    if candidate_node_label not in nodes_seen:
-        return True
-
-    if nodes_since_start + 1 < getattr(candidate_node, min_field):
-        return True
-
-    if nodes_since_start + 1 > getattr(candidate_node, max_field):
-        return True
-
-    if orig_node_label not in getattr(candidate_node, layer_logging_field):
-        return True
-
-    return False
 
 
 def _log_internally_terminated_tensor(self: "Trace", tensor_label: str) -> None:

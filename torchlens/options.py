@@ -628,7 +628,7 @@ class CaptureOptions:
     random_seed: int | None = None
     source_context_lines: int = 7
     optimizer: Any = None
-    compute_input_output_distances: bool = False
+    compute_input_output_distances: bool = True
     detach_saved_activations: bool = False
     recurrence_detection: bool = True
     intervention_ready: bool = False
@@ -760,7 +760,7 @@ class CaptureOptions:
             "compute_input_output_distances": _resolve_option_value(
                 "compute_input_output_distances",
                 compute_input_output_distances,
-                False,
+                True,
                 specified_fields,
             ),
             "detach_saved_activations": _resolve_option_value(

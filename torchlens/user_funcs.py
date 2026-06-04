@@ -1370,8 +1370,7 @@ def trace(
             Default False - torch stays wrapped for subsequent calls.
         verbose: If True, print timed progress messages at each major pipeline stage.
         source_context_lines: Lines of source context to capture per function call.
-        compute_input_output_distances: Compute BFS distances from inputs/outputs
-            (expensive).
+        compute_input_output_distances: Compute graph distances from inputs/outputs.
         recurrence_detection: If True (default), run full isomorphic
             subgraph expansion. Set this to False when the forward pass has more than
             about 1M operations and postprocessing speed matters; the False path skips
