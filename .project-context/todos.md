@@ -2299,6 +2299,64 @@ preserved to vault/.research) for the full guard rationale.
 
 ---
 
+### Rolled view: reconcile loop-rolling vs module-rolling (raised 2026-06-04)
+
+GENERAL issue (applies to MODULES and BUFFERS alike — NOT buffer-specific). The rolled
+view has TWO independent collapse axes that can BOTH apply to the same node:
+- **loop-rolling**: recurrence groups repeated graph positions into a Layer (passes `:N`).
+- **module-rolling**: a module called multiple times groups into ModuleCall instances
+  (`module_address:N`).
+
+The collision is generic: e.g. a single-op module (a reused `ReLU`) that is BOTH called
+multiple times AND sits inside a recurrent loop carries colons along two axes at once
+(its Layer pass index AND its module-call index). What does the rolled node show, and
+which axis collapses first / how do they compose? This predates buffers — buffers just
+make it vivid.
+
+Buffer instance of the same problem: a buffer rewritten in MULTIPLE loops spans multiple
+buffer-Layers (positions) AND has a flat version index (`address:N`); in the rolled view,
+two loop-positions of the SAME buffer both collapse to nodes labeled by the same address,
+distinguished only by graph position.
+
+Need a coherent, GENERAL story for: (a) which axis wins / how they compose when both
+apply; (b) how the rolled node is LABELED when both axes apply (address + a position
+hint?); (c) consistency across op / module / buffer rolling. Genuinely hard. RARE in
+practice (a node that is both multiply-module-called AND loop-recurrent), so it doesn't
+block the buffer sprint — decide during or just after it. The buffer sprint's "How
+buffers work" doc should at least NAME this case even if the rolled-view answer lands
+later.
+
+---
+
+### Consider a broader Op-subclassing refactor (raised 2026-06-04, for completeness)
+
+During the buffer design we chose plain `Op` + `is_buffer` flag over a `BufferOp`
+subclass, because EVERY op-role in TorchLens is currently a flag (`is_input`,
+`is_output`, `is_internal_source`, `is_internal_sink`, `is_terminal_bool`, `is_buffer`),
+not a subclass — and subclassing buffers alone would be the inconsistent odd-one-out and
+multiply buffer-related nouns. BUT if we ever want cleaner per-role types (`BufferOp`,
+`InputOp`, `OutputOp`, …) with role-specific fields lifted off the base `Op`, that should
+be ONE coherent refactor subclassing ALL op-roles, not a buffer-only special case. Filed
+for completeness; NOT planned. It'd be a big, breaking, cross-cutting change (data model +
+accessors + isinstance handling everywhere). Only worth it if the flat fat-`Op` record
+becomes a real pain point. The lighter-weight fix for the only concrete complaint (field
+clutter) is a role-gated repr, which the buffer sprint already does.
+
+---
+
+### Revisit loop-based indexing / recurrence semantics (raised 2026-06-04)
+
+JMT feels good about the current loop-finding system (recurrence -> Layers, pass indices,
+equivalence-class grouping), but flagged a leaner ALTERNATIVE worth riffing exhaustively
+later: treat recurrence WITHOUT loop-finding — flat, un-grouped ops/versions, with
+rolling/grouping made opt-in on demand rather than always-computed. Surfaced during the
+buffer design (where version<->pass and the loop/module rolling collision live). Open
+question: is the equivalence-class loop-finding machinery worth its complexity, or is a
+leaner flat model + opt-in grouping cleaner and easier to reason about? Riff exhaustively
+later. Closely related to the rolled-view loop-vs-module collision todo above.
+
+---
+
 ### Stacked multi-pass single-ModelLog (raised 2026-04-28, separate from intervention API)
 
 Workflow gap: user has 1000 prompts, model fits batch=4 in memory. Today
