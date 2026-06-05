@@ -883,6 +883,18 @@ class Layer:
         return any(p.has_parents for p in self.ops.values())
 
     @property
+    def num_parents(self) -> int:
+        """Number of distinct parent Layers feeding this Layer."""
+
+        return len(self.parents)
+
+    @property
+    def num_children(self) -> int:
+        """Number of distinct child Layers fed by this Layer."""
+
+        return len(self.children)
+
+    @property
     def siblings(self) -> list[str]:
         """Union of sibling layers (no-pass labels) across all ops."""
         result = []

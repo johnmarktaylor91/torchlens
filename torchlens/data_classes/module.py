@@ -209,6 +209,48 @@ def _is_atomic_module_call(call: "ModuleCall") -> bool:
     )
 
 
+def _edge_counts_for_scope(trace: "Trace | None", op_labels: List[str]) -> tuple[int, int, int]:
+    """Count internal, input, and output graph edges for a scoped op set.
+
+    Parameters
+    ----------
+    trace:
+        Owning Trace used to resolve Op labels.
+    op_labels:
+        Pass-qualified labels for Ops in the scope.
+
+    Returns
+    -------
+    tuple[int, int, int]
+        ``(internal_edges, input_edges, output_edges)`` with distinct
+        ``(parent, child)`` pairs.
+    """
+
+    if trace is None:
+        return 0, 0, 0
+
+    scope = {trace.ops[label].label for label in op_labels}
+    internal_edges: set[tuple[str, str]] = set()
+    input_edges: set[tuple[str, str]] = set()
+    output_edges: set[tuple[str, str]] = set()
+
+    for parent_label in scope:
+        parent = trace.ops[parent_label]
+        for child_label in parent.children:
+            canonical_child_label = trace.ops[child_label].label
+            edge = (parent_label, canonical_child_label)
+            if canonical_child_label in scope:
+                internal_edges.add(edge)
+            else:
+                output_edges.add(edge)
+        for inbound_label in parent.parents:
+            canonical_inbound_label = trace.ops[inbound_label].label
+            if canonical_inbound_label not in scope:
+                input_edges.add((canonical_inbound_label, parent_label))
+
+    return len(internal_edges), len(input_edges), len(output_edges)
+
+
 def _visible_call_children(call: "ModuleCall", include_atomic: bool) -> list["ModuleCall"]:
     """Return displayable child ModuleCalls for ``call``.
 
@@ -548,6 +590,30 @@ class ModuleCall:
         """Backward duration placeholder populated in the backward-pass sprint."""
 
         return None
+
+    @property
+    def num_internal_edges(self) -> int:
+        """Edges whose parent and child Ops are both inside this ModuleCall."""
+
+        return _edge_counts_for_scope(self._source_trace, self.ops)[0]
+
+    @property
+    def num_input_edges(self) -> int:
+        """Edges whose child Op is inside this ModuleCall and parent Op is outside."""
+
+        return _edge_counts_for_scope(self._source_trace, self.ops)[1]
+
+    @property
+    def num_output_edges(self) -> int:
+        """Edges whose parent Op is inside this ModuleCall and child Op is outside."""
+
+        return _edge_counts_for_scope(self._source_trace, self.ops)[2]
+
+    @property
+    def num_edges(self) -> int:
+        """Total edge footprint for this ModuleCall."""
+
+        return self.num_internal_edges + self.num_input_edges + self.num_output_edges
 
     def _ops_by_output_role(self, *, output: bool) -> list["Op"]:
         """Return Op records inside this call, filtered by output boundary role."""
@@ -1186,6 +1252,42 @@ class Module:
         if trace is None:
             return list(self.layer_labels)
         return [trace.layers[label] for label in self.layer_labels]
+
+    def _op_labels(self) -> list[str]:
+        """Pass-qualified Op labels belonging to this Module across all calls."""
+
+        labels: list[str] = []
+        seen: set[str] = set()
+        for call in self.ops.values():
+            for label in call.ops:
+                if label not in seen:
+                    seen.add(label)
+                    labels.append(label)
+        return labels
+
+    @property
+    def num_internal_edges(self) -> int:
+        """Edges whose parent and child Ops are both inside this Module."""
+
+        return _edge_counts_for_scope(self._source_trace, self._op_labels())[0]
+
+    @property
+    def num_input_edges(self) -> int:
+        """Edges whose child Op is inside this Module and parent Op is outside."""
+
+        return _edge_counts_for_scope(self._source_trace, self._op_labels())[1]
+
+    @property
+    def num_output_edges(self) -> int:
+        """Edges whose parent Op is inside this Module and child Op is outside."""
+
+        return _edge_counts_for_scope(self._source_trace, self._op_labels())[2]
+
+    @property
+    def num_edges(self) -> int:
+        """Total edge footprint for this Module."""
+
+        return self.num_internal_edges + self.num_input_edges + self.num_output_edges
 
     @property
     def call_parent_address(self) -> str | None:

@@ -3563,6 +3563,91 @@ class Trace:
         return len(self.compute_ops)
 
     @property
+    def num_edges(self) -> int:
+        """Distinct edges in the per-pass Op graph, including boundary edges."""
+
+        return len(
+            {
+                (op.label, self.ops[child_label].label)
+                for op in self.ops
+                for child_label in op.children
+            }
+        )
+
+    @property
+    def num_compute_edges(self) -> int:
+        """Distinct Op graph edges whose endpoints are both compute Ops."""
+
+        compute_labels = {op.label for op in self.compute_ops}
+        return len(
+            {
+                (op.label, self.ops[child_label].label)
+                for op in self.compute_ops
+                for child_label in op.children
+                if self.ops[child_label].label in compute_labels
+            }
+        )
+
+    @property
+    def num_buffer_edges(self) -> int:
+        """Distinct Op graph edges with at least one buffer endpoint."""
+
+        return len(
+            {
+                (op.label, self.ops[child_label].label)
+                for op in self.ops
+                for child_label in op.children
+                if op.is_buffer or self.ops[child_label].is_buffer
+            }
+        )
+
+    @property
+    def num_layer_edges(self) -> int:
+        """Distinct edges in the aggregate Layer graph."""
+
+        return len(
+            {
+                (layer.layer_label, child_label)
+                for layer in self.layers
+                for child_label in layer.children
+            }
+        )
+
+    @property
+    def num_backward_edges(self) -> int | None:
+        """Distinct edges in the backward GradFn graph, or ``None`` if ungated."""
+
+        if not self.has_backward_pass:
+            return None
+        return len(
+            {
+                (grad_fn.label, child_label)
+                for grad_fn in self.grad_fns
+                for child_label in grad_fn.children
+            }
+        )
+
+    @property
+    def branching_factor(self) -> float:
+        """Mean fan-out over Op graph nodes."""
+
+        if self.num_ops == 0:
+            return 0.0
+        return self.num_edges / self.num_ops
+
+    @property
+    def max_in_degree(self) -> int:
+        """Maximum number of parents over compute Ops."""
+
+        return max((op.num_parents for op in self.compute_ops), default=0)
+
+    @property
+    def max_out_degree(self) -> int:
+        """Maximum number of children over compute Ops."""
+
+        return max((op.num_children for op in self.compute_ops), default=0)
+
+    @property
     def num_saved_grad_ops(self) -> int:
         """Number of Ops with saved gradients."""
 
