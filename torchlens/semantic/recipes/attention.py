@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-import torch
-
 from ..facets import register
-from ._helpers import add_if_present, child_out, config_value, first_input, fused_sdpa_pattern
-from ._helpers import module_output, reshape_heads
+from ._helpers import (
+    add_if_present,
+    child_output_spec,
+    config_value,
+    first_input_spec,
+    fused_sdpa_pattern,
+    module_output_spec,
+    reshape_heads,
+)
 
 _ATTENTION_FACETS_BASE = (
     "q",
@@ -37,8 +42,8 @@ def _with_attention_common(
 ) -> dict[str, Any]:
     """Attach common attention facets to a recipe result."""
 
-    add_if_present(result, "attn_out", module_output(module))
-    add_if_present(result, "input", first_input(module))
+    add_if_present(result, "attn_out", module_output_spec(module, "attention"))
+    add_if_present(result, "input", first_input_spec(module, "attention"))
     if n_q_heads is not None:
         result["n_q_heads"] = n_q_heads
         result["n_heads"] = n_q_heads
@@ -124,9 +129,27 @@ def distilbert_attention(module: Any) -> dict[str, Any]:
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
     result: dict[str, Any] = {}
-    add_if_present(result, "q", reshape_heads(child_out(module, "q_lin"), n_q_heads, d_head))
-    add_if_present(result, "k", reshape_heads(child_out(module, "k_lin"), n_kv_heads, d_head))
-    add_if_present(result, "v", reshape_heads(child_out(module, "v_lin"), n_kv_heads, d_head))
+    add_if_present(
+        result,
+        "q",
+        reshape_heads(
+            child_output_spec(module, "q_lin", "distilbert_attention"), n_q_heads, d_head
+        ),
+    )
+    add_if_present(
+        result,
+        "k",
+        reshape_heads(
+            child_output_spec(module, "k_lin", "distilbert_attention"), n_kv_heads, d_head
+        ),
+    )
+    add_if_present(
+        result,
+        "v",
+        reshape_heads(
+            child_output_spec(module, "v_lin", "distilbert_attention"), n_kv_heads, d_head
+        ),
+    )
     return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
 
 
@@ -135,14 +158,14 @@ def gpt2_attention(module: Any) -> dict[str, Any]:
     """Return facets for GPT-2 fused-QKV attention modules."""
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
-    c_attn_out = child_out(module, "c_attn")
+    c_attn_out = child_output_spec(module, "c_attn", "gpt2_attention")
     result: dict[str, Any] = {}
-    if isinstance(c_attn_out, torch.Tensor) and n_q_heads is not None:
-        q_raw, k_raw, v_raw = c_attn_out.split(c_attn_out.shape[-1] // 3, dim=-1)
+    if c_attn_out is not None and n_q_heads is not None:
+        q_raw, k_raw, v_raw = c_attn_out.split(3, dim=-1)
         add_if_present(result, "q", reshape_heads(q_raw, n_q_heads, d_head))
         add_if_present(result, "k", reshape_heads(k_raw, n_kv_heads, d_head))
         add_if_present(result, "v", reshape_heads(v_raw, n_kv_heads, d_head))
-    add_if_present(result, "attn_out", child_out(module, "c_proj"))
+    add_if_present(result, "attn_out", child_output_spec(module, "c_proj", "gpt2_attention"))
     return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
 
 
@@ -152,9 +175,23 @@ def bert_self_attention(module: Any) -> dict[str, Any]:
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
     result: dict[str, Any] = {}
-    add_if_present(result, "q", reshape_heads(child_out(module, "query"), n_q_heads, d_head))
-    add_if_present(result, "k", reshape_heads(child_out(module, "key"), n_kv_heads, d_head))
-    add_if_present(result, "v", reshape_heads(child_out(module, "value"), n_kv_heads, d_head))
+    add_if_present(
+        result,
+        "q",
+        reshape_heads(child_output_spec(module, "query", "bert_self_attention"), n_q_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "k",
+        reshape_heads(child_output_spec(module, "key", "bert_self_attention"), n_kv_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "v",
+        reshape_heads(
+            child_output_spec(module, "value", "bert_self_attention"), n_kv_heads, d_head
+        ),
+    )
     return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
 
 
@@ -168,10 +205,22 @@ def gqa_attention(module: Any) -> dict[str, Any]:
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
     result: dict[str, Any] = {}
-    add_if_present(result, "q", reshape_heads(child_out(module, "q_proj"), n_q_heads, d_head))
-    add_if_present(result, "k", reshape_heads(child_out(module, "k_proj"), n_kv_heads, d_head))
-    add_if_present(result, "v", reshape_heads(child_out(module, "v_proj"), n_kv_heads, d_head))
-    add_if_present(result, "attn_out", child_out(module, "o_proj"))
+    add_if_present(
+        result,
+        "q",
+        reshape_heads(child_output_spec(module, "q_proj", "gqa_attention"), n_q_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "k",
+        reshape_heads(child_output_spec(module, "k_proj", "gqa_attention"), n_kv_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "v",
+        reshape_heads(child_output_spec(module, "v_proj", "gqa_attention"), n_kv_heads, d_head),
+    )
+    add_if_present(result, "attn_out", child_output_spec(module, "o_proj", "gqa_attention"))
     return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
 
 
@@ -192,10 +241,22 @@ def t5_attention(module: Any) -> dict[str, Any]:
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
     result: dict[str, Any] = {}
-    add_if_present(result, "q", reshape_heads(child_out(module, "q"), n_q_heads, d_head))
-    add_if_present(result, "k", reshape_heads(child_out(module, "k"), n_kv_heads, d_head))
-    add_if_present(result, "v", reshape_heads(child_out(module, "v"), n_kv_heads, d_head))
-    add_if_present(result, "attn_out", child_out(module, "o"))
+    add_if_present(
+        result,
+        "q",
+        reshape_heads(child_output_spec(module, "q", "t5_attention"), n_q_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "k",
+        reshape_heads(child_output_spec(module, "k", "t5_attention"), n_kv_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "v",
+        reshape_heads(child_output_spec(module, "v", "t5_attention"), n_kv_heads, d_head),
+    )
+    add_if_present(result, "attn_out", child_output_spec(module, "o", "t5_attention"))
     return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)
 
 
@@ -205,7 +266,19 @@ def vit_self_attention(module: Any) -> dict[str, Any]:
 
     n_q_heads, n_kv_heads, d_head = _attention_config(module)
     result: dict[str, Any] = {}
-    add_if_present(result, "q", reshape_heads(child_out(module, "query"), n_q_heads, d_head))
-    add_if_present(result, "k", reshape_heads(child_out(module, "key"), n_kv_heads, d_head))
-    add_if_present(result, "v", reshape_heads(child_out(module, "value"), n_kv_heads, d_head))
+    add_if_present(
+        result,
+        "q",
+        reshape_heads(child_output_spec(module, "query", "vit_self_attention"), n_q_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "k",
+        reshape_heads(child_output_spec(module, "key", "vit_self_attention"), n_kv_heads, d_head),
+    )
+    add_if_present(
+        result,
+        "v",
+        reshape_heads(child_output_spec(module, "value", "vit_self_attention"), n_kv_heads, d_head),
+    )
     return _with_attention_common(result, module, n_q_heads, n_kv_heads, d_head)

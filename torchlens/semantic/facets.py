@@ -341,6 +341,40 @@ class FacetSpec:
             home=home,
         )
 
+    @classmethod
+    def computed(
+        cls,
+        value_func: Callable[[], Any],
+        *,
+        recipe_id: str | None = None,
+        recipe_version: str | None = None,
+    ) -> "FacetSpec":
+        """Create a read-only computed facet spec.
+
+        Parameters
+        ----------
+        value_func:
+            Callable that computes the read value.
+        recipe_id:
+            Recipe identifier.
+        recipe_version:
+            Recipe version.
+
+        Returns
+        -------
+        FacetSpec
+            Read-only computed spec.
+        """
+
+        return cls(
+            home_kind="computed",
+            capability_class="computed",
+            capability_flags=_CAPABILITY_FLAGS_BY_CLASS["computed"],
+            recipe_id=recipe_id,
+            recipe_version=recipe_version,
+            home=value_func,
+        )
+
     def __getitem__(self, key: Any) -> "FacetSpec":
         """Append a ``__getitem__`` selection primitive."""
 
@@ -422,9 +456,16 @@ class FacetSpec:
         if self.home is None:
             raise RuntimeError(f"FacetSpec {self.recipe_id!r} has no runtime home object.")
         if self.home_kind == "parameter":
+            parameter_value = getattr(self.home, "value", None)
+            if parameter_value is None:
+                parameter_value = getattr(self.home, "_param_ref", self.home)
             if field_name == "grad":
-                return getattr(getattr(self.home, "value", None), "grad", None)
-            return getattr(self.home, "value", None)
+                return getattr(parameter_value, "grad", None)
+            return parameter_value
+        if self.home_kind == "module_input":
+            if field_name == "grad":
+                return None
+            return self.home
         if self.home_kind == "computed":
             if field_name == "grad":
                 return None
@@ -626,16 +667,20 @@ class AttentionHeadView:
         if name not in {"q", "k", "v"} or not hasattr(value, "__getitem__"):
             return value
         head_index = self._head_index
+        is_aliasing = False
         if name in {"k", "v"}:
             n_q_heads = self._parent.get("n_q_heads", self._parent.get("n_heads", None))
             n_kv_heads = self._parent.get("n_kv_heads", n_q_heads)
             if isinstance(n_q_heads, int) and isinstance(n_kv_heads, int) and n_kv_heads:
                 group_size = max(1, n_q_heads // n_kv_heads)
                 head_index = head_index // group_size
+                is_aliasing = n_q_heads != n_kv_heads
+        if isinstance(value, Facet):
+            return Facet(value.spec.select(2, head_index, aliasing=is_aliasing))
         return value[:, :, head_index, :]
 
 
-class FacetView(Mapping[str, Any]):
+class FacetView(Mapping[FacetKey, Any]):
     """Lazy dict-like and attribute-access semantic view on a TorchLens record."""
 
     def __init__(self, record: Any) -> None:
@@ -1160,10 +1205,10 @@ def _module_call_structural_facets(record: Any) -> dict[FacetKey, Any]:
     output_records = [trace.ops[label] for label in output_ops]
     names = _primary_structural_names(output_records)
     facets: dict[FacetKey, Any] = {}
-    for op, name in zip(output_records, names, strict=True):
+    for op, name_value in zip(output_records, names, strict=True):
         spec = FacetSpec.from_home(op, home_kind="op", recipe_id="structural_outputs")
-        if name is not None:
-            facets[name] = spec
+        if name_value is not None:
+            facets[name_value] = spec
         path_key = tuple(getattr(op, "container_path", ()) or ())
         if path_key:
             facets[path_key] = spec
@@ -1195,10 +1240,10 @@ def _op_structural_facets(record: Any) -> dict[FacetKey, Any]:
     return facets
 
 
-def _primary_structural_names(records: Sequence[Any]) -> list[str | None]:
+def _primary_structural_names(records: Sequence[Any]) -> builtins.list[str | None]:
     """Return collision-safe primary string names for output records."""
 
-    candidates: list[str] = []
+    candidates: builtins.list[str] = []
     for index, record in enumerate(records):
         name = _canonical_multi_output_name(getattr(record, "multi_output_name", None))
         if name is not None:
@@ -1216,7 +1261,7 @@ def _path_to_dotted_name(path: tuple[OutputPathComponent, ...]) -> str | None:
 
     if not path:
         return None
-    parts: list[str] = []
+    parts: builtins.list[str] = []
     for index, component in enumerate(path):
         part = _path_component_to_name(component)
         if part is None:

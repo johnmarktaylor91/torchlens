@@ -13,6 +13,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.semantic import FacetRecipe, FacetSpec, FacetView, MissingGradient
 from torchlens.semantic import facets as facets_mod
+from torchlens.semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
 
 
 class _Record:
@@ -427,6 +428,56 @@ def test_facetspec_grad_missing_for_unselected_home() -> None:
 
     assert isinstance(missing, MissingGradient)
     assert "home op has no saved gradient" in missing.reason
+
+
+def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
+    """Built-in norm parameter facets use parameter homes, not op grads."""
+
+    class Model(nn.Module):
+        """Wrapper exposing a LayerNorm module."""
+
+        def __init__(self) -> None:
+            """Initialize LayerNorm."""
+
+            super().__init__()
+            self.norm = nn.LayerNorm(3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run normalization."""
+
+            return self.norm(x)
+
+    model = Model()
+    log = tl.trace(model, torch.randn(2, 3), layers_to_save="all")
+    gamma = log.modules["norm"].facets["gamma"]
+    beta = log.modules["norm"].facets["beta"]
+
+    assert gamma.spec.home_kind == "parameter"
+    assert beta.spec.home_kind == "parameter"
+    assert gamma.spec.capability_flags.grad is False
+    assert torch.equal(gamma, model.norm.weight)
+    assert torch.equal(beta, model.norm.bias)
+    assert isinstance(gamma.grad, MissingGradient)
+
+
+def test_builtin_capability_inventory_is_recorded_as_data() -> None:
+    """Every built-in inventory entry records one allowed capability class."""
+
+    allowed = {
+        "op_structural",
+        "parameter",
+        "module_input",
+        "module_output",
+        "computed_read_only",
+        "missing",
+    }
+    assert BUILTIN_FACET_CAPABILITY_INVENTORY
+    assert BUILTIN_FACET_CAPABILITY_INVENTORY["attention"]["q"] == "op_structural"
+    assert BUILTIN_FACET_CAPABILITY_INVENTORY["mlp"]["intermediate"] == "computed_read_only"
+    assert BUILTIN_FACET_CAPABILITY_INVENTORY["embedding"]["weight"] == "parameter"
+    for facet_map in BUILTIN_FACET_CAPABILITY_INVENTORY.values():
+        assert facet_map
+        assert set(facet_map.values()) <= allowed
 
 
 def test_list_info_glob_and_recipe_record() -> None:

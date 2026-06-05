@@ -92,6 +92,30 @@ class GPT2Attention(nn.Module):
         return self.c_proj(q)
 
 
+class LlamaAttention(nn.Module):
+    """Tiny GQA-style attention block."""
+
+    def __init__(self) -> None:
+        """Initialize projections with fewer KV heads than Q heads."""
+
+        super().__init__()
+        self.num_heads = 4
+        self.num_key_value_heads = 2
+        self.head_dim = 2
+        self.q_proj = nn.Linear(8, 8)
+        self.k_proj = nn.Linear(8, 4)
+        self.v_proj = nn.Linear(8, 4)
+        self.o_proj = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run enough projections for recipe extraction."""
+
+        q = self.q_proj(x)
+        k = self.k_proj(x).repeat_interleave(2, dim=-1)
+        v = self.v_proj(x).repeat_interleave(2, dim=-1)
+        return self.o_proj(q + k + v)
+
+
 class _AttentionModel(nn.Module):
     """Wrapper exposing a named attention module."""
 
@@ -174,3 +198,19 @@ def test_gpt2_fused_qkv_split_matches_manual_reference() -> None:
     c_attn = log.modules["attn.c_attn"].out
     q_ref, _k_ref, _v_ref = c_attn.split(c_attn.shape[-1] // 3, dim=-1)
     assert torch.equal(view.q, q_ref.view(2, 3, 2, 4))
+    assert view.q.spec.home_label == view.k.spec.home_label == view.v.spec.home_label
+
+
+@pytest.mark.slow
+def test_gqa_kv_head_selection_is_aliasing_read_grad_only() -> None:
+    """GQA K/V query-head selection records aliasing capability."""
+
+    log = trace_fn(_AttentionModel(LlamaAttention()), torch.randn(2, 3, 8), layers_to_save="all")
+    view = log.modules["attn"].facets
+    k_head = view.head(3).k
+
+    assert torch.equal(k_head, view.k[:, :, 1, :])
+    assert k_head.spec.capability_class == "aliasing_selection"
+    assert k_head.spec.capability_flags.read is True
+    assert k_head.spec.capability_flags.grad is True
+    assert k_head.spec.capability_flags.write is False
