@@ -678,6 +678,10 @@ def run_and_log_inputs_through_model(
             else:
                 outputs = model(*input_args, **input_kwargs)
 
+        from ..backends.torch.buffer_writes import reconcile_buffer_writes
+
+        reconcile_buffer_writes(self)
+
         output_transform = getattr(self, "_output_transform", None)
         self.raw_output = output_transform(outputs) if output_transform is not None else None
 

@@ -128,6 +128,24 @@ class BufferEvent:
     module_stack: tuple[ModuleFrame, ...]
 
 
+BufferWriteKind = Literal["reassign", "inplace", "fused"]
+
+
+@dataclass(frozen=True, slots=True)
+class BufferWriteEvent:
+    """Captured registered-buffer write event."""
+
+    address: str
+    kind: BufferWriteKind
+    producer_label_raw: str | None
+    value: Any
+    value_changed: bool
+    object_id: int
+    storage_key: tuple[Any, ...] | None
+    buffer_version: int | None
+    source_func_name: str | None
+
+
 @dataclass(frozen=True, slots=True)
 class ModuleEvent:
     """Captured module-call event consumed by postprocessing."""

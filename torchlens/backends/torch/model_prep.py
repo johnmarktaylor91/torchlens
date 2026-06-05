@@ -340,6 +340,10 @@ def _prepare_model_session(
     if trace.capture_mode != "predicate":
         _create_session_param_logs(trace, model, optimizer)
     prepare_buffer_tensors(trace, model)
+    if trace.capture_mode == "exhaustive":
+        from .buffer_writes import install_buffer_write_tracker
+
+        install_buffer_write_tracker(trace, model)
 
 
 def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:

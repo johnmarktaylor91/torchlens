@@ -68,6 +68,7 @@ from .ops import (
     apply_live_hooks_to_outputs,
     log_function_output_tensors,
 )
+from .buffer_writes import record_op_buffer_writes, snapshot_buffer_args
 from .sources import log_source_tensor
 
 if TYPE_CHECKING:
@@ -455,6 +456,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             arg_copies = args
             kwarg_copies = kwargs
 
+        buffer_snapshots = snapshot_buffer_args(trace, func_name, arg_tensorlike)
+
         # ---- Execute the original function ----
         # Write a unique barcode BEFORE the call. If any inner wrapped functions
         # execute during this call, they will overwrite it. After the call,
@@ -542,6 +545,13 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
                 out_label = get_tensor_label(out_orig)
                 if out_label is not None:
                     set_tensor_label(args[0], out_label)
+
+        producer_label = None
+        if isinstance(out_orig, torch.Tensor):
+            producer_label = get_tensor_label(out_orig)
+        elif output_tensors:
+            producer_label = get_tensor_label(output_tensors[0])
+        record_op_buffer_writes(trace, func_name, buffer_snapshots, producer_label)
 
         return out_orig
 

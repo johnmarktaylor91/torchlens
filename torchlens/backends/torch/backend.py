@@ -17,6 +17,7 @@ from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.tensor_utils import safe_copy
 from . import _tl
+from .buffer_writes import uninstall_buffer_write_tracker
 from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
 from .ops import (
     _get_autograd_saved_stats_for_tensor,
@@ -77,6 +78,7 @@ class TorchBackend:
             model, input_tensors = prepared_model
         else:
             model, input_tensors = prepared_model, None
+        uninstall_buffer_write_tracker(cast("Trace", session))
         _cleanup_model_session(cast(torch.nn.Module, model), input_tensors)
 
     def active_logging(self, session: object) -> AbstractContextManager[None]:

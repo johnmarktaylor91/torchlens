@@ -1341,6 +1341,8 @@ class Trace:
         self.buffer_layers: List[str] = []
         self.buffer_num_calls: Dict[str, int] = {}
         self._buffer_accessor = None
+        self._buffer_write_events: list[Any] = []
+        self._buffer_write_tracker: Any | None = None
         self.internal_source_ops: List[str] = []
         self.internal_sink_ops: List[str] = []
         self.internally_terminated_bool_ops: List[str] = []
