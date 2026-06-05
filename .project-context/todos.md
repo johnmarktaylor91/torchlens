@@ -423,8 +423,21 @@ Filed 2026-05-21 during glossary v3 rename pass. Audit + design call needed befo
 
 These came up during the rename-sprint walkthrough; all post-rename-sprint and post-2.0-launch. Listed together to keep the launch surface bounded; revisit individually after rollout + docs sprint lands.
 
-**a. Buffer revamp (Option B).**
-Already filed at `.project-context/buffer_refactor_proposal.md` — promote Buffer from `Buffer(Op)` subclass to first-class persistent entity (Param-parallel), with buffer-source/buffer-sink Ops as subtypes. ~1-2 week sprint of its own. See proposal file for full spec.
+**a. Buffer revamp (Option B). [SHIPPED 2026-06-05 — local main commits 91e1645..6e3a291 + fix 430357a]**
+Originally filed at `.project-context/buffer_refactor_proposal.md`. DONE: `Buffer` is now a
+first-class persistent entity (Module/Param-sibling); graph version nodes are plain `Op` +
+`is_buffer` flag (subclass retired). Write capture lands all three kinds (reassignment via
+scoped class `__setattr__`, in-place via storage snapshot, fused/native via post-op value
+snapshot), each a validatable version node; `validate_forward_pass` green across the stress
+battery + real models. Gradient flow through reassignment verified (hooks observational).
+Docs: `docs/buffers.md` + glossary lockstep. Loop-detection crash on the RNN-cell reassignment
+pattern (dangling per-op `equivalent_ops` after buffer merge) root-caused + fixed generally
+(`_scrub_per_op_equivalence_lists`). Build spec: `.research/buffer-sprint/PLAN_v5_BUILD.md`.
+Residual edges (documented, by design, NOT bugs): `.data = tensor` reassignment unsupported
+(reconciliation diagnostic raises); a dead intermediate fused write that is never read then
+overwritten is not displayable (computationally inert); non-registered Python-attr state is
+out of scope. Follow-on (still open): the layer-vs-op parity check below (item "Unify buffer
+layer-vs-op treatment") — op-side buffer accessors (`buffer_source_ops`/`buffer_sink_ops`).
 
 **b. Attribute-bloat cleanup — consider more sub-config classes.**
 Decided NOT to add Op/Layer sub-config objects pre-launch (only ~5 fields per scope; below the bloat threshold). Trace.capture_config namespace migration is already deferred in the v3 deltas. Post-launch: re-audit ALL classes for "is this attribute count a problem?" — Op has ~70 fields; some natural clusters (function-call cluster, output-tensor cluster, output-gradient cluster, etc.) might earn sub-config dataclasses. Decide per-cluster only when a clear sub-object naming + boundary is evident.
