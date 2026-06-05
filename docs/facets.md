@@ -141,9 +141,67 @@ aliasing_selection  grouped-query or broadcast-style aliases; read and grad only
 computed            callable or multi-home values; read-only
 ```
 
-P1 defines write capability flags for the ABI, but does not implement
-intervention or scatter-back. Attention reconstruction, paired `grad_fn`
-input-side gradients, and intervention are later phases.
+Only `bijective_view` and `selection` chains are writable. `aliasing_selection`
+facets, such as grouped-query K/V heads selected through a query-head index,
+require an explicit alias policy and are refused by default. `computed` facets
+are never writable.
+
+## Intervention
+
+Facet intervention reuses the existing TorchLens hook machinery. A facet target
+resolves to its home op, and TorchLens installs a normal whole-output hook on
+that home. The wrapper reads the facet slice from the home output, calls the
+user hook on that slice, then scatters the edited slice back into the full home
+output returned by the hook.
+
+Use `tl.facet(name)` for a named facet and `tl.head(index, name)` or
+`tl.facet(name).head(index)` for attention-head slices:
+
+```python
+log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+edited = log.fork("ablated")
+edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())
+edited.rerun(model, x)
+```
+
+Static patching uses the same scatter-back path:
+
+```python
+patch = torch.zeros_like(log.modules["blocks.0.attn"].facets.head(3).q)
+edited = log.fork("patched")
+edited.set(tl.facet("q").head(3), patch)
+edited.rerun(model, x)
+```
+
+`tl.head(index)` without a facet name targets the default attention projection
+facets `q`, `k`, and `v` wherever they are present:
+
+```python
+edited.attach_hooks(tl.head(3), tl.zero_ablate())
+```
+
+Scatter-back preserves the home tensor dtype, device, shape, and memory format.
+`bijective_view` primitives write through exact view operations such as reshape
+and transpose. `selection` primitives scatter into the selected region, such as
+a split third of a fused QKV projection or one selected head.
+
+When multiple facet edits share one home op, TorchLens applies them in attach
+order and checks boolean write masks before rerun. Non-overlapping writes, such
+as GPT-2 `c_attn` edits to `q` head 0 and `k` head 1, compose on the shared
+home. Overlapping same-home writes fail at attach time with a conflict error.
+
+Facet intervention fails closed in these cases:
+
+```text
+computed facet        refused; read-only
+aliasing_selection    refused unless a future explicit alias policy is supplied
+non-op home           refused
+non-raw value version refused as not intervention-safe
+overlapping writes    refused before rerun
+```
+
+Attention reconstruction, paired `grad_fn` input-side gradients, and
+per-module-eager reconstruction remain later phases.
 
 ## Built-In Inventory
 
@@ -167,6 +225,14 @@ Only `op_structural` built-in facets may claim facet-gradient capability in P1.
 `FacetSpec`: ABI record describing a facet home, transform chain, capability
 flags, value version, alias/conflict group, and recipe provenance.
 
+`tl.facet(name)`: selector for facet-level intervention on a named facet.
+
+`tl.head(index, name=None)`: selector for facet-level intervention on one
+attention head. With `name=None`, targets default `q`, `k`, and `v` facets.
+
+`scatter_update`: ABI method that writes an edited facet slice back into the
+full home-op output and returns the edited home tensor.
+
 `MissingGradient`: typed sentinel returned by `facet.grad` when the home op has
 no saved gradient or the facet is not grad-capable.
 
@@ -179,6 +245,15 @@ transpose.
 such as grouped-query K/V head access.
 
 `computed`: transform class for callable, nonlinear, or multi-home values.
+
+Write capability: a facet may be edited only when every primitive in its chain
+is scatter-back capable and the home is an op raw output.
+
+Alias policy: explicit rule required before an `aliasing_selection` facet can be
+written; P2 provides no public policy and refuses these writes by default.
+
+Conflict policy: same-home facet writes compose in attach order when their write
+masks do not overlap; overlapping writes raise before rerun.
 
 `recipes=`: `tl.trace` argument for additive per-trace facet recipes captured in
 that trace's registry snapshot.

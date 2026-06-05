@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from types import MappingProxyType
@@ -22,6 +22,7 @@ from .errors import (
 from .selectors import (
     BaseSelector,
     CompositeSelector,
+    FacetSelector,
     NotSelector,
     SelectorLike,
     _classify_selector_direction,
@@ -34,6 +35,7 @@ HookDirection: TypeAlias = Literal["forward", "backward"]
 HookCallable: TypeAlias = Callable[..., torch.Tensor]
 HookInput: TypeAlias = Callable[..., Any] | HelperSpec
 _FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::\d+)?$|:\d+$)")
+_DEFAULT_HEAD_FACET_NAMES = ("q", "k", "v")
 
 _LAYER_LOG_CONTEXT_FIELDS = (
     "layer_label",
@@ -308,6 +310,82 @@ def normalize_hooks_from_spec(spec: InterventionSpec | None) -> list[NormalizedH
             for target in spec.targets:
                 entries.extend(normalize_hook_plan(target, hook_like))
     return entries
+
+
+def is_facet_target(site_target: Any) -> bool:
+    """Return whether a site target is a semantic facet selector.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like site target.
+
+    Returns
+    -------
+    bool
+        Whether the target should be expanded before storage.
+    """
+
+    return _facet_selector_from_target(site_target) is not None
+
+
+def expand_facet_hook_entries(
+    log: Any, entries: Sequence[NormalizedHookEntry]
+) -> list[NormalizedHookEntry]:
+    """Expand facet hook entries into ordinary home-op hook entries.
+
+    Parameters
+    ----------
+    log:
+        Trace that owns the facet registry snapshot and captured home ops.
+    entries:
+        Normalized hook entries, possibly including ``tl.facet`` or
+        ``tl.head`` targets.
+
+    Returns
+    -------
+    list[NormalizedHookEntry]
+        Entries whose facet targets have been replaced by home-op label
+        targets and slice-aware wrapper hooks.
+    """
+
+    expanded: list[NormalizedHookEntry] = []
+    claimed = _existing_facet_write_claims(log)
+    for entry in entries:
+        selector = _facet_selector_from_target(entry.site_target)
+        if selector is None:
+            expanded.append(entry)
+            continue
+        specs = _resolve_facet_specs(log, selector)
+        if not specs:
+            raise SiteResolutionError(
+                f"facet selector {selector!r} matched 0 write-capable facets."
+            )
+        for facet_name, spec in specs:
+            mask = spec.write_mask().detach().clone()
+            home_label = _facet_home_label(spec)
+            _check_facet_write_conflicts(claimed, home_label=home_label, mask=mask)
+            claimed.append((home_label, mask, facet_name))
+            metadata = {
+                **entry.metadata,
+                "facet_write": True,
+                "facet_name": facet_name,
+                "facet_home_label": home_label,
+                "facet_write_mask": mask,
+            }
+            expanded.append(
+                NormalizedHookEntry(
+                    site_target=TargetSpec("label", home_label),
+                    normalized_callable=_facet_scatter_hook(
+                        entry.normalized_callable,
+                        spec,
+                        facet_name=facet_name,
+                    ),
+                    helper_spec=entry.helper_spec,
+                    metadata=MappingProxyType(metadata),
+                )
+            )
+    return expanded
 
 
 def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[NormalizedHookEntry]:
@@ -634,6 +712,271 @@ def _validate_helper_mount(site_target: Any, helper_spec: HelperSpec | None) -> 
         raise HelperMountError(
             f"{helper_spec.name} requires grad_output and cannot mount on AccumulateGrad prehooks."
         )
+
+
+def _facet_selector_from_target(site_target: Any) -> FacetSelector | None:
+    """Return a facet selector from a target object when possible.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target.
+
+    Returns
+    -------
+    FacetSelector | None
+        Normalized facet selector, or ``None`` for ordinary targets.
+    """
+
+    if isinstance(site_target, FacetSelector):
+        return site_target
+    if isinstance(site_target, TargetSpec) and site_target.selector_kind == "facet":
+        return _facet_selector_from_payload(site_target.selector_value)
+    return None
+
+
+def _facet_selector_from_payload(payload: Any) -> FacetSelector:
+    """Build a ``FacetSelector`` from stored target payload data.
+
+    Parameters
+    ----------
+    payload:
+        TargetSpec selector payload.
+
+    Returns
+    -------
+    FacetSelector
+        Normalized semantic facet selector.
+    """
+
+    if isinstance(payload, Mapping):
+        name = payload.get("name")
+        head_index = payload.get("head_index")
+        return FacetSelector(
+            None if name is None else str(name),
+            head_index=None if head_index is None else int(head_index),
+        )
+    if isinstance(payload, str):
+        return FacetSelector(payload)
+    raise SiteResolutionError(f"Unsupported facet selector payload {payload!r}.")
+
+
+def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, Any]]:
+    """Resolve a semantic facet selector against captured module facet views.
+
+    Parameters
+    ----------
+    log:
+        Trace whose modules should be searched.
+    selector:
+        Facet selector to resolve.
+
+    Returns
+    -------
+    list[tuple[str, Any]]
+        Pairs of public facet names and ``FacetSpec`` objects.
+    """
+
+    from ..semantic.facets import Facet, FacetSpec
+
+    resolved: list[tuple[str, Any]] = []
+    seen: set[tuple[int, str, str]] = set()
+    facet_names = _DEFAULT_HEAD_FACET_NAMES if selector.name is None else (selector.name,)
+    for record in _iter_facet_records(log):
+        view = getattr(record, "facets", None)
+        if view is None:
+            continue
+        for facet_name in facet_names:
+            if not view.has(facet_name):
+                continue
+            try:
+                if selector.head_index is None:
+                    value = view[facet_name]
+                else:
+                    value = view.head(selector.head_index)[facet_name]
+            except (AttributeError, KeyError, RuntimeError, ValueError):
+                continue
+            spec = (
+                value.spec
+                if isinstance(value, Facet)
+                else value
+                if isinstance(value, FacetSpec)
+                else None
+            )
+            if spec is None:
+                continue
+            dedupe_key = (id(spec.home), repr(spec.transforms), facet_name)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            resolved.append((facet_name, spec))
+    return resolved
+
+
+def _iter_facet_records(log: Any) -> Iterator[Any]:
+    """Yield records that can own semantic facet views.
+
+    Parameters
+    ----------
+    log:
+        Trace to inspect.
+
+    Yields
+    ------
+    Any
+        Module records followed by op records.
+    """
+
+    modules = getattr(log, "modules", ())
+    try:
+        yield from modules
+    except TypeError:
+        pass
+    for op in getattr(log, "layer_list", ()):
+        yield op
+
+
+def _facet_home_label(spec: Any) -> str:
+    """Return the live hook label for a facet home op.
+
+    Parameters
+    ----------
+    spec:
+        FacetSpec-like object.
+
+    Returns
+    -------
+    str
+        Home op layer label.
+    """
+
+    home = getattr(spec, "home", None)
+    label_value = (
+        getattr(home, "_layer_label_raw", None)
+        or getattr(home, "_label_raw", None)
+        or getattr(home, "layer_label", None)
+        or getattr(home, "label", None)
+    )
+    if label_value is None:
+        label_value = getattr(spec, "home_label", None)
+    if label_value is None:
+        raise SiteResolutionError("Facet selector resolved to a home without a layer label.")
+    return str(label_value)
+
+
+def _existing_facet_write_claims(log: Any) -> list[tuple[str, torch.Tensor, str]]:
+    """Return existing facet write claims from a trace intervention spec.
+
+    Parameters
+    ----------
+    log:
+        Trace whose sticky hook specs should be inspected.
+
+    Returns
+    -------
+    list[tuple[str, torch.Tensor, str]]
+        Claimed ``(home_label, mask, facet_name)`` tuples.
+    """
+
+    spec = getattr(log, "_intervention_spec", None)
+    if spec is None:
+        return []
+    claims: list[tuple[str, torch.Tensor, str]] = []
+    for hook_spec in getattr(spec, "hook_specs", ()):
+        metadata = getattr(hook_spec, "metadata", {})
+        if not metadata.get("facet_write"):
+            continue
+        mask = metadata.get("facet_write_mask")
+        home_label = metadata.get("facet_home_label")
+        facet_name = metadata.get("facet_name", "<unknown>")
+        if isinstance(mask, torch.Tensor) and home_label is not None:
+            claims.append((str(home_label), mask, str(facet_name)))
+    return claims
+
+
+def _check_facet_write_conflicts(
+    claims: Sequence[tuple[str, torch.Tensor, str]],
+    *,
+    home_label: str,
+    mask: torch.Tensor,
+) -> None:
+    """Raise when a facet write overlaps an existing same-home claim.
+
+    Parameters
+    ----------
+    claims:
+        Existing write claims.
+    home_label:
+        Home label for the candidate write.
+    mask:
+        Candidate boolean write mask.
+
+    Returns
+    -------
+    None
+        Raises on overlapping writes.
+    """
+
+    for claimed_home, claimed_mask, claimed_name in claims:
+        if claimed_home != home_label:
+            continue
+        if tuple(claimed_mask.shape) != tuple(mask.shape):
+            continue
+        if bool(torch.logical_and(claimed_mask.to(mask.device), mask).any()):
+            raise SiteResolutionError(
+                f"Facet intervention conflict on home {home_label!r}: write overlaps "
+                f"existing facet {claimed_name!r}."
+            )
+
+
+def _facet_scatter_hook(
+    user_hook: HookCallable,
+    spec: Any,
+    *,
+    facet_name: str,
+) -> HookCallable:
+    """Return a home-op hook that edits one facet slice.
+
+    Parameters
+    ----------
+    user_hook:
+        Normalized user hook that receives the facet slice.
+    spec:
+        FacetSpec used to read and scatter the slice.
+    facet_name:
+        Public facet name for diagnostics.
+
+    Returns
+    -------
+    HookCallable
+        Hook with the standard whole-output TorchLens contract.
+    """
+
+    def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        """Apply a user hook to a facet slice and scatter it into ``out``.
+
+        Parameters
+        ----------
+        out:
+            Full home-op output tensor.
+        hook:
+            Hook context supplied by TorchLens.
+
+        Returns
+        -------
+        torch.Tensor
+            Full edited home-op output tensor.
+        """
+
+        from .runtime import validate_hook_output
+
+        facet_slice = spec.apply(out)
+        edited_slice = user_hook(facet_slice, hook=hook)
+        checked_slice = validate_hook_output(edited_slice, facet_slice, hook_context=hook)
+        return spec.scatter_update(out, checked_slice, mode="replace")
+
+    _hook.__name__ = f"facet_{facet_name}_scatter_hook"
+    return _hook
 
 
 def _selector_direction_recursive(selector: BaseSelector) -> HookDirection | None:
@@ -1106,6 +1449,8 @@ __all__ = [
     "HookDirection",
     "HookTiming",
     "NormalizedHookEntry",
+    "expand_facet_hook_entries",
+    "is_facet_target",
     "make_hook_context",
     "make_live_site_proxy",
     "live_selector_matches_site",

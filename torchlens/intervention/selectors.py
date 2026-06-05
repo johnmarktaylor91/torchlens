@@ -17,6 +17,7 @@ SelectorKind: TypeAlias = Literal[
     "contains",
     "predicate",
     "in_module",
+    "facet",
     "and",
     "or",
     "not",
@@ -405,6 +406,71 @@ class InterveningSelector(BaseSelector):
 
 
 @dataclass(frozen=True, repr=False)
+class FacetSelector(BaseSelector):
+    """Semantic facet selector for facet-level interventions.
+
+    Parameters
+    ----------
+    name:
+        Facet name to target. ``None`` means the selector targets the default
+        attention head facets.
+    head_index:
+        Optional zero-based head index.
+    """
+
+    name: str | None = None
+    head_index: int | None = None
+
+    def __init__(self, name: str | None = None, *, head_index: int | None = None) -> None:
+        """Create a semantic facet selector.
+
+        Parameters
+        ----------
+        name:
+            Facet name to target.
+        head_index:
+            Optional zero-based head index.
+        """
+
+        payload = {"name": name, "head_index": head_index}
+        object.__setattr__(self, "selector_kind", "facet")
+        object.__setattr__(self, "selector_value", payload)
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "head_index", head_index)
+
+    def head(self, head_index: int) -> "FacetSelector":
+        """Return a copy scoped to one attention head.
+
+        Parameters
+        ----------
+        head_index:
+            Zero-based head index.
+
+        Returns
+        -------
+        FacetSelector
+            Facet selector with the requested head.
+        """
+
+        return FacetSelector(self.name, head_index=head_index)
+
+    def __repr__(self) -> str:
+        """Return a concise public selector representation.
+
+        Returns
+        -------
+        str
+            Constructor-style selector representation.
+        """
+
+        if self.name is None:
+            return f"tl.head({self.head_index!r})"
+        if self.head_index is None:
+            return f"tl.facet({self.name!r})"
+        return f"tl.facet({self.name!r}).head({self.head_index!r})"
+
+
+@dataclass(frozen=True, repr=False)
 class GradFnLabelSelector(BaseSelector):
     """Backward-only selector matching a grad_fn label exactly."""
 
@@ -688,6 +754,42 @@ def intervening() -> InterveningSelector:
     return InterveningSelector()
 
 
+def facet(name: str) -> FacetSelector:
+    """Create a semantic facet selector.
+
+    Parameters
+    ----------
+    name:
+        Facet name to target.
+
+    Returns
+    -------
+    FacetSelector
+        Selector resolved to facet home-op hooks by intervention mutators.
+    """
+
+    return FacetSelector(name)
+
+
+def head(index: int, name: str | None = None) -> FacetSelector:
+    """Create a selector for one attention head.
+
+    Parameters
+    ----------
+    index:
+        Zero-based attention head index.
+    name:
+        Optional facet name, such as ``"q"``, ``"k"``, or ``"v"``.
+
+    Returns
+    -------
+    FacetSelector
+        Selector resolved to facet home-op hooks by intervention mutators.
+    """
+
+    return FacetSelector(name, head_index=index)
+
+
 def grad_fn_label(name: str) -> GradFnLabelSelector:
     """Create an exact grad_fn-label selector.
 
@@ -819,6 +921,7 @@ def _classify_selector_direction(
             "contains",
             "predicate",
             "in_module",
+            "facet",
             "and",
             "or",
             "not",
@@ -835,6 +938,7 @@ def _classify_selector_direction(
             ModuleSelector,
             OutputSelector,
             ContainsSelector,
+            FacetSelector,
             WhereSelector,
             InModuleSelector,
             CompositeSelector,
@@ -879,6 +983,7 @@ __all__ = [
     "CompositeSelector",
     "ContainsSelector",
     "FuncSelector",
+    "FacetSelector",
     "GradFnLabelSelector",
     "GradFnSelector",
     "InModuleSelector",
@@ -890,11 +995,13 @@ __all__ = [
     "SelectorLike",
     "WhereSelector",
     "contains",
+    "facet",
     "func",
     "grad_fn",
     "label",
     "in_module",
     "intervening",
+    "head",
     "label",
     "module",
     "output",

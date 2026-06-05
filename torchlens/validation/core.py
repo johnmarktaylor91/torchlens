@@ -296,6 +296,8 @@ def validate_parents_of_saved_layer(
     # Forward replay: re-execute with correct parent values, expect same output.
     ops_to_replay = _representative_ops_for_replay(self, ops_to_validate)
     for target_op in ops_to_replay:
+        if _is_intentional_intervention_replacement(target_op):
+            continue
         if not _check_whether_func_on_saved_parents_yields_saved_tensor(
             self, target_op.label, perturb=False
         ):
@@ -306,6 +308,8 @@ def validate_parents_of_saved_layer(
 
     representative_parent_edges = _representative_parent_edges(self, ops_to_replay)
     for target_op, perturb_layer in representative_parent_edges:
+        if _is_intentional_intervention_replacement(target_op):
+            continue
         if target_op.func_name in SKIP_PERTURBATION_ENTIRELY:
             continue
         if not _check_whether_func_on_saved_parents_yields_saved_tensor(
@@ -337,6 +341,26 @@ def validate_parents_of_saved_layer(
                 layers_to_validate_parents_for.append(parent_layer_label)
 
     return True
+
+
+def _is_intentional_intervention_replacement(layer: "Op") -> bool:
+    """Return whether a layer's out was intentionally replaced by a hook.
+
+    Parameters
+    ----------
+    layer:
+        Operation pass being validated.
+
+    Returns
+    -------
+    bool
+        Whether validation should treat the op as an intervention boundary.
+    """
+
+    return bool(
+        getattr(layer, "intervention_replaced", False)
+        and not getattr(layer, "is_internal_source", False)
+    )
 
 
 def _resolve_output_entry_for_index(

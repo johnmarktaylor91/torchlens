@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import namedtuple
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
@@ -14,6 +14,7 @@ import torchlens as tl
 from torchlens.semantic import FacetRecipe, FacetSpec, FacetView, MissingGradient
 from torchlens.semantic import facets as facets_mod
 from torchlens.semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
+from torchlens.intervention.errors import SiteResolutionError
 
 
 class _Record:
@@ -21,6 +22,23 @@ class _Record:
 
     class_name = "UnitFacetRecord"
     class_qualname = "tests.UnitFacetRecord"
+
+
+def _trace_output(log: Any) -> torch.Tensor:
+    """Return the first saved model output tensor for a trace.
+
+    Parameters
+    ----------
+    log:
+        TorchLens trace.
+
+    Returns
+    -------
+    torch.Tensor
+        First output tensor.
+    """
+
+    return log[log.output_layers[0]].out
 
 
 @pytest.fixture(autouse=True)
@@ -510,3 +528,259 @@ def test_register_preserves_function_object_and_docstring() -> None:
     registered = tl.facets.register(class_name="UnitFacetRecord")(original_recipe)
     assert registered is original_recipe
     assert registered.__doc__ == "Original docstring."
+
+
+class _FacetP2Model(nn.Module):
+    """Wrapper exposing one named block for facet intervention tests."""
+
+    def __init__(self, block: nn.Module) -> None:
+        """Initialize with a block under a stable module address."""
+
+        super().__init__()
+        self.attn = block
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the wrapped block."""
+
+        return self.attn(x)
+
+
+class MultiHeadSelfAttention(nn.Module):
+    """Tiny attention block matching the DistilBERT recipe class name."""
+
+    def __init__(self) -> None:
+        """Initialize projection children used by the built-in recipe."""
+
+        super().__init__()
+        self.n_heads = 2
+        self.dim = 8
+        self.q_lin = nn.Linear(8, 8)
+        self.k_lin = nn.Linear(8, 8)
+        self.v_lin = nn.Linear(8, 8)
+        self.out_lin = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run projection children so q/k/v facets are op-anchored."""
+
+        return self.out_lin(self.q_lin(x) + self.k_lin(x) + self.v_lin(x))
+
+
+class GPT2Attention(nn.Module):
+    """Tiny GPT-2-like fused-QKV block for shared-home writes."""
+
+    def __init__(self) -> None:
+        """Initialize fused c_attn and output projection children."""
+
+        super().__init__()
+        self.num_heads = 2
+        self.embed_dim = 8
+        self.c_attn = nn.Linear(8, 24)
+        self.c_proj = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run fused q/k/v projection and consume all three slices."""
+
+        q, k, v = self.c_attn(x).split(8, dim=-1)
+        return self.c_proj(q + k + v)
+
+
+class LlamaAttention(nn.Module):
+    """Tiny GQA-style attention block with fewer KV heads than Q heads."""
+
+    def __init__(self) -> None:
+        """Initialize projections matching the GQA built-in recipe."""
+
+        super().__init__()
+        self.num_heads = 4
+        self.num_key_value_heads = 2
+        self.head_dim = 2
+        self.q_proj = nn.Linear(8, 8)
+        self.k_proj = nn.Linear(8, 4)
+        self.v_proj = nn.Linear(8, 4)
+        self.o_proj = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run GQA projections and repeat KV values for the output."""
+
+        q = self.q_proj(x)
+        k = self.k_proj(x).repeat_interleave(2, dim=-1)
+        v = self.v_proj(x).repeat_interleave(2, dim=-1)
+        return self.o_proj(q + k + v)
+
+
+class GPT2MLP(nn.Module):
+    """Tiny GPT-2-like MLP block for computed facet refusal."""
+
+    def __init__(self) -> None:
+        """Initialize child modules used by the built-in MLP recipe."""
+
+        super().__init__()
+        self.c_fc = nn.Linear(8, 16)
+        self.c_proj = nn.Linear(16, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a GELU MLP."""
+
+        return self.c_proj(torch.nn.functional.gelu(self.c_fc(x)))
+
+
+class _MLPModel(nn.Module):
+    """Wrapper exposing one named MLP block."""
+
+    def __init__(self) -> None:
+        """Initialize the MLP child."""
+
+        super().__init__()
+        self.mlp = GPT2MLP()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the MLP child."""
+
+        return self.mlp(x)
+
+
+def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
+    """Head zeroing and static patching scatter back through rerun."""
+
+    torch.manual_seed(0)
+    model = _FacetP2Model(MultiHeadSelfAttention())
+    x = torch.randn(2, 3, 8)
+    clean = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    clean_out = _trace_output(clean).clone()
+
+    zeroed = clean.fork("zero_q_head")
+    zeroed.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
+    zeroed.rerun(model, x)
+
+    assert not torch.allclose(_trace_output(zeroed), clean_out)
+    assert torch.count_nonzero(zeroed.modules["attn"].facets.head(0).q) == 0
+    assert zeroed.validate_forward_pass([_trace_output(zeroed)])
+
+    patched = clean.fork("patch_q_head")
+    replacement = torch.zeros_like(clean.modules["attn"].facets.head(1).q)
+    patched.set(tl.facet("q").head(1), replacement)
+    patched.rerun(model, x)
+
+    assert not torch.allclose(_trace_output(patched), clean_out)
+    assert torch.count_nonzero(patched.modules["attn"].facets.head(1).q) == 0
+    assert patched.validate_forward_pass([_trace_output(patched)])
+
+
+def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
+    """Fused q/k edits compose on one c_attn home and same-region writes fail."""
+
+    torch.manual_seed(1)
+    model = _FacetP2Model(GPT2Attention())
+    x = torch.randn(2, 3, 8)
+    clean = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    clean_out = _trace_output(clean).clone()
+
+    edited = clean.fork("fused_qk")
+    edited.attach_hooks(
+        [
+            (tl.head(0, "q"), tl.zero_ablate()),
+            (tl.head(1, "k"), tl.zero_ablate()),
+        ]
+    )
+    edited.rerun(model, x)
+
+    assert not torch.allclose(_trace_output(edited), clean_out)
+    assert torch.count_nonzero(edited.modules["attn"].facets.head(0).q) == 0
+    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).k) == 0
+    assert edited.validate_forward_pass([_trace_output(edited)])
+
+    conflict = clean.fork("fused_conflict")
+    with pytest.raises(SiteResolutionError, match="Facet intervention conflict"):
+        conflict.attach_hooks(
+            [
+                (tl.head(0, "q"), tl.zero_ablate()),
+                (tl.facet("q").head(0), tl.zero_ablate()),
+            ]
+        )
+
+
+def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
+    """Aliasing GQA K/V head writes refuse while read and grad remain usable."""
+
+    torch.manual_seed(2)
+    model = _FacetP2Model(LlamaAttention())
+    x = torch.randn(2, 3, 8)
+    log = tl.trace(
+        model,
+        x,
+        layers_to_save="all",
+        gradients_to_save="all",
+        save_arg_values=True,
+    )
+    log.log_backward(_trace_output(log).sum())
+    k_head = log.modules["attn"].facets.head(3).k
+
+    assert torch.equal(k_head, log.modules["attn"].facets.k[:, :, 1, :])
+    assert not isinstance(k_head.grad, MissingGradient)
+    assert torch.equal(k_head.grad, k_head.spec.apply(k_head.spec.home.grad))
+
+    edited = log.fork("gqa_refuse")
+    with pytest.raises(RuntimeError, match="aliasing_selection.*alias group"):
+        edited.attach_hooks(tl.head(3, "k"), tl.zero_ablate())
+
+
+def test_computed_facet_write_refuses() -> None:
+    """Computed MLP intermediate facets are read-only for intervention."""
+
+    torch.manual_seed(3)
+    model = _MLPModel()
+    log = tl.trace(model, torch.randn(2, 3, 8), layers_to_save="all", save_arg_values=True)
+
+    with pytest.raises(RuntimeError, match="computed facets are read-only"):
+        log.fork("computed_refuse").attach_hooks(tl.facet("intermediate"), tl.zero_ablate())
+
+
+def test_in_place_or_view_version_facet_write_refuses() -> None:
+    """Facets marked with non-raw value versions are not intervention-safe."""
+
+    class Tiny(nn.Module):
+        """Tiny model exposing a linear child."""
+
+        def __init__(self) -> None:
+            """Initialize the child."""
+
+            super().__init__()
+            self.linear = nn.Linear(4, 4)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the linear child."""
+
+            return self.linear(x)
+
+    @tl.facets.register(class_name="Linear", target_scope="module", facets=("unsafe",))
+    def unsafe_version(module: Any) -> dict[str, Any]:
+        """Return a facet marked as a non-raw value version."""
+
+        op = module.trace.ops[module.calls[0].output_ops[0]]
+        spec = FacetSpec.from_home(op, recipe_id="unsafe_version").select(-1, 0)
+        return {"unsafe": replace(spec, value_version="out_versions_by_child")}
+
+    log = tl.trace(Tiny(), torch.randn(2, 4), layers_to_save="all", save_arg_values=True)
+
+    with pytest.raises(RuntimeError, match="not intervention-safe"):
+        log.fork("unsafe_refuse").attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
+
+
+def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
+    """``tl.head(i)`` ablates default q/k/v head facets across the model."""
+
+    torch.manual_seed(4)
+    model = _FacetP2Model(MultiHeadSelfAttention())
+    x = torch.randn(2, 3, 8)
+    clean = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+    clean_out = _trace_output(clean).clone()
+
+    edited = clean.fork("head_all")
+    edited.attach_hooks(tl.head(1), tl.zero_ablate())
+    edited.rerun(model, x)
+
+    assert not torch.allclose(_trace_output(edited), clean_out)
+    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0
+    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).k) == 0
+    assert torch.count_nonzero(edited.modules["attn"].facets.head(1).v) == 0
+    assert edited.validate_forward_pass([_trace_output(edited)])

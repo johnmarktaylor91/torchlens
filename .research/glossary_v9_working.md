@@ -2238,8 +2238,33 @@ narrative guide is `docs/facets.md`. Canonical new public names:
   best-effort sugar for valid identifiers not colliding with FacetView methods (`keys`/`get`/`head`/`recipe_source`).
   `module.outs` is a thin alias. Capability inventory recorded as data (op_structural / parameter / module_input /
   module_output / computed_read_only / missing); parameter facets (norm gamma/beta, embedding weight) are read-only.
-- NOT in P1 (later phases): facet-level INTERVENTION write-back (P2); attention pattern RECONSTRUCTION (P3);
-  paired-grad_fn input-side gradients (deferred — capture discards the input index).
+
+### Facets — P2 intervention update (LOCKED 2026-06-05)
+
+Facet-level intervention is selector sugar over the existing TorchLens hook machinery, not a parallel hook system.
+Canonical public names and semantics:
+
+- **`tl.facet(name)`**: selector for intervention on a named facet. Resolves against captured `FacetView`s to the
+  facet's HOME op plus transform chain, then stores a normal home-op hook target.
+- **`tl.head(index, name=None)`**: selector for one attention head. `tl.head(3, "q")` is equivalent to
+  `tl.facet("q").head(3)`; `name=None` targets the default attention projection facets `q`, `k`, and `v`.
+- **`scatter_update(home_out, edited_slice, mode)`**: write-back ABI on facet transform specs. It writes the edited
+  facet slice back into the FULL home-op output and returns that full edited tensor. `bijective_view` writes through
+  exact view transforms; `selection` scatters into selected regions such as split Q/K/V thirds or selected heads.
+- **Write capability**: a facet can be edited only when its home is an op raw output and every primitive in the
+  chain is scatter-back capable (`bijective_view` or `selection`). Non-op homes, `computed` facets, and non-raw
+  `value_version` facets fail closed.
+- **Alias policy**: `aliasing_selection` (for example GQA repeated K/V query-head aliases) is read+grad only by
+  default. Writes require a future explicit alias policy; P2 refuses and names the alias group.
+- **Conflict policy**: same-home facet writes compose in attach order when their boolean write masks do not overlap
+  (for example GPT-2 fused `c_attn` edits to different q/k/v regions). Overlapping same-home writes raise before
+  rerun.
+- **Validation semantics**: an edited home op is an intervention boundary. Validation still checks saved outputs,
+  downstream propagation, parent-edge logging, graph shape, and metadata; it does not require the intentionally
+  replaced op output to equal the original callable replay.
+
+- NOT in P2 (later phases): attention pattern RECONSTRUCTION (P3); paired-grad_fn input-side gradients (deferred —
+  capture discards the input index); per-module-eager reconstruction/fallback.
 
 ## Input auto-routing (added v9 2026-05-31 — documents shipped API; no walkthrough lock yet)
 

@@ -1819,6 +1819,46 @@ class Trace:
         """
 
         self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
+        from ..intervention.hooks import is_facet_target
+
+        if is_facet_target(site):
+
+            def _facet_replacement_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+                """Return a static or callable facet replacement slice.
+
+                Parameters
+                ----------
+                out:
+                    Facet slice supplied by the facet hook wrapper.
+                hook:
+                    Hook context supplied by TorchLens.
+
+                Returns
+                -------
+                torch.Tensor
+                    Replacement facet slice.
+                """
+
+                del hook
+                if callable(value):
+                    return cast(torch.Tensor, value(out))
+                return cast(torch.Tensor, value)
+
+            self.attach_hooks(
+                site,
+                _facet_replacement_hook,
+                strict=strict,
+                confirm_mutation=True,
+            )
+            self._record_operation(
+                "set",
+                site=repr(site),
+                value_kind=type(value).__name__,
+                strict=strict,
+                callable=callable(value),
+                facet_scatter=True,
+            )
+            return self
         self._validate_intervention_site(site, strict=strict)
         metadata = {"created_by": "set_callable_one_shot"} if callable(value) else {}
         self._ensure_intervention_spec().add_set(
@@ -1887,6 +1927,9 @@ class Trace:
             )
         else:
             entries = normalize_hook_plan(hooks_or_site, hook)
+        from ..intervention.hooks import expand_facet_hook_entries
+
+        entries = expand_facet_hook_entries(self, entries)
         for entry in entries:
             self._validate_intervention_site(entry.site_target, strict=strict)
         spec = self._ensure_intervention_spec()
@@ -2507,8 +2550,14 @@ class Trace:
 
         for layer_pass in self.layer_list:
             layer_pass.source_trace = self
+            layer_pass.__dict__.pop("_facets_cache", None)
         for layer_log in self.layer_logs.values():
             layer_log.source_trace = self
+        for module_log in self.modules:
+            module_log._source_trace = self
+            module_log.__dict__.pop("_facets_cache", None)
+            for module_call in module_log.calls.values():
+                module_call._source_trace = self
 
     @staticmethod
     def _copy_fork_value(value: Any) -> Any:

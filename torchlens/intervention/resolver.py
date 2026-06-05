@@ -739,8 +739,10 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
 
     from .selectors import (
         contains,
+        facet,
         func,
         grad_fn,
+        head,
         intervening,
         label,
         module,
@@ -766,6 +768,15 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         selector = make_in_module(str(value))
         if isinstance(selector, BaseSelector):
             return selector
+    if kind == "facet":
+        if isinstance(value, dict):
+            name = value.get("name")
+            head_index = value.get("head_index")
+            if head_index is not None:
+                return head(int(head_index), None if name is None else str(name))
+            if name is not None:
+                return facet(str(name))
+        raise SiteResolutionError(f"Unsupported facet selector payload {value!r}.")
     if kind == "predicate" and callable(value):
         return where(value, name_hint=metadata.get("name_hint"))
     if kind == "grad_fn":

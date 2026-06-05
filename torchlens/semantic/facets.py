@@ -224,6 +224,37 @@ class TransformPrimitive:
         self._assert_shape(result, self.post_shape, "post")
         return result
 
+    def scatter_update(
+        self,
+        home_out: torch.Tensor,
+        edited_slice: torch.Tensor,
+        *,
+        mode: str = "replace",
+    ) -> torch.Tensor:
+        """Scatter an edited primitive result back into a cloned home tensor.
+
+        Parameters
+        ----------
+        home_out:
+            Full tensor before this primitive is applied.
+        edited_slice:
+            Edited tensor matching the primitive result.
+        mode:
+            Write mode. ``"replace"`` writes ``edited_slice`` directly;
+            ``"add"`` adds it to the selected primitive result.
+
+        Returns
+        -------
+        torch.Tensor
+            Full edited tensor.
+        """
+
+        _ensure_scatter_capable(self)
+        updated = home_out.clone(memory_format=torch.preserve_format)
+        target = self.apply(updated)
+        _copy_scatter_value(target, edited_slice, mode=mode)
+        return updated
+
     def _assert_shape(self, value: Any, expected: tuple[int, ...] | None, label: str) -> None:
         """Assert an optional shape contract for a primitive boundary.
 
@@ -438,6 +469,69 @@ class FacetSpec:
             result = primitive.apply(result)
         return result
 
+    def scatter_update(
+        self,
+        home_out: torch.Tensor,
+        edited_slice: torch.Tensor,
+        *,
+        mode: str = "replace",
+        alias_policy: str | None = None,
+    ) -> torch.Tensor:
+        """Scatter an edited facet slice back into the full home-op output.
+
+        Parameters
+        ----------
+        home_out:
+            Full home-op output tensor passed to the intervention hook.
+        edited_slice:
+            Edited facet slice returned by the user hook.
+        mode:
+            Write mode. ``"replace"`` writes ``edited_slice`` directly;
+            ``"add"`` adds it to the selected slice.
+        alias_policy:
+            Reserved explicit alias policy for future GQA writes. ``None``
+            refuses aliasing selections.
+
+        Returns
+        -------
+        torch.Tensor
+            Full edited home tensor after scatter-back.
+        """
+
+        self._validate_intervention_safe(alias_policy=alias_policy)
+        if not isinstance(home_out, torch.Tensor):
+            raise TypeError("Facet scatter_update requires a tensor home output.")
+        if not isinstance(edited_slice, torch.Tensor):
+            raise TypeError("Facet scatter_update requires a tensor edited slice.")
+        updated = home_out.clone(memory_format=torch.preserve_format)
+        target = self.apply(updated)
+        _copy_scatter_value(target, edited_slice, mode=mode)
+        return updated
+
+    def write_mask(self) -> torch.Tensor:
+        """Return a boolean mask of home positions written by this facet.
+
+        Returns
+        -------
+        torch.Tensor
+            Boolean tensor with ``True`` at home positions touched by
+            ``scatter_update``.
+        """
+
+        self._validate_intervention_safe(alias_policy=None)
+        home_out = self._home_value("out")
+        if not isinstance(home_out, torch.Tensor):
+            raise TypeError("Facet write masks require a tensor home output.")
+        mask = torch.zeros_like(home_out, dtype=torch.bool, device=home_out.device)
+        target = self.apply(mask)
+        target.fill_(True)
+        if not bool(mask.any()):
+            raise RuntimeError(
+                f"Facet {self.recipe_id!r} did not produce a writable view of home "
+                f"{self.home_label or self.home_address or '<unknown>'!r}."
+            )
+        return mask
+
     def _append(self, primitive: TransformPrimitive) -> "FacetSpec":
         """Return a copy with one additional primitive."""
 
@@ -481,6 +575,110 @@ class FacetSpec:
             "Recapture with backward_ready=True and gradients_to_save including "
             f"{label!r}, then run trace.log_backward(...) or a recorded backward pass."
         )
+
+    def _validate_intervention_safe(self, *, alias_policy: str | None) -> None:
+        """Raise if this facet cannot be safely used for intervention.
+
+        Parameters
+        ----------
+        alias_policy:
+            Explicit alias-write policy. ``None`` refuses aliasing selections.
+
+        Returns
+        -------
+        None
+            Raises when the facet is not write-safe.
+        """
+
+        label = self.home_label or self.home_address or "<unknown>"
+        if self.value_version != "raw_out":
+            raise RuntimeError(
+                f"Facet intervention refused for home {label!r}: value_version "
+                f"{self.value_version!r} is not intervention-safe."
+            )
+        if self.home_kind == "computed" or any(
+            primitive.capability_class == "computed" for primitive in self.transforms
+        ):
+            raise RuntimeError(
+                f"Facet intervention refused for home {label!r}: computed facets are read-only."
+            )
+        if self.home_kind != "op":
+            raise RuntimeError(
+                f"Facet intervention refused for home {label!r}: home_kind "
+                f"{self.home_kind!r} is not an op output."
+            )
+        if any(primitive.capability_class == "aliasing_selection" for primitive in self.transforms):
+            alias_group = self.conflict_alias_group or label
+            if alias_policy is None:
+                raise RuntimeError(
+                    f"Facet intervention refused for home {label!r}: aliasing_selection "
+                    f"requires an explicit alias policy for alias group {alias_group!r}."
+                )
+        if not self.capability_flags.write:
+            raise RuntimeError(
+                f"Facet intervention refused for home {label!r}: facet is not write-capable."
+            )
+
+
+def _ensure_scatter_capable(primitive: TransformPrimitive) -> None:
+    """Raise if a primitive is not scatter-back capable.
+
+    Parameters
+    ----------
+    primitive:
+        Transform primitive to validate.
+
+    Returns
+    -------
+    None
+        Raises when the primitive is not write-safe.
+    """
+
+    if primitive.capability_class == "aliasing_selection":
+        raise RuntimeError("aliasing_selection scatter_update requires an explicit alias policy.")
+    if primitive.capability_class == "computed" or not primitive.flags.write:
+        raise RuntimeError(f"Primitive {primitive.kind!r} is not scatter-back capable.")
+
+
+def _copy_scatter_value(target: torch.Tensor, edited_slice: torch.Tensor, *, mode: str) -> None:
+    """Copy an edited value into a scatter target after metadata checks.
+
+    Parameters
+    ----------
+    target:
+        View into the cloned full home tensor.
+    edited_slice:
+        Edited value returned by a facet hook.
+    mode:
+        Scatter mode, currently ``"replace"`` or ``"add"``.
+
+    Returns
+    -------
+    None
+        ``target`` is updated in place.
+    """
+
+    if target.dtype != edited_slice.dtype:
+        raise TypeError(
+            f"Facet scatter_update dtype mismatch: expected {target.dtype}, got {edited_slice.dtype}."
+        )
+    if target.device != edited_slice.device:
+        raise TypeError(
+            f"Facet scatter_update device mismatch: expected {target.device}, got "
+            f"{edited_slice.device}."
+        )
+    if tuple(target.shape) != tuple(edited_slice.shape):
+        raise ValueError(
+            f"Facet scatter_update shape mismatch: expected {tuple(target.shape)}, "
+            f"got {tuple(edited_slice.shape)}."
+        )
+    if mode == "replace":
+        target.copy_(edited_slice)
+        return
+    if mode == "add":
+        target.add_(edited_slice)
+        return
+    raise ValueError("Facet scatter_update mode must be 'replace' or 'add'.")
 
 
 class MissingFacet:

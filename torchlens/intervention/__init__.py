@@ -68,8 +68,10 @@ from .save import (
 )
 from .selectors import (
     contains,
+    facet,
     func,
     grad_fn,
+    head,
     in_module,
     intervening,
     label,
@@ -233,10 +235,12 @@ __all__ = [
     "contains",
     "cosine_distance",
     "do",
+    "facet",
     "func",
     "grad_clamp",
     "grad_clip",
     "grad_fn",
+    "head",
     "label",
     "grad_noise",
     "grad_scale",
