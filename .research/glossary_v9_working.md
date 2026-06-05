@@ -2207,6 +2207,40 @@ def distilbert_attention(mod):
 
 **Facets are derived, not stored. `.tlspec` save drops cached facet values; FacetView reconstructs lazily on load against the receiving session's registry. User-registered recipes must be re-registered in the loading session for their facets to be available. Recommended convention: keep recipe registrations in a Python module that is imported on both sides.**
 
+### Facets — P1 spec-model update (LOCKED 2026-06-05; supersedes the recipe-authoring API above)
+
+The facets framework was rebuilt on a structured spec model (facets sprint P1; dual-lab reviewed). The full
+narrative guide is `docs/facets.md`. Canonical new public names:
+
+- **`FacetSpec`**: the data model behind a facet — `(home op reference, structural transform chain)`. Recipes now
+  return `FacetSpec`s (via op-anchored helpers like `child_output_spec(module, name, recipe)` + transform builders),
+  NOT computed tensors. Read = `transform(home.out)`; grad = `transform(home.grad)`; intervene (P2) = write-back.
+- **Transform builders** on a `FacetSpec`: `__getitem__` (slice/index), `.heads(n_heads, d_head)`, `.split(sections, dim)`,
+  `.reshape(*shape)`, `.transpose`, `.select`. Each declares capability flags.
+- **`FacetCapabilityFlags`** {read, grad, write, portable, reconstructed} and the **capability class** of a spec
+  (`bijective_view` | `selection` | `aliasing_selection` | `computed`). Chain capability = INTERSECTION of its
+  primitives' flags (`computed` -> read-only; `aliasing_selection`, e.g. GQA K/V -> read+grad, no write; `write`
+  needs all primitives bijective/selection). System FAILS CLOSED: only op-anchored structural specs claim grad/write.
+- **`Facet`**: the resolved facet object (`.value`, `.grad`, `.spec`). **`facet.grad`** = the home op's gradient
+  projected through the transform chain — available ONLY when the home op has a saved gradient (grad capture on:
+  `tl.trace(..., backward_ready=True, gradients_to_save=...)` + `log_backward(loss)`); otherwise RETURNS a
+  **`MissingGradient`** sentinel (does NOT raise; only tensor-USE raises) carrying the exact recapture instruction.
+- **`MissingGradient`**: typed sentinel (parallel to `MissingFacet`). `get`/`in`/iteration uniform across both.
+- **Registration scoping (additions):** `tl.facets.register` is additive (non-matching recipes inert; user
+  overrides built-ins for the same class) with **specificity ordering** (qualname > class_name > predicate; user >
+  built-in), NOT registration order. `tl.trace(..., recipes=[...])` (additive) and `with tl.facets.using(r): ...`
+  (contextvar) affect capture-time snapshot construction. Each `Trace` SNAPSHOTS the active recipe set at capture
+  (`Trace.facet_registry_snapshot`, `FieldPolicy.DROP` — not serialized) so facets are reproducible/immune to later
+  registry mutation. `tl.facets.reset()` restores built-ins; `tl.facets.snapshot()` / `FacetRegistrySnapshot`.
+- **Structural output facets:** every output is a facet via the one `.facets` door — named outputs (dict keys /
+  NamedTuple / dataclass / `torch.return_types` structseq) by NAME; positional by `out{i}`; single output stays
+  `.out`; nested by dotted index (`out1.0`). Canonical TYPED item access (path keys); attribute access is
+  best-effort sugar for valid identifiers not colliding with FacetView methods (`keys`/`get`/`head`/`recipe_source`).
+  `module.outs` is a thin alias. Capability inventory recorded as data (op_structural / parameter / module_input /
+  module_output / computed_read_only / missing); parameter facets (norm gamma/beta, embedding weight) are read-only.
+- NOT in P1 (later phases): facet-level INTERVENTION write-back (P2); attention pattern RECONSTRUCTION (P3);
+  paired-grad_fn input-side gradients (deferred — capture discards the input index).
+
 ## Input auto-routing (added v9 2026-05-31 — documents shipped API; no walkthrough lock yet)
 
 `tl.trace(model, x)` auto-routes certain
