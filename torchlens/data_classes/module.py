@@ -1765,7 +1765,11 @@ class Module:
             return cast("BufferAccessor", self._buffer_accessor)
         parent_accessor = self._source_trace._buffer_accessor
         scoped = {
-            addr: bl for addr, bl in parent_accessor._dict.items() if bl.address == self.address
+            addr: bl
+            for addr, bl in parent_accessor._dict.items()
+            if self.address in {"", "self"}
+            or addr == self.address
+            or addr.startswith(f"{self.address}.")
         }
         self._buffer_accessor = BufferAccessor(scoped, source_trace=self._source_trace)
         return cast("BufferAccessor", self._buffer_accessor)

@@ -26,12 +26,9 @@ def materialize_log_from_fields(fields_dict: dict[str, object]) -> "Op":
         Materialized operation or buffer log.
     """
 
-    from torchlens.data_classes.buffer import Buffer
     from torchlens.data_classes.op import Op
 
     pending_blob_ids = _pop_pending_blob_ids(fields_dict)
-    if fields_dict.get("is_buffer"):
-        return Buffer(fields_dict)  # type: ignore[return-value]
     op_log = Op(fields_dict)  # type: ignore[arg-type]
     for field_name, blob_id in pending_blob_ids.items():
         setattr(op_log, field_name, blob_id)

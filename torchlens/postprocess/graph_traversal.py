@@ -235,8 +235,15 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     """
     orig_nodes = set(self._raw_layer_labels_list)
     nodes_seen = set()
-    # Seed with both input and output nodes for bidirectional reachability.
-    node_stack = self.input_layers + self.output_layers
+    # Seed with inputs, outputs, and written buffer-version nodes. Written
+    # buffers such as BatchNorm.num_batches_tracked are state transitions even
+    # when the updated value is not read later in the forward graph.
+    written_buffer_layers = [
+        label
+        for label in self.buffer_layers
+        if getattr(self._raw_layer_dict[label], "buffer_write_kind", None) is not None
+    ]
+    node_stack = self.input_layers + self.output_layers + written_buffer_layers
     while len(node_stack) > 0:
         tensor_label = node_stack.pop()
         nodes_seen.add(tensor_label)

@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..data_classes.buffer import BufferAccessor
+from ..data_classes.buffer import Buffer, BufferAccessor
 from ..data_classes.module import ModuleAccessor
 
 if TYPE_CHECKING:
+    from ..data_classes.op import Op
     from ..data_classes.trace import Trace
     from ..data_classes.module import Module, ModuleCall
 
@@ -49,10 +50,17 @@ def rebuild_trace_accessors(
 
     trace._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
 
-    buffer_dict = {}
-    for label in trace.buffer_layers:
-        if label in trace.layer_dict_all_keys:
-            entry = trace.layer_dict_all_keys[label]
-            if entry.address is not None:
-                buffer_dict[entry.address] = entry
-    trace._buffer_accessor = BufferAccessor(buffer_dict, source_trace=trace)  # type: ignore[assignment, arg-type]
+    buffer_versions: dict[str, list["Op"]] = {}
+    for entry in trace.layer_list:
+        if getattr(entry, "is_buffer", False) and entry.address is not None:
+            buffer_versions.setdefault(entry.address, []).append(entry)
+    buffer_dict = {
+        address: Buffer(
+            address,
+            versions,
+            initial_value=getattr(trace, "_buffer_initial_values", {}).get(address),
+            source_trace=trace,
+        )
+        for address, versions in buffer_versions.items()
+    }
+    trace._buffer_accessor = BufferAccessor(buffer_dict, source_trace=trace)  # type: ignore[assignment]

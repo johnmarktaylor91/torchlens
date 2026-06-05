@@ -52,7 +52,8 @@ layer.ops             # dict[int, Op]
 - `Module` and `ModuleCall` are built in postprocess Step 17 from `_module_build_data`.
 - `Param` keeps `_param_ref` for lazy grad access; call `release_param_ref()` when
   breaking model references.
-- `Buffer` extends `Op` but owns buffer-specific `name` and `address`.
+- Buffer graph nodes are plain `Op` records with `is_buffer=True`; `Buffer` is the
+  persistent address-level entity exposed by `Trace.buffers` and owns versions.
 - `GradFn` and `GradFnCall` are populated by backward capture and rendered separately.
 
 ## Cleanup

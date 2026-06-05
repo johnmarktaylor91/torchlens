@@ -6,11 +6,11 @@ All primary containers for logged TorchLens state. The hierarchy is:
 ```
 Trace
   |- Layer          # aggregate per final layer
-  |   +- Op  # one operation/pass tensor record
-  |       +- Buffer # buffer source node specialization
+  |   +- Op  # one operation/pass tensor record; buffer graph nodes are Op+is_buffer
   |- Module
   |   +- ModuleCall
   |- Param
+  |- Buffer         # persistent address-level entity over buffer version nodes
   |- GradFn
   |   +- GradFnCall
   +- FuncCallLocation

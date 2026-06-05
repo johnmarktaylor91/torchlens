@@ -1,29 +1,19 @@
-"""Buffer and BufferAccessor: per-buffer metadata and dict-like accessor for model buffers.
+"""Persistent buffer entities and dict-like accessors."""
 
-Buffer extends Op to represent a model buffer (e.g. BatchNorm's
-``running_mean``).  Buffers participate in the computation graph just like
-regular tensors but have additional identity: a ``address`` (e.g.
-``"features.0.running_mean"``) and an owning module.
-
-**Why name/address live on Buffer, not Layer**: These are
-buffer-specific identifiers that don't apply to general layers.  A Layer
-is too generic — it could be any operation.  Only Buffer entries have a
-meaningful ``address``.  For single-pass buffers, the parent Layer
-can access these fields via ``__getattr__`` delegation.
-"""
+from __future__ import annotations
 
 import weakref
-from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Dict, cast
 
 from .._io import FieldPolicy
 from ..constants import BUFFER_LOG_FIELD_ORDER
 from ._accessor_base import Accessor
-from .op import Op
 
 if TYPE_CHECKING:
     import pandas as pd
 
+    from .op import Op
     from .trace import Trace
 
 
@@ -40,157 +30,210 @@ def _buffer_log_to_row(buffer_log: "Buffer") -> Dict[str, Any]:
     Dict[str, Any]
         Mapping from canonical field name to exported value.
     """
+
     return {field: getattr(buffer_log, field) for field in BUFFER_LOG_FIELD_ORDER}
 
 
-class Buffer(Op):
-    """A Op entry representing a registered model buffer.
+class Buffer:
+    """Persistent metadata entity for one registered buffer address."""
 
-    Subclasses Op and participates in the computation graph
-    identically to regular tensor operations.  Adds ``name`` derived
-    from the ``address`` field inherited from Op.
+    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "address": FieldPolicy.KEEP,
+        "module_address": FieldPolicy.KEEP,
+        "versions": FieldPolicy.KEEP,
+        "_initial_value": FieldPolicy.KEEP,
+        "_source_ref": FieldPolicy.WEAKREF_STRIP,
+    }
 
-    No additional constructor arguments — the buffer identity comes
-    from the ``address`` field in the fields_dict passed to
-    the parent ``Op.__init__``.
-    """
+    def __init__(
+        self,
+        address: str,
+        versions: Sequence["Op"],
+        initial_value: Any | None = None,
+        source_trace: "Trace | None" = None,
+    ) -> None:
+        """Initialize a buffer entity from graph version nodes.
 
-    PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = dict(Op.PORTABLE_STATE_SPEC)
+        Parameters
+        ----------
+        address:
+            Registered buffer address.
+        versions:
+            Ordered graph nodes representing observed buffer versions.
+        source_trace:
+            Trace that owns the graph nodes.
+        """
+
+        self.address = address
+        self.module_address = address.rsplit(".", 1)[0] if "." in address else ""
+        self.versions = list(versions)
+        self._initial_value = initial_value
+        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
+
+    @property
+    def source_trace(self) -> "Trace | None":
+        """Return the owning trace if it is still alive."""
+
+        if self._source_ref is None:
+            return None
+        return self._source_ref()
+
+    @property
+    def name(self) -> str:
+        """Buffer name, the final component of ``address``."""
+
+        return self.address.rsplit(".", 1)[-1]
 
     @property
     def all_addresses(self) -> list[str]:
-        """Return all addresses associated with this buffer.
+        """Return all registered addresses represented by this entity."""
 
-        Returns
-        -------
-        list[str]
-            Buffer addresses.
-        """
-
-        return [] if self.address is None else [self.address]
+        return [self.address]
 
     @property
     def has_multiple_addresses(self) -> bool:
-        """Return whether this buffer is registered at multiple addresses.
-
-        Returns
-        -------
-        bool
-            Whether this buffer is shared.
-        """
+        """Return whether this entity represents shared registered addresses."""
 
         return len(self.all_addresses) > 1
 
     @property
-    def buffer_overwrite_index(self) -> int | None:
-        """Return this buffer's 1-based overwrite index for its address.
+    def initial_value(self) -> Any:
+        """Initial observed buffer value."""
 
-        Returns
-        -------
-        int | None
-            Overwrite index, or ``None`` before buffer postprocessing assigns it.
-        """
-
-        return self.buffer_pass
+        if self._initial_value is not None:
+            return self._initial_value
+        return None if not self.versions else self.versions[0].out
 
     @property
-    def call_index(self) -> int | None:
-        """Return this buffer's 1-based call index for its address.
+    def final_value(self) -> Any:
+        """Final observed buffer value."""
 
-        Returns
-        -------
-        int | None
-            Call index, or ``None`` before buffer postprocessing assigns it.
-        """
-
-        return self.buffer_pass
-
-    @property
-    def buffer_source_label(self) -> str | None:
-        """Stable Op label for the Op that overwrote this buffer value.
-
-        Glossary stored-form name; ``buffer_source`` resolves the Op record.
-        ``None`` for static buffers (no overwriting Op).
-        """
-
-        source = self.buffer_source
-        return None if source is None else str(source)
-
-    def _address_buffers(self) -> list["Buffer"]:
-        """Return all Buffer records sharing this buffer's address, in order."""
-
-        trace = self.source_trace
-        if trace is None or self.address is None:
-            return [self]
-        try:
-            buffers = list(trace.buffers)
-        except Exception:  # noqa: BLE001 - defensive: detached/partial trace
-            return [self]
-        same = [b for b in buffers if getattr(b, "address", None) == self.address]
-        return same or [self]
-
-    @property
-    def is_overwritten(self) -> bool:
-        """True when this buffer is overwritten during forward (vs. static)."""
-
-        return self.buffer_source_label is not None or self.num_overwrites > 0
+        return None if not self.versions else self.versions[-1].out
 
     @property
     def num_overwrites(self) -> int:
-        """Total overwrites of this buffer's address during the trace.
+        """Number of write events recorded for this buffer address."""
 
-        Counts the Buffer boundary records sharing this address that carry an
-        overwriting Op source. Static buffers (no overwriting Op) yield ``0``.
-        """
-
-        return sum(1 for b in self._address_buffers() if b.buffer_source is not None)
+        return sum(1 for version in self.versions if version.buffer_write_kind is not None)
 
     @property
-    def last_overwrite_source_label(self) -> str | None:
-        """Stable Op label of the most recent Op that overwrote this address.
+    def is_overwritten(self) -> bool:
+        """Return whether the buffer was written during the forward pass."""
 
-        Glossary stored-form name; ``last_overwrite_source`` resolves the record.
-        ``None`` for static buffers.
-        """
-
-        last: str | None = None
-        for b in self._address_buffers():
-            source = b.buffer_source
-            if source is not None:
-                last = str(source)
-        return last
+        return self.num_overwrites > 0
 
     @property
-    def last_overwrite_source(self) -> "Op | None":
-        """Op record that most recently overwrote this buffer's address, or ``None``."""
+    def write_versions(self) -> list["Op"]:
+        """Return versions produced by writes, excluding static initial reads."""
 
-        label = self.last_overwrite_source_label
-        if label is None:
-            return None
-        trace = self.source_trace
-        if trace is None:
-            return None
-        try:
-            return cast("Op", trace.ops[label])
-        except (KeyError, TypeError):
-            return None
+        return [version for version in self.versions if version.buffer_write_kind is not None]
 
     @property
-    def name(self) -> str:
-        """Buffer name (last segment of address), e.g. 'running_mean'."""
-        addr = self.address
-        if addr is None:
-            return ""
-        return cast(str, addr.rsplit(".", 1)[-1])
+    def buffer_overwrite_index(self) -> int | None:
+        """Return the most recent version's overwrite index."""
+
+        return self.buffer_pass
+
+    @property
+    def buffer_pass(self) -> int | None:
+        """Return the most recent graph version pass index."""
+
+        return None if not self.versions else self.versions[-1].buffer_pass
+
+    @property
+    def call_index(self) -> int | None:
+        """Return the most recent graph version call index."""
+
+        return self.buffer_pass
+
+    @property
+    def layer_label(self) -> str | None:
+        """Return the most recent graph version layer label."""
+
+        return None if not self.versions else self.versions[-1].layer_label
+
+    @property
+    def shape(self) -> Any:
+        """Return the final observed buffer shape."""
+
+        return None if not self.versions else self.versions[-1].shape
+
+    @property
+    def dtype(self) -> Any:
+        """Return the final observed buffer dtype."""
+
+        return None if not self.versions else self.versions[-1].dtype
+
+    @property
+    def activation_memory(self) -> Any:
+        """Return final observed buffer activation memory."""
+
+        return None if not self.versions else self.versions[-1].activation_memory
+
+    @property
+    def has_saved_activation(self) -> bool:
+        """Return whether the final version has a saved activation."""
+
+        return bool(self.versions and self.versions[-1].has_saved_activation)
+
+    @property
+    def has_grad(self) -> bool:
+        """Return whether the final version has a saved gradient."""
+
+        return bool(self.versions and self.versions[-1].has_grad)
+
+    @property
+    def grad_shape(self) -> Any:
+        """Return final observed gradient shape."""
+
+        return None if not self.versions else self.versions[-1].grad_shape
+
+    @property
+    def grad_dtype(self) -> Any:
+        """Return final observed gradient dtype."""
+
+        return None if not self.versions else self.versions[-1].grad_dtype
+
+    @property
+    def gradient_memory(self) -> Any:
+        """Return final observed gradient memory."""
+
+        return None if not self.versions else self.versions[-1].gradient_memory
+
+    @property
+    def buffer_source(self) -> str | None:
+        """Return the most recent write producer label, if any."""
+
+        for version in reversed(self.versions):
+            if version.buffer_source is not None:
+                return cast(str, version.buffer_source)
+        return None
+
+    @property
+    def module(self) -> Any:
+        """Return the final graph version's module field."""
+
+        return None if not self.versions else self.versions[-1].module
+
+    @property
+    def modules(self) -> Any:
+        """Return the final graph version's module stack."""
+
+        return [] if not self.versions else self.versions[-1].modules
+
+    def value_at(self, version_index: int) -> Any:
+        """Return the value at a 1-based buffer version index."""
+
+        return self.versions[version_index - 1].out
+
+    def value_after(self, overwrite_index: int) -> Any:
+        """Return the value after a 1-based overwrite index."""
+
+        writes = self.write_versions
+        return writes[overwrite_index - 1].out
 
     def to_pandas(self) -> "pd.DataFrame":
-        """Export this Buffer as a one-row pandas DataFrame.
-
-        Returns
-        -------
-        pd.DataFrame
-            One-row DataFrame ordered by ``BUFFER_LOG_FIELD_ORDER``.
-        """
+        """Export this Buffer as a one-row pandas DataFrame."""
 
         try:
             import pandas as pd
@@ -202,44 +245,20 @@ class Buffer(Op):
         return pd.DataFrame([_buffer_log_to_row(self)], columns=BUFFER_LOG_FIELD_ORDER)
 
     def __repr__(self) -> str:
-        """Multi-line summary showing address, shape, dtype, size, module, and pass number."""
-        lines = [f"Buffer: {self.address or self.layer_label}"]
+        """Return a concise multi-line buffer summary."""
+
+        lines = [f"Buffer: {self.address}"]
         if self.shape is not None:
             lines.append(f"  shape: {list(self.shape)}")
         if self.dtype is not None:
             lines.append(f"  dtype: {self.dtype}")
-        if self.activation_memory is not None:
-            lines.append(f"  size: {self.activation_memory}")
-        if self.module:
-            lines.append(f"  module: {self.module[0]}")
-        if self.buffer_pass is not None:
-            lines.append(f"  pass: {self.buffer_pass}")
-        lines.append(f"  has_saved_activation: {self.has_saved_activation}")
-        if self.has_grad:
-            lines.append("  has_grad: True")
-        if self.layer_label is not None:
-            lines.append(f"  layer_label: {self.layer_label}")
+        lines.append(f"  versions: {len(self.versions)}")
+        lines.append(f"  num_overwrites: {self.num_overwrites}")
         return "\n".join(lines)
-
-    def __getstate__(self) -> Dict[str, Any]:
-        """Return pickle state for this buffer log."""
-        return super().__getstate__()
-
-    def __setstate__(self, state: Dict[str, Any]) -> None:
-        """Restore pickle state for this buffer log."""
-        super().__setstate__(state)
 
 
 class BufferAccessor(Accessor["Buffer"]):
-    """Dict-like accessor for Buffer objects.
-
-    Supports indexing by:
-    * **full buffer address** (str) -- e.g. ``"features.0.running_mean"``.
-    * **short name** (str) -- e.g. ``"running_mean"`` (must be unambiguous).
-    * **ordinal position** (int) -- index into insertion-order list.
-
-    Available as ``trace.buffers`` and ``module_log.buffers``.
-    """
+    """Dict-like accessor for persistent Buffer entities."""
 
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
@@ -252,12 +271,14 @@ class BufferAccessor(Accessor["Buffer"]):
         buffer_dict: Dict[str, "Buffer"],
         source_trace: "Trace | None" = None,
     ) -> None:
+        """Initialize the accessor from address-keyed buffer entities."""
+
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(buffer_dict, source_ref=source_ref)
 
     def _resolve_substring(self, key: str) -> "Buffer | None":
         """Resolve an unambiguous buffer short name."""
-        # Fallback: match by short name (e.g. 'running_mean')
+
         matches = [bl for bl in self._list if bl.name == key]
         if len(matches) == 1:
             return matches[0]
@@ -267,13 +288,16 @@ class BufferAccessor(Accessor["Buffer"]):
 
     def __contains__(self, key: object) -> bool:
         """Check membership by full address or short name."""
+
         try:
-            return super().__contains__(key)
-        except KeyError:
-            return True
+            self[key]  # type: ignore[index]
+        except (KeyError, TypeError, IndexError):
+            return False
+        return True
 
     def __repr__(self) -> str:
         """Format as a dict-like string of buffer addresses with shapes and dtypes."""
+
         if len(self) == 0:
             return "{}"
         items = []
@@ -285,13 +309,8 @@ class BufferAccessor(Accessor["Buffer"]):
         return "{" + inner + "}"
 
     def to_pandas(self) -> "pd.DataFrame":
-        """Export buffer metadata as a pandas DataFrame.
+        """Export buffer metadata as a pandas DataFrame."""
 
-        Returns
-        -------
-        pd.DataFrame
-            One row per buffer, ordered by ``BUFFER_LOG_FIELD_ORDER``.
-        """
         try:
             import pandas as pd
         except ImportError as e:

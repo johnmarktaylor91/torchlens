@@ -1771,6 +1771,11 @@ def _check_buffer_xrefs(ml: "Trace") -> None:
                     name,
                     f"Buffer '{buf.layer_label}' has empty address",
                 )
+            if not buf.versions:
+                raise MetadataInvariantError(
+                    name,
+                    f"Buffer '{buf.address}' has no version nodes",
+                )
             # address references a valid module or an ancestor does.
             # Buffers may live on modules that were never entered during the
             # forward pass (e.g. anchor_generator creates buffers but they're

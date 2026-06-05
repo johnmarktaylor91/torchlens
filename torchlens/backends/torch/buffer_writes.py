@@ -127,6 +127,7 @@ class BufferWriteTracker:
                     continue
                 address = f"{module_address}.{name}" if module_address else name
                 set_buffer_address(tensor, address)
+                self.trace._buffer_initial_values.setdefault(address, _copy_tensor_value(tensor))
                 self.address_to_tensor[address] = tensor
                 self.address_to_snapshot[address] = _copy_tensor_value(tensor)
                 self.address_to_object_id[address] = id(tensor)

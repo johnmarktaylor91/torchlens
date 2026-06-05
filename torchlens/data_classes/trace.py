@@ -1343,6 +1343,7 @@ class Trace:
         self._buffer_accessor = None
         self._buffer_write_events: list[Any] = []
         self._buffer_write_tracker: Any | None = None
+        self._buffer_initial_values: Dict[str, Any] = {}
         self.internal_source_ops: List[str] = []
         self.internal_sink_ops: List[str] = []
         self.internally_terminated_bool_ops: List[str] = []
