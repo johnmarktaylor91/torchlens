@@ -236,7 +236,10 @@ def _run_replay(
         if all(preserve_origins and member.layer_label in origin_labels for member in group):
             continue
         _preflight_group(group)
-        representative = group[0]
+        replay_group = [member for member in group if not getattr(member, "is_buffer", False)]
+        if not replay_group:
+            continue
+        representative = replay_group[0]
         args, kwargs = _reconstruct_args_from_template(
             _template_for_site(representative),
             representative,
@@ -247,7 +250,7 @@ def _run_replay(
         output = _execute_replay_func_strict(representative, args, kwargs)
         if output is None and _is_inplace_none_return(representative):
             output = args[0]
-        for member in group:
+        for member in replay_group:
             if preserve_origins and member.layer_label in origin_labels:
                 continue
             tensor = _slice_output_by_path(output, tuple(member.container_path or ()))
@@ -615,6 +618,8 @@ def _preflight_group(group: Sequence["Op"]) -> None:
     """
 
     for site in group:
+        if getattr(site, "is_buffer", False):
+            continue
         if site.func is None:
             raise ReplayPreconditionError(f"{site.layer_label!r} has no func for replay")
         _template_for_site(site)

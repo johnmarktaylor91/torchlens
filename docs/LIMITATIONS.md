@@ -43,6 +43,7 @@ If you hit a case we haven't listed, please
 | **Multi-process spawn / `DataLoader` workers** | `RuntimeError` if called from a worker | Log in the main process |
 | **Tensor subclasses with custom `__torch_function__`** | May work; limited metadata fidelity | Log with a plain `torch.Tensor` input if possible |
 | **Very deep module hierarchy (>1000 levels)** | May hit Python recursion limit | Flatten the hierarchy, or raise `sys.setrecursionlimit` |
+| **Buffer `.data = tensor` reassignment** | `RuntimeError` during end-of-capture reconciliation | Use `self.buffer = tensor` or `self.buffer.copy_(tensor)`; see [Buffers](buffers.md) |
 
 ---
 

@@ -79,6 +79,12 @@ class Buffer:
         return self._source_ref()
 
     @property
+    def trace(self) -> "Trace | None":
+        """Compatibility alias for ``source_trace``."""
+
+        return self.source_trace
+
+    @property
     def name(self) -> str:
         """Buffer name, the final component of ``address``."""
 

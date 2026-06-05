@@ -410,13 +410,62 @@ def _validate_append_candidate(
 
     old_by_raw = {layer._layer_label_raw: layer for layer in old_log.layer_list}
     new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
+    old_by_label = {
+        key: layer
+        for layer in old_log.layer_list
+        for key in (layer._layer_label_raw, layer.layer_label)
+    }
+    new_by_label = {
+        key: layer
+        for layer in new_log.layer_list
+        for key in (layer._layer_label_raw, layer.layer_label)
+    }
     grads_supported = _hook_plan_supports_append_grads(hook_plan)
     for raw_label in old_labels:
         old_layer = old_by_raw[raw_label]
         new_layer = new_by_raw[raw_label]
+        if _is_append_buffer_side_effect_layer(
+            old_layer, old_by_label
+        ) or _is_append_buffer_side_effect_layer(new_layer, new_by_label):
+            continue
         _validate_append_tensor_pair(old_layer, new_layer, "out")
         _validate_append_tensor_pair(old_layer, new_layer, "transformed_out")
         _validate_append_grad_pair(old_layer, new_layer, grads_supported=grads_supported)
+
+
+def _is_append_buffer_side_effect_layer(layer: Any, layer_by_raw: dict[str, Any]) -> bool:
+    """Return whether ``layer`` only feeds buffer version side effects.
+
+    Parameters
+    ----------
+    layer:
+        Candidate layer being considered for append tensor concatenation.
+    layer_by_raw:
+        Mapping from raw labels to layers in the same trace pass.
+
+    Returns
+    -------
+    bool
+        True when every tracked child is a buffer version node created by a
+        buffer write. Such producer outputs describe state transitions rather
+        than batch activations and are not append-concatenated.
+    """
+
+    child_labels = list(getattr(layer, "children", []))
+    if not child_labels:
+        return False
+    saw_buffer_write = False
+    for child_label in child_labels:
+        child_layer = layer_by_raw.get(child_label)
+        if child_layer is None:
+            return False
+        if not (
+            getattr(child_layer, "is_buffer", False)
+            and getattr(child_layer, "buffer_write_kind", None) is not None
+        ):
+            return False
+        saw_buffer_write = True
+    return saw_buffer_write
 
 
 def _validate_append_tensor_pair(old_layer: Any, new_layer: Any, field_name: str) -> None:
@@ -432,6 +481,8 @@ def _validate_append_tensor_pair(old_layer: Any, new_layer: Any, field_name: str
         Tensor field to compare.
     """
 
+    if getattr(old_layer, "is_buffer", False) or getattr(new_layer, "is_buffer", False):
+        return
     old_value = getattr(old_layer, field_name, None)
     new_value = getattr(new_layer, field_name, None)
     if old_value is None and new_value is None:

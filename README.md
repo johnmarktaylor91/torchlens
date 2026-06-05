@@ -409,6 +409,11 @@ Export options:
 - `to_csv(...)`, `to_parquet(...)`, and `to_json(...)` on those same surfaces
 - `to_parquet(...)` requires `pyarrow`
 
+Buffer support:
+- Registered buffers are tracked as versioned model state, including recurrent
+  reassignment, explicit in-place writes, and BatchNorm/InstanceNorm running
+  statistics. See [docs/buffers.md](docs/buffers.md).
+
 Caveats:
 - Portable bundles do not support `validate_forward_pass()` or replay-oriented validation.
 - Streaming capture is always strict; unsupported tensors abort the save instead of being skipped.

@@ -304,6 +304,7 @@ class BufferWriteTracker:
         self.address_to_storage_key[address] = storage_key(value)
         self.address_to_version[address] = _tensor_version(value)
         set_buffer_address(value, address)
+        self._refresh_overlapping_alias_snapshots(address)
 
     def _log_buffer_version_node(
         self,
@@ -335,6 +336,22 @@ class BufferWriteTracker:
                 self.trace, fields, producer_label_raw, version_label
             )
         return version_label
+
+    def _refresh_overlapping_alias_snapshots(self, written_address: str) -> None:
+        """Refresh final snapshots for aliases changed by a journaled write."""
+
+        written_tensor = self.address_to_tensor.get(written_address)
+        if written_tensor is None:
+            return
+        written_key = storage_key(written_tensor)
+        written_range = _storage_range(written_tensor)
+        for address, tensor in self.address_to_tensor.items():
+            if address == written_address or storage_key(tensor) != written_key:
+                continue
+            if not _ranges_overlap(written_range, _storage_range(tensor)):
+                continue
+            self.address_to_snapshot[address] = _copy_tensor_value(tensor)
+            self.address_to_version[address] = _tensor_version(tensor)
 
 
 def install_buffer_write_tracker(trace: "Trace", model: nn.Module) -> BufferWriteTracker:
@@ -487,7 +504,17 @@ def _tensor_equal(left: torch.Tensor, right: torch.Tensor) -> bool:
 
     with _state.pause_logging():
         try:
-            return bool(torch.equal(left, right))
+            if bool(torch.equal(left, right)):
+                return True
+            if (
+                left.shape != right.shape
+                or left.dtype != right.dtype
+                or left.device != right.device
+            ):
+                return False
+            if not (torch.is_floating_point(left) or torch.is_complex(left)):
+                return False
+            return bool(torch.all(torch.eq(left, right) | (torch.isnan(left) & torch.isnan(right))))
         except Exception:
             return False
 
@@ -527,6 +554,12 @@ def _storage_range(tensor: torch.Tensor) -> tuple[int, int]:
     start = int(tensor.storage_offset()) * element_size
     end = start + int(tensor.numel()) * element_size
     return start, end
+
+
+def _ranges_overlap(left: tuple[int, int], right: tuple[int, int]) -> bool:
+    """Return whether two half-open byte ranges overlap."""
+
+    return left[0] < right[1] and right[0] < left[1]
 
 
 def _could_mutate(func_name: str) -> bool:

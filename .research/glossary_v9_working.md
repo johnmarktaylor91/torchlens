@@ -418,7 +418,7 @@ Use `Trace.compute_ops` / `Op.is_compute_op` to filter to compute Ops (includes 
 - `Module`: Aggregate record for one `nn.Module` address in the model.
 - `ModuleCall`: One actual call of an `nn.Module.forward`.
 - `Param`: Record for one `nn.Parameter` tensor.
-- `Buffer`: Record for one PyTorch buffer value, with buffer-specific identity and update metadata.
+- `Buffer`: Persistent record for one PyTorch registered-buffer address, with version nodes, initial/final values, and update metadata.
 - `GradFn`: Record for one autograd `grad_fn` node in the backward graph.
 - `GradFnCall`: One hook firing or backward call event for a `GradFn`.
 - `Bundle`: Coordinated container for comparing multiple Traces.
@@ -546,7 +546,7 @@ Example: `trace.layers["conv2d_1_2"]` returns the Layer; `trace.ops["conv2d_1_2:
 - `modules`: Accessor for Module records. ALWAYS returns Module. Accepts bare Module addresses (`encoder.block`) directly, AND ModuleCall labels (`encoder.block:1`) by stripping `:N` to find the parent Module. Also accepts alias forms. 0-based positional integer indexing.
 - `uncalled_modules`: Module addresses registered on the source model but not called in this capture.
 - `params`: Accessor for Param records. ALWAYS returns Param. Accepts Param addresses (`encoder.block.weight`) by exact match, plus alternate lookup keys. 0-based positional integer indexing.
-- `buffers`: Accessor for Buffer records. ALWAYS returns Buffer. Accepts Buffer addresses (`bn.running_mean`) by exact match. 0-based positional integer indexing. (Buffer Option B post-launch will introduce buffer-source-Op and buffer-sink-Op accessors separately.)
+- `buffers`: Accessor for persistent Buffer records. ALWAYS returns Buffer. Accepts Buffer addresses (`bn.running_mean`) by exact match, short name when unambiguous, and 0-based positional integer indexing.
 - `grad_fns`: Accessor for GradFn records. ALWAYS returns GradFn. Accepts GradFn labels directly, AND GradFnCall labels (`:N`-qualified) by stripping `:N` to find the parent GradFn. 0-based positional integer indexing.
 
 ### Topology
@@ -1517,7 +1517,7 @@ back the way activations do. They are gradient dead-ends.
 
 ### Buffer Identity
 
-- `address`: Dotted PyTorch buffer address (formerly `buffer_address`; Buffer extends Op so the redundant `buffer_` prefix is dropped on this field).
+- `address`: Dotted PyTorch buffer address (formerly `buffer_address`). Buffer is an address-level entity; graph versions are plain `Op` records with `is_buffer=True`.
 - `name` (`@property`): Last segment of `address`.
 - `all_addresses`: All addresses sharing the same buffer object.
 - `has_multiple_addresses`: True when the same buffer appears at multiple addresses.
@@ -1525,35 +1525,31 @@ back the way activations do. They are gradient dead-ends.
 
 ### Buffer Dynamics
 
-- `buffer_overwrite_index`: 1-based index of this buffer overwrite for its address. Pairs cleanly with `buffer_source` (the Op doing the overwriting).
-- `buffer_source_label`: Stable Op label for the Op that overwrote this buffer value, or `None` for static buffers (replaces the removed `buffer_parent` field; use `parents` for graph relations). Stored form.
-- `buffer_source` (`@property`): Op record resolved via `self.trace.ops[self.buffer_source_label]`. Returns `None` for static buffers.
+- `initial_value`: Pre-forward value for this registered-buffer address.
+- `final_value`: Final observed value after capture.
+- `versions`: Ordered buffer-version `Op` nodes for this address.
+- `write_versions`: Ordered write-produced version nodes, excluding static initial reads.
+- `buffer_overwrite_index`: 1-based index of the most recent buffer version for its address.
+- `buffer_source`: Stable Op label for the most recent Op that overwrote this buffer value, or `None` for static buffers.
 - `is_overwritten`: True when this buffer is overwritten during forward (vs. static buffers that aren't).
 - `num_overwrites`: Total overwrites of this buffer's address during the trace.
-- `last_overwrite_source_label`: Stable Op label for the most recent Op that overwrote this buffer's address. Stored form.
-- `last_overwrite_source` (`@property`): Op record resolved via `self.trace.ops[self.last_overwrite_source_label]`. Returns `None` for static buffers.
+- `value_at(n)`: 1-based value lookup by observed version index.
+- `value_after(n)`: 1-based value lookup by overwrite index.
 
 ### Inherited Op-Like Fields
 
-These fields come from Buffer's Op-like role in the graph. `pass_index`
-is the generic Op pass index; `buffer_overwrite_index` is the
-buffer-specific "which overwrite of this buffer" index.
+These fields are projected from the final graph version node.
 
-- `label`: Op-like label for this buffer boundary record.
+- `layer_label`: Layer label associated with the final buffer version.
 - `shape`: Shape of the buffer value.
 - `dtype`: Dtype of the buffer value.
 - `activation_memory`: Bytes used by the buffer value.
 - `has_saved_activation`: True when the buffer value was saved.
 - `has_saved_gradient`: True when a gradient was saved for the buffer record.
-- `pass_index`: 1-based pass index inherited from Op semantics.
 - `module` (`@property`): Module containing the buffer use; resolves via `self.trace.modules[<address>]`. Raises if no containing module exists.
-- `module_call_stack`: List of ModuleCall labels (root-first) active at the buffer use. Stored as label list per Principle 4.
-- `layer_label`: Layer label associated with the buffer record. Stored form.
-- `layer` (`@property`): Layer record resolved via `self.trace.layers[self.layer_label]`. Raises if not resolvable.
 - `grad_shape`: Shape of saved gradient, if any.
 - `grad_dtype`: Dtype of saved gradient, if any.
 - `gradient_memory`: Bytes used by saved gradient, if any.
-- `parents`, `children`, `siblings`, `co_parents`: Graph relations (returns labels).
 
 ### Buffer Methods
 

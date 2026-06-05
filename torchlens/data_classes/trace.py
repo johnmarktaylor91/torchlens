@@ -1046,6 +1046,9 @@ class Trace:
         "buffer_layers": FieldPolicy.KEEP,
         "buffer_num_calls": FieldPolicy.KEEP,
         "_buffer_accessor": FieldPolicy.DROP,
+        "_buffer_write_events": FieldPolicy.DROP,
+        "_buffer_write_tracker": FieldPolicy.DROP,
+        "_buffer_initial_values": FieldPolicy.BLOB_RECURSIVE,
         "internal_source_ops": FieldPolicy.KEEP,
         "internal_sink_ops": FieldPolicy.KEEP,
         "internally_terminated_bool_ops": FieldPolicy.KEEP,
@@ -2947,10 +2950,19 @@ class Trace:
         """
 
         new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
+        old_by_label = {
+            key: layer
+            for layer in self.layer_list
+            for key in (layer._layer_label_raw, layer.layer_label)
+        }
         for layer in self.layer_list:
             new_layer = new_by_raw[layer._layer_label_raw]
-            layer._append_tensor_from(new_layer, "out")
-            layer._append_tensor_from(new_layer, "transformed_out")
+            if not (
+                getattr(layer, "is_buffer", False)
+                or self._is_append_buffer_side_effect_layer(layer, old_by_label)
+            ):
+                layer._append_tensor_from(new_layer, "out")
+                layer._append_tensor_from(new_layer, "transformed_out")
             self._copy_append_last_chunk_fields(layer, new_layer)
             self._refresh_appended_tensor_metadata(layer)
         self.has_gradients = self.has_gradients or new_log.has_gradients
@@ -2958,6 +2970,41 @@ class Trace:
         self.input_object_id = new_log.input_object_id
         self.input_signature_hash = new_log.input_signature_hash
         self._rebind_fork_owner_refs()
+
+    def _is_append_buffer_side_effect_layer(
+        self, layer: Any, layer_by_label: dict[str, Any]
+    ) -> bool:
+        """Return whether ``layer`` only feeds buffer version side effects.
+
+        Parameters
+        ----------
+        layer:
+            Candidate layer being considered for append tensor concatenation.
+        layer_by_label:
+            Mapping from raw and final labels to layers in this trace.
+
+        Returns
+        -------
+        bool
+            True when every tracked child is a buffer version node created by a
+            buffer write.
+        """
+
+        child_labels = list(getattr(layer, "children", []))
+        if not child_labels:
+            return False
+        saw_buffer_write = False
+        for child_label in child_labels:
+            child_layer = layer_by_label.get(child_label)
+            if child_layer is None:
+                return False
+            if not (
+                getattr(child_layer, "is_buffer", False)
+                and getattr(child_layer, "buffer_write_kind", None) is not None
+            ):
+                return False
+            saw_buffer_write = True
+        return saw_buffer_write
 
     def _copy_append_last_chunk_fields(self, layer: Any, new_layer: Any) -> None:
         """Copy per-call metadata fields from the last appended chunk.

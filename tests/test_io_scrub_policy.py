@@ -56,7 +56,7 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
         Module: next(iter(live_log.modules)),
         ModuleCall: next(iter(live_log.modules._pass_dict.values())),
         Param: next(iter(live_log.param_logs)),
-        Buffer: next(layer for layer in live_log.layer_list if isinstance(layer, Buffer)),
+        Buffer: next(iter(live_log.buffers)),
         FuncCallLocation: next(
             frame
             for layer in live_log.layer_list

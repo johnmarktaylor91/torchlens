@@ -666,7 +666,7 @@ def _fix_buffer_layers(self: "Trace") -> None:
                 layer.func_name = "identity"
             else:
                 layer.buffer_replay_validated = False
-            layer.has_input_ancestor = True
+            layer.has_input_ancestor = bool(self[layer.buffer_source].has_input_ancestor)
             layer.input_ancestors.update(self[layer.buffer_source].input_ancestors)
             layer.root_ancestors.discard(layer._label_raw)
             layer.root_ancestors.update(self[layer.buffer_source].root_ancestors)
