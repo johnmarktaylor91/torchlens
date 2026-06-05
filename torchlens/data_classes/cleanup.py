@@ -506,3 +506,27 @@ def _remove_log_entry_references(self: "Trace", layer_to_remove: str) -> None:
         for equiv_group, tensor_labels in self.op_equivalence_classes.items()
         if len(tensor_labels) > 0
     }
+
+    _scrub_per_op_equivalence_lists(self, {layer_to_remove})
+
+
+def _scrub_per_op_equivalence_lists(ops: Iterable["Op"], labels_to_remove: Set[str]) -> None:
+    """Remove dead labels from per-op ``equivalent_ops``/``recurrent_ops`` lists.
+
+    ``equivalent_ops`` and ``recurrent_ops`` are *stored* per-op label lists
+    (``FieldPolicy.KEEP``), so removing an Op from the Trace does not by itself
+    clear references to it held by *other* ops — scrubbing the global
+    ``op_equivalence_classes`` map is not enough. Loop detection iterates
+    ``node.equivalent_ops`` and dereferences each label via ``self[...]``, so a
+    dangling reference (e.g. an output node that returns a buffer still listing
+    the now-merged buffer source) raises ``"... is not a known raw label"``
+    mid-pass. Keep both per-op lists consistent with the surviving graph.
+    """
+
+    for op in ops:
+        equivalent_ops = getattr(op, "equivalent_ops", None)
+        if equivalent_ops:
+            op.equivalent_ops = [label for label in equivalent_ops if label not in labels_to_remove]
+        recurrent_ops = getattr(op, "recurrent_ops", None)
+        if recurrent_ops:
+            op.recurrent_ops = [label for label in recurrent_ops if label not in labels_to_remove]

@@ -284,6 +284,124 @@ def test_reassignment_double_count_is_exact() -> None:
     assert trace.buffers["h"].num_overwrites == 5
 
 
+class RecurrentCell(nn.Module):
+    """RNN-style cell: reassigns a state buffer in a loop around a submodule.
+
+    The inner ``nn.Linear`` makes the loop body recurrent, so loop detection
+    engages over the reassigned buffer's version nodes. Regression guard for a
+    crash where merging the initial buffer node left a dangling label in the
+    output node's ``equivalent_ops`` (``'buffer_1_raw' is not a known raw
+    label``) that loop detection then dereferenced mid-pass.
+    """
+
+    def __init__(self, dim: int = 8, steps: int = 4) -> None:
+        """Initialize the recurrent cell and its hidden-state buffer."""
+
+        super().__init__()
+        self.steps = steps
+        self.cell = nn.Linear(dim, dim)
+        self.register_buffer("h", torch.zeros(1, dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Reset then recurrently reassign the hidden-state buffer."""
+
+        self.h = torch.zeros_like(self.h)
+        for _ in range(self.steps):
+            self.h = torch.tanh(self.cell(x) + self.h)
+        return self.h
+
+
+def test_recurrent_cell_reassignment_does_not_break_loop_detection() -> None:
+    """An RNN cell reassigning its state buffer must trace and validate."""
+
+    model = RecurrentCell()
+    x = torch.randn(1, 8)
+    assert tl.validation.validate_forward_pass(
+        RecurrentCell(), x.clone(), random_seed=7, validate_metadata=True
+    )
+    trace = tl.trace(model, x, save_arg_values=True)
+    assert "h" in trace.buffers
+    assert trace.buffers["h"].num_overwrites == 5  # one reset + four loop steps
+
+
+class GradRecurrent(nn.Module):
+    """Recurrent reassignment with learnable params (non-detached hidden state)."""
+
+    def __init__(self, dim: int = 4, steps: int = 3) -> None:
+        """Initialize the recurrent cell and its state buffer."""
+
+        super().__init__()
+        self.steps = steps
+        self.lin = nn.Linear(dim, dim)
+        self.register_buffer("h", torch.zeros(1, dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Reassign the state buffer through the autograd graph each step."""
+
+        self.h = torch.zeros_like(self.h)
+        for _ in range(self.steps):
+            self.h = torch.tanh(self.lin(x) + self.h)
+        return self.h.sum()
+
+
+class GradBatchNorm(nn.Module):
+    """Learnable model whose forward updates fused BatchNorm running stats."""
+
+    def __init__(self, dim: int = 4) -> None:
+        """Initialize the linear + BatchNorm stack."""
+
+        super().__init__()
+        self.lin = nn.Linear(dim, dim)
+        self.bn = nn.BatchNorm1d(dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the fused-buffer-writing forward."""
+
+        return self.bn(self.lin(x)).sum()
+
+
+def _param_grads(model: nn.Module, x: torch.Tensor) -> dict[str, torch.Tensor]:
+    """Return a fresh-backward gradient snapshot for every parameter."""
+
+    model.zero_grad(set_to_none=True)
+    model(x).backward()
+    return {
+        name: param.grad.detach().clone()
+        for name, param in model.named_parameters()
+        if param.grad is not None
+    }
+
+
+@pytest.mark.parametrize("model_factory", [GradRecurrent, GradBatchNorm])
+def test_buffer_capture_preserves_gradient_flow(
+    model_factory: Callable[[], nn.Module],
+) -> None:
+    """Capture hooks must be observational: tracing must not break autograd.
+
+    A reassigned state buffer carries ``grad_fn`` exactly like a non-detached
+    RNN hidden state; the fused-write snapshot reads (never replaces) the live
+    buffer. So gradients through a traced model must match an untraced run.
+    """
+
+    import copy
+
+    torch.manual_seed(0)
+    reference = model_factory().train()
+    traced_model = copy.deepcopy(reference).train()
+    x = torch.randn(8, 4)
+
+    expected = _param_grads(reference, x.clone())
+
+    # Tracing performs the fused/reassignment writes; it must leave the live
+    # autograd path untouched, so a subsequent backward still matches.
+    tl.trace(traced_model, x.clone())
+    actual = _param_grads(traced_model, x.clone())
+
+    assert expected.keys() == actual.keys()
+    for name in expected:
+        assert torch.allclose(expected[name], actual[name], atol=1e-5), name
+
+
 def test_data_setter_reconciliation_raises() -> None:
     """Assert unsupported ``.data = tensor`` changes raise a diagnostic."""
 

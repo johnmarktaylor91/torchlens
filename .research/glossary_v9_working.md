@@ -878,7 +878,10 @@ Relationship to `op.args` / `op.kwargs`: call-signature view (with scalars, nest
 - `is_input`: True when this Op represents an external input boundary.
 - `is_output`: True when this Op represents an output boundary node.
 - `is_final_output`: True when this Op is the final model output marker.
-- `is_buffer_source`: True when this Op represents a buffer boundary (overwrites a buffer).
+- `is_buffer_source` (`@property`): True when this Op is a buffer-version node (a buffer boundary / overwrite). The public glossary name for the stored `is_buffer` flag (`is_buffer_source == is_buffer`); `compute_ops` and `is_compute_op` exclude these nodes.
+- `is_buffer`: Stored flag backing `is_buffer_source` — `True` for plain `Op` records that are buffer-version nodes.
+- `buffer_write_kind`: How this buffer version was written — `"reassign"` (`self.buf = ...`), `"inplace"` (`buf.mul_`/`copy_`/`buf[...] =`), or `"fused"` (native running-stat update, e.g. BatchNorm); `None` for the static initial-read node.
+- `buffer_value_changed`: For a fused/native buffer version, whether the post-op value differed from the pre-op value (the state transition actually changed the buffer); `None`/unused for non-fused versions.
 - `address`: Dotted path for the buffer when buffer-sourced (replaces former `buffer_address`).
 - `buffer_source`: Source Layer or Op that wrote this buffer value, or `None` for static buffers.
 - `is_internal_source`: True when this Op starts an internally generated graph region.
@@ -1333,6 +1336,7 @@ tree is what actually happened as modules called one another during `forward`.
 Direct (own-address) param fields are bare; address-recursive (this Module + all address-based sub-Modules per PyTorch `parameters(recurse=True)`) carry the `recursive_` prefix.
 
 - `params`: ParamAccessor for parameters owned by this Module.
+- `buffers`: Scoped BufferAccessor for persistent `Buffer` entities belonging to this Module — its own address and address-based sub-modules (parallels `params`).
 - `num_params`: Scalar parameter count owned by this Module.
 - `num_param_tensors` (`@property`): Number of parameter tensors owned.
 - `num_params_trainable`: Trainable scalar parameter count.

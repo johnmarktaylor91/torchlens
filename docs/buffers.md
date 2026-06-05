@@ -84,7 +84,7 @@ slices back to the registered buffer whose storage range was touched.
 Those kernels can update buffers without bumping PyTorch's normal tensor
 `_version` counter, so TorchLens always compares post-op values for known fused
 mutators. Fused versions are emitted per train/update op execution and carry a
-`value_changed` flag.
+`buffer_value_changed` flag.
 
 ## Validation
 

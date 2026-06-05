@@ -112,6 +112,7 @@ from .cleanup import (
     _label_for_reference_removal,
     _remove_log_entry_references,
     _scrub_conditional_fields_after_removal,
+    _scrub_per_op_equivalence_lists,
     cleanup,
 )
 from .module import ModuleAccessor
@@ -5155,6 +5156,8 @@ class Trace:
             for equiv_group, equivalent_label_set in self.op_equivalence_classes.items()
             if len(equivalent_label_set) > 0
         }
+
+        _scrub_per_op_equivalence_lists(surviving_entries, labels_to_remove)
 
 
 Trace.FIELD_FORK_POLICY = MODEL_LOG_FIELD_FORK_POLICY  # type: ignore[attr-defined]
