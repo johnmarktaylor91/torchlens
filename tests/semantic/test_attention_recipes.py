@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 from torchlens import trace as trace_fn
+from torchlens.semantic import MissingFacet
 
 
 pytest.importorskip("transformers")
@@ -159,8 +160,9 @@ def test_distilbert_unified_attention_q_shape_and_pattern_missing() -> None:
     assert view.head(1).q.shape == (2, 3, 4)
     # Fused-by-default: pattern is declared but surfaced as an informative MissingFacet.
     assert "pattern" in view.keys()
+    assert isinstance(view.pattern, MissingFacet)
     with pytest.raises(RuntimeError, match="attention pattern not captured"):
-        view.pattern
+        torch.add(view.pattern, 1)
 
 
 @pytest.mark.slow

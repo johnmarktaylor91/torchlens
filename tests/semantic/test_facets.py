@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import FacetRecipe, FacetView
+from torchlens.semantic import FacetRecipe, FacetSpec, FacetView, MissingGradient
 from torchlens.semantic import facets as facets_mod
 
 
@@ -326,6 +326,107 @@ def test_lstm_multi_output_facets_preserve_single_call_roles() -> None:
     assert torch.equal(lstm.facets["output"], lstm.outs[0])
     assert torch.equal(lstm.facets["h_n"], lstm.outs[1])
     assert torch.equal(lstm.facets["c_n"], lstm.outs[2])
+
+
+def test_facetspec_read_and_default_missing_gradient() -> None:
+    """FacetSpec read works and default traces return MissingGradient."""
+
+    class Tiny(nn.Module):
+        """Tiny model with a named linear home."""
+
+        def __init__(self) -> None:
+            """Initialize the linear layer."""
+
+            super().__init__()
+            self.linear = nn.Linear(3, 2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return the linear output."""
+
+            return self.linear(x)
+
+    @tl.facets.register(class_name="Linear", target_scope="module", facets=("first_feature",))
+    def first_feature(module: Any) -> dict[str, Any]:
+        """Return the first feature as an op-anchored FacetSpec."""
+
+        op = module.trace.ops[module.calls[0].output_ops[0]]
+        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+
+    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all")
+    facet = log.modules["linear"].facets["first_feature"]
+
+    assert torch.equal(facet, log.modules["linear"].out[..., 0])
+    missing = facet.grad
+    assert isinstance(missing, MissingGradient)
+    assert "backward_ready=True" in missing.reason
+    assert "gradients_to_save" in missing.reason
+    with pytest.raises(RuntimeError, match="Facet gradient unavailable"):
+        torch.add(missing, 1)
+
+
+def test_facetspec_grad_matches_manual_slice_when_saved() -> None:
+    """FacetSpec grad applies the same transform chain to the home op grad."""
+
+    class Tiny(nn.Module):
+        """Tiny model with a named linear home."""
+
+        def __init__(self) -> None:
+            """Initialize the linear layer."""
+
+            super().__init__()
+            self.linear = nn.Linear(3, 2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return the linear output."""
+
+            return self.linear(x)
+
+    @tl.facets.register(class_name="Linear", target_scope="module", facets=("first_feature",))
+    def first_feature(module: Any) -> dict[str, Any]:
+        """Return the first feature as an op-anchored FacetSpec."""
+
+        op = module.trace.ops[module.calls[0].output_ops[0]]
+        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+
+    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all", gradients_to_save="all")
+    log.log_backward(log[log.output_layers[0]].out.sum())
+    facet = log.modules["linear"].facets["first_feature"]
+    home = log.ops[log.modules["linear"].calls[0].output_ops[0]]
+
+    assert torch.equal(facet.grad, home.grad.select(-1, 0))
+
+
+def test_facetspec_grad_missing_for_unselected_home() -> None:
+    """Selective gradients return MissingGradient for an unselected home op."""
+
+    class Tiny(nn.Module):
+        """Tiny model with linear and relu homes."""
+
+        def __init__(self) -> None:
+            """Initialize the layers."""
+
+            super().__init__()
+            self.linear = nn.Linear(3, 2)
+            self.relu = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return relu(linear(x))."""
+
+            return self.relu(self.linear(x))
+
+    @tl.facets.register(class_name="Linear", target_scope="module", facets=("first_feature",))
+    def first_feature(module: Any) -> dict[str, Any]:
+        """Return the first feature as an op-anchored FacetSpec."""
+
+        op = module.trace.ops[module.calls[0].output_ops[0]]
+        return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
+
+    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all", gradients_to_save=["relu"])
+    log.log_backward(log[log.output_layers[0]].out.sum())
+    missing = log.modules["linear"].facets["first_feature"].grad
+
+    assert isinstance(missing, MissingGradient)
+    assert "home op has no saved gradient" in missing.reason
 
 
 def test_list_info_glob_and_recipe_record() -> None:

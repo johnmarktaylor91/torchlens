@@ -12,9 +12,11 @@ import itertools
 import textwrap
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from fnmatch import fnmatch
 from typing import Any, Literal, TypeAlias, overload
+
+import torch
 
 from ..intervention.types import (
     DataclassField,
@@ -31,6 +33,9 @@ RecipeFunc = Callable[[Any], dict[str, Any]]
 PredicateFunc = Callable[[Any], bool]
 RecipeSource = Literal["built-in", "user"]
 FacetKey: TypeAlias = str | tuple[OutputPathComponent, ...]
+HomeKind = Literal["op", "module_output", "module_input", "parameter", "computed"]
+CapabilityClass = Literal["bijective_view", "selection", "aliasing_selection", "computed"]
+ValueVersion = Literal["raw_out", "out_versions_by_child"]
 
 
 @dataclass(frozen=True)
@@ -89,6 +94,354 @@ class FacetRegistrySnapshot:
     recipes: tuple[_RegisteredRecipe, ...]
 
 
+@dataclass(frozen=True)
+class FacetCapabilityFlags:
+    """Read/grad/write/portability flags for a facet or primitive.
+
+    Parameters
+    ----------
+    read:
+        Whether the facet can be read.
+    grad:
+        Whether the same transform may be applied to a saved home gradient.
+    write:
+        Whether the primitive is scatter-back capable for future intervention.
+    portable:
+        Whether the primitive can be represented without executable Python code.
+    reconstructed:
+        Whether the value is reconstructed rather than captured.
+    """
+
+    read: bool = True
+    grad: bool = False
+    write: bool = False
+    portable: bool = True
+    reconstructed: bool = False
+
+    def intersect(self, other: "FacetCapabilityFlags") -> "FacetCapabilityFlags":
+        """Return the weakest-link intersection of two flag sets.
+
+        Parameters
+        ----------
+        other:
+            Flags to intersect with this instance.
+
+        Returns
+        -------
+        FacetCapabilityFlags
+            Combined capability flags.
+        """
+
+        return FacetCapabilityFlags(
+            read=self.read and other.read,
+            grad=self.grad and other.grad,
+            write=self.write and other.write,
+            portable=self.portable and other.portable,
+            reconstructed=self.reconstructed or other.reconstructed,
+        )
+
+
+_CAPABILITY_FLAGS_BY_CLASS: dict[CapabilityClass, FacetCapabilityFlags] = {
+    "bijective_view": FacetCapabilityFlags(read=True, grad=True, write=True),
+    "selection": FacetCapabilityFlags(read=True, grad=True, write=True),
+    "aliasing_selection": FacetCapabilityFlags(read=True, grad=True, write=False),
+    "computed": FacetCapabilityFlags(read=True, grad=False, write=False, portable=False),
+}
+
+
+@dataclass(frozen=True)
+class TransformPrimitive:
+    """One structural transform in a ``FacetSpec`` chain.
+
+    Parameters
+    ----------
+    kind:
+        Primitive name.
+    args:
+        Positional primitive arguments.
+    kwargs:
+        Keyword primitive arguments.
+    capability_class:
+        Safety class for read/grad/write capability.
+    pre_shape:
+        Optional expected input shape.
+    post_shape:
+        Optional expected output shape.
+    """
+
+    kind: str
+    args: tuple[Any, ...] = ()
+    kwargs: tuple[tuple[str, Any], ...] = ()
+    capability_class: CapabilityClass = "computed"
+    pre_shape: tuple[int, ...] | None = None
+    post_shape: tuple[int, ...] | None = None
+
+    @property
+    def flags(self) -> FacetCapabilityFlags:
+        """Return capability flags for this primitive."""
+
+        return _CAPABILITY_FLAGS_BY_CLASS[self.capability_class]
+
+    def apply(self, value: Any) -> Any:
+        """Apply this primitive to a tensor-like value.
+
+        Parameters
+        ----------
+        value:
+            Tensor-like value to transform.
+
+        Returns
+        -------
+        Any
+            Transformed value.
+        """
+
+        self._assert_shape(value, self.pre_shape, "pre")
+        if self.kind == "getitem":
+            result = value[self.args[0]]
+        elif self.kind == "heads":
+            n_heads, d_head = self.args
+            result = value.reshape(*value.shape[:-1], n_heads, d_head)
+        elif self.kind == "split":
+            sections, dim, index = self.args
+            size = value.shape[dim]
+            if size % sections:
+                raise ValueError(
+                    f"Cannot split dimension {dim} of shape {tuple(value.shape)} "
+                    f"into {sections} equal sections."
+                )
+            chunk = size // sections
+            result = value.narrow(dim, index * chunk, chunk)
+        elif self.kind == "reshape":
+            result = value.reshape(*self.args)
+        elif self.kind == "transpose":
+            result = value.transpose(*self.args)
+        elif self.kind == "select":
+            dim, index = self.args
+            result = value.select(dim, index)
+        else:
+            raise ValueError(f"Unknown facet transform primitive {self.kind!r}.")
+        self._assert_shape(result, self.post_shape, "post")
+        return result
+
+    def _assert_shape(self, value: Any, expected: tuple[int, ...] | None, label: str) -> None:
+        """Assert an optional shape contract for a primitive boundary.
+
+        Parameters
+        ----------
+        value:
+            Tensor-like value to inspect.
+        expected:
+            Expected shape, or ``None`` to skip the assertion.
+        label:
+            Boundary label for error messages.
+        """
+
+        if expected is None or not hasattr(value, "shape"):
+            return
+        actual = tuple(value.shape)
+        if actual != expected:
+            raise ValueError(
+                f"Facet transform {self.kind!r} {label}-shape assertion failed: "
+                f"expected {expected}, got {actual}."
+            )
+
+
+@dataclass(frozen=True)
+class FacetSpec:
+    """Portable ABI for one facet's home and transform chain.
+
+    Parameters
+    ----------
+    home_kind:
+        Kind of home value.
+    home_label:
+        Stable home label when available.
+    home_address:
+        Stable home address when available.
+    pass_index:
+        Pass index for pass-qualified homes.
+    call_index:
+        Module call index for module homes.
+    output_path:
+        Structural output path inside a container output.
+    transforms:
+        Primitive transform chain.
+    capability_class:
+        Weakest capability class of the transform chain.
+    capability_flags:
+        Weakest-link capability flags.
+    value_version:
+        Which home value version the spec reads.
+    conflict_alias_group:
+        Shared-home conflict/alias group for future intervention.
+    recipe_id:
+        Recipe identifier that produced this facet.
+    recipe_version:
+        Recipe version that produced this facet.
+    home:
+        Runtime home object. This is intentionally non-portable.
+    """
+
+    home_kind: HomeKind
+    home_label: str | None = None
+    home_address: str | None = None
+    pass_index: int | None = None
+    call_index: int | None = None
+    output_path: tuple[OutputPathComponent, ...] = ()
+    transforms: tuple[TransformPrimitive, ...] = ()
+    capability_class: CapabilityClass = "bijective_view"
+    capability_flags: FacetCapabilityFlags = field(default_factory=FacetCapabilityFlags)
+    value_version: ValueVersion = "raw_out"
+    conflict_alias_group: str | None = None
+    recipe_id: str | None = None
+    recipe_version: str | None = None
+    home: Any | None = field(default=None, compare=False, repr=False)
+
+    @classmethod
+    def from_home(
+        cls,
+        home: Any,
+        *,
+        home_kind: HomeKind = "op",
+        recipe_id: str | None = None,
+        recipe_version: str | None = None,
+    ) -> "FacetSpec":
+        """Create a spec anchored to a runtime home object.
+
+        Parameters
+        ----------
+        home:
+            Runtime home object.
+        home_kind:
+            Kind of home value.
+        recipe_id:
+            Recipe identifier.
+        recipe_version:
+            Recipe version.
+
+        Returns
+        -------
+        FacetSpec
+            New home-anchored spec.
+        """
+
+        flags = FacetCapabilityFlags(read=True, grad=home_kind == "op", write=home_kind == "op")
+        return cls(
+            home_kind=home_kind,
+            home_label=getattr(home, "label", getattr(home, "call_label", None)),
+            home_address=getattr(home, "address", None),
+            pass_index=getattr(home, "pass_index", None),
+            call_index=getattr(home, "call_index", None),
+            output_path=tuple(getattr(home, "container_path", ()) or ()),
+            capability_flags=flags,
+            recipe_id=recipe_id,
+            recipe_version=recipe_version,
+            conflict_alias_group=getattr(home, "label", None),
+            home=home,
+        )
+
+    def __getitem__(self, key: Any) -> "FacetSpec":
+        """Append a ``__getitem__`` selection primitive."""
+
+        return self._append(TransformPrimitive("getitem", (key,), capability_class="selection"))
+
+    def heads(self, n_heads: int, d_head: int) -> "FacetSpec":
+        """Append a projection-to-heads reshape primitive."""
+
+        return self._append(
+            TransformPrimitive("heads", (n_heads, d_head), capability_class="bijective_view")
+        )
+
+    def split(self, sections: int, dim: int = -1) -> tuple["FacetSpec", ...]:
+        """Return specs for equal sections along a dimension."""
+
+        return tuple(
+            self._append(
+                TransformPrimitive("split", (sections, dim, index), capability_class="selection")
+            )
+            for index in range(sections)
+        )
+
+    def reshape(self, *shape: int) -> "FacetSpec":
+        """Append a reshape primitive."""
+
+        return self._append(TransformPrimitive("reshape", shape, capability_class="bijective_view"))
+
+    def transpose(self, dim0: int, dim1: int) -> "FacetSpec":
+        """Append a transpose primitive."""
+
+        return self._append(
+            TransformPrimitive("transpose", (dim0, dim1), capability_class="bijective_view")
+        )
+
+    def select(self, dim: int, index: int, *, aliasing: bool = False) -> "FacetSpec":
+        """Append a dimension selection primitive."""
+
+        capability: CapabilityClass = "aliasing_selection" if aliasing else "selection"
+        return self._append(TransformPrimitive("select", (dim, index), capability_class=capability))
+
+    def read(self) -> Any:
+        """Read the facet value from its runtime home."""
+
+        return self.apply(self._home_value("out"))
+
+    def grad(self) -> Any:
+        """Read the facet gradient from its runtime home or return ``MissingGradient``."""
+
+        if not self.capability_flags.grad or self.home_kind != "op":
+            return MissingGradient(self._missing_gradient_reason("facet is not grad-capable"))
+        grad_value = self._home_value("grad")
+        if grad_value is None:
+            return MissingGradient(self._missing_gradient_reason("home op has no saved gradient"))
+        return self.apply(grad_value)
+
+    def apply(self, value: Any) -> Any:
+        """Apply the transform chain to a value."""
+
+        result = value
+        for primitive in self.transforms:
+            result = primitive.apply(result)
+        return result
+
+    def _append(self, primitive: TransformPrimitive) -> "FacetSpec":
+        """Return a copy with one additional primitive."""
+
+        transforms = (*self.transforms, primitive)
+        flags = self.capability_flags.intersect(primitive.flags)
+        return replace(
+            self,
+            transforms=transforms,
+            capability_class=_weakest_capability_class(transforms),
+            capability_flags=flags,
+        )
+
+    def _home_value(self, field_name: Literal["out", "grad"]) -> Any:
+        """Return a runtime value from the home object."""
+
+        if self.home is None:
+            raise RuntimeError(f"FacetSpec {self.recipe_id!r} has no runtime home object.")
+        if self.home_kind == "parameter":
+            if field_name == "grad":
+                return getattr(getattr(self.home, "value", None), "grad", None)
+            return getattr(self.home, "value", None)
+        if self.home_kind == "computed":
+            if field_name == "grad":
+                return None
+            return self.home() if callable(self.home) else self.home
+        return getattr(self.home, field_name, None)
+
+    def _missing_gradient_reason(self, detail: str) -> str:
+        """Return an actionable missing-gradient instruction."""
+
+        label = self.home_label or self.home_address or "<unknown>"
+        return (
+            f"Facet gradient unavailable for home {label!r}: {detail}. "
+            "Recapture with backward_ready=True and gradients_to_save including "
+            f"{label!r}, then run trace.log_backward(...) or a recorded backward pass."
+        )
+
+
 class MissingFacet:
     """Sentinel for a known facet whose value is intentionally unavailable."""
 
@@ -122,6 +475,121 @@ class MissingFacet:
         """Raise when the sentinel is called."""
 
         self.raise_error()
+
+    @classmethod
+    def __torch_function__(
+        cls,
+        func: Callable[..., Any],
+        types: tuple[type[Any], ...],
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
+    ) -> Any:
+        """Raise when a missing facet is used as a torch value."""
+
+        for arg in args:
+            if isinstance(arg, MissingFacet):
+                arg.raise_error()
+        raise RuntimeError("MissingFacet used as a torch value.")
+
+
+class MissingGradient:
+    """Sentinel for a known facet gradient that is not currently saved."""
+
+    def __init__(self, reason: str) -> None:
+        """Initialize the missing-gradient sentinel.
+
+        Parameters
+        ----------
+        reason:
+            Actionable explanation for how to recapture the gradient.
+        """
+
+        self.reason = reason
+        self.recapture_instruction = reason
+
+    def raise_error(self) -> None:
+        """Raise the missing-gradient tensor-use error."""
+
+        raise RuntimeError(self.reason)
+
+    def __bool__(self) -> bool:
+        """Return ``False`` for availability checks."""
+
+        return False
+
+    @classmethod
+    def __torch_function__(
+        cls,
+        func: Callable[..., Any],
+        types: tuple[type[Any], ...],
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
+    ) -> Any:
+        """Raise when the sentinel is used as a torch value."""
+
+        for arg in args:
+            if isinstance(arg, MissingGradient):
+                arg.raise_error()
+        raise RuntimeError("MissingGradient used as a torch value.")
+
+    def __array__(self, dtype: Any | None = None) -> Any:
+        """Raise when NumPy tries to coerce the sentinel."""
+
+        self.raise_error()
+
+    def __getitem__(self, key: Any) -> Any:
+        """Raise when item access treats the sentinel as a tensor."""
+
+        self.raise_error()
+
+
+class Facet:
+    """Lazy tensor-like runtime wrapper for a ``FacetSpec``."""
+
+    def __init__(self, spec: FacetSpec) -> None:
+        """Initialize a runtime facet wrapper.
+
+        Parameters
+        ----------
+        spec:
+            Facet specification to evaluate lazily.
+        """
+
+        self.spec = spec
+
+    @property
+    def value(self) -> Any:
+        """Return the lazily read facet value."""
+
+        return self.spec.read()
+
+    @property
+    def grad(self) -> Any:
+        """Return the lazily projected facet gradient or ``MissingGradient``."""
+
+        return self.spec.grad()
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate tensor attributes to the read value."""
+
+        return getattr(self.value, name)
+
+    def __getitem__(self, key: Any) -> Any:
+        """Delegate item access to the read value."""
+
+        return self.value[key]
+
+    @classmethod
+    def __torch_function__(
+        cls,
+        func: Callable[..., Any],
+        types: tuple[type[Any], ...],
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
+    ) -> Any:
+        """Delegate torch operations to the read value."""
+
+        return func(*_unwrap_facets(args), **(_unwrap_facets(kwargs or {})))
 
 
 class AttentionHeadView:
@@ -260,8 +728,9 @@ class FacetView(Mapping[str, Any]):
         if name not in self._cache:
             raise KeyError(name)
         value = self._cache[name]
-        if isinstance(value, MissingFacet):
-            value.raise_error()
+        if isinstance(value, FacetSpec):
+            value = Facet(value)
+            self._cache[name] = value
         return value
 
     def __getattr__(self, name: str) -> Any:
@@ -564,6 +1033,34 @@ def _recipe_matches(recipe: _RegisteredRecipe, record: Any) -> bool:
     return True
 
 
+def _weakest_capability_class(
+    transforms: tuple[TransformPrimitive, ...],
+) -> CapabilityClass:
+    """Return the weakest capability class in a transform chain."""
+
+    if any(primitive.capability_class == "computed" for primitive in transforms):
+        return "computed"
+    if any(primitive.capability_class == "aliasing_selection" for primitive in transforms):
+        return "aliasing_selection"
+    if any(primitive.capability_class == "selection" for primitive in transforms):
+        return "selection"
+    return "bijective_view"
+
+
+def _unwrap_facets(value: Any) -> Any:
+    """Recursively replace ``Facet`` wrappers with their read values."""
+
+    if isinstance(value, Facet):
+        return value.value
+    if isinstance(value, tuple):
+        return tuple(_unwrap_facets(item) for item in value)
+    if isinstance(value, builtins.list):
+        return [_unwrap_facets(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _unwrap_facets(item) for key, item in value.items()}
+    return value
+
+
 def _recipe_priority(recipe: _RegisteredRecipe, record: Any) -> tuple[int, int]:
     """Return ``(specificity, source)`` for conflict resolution."""
 
@@ -664,32 +1161,37 @@ def _module_call_structural_facets(record: Any) -> dict[FacetKey, Any]:
     names = _primary_structural_names(output_records)
     facets: dict[FacetKey, Any] = {}
     for op, name in zip(output_records, names, strict=True):
+        spec = FacetSpec.from_home(op, home_kind="op", recipe_id="structural_outputs")
         if name is not None:
-            facets[name] = op.out
+            facets[name] = spec
         path_key = tuple(getattr(op, "container_path", ()) or ())
         if path_key:
-            facets[path_key] = op.out
+            facets[path_key] = spec
             dotted = _path_to_dotted_name(path_key)
             if dotted is not None and dotted not in facets:
-                facets[dotted] = op.out
+                facets[dotted] = spec
     if len(output_records) == 1:
-        facets.setdefault("out", output_records[0].out)
+        facets.setdefault(
+            "out",
+            FacetSpec.from_home(output_records[0], home_kind="op", recipe_id="structural_outputs"),
+        )
     return facets
 
 
 def _op_structural_facets(record: Any) -> dict[FacetKey, Any]:
     """Build structural output facets for one operation record."""
 
-    facets: dict[FacetKey, Any] = {"out": record.out}
+    spec = FacetSpec.from_home(record, home_kind="op", recipe_id="structural_outputs")
+    facets: dict[FacetKey, Any] = {"out": spec}
     name = _canonical_multi_output_name(getattr(record, "multi_output_name", None))
     if name is not None:
-        facets[name] = record.out
+        facets[name] = spec
     path_key = tuple(getattr(record, "container_path", ()) or ())
     if path_key:
-        facets[path_key] = record.out
+        facets[path_key] = spec
         dotted = _path_to_dotted_name(path_key)
         if dotted is not None:
-            facets[dotted] = record.out
+            facets[dotted] = spec
     return facets
 
 
