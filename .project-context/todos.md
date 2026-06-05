@@ -2355,6 +2355,45 @@ buffers loop-position context. WEEKS, risky (wrapper hot path + loop detection +
 Separate from the data-model refactor. See `.research/buffer-sprint/` for full empirical
 findings.
 
+**UPDATE 2026-06-05 (overnight effort):** The PROMISE this threatened (perfect replay) is
+INTACT — the recurrent "failure" was a validator GT-aliasing false-negative, now FIXED + merged
+(`39a5029`). Replay survives buffer mutation via `out_versions_by_child`. So the write-version
+model is a data-model ENRICHMENT, not a replay requirement. Two dual-lab adversarial rounds
+demolished the cheap `_version`-diff approach (systematic false-negative on fused BatchNorm;
+alias/view/`.data` evasion; global `__setattr__` leak; new-identity-node double-modeling). The
+**VALIDATED, lower-risk design** (both labs converged): build the version chain as a VIEW over
+the existing `out_versions_by_child` value-diff (catches BatchNorm via value compare, under
+`save_arg_values=True` precondition); the existing mutating op IS the version producer (no new
+nodes); module-EXIT re-scan for reassignment (no global monkeypatch); keep "node only if read",
+unread-write history on the entity. TWO DECISIONS for JMT first: (a) `save_arg_values=True`
+precondition acceptable (memory)? (b) re-measure the dual-label/two-loop split once writes are
+real. Full design + review evidence in `.research/buffer-sprint/PLAN_PHASE2.md` +
+`PLAN2_REVIEW_*.md` + `.research/buffer-overnight_SUMMARY.md`.
+
+---
+
+### Static buffer as a model's SOLE output -> MetadataInvariantError (raised 2026-06-05)
+
+A model whose ONLY output is a static buffer (`def forward(s,x): return s.b`, no other
+consumer) captures no output layer -> `tl.trace` "succeeds" but has no `output_1`, and
+`validate_forward_pass` raises `MetadataInvariantError: No output layers found`
+(`validation/invariants.py:414`). Real bug (a valid model errors), but the fix is in
+load-bearing postprocess (output-layer creation `graph_traversal.py` Step 1 / orphan pruning
+Step 3) -> needs care, not an overnight rush. Repro: `/tmp/orphan_diag2.py`. Found during the
+buffer overnight effort.
+
+---
+
+### Validation can't reset non-registered mutable state (raised 2026-06-05)
+
+`validate_forward_pass` snapshots/restores `state_dict`, which only covers registered params/
+buffers. A model using a plain attribute/list as mutable state (`self.state=[tensor]` mutated
+in-place across the run) isn't in `state_dict`, so the trace run starts from the GT-run's
+already-mutated state -> false-negative. Narrow/non-idiomatic (real models use
+`register_buffer`, which validates correctly). Fix option: deep-copy the model (or all
+TorchLens-tagged buffer-like state) for the GT run, or document as unsupported. Repro:
+`/tmp/listinplace_diag.py`. Found during the buffer overnight effort.
+
 ---
 
 ### Consider a broader Op-subclassing refactor (raised 2026-06-04, for completeness)

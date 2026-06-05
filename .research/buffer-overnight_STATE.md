@@ -1,8 +1,9 @@
 ---
 run: buffer-overnight
 created: 2026-06-05T00:58:50-04:00
-state: P1_RESEARCH
-current_round: 1
+state: DONE
+current_round: 7
+result: "P1 validator-aliasing fix SHIPPED+merged (promise restored). Write-version data model = hard capture-pipeline project; 2 dual-lab adversarial rounds produced a validated lower-risk design (out_versions_by_child view), DEFERRED for a supervised build (needs JMT decisions). 2 narrow gaps documented. SUMMARY: buffer-overnight_SUMMARY.md."
 ---
 
 # buffer-overnight -- Autonomous Loop State
@@ -74,3 +75,6 @@ max_rounds: 8
 | 2 | P1 research done | 4/4 CONVERGED | Recurrent "failure" = validator GT-aliasing bug, NOT capture. Replay correct. |
 | 3 | P1 FIX SHIPPED | commit 39a5029 | branch feat/buffer-capture: clone GT outputs before state restore + regression test; recurrent validates True; 174 tests 0 regress. PROMISE RESTORED. |
 | 4 | P2 plan written | PLAN_PHASE2.md | Converged write-capture design (post-op _version-diff detector + __setattr__ hook + entity). Next: adversarial review of the plan, then build, then review/merge. |
+| 5 | P2 plan adversarial review | 6+5 blocking, NOT bulletproof | Both labs demolished _version-diff (BatchNorm false-negative) + __setattr__ leak + new-node double-model. Produced BETTER design: VIEW over out_versions_by_child + writer-op-as-producer + module-exit rescan. |
+| 6 | Decision: DEFER write-capture build | responsible stop | Data model = materially-changed spec on hot path, not bulletproof, needs JMT decisions. Don't rush unsupervised. Shipped P1 only. |
+| 7 | P1 merged + wrap-up | DONE | P1 merged to local main (223 smoke+mypy green, branch swept). SUMMARY + validated v3 design + 2 gap todos written. Promise restored; data model = clean validated runway. |
