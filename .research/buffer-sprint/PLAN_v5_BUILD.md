@@ -101,6 +101,31 @@ Validation = the gate; tripwire SACRED (no self-feed, no exemption, no weakened 
   re-measure & lock dual-label; docs-lockstep (glossary, CLAUDE/AGENTS, examples, notebooks).
 - P5d: exhaustive stress tests + ruff+mypy+smoke+tier2.
 
+## Documentation deliverable (REQUIRED — JMT: "this is prob the most niche plumbing in the package")
+Write `docs/buffers.md` — a standalone narrative explainer for devs + curious users (match
+the tone/structure of `docs/intervention_api.md` / `docs/visibility.md`). Cover, plainly:
+- What a registered buffer is, and TorchLens's model: ONE node per buffer version in the graph
+  (`producer -> buffer -> reader`), read/write are EDGES not separate nodes; the persistent
+  `Buffer` entity (Module/Param-sibling) vs the per-version graph nodes.
+- The version model: `initial_value`, each write = a new version, `final_value`,
+  `num_overwrites`, `versions`, `value_at/after`; worked example (a recurrent state buffer +
+  a BatchNorm running-mean) showing the version chain.
+- HOW writes are captured (the three kinds, in user terms): reassignment (`self.h = ...`),
+  explicit in-place (`buf.mul_/add_/copy_`, `buf[...] =`, `buf.data.copy_`), and FUSED/native
+  (BatchNorm/InstanceNorm running stats — caught by value-snapshot since `_version` doesn't
+  bump). One paragraph each, no internal jargon dump but enough that a dev gets WHY.
+- How buffers interact with validation/replay (they replay; fused versions validated by
+  re-running the kernel under restored state).
+- The documented LIMITATIONS, stated honestly: `.data = new_tensor` reassignment is
+  unsupported (+ the reconciliation diagnostic that warns); an intermediate fused write that
+  is never read and then overwritten can't be displayed (computationally inert — zero effect
+  on the model's output or replay, purely an introspection gap); non-registered Python-attr
+  "state" is out of scope.
+- Accessors cheat-sheet: `trace.buffers`, `trace["addr:N"]`, `buffer.versions`, `Module.buffers`.
+Cross-link: add a "Buffers" line to `docs/LIMITATIONS.md` (the residuals) and a pointer from
+the README/feature list + the glossary's Buffer entry. Link `docs/buffers.md` from any docs
+index/TOC that lists the other `docs/*.md` explainers.
+
 ## Stress models (tests MUST cover, all validate True)
 recurrent top-level reassignment; BatchNorm1d/2d train (fused 3-buffer); InstanceNorm;
 in-place `mul_`/`add_`/`copy_`; multi-overwrite in one call; same buffer in two loops;
