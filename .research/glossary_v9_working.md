@@ -456,7 +456,7 @@ Use `Trace.compute_ops` / `Op.is_compute_op` to filter to compute Ops (includes 
 - `num_buffer_edges` (`@property`): Edges with at least one `is_buffer` endpoint.
 - `num_layer_edges` (`@property`): Distinct (parent_layer, child_layer) pairs in the aggregate LAYER graph (use Layer.parents/children). The rolled-graph edge count; parallels `num_layers`.
 - `num_backward_edges` (`@property`): Distinct (parent,child) pairs in the GradFn backward graph; `None` when no backward/gradients were captured.
-- `branching_factor` (`@property`): `num_edges / num_ops` (mean fan-out over op-graph nodes); `0.0` when `num_ops == 0`.
+- `branching_factor` (`@property`): mean fan-out = children (consumers) per compute Op, `sum(op.num_children for op in compute_ops) / num_compute_ops`; `0.0` when there are no compute Ops. Computed over a single consistent node set (compute Ops) so the ratio is coherent: ~1.0 for a plain chain, >1.0 with reuse (residual streams, shared embeddings, dense connectivity).
 - `max_in_degree` (`@property`): Max `num_parents` over `compute_ops` (the meaningful gather hotspot, e.g. DenseNet concat); `0` if no compute ops. Computed over compute_ops, NOT boundary sentinels.
 - `max_out_degree` (`@property`): Max `num_children` over `compute_ops` (most-reused tensor / residual stream); `0` if none.
 - `num_saved_ops`: Number of Ops whose forward activation was saved.

@@ -1023,7 +1023,7 @@ def _build_overview_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str
         f"{_int_with_commas(trace.num_params_trainable)}",
         f"Ops: {trace.num_ops} total",
         f"Edges: {trace.num_edges} total",
-        f"Branching factor: {trace.branching_factor:.3g}",
+        f"Branching factor: {trace.branching_factor:.2f}",
         f"Saved outs: {human_readable_size(trace.saved_activation_memory)}",
         f"Forward FLOPs: {_human_flops(trace.total_flops_forward)}  "
         f"MACs: {_human_flops(trace.total_macs_forward)}",
@@ -1060,7 +1060,7 @@ def _build_graph_rows(trace: "Trace") -> tuple[List[Dict[str, str]], List[str]]:
         f"Modules shown: {len(rows)}",
         f"Ops tracked: {trace.num_ops}",
         f"Edges tracked: {trace.num_edges}",
-        f"Branching factor: {trace.branching_factor:.3g}",
+        f"Branching factor: {trace.branching_factor:.2f}",
     ]
     return rows, footer_lines
 

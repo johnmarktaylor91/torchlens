@@ -3629,11 +3629,18 @@ class Trace:
 
     @property
     def branching_factor(self) -> float:
-        """Mean fan-out over Op graph nodes."""
+        """Mean fan-out: children (consumers) per compute Op.
 
-        if self.num_ops == 0:
+        Computed over a single, consistent node set (compute Ops) so the ratio is
+        a coherent mean out-degree: ~1.0 for a plain chain, >1.0 when ops are
+        reused (residual streams, shared embeddings, dense connectivity). Counts
+        every child of each compute Op (including boundary/buffer consumers).
+        """
+
+        compute_ops = list(self.compute_ops)
+        if not compute_ops:
             return 0.0
-        return self.num_edges / self.num_ops
+        return sum(op.num_children for op in compute_ops) / len(compute_ops)
 
     @property
     def max_in_degree(self) -> int:

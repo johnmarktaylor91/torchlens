@@ -61,7 +61,7 @@ def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
         "Params: 1,388 unique; trainable: 1,388\n"
         "Ops: 4 total\n"
         "Edges: 5 total\n"
-        "Branching factor: 1.25\n"
+        "Branching factor: 1.00\n"
         "Saved outs: 0 B\n"
         "Forward FLOPs: 19.2 KFLOPs  MACs: 9.6 KFLOPs\n"
         "FLOP convention: counts use the captured TorchLens convention; "

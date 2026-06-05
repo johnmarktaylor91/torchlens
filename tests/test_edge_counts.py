@@ -212,7 +212,8 @@ def test_linear_chain_edge_counts() -> None:
 
     assert trace.num_edges == 5
     assert trace.num_compute_edges == 3
-    assert trace.branching_factor == pytest.approx(1.25)
+    # mean children per compute op: 4 compute ops each feed exactly one child -> 1.0
+    assert trace.branching_factor == pytest.approx(1.0)
     assert trace.max_in_degree == 1
     assert trace.max_out_degree == 1
     assert trace.num_layer_edges == 5
