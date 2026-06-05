@@ -2417,6 +2417,30 @@ TorchLens-tagged buffer-like state) for the GT run, or document as unsupported. 
 
 ---
 
+### Edges as first-class objects (`Edge` / `trace.edges`) (raised 2026-06-05, DEFERRED)
+
+Filed during the num_edges mini-sprint (counts shipped; see `.research/edges-proposal.md`).
+Idea: promote edges from implicit `Op.parents`/`children` label lists to a first-class `Edge`
+view + `trace.edges` accessor (sibling of ops/layers/modules/params/buffers), carrying endpoints,
+`arg_position`, direction, the activation (`== source.out`), `crosses_module_boundary` +
+modules entered/exited, `kind` (compute/buffer_read/buffer_write/conditional), `is_recurrent`,
+`span` (topological jump -> skip/residual detection).
+
+DEFERRED — convenience, not capability. Two reasons it's low-priority:
+1. **Interventions don't need it (JMT 2026-06-05).** An edge edit is always reducible to a
+   pre-hook on the CHILD targeting a specific arg slot (TL already stores `parent_arg_positions`),
+   or a post-hook on the parent when it has a single child. Even fan-out-selective editing (edit
+   A's contribution to B but not to C) reduces to (child node, arg_position) because merges happen
+   AT a node whose input args keep parents separable. We already have predicates/selectors. So
+   edges would be addressing sugar ("ablate edge attn->mlp" reads nicer than "pre-hook mlp arg 0"),
+   never a new ability.
+2. **Mostly projection + scale risk.** An Edge's data derives from its endpoints; edges >> nodes,
+   so it MUST be lazy/on-demand views (never stored/serialized) or it blows up memory + `.tlspec`.
+
+Gate building this on a concrete driver where edge-addressing genuinely beats node+arg addressing
+(e.g. a viz/analysis workflow or an edge-targeted intervention API people actually ask for). If
+ever built: lazy views only; consider `SuperEdge` for Bundle parity; do NOT add to locked-2.0 surface.
+
 ### Consider a broader Op-subclassing refactor (raised 2026-06-04, for completeness)
 
 During the buffer design we chose plain `Op` + `is_buffer` flag over a `BufferOp`
