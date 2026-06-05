@@ -80,6 +80,7 @@ MODEL_LOG_FIELD_ORDER = [
     "capture_cache_hit",
     "capture_cache_key",
     "capture_cache_path",
+    "facet_registry_snapshot",
     "recording_kept",
     "_out_hash_cache",
     "save_arg_values",

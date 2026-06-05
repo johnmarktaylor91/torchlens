@@ -191,6 +191,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "capture_cache_key": None,
     "capture_cache_path": None,
     "recording_kept": True,
+    "facet_registry_snapshot": None,
     "_out_hash_cache": {},
     "is_appended": False,
     "relationship_evidence": {},
@@ -995,6 +996,7 @@ class Trace:
         "capture_cache_key": FieldPolicy.KEEP,
         "capture_cache_path": FieldPolicy.KEEP,
         "recording_kept": FieldPolicy.KEEP,
+        "facet_registry_snapshot": FieldPolicy.DROP,
         "_out_hash_cache": FieldPolicy.DROP,
         "save_arg_values": FieldPolicy.KEEP,
         "save_gradients": FieldPolicy.KEEP,
@@ -1153,6 +1155,7 @@ class Trace:
         backward_ready: bool = False,
         module_filter: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
+        facet_registry_snapshot: Any | None = None,
         transform: Callable[[Any], Any] | None = None,
         raw_input: Any | None = None,
         save_raw_input: str | bool = "small",
@@ -1188,6 +1191,8 @@ class Trace:
             backward_ready: Session-time flag for training-compatible out retention.
                 Portable bundle load restores the default ``False`` value.
             emit_nvtx: Whether decorated torch operations should emit NVTX ranges.
+            facet_registry_snapshot: Immutable facet recipe snapshot captured for
+                this trace.
             transform: Optional callable used to convert raw user input into
                 model-ready input.
             raw_input: Original user input before ``transform`` was applied.
@@ -1259,6 +1264,7 @@ class Trace:
         self.backward_ready = backward_ready
         self.module_filter = module_filter
         self.emit_nvtx = emit_nvtx
+        self.facet_registry_snapshot = facet_registry_snapshot
         self.raise_on_nan: bool = False
         self.annotations: Dict[str, Any] = {}
         self.code_context: list["FuncCallLocation"] = []

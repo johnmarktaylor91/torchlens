@@ -684,6 +684,29 @@ def _capture_cache_key(
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _facet_recipe_cache_key(
+    recipes: list[Callable[[Any], dict[str, Any]]]
+    | tuple[Callable[[Any], dict[str, Any]], ...]
+    | None,
+) -> tuple[str, ...]:
+    """Return stable-ish recipe identities for capture cache separation.
+
+    Parameters
+    ----------
+    recipes:
+        Per-trace recipe functions supplied to ``trace``.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Function module/qualname identities for cache configuration.
+    """
+
+    if recipes is None:
+        return ()
+    return tuple(f"{recipe.__module__}.{recipe.__qualname__}" for recipe in recipes)
+
+
 def _prepare_log_for_capture_cache(trace: Trace) -> None:
     """Detach non-leaf tensors and autograd objects before cache serialization.
 
@@ -943,6 +966,9 @@ def _run_model_and_save_specified_outs(
     save_raw_output: str | bool = "small",
     layer_visualizers: dict[Any, Callable[..., Any]] | None = None,
     save_visualizations: bool = False,
+    recipes: list[Callable[[Any], dict[str, Any]]]
+    | tuple[Callable[[Any], dict[str, Any]], ...]
+    | None = None,
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
 
@@ -1012,6 +1038,8 @@ def _run_model_and_save_specified_outs(
         save_raw_output: Portable save policy for the transformed raw output.
         layer_visualizers: Optional mapping from selectors to thumbnail visualizer callables.
         save_visualizations: Whether rendered thumbnails should persist in portable bundles.
+        recipes: Per-trace additive facet recipes captured into the trace-owned
+            immutable registry snapshot.
 
     Returns:
         Fully-populated Trace.
@@ -1045,6 +1073,8 @@ def _run_model_and_save_specified_outs(
         input_object_id=input_object_id,
         input_signature_hash=input_signature_hash,
     )
+    from .semantic import facets as facets_mod
+
     trace = Trace(
         model_class_name=model_class_name,
         output_device=output_device,
@@ -1075,6 +1105,7 @@ def _run_model_and_save_specified_outs(
         save_raw_output=save_raw_output,
         layer_visualizers=layer_visualizers,
         save_visualizations=save_visualizations,
+        facet_registry_snapshot=facets_mod.snapshot(recipes),
     )
     trace.trace_label = name
     trace.code_context = _get_code_context(
@@ -1264,6 +1295,12 @@ def trace(
     module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
     stop_after: Any | None | MissingType = MISSING,
     raise_on_nan: bool | MissingType = MISSING,
+    recipes: (
+        list[Callable[[Any], dict[str, Any]]]
+        | tuple[Callable[[Any], dict[str, Any]], ...]
+        | None
+        | MissingType
+    ) = MISSING,
 ) -> Trace:
     """Run a forward pass through *model*, log every operation, and return a Trace.
 
@@ -1388,6 +1425,8 @@ def trace(
         module_filter: Optional predicate receiving each op log. Returning ``False`` keeps
             metadata but skips out saving for that op.
         stop_after: Experimental stop-early site. Unsupported for ``trace``.
+        recipes: Per-trace additive facet recipes captured into the immutable
+            registry snapshot for the returned trace.
 
     Postfunc behavior:
         ``activation_transform`` and ``grad_transform`` both take a tensor, should return a
@@ -1453,6 +1492,7 @@ def trace(
             "module_filter": module_filter,
             "stop_after": stop_after,
             "raise_on_nan": raise_on_nan,
+            "recipes": recipes,
         }
         for detector in autoroute.input.iter_by_priority():
             result = detector(model, input_args, **autoroute_kwargs)
@@ -1611,6 +1651,7 @@ def trace(
     module_filter_value = capture_options.module_filter
     raise_on_nan_value = capture_options.raise_on_nan
     module_containment_engine = capture_options._module_containment_engine
+    facet_recipes = None if isinstance(recipes, MissingType) else recipes
     if capture_options.stop_after is not None:
         raise NotImplementedError("stop_after is only supported by torchlens.peek.")
     save_grads_to_value = None if isinstance(save_grads_to, MissingType) else save_grads_to
@@ -1692,6 +1733,7 @@ def trace(
             "recurrence_detection": recurrence_detection,
             "backward_ready": train_mode_value,
             "output_transform": repr(output_transform_value),
+            "facet_recipes": _facet_recipe_cache_key(facet_recipes),
         }
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
         cache_root = _capture_cache_dir(cache_dir_value) / "capture"
@@ -1767,6 +1809,7 @@ def trace(
             save_raw_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,
+            recipes=facet_recipes,
         )
     else:
         # --- TWO-PASS path ---
@@ -1827,6 +1870,7 @@ def trace(
             save_raw_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,
+            recipes=facet_recipes,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching outs.

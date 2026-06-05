@@ -4,18 +4,33 @@ from __future__ import annotations
 
 import ast
 import builtins
+import contextlib
+import contextvars
+import hashlib
 import inspect
+import itertools
 import textwrap
 import warnings
-from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, replace
 from fnmatch import fnmatch
-from typing import Any, Literal, overload
+from typing import Any, Literal, TypeAlias, overload
+
+from ..intervention.types import (
+    DataclassField,
+    DictKey,
+    HFKey,
+    NamedField,
+    OutputPathComponent,
+    TupleIndex,
+)
 
 
 RecordScope = Literal["op", "module", "any"]
 RecipeFunc = Callable[[Any], dict[str, Any]]
 PredicateFunc = Callable[[Any], bool]
+RecipeSource = Literal["built-in", "user"]
+FacetKey: TypeAlias = str | tuple[OutputPathComponent, ...]
 
 
 @dataclass(frozen=True)
@@ -41,6 +56,7 @@ class FacetRecipe:
     qualnames: tuple[str, ...]
     has_predicate: bool
     target_scope: RecordScope
+    source: RecipeSource = "user"
 
 
 @dataclass
@@ -51,6 +67,26 @@ class _RegisteredRecipe:
     func: RecipeFunc
     predicate: PredicateFunc | None
     declared_facets: tuple[str, ...]
+    order: int
+
+
+@dataclass(frozen=True)
+class FacetRegistrySnapshot:
+    """Immutable facet recipe set captured for one trace.
+
+    Parameters
+    ----------
+    version:
+        Monotonic global registry version at snapshot construction time.
+    provenance_id:
+        Stable digest of the recipe identities and their source tier.
+    recipes:
+        Immutable active recipe entries.
+    """
+
+    version: int
+    provenance_id: str
+    recipes: tuple[_RegisteredRecipe, ...]
 
 
 class MissingFacet:
@@ -144,26 +180,37 @@ class FacetView(Mapping[str, Any]):
         """
 
         self._record = record
-        self._recipes = _matching_recipes(record)
-        self._cache: dict[str, Any] = {}
+        self._snapshot = _snapshot_for_record(record)
+        self._recipes = _matching_recipes(record, self._snapshot)
+        self._cache: dict[FacetKey, Any] = {}
         self._computed = False
+        self._structural = _structural_facets(record)
 
     @property
     def recipe_source(self) -> str | tuple[str, ...] | None:
         """Return recipe name provenance for this view."""
 
-        names = tuple(recipe.public.recipe_name for recipe in self._recipes)
+        names = tuple(
+            recipe.public.recipe_name
+            for recipe in sorted(
+                self._recipes, key=lambda item: _recipe_sort_key(item, self._record)
+            )
+        )
         if not names:
             return None
         if len(names) == 1:
             return names[0]
         return names
 
-    def keys(self) -> builtins.list[str]:  # type: ignore[override]
+    def keys(self) -> builtins.list[FacetKey]:  # type: ignore[override]
         """Return available facet names without invoking recipe functions."""
 
-        names: builtins.list[str] = []
-        seen: set[str] = set()
+        names: builtins.list[FacetKey] = []
+        seen: set[FacetKey] = set()
+        for name in self._structural:
+            if name not in seen:
+                names.append(name)
+                seen.add(name)
         for recipe in self._recipes:
             for name in recipe.declared_facets:
                 if name not in seen:
@@ -171,7 +218,7 @@ class FacetView(Mapping[str, Any]):
                     seen.add(name)
         return names
 
-    def has(self, name: str) -> bool:
+    def has(self, name: FacetKey) -> bool:
         """Return whether a facet name is declared without computing values."""
 
         return name in self.keys()
@@ -182,7 +229,7 @@ class FacetView(Mapping[str, Any]):
         self._cache.clear()
         self._computed = False
 
-    def get(self, name: str, default: Any = None) -> Any:
+    def get(self, name: FacetKey, default: Any = None) -> Any:
         """Return a facet value or a default.
 
         Parameters
@@ -205,7 +252,7 @@ class FacetView(Mapping[str, Any]):
 
         return AttentionHeadView(self, head_index)
 
-    def __getitem__(self, name: str) -> Any:
+    def __getitem__(self, name: FacetKey) -> Any:
         """Return a facet value by key, computing lazily if needed."""
 
         if name not in self._cache:
@@ -220,12 +267,14 @@ class FacetView(Mapping[str, Any]):
     def __getattr__(self, name: str) -> Any:
         """Return a facet value by attribute name."""
 
+        if not name.isidentifier() or name in _FACET_VIEW_RESERVED_NAMES:
+            raise AttributeError(name)
         try:
             return self[name]
         except KeyError as exc:
             raise AttributeError(name) from exc
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self) -> Iterator[FacetKey]:
         """Iterate declared facet names."""
 
         return iter(self.keys())
@@ -240,22 +289,45 @@ class FacetView(Mapping[str, Any]):
 
         if self._computed:
             return
-        values: dict[str, Any] = {}
-        for recipe in self._recipes:
+        values: dict[FacetKey, Any] = dict(self._structural)
+        facet_tiers: dict[FacetKey, tuple[int, int]] = {key: (-1, -1) for key in self._structural}
+        for recipe in sorted(self._recipes, key=lambda item: _recipe_sort_key(item, self._record)):
             contribution = recipe.func(self._record)
+            tier = _recipe_priority(recipe, self._record)
             for name, value in contribution.items():
                 if name in values:
-                    warnings.warn(
-                        f"Facet recipe {recipe.public.recipe_name!r} overrides facet {name!r}.",
-                        UserWarning,
-                        stacklevel=2,
-                    )
+                    previous_tier = facet_tiers.get(name)
+                    if previous_tier == tier:
+                        warnings.warn(
+                            f"Facet {name!r} has ambiguous same-tier recipes; "
+                            f"{recipe.public.recipe_name!r} wins by deterministic order.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                 values[name] = value
+                facet_tiers[name] = tier
         self._cache = values
         self._computed = True
 
 
 _REGISTRY: builtins.list[_RegisteredRecipe] = []
+_BUILTIN_REGISTRY: tuple[_RegisteredRecipe, ...] = ()
+_REGISTRY_VERSION = 0
+_RECIPE_COUNTER = itertools.count()
+_CONTEXT_RECIPES: contextvars.ContextVar[tuple[_RegisteredRecipe, ...]] = contextvars.ContextVar(
+    "torchlens_facets_recipes", default=()
+)
+_FACET_VIEW_RESERVED_NAMES = frozenset(
+    {
+        "get",
+        "has",
+        "head",
+        "items",
+        "keys",
+        "recipe_source",
+        "values",
+    }
+)
 
 
 @overload
@@ -305,6 +377,7 @@ def register(
     def decorator(func: RecipeFunc) -> RecipeFunc:
         """Store the recipe metadata and return ``func`` unchanged."""
 
+        global _REGISTRY_VERSION
         class_names = _as_tuple(class_name)
         qualnames = _as_tuple(class_qualname)
         declared = facets or _literal_return_keys(func)
@@ -316,15 +389,50 @@ def register(
                     qualnames=qualnames,
                     has_predicate=predicate is not None,
                     target_scope=target_scope,
+                    source="user",
                 ),
                 func=func,
                 predicate=predicate,
                 declared_facets=declared,
+                order=next(_RECIPE_COUNTER),
             )
         )
+        _REGISTRY_VERSION += 1
         return func
 
     return decorator
+
+
+def reset() -> None:
+    """Reset the process registry to the built-in recipe set."""
+
+    global _REGISTRY_VERSION
+    _REGISTRY[:] = _BUILTIN_REGISTRY
+    _REGISTRY_VERSION += 1
+
+
+@contextlib.contextmanager
+def using(*recipes: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
+    """Temporarily add recipes to snapshots constructed in this context.
+
+    Parameters
+    ----------
+    recipes:
+        Recipe functions. A single iterable is also accepted for convenience.
+
+    Yields
+    ------
+    None
+        Context body where new trace captures include the supplied recipes.
+    """
+
+    flattened = _flatten_recipe_args(recipes)
+    entries = tuple(_entry_for_recipe(func) for func in flattened)
+    token = _CONTEXT_RECIPES.set((*_CONTEXT_RECIPES.get(), *entries))
+    try:
+        yield
+    finally:
+        _CONTEXT_RECIPES.reset(token)
 
 
 def list(scope: str | None = None, class_name: str | None = None) -> builtins.list[FacetRecipe]:
@@ -353,6 +461,48 @@ def info(class_name: str) -> dict[str, builtins.list[str]]:
                 facets.append(facet_name)
                 seen.add(facet_name)
     return {"recipes": recipes, "facets": facets}
+
+
+def snapshot(extra_recipes: Sequence[RecipeFunc] | None = None) -> FacetRegistrySnapshot:
+    """Return an immutable active recipe snapshot for a new trace.
+
+    Parameters
+    ----------
+    extra_recipes:
+        Per-trace additive recipes supplied to ``tl.trace(..., recipes=[...])``.
+
+    Returns
+    -------
+    FacetRegistrySnapshot
+        Frozen recipe snapshot with version and provenance metadata.
+    """
+
+    extra_entries = tuple(_entry_for_recipe(func) for func in (extra_recipes or ()))
+    recipes = (*_REGISTRY, *_CONTEXT_RECIPES.get(), *extra_entries)
+    digest = hashlib.sha256()
+    for recipe in recipes:
+        digest.update(recipe.public.recipe_name.encode("utf-8"))
+        digest.update(repr(recipe.public.class_names).encode("utf-8"))
+        digest.update(repr(recipe.public.qualnames).encode("utf-8"))
+        digest.update(str(recipe.public.has_predicate).encode("utf-8"))
+        digest.update(recipe.public.target_scope.encode("utf-8"))
+        digest.update(recipe.public.source.encode("utf-8"))
+    return FacetRegistrySnapshot(
+        version=_REGISTRY_VERSION,
+        provenance_id=digest.hexdigest()[:16],
+        recipes=tuple(recipes),
+    )
+
+
+def mark_current_registry_as_builtins() -> None:
+    """Record the current registry as the built-in reset target."""
+
+    global _BUILTIN_REGISTRY
+    marked: builtins.list[_RegisteredRecipe] = []
+    for recipe in _REGISTRY:
+        marked.append(replace(recipe, public=replace(recipe.public, source="built-in")))
+    _REGISTRY[:] = marked
+    _BUILTIN_REGISTRY = tuple(marked)
 
 
 def _as_tuple(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
@@ -390,10 +540,12 @@ def _literal_return_keys(func: RecipeFunc) -> tuple[str, ...]:
     return tuple(keys)
 
 
-def _matching_recipes(record: Any) -> builtins.list[_RegisteredRecipe]:
+def _matching_recipes(
+    record: Any, snapshot_value: FacetRegistrySnapshot
+) -> builtins.list[_RegisteredRecipe]:
     """Return recipes whose matchers all pass for a record."""
 
-    return [recipe for recipe in _REGISTRY if _recipe_matches(recipe, record)]
+    return [recipe for recipe in snapshot_value.recipes if _recipe_matches(recipe, record)]
 
 
 def _recipe_matches(recipe: _RegisteredRecipe, record: Any) -> bool:
@@ -410,6 +562,195 @@ def _recipe_matches(recipe: _RegisteredRecipe, record: Any) -> bool:
     if recipe.predicate is not None and not recipe.predicate(record):
         return False
     return True
+
+
+def _recipe_priority(recipe: _RegisteredRecipe, record: Any) -> tuple[int, int]:
+    """Return ``(specificity, source)`` for conflict resolution."""
+
+    class_name = getattr(record, "class_name", getattr(record, "type", None))
+    class_qualname = getattr(record, "class_qualname", getattr(record, "func_qualname", None))
+    specificity = 0
+    if recipe.public.qualnames and class_qualname in recipe.public.qualnames:
+        specificity = 3
+    elif recipe.public.class_names and class_name in recipe.public.class_names:
+        specificity = 2
+    elif recipe.predicate is not None:
+        specificity = 1
+    source = 1 if recipe.public.source == "user" else 0
+    return (specificity, source)
+
+
+def _recipe_sort_key(recipe: _RegisteredRecipe, record: Any) -> tuple[int, int, int, str]:
+    """Return deterministic low-to-high recipe sort key."""
+
+    specificity, source = _recipe_priority(recipe, record)
+    return (specificity, source, recipe.order, recipe.public.recipe_name)
+
+
+def _snapshot_for_record(record: Any) -> FacetRegistrySnapshot:
+    """Return the owning trace snapshot for a record, or a current fallback."""
+
+    trace = getattr(record, "trace", None)
+    if trace is None:
+        trace = getattr(record, "source_trace", None)
+    snapshot_value = getattr(trace, "facet_registry_snapshot", None)
+    if isinstance(snapshot_value, FacetRegistrySnapshot):
+        return snapshot_value
+    return snapshot()
+
+
+def _flatten_recipe_args(
+    recipes: tuple[RecipeFunc | Iterable[RecipeFunc], ...],
+) -> tuple[RecipeFunc, ...]:
+    """Normalize ``using`` positional arguments to a function tuple."""
+
+    if len(recipes) == 1 and not callable(recipes[0]):
+        return tuple(recipes[0])
+    return tuple(recipe for recipe in recipes if callable(recipe))
+
+
+def _entry_for_recipe(func: RecipeFunc) -> _RegisteredRecipe:
+    """Return registry metadata for a recipe function."""
+
+    for recipe in reversed(_REGISTRY):
+        if recipe.func is func:
+            return recipe
+    return _RegisteredRecipe(
+        public=FacetRecipe(
+            recipe_name=getattr(func, "__name__", type(func).__name__),
+            class_names=(),
+            qualnames=(),
+            has_predicate=False,
+            target_scope="any",
+            source="user",
+        ),
+        func=func,
+        predicate=None,
+        declared_facets=_literal_return_keys(func),
+        order=next(_RECIPE_COUNTER),
+    )
+
+
+def _structural_facets(record: Any) -> dict[FacetKey, Any]:
+    """Return structural output facets already captured on a record."""
+
+    if _is_module_record(record):
+        try:
+            call = record._single_call_or_error()
+        except AttributeError:
+            call = record
+        return _module_call_structural_facets(call)
+    if hasattr(record, "out"):
+        return _op_structural_facets(record)
+    return {}
+
+
+def _is_module_record(record: Any) -> bool:
+    """Return whether a record is module-like for structural facets."""
+
+    return hasattr(record, "output_ops") and hasattr(record, "trace")
+
+
+def _module_call_structural_facets(record: Any) -> dict[FacetKey, Any]:
+    """Build structural output facets for a module call."""
+
+    trace = getattr(record, "trace", None)
+    if trace is None:
+        return {}
+    output_ops = builtins.list(getattr(record, "output_ops", ()) or ())
+    if not output_ops:
+        return {}
+    output_records = [trace.ops[label] for label in output_ops]
+    names = _primary_structural_names(output_records)
+    facets: dict[FacetKey, Any] = {}
+    for op, name in zip(output_records, names, strict=True):
+        if name is not None:
+            facets[name] = op.out
+        path_key = tuple(getattr(op, "container_path", ()) or ())
+        if path_key:
+            facets[path_key] = op.out
+            dotted = _path_to_dotted_name(path_key)
+            if dotted is not None and dotted not in facets:
+                facets[dotted] = op.out
+    if len(output_records) == 1:
+        facets.setdefault("out", output_records[0].out)
+    return facets
+
+
+def _op_structural_facets(record: Any) -> dict[FacetKey, Any]:
+    """Build structural output facets for one operation record."""
+
+    facets: dict[FacetKey, Any] = {"out": record.out}
+    name = _canonical_multi_output_name(getattr(record, "multi_output_name", None))
+    if name is not None:
+        facets[name] = record.out
+    path_key = tuple(getattr(record, "container_path", ()) or ())
+    if path_key:
+        facets[path_key] = record.out
+        dotted = _path_to_dotted_name(path_key)
+        if dotted is not None:
+            facets[dotted] = record.out
+    return facets
+
+
+def _primary_structural_names(records: Sequence[Any]) -> list[str | None]:
+    """Return collision-safe primary string names for output records."""
+
+    candidates: list[str] = []
+    for index, record in enumerate(records):
+        name = _canonical_multi_output_name(getattr(record, "multi_output_name", None))
+        if name is not None:
+            candidates.append(name)
+            continue
+        path_key = tuple(getattr(record, "container_path", ()) or ())
+        dotted = _path_to_dotted_name(path_key)
+        candidates.append(dotted or f"out{index}")
+    duplicates = {name for name in candidates if candidates.count(name) > 1}
+    return [None if name in duplicates else name for name in candidates]
+
+
+def _path_to_dotted_name(path: tuple[OutputPathComponent, ...]) -> str | None:
+    """Return a dotted structural name for ordinary positional paths."""
+
+    if not path:
+        return None
+    parts: list[str] = []
+    for index, component in enumerate(path):
+        part = _path_component_to_name(component)
+        if part is None:
+            return None
+        if index == 0 and isinstance(component, TupleIndex):
+            parts.append(f"out{part}")
+        else:
+            parts.append(part)
+    return ".".join(parts)
+
+
+def _canonical_multi_output_name(name: Any) -> str | None:
+    """Return the public structural facet name for a captured output name."""
+
+    if not isinstance(name, str) or not name:
+        return None
+    first, separator, rest = name.partition(".")
+    if first.isdecimal():
+        return f"out{first}{separator}{rest}" if separator else f"out{first}"
+    return name
+
+
+def _path_component_to_name(component: OutputPathComponent) -> str | None:
+    """Return a string component name when it has unambiguous item syntax."""
+
+    if isinstance(component, TupleIndex):
+        return str(component.index)
+    if isinstance(component, NamedField | DataclassField):
+        return component.name
+    if isinstance(component, DictKey | HFKey):
+        return str(component.key)
+    if isinstance(component, int):
+        return str(component)
+    if isinstance(component, str):
+        return component
+    return None
 
 
 def _record_scope_matches(scope: RecordScope, record: Any) -> bool:

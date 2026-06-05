@@ -34,6 +34,7 @@ pause_logging usage:
 
 import copy
 import dataclasses
+import re
 import time
 import warnings
 import weakref
@@ -411,6 +412,35 @@ def _is_namedtuple_instance(value: Any) -> bool:
     return isinstance(value, tuple) and hasattr(value, "_fields")
 
 
+def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
+    """Return public field names for a ``torch.return_types`` structseq.
+
+    Parameters
+    ----------
+    value
+        Object to inspect.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Field names when PyTorch exposes a named structseq, otherwise ``()``.
+    """
+
+    cls = type(value)
+    if cls.__module__ != "torch.return_types":
+        return ()
+    if not isinstance(value, tuple):
+        return ()
+    n_fields = getattr(value, "n_fields", None)
+    n_unnamed = getattr(value, "n_unnamed_fields", 0)
+    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
+        return ()
+    field_names = tuple(re.findall(r"^\s*([A-Za-z_]\w*)=", repr(value), flags=re.MULTILINE))
+    if len(field_names) != n_fields:
+        return ()
+    return field_names
+
+
 def _is_hf_model_output(value: Any) -> bool:
     """Return whether ``value`` looks like a HuggingFace ``ModelOutput``.
 
@@ -487,8 +517,9 @@ def _build_container_spec(value: Any) -> ContainerSpec | None:
             type_qualname=qualname,
             child_specs=tuple(child_specs),
         )
-    if _is_namedtuple_instance(value):
-        fields = tuple(value._fields)
+    torch_fields = _torch_return_type_fields(value)
+    if _is_namedtuple_instance(value) or torch_fields:
+        fields = torch_fields or tuple(value._fields)
         for field_name in fields:
             child_spec = _build_container_spec(getattr(value, field_name))
             if child_spec is not None:
@@ -579,8 +610,10 @@ def _walk_supported_output_container(
                 path=(*path, HFKey(key)),
             )
         return
-    if _is_namedtuple_instance(out):
-        for field_name in out._fields:
+    torch_fields = _torch_return_type_fields(out)
+    if _is_namedtuple_instance(out) or torch_fields:
+        fields = torch_fields or tuple(out._fields)
+        for field_name in fields:
             yield from _walk_supported_output_container(
                 getattr(out, field_name),
                 root_spec=root_spec,

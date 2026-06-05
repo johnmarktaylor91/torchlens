@@ -823,6 +823,24 @@ class ModuleCall:
         return self._output_values("out")
 
     @property
+    def facets(self) -> Any:
+        """Return the lazy semantic facet view for this module call."""
+
+        cache = self.__dict__.get("_facets_cache")
+        if cache is None:
+            from ..semantic import FacetView
+
+            cache = FacetView(self)
+            self.__dict__["_facets_cache"] = cache
+        return cache
+
+    @facets.deleter
+    def facets(self) -> None:
+        """Drop the cached semantic facet view for this module call."""
+
+        self.__dict__.pop("_facets_cache", None)
+
+    @property
     def out(self) -> Any:
         """Saved output tensor for a single-output module call."""
 
@@ -1525,6 +1543,7 @@ class Module:
     def facets(self) -> Any:
         """Return the lazy semantic facet view for this Module."""
 
+        self._single_call_or_error()
         cache = self.__dict__.get("_facets_cache")
         if cache is None:
             from ..semantic import FacetView
