@@ -2328,6 +2328,35 @@ later.
 
 ---
 
+### [BIG, important] TorchLens does not capture buffer WRITES/OVERWRITES (raised 2026-06-04)
+
+Discovered during the buffer-sprint adversarial review (Codex + Claude both proved it
+empirically). TorchLens currently captures only buffer READS as graph nodes; the WRITE
+side is largely invisible:
+- **BatchNorm train**: running-stat update is inside the fused `batch_norm` kernel ->
+  only the initial (pre-update) read is captured; `num_overwrites=0`.
+- **In-place (`mul_`/`add_`/`copy_`)**: captured as a plain compute op with
+  `is_buffer=False`, NO buffer linkage, no new buffer version; `copy_` drops its source edge.
+- **Mid-forward reassignment (`self.b = y+1`)**: invisible — `_tag_untagged_buffers`
+  (`backends/torch/model_prep.py:724`) only tags at module-entry, so an assigned-then-read
+  buffer isn't even a buffer node.
+- Two-loop overwrite collapses into ONE Layer (`equivalence_class="buffer_<address>"`
+  ignores loop position).
+- `trace.buffers` ALREADY LIES for overwritten buffers (`num_overwrites` returns 0;
+  collapsed-per-address accessor sees 1 of N ops; shared aliases undiscovered).
+
+This is the proposal's flagged "hard part" (detecting overwrites), and it is NOT built.
+Making buffer VERSIONING real (the dual-label, `value_after`, BatchNorm/in-place history)
+requires a **capture-pipeline sub-project** ("Option B" in
+`.research/buffer-sprint/SCOPE_NOTE.md`): intercept `nn.Module.__setattr__`/`register_buffer`;
+post-call buffer snapshot/diff for fused ops; detect in-place ops mutating buffer-tagged
+receivers and synthesize the write-version + rewire reads; fix `copy_` source edge; give
+buffers loop-position context. WEEKS, risky (wrapper hot path + loop detection + validation).
+Separate from the data-model refactor. See `.research/buffer-sprint/` for full empirical
+findings.
+
+---
+
 ### Consider a broader Op-subclassing refactor (raised 2026-06-04, for completeness)
 
 During the buffer design we chose plain `Op` + `is_buffer` flag over a `BufferOp`
