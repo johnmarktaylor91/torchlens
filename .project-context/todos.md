@@ -2341,7 +2341,15 @@ later.
 
 ---
 
-### [BIG, important] TorchLens does not capture buffer WRITES/OVERWRITES (raised 2026-06-04)
+### [BIG, important] TorchLens does not capture buffer WRITES/OVERWRITES (raised 2026-06-04) — [DONE 2026-06-05, local main commits 91e1645..6e3a291 + 430357a]
+
+SHIPPED. All three write kinds now captured as validatable version nodes (reassignment via
+scoped class `__setattr__`; in-place via storage snapshot; fused/native via post-op value
+snapshot). `num_overwrites` correct for BatchNorm train; `copy_` source edge restored;
+mid-forward reassignment caught at any nesting level. Persistent `Buffer` entity shipped;
+`Buffer(Op)` retired. Gradient flow verified; tripwire non-vacuous; `docs/buffers.md` + glossary
+lockstep. RNN-cell loop-detection crash root-caused + fixed (`_scrub_per_op_equivalence_lists`).
+See `.research/buffer-build_SUMMARY.md`. Original analysis below (archival):
 
 Discovered during the buffer-sprint adversarial review (Codex + Claude both proved it
 empirically). TorchLens currently captures only buffer READS as graph nodes; the WRITE
