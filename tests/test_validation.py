@@ -42,6 +42,42 @@ def test_validate_forward_pass_importable():
     assert callable(validate_forward_pass)
 
 
+def test_validate_forward_pass_output_aliasing_a_reassigned_buffer():
+    """Regression: a model that RETURNS a registered buffer it reassigned must validate.
+
+    Previously a false-negative: validate_forward_pass saved the ground-truth output by
+    reference, then restored state_dict; load_state_dict writes buffers in-place, clobbering
+    the saved ground-truth (which aliased the returned buffer) back to its initial value, so
+    the (correct) traced output was compared against a corrupted zero tensor. Capture/replay
+    were always correct; the validator now snapshots ground-truth outputs before the restore.
+    """
+
+    class RecurrentStateBuffer(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.register_buffer("h", torch.zeros(3))
+            self.lin = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            for _ in range(4):
+                self.h = torch.tanh(self.lin(x) + self.h)
+            return self.h  # output aliases the reassigned buffer
+
+    torch.manual_seed(0)
+    assert validate_forward_pass(RecurrentStateBuffer(), torch.randn(3)) is True
+
+    class ReassignReturn(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.register_buffer("b", torch.ones(3))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            self.b = self.b + x  # reassignment -> new object, still the registered buffer
+            return self.b
+
+    assert validate_forward_pass(ReassignReturn(), torch.randn(3)) is True
+
+
 def test_check_metadata_invariants_importable():
     """check_metadata_invariants and MetadataInvariantError importable from top-level."""
     assert callable(check_metadata_invariants)

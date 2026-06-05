@@ -2691,7 +2691,15 @@ def validate_forward_pass(
         for entry in ground_truth_output_all:
             if entry[1] in addresses_used:
                 continue
-            ground_truth_output_tensors.append(entry[0])
+            # Clone/detach the ground-truth output BEFORE restoring state_dict below.
+            # When the model returns a registered buffer directly (e.g. `return self.h`
+            # after `self.h = ...`), the output tensor IS the live buffer object;
+            # `model.load_state_dict` writes buffers in-place, which would clobber this
+            # saved ground-truth reference back to its initial value and produce a
+            # validation FALSE-NEGATIVE. (Inputs are already deep-copied above; outputs
+            # were not.) Snapshotting the value here corrects the ground truth fed to the
+            # tripwire — it does NOT weaken any check.
+            ground_truth_output_tensors.append(entry[0].detach().clone())
             addresses_used.append(entry[1])
         model.load_state_dict(state_dict)
 
