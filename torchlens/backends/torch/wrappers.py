@@ -551,7 +551,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
             producer_label = get_tensor_label(out_orig)
         elif output_tensors:
             producer_label = get_tensor_label(output_tensors[0])
-        record_op_buffer_writes(trace, func_name, buffer_snapshots, producer_label)
+        if is_bottom_level_func:
+            record_op_buffer_writes(trace, func_name, buffer_snapshots, producer_label)
 
         return out_orig
 

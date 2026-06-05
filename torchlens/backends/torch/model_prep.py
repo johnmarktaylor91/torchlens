@@ -1118,6 +1118,10 @@ def _ensure_module_output_tensor_logged(
             "address": None,
             "buffer_pass": None,
             "buffer_source": None,
+            "buffer_write_kind": None,
+            "buffer_value_changed": None,
+            "buffer_replay_validated": None,
+            "buffer_source_func_name": None,
             "is_internal_source": is_internal_source,
             "has_internal_source_ancestor": is_internal_source
             or any(entry["has_internal_source_ancestor"] for entry in parent_entries),

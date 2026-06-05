@@ -138,6 +138,7 @@ class BufferWriteEvent:
     address: str
     kind: BufferWriteKind
     producer_label_raw: str | None
+    version_label_raw: str | None
     value: Any
     value_changed: bool
     object_id: int

@@ -225,6 +225,10 @@ class Layer:
         "is_buffer": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
         "buffer_source": FieldPolicy.KEEP,
+        "buffer_write_kind": FieldPolicy.KEEP,
+        "buffer_value_changed": FieldPolicy.KEEP,
+        "buffer_replay_validated": FieldPolicy.KEEP,
+        "buffer_source_func_name": FieldPolicy.KEEP,
         "is_internal_source": FieldPolicy.KEEP,
         "is_internal_sink": FieldPolicy.KEEP,
         "is_terminal_bool": FieldPolicy.KEEP,
@@ -344,6 +348,10 @@ class Layer:
         self.is_buffer = first_pass.is_buffer
         self.address = first_pass.address
         self.buffer_source = first_pass.buffer_source
+        self.buffer_write_kind = first_pass.buffer_write_kind
+        self.buffer_value_changed = first_pass.buffer_value_changed
+        self.buffer_replay_validated = first_pass.buffer_replay_validated
+        self.buffer_source_func_name = first_pass.buffer_source_func_name
         self.is_internal_source = first_pass.is_internal_source
         self.is_internal_sink = first_pass.is_internal_sink
         self.is_terminal_bool = first_pass.is_terminal_bool

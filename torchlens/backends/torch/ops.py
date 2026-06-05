@@ -1306,6 +1306,10 @@ def _build_graph_relationship_fields(
     fields_dict["address"] = None
     fields_dict["buffer_pass"] = None
     fields_dict["buffer_source"] = None
+    fields_dict["buffer_write_kind"] = None
+    fields_dict["buffer_value_changed"] = None
+    fields_dict["buffer_replay_validated"] = None
+    fields_dict["buffer_source_func_name"] = None
     fields_dict["is_internal_source"] = len(parent_layer_labels) == 0
     fields_dict["has_internal_source_ancestor"] = len(internal_source_ancestors) > 0
     fields_dict["internal_source_parents"] = internal_parent_layer_labels
@@ -2187,7 +2191,14 @@ def _log_output_tensor_info(
         # Non-parameterized ops: equivalence is a hash of the operation type,
         # non-tensor args, output index, and containing module.  Each unique
         # non-param operation is seen only once (pass_index=1).
-        equivalence_class = _get_equivalence_class(args, kwargs, i, layer_type, fields_dict)
+        logged_func_name = fields_dict["func_name"]
+        is_inplace_output = logged_func_name.startswith("__i") or (
+            logged_func_name.endswith("_") and not logged_func_name.startswith("__")
+        )
+        equivalence_layer_type = f"{layer_type}_inplace" if is_inplace_output else layer_type
+        equivalence_class = _get_equivalence_class(
+            args, kwargs, i, equivalence_layer_type, fields_dict
+        )
         base_equivalence_class = equivalence_class
         equivalence_class = _append_module_suffix_to_equivalence_class(
             equivalence_class, fields_dict["modules"]

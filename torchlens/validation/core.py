@@ -998,6 +998,17 @@ def _prepare_input_args_for_validating_layer(
                     layer_to_validate_parents_for.layer_label
                 ]
             else:
+                if _is_buffer_version_parent(parent_layer) and not _buffer_parent_source_equal(
+                    parent_layer,
+                    input_args,
+                    arg_type,
+                    key,
+                ):
+                    raise ValueError(
+                        "Validation cannot source-match buffer-version parent "
+                        f"'{parent_layer_arg}' for child "
+                        f"'{layer_to_validate_parents_for.layer_label}'."
+                    )
                 parent_values = parent_layer.out
             if parent_values is None:
                 continue  # Skip validation for unsaved parents (#150)
@@ -1018,6 +1029,38 @@ def _prepare_input_args_for_validating_layer(
                 )
 
     return input_args
+
+
+def _is_buffer_version_parent(parent_layer: Op) -> bool:
+    """Return whether a parent is a written buffer-version node."""
+
+    return bool(
+        getattr(parent_layer, "is_buffer", False)
+        and getattr(parent_layer, "buffer_write_kind", None) is not None
+    )
+
+
+def _buffer_parent_source_equal(
+    parent_layer: Op,
+    input_args: dict[str, Any],
+    arg_type: str,
+    key: Any,
+) -> bool:
+    """Return whether a child saved arg already equals the buffer-version value."""
+
+    parent_out = parent_layer.out
+    if parent_out is None:
+        return False
+    try:
+        if type(key) != tuple:
+            saved_arg_value = input_args[arg_type][key]
+        else:
+            saved_arg_value = input_args[arg_type][key[0]]
+            for nested_key in key[1:]:
+                saved_arg_value = saved_arg_value[nested_key]
+    except Exception:
+        return False
+    return tensor_nanequal(saved_arg_value, parent_out, allow_tolerance=False)
 
 
 def _deep_clone_tensors(val: Any) -> Any:

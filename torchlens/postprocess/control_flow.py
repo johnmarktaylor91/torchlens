@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 import torch
 
 from ..data_classes.op import Op
+from .._state import pause_logging
 from ..utils.display import identity
 from ..utils.tensor_utils import safe_copy
 from . import ast_branches
@@ -654,14 +655,20 @@ def _fix_buffer_layers(self: "Trace") -> None:
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
         if layer.buffer_source is not None:
-            layer.parents.append(layer.buffer_source)
-            self[layer.buffer_source].children.append(layer_label)
+            if layer.buffer_source not in layer.parents:
+                layer.parents.append(layer.buffer_source)
+            if layer_label not in self[layer.buffer_source].children:
+                self[layer.buffer_source].children.append(layer_label)
             self[layer.buffer_source].has_children = True
-            layer.func = identity
-            layer.func_name = "identity"
+            source_matches_buffer = _buffer_source_value_matches(self[layer.buffer_source], layer)
+            if source_matches_buffer:
+                layer.func = identity
+                layer.func_name = "identity"
+            else:
+                layer.buffer_replay_validated = False
             layer.has_input_ancestor = True
             layer.input_ancestors.update(self[layer.buffer_source].input_ancestors)
-            layer.root_ancestors.remove(layer._label_raw)
+            layer.root_ancestors.discard(layer._label_raw)
             layer.root_ancestors.update(self[layer.buffer_source].root_ancestors)
             layer.parent_arg_positions["args"][0] = layer.buffer_source
             if (self[layer.buffer_source].out is not None) and (layer.saved_args is not None):
@@ -700,6 +707,22 @@ def _fix_buffer_layers(self: "Trace") -> None:
         layer.buffer_pass = buffer_counter[address]
         self.buffer_num_calls[address] = buffer_counter[address]
         buffer_counter[address] += 1
+
+
+def _buffer_source_value_matches(source: Op, buffer_layer: Op) -> bool:
+    """Return whether a buffer-version source op output equals the full buffer value."""
+
+    if source.out is None or buffer_layer.out is None:
+        return False
+    if not isinstance(source.out, torch.Tensor) or not isinstance(buffer_layer.out, torch.Tensor):
+        return False
+    if tuple(source.out.shape) != tuple(buffer_layer.out.shape):
+        return False
+    with pause_logging():
+        try:
+            return bool(torch.equal(source.out, buffer_layer.out))
+        except Exception:
+            return False
 
 
 def _merge_buffer_entries(self: "Trace", source_buffer: Op, buffer_to_remove: Op) -> None:

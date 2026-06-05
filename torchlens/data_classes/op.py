@@ -633,6 +633,10 @@ class Op:
         "address": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
         "buffer_source": FieldPolicy.KEEP,
+        "buffer_write_kind": FieldPolicy.KEEP,
+        "buffer_value_changed": FieldPolicy.KEEP,
+        "buffer_replay_validated": FieldPolicy.KEEP,
+        "buffer_source_func_name": FieldPolicy.KEEP,
         "is_internal_source": FieldPolicy.KEEP,
         "has_internal_source_ancestor": FieldPolicy.KEEP,
         "internal_source_parents": FieldPolicy.KEEP,
@@ -939,6 +943,10 @@ class Op:
         self.address = fields_dict["address"]
         self.buffer_pass = fields_dict["buffer_pass"]
         self.buffer_source = fields_dict["buffer_source"]
+        self.buffer_write_kind = fields_dict["buffer_write_kind"]
+        self.buffer_value_changed = fields_dict["buffer_value_changed"]
+        self.buffer_replay_validated = fields_dict["buffer_replay_validated"]
+        self.buffer_source_func_name = fields_dict["buffer_source_func_name"]
         self.is_internal_source = fields_dict["is_internal_source"]
         self.has_internal_source_ancestor = fields_dict["has_internal_source_ancestor"]
         self.internal_source_parents = fields_dict["internal_source_parents"]
