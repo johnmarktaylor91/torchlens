@@ -451,6 +451,14 @@ Use `Trace.compute_ops` / `Op.is_compute_op` to filter to compute Ops (includes 
 - `num_compute_layers` (`@property`): Number of compute Layers (Layers whose representative Op is compute, i.e., NOT an input / output / buffer-source boundary). Compute Layers may carry connectivity flags like `is_internal_source` or `is_internal_sink`. Equals `len(trace.compute_layers)`.
 - `num_ops`: Number of Op records in this Trace, including compute Ops AND boundary Ops (input, output, buffer source). Equals `len(trace.ops)`. NOT equal to `num_compute_ops`.
 - `num_compute_ops` (`@property`): Number of compute Ops (Ops that executed a torch function); EXCLUDES boundary Ops (input / output / buffer source). Includes Ops with `is_internal_source` / `is_internal_sink` / `is_orphan` flags since those ARE compute Ops with connectivity descriptors. Equals `len(trace.compute_ops)` and `max(op.step_index for op in trace.compute_ops)`.
+- `num_edges` (`@property`): Distinct (parent,child) pairs in the per-pass OP graph, INCLUDING boundary sentinel edges (input->first op, last op->output) and buffer edges. Dedupe pairs (a parent feeding a child via two arg slots counts ONCE). Must equal both sum-over-ops-of-distinct-children and sum-over-ops-of-distinct-parents.
+- `num_compute_edges` (`@property`): Edges where BOTH endpoints are compute ops (`is_compute_op` on both) — excludes any edge incident to an input/output/buffer node.
+- `num_buffer_edges` (`@property`): Edges with at least one `is_buffer` endpoint.
+- `num_layer_edges` (`@property`): Distinct (parent_layer, child_layer) pairs in the aggregate LAYER graph (use Layer.parents/children). The rolled-graph edge count; parallels `num_layers`.
+- `num_backward_edges` (`@property`): Distinct (parent,child) pairs in the GradFn backward graph; `None` when no backward/gradients were captured.
+- `branching_factor` (`@property`): `num_edges / num_ops` (mean fan-out over op-graph nodes); `0.0` when `num_ops == 0`.
+- `max_in_degree` (`@property`): Max `num_parents` over `compute_ops` (the meaningful gather hotspot, e.g. DenseNet concat); `0` if no compute ops. Computed over compute_ops, NOT boundary sentinels.
+- `max_out_degree` (`@property`): Max `num_children` over `compute_ops` (most-reused tensor / residual stream); `0` if none.
 - `num_saved_ops`: Number of Ops whose forward activation was saved.
 - `num_saved_layers`: Number of Layers containing >= 1 saved Op.
 - `num_saved_module_calls`: Number of ModuleCalls whose output Op has a saved activation.
@@ -926,6 +934,8 @@ lists may use pass-qualified Op labels when per-pass precision matters.
 - `co_parents`: Other parents that jointly feed this Op's children.
 - `has_parents` (`@property`): True when this Op has parents.
 - `has_children` (`@property`): True when this Op has children.
+- `num_parents` (`@property`): `len(self.parents)`.
+- `num_children` (`@property`): `len(self.children)` — mirror the existing `num_parents`.
 - `has_siblings` (`@property`): True when this Op has siblings.
 - `has_co_parents` (`@property`): True when this Op has co-parents.
 - `has_input_ancestor`: True when an input boundary reaches this Op.
@@ -1133,6 +1143,8 @@ one-Op Layers and raise `ValueError` for multi-Op Layers (use `layer.ops[n]`).
 - `co_parents`: Other parent Layers that share children.
 - `has_children` (`@property`): True when this Layer has children.
 - `has_parents` (`@property`): True when this Layer has parents.
+- `num_parents` (`@property`): `len(self.parents)`.
+- `num_children` (`@property`): `len(self.children)` — mirror the existing `num_parents`.
 - `has_siblings` (`@property`): True when this Layer has siblings.
 - `has_co_parents` (`@property`): True when this Layer has co-parents.
 - `has_input_ancestor`: True when this Layer descends from an input.
@@ -1183,6 +1195,10 @@ one-Op Layers and raise `ValueError` for multi-Op Layers (use `layer.ops[n]`).
 
 - `ops`: List of pass-qualified Op labels (`conv2d_1_2:1`) computed during this ModuleCall (ALL ops, not just outputs). Bare label list.
 - `num_ops`: Number of Ops associated with this call.
+- `num_internal_edges` (`@property`): Edges (p,c) with BOTH endpoints in this scope's op set.
+- `num_input_edges` (`@property`): Edges with child IN this scope's op set and parent NOT in it (inward boundary crossings = module fan-in).
+- `num_output_edges` (`@property`): Edges with parent IN this scope's op set and child NOT in it (outward = module fan-out).
+- `num_edges` (`@property`): Internal + input + output (the scope's total edge footprint).
 - `input_ops`: List of pass-qualified Op labels at this call's input boundary positions. Bare label list.
 - `input_layers`: List of Layer labels at this call's input boundary positions. Bare label list.
 - `output_ops`: List of pass-qualified Op labels for the actual output Ops of this call. Bare label list.
@@ -1416,6 +1432,10 @@ six registries exactly.
 - `layer_labels`: Aggregate union of Layer labels across this Module's calls (bare label list — keep with `_labels` here because `layers` is taken by the @property below).
 - `layers` (`@property`): Aggregate union of Layer records across this Module's calls (resolved). Kept as @property — high-traffic iteration surface.
 - `num_layers`: Number of aggregate Layers inside this Module.
+- `num_internal_edges` (`@property`): Edges (p,c) with BOTH endpoints in this scope's op set.
+- `num_input_edges` (`@property`): Edges with child IN this scope's op set and parent NOT in it (inward boundary crossings = module fan-in).
+- `num_output_edges` (`@property`): Edges with parent IN this scope's op set and child NOT in it (outward = module fan-out).
+- `num_edges` (`@property`): Internal + input + output (the scope's total edge footprint).
 - `input_ops`: Aggregate union of input Op labels across this Module's calls. Bare label list.
 - `input_layers`: Aggregate union of input Layer labels across this Module's calls. Bare label list.
 - `output_ops`: Aggregate union of output Op labels across this Module's calls. Bare label list.

@@ -1250,6 +1250,18 @@ class Op:
         return len(self.parents) > 0
 
     @property
+    def num_parents(self) -> int:
+        """Number of distinct parent Ops feeding this Op."""
+
+        return len(self.parents)
+
+    @property
+    def num_children(self) -> int:
+        """Number of distinct child Ops fed by this Op."""
+
+        return len(self.children)
+
+    @property
     def siblings(self) -> list[str]:
         """Layers sharing at least one parent (excluding output layers)."""
         ml = self.source_trace
