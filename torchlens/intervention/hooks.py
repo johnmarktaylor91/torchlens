@@ -768,9 +768,11 @@ def _facet_selector_from_payload(payload: Any) -> FacetSelector:
     if isinstance(payload, Mapping):
         name = payload.get("name")
         head_index = payload.get("head_index")
+        module_address = payload.get("module_address")
         return FacetSelector(
             None if name is None else str(name),
             head_index=None if head_index is None else int(head_index),
+            module_address=None if module_address is None else str(module_address),
         )
     if isinstance(payload, str):
         return FacetSelector(payload)
@@ -799,6 +801,10 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
     seen: set[tuple[int, str, str]] = set()
     facet_names = _DEFAULT_HEAD_FACET_NAMES if selector.name is None else (selector.name,)
     for record in _iter_facet_records(log):
+        if selector.module_address is not None:
+            record_address = getattr(record, "address", None)
+            if record_address != selector.module_address:
+                continue
         view = getattr(record, "facets", None)
         if view is None:
             continue

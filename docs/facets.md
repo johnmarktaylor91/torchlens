@@ -204,6 +204,60 @@ Fused attention reconstruction facets are read-only. Editing internal fused
 facets requires recapturing with an eager attention implementation so the facet
 is backed by a real op.
 
+## Patching
+
+Patching helpers live at `tl.facets.patching`. They run a clean trace and a
+corrupted trace, then reuse the facet intervention path (`fork`,
+`attach_hooks`, `rerun`, and `tl.facet`/`tl.head` selectors) to patch clean
+facet activations into the corrupted run.
+
+The metric callable receives the patched `Trace` and must return a scalar
+tensor:
+
+```python
+def metric(log):
+    return log[log.output_layers[0]].out[..., answer_id].mean()
+
+scores = tl.facets.patching.activation_patch_attention_heads(
+    model, clean_tokens, corrupted_tokens, metric
+)
+```
+
+Available activation-patching helpers:
+
+```text
+activation_patch_residual_stream -> [layer, pos] by default, or [layer]
+activation_patch_attention_output -> [layer]
+activation_patch_attention_heads  -> [layer, head]
+activation_patch_mlp_output       -> [layer]
+```
+
+Residual patching defaults to `resid_pre` and patches each position along axis
+1. Attention-head patching defaults to the P3 `result` facet, whose shape is
+`[batch, pos, head, d_model]`; `tl.head(i, "result")` selects one head's
+contribution. MLP patching defaults to the `output` facet on modules that expose
+the built-in MLP facet family.
+
+Attribution patching is a faster linear approximation to activation patching:
+
+```text
+effect ~= grad(metric wrt corrupted component) * (clean component - corrupted component)
+```
+
+summed over the component dimensions. The helper runs one clean forward/backward
+and one corrupted forward/backward, reads facet gradients through `facet.grad`,
+and returns `[layer, head]`:
+
+```python
+approx = tl.facets.patching.attribution_patch_attention_heads(
+    model, clean_tokens, corrupted_tokens, metric
+)
+```
+
+Attribution patching requires gradient capture. By default the helper traces
+with `gradients_to_save="all"`. If gradients are not saved, it raises a clear
+error that includes the `MissingGradient` recapture instruction.
+
 ## Reconstruction
 
 Fused `torch.nn.functional.scaled_dot_product_attention` hides `scores`,

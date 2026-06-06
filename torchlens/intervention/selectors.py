@@ -420,8 +420,15 @@ class FacetSelector(BaseSelector):
 
     name: str | None = None
     head_index: int | None = None
+    module_address: str | None = None
 
-    def __init__(self, name: str | None = None, *, head_index: int | None = None) -> None:
+    def __init__(
+        self,
+        name: str | None = None,
+        *,
+        head_index: int | None = None,
+        module_address: str | None = None,
+    ) -> None:
         """Create a semantic facet selector.
 
         Parameters
@@ -430,13 +437,16 @@ class FacetSelector(BaseSelector):
             Facet name to target.
         head_index:
             Optional zero-based head index.
+        module_address:
+            Optional module address used to scope the selector to one facet owner.
         """
 
-        payload = {"name": name, "head_index": head_index}
+        payload = {"name": name, "head_index": head_index, "module_address": module_address}
         object.__setattr__(self, "selector_kind", "facet")
         object.__setattr__(self, "selector_value", payload)
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "head_index", head_index)
+        object.__setattr__(self, "module_address", module_address)
 
     def head(self, head_index: int) -> "FacetSelector":
         """Return a copy scoped to one attention head.
@@ -452,7 +462,23 @@ class FacetSelector(BaseSelector):
             Facet selector with the requested head.
         """
 
-        return FacetSelector(self.name, head_index=head_index)
+        return FacetSelector(self.name, head_index=head_index, module_address=self.module_address)
+
+    def in_module(self, address: str) -> "FacetSelector":
+        """Return a copy scoped to one module address.
+
+        Parameters
+        ----------
+        address:
+            Module address whose facets should be patched.
+
+        Returns
+        -------
+        FacetSelector
+            Facet selector scoped to the requested module address.
+        """
+
+        return FacetSelector(self.name, head_index=self.head_index, module_address=address)
 
     def __repr__(self) -> str:
         """Return a concise public selector representation.
@@ -464,10 +490,14 @@ class FacetSelector(BaseSelector):
         """
 
         if self.name is None:
-            return f"tl.head({self.head_index!r})"
-        if self.head_index is None:
-            return f"tl.facet({self.name!r})"
-        return f"tl.facet({self.name!r}).head({self.head_index!r})"
+            base = f"tl.head({self.head_index!r})"
+        elif self.head_index is None:
+            base = f"tl.facet({self.name!r})"
+        else:
+            base = f"tl.facet({self.name!r}).head({self.head_index!r})"
+        if self.module_address is None:
+            return base
+        return f"{base}.in_module({self.module_address!r})"
 
 
 @dataclass(frozen=True, repr=False)

@@ -7,6 +7,7 @@ import builtins
 import contextlib
 import contextvars
 import hashlib
+import importlib
 import inspect
 import itertools
 import textwrap
@@ -862,7 +863,7 @@ class AttentionHeadView:
         """Return the named tensor sliced to this head when applicable."""
 
         value = self._parent[name]
-        if name not in {"q", "k", "v"} or not hasattr(value, "__getitem__"):
+        if name not in {"q", "k", "v", "result"} or not hasattr(value, "__getitem__"):
             return value
         head_index = self._head_index
         is_aliasing = False
@@ -1222,6 +1223,27 @@ def info(class_name: str) -> dict[str, builtins.list[str]]:
                 facets.append(facet_name)
                 seen.add(facet_name)
     return {"recipes": recipes, "facets": facets}
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily expose facet submodules.
+
+    Parameters
+    ----------
+    name:
+        Attribute requested from ``torchlens.facets``.
+
+    Returns
+    -------
+    Any
+        Requested lazy submodule.
+    """
+
+    if name == "patching":
+        module = importlib.import_module("torchlens.semantic.patching")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module 'torchlens.semantic.facets' has no attribute {name!r}")
 
 
 def snapshot(extra_recipes: Sequence[RecipeFunc] | None = None) -> FacetRegistrySnapshot:

@@ -20,6 +20,7 @@ from .facets import (
     transformer_lens_aliases_enabled,
     using,
 )
+from . import patching as patching
 from . import recipes as recipes
 
 __all__ = [
@@ -39,6 +40,7 @@ __all__ = [
     "register",
     "reset",
     "snapshot",
+    "patching",
     "transformer_lens_aliases_enabled",
     "using",
 ]

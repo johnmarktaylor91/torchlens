@@ -2293,6 +2293,27 @@ Canonical new public names and semantics:
   **`torchlens.recipes`** setuptools entry-point group. Entry-point failures warn and skip; TorchLens does not scan
   or auto-execute local directories.
 
+### Facets — P4 patching and attribution update (LOCKED 2026-06-05)
+
+Canonical new public names and semantics:
+
+- **`tl.facets.patching.activation_patch_residual_stream(model, clean_input, corrupted_input, metric, ...)`**:
+  clean-vs-corrupted causal mediation helper for residual stream facets. Patches clean `resid_pre` by default into
+  corrupted reruns and returns metric values shaped **`[layer, pos]`**; with `patch_positions=False`, patches each
+  full residual tensor and returns **`[layer]`**.
+- **`tl.facets.patching.activation_patch_attention_output(...)`**: patches each clean attention-output facet
+  (`attn_out` by default) into the corrupted run and returns **`[layer]`**.
+- **`tl.facets.patching.activation_patch_attention_heads(...)`**: patches each clean per-head attention-output
+  facet (`result` by default) into the corrupted run and returns **`[layer, head]`**.
+- **`tl.facets.patching.activation_patch_mlp_output(...)`**: patches each clean MLP output facet (`output` by
+  default on modules exposing the built-in MLP facet family) into the corrupted run and returns **`[layer]`**.
+- **`tl.facets.patching.attribution_patch_attention_heads(...)`**: fast linear approximation to attention-head
+  activation patching. Computes `grad(metric wrt corrupted component) * (clean component - corrupted component)`,
+  summed over component dimensions, and returns **`[layer, head]`**. Requires saved facet gradients; missing capture
+  raises with the `MissingGradient` recapture instruction.
+- **`tl.facet(name).in_module(address)`**: module-scoped facet selector used by patching helpers to target one layer
+  while still routing through the standard `fork` / `attach_hooks` / `rerun` facet scatter path.
+
 ## Input auto-routing (added v9 2026-05-31 — documents shipped API; no walkthrough lock yet)
 
 `tl.trace(model, x)` auto-routes certain
