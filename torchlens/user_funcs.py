@@ -447,24 +447,6 @@ def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) 
     return keep
 
 
-def _layers_to_save_conflicts_with_intervention_ready(layers_to_save: Any) -> bool:
-    """Return whether ``layers_to_save`` requests unsupported selective readiness.
-
-    Parameters
-    ----------
-    layers_to_save:
-        User-provided out selection.
-
-    Returns
-    -------
-    bool
-        True only for a non-empty list, which would require a deferred two-pass
-        intervention-ready capture.
-    """
-
-    return isinstance(layers_to_save, list) and len(layers_to_save) > 0
-
-
 def _qualname_for_model(model: nn.Module) -> str:
     """Return a stable class name for relationship evidence.
 
@@ -1767,16 +1749,21 @@ def trace(
         layers_to_save = layers_to_save.lower()
     if type(grads_to_save_resolved) is str:
         grads_to_save_resolved = grads_to_save_resolved.lower()
-    if intervention_ready and _layers_to_save_conflicts_with_intervention_ready(layers_to_save):
-        raise InterventionReadyConflictError(
-            "intervention_ready=True is not compatible with a non-empty list for "
-            "layers_to_save in Phase 4a. Use layers_to_save='all', 'none', None, or [] "
-            "until two-pass intervention readiness lands."
-        )
-
     uses_two_pass = (layers_to_save not in ["all", "none", None, []]) or (
         grads_to_save_resolved not in ["all", "none", None, []]
     )
+    if intervention_ready and uses_two_pass:
+        raise InterventionReadyConflictError(
+            "intervention_ready=True is not compatible with selective two-pass "
+            "layers_to_save or gradients_to_save. Use a predicate save=... capture "
+            "or set layers_to_save/gradients_to_save to 'all', 'none', None, or []."
+        )
+    if hooks is not None and uses_two_pass:
+        raise InterventionReadyConflictError(
+            "hooks/intervention capture is not compatible with selective two-pass "
+            "layers_to_save or gradients_to_save. Use a predicate save=... capture "
+            "for single-pass selective saving."
+        )
     if save_predicate is not None and uses_two_pass:
         raise ValueError(
             "trace(save=predicate) is single-pass selective save and cannot be combined with "
@@ -1818,9 +1805,9 @@ def trace(
             return cached_log
     if streaming_options.bundle_path is not None and uses_two_pass:
         raise TorchLensIOError(
-            'save_outs_to is only supported with layers_to_save="all" in this '
-            "release. For selective streaming use out_sink=callable, or capture "
-            'with layers_to_save="all" and filter post-hoc with '
+            "storage=to_disk/save_outs_to is not compatible with selective two-pass "
+            "layers_to_save. Use predicate save=... for selective streaming, or "
+            'capture with layers_to_save="all" and filter post-hoc with '
             "torchlens.save(..., include_outs=True)."
         )
     if save_grads_to_value is not None and uses_two_pass:

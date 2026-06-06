@@ -6,6 +6,7 @@ import torch
 
 import torchlens as tl
 from torchlens import MetadataInvariantError, check_metadata_invariants
+from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import ParentRef, TupleIndex
 from torchlens.validation.invariants import check_func_call_id_invariant
 
@@ -29,6 +30,12 @@ class _SplitModel(torch.nn.Module):
 
         left, right = torch.split(x, 1, dim=0)
         return left + right
+
+
+def _save_only_outputs(ctx: RecordContext) -> bool:
+    """Select synthetic output records for predicate selective-save tests."""
+
+    return ctx.kind == "synthetic_output" or ctx.layer_type == "output"
 
 
 class _LinearSplitModel(torch.nn.Module):
@@ -185,7 +192,7 @@ def test_selective_save_preserves_replay_call_group_siblings() -> None:
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
-        layers_to_save="output",
+        save=_save_only_outputs,
         intervention_ready=True,
     )
 

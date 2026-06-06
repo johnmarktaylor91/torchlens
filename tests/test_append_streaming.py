@@ -78,7 +78,7 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
         model,
         torch.randn(1, 3),
         out_sink=_sink,
-        layers_to_save="linear",
+        layers_to_save="all",
         intervention_ready=True,
     )
 
