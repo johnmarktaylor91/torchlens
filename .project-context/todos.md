@@ -150,10 +150,19 @@ adversarial plan review (2 rounds) + per-phase independent review; tripwire inta
 - **Editing a fused `pattern` is BY DESIGN read-only + fail-closed (JMT-confirmed 2026-06-05).** Auto-eager-on-edit
   was REJECTED: flipping just the touched module to eager on rerun is silent kernel surgery (different numerics,
   slower) and creates a fused-baseline-vs-eager-edit mismatch that conflates the edit with the kernel change. The
-  right workflow is to CAPTURE the whole trace eager (`model.config._attn_implementation='eager'` before tracing)
-  so baseline + edit are the same computation; the error message now names that path. (`allow_eager=True` would be
-  strictly worse: more machinery for a less-faithful result.) Optional clean follow-up: a TorchLens-native
-  `tl.trace(..., attention="eager")` flag so the pointer isn't HF-config-specific. Not urgent.
+  right workflow is to CAPTURE the model running eager attention (e.g. HF `from_pretrained(...,
+  attn_implementation="eager")`) so baseline + edit are the same computation; the error message names that (decoupled:
+  TorchLens just requires eager attention, the user owns HOW). (`allow_eager=True` would be strictly worse: more
+  machinery for a less-faithful result.)
+
+- **MAYBE (deferred, low priority — `attention="eager"` capture flag).** A `tl.trace(..., attention="eager")` one-liner
+  was considered + DEFERRED 2026-06-05 (JMT: "could become a maintenance timesink"). The obvious impl (TorchLens drives
+  HF's eager switching via `_attn_implementation` / `set_attn_implementation`) is REJECTED — couples to HF's evolving
+  attention-dispatch internals, exactly the treadmill we avoided by NOT going the TransformerLens reimplement route. The
+  only low-maintenance version: monkeypatch torch's STABLE `F.scaled_dot_product_attention` during capture (reuse the P3
+  reconstruction math) to decompose SDPA into capturable eager ops — couples only to a torch core API, works for any
+  SDPA model, no HF coupling; caveat covers SDPA not FlashAttention-2. Build ONLY on real demand; the decoupled error
+  message (capture eager at load) is sufficient and the capability already exists.
 - Head-count inference ALREADY works (capture snapshots scalar module attrs into `custom_attributes`; `config_value`
   reads them). `nn.MultiheadAttention.num_heads` + conventionally-named custom modules infer automatically. DONE
   2026-06-05: broadened `_HEAD_COUNT_NAMES`/`_KV_HEAD_COUNT_NAMES`/`_HEAD_DIM_NAMES` in attention recipes (added

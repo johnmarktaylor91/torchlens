@@ -259,8 +259,9 @@ def fused_sdpa_pattern(module: Any) -> Any:
         f"attention pattern not captured: model uses a fused attention kernel "
         f"(SDPA/FlashAttention) at {label}. "
         f"{value.reason} To READ pattern/scores/z, re-run with reconstruction_ready=True "
-        "(or save_arg_values=True). To EDIT the pattern, capture the whole trace with eager "
-        "attention (set model.config._attn_implementation='eager' before tracing) so it is a "
-        "real, editable op -- the reconstructed pattern is read-only by design (editing it would "
-        "silently change the attention kernel, so capture eager instead for a consistent baseline)."
+        "(or save_arg_values=True). To EDIT the pattern, capture a model that runs eager / "
+        "unfused attention so it is a real, editable op -- e.g. load HF models with "
+        "attn_implementation='eager' (AutoModel.from_pretrained(..., attn_implementation='eager')). "
+        "The reconstructed pattern is read-only by design: editing it would silently change the "
+        "attention kernel, so capture eager for a consistent baseline."
     )
