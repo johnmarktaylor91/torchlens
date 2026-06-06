@@ -12,7 +12,9 @@ import torch
 
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import CaptureSpec, ModuleStackFrame, RecordContext
+from ..intervention.predicates import as_intervention_decision
 from ..intervention.selectors import BaseSelector, CompositeSelector, FollowedBySelector
+from ..intervention.types import InterventionDecision
 from ..ir.predicate import RetroactiveCaptureDecision
 
 if TYPE_CHECKING:
@@ -104,6 +106,38 @@ def _evaluate_keep_op(
             if result is not False:
                 ctx = alias_ctx
     return _normalize_capture_decision(result, ctx, options.default_op)
+
+
+def _evaluate_intervene_op(
+    ctx: RecordContext,
+    options: "RecordingOptions",
+) -> InterventionDecision | None:
+    """Evaluate the active operation intervention predicate slot.
+
+    Parameters
+    ----------
+    ctx:
+        Operation context for the current candidate output.
+    options:
+        Unified predicate runtime options.
+
+    Returns
+    -------
+    InterventionDecision | None
+        Normalized current-op intervention decision, if any.
+    """
+
+    if options.intervene is None:
+        return None
+    result = options.intervene(ctx)
+    try:
+        return as_intervention_decision(result)
+    except TypeError as exc:
+        raise PredicateError(
+            "intervene predicate must return InterventionDecision, HelperSpec, callable, or None",
+            ctx=ctx,
+            result=result,
+        ) from exc
 
 
 def _evaluate_retroactive_followed_by(

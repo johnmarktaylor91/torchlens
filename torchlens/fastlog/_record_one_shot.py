@@ -9,6 +9,7 @@ from torch import nn
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .._input_coerce import _coerce_input_args
 from .._training_validation import reject_compiled_model
+from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from ._recorder import Recorder
@@ -30,6 +31,7 @@ def record(
     lookback: int = 0,
     lookback_payload_policy: LookbackPayloadPolicy = "metadata_only",
     include_source_events: bool = False,
+    intervene: InterventionPredicate | None = None,
     max_predicate_failures: int = 32,
     on_predicate_error: PredicateErrorMode = "auto",
     streaming: StreamingOptions | None = None,
@@ -58,6 +60,8 @@ def record(
     lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
     on_predicate_error, streaming, random_seed:
         Fastlog recording options.
+    intervene:
+        Optional predicate-time intervention slot evaluated on operation contexts.
     activation_transform:
         Optional callable applied to each retained out copy after
         dtype/device transforms. Errors propagate as
@@ -91,6 +95,7 @@ def record(
         lookback=lookback,
         lookback_payload_policy=lookback_payload_policy,
         include_source_events=include_source_events,
+        intervene=intervene,
         max_predicate_failures=max_predicate_failures,
         on_predicate_error=on_predicate_error,
         streaming=streaming,

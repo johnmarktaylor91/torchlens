@@ -82,6 +82,7 @@ from .visualization.code_panel import (
     make_weak_model_ref,
 )
 from .intervention.errors import InterventionReadyConflictError
+from .intervention.predicates import InterventionPredicate
 from .intervention.hooks import normalize_hook_plan
 from .intervention.selectors import BaseSelector
 from .intervention.resolver import resolve_sites
@@ -963,6 +964,7 @@ def _run_model_and_save_specified_outs(
     | tuple[Callable[[Any], dict[str, Any]], ...]
     | None = None,
     save_predicate: PredicateFn | None = None,
+    intervene_predicate: InterventionPredicate | None = None,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
 ) -> Trace:
@@ -1038,6 +1040,8 @@ def _run_model_and_save_specified_outs(
             immutable registry snapshot.
         save_predicate: Optional in-flight predicate controlling saved activation
             payloads during the exhaustive pass.
+        intervene_predicate: Optional in-flight predicate controlling current-op
+            interventions during the exhaustive pass.
         lookback: Number of recent events available to predicate-window queries.
         lookback_payload_policy: Candidate payload retention policy for retroactive
             ``followed_by`` saves. Memory cost is bounded by ``lookback`` times
@@ -1135,10 +1139,11 @@ def _run_model_and_save_specified_outs(
     trace._defer_streaming_bundle_finalization = save_grads_to is not None
     trace._in_exhaustive_pass = True
     trace.raise_on_nan = raise_on_nan
-    if save_predicate is not None:
+    if save_predicate is not None or intervene_predicate is not None:
         predicate_history_size = lookback if lookback > 0 else 8
         trace._predicate_save_options = RecordingOptions(
             keep_op=save_predicate,
+            intervene=intervene_predicate,
             default_op=False,
             history_size=predicate_history_size,
             lookback=lookback,
@@ -1330,6 +1335,7 @@ def trace(
     recurrence_detection: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
     save: SaveOptions | PredicateFn | BaseSelector | None = None,
+    intervene: InterventionPredicate | None = None,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
     streaming: StreamingOptions | None = None,
@@ -1462,6 +1468,8 @@ def trace(
             the expensive expansion step and only groups operations that share the same
             parameters.
         lookback: Number of recent capture events queryable by predicate-window helpers.
+        intervene: Optional predicate returning an intervention decision for
+            current-op live mutation.
         lookback_payload_policy: Retention policy for retroactive ``followed_by`` saves.
             ``"metadata_only"`` keeps the default metadata-only window and cannot
             retroactively save payloads. Non-default policies retain up to ``lookback``
@@ -1539,6 +1547,7 @@ def trace(
             "recurrence_detection": recurrence_detection,
             "capture": capture,
             "save": save,
+            "intervene": intervene,
             "lookback": lookback,
             "lookback_payload_policy": lookback_payload_policy,
             "streaming": streaming,
@@ -1562,6 +1571,10 @@ def trace(
         if mlx_save_predicate is not None:
             raise NotImplementedError(
                 "trace(save=predicate) is only supported by the PyTorch backend."
+            )
+        if intervene is not None:
+            raise NotImplementedError(
+                "trace(intervene=predicate) is only supported by the PyTorch backend."
             )
         if activation_transform is not MISSING:
             if activation_transform is not MISSING:
@@ -1669,6 +1682,8 @@ def trace(
 
     check_model_and_input_variants(model, input_args, input_kwargs)
     grouped_save_options, save_predicate = _split_save_options_and_predicate(save)
+    if intervene is not None and not callable(intervene):
+        raise TypeError("intervene must be a predicate callable or None")
     if not isinstance(lookback, int) or not 0 <= lookback <= 1024:
         raise ValueError("lookback must be an integer in [0, 1024]")
     if lookback_payload_policy not in {
@@ -1798,6 +1813,12 @@ def trace(
             "layers_to_save or gradients_to_save. Use a predicate save=... capture "
             "for single-pass selective saving."
         )
+    if intervene is not None and uses_two_pass:
+        raise InterventionReadyConflictError(
+            "intervene=predicate capture is not compatible with selective two-pass "
+            "layers_to_save or gradients_to_save. Use predicate save=... capture "
+            "for single-pass selective saving."
+        )
     if save_predicate is not None and uses_two_pass:
         raise ValueError(
             "trace(save=predicate) is single-pass selective save and cannot be combined with "
@@ -1824,6 +1845,7 @@ def trace(
             "output_transform": repr(output_transform_value),
             "facet_recipes": _facet_recipe_cache_key(facet_recipes),
             "save_predicate": repr(save_predicate),
+            "intervene": repr(intervene),
             "lookback": lookback,
             "lookback_payload_policy": lookback_payload_policy,
         }
@@ -1903,6 +1925,7 @@ def trace(
             save_visualizations=save_visualizations_value,
             recipes=facet_recipes,
             save_predicate=save_predicate,
+            intervene_predicate=intervene,
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
         )
@@ -1967,6 +1990,7 @@ def trace(
             save_visualizations=save_visualizations_value,
             recipes=facet_recipes,
             save_predicate=save_predicate,
+            intervene_predicate=intervene,
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
         )

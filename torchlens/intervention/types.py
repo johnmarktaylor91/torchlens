@@ -9,6 +9,7 @@ import importlib
 from typing import Any, Literal, TypeAlias
 
 GraphShapeHash: TypeAlias = str
+InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
 
 
 @dataclass(frozen=True)
@@ -184,6 +185,31 @@ class HelperSpec:
         if self.factory is None:
             raise TypeError(f"HelperSpec {self.helper_name!r} has no hook factory")
         return self.factory()
+
+
+@dataclass(frozen=True, slots=True)
+class InterventionDecision:
+    """Active predicate-time intervention decision.
+
+    Parameters
+    ----------
+    action:
+        Active intervention action kind.
+    hook:
+        Helper spec or callable consumed by the existing hook normalizer.
+    template_ref:
+        Optional template reference associated with the intervention.
+    keep_grad:
+        Whether the replacement should preserve gradient connectivity when possible.
+    isolate:
+        Whether backend isolation is required before applying the action.
+    """
+
+    action: InterventionAction
+    hook: Any | None = None
+    template_ref: Any | None = None
+    keep_grad: bool = False
+    isolate: bool = False
 
 
 @dataclass(frozen=True)
@@ -831,6 +857,8 @@ __all__ = [
     "GraphShapeHash",
     "HFKey",
     "HelperSpec",
+    "InterventionAction",
+    "InterventionDecision",
     "HookSpec",
     "InterventionSpec",
     "LAYER_PASS_LOG_FIELD_FORK_POLICY",

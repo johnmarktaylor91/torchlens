@@ -46,6 +46,7 @@ from .helpers import (
     swap_with,
     zero_ablate,
 )
+from .predicates import add, replace_with, when
 from .hooks import (
     HookContext,
     NormalizedHookEntry,
@@ -136,6 +137,7 @@ from .types import (
     FunctionRegistryKey,
     HFKey,
     HelperSpec,
+    InterventionDecision,
     InterventionSpec,
     LiteralTensor,
     LiteralValue,
@@ -154,6 +156,7 @@ __all__ = [
     "AppendMismatchError",
     "AppendStateValidationWarning",
     "AppendStreamingNotSupportedError",
+    "add",
     "ArgComponent",
     "AxisAmbiguityError",
     "BaselineUndeterminedError",
@@ -180,6 +183,7 @@ __all__ = [
     "GraphShapeMismatchError",
     "HFKey",
     "HelperSpec",
+    "InterventionDecision",
     "HookSignatureError",
     "HelperMountError",
     "HookHandle",
@@ -264,6 +268,7 @@ __all__ = [
     "pearson_correlation_distance",
     "project_off",
     "project_onto",
+    "replace_with",
     "replay",
     "replay_from",
     "rerun",
@@ -278,6 +283,7 @@ __all__ = [
     "steer",
     "swap_with",
     "where",
+    "when",
     "UnclassifiedSelectorError",
     "zero_ablate",
     "rebuild_container_from_spec",

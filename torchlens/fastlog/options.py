@@ -7,6 +7,7 @@ from typing import Any, Callable, Final, Literal, Mapping
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from ..ir.predicate import RetroactiveCaptureDecision
+from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from .types import CaptureSpec, GradRecordContext, RecordContext
@@ -33,6 +34,7 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "lookback",
     "lookback_payload_policy",
     "include_source_events",
+    "intervene",
     "max_predicate_failures",
     "on_predicate_error",
     "streaming",
@@ -72,6 +74,7 @@ class RecordingOptions:
     lookback: int = 0
     lookback_payload_policy: LookbackPayloadPolicy = "metadata_only"
     include_source_events: bool = False
+    intervene: InterventionPredicate | None = None
     max_predicate_failures: int = 32
     on_predicate_error: PredicateErrorMode = "auto"
     streaming: StreamingOptions | None = None
@@ -99,6 +102,7 @@ class RecordingOptions:
         lookback: int | MissingType = MISSING,
         lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
         include_source_events: bool | MissingType = MISSING,
+        intervene: InterventionPredicate | None | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
@@ -137,6 +141,7 @@ class RecordingOptions:
             "include_source_events": _resolve_recording_option(
                 "include_source_events", include_source_events, False, specified_fields
             ),
+            "intervene": _resolve_recording_option("intervene", intervene, None, specified_fields),
             "max_predicate_failures": _resolve_recording_option(
                 "max_predicate_failures", max_predicate_failures, 32, specified_fields
             ),
@@ -201,6 +206,7 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     history_size = values["history_size"]
     lookback = values["lookback"]
     lookback_payload_policy = values["lookback_payload_policy"]
+    intervene = values["intervene"]
     max_predicate_failures = values["max_predicate_failures"]
     on_predicate_error = values["on_predicate_error"]
     activation_transform = values["activation_transform"]
@@ -224,6 +230,8 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             "lookback_payload_policy must be one of 'metadata_only', 'detached_raw', "
             "'transformed', 'grad_connected', or 'disk_spilled'"
         )
+    if intervene is not None and not callable(intervene):
+        raise ValueError("intervene must be callable or None")
     if not isinstance(max_predicate_failures, int) or max_predicate_failures < 0:
         raise ValueError("max_predicate_failures must be a non-negative integer")
     if on_predicate_error not in {"auto", "accumulate", "fail-fast"}:
@@ -257,6 +265,7 @@ def merge_recording_options(
     lookback: int | MissingType = MISSING,
     lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
     include_source_events: bool | MissingType = MISSING,
+    intervene: InterventionPredicate | None | MissingType = MISSING,
     max_predicate_failures: int | MissingType = MISSING,
     on_predicate_error: PredicateErrorMode | MissingType = MISSING,
     streaming: StreamingOptions | None | MissingType = MISSING,
@@ -283,6 +292,7 @@ def merge_recording_options(
         "lookback": lookback,
         "lookback_payload_policy": lookback_payload_policy,
         "include_source_events": include_source_events,
+        "intervene": intervene,
         "max_predicate_failures": max_predicate_failures,
         "on_predicate_error": on_predicate_error,
         "streaming": streaming,

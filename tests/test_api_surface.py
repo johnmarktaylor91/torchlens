@@ -31,6 +31,7 @@ TARGET_ALL = [
     "Flops",
     "Macs",
     "Bundle",
+    "add",
     "label",
     "func",
     "followed_by",
@@ -49,12 +50,14 @@ TARGET_ALL = [
     "noise",
     "project_off",
     "project_onto",
+    "replace_with",
     "resample_ablate",
     "scale",
     "splice_module",
     "steer",
     "swap_with",
     "zero_ablate",
+    "when",
     "bwd_hook",
     "grad_clip",
     "grad_noise",
@@ -93,7 +96,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_56() -> None:
+def test_all_size_exactly_59() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -103,9 +106,10 @@ def test_all_size_exactly_56() -> None:
     the duplicate `label` export = 47; v7 quantity types add 5 = 52; facets
     P2 adds `facet` and `head` selectors = 54; capture-unification P4 adds
     `followed_by` and `preceded_by` predicate-window selectors = 56.
+    Capture-unification P5 adds `when`, `add`, and `replace_with` = 59.
     """
 
-    assert len(torchlens.__all__) == 56
+    assert len(torchlens.__all__) == 59
     assert torchlens.__all__ == TARGET_ALL
 
 

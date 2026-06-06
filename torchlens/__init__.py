@@ -42,6 +42,7 @@ from .data_classes.op import Op
 from .data_classes.trace import Trace
 from .intervention import (
     Bundle,
+    add,
     bwd_hook,
     clamp,
     contains,
@@ -66,6 +67,7 @@ from .intervention import (
     preceded_by,
     project_off,
     project_onto,
+    replace_with,
     replay,
     replay_from,
     rerun,
@@ -75,6 +77,7 @@ from .intervention import (
     steer,
     swap_with,
     where,
+    when,
     zero_ablate,
 )
 from .user_funcs import (
@@ -829,6 +832,7 @@ __all__ = [
     "Flops",
     "Macs",
     "Bundle",
+    "add",
     "label",
     "func",
     "followed_by",
@@ -847,12 +851,14 @@ __all__ = [
     "noise",
     "project_off",
     "project_onto",
+    "replace_with",
     "resample_ablate",
     "scale",
     "splice_module",
     "steer",
     "swap_with",
     "zero_ablate",
+    "when",
     "bwd_hook",
     "grad_clip",
     "grad_noise",

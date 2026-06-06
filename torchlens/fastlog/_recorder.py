@@ -19,6 +19,7 @@ from ..capture.projections import (
 )
 from ..data_classes.trace import Trace
 from ..ir import CaptureEvents
+from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from ._halt import HaltSignal
@@ -148,6 +149,7 @@ class Recorder:
         lookback: int | MissingType = MISSING,
         lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
         include_source_events: bool | MissingType = MISSING,
+        intervene: InterventionPredicate | None | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
@@ -206,6 +208,7 @@ class Recorder:
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
             include_source_events=include_source_events,
+            intervene=intervene,
             max_predicate_failures=max_predicate_failures,
             on_predicate_error=on_predicate_error,
             streaming=streaming,
@@ -312,6 +315,7 @@ class Recorder:
         )
         trace.capture_mode = "predicate"
         trace._fastlog_recording = self._state.recording
+        trace._predicate_save_options = self.options
         self._reset_state_for_pass(sample_id=sample_id)
         self._state.recording.start_times.append(time.time())
         try:

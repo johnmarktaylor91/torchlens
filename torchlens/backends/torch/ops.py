@@ -90,7 +90,12 @@ from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.predicate import RetroactiveCaptureDecision
 from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...intervention.selectors import BaseSelector, CompositeSelector, FollowedBySelector
+from ...intervention.selectors import (
+    BaseSelector,
+    CompositeSelector,
+    FollowedBySelector,
+    label as make_label_selector,
+)
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -108,7 +113,8 @@ from ...intervention.types import (
     TupleIndex,
     Unsupported,
 )
-from ...intervention.hooks import make_live_site_proxy
+from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
+from ...intervention.runtime import active_intervention_context
 from ...capture.arg_positions import (
     FUNC_ARG_SPECS,
     ArgSpec,
@@ -130,7 +136,7 @@ from .tensor_tracking import (
 from ..._errors import TorchLensPostfuncError
 from ..._training_validation import TrainingModeConfigError
 from ...data_classes.internal_types import FuncExecutionContext
-from ...capture.predicates import _evaluate_keep_op, build_op_record_context
+from ...capture.predicates import _evaluate_intervene_op, _evaluate_keep_op, build_op_record_context
 from ...capture.projections import (
     append_projected_event,
     get_active_recording_state,
@@ -1044,8 +1050,27 @@ def apply_live_hooks_to_outputs(
         Fired hook results are stored temporarily on the tensor being logged.
     """
 
-    if not _st._active_hook_plan or self.capture_mode != "exhaustive":
+    predicate_intervene_active = _trace_intervene_options(self) is not None
+    if (
+        not _st._active_hook_plan
+        and not predicate_intervene_active
+        or self.capture_mode not in {"exhaustive", "predicate"}
+    ):
         return out_orig
+    if (
+        self.capture_mode == "predicate"
+        and predicate_intervene_active
+        and not _st._active_hook_plan
+    ):
+        return _apply_predicate_mode_interventions_to_outputs(
+            self,
+            func_name=func_name,
+            args=args,
+            kwargs=kwargs,
+            out_orig=out_orig,
+            is_bottom_level_func=is_bottom_level_func,
+            func_call_id=func_call_id,
+        )
 
     from ...intervention.runtime import _apply_live_hooks
 
@@ -1066,6 +1091,12 @@ def apply_live_hooks_to_outputs(
         raw_label = reserved.label_raw
         site_fields = dict(shared_fields)
         site_fields["raw_index"] = reserved.raw_index
+        site_fields["type_index"] = reserved.type_index
+        site_fields["_label_raw"] = raw_label
+        site_fields["_layer_label_raw"] = raw_label
+        site_fields["pass_index"] = 1
+        site_fields["step_index"] = None
+        site_fields["container_path"] = container_path
         site = make_live_site_proxy(
             _layer_label_raw=raw_label,
             func_name=func_name,
@@ -1075,7 +1106,27 @@ def apply_live_hooks_to_outputs(
             container_path=container_path,
             fields=site_fields,
         )
-        hooked, fire_results = _apply_live_hooks(out, site=site, container_path=container_path)
+        hooked = out
+        all_fire_results: list[FireResult] = []
+        if _st._active_hook_plan:
+            hooked, fire_results = _apply_live_hooks(
+                hooked, site=site, container_path=container_path
+            )
+            all_fire_results.extend(fire_results)
+        if predicate_intervene_active:
+            hooked, fire_results = _apply_predicate_intervention(
+                self,
+                func_name=func_name,
+                out=hooked,
+                site=site,
+                site_fields=site_fields,
+                parent_labels=tuple(site_fields.get("parents", ())),
+                output_index=_live_output_index(container_path),
+                is_bottom_level_func=is_bottom_level_func,
+                container_path=container_path,
+            )
+            all_fire_results.extend(fire_results)
+        fire_results = tuple(all_fire_results)
         if fire_results:
             _set_tensor_live_fire_results(hooked, fire_results)
         if hooked is not out:
@@ -1086,6 +1137,162 @@ def apply_live_hooks_to_outputs(
     if isinstance(out_orig, torch.Tensor):
         return replacements.get((), out_orig)
     return _replace_output_tensors_by_path(out_orig, replacements)
+
+
+def _apply_predicate_mode_interventions_to_outputs(
+    trace: "Trace",
+    *,
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    out_orig: Any,
+    is_bottom_level_func: bool,
+    func_call_id: int,
+) -> Any:
+    """Apply predicate interventions in fastlog predicate mode."""
+
+    options = _trace_intervene_options(trace)
+    if options is None:
+        return out_orig
+    state = get_active_recording_state()
+    layer_type = func_name.lower().replace("_", "")
+    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+    parent_labels = tuple(get_label_list(arg_tensors))
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor] = {}
+    loggable_outputs = list(_iter_loggable_live_outputs(out_orig, is_bottom_level_func))
+    output_ordinal = 0
+    for out, container_path, _container_spec in loggable_outputs:
+        output_ordinal += 1
+        raw_index = trace._layer_counter + output_ordinal
+        type_index = trace._raw_layer_type_counter[layer_type] + output_ordinal
+        raw_label = f"{layer_type}_{type_index}_{raw_index}_raw"
+        module_frame = state.module_stack[-1] if state.module_stack else None
+        ctx = build_op_record_context(
+            kind="op",
+            label=raw_label,
+            raw_label=raw_label,
+            raw_index=raw_index,
+            layer_type=layer_type,
+            type_index=type_index,
+            func_name=func_name,
+            parent_labels=parent_labels,
+            tensor=out,
+            output_index=_live_output_index(container_path),
+            is_bottom_level_func=is_bottom_level_func,
+            module_stack=state.module_stack,
+            history=tuple(state.history),
+            op_counts=state.op_counts,
+            pass_index=state.pass_index,
+            event_index=state.event_index + output_ordinal,
+            step_index=state.step_index + output_ordinal,
+            capture_start_time=trace.capture_start_time,
+            include_source_events=state.options.include_source_events,
+            sample_id=state.sample_id,
+            address=module_frame.address if module_frame else None,
+            module_type=module_frame.module_type if module_frame else None,
+            module_pass_index=module_frame.pass_index if module_frame else None,
+        )
+        decision = _evaluate_intervene_op(ctx, options)
+        if decision is None:
+            continue
+        site = make_live_site_proxy(
+            _layer_label_raw=raw_label,
+            func_name=func_name,
+            layer_type=layer_type,
+            tensor=out,
+            func_call_id=func_call_id,
+            container_path=container_path,
+            fields={
+                "_label_raw": raw_label,
+                "_layer_label_raw": raw_label,
+                "raw_index": raw_index,
+                "type_index": type_index,
+            },
+        )
+        hook_entries = normalize_hook_plan(
+            decision.hook,
+            default_site_target=make_label_selector(ctx.raw_label or ctx.label),
+        )
+        from ...intervention.runtime import _apply_live_hooks
+
+        with active_intervention_context(
+            intervention_spec=_st._active_intervention_spec,
+            hook_plan=hook_entries,
+        ):
+            hooked, fire_results = _apply_live_hooks(out, site=site, container_path=container_path)
+        if fire_results:
+            _set_tensor_live_fire_results(hooked, fire_results)
+        if hooked is not out:
+            replacements[container_path] = hooked
+    if not replacements:
+        return out_orig
+    if isinstance(out_orig, torch.Tensor):
+        return replacements.get((), out_orig)
+    return _replace_output_tensors_by_path(out_orig, replacements)
+
+
+def _trace_intervene_options(trace: "Trace") -> Any | None:
+    """Return trace predicate options when ``intervene`` is configured."""
+
+    options = getattr(trace, "_predicate_save_options", None)
+    if options is None or options.intervene is None:
+        return None
+    return options
+
+
+def _live_output_index(container_path: tuple[OutputPathComponent, ...]) -> int | None:
+    """Return the first tuple/list path index for a live output."""
+
+    if not container_path:
+        return None
+    first = container_path[0]
+    if isinstance(first, TupleIndex):
+        return first.index
+    if isinstance(first, int):
+        return first
+    return None
+
+
+def _apply_predicate_intervention(
+    trace: "Trace",
+    *,
+    func_name: str,
+    out: torch.Tensor,
+    site: Any,
+    site_fields: dict[str, Any],
+    parent_labels: tuple[str, ...],
+    output_index: int | None,
+    is_bottom_level_func: bool,
+    container_path: tuple[OutputPathComponent, ...],
+) -> tuple[torch.Tensor, tuple[FireResult, ...]]:
+    """Evaluate and apply a current-op predicate intervention."""
+
+    options = _trace_intervene_options(trace)
+    if options is None:
+        return out, ()
+    ctx = _build_trace_predicate_context(
+        trace,
+        site_fields,
+        out,
+        parent_labels=parent_labels,
+        output_index=output_index,
+        is_bottom_level_func=is_bottom_level_func,
+    )
+    _cache_trace_predicate_context(trace, ctx, container_path)
+    decision = _evaluate_intervene_op(ctx, options)
+    if decision is None:
+        return out, ()
+    hook_entries = normalize_hook_plan(
+        decision.hook,
+        default_site_target=make_label_selector(ctx.raw_label or ctx.label),
+    )
+    from ...intervention.runtime import _apply_live_hooks
+
+    with active_intervention_context(
+        intervention_spec=_st._active_intervention_spec,
+        hook_plan=hook_entries,
+    ):
+        return _apply_live_hooks(out, site=site, container_path=container_path)
 
 
 def _iter_loggable_live_outputs(
@@ -2892,6 +3099,127 @@ def _replace_event_with_retained_payload(
             break
 
 
+def _build_trace_predicate_context(
+    trace: "Trace",
+    fields_dict: dict[str, Any],
+    tensor: torch.Tensor,
+    *,
+    parent_labels: tuple[str, ...] | None = None,
+    output_index: int | None = None,
+    is_bottom_level_func: bool = True,
+) -> RecordContext:
+    """Build the shared trace predicate context for one op.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    fields_dict:
+        Live exhaustive op fields for the tensor.
+    tensor:
+        Output tensor being considered.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    fields_dict:
+        Live exhaustive op fields for the tensor.
+    tensor:
+        Output tensor being considered.
+    parent_labels:
+        Optional raw parent labels supplied by the caller.
+    output_index:
+        Optional output index supplied by the caller.
+    is_bottom_level_func:
+        Whether this is a bottom-level function output.
+
+    Returns
+    -------
+    RecordContext
+        Predicate context shared by save and intervention slots.
+    """
+
+    history = tuple(getattr(trace, "_predicate_history", ()))
+    raw_label = fields_dict["_label_raw"]
+    return build_op_record_context(
+        kind="op",
+        label=raw_label,
+        raw_label=raw_label,
+        raw_index=int(fields_dict["raw_index"]),
+        layer_type=str(fields_dict["type"]),
+        type_index=int(fields_dict["type_index"]),
+        func_name=fields_dict.get("func_name"),
+        parent_labels=tuple(fields_dict.get("parents", ()))
+        if parent_labels is None
+        else parent_labels,
+        tensor=tensor,
+        output_index=fields_dict.get("multi_output_index")
+        if output_index is None
+        else output_index,
+        is_bottom_level_func=is_bottom_level_func,
+        module_stack=_module_stack_frames_from_fields(fields_dict),
+        history=history,
+        op_counts=dict(getattr(trace, "_raw_layer_type_counter", {})),
+        pass_index=int(fields_dict.get("pass_index", 0)),
+        event_index=int(fields_dict["raw_index"]),
+        step_index=fields_dict.get("step_index"),
+        capture_start_time=float(getattr(trace, "capture_start_time", time.time())),
+        include_source_events=False,
+        sample_id=None,
+        address=fields_dict.get("module"),
+        module_type=None,
+        module_pass_index=None,
+    )
+
+
+def _trace_predicate_context_key(
+    raw_label: str,
+    pass_index: int,
+    container_path: tuple[Any, ...],
+) -> tuple[str, int, tuple[Any, ...]]:
+    """Return the runtime key for cached trace predicate contexts."""
+
+    return (raw_label, pass_index, container_path)
+
+
+def _cache_trace_predicate_context(
+    trace: "Trace",
+    ctx: RecordContext,
+    container_path: tuple[Any, ...],
+) -> None:
+    """Cache a pre-save predicate context for the current op."""
+
+    contexts = getattr(trace, "_predicate_current_contexts", None)
+    if contexts is None:
+        contexts = {}
+        trace._predicate_current_contexts = contexts
+    contexts[
+        _trace_predicate_context_key(
+            ctx.raw_label or ctx.label,
+            ctx.pass_index,
+            container_path,
+        )
+    ] = ctx
+
+
+def _pop_trace_predicate_context(
+    trace: "Trace",
+    fields_dict: dict[str, Any],
+) -> RecordContext | None:
+    """Pop a cached predicate context for an op, if one exists."""
+
+    contexts = getattr(trace, "_predicate_current_contexts", None)
+    if contexts is None:
+        return None
+    key = _trace_predicate_context_key(
+        str(fields_dict["_label_raw"]),
+        int(fields_dict.get("pass_index", 0)),
+        tuple(fields_dict.get("container_path", ())),
+    )
+    return contexts.pop(key, None)
+
+
 def _evaluate_trace_save_predicate(
     trace: "Trace",
     fields_dict: dict[str, Any],
@@ -2917,33 +3245,10 @@ def _evaluate_trace_save_predicate(
     options = getattr(trace, "_predicate_save_options", None)
     if options is None:
         return None, None
-    history = tuple(getattr(trace, "_predicate_history", ()))
-    raw_label = fields_dict["_label_raw"]
-    ctx = build_op_record_context(
-        kind="op",
-        label=raw_label,
-        raw_label=raw_label,
-        raw_index=int(fields_dict["raw_index"]),
-        layer_type=str(fields_dict["type"]),
-        type_index=int(fields_dict["type_index"]),
-        func_name=fields_dict.get("func_name"),
-        parent_labels=tuple(fields_dict.get("parents", ())),
-        tensor=tensor,
-        output_index=fields_dict.get("multi_output_index"),
-        is_bottom_level_func=True,
-        module_stack=_module_stack_frames_from_fields(fields_dict),
-        history=history,
-        op_counts=dict(getattr(trace, "_raw_layer_type_counter", {})),
-        pass_index=int(fields_dict.get("pass_index", 0)),
-        event_index=int(fields_dict["raw_index"]),
-        step_index=fields_dict.get("step_index"),
-        capture_start_time=float(getattr(trace, "capture_start_time", time.time())),
-        include_source_events=False,
-        sample_id=None,
-        address=fields_dict.get("module"),
-        module_type=None,
-        module_pass_index=None,
-    )
+    ctx = _pop_trace_predicate_context(trace, fields_dict)
+    if ctx is None:
+        ctx = _build_trace_predicate_context(trace, fields_dict, tensor)
+    raw_label = str(fields_dict["_label_raw"])
     try:
         decision = _evaluate_keep_op(ctx, options)
     finally:
