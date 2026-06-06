@@ -1063,6 +1063,7 @@ class Trace:
         "conditionals": FieldPolicy.KEEP,
         "_orphan_labels": FieldPolicy.KEEP,
         "_orphan_logs": FieldPolicy.KEEP,
+        "orphan_records": FieldPolicy.BLOB_RECURSIVE,
         "_saved_grads_set": FieldPolicy.DROP,
         "layers_with_params": FieldPolicy.KEEP,
         "ops_with_params": FieldPolicy.KEEP,
@@ -1365,6 +1366,7 @@ class Trace:
         self.conditionals = ConditionalAccessor()
         self._orphan_labels: List[str] = []
         self._orphan_logs: tuple[Op, ...] = ()
+        self.orphan_records: list[dict[str, Any]] = []
         self._saved_grads_set: set[str] = set()
         self.layers_with_params: Dict[str, List[Any]] = defaultdict(list)
         # Maps equivalence_class -> set of layer labels that share

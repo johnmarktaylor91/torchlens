@@ -162,6 +162,7 @@ MODEL_LOG_FIELD_ORDER = [
     "op_equivalence_classes",
     "_orphan_labels",
     "_orphan_logs",
+    "orphan_records",
     # Tensor info:
     "total_activation_memory",
     "total_gradient_memory",

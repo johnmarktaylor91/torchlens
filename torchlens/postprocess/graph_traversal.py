@@ -260,6 +260,17 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     orphan_nodes = orig_nodes - nodes_seen
     self._orphan_labels = [label for label in self._raw_layer_labels_list if label in orphan_nodes]
     self._orphan_logs = tuple(self._raw_layer_dict[label] for label in self._orphan_labels)
+    self.orphan_records = [
+        {
+            "raw_label": orphan._label_raw,
+            "label": orphan.label,
+            "payload_ref": orphan.out_ref
+            if getattr(orphan, "out_ref", None) is not None
+            else orphan.out,
+        }
+        for orphan in self._orphan_logs
+        if getattr(orphan, "has_saved_activation", False)
+    ]
     if getattr(self, "keep_orphans", False):
         for orphan_label in orphan_nodes:
             self._raw_layer_dict[orphan_label].is_orphan = True
