@@ -187,7 +187,9 @@ class MLXBackend:
             grad_fn_class_name=None,
             autograd_memory=None,
             num_autograd_tensors=None,
-            mutates_inputs=(),
+            mutated_input_positions=(),
+            aliased_output_inputs=(),
+            unknown_aliasing=False,
             bytes_delta_at_call=0,
             bytes_peak_at_call=0,
         )

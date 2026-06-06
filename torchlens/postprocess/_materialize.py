@@ -156,6 +156,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
         _module_role_hints_by_address(events.module_prep_events),
     )
     buffer_write_fields = _buffer_write_fields(trace, op_event_labels)
+    output_versions = _output_versions_by_parent(events)
 
     for event in events.op_events:
         fields_dict = _fields_from_event(
@@ -171,6 +172,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
             buffer_write_fields.get(event.label_raw, {}),
             events.grad_fn_handles_by_label_raw.get(event.label_raw),
             input_io_roles.get(event.label_raw),
+            output_versions.get(event.label_raw, {}),
         )
         op_log = materialize_log_from_fields(fields_dict)
         _register_raw_log(trace, event, op_log)
@@ -182,6 +184,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     events.module_enter_events.clear()
     events.module_exit_events.clear()
     events.conditional_events.clear()
+    events.output_version_events.clear()
     events.live_by_raw_label.clear()
     events.op_event_by_label_raw.clear()
     events.live_index.clear()
@@ -209,6 +212,26 @@ def _drop_missing_buffer_sources(trace: "Trace") -> None:
             op_log.buffer_source = None
 
 
+def _output_versions_by_parent(events: CaptureEvents) -> dict[str, dict[str, object]]:
+    """Return output-version payloads grouped by parent raw label.
+
+    Parameters
+    ----------
+    events
+        Capture event buffer containing sibling output-version events.
+
+    Returns
+    -------
+    dict[str, dict[str, object]]
+        Mapping from parent raw label to child raw label to pre-child payload.
+    """
+
+    grouped: dict[str, dict[str, object]] = defaultdict(dict)
+    for event in events.output_version_events:
+        grouped[event.parent_raw_label][event.child_raw_label] = event.payload
+    return grouped
+
+
 def _fields_from_event(
     trace: "Trace",
     event: OpEvent,
@@ -222,6 +245,7 @@ def _fields_from_event(
     buffer_write_fields: dict[str, object],
     grad_fn_handle: object | None,
     input_io_role: str | None,
+    output_versions_by_child: dict[str, object],
 ) -> dict[str, object]:
     """Build a complete raw ``Op`` field dictionary from one operation event.
 
@@ -263,6 +287,12 @@ def _fields_from_event(
     transformed = output.transformed_tensor
     function = event.function
     semantics = event.backend_semantics
+    if semantics.unknown_aliasing:
+        raise ValueError(
+            "Cannot materialize capture events for "
+            f"{event.label_raw}: backend aliasing semantics are unknown. "
+            "Replay and validation require an explicit alias contract."
+        )
     templates = event.templates
     params = tuple(event.params)
     param_logs = _param_logs_for_event(trace, params)
@@ -330,8 +360,11 @@ def _fields_from_event(
             "transformed_out": None if transformed is None else transformed.payload,
             "autograd_memory": semantics.autograd_memory,
             "num_autograd_tensors": semantics.num_autograd_tensors,
-            "has_out_variations": bool(output.child_versions),
-            "out_versions_by_child": dict(output.child_versions),
+            "has_out_variations": bool(output_versions_by_child or output.child_versions),
+            "out_versions_by_child": {
+                **dict(output.child_versions),
+                **output_versions_by_child,
+            },
             "grad": None,
             "transformed_grad": None,
             "save_gradients": event.policy.save_grad,

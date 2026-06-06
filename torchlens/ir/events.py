@@ -57,6 +57,18 @@ class OutputRef:
 
 
 @dataclass(frozen=True, slots=True)
+class OutputVersionEvent:
+    """Pre-child parent output snapshot for replay validation."""
+
+    parent_raw_label: str
+    child_raw_label: str
+    child_output_path: tuple[object, ...]
+    payload: object
+    transform_state: object | None
+    detach_grad_policy: bool
+
+
+@dataclass(frozen=True, slots=True)
 class FunctionCallRef:
     """Backend-neutral function call summary captured for an op event."""
 

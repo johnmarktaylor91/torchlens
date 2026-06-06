@@ -28,6 +28,7 @@ from .events import (
     OpEvent,
     OpEventKind,
     OutputRef,
+    OutputVersionEvent,
     ParentEdge,
     TraceBuildState,
 )
@@ -68,6 +69,7 @@ __all__ = [
     "OpEvent",
     "OpEventKind",
     "OutputRef",
+    "OutputVersionEvent",
     "ParamRef",
     "ParentEdge",
     "RecordContext",

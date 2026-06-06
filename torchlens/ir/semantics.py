@@ -13,9 +13,23 @@ class BackendSemantics:
     grad_fn_class_name: str | None
     autograd_memory: int | None
     num_autograd_tensors: int | None
-    mutates_inputs: tuple[int, ...]
+    mutated_input_positions: tuple[object, ...]
+    aliased_output_inputs: tuple[object, ...]
+    unknown_aliasing: bool
     bytes_delta_at_call: int | None
     bytes_peak_at_call: int | None
+
+    @property
+    def mutates_inputs(self) -> tuple[object, ...]:
+        """Return legacy mutation positions for compatibility.
+
+        Returns
+        -------
+        tuple[object, ...]
+            Input positions known to be mutated by the backend operation.
+        """
+
+        return self.mutated_input_positions
 
 
 @dataclass(frozen=True, slots=True)

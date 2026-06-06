@@ -484,6 +484,7 @@ def _event_from_record(
     ram_payload: torch.Tensor | None = None,
     transformed_ram_payload: torch.Tensor | None = None,
     predicate_matched: bool,
+    backend_semantics: BackendSemantics | None = None,
 ) -> OpEvent:
     """Build a lightweight fastlog ``OpEvent`` without materializing an Op."""
 
@@ -576,12 +577,16 @@ def _event_from_record(
         parent_params=(),
         module_stack=_module_frames_from_record_context(ctx),
         modules=tuple((frame.address, frame.pass_index) for frame in ctx.module_stack),
-        backend_semantics=BackendSemantics(
+        backend_semantics=backend_semantics
+        if backend_semantics is not None
+        else BackendSemantics(
             backend_grad_handle=None,
             grad_fn_class_name=None,
             autograd_memory=0,
             num_autograd_tensors=0,
-            mutates_inputs=(),
+            mutated_input_positions=(),
+            aliased_output_inputs=(),
+            unknown_aliasing=False,
             bytes_delta_at_call=None,
             bytes_peak_at_call=None,
         ),
@@ -628,6 +633,7 @@ def append_projected_event(
     ram_payload: torch.Tensor | None = None,
     transformed_ram_payload: torch.Tensor | None = None,
     predicate_matched: bool,
+    backend_semantics: BackendSemantics | None = None,
 ) -> None:
     """Append one lightweight predicate event to ``trace.capture_events``."""
 
@@ -643,6 +649,7 @@ def append_projected_event(
             ram_payload=ram_payload,
             transformed_ram_payload=transformed_ram_payload,
             predicate_matched=predicate_matched,
+            backend_semantics=backend_semantics,
         )
     )
 

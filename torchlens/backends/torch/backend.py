@@ -17,6 +17,7 @@ from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.tensor_utils import safe_copy
 from . import _tl
+from .aliasing import detect_torch_alias_contract
 from .buffer_writes import uninstall_buffer_write_tracker
 from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
 from .ops import (
@@ -169,24 +170,14 @@ class TorchBackend:
             if isinstance(output, torch.Tensor)
             else (None, None)
         )
-        mutates_inputs = (
-            (0,)
-            if len(func_event_input.args) > 0
-            and id(func_event_input.raw_output) == id(func_event_input.args[0])
-            and (
-                func_event_input.func_name.endswith("_")
-                or func_event_input.func_name.startswith("__i")
-            )
-            else ()
-        )
-        return BackendSemantics(
+        return detect_torch_alias_contract(
+            func_event_input,
             backend_grad_handle=grad_fn_handle,
             grad_fn_class_name=type(grad_fn_handle).__name__
             if grad_fn_handle is not None
             else None,
             autograd_memory=saved_memory,
             num_autograd_tensors=saved_count,
-            mutates_inputs=mutates_inputs,
             bytes_delta_at_call=0,
             bytes_peak_at_call=0,
         )

@@ -14,6 +14,7 @@ from .events import (
     ModuleExitEvent,
     ModulePrepEvent,
     OpEvent,
+    OutputVersionEvent,
 )
 from .live_index import LiveIndex
 from .predicate import RecordContext
@@ -35,6 +36,7 @@ class CaptureEvents:
     module_enter_events: list[ModuleEnterEvent] = field(default_factory=list)
     module_exit_events: list[ModuleExitEvent] = field(default_factory=list)
     conditional_events: list[ConditionalEvent] = field(default_factory=list)
+    output_version_events: list[OutputVersionEvent] = field(default_factory=list)
     param_refs: dict[str, ParamRef] = field(default_factory=dict)
     raw_layer_counter: int = 0
     raw_layer_type_counter: dict[str, int] = field(default_factory=dict)
@@ -62,6 +64,10 @@ class CaptureEvents:
         """Append multiple operation events in order."""
         for event in events:
             self.append(event)
+
+    def append_output_version(self, event: OutputVersionEvent) -> None:
+        """Append a parent output-version sibling event."""
+        self.output_version_events.append(event)
 
     def reserve_label(self, layer_type: str) -> ReservedLabel:
         """Reserve the next raw label for a single output site."""

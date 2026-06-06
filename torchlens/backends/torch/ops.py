@@ -48,6 +48,11 @@ import torch
 from ... import _state as _st
 from ..._state import pause_logging
 from ._tl import get_label_list, get_param_meta, get_tensor_label, set_tensor_label
+from .aliasing import (
+    detect_torch_alias_contract,
+    get_parent_contents_for_contract_position,
+    parent_label_has_alias_contract,
+)
 from . import module_stack as _mstack
 from ...errors import CaptureError
 from ...fastlog._halt import HaltSignal
@@ -77,10 +82,10 @@ from ...ir.events import (
     ModuleFrame,
     OpEvent,
     OutputRef,
+    OutputVersionEvent,
     ParentEdge,
 )
-from ...ir import replace_op_event
-from ...ir.intervention import FireResult
+from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...intervention.types import (
@@ -318,6 +323,19 @@ def _op_event_from_log(
             backend_handle_id=None,
         )
     )
+    backend_semantics = fields_dict.get("backend_semantics")
+    if backend_semantics is None:
+        backend_semantics = BackendSemantics(
+            backend_grad_handle=fields_dict["grad_fn_handle"],
+            grad_fn_class_name=fields_dict["grad_fn_class_name"],
+            autograd_memory=fields_dict["autograd_memory"],
+            num_autograd_tensors=fields_dict["num_autograd_tensors"],
+            mutated_input_positions=(),
+            aliased_output_inputs=(),
+            unknown_aliasing=False,
+            bytes_delta_at_call=fields_dict["bytes_delta_at_call"],
+            bytes_peak_at_call=fields_dict["bytes_peak_at_call"],
+        )
     return OpEvent(
         kind="source" if fields_dict["is_input"] or fields_dict["is_buffer"] else "op",
         label_raw=fields_dict["_label_raw"],
@@ -387,15 +405,7 @@ def _op_event_from_log(
         parent_params=tuple(fields_dict["parent_params"]),
         module_stack=_module_frames_from_fields(fields_dict),
         modules=tuple(fields_dict["modules"]),
-        backend_semantics=BackendSemantics(
-            backend_grad_handle=fields_dict["grad_fn_handle"],
-            grad_fn_class_name=fields_dict["grad_fn_class_name"],
-            autograd_memory=fields_dict["autograd_memory"],
-            num_autograd_tensors=fields_dict["num_autograd_tensors"],
-            mutates_inputs=(0,) if fields_dict["is_inplace"] else (),
-            bytes_delta_at_call=fields_dict["bytes_delta_at_call"],
-            bytes_peak_at_call=fields_dict["bytes_peak_at_call"],
-        ),
+        backend_semantics=backend_semantics,
         policy=CapturePolicy(
             must_keep_topology=True,
             save_payload=fields_dict["has_saved_activation"],
@@ -954,10 +964,15 @@ def log_function_output_tensors(
     elif self.capture_mode == "predicate":
         log_function_output_tensors_predicate(
             self,
+            func,
             func_name,
             args,
+            kwargs,
+            arg_copies,
+            kwarg_copies,
             out_orig,
             is_bottom_level_func,
+            func_call_id,
         )
 
 
@@ -1234,16 +1249,21 @@ def _record_predicate_output(
 
 def log_function_output_tensors_predicate(
     self: "Trace",
+    func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
     out_orig: Any,
     is_bottom_level_func: bool,
+    func_call_id: int,
 ) -> None:
     """Predicate-mode logging for decorated torch function outputs."""
 
     state = get_active_recording_state()
     layer_type = func_name.lower().replace("_", "")
-    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, {})
+    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     parent_labels = tuple(get_label_list(arg_tensors))
     out_iter = ensure_iterable(out_orig)
 
@@ -1290,6 +1310,29 @@ def log_function_output_tensors_predicate(
                 state.grad_fn_to_context[out.grad_fn] = ctx
             spec = _evaluate_keep_op(ctx, state.options)
             ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
+            grad_fn_handle = out.grad_fn if isinstance(out, torch.Tensor) else None
+            backend_semantics = detect_torch_alias_contract(
+                FunctionEventInput(
+                    func=func,
+                    func_name=func_name,
+                    func_qualname=getattr(func, "__qualname__", None),
+                    args=args,
+                    kwargs=kwargs,
+                    raw_output=out_orig,
+                    arg_copies=arg_copies,
+                    kwarg_copies=kwarg_copies,
+                    module_stack=(),
+                    is_bottom_level_func=is_bottom_level_func,
+                    func_call_id=func_call_id,
+                    expected_output_count=len(out_iter),
+                ),
+                backend_grad_handle=grad_fn_handle,
+                grad_fn_class_name=type(grad_fn_handle).__name__
+                if grad_fn_handle is not None
+                else None,
+                autograd_memory=None,
+                num_autograd_tensors=None,
+            )
             append_projected_event(
                 self,
                 ctx,
@@ -1298,6 +1341,7 @@ def log_function_output_tensors_predicate(
                 ram_payload=ram_payload,
                 transformed_ram_payload=transformed_ram_payload,
                 predicate_matched=spec.save_out or spec.save_metadata,
+                backend_semantics=backend_semantics,
             )
         except HaltSignal:
             raise
@@ -1335,6 +1379,18 @@ def _build_graph_relationship_fields(
     out_orig: Any,
 ) -> None:
     """Populate graph structure fields: parents, children, ancestors, buffer/IO flags."""
+    out_kwarg_label = None
+    out_kwarg = kwargs.get("out")
+    if isinstance(out_kwarg, torch.Tensor):
+        out_kwarg_label = get_tensor_label(out_kwarg)
+    if out_kwarg_label is not None and out_kwarg_label not in parent_layer_labels:
+        parent_layer_labels = [*parent_layer_labels, out_kwarg_label]
+        parent_layer_entries = [
+            *parent_layer_entries,
+            cast(
+                Op, LiveOpView(self, self.capture_events.live_index.require_event(out_kwarg_label))
+            ),
+        ]
     parent_arg_positions = _locate_parent_tensors_in_args(self, parent_layer_entries, args, kwargs)
     input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_layer_entries)
     internal_parent_layer_labels = [
@@ -1617,25 +1673,39 @@ def _tag_tensor_and_track_variations(
     if self.save_gradients:
         _add_tensor_backward_hook(self, out, out_label)
 
+    child_event = self.capture_events.live_index.require_event(new_layer_entry._label_raw)
     for parent_label in new_layer_entry.parents:
         parent_event = self.capture_events.live_index.require_event(parent_label)
-        if parent_event.output.has_saved_activation and self.save_arg_values:
-            parent_tensor_contents = _get_parent_contents(
+        contract = child_event.backend_semantics
+        contract_positions = tuple(contract.mutated_input_positions) + tuple(
+            contract.aliased_output_inputs
+        )
+        should_snapshot_by_contract = parent_label_has_alias_contract(
+            parent_label,
+            new_layer_entry.parent_arg_positions,
+            contract_positions,
+        )
+        should_snapshot_by_value = parent_event.output.has_saved_activation
+        if self.save_arg_values and (should_snapshot_by_contract or should_snapshot_by_value):
+            parent_tensor_contents = get_parent_contents_for_contract_position(
                 parent_label,
                 arg_copies,
                 kwarg_copies,
                 new_layer_entry.parent_arg_positions,
             )
-            if not tensor_nanequal(parent_tensor_contents, parent_event.output.tensor.payload):
-                child_versions = dict(parent_event.output.child_versions)
-                child_versions[new_layer_entry._label_raw] = parent_tensor_contents
-                replace_op_event(
-                    self,
-                    parent_label,
-                    output=dataclasses.replace(
-                        parent_event.output,
-                        child_versions=tuple(child_versions.items()),
-                    ),
+            if should_snapshot_by_contract or not tensor_nanequal(
+                parent_tensor_contents,
+                parent_event.output.tensor.payload,
+            ):
+                self.capture_events.append_output_version(
+                    OutputVersionEvent(
+                        parent_raw_label=parent_label,
+                        child_raw_label=new_layer_entry._label_raw,
+                        child_output_path=tuple(fields_dict_onetensor["container_path"]),
+                        payload=parent_tensor_contents,
+                        transform_state=fields_dict_onetensor["activation_transform"],
+                        detach_grad_policy=fields_dict_onetensor["detach_saved_activations"],
+                    )
                 )
 
 
@@ -1725,6 +1795,28 @@ def log_function_output_tensors_exhaustive(
             parent_param_ops,
             fields_dict_onetensor,
             autograd_saved_stats.get(i, (None, None)),
+        )
+        fields_dict_onetensor["backend_semantics"] = detect_torch_alias_contract(
+            FunctionEventInput(
+                func=func,
+                func_name=func_name,
+                func_qualname=getattr(func, "__qualname__", None),
+                args=args,
+                kwargs=kwargs,
+                raw_output=out_orig,
+                arg_copies=arg_copies,
+                kwarg_copies=kwarg_copies,
+                module_stack=tuple(_module_frames_from_fields(fields_dict_onetensor)),
+                is_bottom_level_func=is_bottom_level_func,
+                func_call_id=func_call_id,
+                expected_output_count=len(out_iter),
+            ),
+            backend_grad_handle=fields_dict_onetensor["grad_fn_handle"],
+            grad_fn_class_name=fields_dict_onetensor["grad_fn_class_name"],
+            autograd_memory=fields_dict_onetensor["autograd_memory"],
+            num_autograd_tensors=fields_dict_onetensor["num_autograd_tensors"],
+            bytes_delta_at_call=fields_dict_onetensor["bytes_delta_at_call"],
+            bytes_peak_at_call=fields_dict_onetensor["bytes_peak_at_call"],
         )
         fire_results = _pop_tensor_live_fire_results(out)
         if fire_results:

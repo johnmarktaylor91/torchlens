@@ -519,7 +519,15 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
             parent_layer = self[parent_layer_label]
             for arg_type in ["args", "kwargs"]:
                 iterfunc, argtype_field = argtype_dict[arg_type]
-                for key, val in iterfunc(getattr(target_layer, argtype_field)):  # type: ignore[operator]
+                saved_values = getattr(target_layer, argtype_field)
+                if saved_values is None:
+                    raise ValueError(
+                        "Cannot validate saved layer "
+                        f"{target_layer.label}: {argtype_field} was not saved. "
+                        "Selective replay validation requires save_arg_values=True "
+                        "and saved argument payloads for the target op."
+                    )
+                for key, val in iterfunc(saved_values):  # type: ignore[operator]
                     validation_correct_for_arg_and_layer = _validate_layer_against_arg(
                         self, target_layer, parent_layer, arg_type, key, val
                     )
