@@ -139,7 +139,22 @@ params: weight (3072, 768) · bias (3072,)
 
 ### Revisit facets framework follow-ups (filed 2026-05-27 after sprint landed)
 
-**Status:** facets framework shipped on `main` as `3ada85d` + `9406863` (LOCKED entry in `glossary_walkthrough_deltas.md`, glossary v8 in vault, HF notebook with examples). Tier-2 GREEN. End-to-end verified against DistilBERT and GPT-2 in the notebook. But several rough edges surfaced that JMT should weigh in on before 2.0 launch.
+**[SUPERSEDED 2026-06-05 by the facets SPRINT — local main `c9ef746..de29cb7`, P1-P4 + notebook.]** The framework
+was REBUILT on a structured spec model: `facet=(home op, structural transform chain)`; read/grad/intervene/
+reconstruct/patch; capability classes (fail-closed); `tl.head`/`tl.facet` selectors; fused-attention reconstruction;
+`tl.facets.patching.*`; module-path universal fallback; TL aliases; `notebooks/facets_tutorial.ipynb`. Dual-lab
+adversarial plan review (2 rounds) + per-phase independent review; tripwire intact. See
+`.research/facets-sprint_SUMMARY.md`. NOT pushed (local main only).
+
+**Fast-follow residuals (open):**
+- **Auto-scoped-eager-on-edit of fused `pattern`** — editing a reconstructed fused-internal facet currently
+  fail-closes + names the eager prereq; capability exists via manual `attn_implementation="eager"` + P2 intervention,
+  but the auto-trigger (flip just the touched attention module to eager on rerun, restore after) isn't wired. Hardest
+  P3 piece; deliberately deferred fail-closed. Pick up when convenient.
+- Custom (non-HF) recipe authoring: head counts must be supplied by the recipe (built-ins use HF `config_value`;
+  the Module RECORD doesn't expose live-module attrs). Add a `docs/facets.md` authoring note / a small helper.
+
+Original 2026-05-27 status (historical): facets v8 shipped `3ada85d`+`9406863`; the rough edges below fed the sprint.
 
 **Open items, in priority order:**
 

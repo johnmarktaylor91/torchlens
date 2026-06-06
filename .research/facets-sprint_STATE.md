@@ -1,9 +1,9 @@
 ---
 run: facets-sprint
 created: 2026-06-05T14:30:00-04:00
-state: RUNNING
+state: DONE
 current_stage: STAGE_4_P3_BUILD
-result: ""
+result: "SHIPPED P1-P4 + demo notebook to local main (c9ef746..de29cb7). Facets read/grad/intervene/reconstruct/patch; dual-lab plan review (2 rounds); per-phase independent review; tripwire intact throughout; full facets suite 48 + smoke 223 green. Residual: auto-eager-on-edit deferred (fail-closed). Not pushed (~82 ahead). Summary: facets-sprint_SUMMARY.md."
 ---
 
 # facets-sprint — Autonomous Loop State
@@ -76,3 +76,5 @@ real models; ruff+mypy+smoke+not-slow green each phase; docs/facets.md + glossar
 | 6 | STAGE 3 P2 DONE | merged to local main | Commit 9221e30 (ff). Independently verified: head ablation CHANGES output; build tests (9) assert edit-changes-output+validates, GPT2 c_attn compose+conflict, GQA/computed/in-place writes REFUSED, whole-model ablation reruns+validates. TRIPWIRE: P2's validation carve-out (skip func-replay of `intervention_replaced` ops) is NARROW + correct — provably inert on plain capture (0 flagged ops), downstream still validated, aligns w/ the 2026-06-02 narrow-exemption discipline. Gates: facets interven 9, smoke 223, not-slow 2364 (codex). docs+glossary done. Branch swept. iMessage sent. |
 | 7 | STAGE 4 P3 DONE | merged to local main | Commit 445e20a (ff). Independently verified P3 tests (9, exact matrix): reconstruction anchors post-RoPE SDPA inputs + validates; NON-VACUOUS (corrupt recon -> FAIL); GQA+causal mask; MissingFacet names prereq; residual resid_pre/mid/post read+grad; module-path fallback; TL aliases opt-in; entry-point fail-safe. Tripwire untouched (no validation files). `tl.trace(reconstruction_ready=True)` + `enable_transformerlens_aliases()`. Gates: semantic 43, smoke 223, not-slow 2373. docs+glossary done. Branch swept. iMessage sent. **RESIDUAL: auto-scoped-eager-on-edit NOT wired — fused-internal pattern intervention fail-closes + names the eager prereq (capability exists via manual eager capture + P2; auto-trigger deferred). Documented; fast-follow candidate.** |
 | 8 | STAGE 5 P4 dispatched | RUNNING | feat/facets-p4: patching/attribution helpers (activation-patching residual/attn-out/per-head clean-vs-corrupted -> [layer,head]; attribution-patching grad*(clean-corrupted) via facet grads). Then STAGE 6: notebook + wrap. |
+
+| 9 | STAGE 6 + WRAP DONE | SHIPPED | notebook executes clean (12/12); full facets suite 48 + smoke 223; branches swept; SUMMARY + todos + memory updated. State DONE. |
