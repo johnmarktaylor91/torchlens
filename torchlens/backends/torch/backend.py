@@ -12,7 +12,7 @@ from ...data_classes.internal_types import FuncExecutionContext
 from ...ir.events import OpEvent, TraceBuildState
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext
-from ...ir.refs import ReservedLabel, TensorRef
+from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.tensor_utils import safe_copy
@@ -126,8 +126,8 @@ class TorchBackend:
             parent_labels=(),
             input_output_address=None,
             shape=tuple(tensor.shape) if tensor is not None else None,
-            dtype=tensor.dtype if tensor is not None else None,
-            tensor_device=tensor.device if tensor is not None else None,
+            dtype=DtypeRef.from_value(tensor.dtype) if tensor is not None else None,
+            tensor_device=DeviceRef.from_value(tensor.device) if tensor is not None else None,
             tensor_requires_grad=tensor.requires_grad if tensor is not None else None,
             output_index=None,
             is_bottom_level_func=func_event_input.is_bottom_level_func,
@@ -180,7 +180,7 @@ class TorchBackend:
             else ()
         )
         return BackendSemantics(
-            grad_fn_object_id=id(grad_fn_handle) if grad_fn_handle is not None else None,
+            backend_grad_handle=grad_fn_handle,
             grad_fn_class_name=type(grad_fn_handle).__name__
             if grad_fn_handle is not None
             else None,

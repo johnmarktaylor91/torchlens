@@ -3,10 +3,78 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .events import BlobRef
+
+
+@dataclass(frozen=True, slots=True)
+class DtypeRef:
+    """Backend-neutral dtype reference."""
+
+    backend: str
+    name: str
+
+    @classmethod
+    def from_value(cls, value: Any) -> "DtypeRef | None":
+        """Create a dtype reference from a backend dtype-like value.
+
+        Parameters
+        ----------
+        value
+            Backend dtype object or string.
+
+        Returns
+        -------
+        DtypeRef | None
+            Neutral dtype reference, or ``None`` when ``value`` is ``None``.
+        """
+
+        if value is None:
+            return None
+        text = str(value)
+        backend = text.split(".", 1)[0] if "." in text else "unknown"
+        return cls(backend=backend, name=text)
+
+    def __str__(self) -> str:
+        """Return the canonical dtype name."""
+
+        return self.name
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceRef:
+    """Backend-neutral device reference."""
+
+    backend: str
+    name: str
+
+    @classmethod
+    def from_value(cls, value: Any) -> "DeviceRef | None":
+        """Create a device reference from a backend device-like value.
+
+        Parameters
+        ----------
+        value
+            Backend device object or string.
+
+        Returns
+        -------
+        DeviceRef | None
+            Neutral device reference, or ``None`` when ``value`` is ``None``.
+        """
+
+        if value is None:
+            return None
+        text = str(value)
+        backend = text.split(":", 1)[0] if ":" in text else text
+        return cls(backend=backend, name=text)
+
+    def __str__(self) -> str:
+        """Return the canonical device name."""
+
+        return self.name
 
 
 @dataclass(frozen=True, slots=True)

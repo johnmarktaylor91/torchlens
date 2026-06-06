@@ -17,7 +17,7 @@ from ...quantities import Duration
 from ...ir.events import OpEvent, TraceBuildState
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext
-from ...ir.refs import ReservedLabel, TensorRef
+from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from . import capabilities
 from .model_prep import cleanup_model_session, prepare_model_once, prepare_model_session
@@ -147,8 +147,8 @@ class MLXBackend:
             parent_labels=(),
             input_output_address=None,
             shape=self._shape(output),
-            dtype=cast(Any, self._dtype(output)),
-            tensor_device=cast(Any, self._device(output)),
+            dtype=DtypeRef.from_value(self._dtype(output)),
+            tensor_device=DeviceRef.from_value(self._device(output)),
             tensor_requires_grad=None,
             output_index=None,
             is_bottom_level_func=func_event_input.is_bottom_level_func,
@@ -183,7 +183,7 @@ class MLXBackend:
         """Return MLX backend semantics for one output."""
 
         return BackendSemantics(
-            grad_fn_object_id=None,
+            backend_grad_handle=None,
             grad_fn_class_name=None,
             autograd_memory=None,
             num_autograd_tensors=None,

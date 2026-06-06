@@ -9,7 +9,7 @@ from dataclasses import dataclass
 class BackendSemantics:
     """Backend-specific operation facts normalized into portable scalars."""
 
-    grad_fn_object_id: int | None
+    backend_grad_handle: object | None
     grad_fn_class_name: str | None
     autograd_memory: int | None
     num_autograd_tensors: int | None

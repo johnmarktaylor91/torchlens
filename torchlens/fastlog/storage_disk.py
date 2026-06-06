@@ -31,6 +31,7 @@ from .types import (
     Recording,
     StorageIntent,
 )
+from ..ir.refs import DeviceRef, DtypeRef
 
 _GRAD_DTYPES = {
     torch.float16,
@@ -222,7 +223,7 @@ class DiskStorageBackend:
             return
         if self.disk_only:
             raise PredicateError("keep_grad=True is not valid for disk-only fastlog storage")
-        dtype = record.ctx.dtype
+        dtype = _torch_dtype_from_ref(record.ctx.dtype)
         if dtype is not None and dtype not in _GRAD_DTYPES:
             raise PredicateError("keep_grad=True is not valid for integer or bool tensors")
         if (
@@ -317,9 +318,29 @@ def _ctx_to_json(ctx: Any) -> dict[str, Any]:
     data["module_stack"] = [asdict(frame) for frame in ctx.module_stack]
     data["recent_events"] = []
     data["recent_ops"] = []
-    data["dtype"] = _dtype_to_name(ctx.dtype)
+    data["dtype"] = None if ctx.dtype is None else str(ctx.dtype)
     data["tensor_device"] = None if ctx.tensor_device is None else str(ctx.tensor_device)
     return data
+
+
+def _torch_dtype_from_ref(dtype: Any) -> torch.dtype | None:
+    """Resolve a neutral dtype reference to a torch dtype when possible.
+
+    Parameters
+    ----------
+    dtype
+        ``DtypeRef``, torch dtype, string, or ``None``.
+
+    Returns
+    -------
+    torch.dtype | None
+        Torch dtype for validation checks, or ``None`` when unavailable.
+    """
+
+    if dtype is None or isinstance(dtype, torch.dtype):
+        return dtype
+    name = str(dtype).replace("torch.", "")
+    return cast(torch.dtype | None, getattr(torch, name, None))
 
 
 def _ctx_from_json(data: dict[str, Any]) -> Any:
@@ -333,10 +354,8 @@ def _ctx_from_json(data: dict[str, Any]) -> Any:
     values["recent_ops"] = ()
     values["parent_labels"] = tuple(values.get("parent_labels", ()))
     values["shape"] = None if values.get("shape") is None else tuple(values["shape"])
-    values["dtype"] = _dtype_from_name(values.get("dtype"))
-    values["tensor_device"] = (
-        None if values.get("tensor_device") is None else torch.device(values["tensor_device"])
-    )
+    values["dtype"] = DtypeRef.from_value(values.get("dtype"))
+    values["tensor_device"] = DeviceRef.from_value(values.get("tensor_device"))
     return RecordContext(**values)
 
 

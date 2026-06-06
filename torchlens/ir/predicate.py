@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-import torch
+from .refs import DeviceRef, DtypeRef
 
 EventKind = Literal["op", "module_enter", "module_exit", "input", "buffer"]
 
@@ -43,8 +43,8 @@ class RecordContext:
     parent_labels: tuple[str, ...]
     input_output_address: str | None
     shape: tuple[int, ...] | None
-    dtype: torch.dtype | None
-    tensor_device: torch.device | None
+    dtype: DtypeRef | None
+    tensor_device: DeviceRef | None
     tensor_requires_grad: bool | None
     output_index: int | None
     is_bottom_level_func: bool | None
