@@ -33,10 +33,12 @@ TARGET_ALL = [
     "Bundle",
     "label",
     "func",
+    "followed_by",
     "grad_fn",
     "intervening",
     "module",
     "output",
+    "preceded_by",
     "contains",
     "facet",
     "where",
@@ -91,7 +93,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_54() -> None:
+def test_all_size_exactly_56() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -99,10 +101,11 @@ def test_all_size_exactly_54() -> None:
     megasprint P1 added `output` (multi-output module selector disambiguation
     per AD-7 / F-Multi) = 47; facets framework adds `facets` and B1 removes
     the duplicate `label` export = 47; v7 quantity types add 5 = 52; facets
-    P2 adds `facet` and `head` selectors = 54.
+    P2 adds `facet` and `head` selectors = 54; capture-unification P4 adds
+    `followed_by` and `preceded_by` predicate-window selectors = 56.
     """
 
-    assert len(torchlens.__all__) == 54
+    assert len(torchlens.__all__) == 56
     assert torchlens.__all__ == TARGET_ALL
 
 

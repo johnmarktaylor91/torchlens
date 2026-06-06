@@ -57,13 +57,14 @@ def test_report_namespace_is_not_top_level_all() -> None:
     post-backward P1 added ``output`` for multi-output module selector
     disambiguation, facets added the top-level ``facets`` namespace, and
     v7 quantity types added five top-level names, and facets P2 added
-    ``facet`` / ``head`` selectors.
+    ``facet`` / ``head`` selectors. Capture-unification P4 added the
+    ``followed_by`` / ``preceded_by`` predicate-window selectors.
     """
 
     assert hasattr(tl.report, "explain")
     assert "report" not in tl.__all__
     assert "explain" not in tl.__all__
-    assert len(tl.__all__) == 54
+    assert len(tl.__all__) == 56
 
 
 def test_explain_returns_sensible_string_for_each_audience() -> None:
