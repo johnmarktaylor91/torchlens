@@ -963,6 +963,8 @@ def _run_model_and_save_specified_outs(
     | tuple[Callable[[Any], dict[str, Any]], ...]
     | None = None,
     save_predicate: PredicateFn | None = None,
+    lookback: int = 0,
+    lookback_payload_policy: str = "metadata_only",
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
 
@@ -1036,6 +1038,10 @@ def _run_model_and_save_specified_outs(
             immutable registry snapshot.
         save_predicate: Optional in-flight predicate controlling saved activation
             payloads during the exhaustive pass.
+        lookback: Number of recent events available to predicate-window queries.
+        lookback_payload_policy: Candidate payload retention policy for retroactive
+            ``followed_by`` saves. Memory cost is bounded by ``lookback`` times
+            the candidate payload size.
 
     Returns:
         Fully-populated Trace.
@@ -1130,13 +1136,18 @@ def _run_model_and_save_specified_outs(
     trace._in_exhaustive_pass = True
     trace.raise_on_nan = raise_on_nan
     if save_predicate is not None:
+        predicate_history_size = lookback if lookback > 0 else 8
         trace._predicate_save_options = RecordingOptions(
             keep_op=save_predicate,
             default_op=False,
-            history_size=8,
+            history_size=predicate_history_size,
+            lookback=lookback,
+            lookback_payload_policy=lookback_payload_policy,  # type: ignore[arg-type]
             on_predicate_error="fail-fast",
         )
-        trace._predicate_history_size = 8
+        trace._predicate_history_size = predicate_history_size
+        trace._predicate_lookback = lookback
+        trace._predicate_lookback_payload_policy = lookback_payload_policy
     bundle_path = save_grads_to if save_grads_to is not None else save_outs_to
     if bundle_path is not None:
         trace._out_writer = BundleStreamWriter(bundle_path)
@@ -1319,6 +1330,8 @@ def trace(
     recurrence_detection: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
     save: SaveOptions | PredicateFn | BaseSelector | None = None,
+    lookback: int = 0,
+    lookback_payload_policy: str = "metadata_only",
     streaming: StreamingOptions | None = None,
     backward_ready: bool | MissingType = MISSING,
     name: str | None | MissingType = MISSING,
@@ -1448,6 +1461,12 @@ def trace(
             about 1M operations and postprocessing speed matters; the False path skips
             the expensive expansion step and only groups operations that share the same
             parameters.
+        lookback: Number of recent capture events queryable by predicate-window helpers.
+        lookback_payload_policy: Retention policy for retroactive ``followed_by`` saves.
+            ``"metadata_only"`` keeps the default metadata-only window and cannot
+            retroactively save payloads. Non-default policies retain up to ``lookback``
+            candidate payloads, for a memory cost of roughly ``lookback`` times the
+            candidate payload size.
         streaming: Grouped streaming-save options.
         backward_ready: If True, validate training-compatible settings and keep saved
             outs attached to autograd.
@@ -1520,6 +1539,8 @@ def trace(
             "recurrence_detection": recurrence_detection,
             "capture": capture,
             "save": save,
+            "lookback": lookback,
+            "lookback_payload_policy": lookback_payload_policy,
             "streaming": streaming,
             "backward_ready": backward_ready,
             "name": name,
@@ -1648,6 +1669,19 @@ def trace(
 
     check_model_and_input_variants(model, input_args, input_kwargs)
     grouped_save_options, save_predicate = _split_save_options_and_predicate(save)
+    if not isinstance(lookback, int) or not 0 <= lookback <= 1024:
+        raise ValueError("lookback must be an integer in [0, 1024]")
+    if lookback_payload_policy not in {
+        "metadata_only",
+        "detached_raw",
+        "transformed",
+        "grad_connected",
+        "disk_spilled",
+    }:
+        raise ValueError(
+            "lookback_payload_policy must be one of 'metadata_only', 'detached_raw', "
+            "'transformed', 'grad_connected', or 'disk_spilled'"
+        )
     save_options = merge_save_options(
         save=grouped_save_options,
         activation_transform=activation_transform,
@@ -1790,6 +1824,8 @@ def trace(
             "output_transform": repr(output_transform_value),
             "facet_recipes": _facet_recipe_cache_key(facet_recipes),
             "save_predicate": repr(save_predicate),
+            "lookback": lookback,
+            "lookback_payload_policy": lookback_payload_policy,
         }
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
         cache_root = _capture_cache_dir(cache_dir_value) / "capture"
@@ -1867,6 +1903,8 @@ def trace(
             save_visualizations=save_visualizations_value,
             recipes=facet_recipes,
             save_predicate=save_predicate,
+            lookback=lookback,
+            lookback_payload_policy=lookback_payload_policy,
         )
     else:
         # --- TWO-PASS path ---
@@ -1929,6 +1967,8 @@ def trace(
             save_visualizations=save_visualizations_value,
             recipes=facet_recipes,
             save_predicate=save_predicate,
+            lookback=lookback,
+            lookback_payload_policy=lookback_payload_policy,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching outs.

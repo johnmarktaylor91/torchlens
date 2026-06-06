@@ -58,6 +58,7 @@ class RecordContext:
     backend_requires_isolation: bool = False
     is_scalar_bool: bool | None = None
     bool_value: bool | None = None
+    window_miss: bool = False
 
     def __getattr__(self, name: str) -> Any:
         """Raise a schema-specific error for unknown predicate fields."""
@@ -65,3 +66,22 @@ class RecordContext:
         from ..fastlog.exceptions import RecordContextFieldError
 
         raise RecordContextFieldError(name)
+
+
+@dataclass(frozen=True, slots=True)
+class RetroactiveCaptureDecision:
+    """Decision that saves already-emitted candidates from a lookback window.
+
+    Parameters
+    ----------
+    target_raw_labels:
+        Raw labels for candidate ops to mark as saved.
+    spec:
+        Capture spec to apply to each target.
+    reason:
+        Diagnostic reason for the retroactive decision.
+    """
+
+    target_raw_labels: tuple[str, ...]
+    spec: Any
+    reason: str = "followed_by"

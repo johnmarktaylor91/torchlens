@@ -588,6 +588,7 @@ def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
     """Return labels for predicate-selected forward records."""
 
     from ...capture.predicates import _evaluate_keep_op
+    from ...ir.predicate import RetroactiveCaptureDecision
 
     recording._ensure_records()  # noqa: SLF001
     labels: set[str] = set()
@@ -606,6 +607,8 @@ def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
         return labels
     for ctx in recording_state.all_contexts:
         spec = _evaluate_keep_op(ctx, recording_state.options)
+        if isinstance(spec, RetroactiveCaptureDecision):
+            continue
         if not spec.save_out and not spec.save_metadata:
             continue
         labels.add(ctx.label)

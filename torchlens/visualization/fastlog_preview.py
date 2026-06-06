@@ -10,7 +10,7 @@ from typing import Any, cast
 from ..capture.predicates import _normalize_capture_decision
 from ..capture.projections import _build_record_context
 from ..fastlog.exceptions import RecordContextFieldError
-from ..fastlog.types import CaptureDecision, ModuleStackFrame, RecordContext
+from ..fastlog.types import CaptureDecision, CaptureSpec, ModuleStackFrame, RecordContext
 from .node_spec import NodeSpec
 
 
@@ -160,7 +160,7 @@ def _evaluate_preview_node(
         return PreviewNode(ctx=ctx, decision=Decision.EXCEPTION, tooltip=str(exc))
     except Exception as exc:  # noqa: BLE001
         return PreviewNode(ctx=ctx, decision=Decision.EXCEPTION, tooltip=repr(exc))
-    if spec.save_out or spec.save_metadata:
+    if not isinstance(spec, CaptureSpec) or spec.save_out or spec.save_metadata:
         return PreviewNode(ctx=ctx, decision=Decision.KEPT)
     return PreviewNode(ctx=ctx, decision=Decision.REJECTED)
 

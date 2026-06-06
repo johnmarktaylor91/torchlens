@@ -190,10 +190,11 @@ class RecordingState:
         """Append an event context to the bounded sliding window."""
 
         self.all_contexts.append(ctx)
-        if self.options.history_size == 0:
+        window_size = self.options.lookback or self.options.history_size
+        if window_size == 0:
             return
         self.history.append(ctx)
-        while len(self.history) > self.options.history_size:
+        while len(self.history) > window_size:
             self.history.popleft()
 
     def add_record(self, record: ActivationRecord) -> None:
@@ -400,6 +401,7 @@ def _build_record_context(
     label = _read_field(data, "label", raw_label)
     if label is None:
         label = f"{kind}_{event_index}"
+    parent_labels = tuple(_read_field(data, "parent_labels", ()))
     return RecordContext(
         kind=kind,
         label=str(label),
@@ -417,7 +419,7 @@ def _build_record_context(
         module_stack=stack,
         recent_events=recent_events,
         recent_ops=_recent_ops_for_event(recent_events, include_source_events),
-        parent_labels=tuple(_read_field(data, "parent_labels", ())),
+        parent_labels=parent_labels,
         input_output_address=_read_field(data, "input_output_address"),
         shape=shape,
         dtype=dtype,
@@ -427,6 +429,9 @@ def _build_record_context(
         is_bottom_level_func=_read_field(data, "is_bottom_level_func"),
         time_since_pass_start=time_since_pass_start,
         sample_id=sample_id,
+        label_raw=str(raw_label) if raw_label is not None else "",
+        label_prefix=str(label).rsplit("_", 2)[0] if isinstance(label, str) else "",
+        parent_labels_raw=parent_labels,
     )
 
 

@@ -13,7 +13,7 @@ from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from ._recorder import Recorder
 from ._validation import validate_postprocess
-from .options import GradPredicateFn, PredicateErrorMode, PredicateFn
+from .options import GradPredicateFn, LookbackPayloadPolicy, PredicateErrorMode, PredicateFn
 from .types import CaptureSpec, Recording
 
 
@@ -27,6 +27,8 @@ def record(
     default_op: bool | CaptureSpec | MissingType = MISSING,
     default_module: bool | CaptureSpec | MissingType = MISSING,
     history_size: int = 8,
+    lookback: int = 0,
+    lookback_payload_policy: LookbackPayloadPolicy = "metadata_only",
     include_source_events: bool = False,
     max_predicate_failures: int = 32,
     on_predicate_error: PredicateErrorMode = "auto",
@@ -53,8 +55,8 @@ def record(
     input_kwargs:
         Optional keyword arguments for the model call.
     keep_op, keep_module, default_op, default_module, history_size,
-    include_source_events, max_predicate_failures, on_predicate_error, streaming,
-    random_seed:
+    lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
+    on_predicate_error, streaming, random_seed:
         Fastlog recording options.
     activation_transform:
         Optional callable applied to each retained out copy after
@@ -86,6 +88,8 @@ def record(
         default_op=default_op,
         default_module=default_module,
         history_size=history_size,
+        lookback=lookback,
+        lookback_payload_policy=lookback_payload_policy,
         include_source_events=include_source_events,
         max_predicate_failures=max_predicate_failures,
         on_predicate_error=on_predicate_error,

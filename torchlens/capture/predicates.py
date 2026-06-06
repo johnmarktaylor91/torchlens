@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import time
+import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import CaptureSpec, ModuleStackFrame, RecordContext
+from ..intervention.selectors import BaseSelector, CompositeSelector, FollowedBySelector
+from ..ir.predicate import RetroactiveCaptureDecision
 
 if TYPE_CHECKING:
     from ..fastlog.options import RecordingOptions
@@ -29,10 +32,10 @@ def _coerce_default_capture_spec(default: bool | CaptureSpec) -> CaptureSpec:
 
 
 def _normalize_capture_decision(
-    result: bool | CaptureSpec | None,
+    result: bool | CaptureSpec | RetroactiveCaptureDecision | None,
     ctx: RecordContext,
     default: bool | CaptureSpec,
-) -> CaptureSpec:
+) -> CaptureSpec | RetroactiveCaptureDecision:
     """Normalize one predicate return value to a CaptureSpec.
 
     Parameters
@@ -68,22 +71,28 @@ def _normalize_capture_decision(
         return CaptureSpec(save_out=False, save_metadata=False)
     if result is None:
         return default_spec
-    if isinstance(result, CaptureSpec):
+    if isinstance(result, (CaptureSpec, RetroactiveCaptureDecision)):
         return result
     raise PredicateError(
-        "predicate must return bool, CaptureSpec, or None",
+        "predicate must return bool, CaptureSpec, RetroactiveCaptureDecision, or None",
         ctx=ctx,
         result=result,
     )
 
 
-def _evaluate_keep_op(ctx: RecordContext, options: "RecordingOptions") -> CaptureSpec:
+def _evaluate_keep_op(
+    ctx: RecordContext,
+    options: "RecordingOptions",
+) -> CaptureSpec | RetroactiveCaptureDecision:
     """Evaluate the operation/source predicate slot for one event."""
 
+    result: bool | CaptureSpec | RetroactiveCaptureDecision | None
     if options.keep_op is None:
         result = None
     else:
-        result = options.keep_op(ctx)
+        result = _evaluate_retroactive_followed_by(ctx, options)
+        if result is None:
+            result = options.keep_op(ctx)
         if (
             result is False
             and ctx.kind == "op"
@@ -97,6 +106,68 @@ def _evaluate_keep_op(ctx: RecordContext, options: "RecordingOptions") -> Captur
     return _normalize_capture_decision(result, ctx, options.default_op)
 
 
+def _evaluate_retroactive_followed_by(
+    ctx: RecordContext,
+    options: "RecordingOptions",
+) -> RetroactiveCaptureDecision | None:
+    """Evaluate supported ``candidate & followed_by(successor)`` predicate sugar."""
+
+    predicate = options.keep_op
+    if not isinstance(predicate, CompositeSelector) or predicate.operator != "and":
+        return None
+    left, right = predicate.selectors
+    followed_selector: FollowedBySelector | None = None
+    candidate_selector: Any | None = None
+    if isinstance(right, FollowedBySelector):
+        followed_selector = right
+        candidate_selector = left
+    elif isinstance(left, FollowedBySelector):
+        followed_selector = left
+        candidate_selector = right
+    if followed_selector is None or candidate_selector is None:
+        return None
+    inner = followed_selector.inner
+    if not callable(inner) or not bool(inner(ctx)):
+        return None
+    target_labels = _matching_recent_parent_labels(ctx, cast(BaseSelector, candidate_selector))
+    if not target_labels:
+        return None
+    return RetroactiveCaptureDecision(
+        target_raw_labels=target_labels,
+        spec=CaptureSpec(save_out=True, save_metadata=True),
+    )
+
+
+def _matching_recent_parent_labels(
+    ctx: RecordContext,
+    candidate_selector: BaseSelector,
+) -> tuple[str, ...]:
+    """Return parent labels in the lookback window matching a candidate selector."""
+
+    parent_labels = tuple(ctx.parent_labels_raw or ctx.parent_labels)
+    if not parent_labels:
+        return ()
+    recent_by_label = {
+        recent.raw_label or recent.label: recent
+        for recent in ctx.recent_ops
+        if recent.raw_label is not None or recent.label
+    }
+    matches: list[str] = []
+    for parent_label in parent_labels:
+        recent = recent_by_label.get(parent_label)
+        if recent is None:
+            warnings.warn(
+                f"followed_by parent {parent_label!r} is outside the lookback window; "
+                "increase lookback to make this dependency queryable.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            continue
+        if candidate_selector(recent):
+            matches.append(parent_label)
+    return tuple(matches)
+
+
 def _evaluate_keep_module(ctx: RecordContext, options: "RecordingOptions") -> CaptureSpec:
     """Evaluate the module predicate slot for one event."""
 
@@ -104,7 +175,10 @@ def _evaluate_keep_module(ctx: RecordContext, options: "RecordingOptions") -> Ca
         result = None
     else:
         result = options.keep_module(ctx)
-    return _normalize_capture_decision(result, ctx, options.default_module)
+    decision = _normalize_capture_decision(result, ctx, options.default_module)
+    if isinstance(decision, RetroactiveCaptureDecision):
+        raise PredicateError("module predicates cannot return RetroactiveCaptureDecision")
+    return decision
 
 
 def build_op_record_context(

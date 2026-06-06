@@ -26,6 +26,7 @@ from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
     GradPredicateFn,
+    LookbackPayloadPolicy,
     PredicateErrorMode,
     PredicateFn,
     RecordingOptions,
@@ -144,6 +145,8 @@ class Recorder:
         default_op: bool | CaptureSpec | MissingType = MISSING,
         default_module: bool | CaptureSpec | MissingType = MISSING,
         history_size: int | MissingType = MISSING,
+        lookback: int | MissingType = MISSING,
+        lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
         include_source_events: bool | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
@@ -164,8 +167,8 @@ class Recorder:
         model:
             PyTorch module to record.
         keep_op, keep_module, default_op, default_module, history_size,
-        include_source_events, max_predicate_failures, on_predicate_error, streaming,
-        random_seed:
+        lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
+        on_predicate_error, streaming, random_seed:
             Fastlog recording options.
         activation_transform:
             Optional callable applied to each retained out copy after
@@ -200,6 +203,8 @@ class Recorder:
             default_op=default_op,
             default_module=default_module,
             history_size=history_size,
+            lookback=lookback,
+            lookback_payload_policy=lookback_payload_policy,
             include_source_events=include_source_events,
             max_predicate_failures=max_predicate_failures,
             on_predicate_error=on_predicate_error,

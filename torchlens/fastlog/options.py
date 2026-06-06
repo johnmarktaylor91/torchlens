@@ -6,14 +6,23 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Final, Literal, Mapping
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
+from ..ir.predicate import RetroactiveCaptureDecision
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from .types import CaptureSpec, GradRecordContext, RecordContext
 
 CaptureDecision = bool | CaptureSpec | None
-PredicateFn = Callable[[RecordContext], CaptureDecision]
+PredicateDecision = CaptureDecision | RetroactiveCaptureDecision
+PredicateFn = Callable[[RecordContext], PredicateDecision]
 GradPredicateFn = Callable[[GradRecordContext], CaptureDecision]
 PredicateErrorMode = Literal["auto", "accumulate", "fail-fast"]
+LookbackPayloadPolicy = Literal[
+    "metadata_only",
+    "detached_raw",
+    "transformed",
+    "grad_connected",
+    "disk_spilled",
+]
 
 _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "keep_op",
@@ -21,6 +30,8 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "default_op",
     "default_module",
     "history_size",
+    "lookback",
+    "lookback_payload_policy",
     "include_source_events",
     "max_predicate_failures",
     "on_predicate_error",
@@ -58,6 +69,8 @@ class RecordingOptions:
     default_op: bool | CaptureSpec = False
     default_module: bool | CaptureSpec = False
     history_size: int = 8
+    lookback: int = 0
+    lookback_payload_policy: LookbackPayloadPolicy = "metadata_only"
     include_source_events: bool = False
     max_predicate_failures: int = 32
     on_predicate_error: PredicateErrorMode = "auto"
@@ -83,6 +96,8 @@ class RecordingOptions:
         default_op: bool | CaptureSpec | MissingType = MISSING,
         default_module: bool | CaptureSpec | MissingType = MISSING,
         history_size: int | MissingType = MISSING,
+        lookback: int | MissingType = MISSING,
+        lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
         include_source_events: bool | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
@@ -111,6 +126,13 @@ class RecordingOptions:
             ),
             "history_size": _resolve_recording_option(
                 "history_size", history_size, 8, specified_fields
+            ),
+            "lookback": _resolve_recording_option("lookback", lookback, 0, specified_fields),
+            "lookback_payload_policy": _resolve_recording_option(
+                "lookback_payload_policy",
+                lookback_payload_policy,
+                "metadata_only",
+                specified_fields,
             ),
             "include_source_events": _resolve_recording_option(
                 "include_source_events", include_source_events, False, specified_fields
@@ -177,6 +199,8 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     """Validate scalar recording option values."""
 
     history_size = values["history_size"]
+    lookback = values["lookback"]
+    lookback_payload_policy = values["lookback_payload_policy"]
     max_predicate_failures = values["max_predicate_failures"]
     on_predicate_error = values["on_predicate_error"]
     activation_transform = values["activation_transform"]
@@ -187,6 +211,19 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     save_raw_gradients = values["save_raw_gradients"]
     if not isinstance(history_size, int) or not 0 <= history_size <= 1024:
         raise ValueError("history_size must be an integer in [0, 1024]")
+    if not isinstance(lookback, int) or not 0 <= lookback <= 1024:
+        raise ValueError("lookback must be an integer in [0, 1024]")
+    if lookback_payload_policy not in {
+        "metadata_only",
+        "detached_raw",
+        "transformed",
+        "grad_connected",
+        "disk_spilled",
+    }:
+        raise ValueError(
+            "lookback_payload_policy must be one of 'metadata_only', 'detached_raw', "
+            "'transformed', 'grad_connected', or 'disk_spilled'"
+        )
     if not isinstance(max_predicate_failures, int) or max_predicate_failures < 0:
         raise ValueError("max_predicate_failures must be a non-negative integer")
     if on_predicate_error not in {"auto", "accumulate", "fail-fast"}:
@@ -217,6 +254,8 @@ def merge_recording_options(
     default_op: bool | CaptureSpec | MissingType = MISSING,
     default_module: bool | CaptureSpec | MissingType = MISSING,
     history_size: int | MissingType = MISSING,
+    lookback: int | MissingType = MISSING,
+    lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
     include_source_events: bool | MissingType = MISSING,
     max_predicate_failures: int | MissingType = MISSING,
     on_predicate_error: PredicateErrorMode | MissingType = MISSING,
@@ -241,6 +280,8 @@ def merge_recording_options(
         "default_op": default_op,
         "default_module": default_module,
         "history_size": history_size,
+        "lookback": lookback,
+        "lookback_payload_policy": lookback_payload_policy,
         "include_source_events": include_source_events,
         "max_predicate_failures": max_predicate_failures,
         "on_predicate_error": on_predicate_error,

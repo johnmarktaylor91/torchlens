@@ -29,7 +29,9 @@ import torch
 from torch import nn
 
 from ..._errors import TorchLensPostfuncError
+from ...fastlog.exceptions import PredicateError
 from ...fastlog._halt import HaltSignal
+from ...ir.predicate import RetroactiveCaptureDecision
 from ...quantities import Bytes
 from ._tl import get_tensor_meta, set_tensor_label
 from ..._training_validation import TrainingModeConfigError
@@ -149,7 +151,12 @@ def log_source_tensor_predicate(
     transformed_ram_payload = None
     try:
         if state.options.include_source_events:
-            spec = _evaluate_keep_op(ctx, state.options)
+            decision = _evaluate_keep_op(ctx, state.options)
+            if isinstance(decision, RetroactiveCaptureDecision):
+                raise PredicateError(
+                    "tl.followed_by(...) retroactive save is only supported by trace"
+                )
+            spec = decision
             if spec.save_out or spec.save_metadata:
                 disk_payload = None
                 transformed_disk_payload = None

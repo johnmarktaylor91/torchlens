@@ -247,6 +247,9 @@ class RecordingTrace:
             )
             result = predicate(ctx) if predicate is not None else False
             spec = _normalize_capture_decision(result, ctx, False)
+            if not isinstance(spec, CaptureSpec):
+                decisions.append(True)
+                continue
             decisions.append(spec.save_out or spec.save_metadata)
         return RecordingTrace(
             contexts=self.contexts,

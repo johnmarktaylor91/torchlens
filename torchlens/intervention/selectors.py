@@ -23,6 +23,8 @@ SelectorKind: TypeAlias = Literal[
     "not",
     "grad_fn",
     "intervening",
+    "followed_by",
+    "preceded_by",
     "label",
 ]
 
@@ -365,6 +367,56 @@ class InModuleSelector(BaseSelector):
 
 
 @dataclass(frozen=True, repr=False)
+class FollowedBySelector(BaseSelector):
+    """Retroactive selector that saves parents when a later op matches.
+
+    Parameters
+    ----------
+    inner:
+        Successor predicate that must match the current operation.
+    """
+
+    inner: "SelectorLike"
+
+    def __init__(self, inner: "SelectorLike") -> None:
+        """Create a retroactive successor selector."""
+
+        object.__setattr__(self, "selector_kind", "followed_by")
+        object.__setattr__(self, "selector_value", inner)
+        object.__setattr__(self, "inner", inner)
+
+    def __repr__(self) -> str:
+        """Return a concise public representation."""
+
+        return f"tl.followed_by({self.inner!r})"
+
+
+@dataclass(frozen=True, repr=False)
+class PrecededBySelector(BaseSelector):
+    """Lookback selector that matches when a recent parent matched.
+
+    Parameters
+    ----------
+    inner:
+        Predecessor predicate evaluated over the retained lookback window.
+    """
+
+    inner: "SelectorLike"
+
+    def __init__(self, inner: "SelectorLike") -> None:
+        """Create a predecessor selector."""
+
+        object.__setattr__(self, "selector_kind", "preceded_by")
+        object.__setattr__(self, "selector_value", inner)
+        object.__setattr__(self, "inner", inner)
+
+    def __repr__(self) -> str:
+        """Return a concise public representation."""
+
+        return f"tl.preceded_by({self.inner!r})"
+
+
+@dataclass(frozen=True, repr=False)
 class GradFnSelector(BaseSelector):
     """Backward-only selector against grad_fn type, label pattern, or custom flag."""
 
@@ -690,6 +742,40 @@ def func(name: str, *, output: int | str | None = None) -> FuncSelector:
     """
 
     return FuncSelector(name, output=output)
+
+
+def followed_by(inner: SelectorLike) -> FollowedBySelector:
+    """Create a retroactive successor selector.
+
+    Parameters
+    ----------
+    inner:
+        Predicate that must match a later successor op.
+
+    Returns
+    -------
+    FollowedBySelector
+        Selector interpreted by capture-time save predicates.
+    """
+
+    return FollowedBySelector(inner)
+
+
+def preceded_by(inner: SelectorLike) -> PrecededBySelector:
+    """Create a lookback predecessor selector.
+
+    Parameters
+    ----------
+    inner:
+        Predicate that must match a retained predecessor op.
+
+    Returns
+    -------
+    PrecededBySelector
+        Selector matching current ops with a retained predecessor.
+    """
+
+    return PrecededBySelector(inner)
 
 
 def output(target: int | str) -> OutputSelector:
@@ -1023,6 +1109,19 @@ def _selector_matches_record_context(selector: BaseSelector, ctx: Any) -> bool:
     if kind == "predicate":
         predicate = getattr(selector, "predicate")
         return bool(predicate(ctx))
+    if kind == "preceded_by" and isinstance(selector, PrecededBySelector):
+        parent_labels = set(
+            getattr(ctx, "parent_labels_raw", ()) or getattr(ctx, "parent_labels", ())
+        )
+        recent_ops = tuple(getattr(ctx, "recent_ops", ()))
+        if parent_labels:
+            return any(
+                (recent.raw_label or recent.label) in parent_labels and bool(selector.inner(recent))  # type: ignore[operator]
+                for recent in recent_ops
+            )
+        return any(bool(selector.inner(recent)) for recent in recent_ops)  # type: ignore[operator]
+    if kind == "followed_by":
+        return False
     if kind == "and" and isinstance(selector, CompositeSelector):
         left, right = selector.selectors
         return bool(left(ctx)) and bool(right(ctx))  # type: ignore[operator]
@@ -1105,6 +1204,8 @@ def _classify_selector_direction(
             FacetSelector,
             WhereSelector,
             InModuleSelector,
+            FollowedBySelector,
+            PrecededBySelector,
             CompositeSelector,
             NotSelector,
         ),
@@ -1147,6 +1248,7 @@ __all__ = [
     "CompositeSelector",
     "ContainsSelector",
     "FuncSelector",
+    "FollowedBySelector",
     "FacetSelector",
     "GradFnLabelSelector",
     "GradFnSelector",
@@ -1156,11 +1258,13 @@ __all__ = [
     "ModuleSelector",
     "NotSelector",
     "OutputSelector",
+    "PrecededBySelector",
     "SelectorLike",
     "WhereSelector",
     "contains",
     "facet",
     "func",
+    "followed_by",
     "grad_fn",
     "label",
     "in_module",
@@ -1169,5 +1273,6 @@ __all__ = [
     "label",
     "module",
     "output",
+    "preceded_by",
     "where",
 ]

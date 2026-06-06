@@ -39,6 +39,7 @@ import time
 import warnings
 from collections import defaultdict, deque
 from collections.abc import Callable
+from dataclasses import dataclass
 from math import prod
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Iterator, cast
@@ -87,7 +88,9 @@ from ...ir.events import (
 )
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.refs import ParamRef, TensorRef
+from ...ir.predicate import RetroactiveCaptureDecision
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...intervention.selectors import BaseSelector, CompositeSelector, FollowedBySelector
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -132,6 +135,7 @@ from ...capture.projections import (
     append_projected_event,
     get_active_recording_state,
 )
+from ...fastlog.exceptions import PredicateError
 from ...fastlog.types import ActivationRecord, CaptureSpec, ModuleStackFrame, RecordContext
 from ...capture.salient_args import extract_salient_args
 
@@ -141,6 +145,29 @@ if TYPE_CHECKING:
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
 _LIVE_FIRE_RESULTS_ATTR = "_tl_live_fire_results"
+
+
+@dataclass(slots=True)
+class _RetainedLookbackPayload:
+    """Payload retained for one retroactive-save candidate."""
+
+    raw_out: torch.Tensor | None
+    transformed_out: torch.Tensor | None
+    shape: tuple[int, ...]
+    dtype: torch.dtype
+    activation_memory: int
+    transformed_shape: tuple[int, ...] | None
+    transformed_dtype: torch.dtype | None
+    transformed_memory: int | None
+
+
+@dataclass(slots=True)
+class _RetainedLookbackCandidate:
+    """One bounded lookback candidate with payload and event identity."""
+
+    raw_label: str
+    payload: _RetainedLookbackPayload
+    marked: bool = False
 
 
 def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
@@ -1309,6 +1336,10 @@ def log_function_output_tensors_predicate(
             if out.grad_fn is not None:
                 state.grad_fn_to_context[out.grad_fn] = ctx
             spec = _evaluate_keep_op(ctx, state.options)
+            if isinstance(spec, RetroactiveCaptureDecision):
+                raise PredicateError(
+                    "tl.followed_by(...) retroactive save is only supported by trace"
+                )
             ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
             grad_fn_handle = out.grad_fn if isinstance(out, torch.Tensor) else None
             backend_semantics = detect_torch_alias_contract(
@@ -2680,11 +2711,192 @@ def _append_trace_predicate_context(trace: "Trace", ctx: RecordContext) -> None:
         history.popleft()
 
 
+def _trace_followed_by_candidate_selector(trace: "Trace") -> BaseSelector | None:
+    """Return the candidate selector for ``candidate & followed_by(successor)``."""
+
+    options = getattr(trace, "_predicate_save_options", None)
+    predicate = None if options is None else options.keep_op
+    if not isinstance(predicate, CompositeSelector) or predicate.operator != "and":
+        return None
+    left, right = predicate.selectors
+    if isinstance(right, FollowedBySelector) and isinstance(left, BaseSelector):
+        return left
+    if isinstance(left, FollowedBySelector) and isinstance(right, BaseSelector):
+        return right
+    return None
+
+
+def _retain_lookback_candidate(
+    trace: "Trace",
+    ctx: RecordContext,
+    fields_dict: dict[str, Any],
+    tensor: torch.Tensor,
+) -> None:
+    """Retain one candidate payload in the bounded retroactive-save window."""
+
+    if ctx.raw_label is None:
+        return
+    lookback = int(getattr(trace, "_predicate_lookback", 0))
+    if lookback <= 0:
+        return
+    policy = str(getattr(trace, "_predicate_lookback_payload_policy", "metadata_only"))
+    if policy == "metadata_only":
+        return
+    candidate_selector = _trace_followed_by_candidate_selector(trace)
+    if candidate_selector is None or not candidate_selector(ctx):
+        return
+    payload = _copy_lookback_payload(trace, fields_dict, tensor, policy)
+    candidates = getattr(trace, "_predicate_lookback_candidates", None)
+    if candidates is None:
+        candidates = deque()
+        trace._predicate_lookback_candidates = candidates
+    candidates.append(_RetainedLookbackCandidate(raw_label=ctx.raw_label, payload=payload))
+    while len(candidates) > lookback:
+        candidates.popleft()
+
+
+def _copy_lookback_payload(
+    trace: "Trace",
+    fields_dict: dict[str, Any],
+    tensor: torch.Tensor,
+    policy: str,
+) -> _RetainedLookbackPayload:
+    """Copy a candidate tensor according to the lookback payload policy."""
+
+    detach = policy != "grad_connected"
+    if policy == "disk_spilled":
+        warnings.warn(
+            "lookback_payload_policy='disk_spilled' currently retains the bounded candidate "
+            "payload in memory before final bundle streaming.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    raw_out = safe_copy(tensor, detach)
+    if fields_dict["output_device"] not in [str(raw_out.device), "same"]:
+        raw_out = safe_to(raw_out, fields_dict["output_device"])
+    transformed_out = None
+    if policy == "transformed" and trace.activation_transform is not None:
+        transformed_out = apply_transform(
+            label=fields_dict.get("_layer_label_raw"),
+            raw_label=fields_dict.get("_label_raw"),
+            func_name=fields_dict.get("func_name"),
+            tensor=raw_out,
+            transform=trace.activation_transform,
+            transform_kind="activation",
+            streaming_active=False,
+        )
+        validate_train_mode_transform_output(
+            raw_tensor=raw_out,
+            transformed_tensor=transformed_out,
+            transform_kind="activation",
+            backward_ready=fields_dict.get(
+                "backward_ready", getattr(trace, "backward_ready", False)
+            ),
+            label=fields_dict.get("_layer_label_raw"),
+        )
+    store_raw = policy != "transformed" or getattr(trace, "save_raw_activations", True)
+    return _RetainedLookbackPayload(
+        raw_out=raw_out if store_raw else None,
+        transformed_out=transformed_out,
+        shape=tuple(raw_out.shape),
+        dtype=raw_out.dtype,
+        activation_memory=get_memory_amount(raw_out),
+        transformed_shape=_shape_or_none(transformed_out),
+        transformed_dtype=_dtype_or_none(transformed_out),
+        transformed_memory=_memory_or_none(transformed_out),
+    )
+
+
+def _apply_retroactive_decision(
+    trace: "Trace",
+    decision: RetroactiveCaptureDecision,
+) -> None:
+    """Mark retained candidate events as saved after a successor matches."""
+
+    policy = str(getattr(trace, "_predicate_lookback_payload_policy", "metadata_only"))
+    if policy == "metadata_only":
+        raise PredicateError(
+            "tl.followed_by(...) requires lookback_payload_policy other than "
+            "'metadata_only' so candidate payloads are retained."
+        )
+    candidates = getattr(trace, "_predicate_lookback_candidates", ())
+    by_label = {
+        candidate.raw_label: candidate
+        for candidate in candidates
+        if isinstance(candidate, _RetainedLookbackCandidate)
+    }
+    for raw_label in decision.target_raw_labels:
+        candidate = by_label.get(raw_label)
+        if candidate is None:
+            warnings.warn(
+                f"followed_by target {raw_label!r} was not retained in the payload lookback "
+                "window; increase lookback.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            continue
+        if candidate.marked:
+            continue
+        candidate.marked = True
+        _replace_event_with_retained_payload(trace, raw_label, candidate.payload)
+
+
+def _replace_event_with_retained_payload(
+    trace: "Trace",
+    raw_label: str,
+    payload: _RetainedLookbackPayload,
+) -> None:
+    """Replace a frozen op event with a saved-output version."""
+
+    event = trace.capture_events.op_event_by_label_raw.get(raw_label)
+    if event is None:
+        return
+    tensor_ref = dataclasses.replace(
+        event.output.tensor,
+        shape=payload.shape,
+        dtype=str(payload.dtype),
+        device=str(payload.raw_out.device)
+        if payload.raw_out is not None
+        else event.output.tensor.device,
+        requires_grad=payload.raw_out.requires_grad
+        if payload.raw_out is not None
+        else event.output.tensor.requires_grad,
+        memory=payload.activation_memory,
+        payload=payload.raw_out,
+        backend_handle_id=str(id(payload.raw_out)) if payload.raw_out is not None else None,
+    )
+    transformed_ref = None
+    if payload.transformed_out is not None:
+        transformed_ref = TensorRef(
+            label_raw=raw_label,
+            shape=payload.transformed_shape,
+            dtype=str(payload.transformed_dtype),
+            device=str(payload.transformed_out.device),
+            requires_grad=payload.transformed_out.requires_grad,
+            memory=payload.transformed_memory,
+            payload=payload.transformed_out,
+            blob_ref=None,
+            backend_handle_id=str(id(payload.transformed_out)),
+        )
+    output_ref = dataclasses.replace(
+        event.output,
+        tensor=tensor_ref,
+        transformed_tensor=transformed_ref,
+        has_saved_activation=True,
+    )
+    updated_event = dataclasses.replace(event, output=output_ref, predicate_matched=True)
+    trace.capture_events.op_event_by_label_raw[raw_label] = updated_event
+    for index, existing_event in enumerate(trace.capture_events.op_events):
+        if existing_event.label_raw == raw_label:
+            trace.capture_events.op_events[index] = updated_event
+            break
+
+
 def _evaluate_trace_save_predicate(
     trace: "Trace",
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
-) -> CaptureSpec | None:
+) -> tuple[CaptureSpec | None, RecordContext | None]:
     """Evaluate ``trace(save=...)`` for one exhaustive op, if configured.
 
     Parameters
@@ -2704,7 +2916,7 @@ def _evaluate_trace_save_predicate(
 
     options = getattr(trace, "_predicate_save_options", None)
     if options is None:
-        return None
+        return None, None
     history = tuple(getattr(trace, "_predicate_history", ()))
     raw_label = fields_dict["_label_raw"]
     ctx = build_op_record_context(
@@ -2733,9 +2945,14 @@ def _evaluate_trace_save_predicate(
         module_pass_index=None,
     )
     try:
-        spec = _evaluate_keep_op(ctx, options)
+        decision = _evaluate_keep_op(ctx, options)
     finally:
         _append_trace_predicate_context(trace, ctx)
+    if isinstance(decision, RetroactiveCaptureDecision):
+        _apply_retroactive_decision(trace, decision)
+        spec = CaptureSpec(save_out=False, save_metadata=True)
+    else:
+        spec = decision
     decisions = getattr(trace, "_predicate_save_decisions", None)
     if decisions is None:
         decisions = {}
@@ -2747,7 +2964,7 @@ def _evaluate_trace_save_predicate(
             tuple(fields_dict.get("container_path", ())),
         )
     ] = spec
-    return spec
+    return spec, ctx
 
 
 def _make_layer_log_entry(
@@ -2785,7 +3002,7 @@ def _make_layer_log_entry(
         keep_by_predicate = bool(module_filter(SimpleNamespace(**fields_dict)))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     raw_index = cast(int, fields_dict["raw_index"])
-    predicate_spec = _evaluate_trace_save_predicate(self, fields_dict, t)
+    predicate_spec, predicate_ctx = _evaluate_trace_save_predicate(self, fields_dict, t)
     if predicate_spec is None:
         save_this_activation = (layer_nums_to_save == "all") or (raw_index in layer_nums_to_save)
     else:
@@ -2799,6 +3016,8 @@ def _make_layer_log_entry(
             op_event.grad_fn_handle
         )
     new_entry = LiveOpView(self, op_event)
+    if predicate_ctx is not None and not save_this_activation:
+        _retain_lookback_candidate(self, predicate_ctx, fields_dict, t)
     _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry

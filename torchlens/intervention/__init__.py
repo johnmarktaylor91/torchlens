@@ -70,6 +70,7 @@ from .selectors import (
     contains,
     facet,
     func,
+    followed_by,
     grad_fn,
     head,
     in_module,
@@ -77,6 +78,7 @@ from .selectors import (
     label,
     module,
     output,
+    preceded_by,
     where,
 )
 from .sites import SiteCollection, SiteSpec, sites
@@ -237,6 +239,7 @@ __all__ = [
     "do",
     "facet",
     "func",
+    "followed_by",
     "grad_clamp",
     "grad_clip",
     "grad_fn",
@@ -257,6 +260,7 @@ __all__ = [
     "normalize_hook_plan",
     "NormalizedHookEntry",
     "output",
+    "preceded_by",
     "pearson_correlation_distance",
     "project_off",
     "project_onto",
