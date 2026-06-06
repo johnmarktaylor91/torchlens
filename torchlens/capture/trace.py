@@ -234,6 +234,17 @@ def _get_op_nums_from_user_labels(
                 )
             )
             continue
+        if isinstance(layer_key, str) and ":" not in layer_key:
+            matching_layer_passes = [
+                layer_entry
+                for layer_entry in getattr(self, "layer_list", [])
+                if layer_key in {layer_entry.layer_label, layer_entry.layer_label_short}
+            ]
+            if matching_layer_passes:
+                raw_layer_nums_to_save.update(
+                    layer_entry.raw_index for layer_entry in matching_layer_passes
+                )
+                continue
         if layer_key in self._lookup_keys_to_layer_num_dict:
             raw_layer_nums_to_save.add(self._lookup_keys_to_layer_num_dict[layer_key])  # type: ignore[index]
             continue
