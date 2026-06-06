@@ -146,13 +146,20 @@ reconstruct/patch; capability classes (fail-closed); `tl.head`/`tl.facet` select
 adversarial plan review (2 rounds) + per-phase independent review; tripwire intact. See
 `.research/facets-sprint_SUMMARY.md`. NOT pushed (local main only).
 
-**Fast-follow residuals (open):**
-- **Auto-scoped-eager-on-edit of fused `pattern`** — editing a reconstructed fused-internal facet currently
-  fail-closes + names the eager prereq; capability exists via manual `attn_implementation="eager"` + P2 intervention,
-  but the auto-trigger (flip just the touched attention module to eager on rerun, restore after) isn't wired. Hardest
-  P3 piece; deliberately deferred fail-closed. Pick up when convenient.
-- Custom (non-HF) recipe authoring: head counts must be supplied by the recipe (built-ins use HF `config_value`;
-  the Module RECORD doesn't expose live-module attrs). Add a `docs/facets.md` authoring note / a small helper.
+**Design decisions (NOT gaps) + tiny follow-ups:**
+- **Editing a fused `pattern` is BY DESIGN read-only + fail-closed (JMT-confirmed 2026-06-05).** Auto-eager-on-edit
+  was REJECTED: flipping just the touched module to eager on rerun is silent kernel surgery (different numerics,
+  slower) and creates a fused-baseline-vs-eager-edit mismatch that conflates the edit with the kernel change. The
+  right workflow is to CAPTURE the whole trace eager (`model.config._attn_implementation='eager'` before tracing)
+  so baseline + edit are the same computation; the error message now names that path. (`allow_eager=True` would be
+  strictly worse: more machinery for a less-faithful result.) Optional clean follow-up: a TorchLens-native
+  `tl.trace(..., attention="eager")` flag so the pointer isn't HF-config-specific. Not urgent.
+- Head-count inference ALREADY works (capture snapshots scalar module attrs into `custom_attributes`; `config_value`
+  reads them). `nn.MultiheadAttention.num_heads` + conventionally-named custom modules infer automatically. DONE
+  2026-06-05: broadened `_HEAD_COUNT_NAMES`/`_KV_HEAD_COUNT_NAMES`/`_HEAD_DIM_NAMES` in attention recipes (added
+  `n_head`/`nhead`/etc.) + documented the `config_value(module, ...)` pattern (recipe authors must NOT read
+  `module.<attr>` directly -- live attrs live in `custom_attributes`). Only TRULY-bespoke field names still need the
+  recipe to pass the count (fundamental: H*D is unfactorable from shapes).
 
 Original 2026-05-27 status (historical): facets v8 shipped `3ada85d`+`9406863`; the rough edges below fed the sprint.
 

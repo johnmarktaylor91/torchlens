@@ -16,6 +16,17 @@ from ._helpers import (
     reshape_heads,
 )
 
+# Candidate attribute/config names for head counts + head dim. These are looked up
+# via config_value (which checks record attrs AND the captured custom_attributes
+# snapshot), so ANY module that stores a conventionally-named head count -- HF
+# configs, torch.nn.MultiheadAttention (.num_heads), or a custom module using one
+# of these names -- infers heads automatically without the recipe hardcoding them.
+# (num_heads cannot be recovered from tensor shapes alone: a q-projection's output
+# dim is num_heads * d_head, an unfactorable product, so it MUST come from a field.)
+_HEAD_COUNT_NAMES = ("n_heads", "num_heads", "num_attention_heads", "n_head", "nhead", "nheads")
+_KV_HEAD_COUNT_NAMES = ("num_key_value_heads", "n_kv_heads", "num_kv_heads", "n_kv_head")
+_HEAD_DIM_NAMES = ("head_dim", "attention_head_size", "d_kv", "d_head", "head_size")
+
 _ATTENTION_FACETS_BASE = (
     "q",
     "k",
@@ -85,17 +96,17 @@ def _attention_config(module: Any) -> tuple[int | None, int | None, int | None]:
     """Return ``(n_q_heads, n_kv_heads, d_head)`` from common HF attention configs."""
 
     cls = getattr(module, "cls", None)
-    n_q_heads = config_value(module, "n_heads", "num_heads", "num_attention_heads")
+    n_q_heads = config_value(module, *_HEAD_COUNT_NAMES)
     if n_q_heads is None:
-        n_q_heads = config_value(cls, "n_heads", "num_heads", "num_attention_heads")
-    n_kv_heads = config_value(module, "num_key_value_heads", "n_kv_heads")
+        n_q_heads = config_value(cls, *_HEAD_COUNT_NAMES)
+    n_kv_heads = config_value(module, *_KV_HEAD_COUNT_NAMES)
     if n_kv_heads is None:
-        n_kv_heads = config_value(cls, "num_key_value_heads", "n_kv_heads")
+        n_kv_heads = config_value(cls, *_KV_HEAD_COUNT_NAMES)
     if n_kv_heads is None:
         n_kv_heads = n_q_heads
-    d_head = config_value(module, "head_dim", "attention_head_size", "d_kv")
+    d_head = config_value(module, *_HEAD_DIM_NAMES)
     if d_head is None:
-        d_head = config_value(cls, "head_dim", "attention_head_size", "d_kv")
+        d_head = config_value(cls, *_HEAD_DIM_NAMES)
     if d_head is None:
         hidden_size = config_value(module, "dim", "embed_dim", "hidden_size", "all_head_size")
         if hidden_size is None:

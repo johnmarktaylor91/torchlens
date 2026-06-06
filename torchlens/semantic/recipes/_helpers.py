@@ -258,7 +258,9 @@ def fused_sdpa_pattern(module: Any) -> Any:
     return MissingFacet(
         f"attention pattern not captured: model uses a fused attention kernel "
         f"(SDPA/FlashAttention) at {label}. "
-        f"{value.reason} Re-run with reconstruction_ready=True or save_arg_values=True; "
-        "for intervention, re-run with model.config._attn_implementation='eager' "
-        "to expose a real pattern op."
+        f"{value.reason} To READ pattern/scores/z, re-run with reconstruction_ready=True "
+        "(or save_arg_values=True). To EDIT the pattern, capture the whole trace with eager "
+        "attention (set model.config._attn_implementation='eager' before tracing) so it is a "
+        "real, editable op -- the reconstructed pattern is read-only by design (editing it would "
+        "silently change the attention kernel, so capture eager instead for a consistent baseline)."
     )

@@ -129,6 +129,30 @@ Conflict resolution is deterministic: `class_qualname` is more specific than
 `class_name`, which is more specific than a predicate; user recipes beat built-ins
 only within the same specificity tier. True same-tier facet collisions warn.
 
+### Reading module config in a recipe (head counts, dims)
+
+A recipe receives the TorchLens **`Module` record**, not the live `nn.Module`. The
+record does not proxy arbitrary live attributes as direct attributes -- they are
+snapshotted into `module.custom_attributes`. Use `config_value(module, *names)`
+(from `torchlens.semantic.recipes._helpers`), which checks record attributes **and**
+the `custom_attributes` snapshot, instead of `module.num_heads` directly:
+
+```python
+from torchlens.semantic.recipes._helpers import config_value, child_output_spec
+
+def my_attention(module):
+    n_heads = config_value(module, "num_heads", "n_heads", "num_attention_heads", "n_head")
+    qkv = child_output_spec(module, "qkv", "my_attention")
+    return {"q": qkv.split(3, dim=-1)[0].heads(n_heads, None)}  # d_head inferred from shape
+```
+
+Head counts are inferred automatically for any module that stores a conventionally
+named count -- HF configs, `torch.nn.MultiheadAttention` (`.num_heads`), or a custom
+module using one of the common names. Note that `num_heads` **cannot** be recovered
+from tensor shapes alone (a q-projection's output dim is `num_heads * d_head`, an
+unfactorable product), so a truly bespoke module with a non-standard field name must
+pass the count explicitly.
+
 ## Capability Classes
 
 Facet transform chains fail closed. The chain capability is the intersection of
