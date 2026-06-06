@@ -60,7 +60,14 @@ from ...data_classes.param import ParamAccessor, Param
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.module import HookInfo
 from ...data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
-from ...ir import live_record_for_label
+from ...ir import (
+    CaptureEvents,
+    ModuleEnterEvent,
+    ModuleExitEvent,
+    ModuleFrame,
+    ModulePrepEvent,
+    live_record_for_label,
+)
 from ...utils.tensor_utils import get_memory_amount
 from ...utils.introspection import (
     _get_code_context,
@@ -328,6 +335,43 @@ def _prepare_model_session(
             _seen_module_ids,
             is_root=is_root,
         )
+        meta_address = "self" if is_root else address
+        meta = trace._module_metadata.get(meta_address)
+        if meta is not None:
+            capture_events = getattr(trace, "capture_events", None)
+            if capture_events is None:
+                capture_events = CaptureEvents()
+                trace.capture_events = capture_events
+            capture_events.module_prep_events.append(
+                ModulePrepEvent(
+                    address=meta_address,
+                    all_addresses=tuple(meta["all_addresses"]),
+                    module_type_str=_module_type(module),
+                    cls_qualname=meta["class_qualname"],
+                    class_name=meta["class_name"],
+                    address_children=tuple(meta["address_children"]),
+                    class_source_file=meta.get("class_source_file"),
+                    class_source_line=meta.get("class_source_line"),
+                    init_source_file=meta.get("init_source_file"),
+                    init_source_line=meta.get("init_source_line"),
+                    forward_source_file=meta.get("forward_source_file"),
+                    forward_source_line=meta.get("forward_source_line"),
+                    class_docstring=meta.get("class_docstring"),
+                    init_signature=meta.get("init_signature"),
+                    init_docstring=meta.get("init_docstring"),
+                    forward_signature=meta.get("forward_signature"),
+                    forward_docstring=meta.get("forward_docstring"),
+                    forward_pre_hooks=tuple(meta["forward_pre_hooks"]),
+                    forward_hooks=tuple(meta["forward_hooks"]),
+                    backward_pre_hooks=tuple(meta["backward_pre_hooks"]),
+                    backward_hooks=tuple(meta["backward_hooks"]),
+                    full_backward_pre_hooks=tuple(meta["full_backward_pre_hooks"]),
+                    full_backward_hooks=tuple(meta["full_backward_hooks"]),
+                    training_at_prep=bool(meta["training"]),
+                    custom_attributes=tuple(meta["custom_attributes"].items()),
+                    custom_methods=tuple(meta["custom_methods"]),
+                )
+            )
         if not is_root:
             trace._module_build_data["module_types"][address] = _module_type(module)
             # Session-scoped tracking in Trace dicts (keyed by id(module)).
@@ -787,28 +831,37 @@ def _record_module_entry_metadata(
     should_capture_template = bool(
         getattr(trace, "intervention_ready", False) or getattr(trace, "save_arg_templates", False)
     )
+    forward_args_template = None
+    forward_kwargs_template = None
     if should_capture_template:
         from .ops import _build_args_template
 
         captured_template = _build_args_template(module.forward, args, kwargs)
+        forward_args_template = captured_template
+        forward_kwargs_template = captured_template if kwargs else None
         trace._module_build_data.setdefault("module_forward_templates", {})[
             module_call_label_str
         ] = (
-            captured_template,
-            captured_template if kwargs else None,
+            forward_args_template,
+            forward_kwargs_template,
         )
+    forward_start_time = time.time()
     trace._module_build_data.setdefault("module_forward_start_times", {})[module_call_label_str] = (
-        time.time()
+        forward_start_time
+    )
+    code_context = _get_code_context(
+        num_context_lines=trace.num_context_lines,
+        source_loading_enabled=trace.save_code_context,
     )
     trace._module_build_data.setdefault("module_code_contexts", {})[module_call_label_str] = (
-        _get_code_context(
-            num_context_lines=trace.num_context_lines,
-            source_loading_enabled=trace.save_code_context,
-        )
+        code_context
     )
-    trace._module_build_data.setdefault("module_call_stacks", {})[module_call_label_str] = [
+    call_stack = [
         f"{frame.address}:{frame.pass_index}" for frame in trace._exhaustive_module_stack[:-1]
     ]
+    trace._module_build_data.setdefault("module_call_stacks", {})[module_call_label_str] = (
+        call_stack
+    )
 
     # Find all tensor arguments (excluding Parameters, which are source tensors).
     input_tensors = get_vars_of_type_from_obj(
@@ -857,6 +910,24 @@ def _record_module_entry_metadata(
 
     # Catch buffers created dynamically (e.g. in forward()) after initial scan.
     _tag_untagged_buffers(module)
+    trace.capture_events.module_enter_events.append(
+        ModuleEnterEvent(
+            address=address,
+            call_index=module_call_index,
+            call_label=module_call_label_str,
+            training=module.training,
+            code_context=tuple(code_context),
+            call_stack=tuple(call_stack),
+            forward_start_time=forward_start_time,
+            forward_args=args,
+            forward_kwargs=kwargs,
+            forward_args_template=forward_args_template,
+            forward_kwargs_template=forward_kwargs_template,
+            layer_argnames=tuple(
+                trace._module_build_data["module_layer_argnames"][module_call_label_str]
+            ),
+        )
+    )
     return input_tensor_labels, input_tensor_labels_at_entry
 
 
@@ -1276,14 +1347,20 @@ def _record_module_exit_metadata(
     role_hints = role_hints_for_module(module)
     module_call_label = f"{address}:{module_call_index}"
     start_times = trace._module_build_data.setdefault("module_forward_start_times", {})
+    forward_duration = 0.0
     if module_call_label in start_times:
+        forward_duration = time.time() - start_times[module_call_label]
         trace._module_build_data.setdefault("module_forward_durations", {})[module_call_label] = (
-            time.time() - start_times[module_call_label]
+            forward_duration
         )
+    output_structure = None
     if output_entries:
+        output_structure = output_entries[0][2]
         trace._module_build_data.setdefault("module_output_structures", {})[module_call_label] = (
-            output_entries[0][2]
+            output_structure
         )
+    output_tensor_labels_raw: list[str] = []
+    per_output_atomic: list[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None]] = []
     for output_index, (t, container_path, _container_spec) in enumerate(output_entries):
         # nn.Identity modules and pass-through tensors (output is same object
         # as input) need _decorated_identity() to create a distinct log entry
@@ -1319,6 +1396,25 @@ def _record_module_exit_metadata(
         layer_entry["is_atomic_module"] = _is_bottom_level_submodule_exit(trace, t, module)
         layer_entry["output_of_modules"].append(address)
         layer_entry["output_of_module_calls"].append((address, module_call_index))
+        output_tensor_labels_raw.append(tensor_label)
+        per_output_atomic.append(
+            (
+                tensor_label,
+                tuple(
+                    ModuleFrame(
+                        address=frame_address,
+                        address_normalized=None,
+                        module_type="",
+                        call_index=frame_pass,
+                        fx_qualpath=None,
+                        entry_argnames=(),
+                    )
+                    for frame_address, frame_pass in layer_entry["modules"]
+                ),
+                bool(layer_entry["is_atomic_module"]),
+                layer_entry["atomic_module_call"],
+            )
+        )
         if len(output_entries) > 1:
             layer_entry["multi_output_name"] = multi_output_role_from_path(
                 container_path,
@@ -1326,6 +1422,18 @@ def _record_module_exit_metadata(
                 hints=role_hints,
             )
         trace._mod_exited[mod_id].append(tensor_label)
+    trace.capture_events.module_exit_events.append(
+        ModuleExitEvent(
+            address=address,
+            call_index=module_call_index,
+            call_label=module_call_label,
+            forward_duration=forward_duration,
+            output_structure=output_structure,
+            output_tensor_labels_raw=tuple(output_tensor_labels_raw),
+            has_user_forward_hooks=bool(getattr(module, "_forward_hooks", None)),
+            per_output_atomic=tuple(per_output_atomic),
+        )
+    )
 
 
 def module_forward_decorator(

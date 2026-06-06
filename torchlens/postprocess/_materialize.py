@@ -123,9 +123,13 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
 
     events.op_events.clear()
     events.module_events.clear()
+    events.module_prep_events.clear()
+    events.module_enter_events.clear()
+    events.module_exit_events.clear()
     events.conditional_events.clear()
     events.live_by_raw_label.clear()
     events.op_event_by_label_raw.clear()
+    events.grad_fn_handles_by_label_raw.clear()
 
 
 def _register_raw_log(trace: "Trace", event: OpEvent, op_log: "Op") -> None:
