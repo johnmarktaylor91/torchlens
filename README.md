@@ -6,6 +6,7 @@
 
 - [Paper introducing TorchLens](https://www.nature.com/articles/s41598-023-40807-0)
 - [CoLab tutorial](https://colab.research.google.com/drive/1ORJLGZPifvdsVPFqq1LYT3t5hV560SoW?usp=sharing)
+- [Facets tutorial notebook](notebooks/facets_tutorial.ipynb)
 - [5-minute notebook gallery](examples/5min/README.md)
 - [50-minute workflow notebook gallery](examples/50min/README.md)
 - [\"Menagerie\" of model visualizations](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb)
