@@ -840,17 +840,11 @@ def _live_op_rows(trace: "Trace") -> list[dict[str, str]]:
     if events is not None and getattr(events, "op_events", None) is not None:
         rows = []
         for event in events.op_events:
-            record = events.live_by_raw_label.get(event.label_raw)
-            fields = record.fields if record is not None else {}
             rows.append(
                 {
-                    "name": str(
-                        fields.get("_layer_label_raw")
-                        or fields.get("_label_raw")
-                        or event.label_raw
-                    ),
-                    "shape": _shape_str(fields.get("shape")),
-                    "dtype": _dtype_str(fields.get("dtype")),
+                    "name": str(event.layer_label_raw or event.label_raw),
+                    "shape": _shape_str(event.output.tensor.shape),
+                    "dtype": _dtype_str(event.output.tensor.dtype),
                 }
             )
         return rows

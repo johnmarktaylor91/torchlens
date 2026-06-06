@@ -37,10 +37,10 @@ import dataclasses
 import re
 import time
 import warnings
-import weakref
 from collections import defaultdict
 from collections.abc import Callable
 from math import prod
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Iterator, cast
 
 import torch
@@ -79,7 +79,7 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir import LiveOpRecord, live_record_for_label, replace_op_event
+from ...ir import replace_op_event
 from ...ir.intervention import FireResult
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -118,7 +118,6 @@ from .tensor_tracking import (
     _locate_parent_tensors_in_args,
     _make_raw_param_group_barcode,
     _process_parent_param_ops,
-    _update_tensor_family_links,
 )
 from ..._errors import TorchLensPostfuncError
 from ..._training_validation import TrainingModeConfigError
@@ -884,9 +883,9 @@ def _build_edge_use_records(
                 arg_kind="positional",
                 arg_path=_arg_location_to_path(location),
                 view_or_copy="unknown",
-                parent_func_call_id=live_record_for_label(self, parent_label).fields.get(
-                    "func_call_id"
-                ),
+                parent_func_call_id=self.capture_events.live_index.require_event(
+                    parent_label
+                ).func_call_id,
                 child_func_call_id=child_func_call_id,
             )
         )
@@ -898,9 +897,9 @@ def _build_edge_use_records(
                 arg_kind="keyword",
                 arg_path=_arg_location_to_path(location),
                 view_or_copy="unknown",
-                parent_func_call_id=live_record_for_label(self, parent_label).fields.get(
-                    "func_call_id"
-                ),
+                parent_func_call_id=self.capture_events.live_index.require_event(
+                    parent_label
+                ).func_call_id,
                 child_func_call_id=child_func_call_id,
             )
         )
@@ -1345,7 +1344,7 @@ def _build_graph_relationship_fields(
     internal_parent_layer_labels = [
         label
         for label in parent_layer_labels
-        if live_record_for_label(self, label).fields["has_internal_source_ancestor"]
+        if self.capture_events.live_index.require_event(label).has_internal_source_ancestor
     ]
 
     fields_dict["parents"] = parent_layer_labels
@@ -1507,7 +1506,7 @@ def _build_shared_fields_dict(
     non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
     parent_layer_labels = get_label_list(arg_tensors)
     parent_layer_entries = [
-        cast(Op, LiveOpView(self, live_record_for_label(self, label)))
+        cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
         for label in parent_layer_labels
     ]
 
@@ -1623,28 +1622,25 @@ def _tag_tensor_and_track_variations(
         _add_tensor_backward_hook(self, out, out_label)
 
     for parent_label in new_layer_entry.parents:
-        parent = live_record_for_label(self, parent_label).fields
-        if parent["has_saved_activation"] and self.save_arg_values:
+        parent_event = self.capture_events.live_index.require_event(parent_label)
+        if parent_event.output.has_saved_activation and self.save_arg_values:
             parent_tensor_contents = _get_parent_contents(
                 parent_label,
                 arg_copies,
                 kwarg_copies,
                 new_layer_entry.parent_arg_positions,
             )
-            if not tensor_nanequal(parent_tensor_contents, parent["out"]):
-                parent["out_versions_by_child"][new_layer_entry._label_raw] = parent_tensor_contents
-                parent["has_out_variations"] = True
-                parent_record = live_record_for_label(self, parent_label)
-                parent_event = parent_record.event
-                if parent_event is not None:
-                    replace_op_event(
-                        self,
-                        parent_label,
-                        output=dataclasses.replace(
-                            parent_event.output,
-                            child_versions=tuple(parent["out_versions_by_child"].items()),
-                        ),
-                    )
+            if not tensor_nanequal(parent_tensor_contents, parent_event.output.tensor.payload):
+                child_versions = dict(parent_event.output.child_versions)
+                child_versions[new_layer_entry._label_raw] = parent_tensor_contents
+                replace_op_event(
+                    self,
+                    parent_label,
+                    output=dataclasses.replace(
+                        parent_event.output,
+                        child_versions=tuple(child_versions.items()),
+                    ),
+                )
 
 
 def log_function_output_tensors_exhaustive(
@@ -1750,23 +1746,18 @@ def log_function_output_tensors_exhaustive(
                 fields_dict_onetensor["_label_raw"],
                 func_call_id,
             )
-        _make_layer_log_entry(
-            self,
-            out,
-            fields_dict=fields_dict_onetensor,
-            t_args=arg_copies,
-            t_kwargs=kwarg_copies,
-            activation_transform=self.activation_transform,
-        )
         new_layer_entry = cast(
             Op,
-            LiveOpView(
+            _make_layer_log_entry(
                 self,
-                live_record_for_label(self, fields_dict_onetensor["_label_raw"]),
+                out,
+                fields_dict=fields_dict_onetensor,
+                t_args=arg_copies,
+                t_kwargs=kwarg_copies,
+                activation_transform=self.activation_transform,
             ),
         )
         new_tensor_label = new_layer_entry._label_raw
-        _update_tensor_family_links(self, new_layer_entry)
 
         _classify_new_tensor_in_trace(self, fields_dict, new_tensor_label)
         _tag_tensor_and_track_variations(
@@ -2568,31 +2559,23 @@ def _make_layer_log_entry(
         t_kwargs = {}
 
     fire_results = tuple(fields_dict.pop("fire_results", ()))
-    live_record = LiveOpRecord(
-        event=None,
-        fields=fields_dict,
-        tensor_ref=weakref.ref(t),
-        t_args=t_args,
-        t_kwargs=t_kwargs,
-        fire_results=fire_results,
-    )
     from ...capture.projections import LiveOpView
 
-    new_entry = LiveOpView(self, live_record)
     keep_by_predicate = True
     module_filter = getattr(self, "module_filter", None)
     if module_filter is not None:
-        keep_by_predicate = bool(module_filter(new_entry))
+        keep_by_predicate = bool(module_filter(SimpleNamespace(**fields_dict)))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
-    if keep_by_predicate and (
-        (layer_nums_to_save == "all") or (new_entry.raw_index in layer_nums_to_save)
-    ):
+    raw_index = cast(int, fields_dict["raw_index"])
+    if keep_by_predicate and ((layer_nums_to_save == "all") or (raw_index in layer_nums_to_save)):
         _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, activation_transform)
     op_event = _op_event_from_log(self, fields_dict, t, fire_results)
-    live_record.event = op_event
-    from ...ir import register_live_event
-
-    register_live_event(self, op_event, live_record)
+    self.capture_events.append(op_event)
+    if op_event.grad_fn_handle is not None:
+        self.capture_events.grad_fn_handles_by_label_raw[op_event.label_raw] = (
+            op_event.grad_fn_handle
+        )
+    new_entry = LiveOpView(self, op_event)
     _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry

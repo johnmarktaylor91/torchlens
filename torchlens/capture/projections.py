@@ -5,10 +5,11 @@ from __future__ import annotations
 import time
 import traceback
 import weakref
-from collections import deque
+from collections import defaultdict, deque
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from math import prod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Protocol, cast
 
@@ -663,12 +664,169 @@ _OPLOG_FIELDS_KNOWN_LATE = frozenset(
 )
 
 
+def _event_live_field(trace: "Trace", event: OpEvent, name: str) -> Any:
+    """Return a forward-time field projected from an operation event.
+
+    Parameters
+    ----------
+    trace
+        Active trace owning the live index.
+    event
+        Operation event to project.
+    name
+        Op-style field name requested by a capture-time consumer.
+
+    Returns
+    -------
+    Any
+        Event-backed field value.
+    """
+
+    output = event.output
+    function = event.function
+    semantics = event.backend_semantics
+    templates = event.templates
+    simple: dict[str, Any] = {
+        "_label_raw": event.label_raw,
+        "_layer_label_raw": event.layer_label_raw,
+        "raw_index": event.raw_index,
+        "step_index": event.step_index,
+        "source_trace": event.source_trace or trace,
+        "_tracing_finished": event.tracing_finished,
+        "_construction_done": event.construction_done,
+        "type": event.layer_type,
+        "type_index": event.type_index,
+        "pass_index": event.pass_index,
+        "num_passes": 1,
+        "lookup_keys": [],
+        "out": output.tensor.payload,
+        "transformed_out": None
+        if output.transformed_tensor is None
+        else output.transformed_tensor.payload,
+        "has_saved_activation": output.has_saved_activation,
+        "activation_transform": output.activation_transform,
+        "output_device": output.output_device,
+        "detach_saved_activations": output.detach_saved_activations,
+        "has_saved_args": False if templates is None else templates.has_saved_args,
+        "saved_args": None if templates is None else templates.saved_args,
+        "saved_kwargs": None if templates is None else templates.saved_kwargs,
+        "args_template": None if templates is None else templates.args_template,
+        "kwargs_template": None if templates is None else templates.kwargs_template,
+        "shape": output.tensor.shape,
+        "transformed_out_shape": None
+        if output.transformed_tensor is None
+        else output.transformed_tensor.shape,
+        "dtype": output.tensor.dtype,
+        "transformed_out_dtype": None
+        if output.transformed_tensor is None
+        else output.transformed_tensor.dtype,
+        "activation_memory": output.tensor.memory,
+        "transformed_activation_memory": None
+        if output.transformed_tensor is None
+        else output.transformed_tensor.memory,
+        "visualizer_path": output.visualizer_path,
+        "bytes_delta_at_call": semantics.bytes_delta_at_call,
+        "bytes_peak_at_call": semantics.bytes_peak_at_call,
+        "autograd_memory": semantics.autograd_memory,
+        "num_autograd_tensors": semantics.num_autograd_tensors,
+        "has_out_variations": bool(output.child_versions),
+        "out_versions_by_child": dict(output.child_versions),
+        "func": function.func,
+        "func_call_id": function.func_call_id,
+        "func_name": function.func_name,
+        "func_qualname": function.func_qualname,
+        "code_context": list(function.code_context),
+        "func_duration": function.func_duration or 0,
+        "flops_forward": function.flops_forward or 0,
+        "flops_backward": function.flops_backward or 0,
+        "func_rng_states": function.func_rng_states,
+        "func_autocast_state": function.func_autocast_state,
+        "arg_names": tuple(function.arg_names),
+        "num_args_total": function.num_args_total,
+        "num_pos_args": function.num_pos_args,
+        "num_kwargs": function.num_kwargs,
+        "non_tensor_pos_args": list(function.non_tensor_pos_args),
+        "non_tensor_kwargs": dict(function.non_tensor_kwargs),
+        "func_non_tensor_args": list(function.func_non_tensor_args),
+        "is_inplace": function.is_inplace,
+        "grad_fn_class_name": semantics.grad_fn_class_name,
+        "grad_fn_class_qualname": event.grad_fn_class_qualname,
+        "grad_fn_object_id": None if event.grad_fn_handle is None else id(event.grad_fn_handle),
+        "grad_fn_handle": event.grad_fn_handle,
+        "grad_fn": None,
+        "in_multi_output": output.in_multi_output,
+        "multi_output_index": output.multi_output_index,
+        "multi_output_name": None,
+        "container_path": output.container_path,
+        "container_spec": output.container_spec,
+        "parent_params": list(event.parent_params),
+        "_param_barcodes": [param.barcode for param in event.params],
+        "parent_param_ops": {param.barcode: event.pass_index for param in event.params},
+        "param_shapes": [param.shape for param in event.params],
+        "num_params": sum(
+            0 if param.shape is None else prod(param.shape) for param in event.params
+        ),
+        "equivalence_class": event.equivalence_class,
+        "equivalent_ops": {event.label_raw},
+        "recurrent_ops": [],
+        "parents": [edge.parent_label_raw for edge in event.parents],
+        "parent_arg_positions": event.parent_arg_positions,
+        "_edge_uses": list(event._edge_uses),
+        "root_ancestors": set(event.root_ancestors),
+        "children": list(trace.capture_events.live_index.children(event.label_raw)),
+        "has_children": bool(trace.capture_events.live_index.children(event.label_raw)),
+        "is_input": event.kind == "source" and event.layer_type == "input",
+        "has_input_ancestor": bool(event.input_ancestors),
+        "input_ancestors": set(event.input_ancestors),
+        "is_output": False,
+        "is_output_parent": event.is_output_parent,
+        "is_final_output": False,
+        "has_output_descendant": False,
+        "output_descendants": set(),
+        "is_orphan": False,
+        "io_role": None,
+        "is_buffer": event.kind == "source" and event.layer_type == "buffer",
+        "is_internal_source": event.layer_type != "input" and not event.parents,
+        "has_internal_source_ancestor": event.has_internal_source_ancestor,
+        "internal_source_parents": [],
+        "internal_source_ancestors": set(event.internal_source_ancestors),
+        "is_internal_sink": False,
+        "is_scalar_bool": event.is_scalar_bool,
+        "bool_value": event.bool_value,
+        "module": event.modules[-1] if event.modules else None,
+        "modules": list(event.modules),
+        "module_call_stack": list(
+            trace.capture_events.live_index.module_stack_membership(event.label_raw)
+        ),
+        "input_to_module_calls": [],
+        "module_entry_arg_keys": defaultdict(list),
+        "output_of_modules": [],
+        "output_of_module_calls": [],
+        "is_module_output": False,
+        "is_atomic_module": False,
+        "atomic_module_call": None,
+        "interventions": [
+            result.fire_record for result in event.fire_results if result.fire_record is not None
+        ],
+        "intervention_replaced": event.intervention_replaced,
+        "func_config": dict(function.func_config),
+    }
+    if name in simple:
+        return simple[name]
+    if name in _OPLOG_FIELDS_KNOWN_LATE:
+        raise LiveOpViewFieldNotYetWritten(
+            f"LiveOpView.{name!r} is populated by postprocess Step 0; "
+            "it is not available inside a forward-time callback."
+        )
+    raise AttributeError(f"LiveOpView has no attribute {name!r}.")
+
+
 class LiveOpView:
-    """Read-only Op-shaped adapter over a capture-time live record."""
+    """Read-only Op-shaped adapter over a capture-time operation event."""
 
     __slots__ = ("_trace_ref", "_record")
 
-    def __init__(self, trace: "Trace", record: "LiveOpRecord") -> None:
+    def __init__(self, trace: "Trace", record: "LiveOpRecord | OpEvent") -> None:
         """Initialize the live view.
 
         Parameters
@@ -676,7 +834,7 @@ class LiveOpView:
         trace
             Active trace that owns the live record.
         record
-            Live operation record to expose.
+            Operation event, or a legacy live operation record.
         """
 
         object.__setattr__(self, "_trace_ref", weakref.ref(trace))
@@ -714,6 +872,8 @@ class LiveOpView:
         """
 
         record = object.__getattribute__(self, "_record")
+        if isinstance(record, OpEvent):
+            return _event_live_field(self._trace, record, name)
         if name in record.fields:
             return record.fields[name]
         if hasattr(record, name):

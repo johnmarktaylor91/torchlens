@@ -41,7 +41,6 @@ from ..backends import CaptureBackend
 from ..backends.torch._tl import clear_meta, get_tensor_label
 from ..backends.torch.backend import TorchBackend
 from ..fastlog._halt import HaltSignal
-from ..ir import live_record_for_label
 from ..quantities import Bytes, Duration
 
 if TYPE_CHECKING:
@@ -431,7 +430,6 @@ def _extract_and_mark_outputs(
             continue
         if self.capture_mode == "exhaustive":
             self.output_layers.append(_label_raw)
-            live_record_for_label(self, _label_raw).fields["is_output_parent"] = True
             event = self.capture_events.op_event_by_label_raw.get(_label_raw)
             if event is not None:
                 updated_event = dataclasses.replace(event, is_output_parent=True)

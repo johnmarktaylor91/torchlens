@@ -15,6 +15,7 @@ from .events import (
     ModulePrepEvent,
     OpEvent,
 )
+from .live_index import LiveIndex
 from .predicate import RecordContext
 from .refs import ParamRef, ReservedLabel
 
@@ -42,6 +43,7 @@ class CaptureEvents:
     backend_session: object | None = None
     live_by_raw_label: dict[str, "LiveOpRecord"] = field(default_factory=dict)
     op_event_by_label_raw: dict[str, OpEvent] = field(default_factory=dict)
+    live_index: LiveIndex = field(default_factory=LiveIndex)
     parent_op_label_raws: dict[str, list[str]] = field(default_factory=dict)
     child_op_label_raws: dict[str, list[str]] = field(default_factory=dict)
     parent_param_label_raws: dict[str, list[str]] = field(default_factory=dict)
@@ -54,6 +56,7 @@ class CaptureEvents:
         """Append a single operation event."""
         self.op_events.append(event)
         self.op_event_by_label_raw[event.label_raw] = event
+        self.live_index.append(event)
 
     def extend(self, events: tuple[OpEvent, ...] | list[OpEvent]) -> None:
         """Append multiple operation events in order."""
@@ -141,9 +144,7 @@ def register_live_event(trace: Any, event: OpEvent, live_record: LiveOpRecord) -
     if events is None:
         events = CaptureEvents()
         trace.capture_events = events
-    live_record.event = event
     events.append(event)
-    events.live_by_raw_label[event.label_raw] = live_record
     if event.grad_fn_handle is not None:
         events.grad_fn_handles_by_label_raw[event.label_raw] = event.grad_fn_handle
 
@@ -178,9 +179,7 @@ def replace_op_event(trace: Any, label_raw: str, **updates: Any) -> OpEvent | No
         if candidate.label_raw == label_raw:
             events.op_events[index] = updated_event
             break
-    live_record = events.live_by_raw_label.get(label_raw)
-    if live_record is not None:
-        live_record.event = updated_event
+    events.live_index.replace(updated_event)
     return updated_event
 
 
@@ -200,15 +199,6 @@ def live_record_for_label(trace: Any, label_raw: str) -> LiveOpRecord:
         Live projection for ``label_raw``.
     """
 
-    events = getattr(trace, "capture_events", None)
-    if events is not None and label_raw in events.live_by_raw_label:
-        return events.live_by_raw_label[label_raw]
-    legacy_log = trace._raw_layer_dict[label_raw]
-    return LiveOpRecord(
-        event=getattr(events, "op_event_by_label_raw", {}).get(label_raw),
-        fields=legacy_log.__dict__,
-        tensor_ref=None,
-        t_args=(),
-        t_kwargs={},
-        fire_results=(),
+    raise KeyError(
+        f"{label_raw!r} has no mutable live record; use CaptureEvents.live_index instead."
     )

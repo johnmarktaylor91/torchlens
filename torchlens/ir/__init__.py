@@ -32,6 +32,7 @@ from .events import (
     TraceBuildState,
 )
 from .intervention import FireResult, FunctionEventInput, InterventionTemplateRef
+from .live_index import LiveIndex, LiveIndexWindowError
 from .predicate import RecordContext
 from .refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from .semantics import BackendSemantics, CapturePolicy
@@ -57,6 +58,8 @@ __all__ = [
     "InterventionState",
     "InterventionTemplateRef",
     "LiveOpRecord",
+    "LiveIndex",
+    "LiveIndexWindowError",
     "ModuleEnterEvent",
     "ModuleEvent",
     "ModuleExitEvent",

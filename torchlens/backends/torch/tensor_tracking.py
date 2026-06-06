@@ -36,7 +36,6 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
-from ...ir import live_record_for_label
 from ...data_classes.op import Op
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 
@@ -209,29 +208,6 @@ def _get_ancestors_from_parents(
         input_ancestors.update(parent_entry.input_ancestors)
         internal_source_ancestors.update(parent_entry.internal_source_ancestors)
     return input_ancestors, internal_source_ancestors
-
-
-def _update_tensor_family_links(self: "Trace", entry_to_update: Op) -> None:
-    """Update bidirectional family links for a newly created tensor.
-
-    All four relationship types are updated symmetrically:
-      - **Parent → Child**: new tensor added to each parent's ``children``.
-      - **Spouse ↔ Spouse**: all pairs of parents become spouses (they co-parent).
-      - **Sibling ↔ Sibling**: existing children of each parent become siblings
-        of the new tensor (and vice versa).
-
-    Args:
-        entry_to_update: The newly created Op entry.
-    """
-    tensor_label = entry_to_update._label_raw
-    parent_tensor_labels = entry_to_update.parents
-
-    # Parent → Child (bidirectional: child already knows its parents from fields_dict).
-    for parent_tensor_label in parent_tensor_labels:
-        parent_tensor = live_record_for_label(self, parent_tensor_label).fields
-        if tensor_label not in parent_tensor["children"]:
-            parent_tensor["children"].append(tensor_label)
-            parent_tensor["has_children"] = True
 
 
 def _process_parent_param_ops(

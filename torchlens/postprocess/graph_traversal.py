@@ -116,6 +116,7 @@ def _add_output_layers(
         new_output_node.output_of_module_calls = output_node.modules
         new_output_node.is_module_output = False
         new_output_node.is_atomic_module = False
+        new_output_node.atomic_module_call = None
 
         # Fix ancestry information:
 

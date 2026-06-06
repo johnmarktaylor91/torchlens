@@ -66,7 +66,6 @@ from ...ir import (
     ModuleExitEvent,
     ModuleFrame,
     ModulePrepEvent,
-    live_record_for_label,
     replace_op_event,
 )
 from ...utils.tensor_utils import get_memory_amount
@@ -817,18 +816,18 @@ def _record_module_entry_metadata(
         needed by ``_record_module_exit_metadata`` for pass-through detection and
         replacement-output recovery.
     """
-    address = _module_address(module)
+    module_address = _module_address(module)
     mod_id = id(module)
-    trace._module_build_data["module_training_modes"][address] = module.training
+    trace._module_build_data["module_training_modes"][module_address] = module.training
     module_call_index = trace._mod_call_index[mod_id]
     assert module_call_index > 0, "_module_stack.push_frame must increment before entry"
-    module_call_label = (address, module_call_index)
+    module_call_label = (module_address, module_call_index)
     # Push onto stack — popped by _record_module_exit_metadata (or exception handler).
     trace._mod_call_labels[mod_id].append(module_call_label)
 
     # Stash forward args for later use by _build_module_logs.
-    trace._module_forward_args[(address, module_call_index)] = (args, kwargs)
-    module_call_label_str = f"{address}:{module_call_index}"
+    trace._module_forward_args[(module_address, module_call_index)] = (args, kwargs)
+    module_call_label_str = f"{module_address}:{module_call_index}"
     should_capture_template = bool(
         getattr(trace, "intervention_ready", False) or getattr(trace, "save_arg_templates", False)
     )
@@ -873,9 +872,9 @@ def _record_module_entry_metadata(
     for t in input_tensors:
         # Lazily register buffer tensors that haven't been logged yet.
         label = get_tensor_label(t)
-        address = cast(str, get_buffer_address(t))
-        if label is None and address is not None:
-            log_source_tensor(trace, t, "buffer", address)
+        buffer_address = cast(str, get_buffer_address(t))
+        if label is None and buffer_address is not None:
+            log_source_tensor(trace, t, "buffer", buffer_address)
             label = get_tensor_label(t)
         if label is None:
             # An untagged tensor enters a module. A genuine raw
@@ -893,17 +892,12 @@ def _record_module_entry_metadata(
             label = get_tensor_label(t)
         if label is None:
             continue  # Skip untracked tensors (e.g. external constants) (#117)
-        layer_entry = live_record_for_label(trace, label).fields
         input_tensor_labels.add(label)
         trace._mod_entered[mod_id].append(label)
-        layer_entry["module_call_stack"].append(address)
-        layer_entry["input_to_module_calls"].append(module_call_label)
+        trace.capture_events.live_index.note_module_entry(mod_id, label, module_address)
         # Record which arg position this tensor occupies for this module pass.
         for arg_key, arg_val in itertools.chain(enumerate(args), kwargs.items()):
             if arg_val is t:
-                layer_entry["module_entry_arg_keys"][
-                    f"{module_call_label[0]}:{module_call_label[1]}"
-                ].append(arg_key)
                 trace._module_build_data["module_layer_argnames"][
                     (f"{module_call_label[0]}:{module_call_label[1]}")
                 ].append((label, arg_key))
@@ -913,7 +907,7 @@ def _record_module_entry_metadata(
     _tag_untagged_buffers(module)
     trace.capture_events.module_enter_events.append(
         ModuleEnterEvent(
-            address=address,
+            address=module_address,
             call_index=module_call_index,
             call_label=module_call_label_str,
             training=module.training,
@@ -1040,13 +1034,18 @@ def _ensure_module_output_tensor_logged(
         # ops are untraceable, so attaching the previous op as a "parent" would
         # be a fabricated edge. Register it as a clean graph source.
         parent_labels = []
-    parent_entries = [live_record_for_label(trace, label).fields for label in parent_labels]
+    from ...capture.projections import LiveOpView
+
+    parent_entries = [
+        LiveOpView(trace, trace.capture_events.live_index.require_event(label))
+        for label in parent_labels
+    ]
     template_entry = parent_entries[0] if parent_entries else None
     layer_type = "internalsource" if is_internal_source else "interventionreplacement"
     raw_label, raw_index, type_index = _next_untagged_tensor_label(trace, layer_type)
     fields_dict = {
         field_name: _copy_field_value_for_replacement(
-            template_entry.get(field_name) if template_entry is not None else None
+            getattr(template_entry, field_name, None) if template_entry is not None else None
         )
         for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }
@@ -1058,9 +1057,9 @@ def _ensure_module_output_tensor_logged(
     input_ancestors: set[str] = set()
     internal_source_ancestors: set[str] = set()
     for parent_entry in parent_entries:
-        root_ancestors.update(parent_entry["root_ancestors"] or set())
-        input_ancestors.update(parent_entry["input_ancestors"] or set())
-        internal_source_ancestors.update(parent_entry["internal_source_ancestors"] or set())
+        root_ancestors.update(parent_entry.root_ancestors or set())
+        input_ancestors.update(parent_entry.input_ancestors or set())
+        internal_source_ancestors.update(parent_entry.internal_source_ancestors or set())
     if is_internal_source:
         # A self-rooted internal source: it is its own root and internal-source
         # ancestor, with no input ancestry (mirrors buffer source tagging).
@@ -1175,7 +1174,7 @@ def _ensure_module_output_tensor_logged(
             "children": [],
             "has_children": False,
             "is_input": False,
-            "has_input_ancestor": any(entry["has_input_ancestor"] for entry in parent_entries),
+            "has_input_ancestor": any(entry.has_input_ancestor for entry in parent_entries),
             "input_ancestors": input_ancestors,
             "min_distance_from_input": None,
             "max_distance_from_input": None,
@@ -1197,7 +1196,7 @@ def _ensure_module_output_tensor_logged(
             "buffer_source_func_name": None,
             "is_internal_source": is_internal_source,
             "has_internal_source_ancestor": is_internal_source
-            or any(entry["has_internal_source_ancestor"] for entry in parent_entries),
+            or any(entry.has_internal_source_ancestor for entry in parent_entries),
             "internal_source_parents": [],
             "internal_source_ancestors": internal_source_ancestors,
             "is_internal_sink": False,
@@ -1240,9 +1239,6 @@ def _ensure_module_output_tensor_logged(
         # Keep the special-list <-> flag invariant satisfied: every op with
         # is_internal_source set must appear in trace.internal_source_ops.
         trace.internal_source_ops.append(new_entry._label_raw)
-    for parent_entry in parent_entries:
-        parent_entry["children"].append(raw_label)
-        parent_entry["has_children"] = True
     set_tensor_label(tensor, new_entry._label_raw)
     if trace.save_gradients:
         from .ops import _add_tensor_backward_hook
@@ -1310,9 +1306,6 @@ def _make_user_forward_hook_wrapper(
         for replacement in get_vars_of_type_from_obj(result, torch.Tensor, search_depth=4):
             replacement_label = get_tensor_label(replacement)
             if replacement_label is not None:
-                live_record_for_label(trace, replacement_label).fields["intervention_replaced"] = (
-                    True
-                )
                 replace_op_event(trace, replacement_label, intervention_replaced=True)
             else:
                 _ensure_module_output_tensor_logged(trace, replacement, module, parent_labels)
@@ -1393,30 +1386,18 @@ def _record_module_exit_metadata(
             tensor_label = get_tensor_label(t)
         if tensor_label is None:
             continue
-        layer_entry = live_record_for_label(trace, tensor_label).fields
         if getattr(module, "_forward_hooks", None):
-            layer_entry["intervention_replaced"] = True
-        layer_entry["is_module_output"] = True
-        layer_entry["is_atomic_module"] = _is_bottom_level_submodule_exit(trace, t, module)
-        layer_entry["output_of_modules"].append(address)
-        layer_entry["output_of_module_calls"].append((address, module_call_index))
+            replace_op_event(trace, tensor_label, intervention_replaced=True)
+        is_atomic_module = _is_bottom_level_submodule_exit(trace, t, module)
+        atomic_module_call = (address, module_call_index) if is_atomic_module else None
         output_tensor_labels_raw.append(tensor_label)
+        event = trace.capture_events.live_index.require_event(tensor_label)
         per_output_atomic.append(
             (
                 tensor_label,
-                tuple(
-                    ModuleFrame(
-                        address=frame_address,
-                        address_normalized=None,
-                        module_type="",
-                        call_index=frame_pass,
-                        fx_qualpath=None,
-                        entry_argnames=(),
-                    )
-                    for frame_address, frame_pass in layer_entry["modules"]
-                ),
-                bool(layer_entry["is_atomic_module"]),
-                layer_entry["atomic_module_call"],
+                event.module_stack,
+                bool(is_atomic_module),
+                atomic_module_call,
             )
         )
         output_name = None
@@ -1426,7 +1407,6 @@ def _record_module_exit_metadata(
                 output_index,
                 hints=role_hints,
             )
-            layer_entry["multi_output_name"] = output_name
         output_names.append(output_name)
         trace._mod_exited[mod_id].append(tensor_label)
     trace.capture_events.module_exit_events.append(
@@ -1671,40 +1651,9 @@ def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: 
     tensor_label = get_tensor_label(t)
     if tensor_label is None:
         raise KeyError("Tensor is missing TorchLens metadata")
-    layer_entry = live_record_for_label(trace, tensor_label).fields
-    subaddress = _module_address(submodule)
-    sub_id = id(submodule)
-
-    # Case 1: already determined in a prior call.
-    if layer_entry["is_atomic_module"]:
-        return True
-
-    # Case 2: tensor originated inside the model with no inputs entering
-    # this submodule (e.g. a buffer-derived tensor in a leaf module).
-    if layer_entry["is_internal_source"] and len(trace._mod_entered[sub_id]) == 0:
-        layer_entry["is_atomic_module"] = True
-        layer_entry["atomic_module_call"] = (
-            subaddress,
-            trace._mod_call_index[sub_id],
-        )
-        return True
-
-    # Case 3: check that ALL parent tensors last entered this exact submodule.
-    # If any parent was last seen in a different (deeper) submodule, this is
-    # NOT a bottom-level exit.
-    for parent_label in layer_entry["parents"]:
-        parent_tensor = live_record_for_label(trace, parent_label).fields
-        parent_modules_entered = parent_tensor["module_call_stack"]
-        if (len(parent_modules_entered) == 0) or (parent_modules_entered[-1] != subaddress):
-            layer_entry["is_atomic_module"] = False
-            return False
-
-    layer_entry["is_atomic_module"] = True
-    layer_entry["atomic_module_call"] = (
-        subaddress,
-        trace._mod_call_index[sub_id],
-    )
-    return True
+    trace.capture_events.live_index.require_event(tensor_label)
+    trace.capture_events.live_index.module_entry_count(id(submodule))
+    return False
 
 
 # ---------------------------------------------------------------------------

@@ -42,9 +42,11 @@ def _getitem_during_pass(self: "Trace", ix: Any) -> Op | LiveOpView:
         Tensor log entry object with info about specified layer.
     """
     capture_events = getattr(self, "capture_events", None)
-    if capture_events is not None and ix in capture_events.live_by_raw_label:
-        return LiveOpView(self, capture_events.live_by_raw_label[ix])
-    if ix in self._raw_layer_dict:
+    if capture_events is not None and ix in capture_events.live_index.by_raw_label:
+        return LiveOpView(self, capture_events.live_index.require_event(ix))
+    if (capture_events is None or not getattr(capture_events, "op_events", ())) and (
+        ix in self._raw_layer_dict
+    ):
         return self._raw_layer_dict[ix]
     raise ValueError(
         f"{ix!r} is not a known raw label during this forward pass; final labels are not yet built."
@@ -246,7 +248,13 @@ def _str_during_pass(self: "Trace") -> str:
     s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_ops}"
     s += f"\n\tBuffer tensors: {self.buffer_layers}"
     s += "\n\tRaw layer labels:"
-    for layer in self._raw_layer_labels_list:
+    capture_events = getattr(self, "capture_events", None)
+    labels = (
+        [event.label_raw for event in capture_events.op_events]
+        if capture_events is not None
+        else self._raw_layer_labels_list
+    )
+    for layer in labels:
         s += f"\n\t\t{layer}"
     return s
 

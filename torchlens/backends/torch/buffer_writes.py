@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 from ... import _state
-from ...ir import BufferWriteEvent, live_record_for_label
+from ...ir import BufferWriteEvent
 from ...utils.tensor_utils import safe_copy
 from ._tl import get_buffer_address, get_tensor_label, set_buffer_address
 
@@ -325,16 +325,6 @@ class BufferWriteTracker:
         version_label = get_tensor_label(value)
         if version_label is None:
             return None
-        fields = live_record_for_label(self.trace, version_label).fields
-        fields["buffer_source"] = producer_label_raw
-        fields["buffer_write_kind"] = kind
-        fields["buffer_value_changed"] = value_changed
-        fields["buffer_replay_validated"] = kind != "fused" or self.trace.save_arg_values
-        fields["buffer_source_func_name"] = source_func_name
-        if producer_label_raw is not None:
-            _connect_live_buffer_version_parent(
-                self.trace, fields, producer_label_raw, version_label
-            )
         return version_label
 
     def _refresh_overlapping_alias_snapshots(self, written_address: str) -> None:
@@ -447,30 +437,6 @@ def _make_scoped_setattr(
                 tracker.record_reassignment(self, name, value)
 
     return scoped_setattr
-
-
-def _connect_live_buffer_version_parent(
-    trace: "Trace",
-    version_fields: dict[str, Any],
-    producer_label_raw: str,
-    version_label_raw: str,
-) -> None:
-    """Connect a live producer to a just-logged buffer-version node."""
-
-    try:
-        producer_fields = live_record_for_label(trace, producer_label_raw).fields
-    except KeyError:
-        return
-    if producer_label_raw not in version_fields["parents"]:
-        version_fields["parents"].append(producer_label_raw)
-    version_fields["parent_arg_positions"]["args"][0] = producer_label_raw
-    if version_label_raw not in producer_fields["children"]:
-        producer_fields["children"].append(version_label_raw)
-    producer_fields["has_children"] = True
-    version_fields["has_input_ancestor"] = bool(producer_fields["has_input_ancestor"])
-    version_fields["input_ancestors"].update(producer_fields["input_ancestors"])
-    version_fields["root_ancestors"].discard(version_label_raw)
-    version_fields["root_ancestors"].update(producer_fields["root_ancestors"])
 
 
 def _iter_modules_with_addresses(model: nn.Module) -> list[tuple[str, nn.Module]]:

@@ -8,9 +8,9 @@ import importlib
 from math import prod
 from typing import TYPE_CHECKING, Any, cast
 
-import torch
 from torch import nn
-from torchlens.ir import CaptureEvents, LiveOpRecord
+import torch
+from torchlens.ir import CaptureEvents
 from torchlens.ir.events import (
     ModuleEnterEvent,
     ModuleExitEvent,
@@ -87,7 +87,6 @@ def register_materialized_event(
     trace: "Trace",
     event: OpEvent,
     op_log: "Op",
-    live_record: LiveOpRecord | None = None,
 ) -> None:
     """Append an event and expose its live log to in-flight hooks.
 
@@ -98,9 +97,7 @@ def register_materialized_event(
     event
         Operation event emitted for the new log.
     op_log
-        Live operation log registered in the transient build state.
-    live_record
-        Optional mutable capture-time projection for this operation.
+        Ignored legacy parameter retained for call-site compatibility.
 
     Returns
     -------
@@ -113,10 +110,6 @@ def register_materialized_event(
         events = CaptureEvents()
         trace.capture_events = events
     events.append(event)
-    if live_record is not None:
-        live_record.event = event
-        events.live_by_raw_label[event.label_raw] = live_record
-    _register_raw_log(trace, event, op_log)
 
 
 def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
@@ -191,6 +184,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     events.conditional_events.clear()
     events.live_by_raw_label.clear()
     events.op_event_by_label_raw.clear()
+    events.live_index.clear()
     events.grad_fn_handles_by_label_raw.clear()
 
 

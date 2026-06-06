@@ -53,7 +53,7 @@ from ._literals import (
 )
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
-from .ir import live_record_for_label
+from .ir import ParentEdge, replace_op_event
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
 from .types import ActivationPostfunc, GradientPostfunc
@@ -380,13 +380,22 @@ def _register_live_tensor_connection(
         Mutates the live parent and child field mappings.
     """
 
-    parent_fields = live_record_for_label(trace, parent_label).fields
-    child_fields = live_record_for_label(trace, child_label).fields
-    if child_label not in parent_fields["children"]:
-        parent_fields["children"].append(child_label)
-        parent_fields["has_children"] = True
-    if parent_label not in child_fields["parents"]:
-        child_fields["parents"].append(parent_label)
+    event = trace.capture_events.live_index.require_event(child_label)
+    if parent_label in {edge.parent_label_raw for edge in event.parents}:
+        return
+    parent_arg_positions = copy.deepcopy(event.parent_arg_positions)
+    parent_arg_positions.setdefault("args", {})[len(parent_arg_positions.get("args", {}))] = (
+        parent_label
+    )
+    replace_op_event(
+        trace,
+        child_label,
+        parents=(
+            *event.parents,
+            ParentEdge(parent_label_raw=parent_label, arg_position=None, edge_use="output"),
+        ),
+        parent_arg_positions=parent_arg_positions,
+    )
 
 
 def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.Tensor]:
