@@ -37,7 +37,7 @@ import dataclasses
 import re
 import time
 import warnings
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable
 from math import prod
 from types import SimpleNamespace
@@ -122,13 +122,12 @@ from .tensor_tracking import (
 from ..._errors import TorchLensPostfuncError
 from ..._training_validation import TrainingModeConfigError
 from ...data_classes.internal_types import FuncExecutionContext
-from ...capture.predicates import _evaluate_keep_op
+from ...capture.predicates import _evaluate_keep_op, build_op_record_context
 from ...capture.projections import (
-    _build_record_context,
     append_projected_event,
     get_active_recording_state,
 )
-from ...fastlog.types import ActivationRecord, CaptureSpec
+from ...fastlog.types import ActivationRecord, CaptureSpec, ModuleStackFrame, RecordContext
 from ...capture.salient_args import extract_salient_args
 
 if TYPE_CHECKING:
@@ -1261,33 +1260,30 @@ def log_function_output_tensors_predicate(
         _label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
         set_tensor_label(out, _label_raw)
         module_frame = state.module_stack[-1] if state.module_stack else None
-        ctx = _build_record_context(
+        ctx = build_op_record_context(
             kind="op",
-            op_log_or_op_data={
-                "label": _label_raw,
-                "raw_label": _label_raw,
-                "_label_raw": _label_raw,
-                "raw_index": raw_index,
-                "type": layer_type,
-                "type_index": type_index,
-                "func_name": func_name,
-                "parent_labels": parent_labels,
-                "tensor": out,
-                "output_index": output_index,
-                "is_bottom_level_func": is_bottom_level_func,
-                "address": module_frame.address if module_frame else None,
-                "module_type": module_frame.module_type if module_frame else None,
-                "module_pass_index": module_frame.pass_index if module_frame else None,
-            },
+            label=_label_raw,
+            raw_label=_label_raw,
+            raw_index=raw_index,
+            layer_type=layer_type,
+            type_index=type_index,
+            func_name=func_name,
+            parent_labels=parent_labels,
+            tensor=out,
+            output_index=output_index,
+            is_bottom_level_func=is_bottom_level_func,
             module_stack=state.module_stack,
             history=tuple(state.history),
             op_counts=state.op_counts,
             pass_index=state.pass_index,
             event_index=state.event_index,
             step_index=state.step_index,
-            time_since_pass_start=time.time() - self.capture_start_time,
+            capture_start_time=self.capture_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
+            address=module_frame.address if module_frame else None,
+            module_type=module_frame.module_type if module_frame else None,
+            module_pass_index=module_frame.pass_index if module_frame else None,
         )
         try:
             if out.grad_fn is not None:
@@ -2532,6 +2528,136 @@ def _stream_activation_fields(trace: "Trace", fields_dict: dict[str, Any]) -> No
         writer.write_blob(blob_id, tensor, kind=kind, label=label)
 
 
+def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[ModuleStackFrame, ...]:
+    """Project exhaustive op fields into predicate module-stack frames.
+
+    Parameters
+    ----------
+    fields_dict:
+        Live exhaustive op field mapping.
+
+    Returns
+    -------
+    tuple[ModuleStackFrame, ...]
+        Module frames suitable for ``RecordContext.module_stack``.
+    """
+
+    frames: list[ModuleStackFrame] = []
+    for module_address, module_pass in fields_dict.get("modules", ()):
+        frames.append(
+            ModuleStackFrame(
+                address=str(module_address),
+                module_type="",
+                module_id=0,
+                pass_index=int(module_pass),
+            )
+        )
+    return tuple(frames)
+
+
+def _append_trace_predicate_context(trace: "Trace", ctx: RecordContext) -> None:
+    """Append a trace selective-save context to the bounded runtime window.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    ctx:
+        Context to append.
+
+    Returns
+    -------
+    None
+        Mutates trace-owned predicate runtime state.
+    """
+
+    all_contexts = getattr(trace, "_predicate_all_contexts", None)
+    if all_contexts is None:
+        all_contexts = []
+        trace._predicate_all_contexts = all_contexts
+    all_contexts.append(ctx)
+    history_size = int(getattr(trace, "_predicate_history_size", 8))
+    if history_size == 0:
+        return
+    history = getattr(trace, "_predicate_history", None)
+    if history is None:
+        history = deque()
+        trace._predicate_history = history
+    history.append(ctx)
+    while len(history) > history_size:
+        history.popleft()
+
+
+def _evaluate_trace_save_predicate(
+    trace: "Trace",
+    fields_dict: dict[str, Any],
+    tensor: torch.Tensor,
+) -> CaptureSpec | None:
+    """Evaluate ``trace(save=...)`` for one exhaustive op, if configured.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    fields_dict:
+        Live exhaustive op fields for the tensor.
+    tensor:
+        Output tensor being considered.
+
+    Returns
+    -------
+    CaptureSpec | None
+        Capture decision when selective predicate save is active, otherwise ``None``.
+    """
+
+    options = getattr(trace, "_predicate_save_options", None)
+    if options is None:
+        return None
+    history = tuple(getattr(trace, "_predicate_history", ()))
+    raw_label = fields_dict["_label_raw"]
+    ctx = build_op_record_context(
+        kind="op",
+        label=raw_label,
+        raw_label=raw_label,
+        raw_index=int(fields_dict["raw_index"]),
+        layer_type=str(fields_dict["type"]),
+        type_index=int(fields_dict["type_index"]),
+        func_name=fields_dict.get("func_name"),
+        parent_labels=tuple(fields_dict.get("parents", ())),
+        tensor=tensor,
+        output_index=fields_dict.get("multi_output_index"),
+        is_bottom_level_func=True,
+        module_stack=_module_stack_frames_from_fields(fields_dict),
+        history=history,
+        op_counts=dict(getattr(trace, "_raw_layer_type_counter", {})),
+        pass_index=int(fields_dict.get("pass_index", 0)),
+        event_index=int(fields_dict["raw_index"]),
+        step_index=fields_dict.get("step_index"),
+        capture_start_time=float(getattr(trace, "capture_start_time", time.time())),
+        include_source_events=False,
+        sample_id=None,
+        address=fields_dict.get("module"),
+        module_type=None,
+        module_pass_index=None,
+    )
+    try:
+        spec = _evaluate_keep_op(ctx, options)
+    finally:
+        _append_trace_predicate_context(trace, ctx)
+    decisions = getattr(trace, "_predicate_save_decisions", None)
+    if decisions is None:
+        decisions = {}
+        trace._predicate_save_decisions = decisions
+    decisions[
+        (
+            raw_label,
+            int(fields_dict.get("pass_index", 0)),
+            tuple(fields_dict.get("container_path", ())),
+        )
+    ] = spec
+    return spec
+
+
 def _make_layer_log_entry(
     self: "Trace",
     t: torch.Tensor,
@@ -2567,7 +2693,12 @@ def _make_layer_log_entry(
         keep_by_predicate = bool(module_filter(SimpleNamespace(**fields_dict)))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
     raw_index = cast(int, fields_dict["raw_index"])
-    if keep_by_predicate and ((layer_nums_to_save == "all") or (raw_index in layer_nums_to_save)):
+    predicate_spec = _evaluate_trace_save_predicate(self, fields_dict, t)
+    if predicate_spec is None:
+        save_this_activation = (layer_nums_to_save == "all") or (raw_index in layer_nums_to_save)
+    else:
+        save_this_activation = predicate_spec.save_out
+    if keep_by_predicate and save_this_activation:
         _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, activation_transform)
     op_event = _op_event_from_log(self, fields_dict, t, fire_results)
     self.capture_events.append(op_event)

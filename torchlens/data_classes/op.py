@@ -685,7 +685,7 @@ class Op:
     _construction_done: bool = False
 
     def __getattribute__(self, name: str) -> Any:
-        """Materialize lazy grads when the public ``grad`` field is accessed."""
+        """Materialize lazy grads and reject finalized unsaved predicate outs."""
 
         if name == "grad":
             state = object.__getattribute__(self, "__dict__")
@@ -693,6 +693,17 @@ class Op:
             if grad is None and state.get("grad_ref") is not None:
                 return object.__getattribute__(self, "materialize_grad")()
             return grad
+        if name == "out":
+            state = object.__getattribute__(self, "__dict__")
+            source_ref = state.get("_source_trace_ref")
+            source_trace = None if source_ref is None else source_ref()
+            if (
+                state.get("_tracing_finished")
+                and not state.get("has_saved_activation", False)
+                and getattr(source_trace, "_predicate_save_options", None) is not None
+            ):
+                label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
+                raise ValueError(f"Activation for {label} was not saved by trace(save=...).")
         return object.__getattribute__(self, name)
 
     def __setattr__(self, name: str, value: Any) -> None:

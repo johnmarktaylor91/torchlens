@@ -83,7 +83,9 @@ from .visualization.code_panel import (
 )
 from .intervention.errors import InterventionReadyConflictError
 from .intervention.hooks import normalize_hook_plan
+from .intervention.selectors import BaseSelector
 from .intervention.resolver import resolve_sites
+from .fastlog.options import PredicateFn, RecordingOptions
 from ._trace_state import TraceState
 
 _can_resolve_hf_processor = _hf_bridge._can_resolve_hf_processor
@@ -978,6 +980,7 @@ def _run_model_and_save_specified_outs(
     recipes: list[Callable[[Any], dict[str, Any]]]
     | tuple[Callable[[Any], dict[str, Any]], ...]
     | None = None,
+    save_predicate: PredicateFn | None = None,
 ) -> Trace:
     """Run a forward pass with logging enabled, returning a populated Trace.
 
@@ -1049,6 +1052,8 @@ def _run_model_and_save_specified_outs(
         save_visualizations: Whether rendered thumbnails should persist in portable bundles.
         recipes: Per-trace additive facet recipes captured into the trace-owned
             immutable registry snapshot.
+        save_predicate: Optional in-flight predicate controlling saved activation
+            payloads during the exhaustive pass.
 
     Returns:
         Fully-populated Trace.
@@ -1142,6 +1147,14 @@ def _run_model_and_save_specified_outs(
     trace._defer_streaming_bundle_finalization = save_grads_to is not None
     trace._in_exhaustive_pass = True
     trace.raise_on_nan = raise_on_nan
+    if save_predicate is not None:
+        trace._predicate_save_options = RecordingOptions(
+            keep_op=save_predicate,
+            default_op=False,
+            history_size=8,
+            on_predicate_error="fail-fast",
+        )
+        trace._predicate_history_size = 8
     bundle_path = save_grads_to if save_grads_to is not None else save_outs_to
     if bundle_path is not None:
         trace._out_writer = BundleStreamWriter(bundle_path)
@@ -1256,6 +1269,33 @@ def _safe_visualizer_filename(label: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", label.replace(":", "pass")).strip("_") or "layer"
 
 
+def _split_save_options_and_predicate(
+    save_value: SaveOptions | PredicateFn | BaseSelector | None,
+) -> tuple[SaveOptions | None, PredicateFn | None]:
+    """Separate grouped save options from ``trace(save=predicate)`` sugar.
+
+    Parameters
+    ----------
+    save_value:
+        Value supplied to the public ``save`` parameter.
+
+    Returns
+    -------
+    tuple[SaveOptions | None, PredicateFn | None]
+        Grouped save options and optional selective-save predicate.
+    """
+
+    if save_value is None:
+        return None, None
+    if isinstance(save_value, SaveOptions):
+        return save_value, None
+    if isinstance(save_value, BaseSelector):
+        return None, cast(PredicateFn, save_value)
+    if callable(save_value):
+        return None, cast(PredicateFn, save_value)
+    raise TypeError("save must be a SaveOptions instance, predicate callable, selector, or None")
+
+
 def trace(
     model: nn.Module,
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1296,7 +1336,7 @@ def trace(
     compute_input_output_distances: bool | MissingType = MISSING,
     recurrence_detection: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
-    save: SaveOptions | None = None,
+    save: SaveOptions | PredicateFn | BaseSelector | None = None,
     streaming: StreamingOptions | None = None,
     backward_ready: bool | MissingType = MISSING,
     name: str | None | MissingType = MISSING,
@@ -1515,6 +1555,11 @@ def trace(
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
     if _is_mlx_module_instance(model):
+        mlx_save_options, mlx_save_predicate = _split_save_options_and_predicate(save)
+        if mlx_save_predicate is not None:
+            raise NotImplementedError(
+                "trace(save=predicate) is only supported by the PyTorch backend."
+            )
         if activation_transform is not MISSING:
             if activation_transform is not MISSING:
                 raise TypeError(
@@ -1551,7 +1596,7 @@ def trace(
             intervention_ready=intervention_ready,
             hooks=hooks,
             capture=capture,
-            save=save,
+            save=mlx_save_options,
             visualization=None,
             backward_ready=backward_ready,
             name=name,
@@ -1620,8 +1665,9 @@ def trace(
         input_args = _coerce_input_args(model, input_args)
 
     check_model_and_input_variants(model, input_args, input_kwargs)
+    grouped_save_options, save_predicate = _split_save_options_and_predicate(save)
     save_options = merge_save_options(
-        save=save,
+        save=grouped_save_options,
         activation_transform=activation_transform,
         grad_transform=grad_transform,
         save_raw_activations=save_raw_activations,
@@ -1731,6 +1777,11 @@ def trace(
     uses_two_pass = (layers_to_save not in ["all", "none", None, []]) or (
         grads_to_save_resolved not in ["all", "none", None, []]
     )
+    if save_predicate is not None and uses_two_pass:
+        raise ValueError(
+            "trace(save=predicate) is single-pass selective save and cannot be combined with "
+            "specific layers_to_save or gradients_to_save in this phase."
+        )
     log_name = name if name is not None else _state._auto_name(model)
     cache_path: Path | None = None
     cache_key: str | None = None
@@ -1751,6 +1802,7 @@ def trace(
             "backward_ready": train_mode_value,
             "output_transform": repr(output_transform_value),
             "facet_recipes": _facet_recipe_cache_key(facet_recipes),
+            "save_predicate": repr(save_predicate),
         }
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
         cache_root = _capture_cache_dir(cache_dir_value) / "capture"
@@ -1827,6 +1879,7 @@ def trace(
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,
             recipes=facet_recipes,
+            save_predicate=save_predicate,
         )
     else:
         # --- TWO-PASS path ---
@@ -1888,6 +1941,7 @@ def trace(
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,
             recipes=facet_recipes,
+            save_predicate=save_predicate,
         )
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching outs.

@@ -127,6 +127,22 @@ class BaseSelector:
 
         return f"tl.{self.selector_kind}({self.selector_value!r})"
 
+    def __call__(self, ctx: Any) -> bool:
+        """Return whether this selector matches a predicate record context.
+
+        Parameters
+        ----------
+        ctx:
+            Capture-time ``RecordContext`` or a layer-like object.
+
+        Returns
+        -------
+        bool
+            Whether ``ctx`` matches this selector.
+        """
+
+        return _selector_matches_record_context(self, ctx)
+
 
 @dataclass(frozen=True, repr=False)
 class LabelSelector(BaseSelector):
@@ -898,6 +914,124 @@ def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSele
     module_ops = getattr(address_or_layer, "output_of_module_calls", ())
     candidates = tuple(modules) + tuple(module_ops)
     return any(_module_pass_matches(candidate, address) for candidate in candidates)
+
+
+def _context_labels(ctx: Any) -> set[str]:
+    """Return all label-like strings visible on a predicate context.
+
+    Parameters
+    ----------
+    ctx:
+        Capture-time context or layer-like object.
+
+    Returns
+    -------
+    set[str]
+        Non-empty label strings available for selector matching.
+    """
+
+    labels: set[str] = set()
+    for attr in ("label", "raw_label", "label_raw", "layer_label", "layer_label_short"):
+        value = getattr(ctx, attr, None)
+        if value is not None:
+            labels.add(str(value))
+    return labels
+
+
+def _context_module_candidates(ctx: Any) -> tuple[str, ...]:
+    """Return module-address candidates from a context.
+
+    Parameters
+    ----------
+    ctx:
+        Capture-time context or layer-like object.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Module addresses and pass-qualified module labels.
+    """
+
+    candidates: list[str] = []
+    address = getattr(ctx, "address", None)
+    if address is not None:
+        candidates.append(str(address))
+    for frame in getattr(ctx, "module_stack", ()):
+        frame_address = getattr(frame, "address", None)
+        if frame_address is None and isinstance(frame, dict):
+            frame_address = frame.get("address")
+        if frame_address is None:
+            continue
+        frame_pass = getattr(frame, "pass_index", None)
+        if frame_pass is None and isinstance(frame, dict):
+            frame_pass = frame.get("pass_index")
+        candidates.append(str(frame_address))
+        if frame_pass is not None:
+            candidates.append(f"{frame_address}:{frame_pass}")
+    modules = getattr(ctx, "modules", ())
+    module_ops = getattr(ctx, "output_of_module_calls", ())
+    candidates.extend(str(candidate) for candidate in tuple(modules) + tuple(module_ops))
+    return tuple(candidates)
+
+
+def _selector_matches_record_context(selector: BaseSelector, ctx: Any) -> bool:
+    """Evaluate a selector as a capture-time predicate.
+
+    Parameters
+    ----------
+    selector:
+        Selector to evaluate.
+    ctx:
+        Capture-time ``RecordContext`` or layer-like object.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches ``ctx``.
+    """
+
+    kind = selector.selector_kind
+    if kind == "label":
+        return str(selector.selector_value) in _context_labels(ctx)
+    if kind == "contains":
+        needle = str(selector.selector_value)
+        return any(needle in label for label in _context_labels(ctx))
+    if kind == "func":
+        value = selector.selector_value
+        if isinstance(value, dict):
+            name = value.get("name")
+            output_target = value.get("output")
+            if output_target is not None and getattr(ctx, "output_index", None) != output_target:
+                return False
+        else:
+            name = value
+        func_name = getattr(ctx, "func_name", None)
+        layer_type = getattr(ctx, "layer_type", None)
+        return str(name) in {str(func_name), str(layer_type)}
+    if kind == "module":
+        target = str(selector.selector_value)
+        return any(
+            _module_pass_matches(candidate, target) for candidate in _context_module_candidates(ctx)
+        )
+    if kind == "in_module":
+        target = str(selector.selector_value)
+        return any(
+            _module_pass_matches(candidate, target) for candidate in _context_module_candidates(ctx)
+        )
+    if kind == "output":
+        return getattr(ctx, "output_index", None) == selector.selector_value
+    if kind == "predicate":
+        predicate = getattr(selector, "predicate")
+        return bool(predicate(ctx))
+    if kind == "and" and isinstance(selector, CompositeSelector):
+        left, right = selector.selectors
+        return bool(left(ctx)) and bool(right(ctx))  # type: ignore[operator]
+    if kind == "or" and isinstance(selector, CompositeSelector):
+        left, right = selector.selectors
+        return bool(left(ctx)) or bool(right(ctx))  # type: ignore[operator]
+    if kind == "not" and isinstance(selector, NotSelector):
+        return not bool(selector.selector(ctx))  # type: ignore[operator]
+    return False
 
 
 def _module_pass_matches(module_pass: str, address: str) -> bool:
