@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 import weakref
 
@@ -146,6 +146,42 @@ def register_live_event(trace: Any, event: OpEvent, live_record: LiveOpRecord) -
     events.live_by_raw_label[event.label_raw] = live_record
     if event.grad_fn_handle is not None:
         events.grad_fn_handles_by_label_raw[event.label_raw] = event.grad_fn_handle
+
+
+def replace_op_event(trace: Any, label_raw: str, **updates: Any) -> OpEvent | None:
+    """Replace one emitted operation event with updated field values.
+
+    Parameters
+    ----------
+    trace
+        Active trace carrying the capture event buffer.
+    label_raw
+        Raw label identifying the operation event.
+    **updates
+        Dataclass field updates to apply to the frozen event.
+
+    Returns
+    -------
+    OpEvent | None
+        Updated event when found, otherwise ``None``.
+    """
+
+    events = getattr(trace, "capture_events", None)
+    if events is None:
+        return None
+    event = events.op_event_by_label_raw.get(label_raw)
+    if event is None:
+        return None
+    updated_event = replace(event, **updates)
+    events.op_event_by_label_raw[label_raw] = updated_event
+    for index, candidate in enumerate(events.op_events):
+        if candidate.label_raw == label_raw:
+            events.op_events[index] = updated_event
+            break
+    live_record = events.live_by_raw_label.get(label_raw)
+    if live_record is not None:
+        live_record.event = updated_event
+    return updated_event
 
 
 def live_record_for_label(trace: Any, label_raw: str) -> LiveOpRecord:

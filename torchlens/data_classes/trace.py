@@ -880,6 +880,7 @@ class Trace:
             "_module" + "_containment_engine": "module_containment_engine",
             "_exhaustive" + "_module_stack": "exhaustive_module_stack",
             "_unsaved" + "_layers_lookup_keys": "unsaved_layers_lookup_keys",
+            "_input" + "_tensor_addresses": "input_tensor_addresses",
         }
 
     def __getattr__(self, name: str) -> Any:

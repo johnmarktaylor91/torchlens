@@ -541,6 +541,7 @@ def run_and_log_inputs_through_model(
             input_tensors,
             input_tensor_addresses,
         ) = _fetch_label_move_input_tensors(input_args, input_arg_names, input_kwargs, model_device)
+        self._input_tensor_addresses = list(input_tensor_addresses)
 
         # RNG state snapshot/restore for two-pass consistency (#58).
         # Exhaustive pass: snapshot state BEFORE forward so fast pass can replay.

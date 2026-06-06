@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from .backward import BackwardSidecar
-from .buffer import CaptureEvents, LiveOpRecord, live_record_for_label, register_live_event
+from .buffer import (
+    CaptureEvents,
+    LiveOpRecord,
+    live_record_for_label,
+    register_live_event,
+    replace_op_event,
+)
 from .events import (
     ArgTemplateRef,
     BlobRef,
@@ -67,4 +73,5 @@ __all__ = [
     "TraceBuildState",
     "live_record_for_label",
     "register_live_event",
+    "replace_op_event",
 ]

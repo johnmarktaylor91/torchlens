@@ -67,6 +67,7 @@ from ...ir import (
     ModuleFrame,
     ModulePrepEvent,
     live_record_for_label,
+    replace_op_event,
 )
 from ...utils.tensor_utils import get_memory_amount
 from ...utils.introspection import (
@@ -926,6 +927,7 @@ def _record_module_entry_metadata(
             layer_argnames=tuple(
                 trace._module_build_data["module_layer_argnames"][module_call_label_str]
             ),
+            input_labels=tuple(input_tensor_labels_at_entry),
         )
     )
     return input_tensor_labels, input_tensor_labels_at_entry
@@ -1311,6 +1313,7 @@ def _make_user_forward_hook_wrapper(
                 live_record_for_label(trace, replacement_label).fields["intervention_replaced"] = (
                     True
                 )
+                replace_op_event(trace, replacement_label, intervention_replaced=True)
             else:
                 _ensure_module_output_tensor_logged(trace, replacement, module, parent_labels)
         return result
@@ -1361,6 +1364,7 @@ def _record_module_exit_metadata(
         )
     output_tensor_labels_raw: list[str] = []
     per_output_atomic: list[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None]] = []
+    output_names: list[str | None] = []
     for output_index, (t, container_path, _container_spec) in enumerate(output_entries):
         # nn.Identity modules and pass-through tensors (output is same object
         # as input) need _decorated_identity() to create a distinct log entry
@@ -1415,12 +1419,15 @@ def _record_module_exit_metadata(
                 layer_entry["atomic_module_call"],
             )
         )
+        output_name = None
         if len(output_entries) > 1:
-            layer_entry["multi_output_name"] = multi_output_role_from_path(
+            output_name = multi_output_role_from_path(
                 container_path,
                 output_index,
                 hints=role_hints,
             )
+            layer_entry["multi_output_name"] = output_name
+        output_names.append(output_name)
         trace._mod_exited[mod_id].append(tensor_label)
     trace.capture_events.module_exit_events.append(
         ModuleExitEvent(
@@ -1432,6 +1439,7 @@ def _record_module_exit_metadata(
             output_tensor_labels_raw=tuple(output_tensor_labels_raw),
             has_user_forward_hooks=bool(getattr(module, "_forward_hooks", None)),
             per_output_atomic=tuple(per_output_atomic),
+            output_names=tuple(output_names),
         )
     )
 

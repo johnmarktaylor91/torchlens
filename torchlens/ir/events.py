@@ -214,6 +214,7 @@ class ModuleEnterEvent:
     forward_args_template: object | None
     forward_kwargs_template: object | None
     layer_argnames: tuple[tuple[str, object], ...]
+    input_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +229,7 @@ class ModuleExitEvent:
     output_tensor_labels_raw: tuple[str, ...]
     has_user_forward_hooks: bool
     per_output_atomic: tuple[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None], ...]
+    output_names: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,6 +327,7 @@ class TraceBuildState:
     unsaved_layers_lookup_keys: set[str] = field(default_factory=set)
     output_container_specs_by_raw_label: dict[str, ContainerSpec] = field(default_factory=dict)
     output_container_specs: tuple[ContainerSpec, ...] = ()
+    input_tensor_addresses: list[int] = field(default_factory=list)
     module_events: list[ModuleEvent] = field(default_factory=list)
     module_prep_events: list[ModulePrepEvent] = field(default_factory=list)
     module_enter_events: list[ModuleEnterEvent] = field(default_factory=list)

@@ -388,6 +388,7 @@ class ModuleCall:
         "module_call_stack": FieldPolicy.KEEP,
         "call_parent": FieldPolicy.KEEP,
         "call_children": FieldPolicy.KEEP,
+        "_source_trace_strong": FieldPolicy.DROP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
 
@@ -780,6 +781,9 @@ class ModuleCall:
     def _source_trace(self) -> "Trace | None":
         """Owning Trace, if still alive."""
 
+        strong_ref = self.__dict__.get("_source_trace_strong")
+        if strong_ref is not None:
+            return cast("Trace", strong_ref)
         ref = self.__dict__.get("_source_trace_ref")
         if ref is None:
             return None
@@ -787,6 +791,7 @@ class ModuleCall:
 
     @_source_trace.setter
     def _source_trace(self, value: "Trace | None") -> None:
+        self.__dict__["_source_trace_strong"] = value
         self._source_trace_ref = weakref.ref(value) if value is not None else None
 
     @property
@@ -921,6 +926,8 @@ class ModuleCall:
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state annotated with the current I/O format version."""
         state = self.__dict__.copy()
+        state.pop("_source_trace_strong", None)
+        state.pop("_source_trace_ref", None)
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 

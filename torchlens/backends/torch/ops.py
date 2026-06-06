@@ -79,7 +79,7 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir import LiveOpRecord, live_record_for_label
+from ...ir import LiveOpRecord, live_record_for_label, replace_op_event
 from ...ir.intervention import FireResult
 from ...ir.refs import ParamRef, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
@@ -1634,6 +1634,17 @@ def _tag_tensor_and_track_variations(
             if not tensor_nanequal(parent_tensor_contents, parent["out"]):
                 parent["out_versions_by_child"][new_layer_entry._label_raw] = parent_tensor_contents
                 parent["has_out_variations"] = True
+                parent_record = live_record_for_label(self, parent_label)
+                parent_event = parent_record.event
+                if parent_event is not None:
+                    replace_op_event(
+                        self,
+                        parent_label,
+                        output=dataclasses.replace(
+                            parent_event.output,
+                            child_versions=tuple(parent["out_versions_by_child"].items()),
+                        ),
+                    )
 
 
 def log_function_output_tensors_exhaustive(
