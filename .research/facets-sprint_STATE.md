@@ -2,7 +2,7 @@
 run: facets-sprint
 created: 2026-06-05T14:30:00-04:00
 state: RUNNING
-current_stage: STAGE_3_P2_BUILD
+current_stage: STAGE_4_P3_BUILD
 result: ""
 ---
 
@@ -74,4 +74,5 @@ real models; ruff+mypy+smoke+not-slow green each phase; docs/facets.md + glossar
 | 4 | STAGE 1 DONE (both SATISFIED) | plan LOCKED | Round-2: both labs SATISFIED, 0 blockers; folded 3 polish notes (MissingGradient returns-not-raises; capability inventory as data; multi-pass home-op selection). iMessage sent. STAGE 2 dispatched: P1 build codex pid 1723350. |
 | 5 | STAGE 2 P1 DONE | merged to local main | Commits 77b63c2/7df3213/79581fc (ff) + glossary c9ef746. Independently verified: read shape, facet.grad default->MissingGradient + captured->correct slice, GQA write=False, registry snapshot, structural naming, capability inventory as data. Gates: facets 28, ruff+mypy clean, smoke 223, not-slow 2358 (codex). Tripwire untouched. docs/facets.md + glossary done. Branch swept. iMessage sent. |
 | 6 | STAGE 3 P2 DONE | merged to local main | Commit 9221e30 (ff). Independently verified: head ablation CHANGES output; build tests (9) assert edit-changes-output+validates, GPT2 c_attn compose+conflict, GQA/computed/in-place writes REFUSED, whole-model ablation reruns+validates. TRIPWIRE: P2's validation carve-out (skip func-replay of `intervention_replaced` ops) is NARROW + correct — provably inert on plain capture (0 flagged ops), downstream still validated, aligns w/ the 2026-06-02 narrow-exemption discipline. Gates: facets interven 9, smoke 223, not-slow 2364 (codex). docs+glossary done. Branch swept. iMessage sent. |
-| 7 | STAGE 4 P3 dispatched | RUNNING | feat/facets-p3: attention RECONSTRUCTION (reconstruction-ready capture, anchor-to-SDPA-input post-RoPE, per-facet validation target, GQA expansion, MissingFacet names prereq) + per-module eager-for-edit + residual resid_pre/mid/post + per-head `result` + module-path universal fallback + TL aliases + entry-point plugin + recipe expansion. |
+| 7 | STAGE 4 P3 DONE | merged to local main | Commit 445e20a (ff). Independently verified P3 tests (9, exact matrix): reconstruction anchors post-RoPE SDPA inputs + validates; NON-VACUOUS (corrupt recon -> FAIL); GQA+causal mask; MissingFacet names prereq; residual resid_pre/mid/post read+grad; module-path fallback; TL aliases opt-in; entry-point fail-safe. Tripwire untouched (no validation files). `tl.trace(reconstruction_ready=True)` + `enable_transformerlens_aliases()`. Gates: semantic 43, smoke 223, not-slow 2373. docs+glossary done. Branch swept. iMessage sent. **RESIDUAL: auto-scoped-eager-on-edit NOT wired — fused-internal pattern intervention fail-closes + names the eager prereq (capability exists via manual eager capture + P2; auto-trigger deferred). Documented; fast-follow candidate.** |
+| 8 | STAGE 5 P4 dispatched | RUNNING | feat/facets-p4: patching/attribution helpers (activation-patching residual/attn-out/per-head clean-vs-corrupted -> [layer,head]; attribution-patching grad*(clean-corrupted) via facet grads). Then STAGE 6: notebook + wrap. |
