@@ -93,6 +93,7 @@ def rerun(
             hook_plan=hook_plan,
             output_transform=output_transform,
         )
+    new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
 
     divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
     log.replace_state_from(new_log)
@@ -178,6 +179,7 @@ def _append_rerun(
             hook_plan=hook_plan,
             output_transform=getattr(log, "_output_transform", None),
         )
+    new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
     log.append_state_from(new_log)

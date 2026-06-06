@@ -2994,6 +2994,10 @@ class Trace:
         replacement_state = dict(new_log.__dict__)
         replacement_state.update(preserved_state)
         self.__dict__.update(replacement_state)
+        _TRACE_OP_ACCESSOR_CACHE.pop(self, None)
+        _TRACE_LAYER_ACCESSOR_CACHE.pop(self, None)
+        _TRACE_MODULE_CALL_ACCESSOR_CACHE.pop(self, None)
+        self._rebind_fork_owner_refs()
 
     def append_state_from(self, new_log: "Trace") -> None:
         """Merge compatible chunk outs from ``new_log`` into this log.

@@ -9,6 +9,7 @@ from ._helpers import (
     add_if_present,
     child_output_spec,
     config_value,
+    fused_sdpa_facet,
     first_input_spec,
     fused_sdpa_pattern,
     module_output_spec,
@@ -29,7 +30,10 @@ _ATTENTION_FACETS_BASE = (
 )
 _ATTENTION_FACETS_SDPA = (
     *_ATTENTION_FACETS_BASE,
+    "scores",
     "pattern",
+    "z",
+    "result",
 )
 
 
@@ -53,7 +57,10 @@ def _with_attention_common(
         result["d_head"] = d_head
     result["head"] = module.facets.head
     if _attention_is_fused(getattr(module, "class_name", "")):
+        result["scores"] = fused_sdpa_facet(module, "scores", "attention_reconstruction")
         result["pattern"] = fused_sdpa_pattern(module)
+        result["z"] = fused_sdpa_facet(module, "z", "attention_reconstruction")
+        result["result"] = fused_sdpa_facet(module, "result", "attention_reconstruction")
     return result
 
 

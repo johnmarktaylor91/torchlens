@@ -11,11 +11,13 @@ from .facets import (
     MissingFacet,
     MissingGradient,
     TransformPrimitive,
+    enable_transformerlens_aliases,
     info,
     list,
     register,
     reset,
     snapshot,
+    transformer_lens_aliases_enabled,
     using,
 )
 from . import recipes as recipes
@@ -31,10 +33,12 @@ __all__ = [
     "MissingFacet",
     "MissingGradient",
     "TransformPrimitive",
+    "enable_transformerlens_aliases",
     "info",
     "list",
     "register",
     "reset",
     "snapshot",
+    "transformer_lens_aliases_enabled",
     "using",
 ]

@@ -1270,6 +1270,7 @@ def trace(
     gradients_to_save: str | list[Any] | None | MissingType = MISSING,
     save_code_context: bool | MissingType = MISSING,
     save_rng_states: bool | MissingType = MISSING,
+    reconstruction_ready: bool | MissingType = MISSING,
     random_seed: int | None | MissingType = MISSING,
     num_context_lines: int | MissingType = MISSING,
     optimizer: Any | MissingType = MISSING,
@@ -1384,6 +1385,9 @@ def trace(
         save_rng_states: If True, capture RNG states before each operation (needed for
             validation replay of stochastic ops like dropout). Auto-enabled when
             ``validate_forward_pass`` is used. Default False for speed.
+        reconstruction_ready: If True, auto-enable the argument and RNG capture
+            prerequisites needed by read-only reconstructed facets such as fused
+            SDPA ``scores``, ``pattern``, and ``z``.
         random_seed: Fixed RNG seed for reproducibility with stochastic models.
         num_context_lines: Deprecated alias for ``source_context_lines``.
         optimizer: Optional optimizer to annotate which params are being optimized.
@@ -1467,6 +1471,7 @@ def trace(
             "gradients_to_save": gradients_to_save,
             "save_code_context": save_code_context,
             "save_rng_states": save_rng_states,
+            "reconstruction_ready": reconstruction_ready,
             "random_seed": random_seed,
             "num_context_lines": num_context_lines,
             "optimizer": optimizer,
@@ -1550,6 +1555,9 @@ def trace(
     if not isinstance(model, nn.Module):
         raise ValueError("Unsupported model type for capture")
     model = _unwrap_data_parallel(model)
+    if reconstruction_ready is not MISSING and reconstruction_ready:
+        save_arg_values = True
+        save_rng_states = True
 
     capture_options = merge_capture_options(
         capture=capture,

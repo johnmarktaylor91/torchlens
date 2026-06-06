@@ -927,6 +927,10 @@ class FacetView(Mapping[FacetKey, Any]):
                 if name not in seen:
                     names.append(name)
                     seen.add(name)
+                alias = _tl_alias_for_native(name)
+                if alias is not None and alias not in seen:
+                    names.append(alias)
+                    seen.add(alias)
         return names
 
     def has(self, name: FacetKey) -> bool:
@@ -1018,6 +1022,11 @@ class FacetView(Mapping[FacetKey, Any]):
                         )
                 values[name] = value
                 facet_tiers[name] = tier
+        if _TRANSFORMERLENS_ALIASES_ENABLED:
+            for alias, native in _TRANSFORMERLENS_ALIAS_TO_NATIVE.items():
+                if native in values and alias not in values:
+                    values[alias] = values[native]
+                    facet_tiers[alias] = facet_tiers.get(native, (0, 0))
         self._cache = values
         self._computed = True
 
@@ -1040,6 +1049,46 @@ _FACET_VIEW_RESERVED_NAMES = frozenset(
         "values",
     }
 )
+_TRANSFORMERLENS_ALIASES_ENABLED = False
+_TRANSFORMERLENS_ALIAS_TO_NATIVE = {
+    "hook_q": "q",
+    "hook_k": "k",
+    "hook_v": "v",
+    "hook_pattern": "pattern",
+    "hook_z": "z",
+    "hook_result": "result",
+    "hook_resid_pre": "resid_pre",
+    "hook_resid_mid": "resid_mid",
+    "hook_resid_post": "resid_post",
+}
+_NATIVE_TO_TRANSFORMERLENS_ALIAS = {
+    native: alias for alias, native in _TRANSFORMERLENS_ALIAS_TO_NATIVE.items()
+}
+
+
+def enable_transformerlens_aliases(enabled: bool = True) -> None:
+    """Enable or disable opt-in TransformerLens-style facet aliases.
+
+    Parameters
+    ----------
+    enabled:
+        Whether alias keys such as ``hook_pattern`` should resolve to native
+        TorchLens facets such as ``pattern``.
+
+    Returns
+    -------
+    None
+        The process-wide alias setting is updated.
+    """
+
+    global _TRANSFORMERLENS_ALIASES_ENABLED
+    _TRANSFORMERLENS_ALIASES_ENABLED = enabled
+
+
+def transformer_lens_aliases_enabled() -> bool:
+    """Return whether TransformerLens aliases are enabled."""
+
+    return _TRANSFORMERLENS_ALIASES_ENABLED
 
 
 @overload
@@ -1523,6 +1572,25 @@ def _class_filter_matches(class_names: tuple[str, ...], class_name: str | None) 
     if not class_names:
         return False
     return builtins.any(fnmatch(name, class_name) for name in class_names)
+
+
+def _tl_alias_for_native(name: FacetKey) -> str | None:
+    """Return the TransformerLens alias for a declared native facet key.
+
+    Parameters
+    ----------
+    name:
+        Native facet key.
+
+    Returns
+    -------
+    str | None
+        Alias key when enabled and known.
+    """
+
+    if not _TRANSFORMERLENS_ALIASES_ENABLED or not isinstance(name, str):
+        return None
+    return _NATIVE_TO_TRANSFORMERLENS_ALIAS.get(name)
 
 
 def _clear_registry_for_tests() -> None:

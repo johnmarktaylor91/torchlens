@@ -358,11 +358,27 @@ def expand_facet_hook_entries(
             continue
         specs = _resolve_facet_specs(log, selector)
         if not specs:
+            if selector.name in {"pattern", "scores", "z", "result"}:
+                raise SiteResolutionError(
+                    f"facet selector {selector!r} matched no write-capable real tensor facets. "
+                    "Fused attention reconstruction facets are read-only; re-run with a scoped "
+                    "eager attention implementation so the requested internal facet is captured "
+                    "as an op before attaching this intervention."
+                )
             raise SiteResolutionError(
                 f"facet selector {selector!r} matched 0 write-capable facets."
             )
         for facet_name, spec in specs:
-            mask = spec.write_mask().detach().clone()
+            try:
+                mask = spec.write_mask().detach().clone()
+            except RuntimeError as exc:
+                if selector.name in {"pattern", "scores", "z", "result"}:
+                    raise SiteResolutionError(
+                        f"facet selector {selector!r} resolved only read-only reconstructed "
+                        "attention facets. Re-run with a scoped eager attention implementation "
+                        "so the requested internal facet is captured as a real tensor op."
+                    ) from exc
+                raise
             home_label = _facet_home_label(spec)
             _check_facet_write_conflicts(claimed, home_label=home_label, mask=mask)
             claimed.append((home_label, mask, facet_name))

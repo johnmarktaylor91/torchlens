@@ -200,8 +200,104 @@ non-raw value version refused as not intervention-safe
 overlapping writes    refused before rerun
 ```
 
-Attention reconstruction, paired `grad_fn` input-side gradients, and
-per-module-eager reconstruction remain later phases.
+Fused attention reconstruction facets are read-only. Editing internal fused
+facets requires recapturing with an eager attention implementation so the facet
+is backed by a real op.
+
+## Reconstruction
+
+Fused `torch.nn.functional.scaled_dot_product_attention` hides `scores`,
+`pattern`, and `z`. TorchLens reconstructs these as read-only computed facets
+when the SDPA op saved its actual inputs and options:
+
+```python
+log = tl.trace(model, x, reconstruction_ready=True)
+pattern = log.modules["blocks.0.attn"].facets.pattern
+z = log.modules["blocks.0.attn"].facets.z
+```
+
+`reconstruction_ready=True` enables `save_arg_values=True` and
+`save_rng_states=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
+so RoPE models use the post-RoPE tensors that actually fed the fused kernel, not
+the q_proj/k_proj outputs.
+
+Validation is per facet and non-vacuous:
+
+```text
+z                 compared directly to the fused SDPA op output
+pattern, scores   recompute z = pattern @ V, then compare to SDPA output
+result            sum per-head W_O contributions and compare to output projection
+```
+
+GQA/MQA uses PyTorch SDPA's `enable_gqa` repeat-interleave convention. Causal
+masks and boolean/additive tensor masks are supported. Nonzero SDPA dropout is
+fail-closed for now; the facet returns `MissingFacet` naming dropout/RNG as the
+missing prerequisite rather than serving an unvalidated value.
+
+## Residuals
+
+Transformer-like block recipes expose:
+
+```text
+resid_pre   block input op
+resid_mid   first identifiable post-attention residual add op
+resid_post  block output op
+```
+
+These are op-structural facets when the anchors exist, so `.grad` works under
+the normal gradient contract. If a block structure does not expose a real
+post-attention add, `resid_mid` is absent instead of guessed.
+
+Attention modules also expose read-only per-head `result` when the recipe can
+find an output projection. `result[..., head, :]` is that head's contribution to
+the projected residual stream; summing heads and adding projection bias matches
+the captured output-projection tensor.
+
+## Fallback
+
+Every module has structural facets even with no semantic recipe. This gives a
+nnsight-style floor for arbitrary models:
+
+```python
+log.modules["custom.submodule"].facets["out"]
+```
+
+Semantic names are added when a recipe classifies the module; otherwise the
+module path plus structural output names remain the stable addressing surface.
+
+## TransformerLens Aliases
+
+TransformerLens hook-name aliases are off by default. Enable them once per
+process:
+
+```python
+tl.facets.enable_transformerlens_aliases()
+```
+
+When enabled, aliases such as `hook_pattern`, `hook_z`, `hook_result`,
+`hook_resid_pre`, `hook_resid_mid`, and `hook_resid_post` resolve to native
+TorchLens facets when those native facets exist.
+
+## Migration Cheat Sheet
+
+```text
+TransformerLens hook_q           -> facets.q
+TransformerLens hook_k           -> facets.k
+TransformerLens hook_v           -> facets.v
+TransformerLens hook_pattern     -> facets.pattern
+TransformerLens hook_z           -> facets.z
+TransformerLens hook_result      -> facets.result
+TransformerLens hook_resid_pre   -> facets.resid_pre
+TransformerLens hook_resid_mid   -> facets.resid_mid
+TransformerLens hook_resid_post  -> facets.resid_post
+nnsight module.path.output       -> log.modules["module.path"].facets["out"]
+```
+
+## Recipe Plugins
+
+At import, TorchLens loads installed setuptools entry points in the
+`torchlens.recipes` group. A broken entry point warns and is skipped; TorchLens
+does not scan or execute local directories.
 
 ## Built-In Inventory
 

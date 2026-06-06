@@ -2266,6 +2266,33 @@ Canonical public names and semantics:
 - NOT in P2 (later phases): attention pattern RECONSTRUCTION (P3); paired-grad_fn input-side gradients (deferred —
   capture discards the input index); per-module-eager reconstruction/fallback.
 
+### Facets — P3 reconstruction and coverage update (LOCKED 2026-06-05)
+
+Canonical new public names and semantics:
+
+- **`reconstruction_ready`**: `tl.trace(..., reconstruction_ready=True)` convenience flag that enables the saved
+  argument/RNG prerequisites for read-only reconstructed facets. It is equivalent to opting into the lower-level
+  capture needed by fused SDPA reconstruction (`save_arg_values=True`, `save_rng_states=True`).
+- **Reconstructed attention facets**: **`scores`**, **`pattern`**, and **`z`** on fused SDPA attention modules are
+  read-only computed facets. They use the fused SDPA op's actual saved Q/K/V inputs (post-RoPE when RoPE is present),
+  not q_proj/k_proj recipe facets. Validation target is the fused SDPA op output: `z` compares directly; `scores` and
+  `pattern` recompute `z = pattern @ V` and compare that target. Missing prerequisites return **`MissingFacet`** with
+  a named prerequisite.
+- **`result`**: per-head output-projection contribution facet. For an attention output projection `W_O`, each
+  `result[..., head, :]` is that head's contribution to the projected residual stream. Summing heads and adding
+  projection bias validates against the captured output-projection tensor.
+- **`resid_pre` / `resid_mid` / `resid_post`**: transformer-block residual stream facets. Anchors are block input op,
+  post-attention residual-add op when identifiable, and block output op. Op-anchored residual facets support
+  `facet.grad` under the normal saved-gradient contract.
+- **Module-path fallback**: modules with no semantic recipe still expose structural facets through
+  `log.modules["path"].facets["out"]` and named output/container facets.
+- **`tl.facets.enable_transformerlens_aliases(enabled=True)`**: opt-in process setting that exposes TL-style aliases
+  such as `hook_pattern`, `hook_z`, `hook_result`, `hook_resid_pre`, `hook_resid_mid`, and `hook_resid_post` when the
+  native TorchLens facet exists. **`tl.facets.transformer_lens_aliases_enabled()`** reports the current setting.
+- **Recipe entry-point group**: installed packages may expose recipe registration modules through the
+  **`torchlens.recipes`** setuptools entry-point group. Entry-point failures warn and skip; TorchLens does not scan
+  or auto-execute local directories.
+
 ## Input auto-routing (added v9 2026-05-31 — documents shipped API; no walkthrough lock yet)
 
 `tl.trace(model, x)` auto-routes certain

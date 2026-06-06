@@ -8,6 +8,7 @@ import torch
 from torch.nn import functional as F
 
 from ..facets import Facet, FacetSpec, MissingFacet
+from ..reconstruction import ReconstructionFacet, sdpa_reconstruction_spec
 
 
 def child_module(module: Any, child_name: str) -> Any | None:
@@ -78,6 +79,36 @@ def first_input_spec(module: Any, recipe_id: str) -> FacetSpec | None:
     if value is None:
         return None
     return FacetSpec.from_home(value, home_kind="module_input", recipe_id=recipe_id)
+
+
+def module_input_op_spec(module: Any, recipe_id: str) -> FacetSpec | None:
+    """Return an op-anchored spec for a module's first input op.
+
+    Parameters
+    ----------
+    module:
+        TorchLens module record.
+    recipe_id:
+        Recipe identifier.
+
+    Returns
+    -------
+    FacetSpec | None
+        Op-anchored input spec when the module input is a captured op.
+    """
+
+    trace = getattr(module, "trace", None)
+    if trace is None:
+        return None
+    try:
+        call = module._single_call_or_error()
+        input_ops = list(getattr(call, "input_ops", ()) or ())
+        if not input_ops:
+            return None
+        op = trace.ops[input_ops[0]]
+    except (AttributeError, KeyError, IndexError, RuntimeError, ValueError):
+        return None
+    return FacetSpec.from_home(op, home_kind="op", recipe_id=recipe_id)
 
 
 def module_output(module: Any) -> Any | None:
@@ -196,12 +227,38 @@ def computed_product(left: Any, right: Any, recipe_id: str) -> FacetSpec | None:
     return None
 
 
-def fused_sdpa_pattern(module: Any) -> MissingFacet:
-    """Return a MissingFacet explaining fused attention pattern unavailability."""
+def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) -> Any:
+    """Return a reconstructed SDPA facet or a MissingFacet.
+
+    Parameters
+    ----------
+    module:
+        Attention module record.
+    facet:
+        Reconstructed facet name.
+    recipe_id:
+        Recipe identifier for provenance.
+
+    Returns
+    -------
+    Any
+        Computed read-only ``FacetSpec`` or ``MissingFacet``.
+    """
+
+    return sdpa_reconstruction_spec(module, facet, recipe_id=recipe_id)
+
+
+def fused_sdpa_pattern(module: Any) -> Any:
+    """Return a reconstructed fused attention pattern or a MissingFacet."""
 
     label = getattr(module.calls[0], "call_label", getattr(module, "address", "<unknown>"))
+    value = fused_sdpa_facet(module, "pattern", "attention_reconstruction")
+    if not isinstance(value, MissingFacet):
+        return value
     return MissingFacet(
         f"attention pattern not captured: model uses a fused attention kernel "
         f"(SDPA/FlashAttention) at {label}. "
-        "Re-run with model.config._attn_implementation='eager' to expose the pattern."
+        f"{value.reason} Re-run with reconstruction_ready=True or save_arg_values=True; "
+        "for intervention, re-run with model.config._attn_implementation='eager' "
+        "to expose a real pattern op."
     )
