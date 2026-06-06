@@ -167,6 +167,70 @@ class ModuleEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class ModulePrepEvent:
+    """Prep-time module metadata emitted before a forward pass."""
+
+    address: str
+    all_addresses: tuple[str, ...]
+    module_type_str: str
+    cls_qualname: str
+    class_name: str
+    address_children: tuple[str, ...]
+    class_source_file: str | None
+    class_source_line: int | None
+    init_source_file: str | None
+    init_source_line: int | None
+    forward_source_file: str | None
+    forward_source_line: int | None
+    class_docstring: str | None
+    init_signature: str | None
+    init_docstring: str | None
+    forward_signature: str | None
+    forward_docstring: str | None
+    forward_pre_hooks: object | None
+    forward_hooks: object | None
+    backward_pre_hooks: object | None
+    backward_hooks: object | None
+    full_backward_pre_hooks: object | None
+    full_backward_hooks: object | None
+    training_at_prep: bool
+    custom_attributes: tuple[tuple[str, object], ...]
+    custom_methods: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleEnterEvent:
+    """Module forward-entry metadata emitted during exhaustive capture."""
+
+    address: str
+    call_index: int
+    call_label: str
+    training: bool
+    code_context: tuple[object, ...]
+    call_stack: tuple[str, ...]
+    forward_start_time: float
+    forward_args: object | None
+    forward_kwargs: object | None
+    forward_args_template: object | None
+    forward_kwargs_template: object | None
+    layer_argnames: tuple[tuple[str, object], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleExitEvent:
+    """Module forward-exit metadata emitted during exhaustive capture."""
+
+    address: str
+    call_index: int
+    call_label: str
+    forward_duration: float
+    output_structure: object | None
+    output_tensor_labels_raw: tuple[str, ...]
+    has_user_forward_hooks: bool
+    per_output_atomic: tuple[tuple[str, tuple[ModuleFrame, ...], bool, tuple[str, int] | None], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class OpEvent:
     """Single backend operation event emitted during capture."""
 
@@ -177,6 +241,7 @@ class OpEvent:
     raw_index: int
     type_index: int
     step_index: int
+    source_trace: object | None
     source_trace_id: str | None
     tracing_finished: bool
     construction_done: bool
@@ -184,11 +249,25 @@ class OpEvent:
     output: OutputRef
     templates: ArgTemplateRef | None
     parents: tuple[ParentEdge, ...]
+    parent_arg_positions: dict[str, dict[Any, str]]
+    _edge_uses: tuple[object, ...]
     params: tuple[ParamRef, ...]
+    parent_params: tuple[object, ...]
     module_stack: tuple[ModuleFrame, ...]
+    modules: tuple[tuple[str, int], ...]
     backend_semantics: BackendSemantics
     policy: CapturePolicy
     predicate_matched: bool
+    pass_index: int
+    grad_fn_class_qualname: str | None
+    grad_fn_handle: object | None
+    equivalence_class: str | None
+    is_output_parent: bool
+    has_internal_source_ancestor: bool
+    internal_source_ancestors: frozenset[str]
+    input_ancestors: frozenset[str]
+    root_ancestors: frozenset[str]
+    func_call_id: int | None
     is_bottom_level: bool
     is_scalar_bool: bool | None
     bool_value: bool | None
@@ -247,4 +326,7 @@ class TraceBuildState:
     output_container_specs_by_raw_label: dict[str, ContainerSpec] = field(default_factory=dict)
     output_container_specs: tuple[ContainerSpec, ...] = ()
     module_events: list[ModuleEvent] = field(default_factory=list)
+    module_prep_events: list[ModulePrepEvent] = field(default_factory=list)
+    module_enter_events: list[ModuleEnterEvent] = field(default_factory=list)
+    module_exit_events: list[ModuleExitEvent] = field(default_factory=list)
     conditional_events: list[ConditionalEvent] = field(default_factory=list)

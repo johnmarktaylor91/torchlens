@@ -27,6 +27,7 @@ Key functions:
 """
 
 import inspect
+import dataclasses
 import random
 import time
 from collections import defaultdict
@@ -431,6 +432,14 @@ def _extract_and_mark_outputs(
         if self.capture_mode == "exhaustive":
             self.output_layers.append(_label_raw)
             live_record_for_label(self, _label_raw).fields["is_output_parent"] = True
+            event = self.capture_events.op_event_by_label_raw.get(_label_raw)
+            if event is not None:
+                updated_event = dataclasses.replace(event, is_output_parent=True)
+                self.capture_events.op_event_by_label_raw[_label_raw] = updated_event
+                for index, existing_event in enumerate(self.capture_events.op_events):
+                    if existing_event.label_raw == _label_raw:
+                        self.capture_events.op_events[index] = updated_event
+                        break
 
     return output_tensors, output_tensor_addresses
 

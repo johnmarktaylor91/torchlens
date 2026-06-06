@@ -265,13 +265,24 @@ def _parent_edges_from_fields(fields_dict: dict[str, Any]) -> tuple[ParentEdge, 
         Parent edges for the operation event.
     """
 
+    positions_by_label: dict[str, tuple[Any, str]] = {}
+    for location, label in fields_dict["parent_arg_positions"]["args"].items():
+        positions_by_label.setdefault(label, (location, "arg"))
+    for location, label in fields_dict["parent_arg_positions"]["kwargs"].items():
+        positions_by_label.setdefault(label, (location, "kwarg"))
+
     return tuple(
-        ParentEdge(parent_label_raw=label, arg_position=None, edge_use="arg")
+        ParentEdge(
+            parent_label_raw=label,
+            arg_position=positions_by_label.get(label, (None, "arg"))[0],
+            edge_use=positions_by_label.get(label, (None, "arg"))[1],
+        )
         for label in fields_dict["parents"]
     )
 
 
 def _op_event_from_log(
+    trace: "Trace",
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
     fire_results: tuple[FireResult, ...] = (),
@@ -317,7 +328,8 @@ def _op_event_from_log(
         raw_index=fields_dict["raw_index"],
         type_index=fields_dict["type_index"],
         step_index=fields_dict["step_index"] or 0,
-        source_trace_id=None,
+        source_trace=trace,
+        source_trace_id=str(id(trace)),
         tracing_finished=fields_dict["_tracing_finished"],
         construction_done=fields_dict["_construction_done"],
         function=FunctionCallRef(
@@ -363,10 +375,22 @@ def _op_event_from_log(
             has_saved_args=fields_dict["has_saved_args"],
         ),
         parents=_parent_edges_from_fields(fields_dict),
+        parent_arg_positions=copy.deepcopy(fields_dict["parent_arg_positions"]),
+        _edge_uses=tuple(
+            fields_dict["_edge_uses"]
+            or _build_edge_use_records(
+                trace,
+                fields_dict["parent_arg_positions"],
+                fields_dict["_label_raw"],
+                fields_dict["func_call_id"],
+            )
+        ),
         params=_param_refs_from_fields(fields_dict),
+        parent_params=tuple(fields_dict["parent_params"]),
         module_stack=_module_frames_from_fields(fields_dict),
+        modules=tuple(fields_dict["modules"]),
         backend_semantics=BackendSemantics(
-            grad_fn_object_id=fields_dict["grad_fn_object_id"],
+            backend_grad_handle=fields_dict["grad_fn_handle"],
             grad_fn_class_name=fields_dict["grad_fn_class_name"],
             autograd_memory=fields_dict["autograd_memory"],
             num_autograd_tensors=fields_dict["num_autograd_tensors"],
@@ -385,6 +409,16 @@ def _op_event_from_log(
             stream=False,
         ),
         predicate_matched=True,
+        pass_index=fields_dict["pass_index"],
+        grad_fn_class_qualname=fields_dict["grad_fn_class_qualname"],
+        grad_fn_handle=fields_dict["grad_fn_handle"],
+        equivalence_class=fields_dict["equivalence_class"],
+        is_output_parent=fields_dict["is_output_parent"],
+        has_internal_source_ancestor=fields_dict["has_internal_source_ancestor"],
+        internal_source_ancestors=frozenset(fields_dict["internal_source_ancestors"]),
+        input_ancestors=frozenset(fields_dict["input_ancestors"]),
+        root_ancestors=frozenset(fields_dict["root_ancestors"]),
+        func_call_id=fields_dict["func_call_id"],
         is_bottom_level=True,
         is_scalar_bool=fields_dict["is_scalar_bool"],
         bool_value=fields_dict["bool_value"],
@@ -982,17 +1016,16 @@ def apply_live_hooks_to_outputs(
     )
     layer_type = shared_fields["type"]
     replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor] = {}
-    predicted_layer_counter = self._layer_counter
-    predicted_type_counter = self._raw_layer_type_counter[layer_type]
+    loggable_outputs = list(_iter_loggable_live_outputs(out_orig, is_bottom_level_func))
+    events = self.capture_events
+    events.raw_layer_counter = self._layer_counter
+    events.raw_layer_type_counter = dict(self._raw_layer_type_counter)
+    reserved_labels = events.reserve_label_block(layer_type, len(loggable_outputs))
 
-    for out, container_path, _container_spec in _iter_loggable_live_outputs(
-        out_orig, is_bottom_level_func
-    ):
-        predicted_layer_counter += 1
-        predicted_type_counter += 1
-        raw_label = f"{layer_type}_{predicted_type_counter}_{predicted_layer_counter}_raw"
+    for reserved, (out, container_path, _container_spec) in zip(reserved_labels, loggable_outputs):
+        raw_label = reserved.label_raw
         site_fields = dict(shared_fields)
-        site_fields["raw_index"] = predicted_layer_counter
+        site_fields["raw_index"] = reserved.raw_index
         site = make_live_site_proxy(
             _layer_label_raw=raw_label,
             func_name=func_name,
@@ -2544,7 +2577,7 @@ def _make_layer_log_entry(
         (layer_nums_to_save == "all") or (new_entry.raw_index in layer_nums_to_save)
     ):
         _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, activation_transform)
-    op_event = _op_event_from_log(fields_dict, t, fire_results)
+    op_event = _op_event_from_log(self, fields_dict, t, fire_results)
     live_record.event = op_event
     from ...ir import register_live_event
 

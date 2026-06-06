@@ -14,8 +14,11 @@ from .events import (
     EdgeUseKind,
     FunctionCallRef,
     InterventionState,
+    ModuleEnterEvent,
     ModuleEvent,
+    ModuleExitEvent,
     ModuleFrame,
+    ModulePrepEvent,
     OpEvent,
     OpEventKind,
     OutputRef,
@@ -24,7 +27,7 @@ from .events import (
 )
 from .intervention import FireResult, FunctionEventInput, InterventionTemplateRef
 from .predicate import RecordContext
-from .refs import DeferredRef, ParamRef, ReservedLabel, TensorRef
+from .refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from .semantics import BackendSemantics, CapturePolicy
 
 __all__ = [
@@ -39,6 +42,8 @@ __all__ = [
     "ConditionalEvent",
     "ContainerSpec",
     "DeferredRef",
+    "DeviceRef",
+    "DtypeRef",
     "EdgeUseKind",
     "FireResult",
     "FunctionCallRef",
@@ -46,8 +51,11 @@ __all__ = [
     "InterventionState",
     "InterventionTemplateRef",
     "LiveOpRecord",
+    "ModuleEnterEvent",
     "ModuleEvent",
+    "ModuleExitEvent",
     "ModuleFrame",
+    "ModulePrepEvent",
     "OpEvent",
     "OpEventKind",
     "OutputRef",

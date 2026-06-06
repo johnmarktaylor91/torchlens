@@ -162,6 +162,7 @@ def _cache_dynamic_spec(
 
 _P0 = ArgSpec(positions=(0,))
 _P01 = ArgSpec(positions=(0, 1))
+_P01_BINARY = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "other"))
 _P012 = ArgSpec(positions=(0, 1, 2))
 _P0123 = ArgSpec(positions=(0, 1, 2, 3))
 _S0 = ArgSpec(sequence_positions=(0,))
@@ -775,7 +776,7 @@ _BINARY_FUNCS = [
 ]
 
 for _name in _BINARY_FUNCS:
-    FUNC_ARG_SPECS[_name] = _P01
+    FUNC_ARG_SPECS[_name] = _P01_BINARY
 
 # ---------------------------------------------------------------------------
 # Ternary: positions 0, 1, 2

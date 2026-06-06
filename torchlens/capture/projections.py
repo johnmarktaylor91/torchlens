@@ -33,7 +33,7 @@ from ..ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ..ir.refs import TensorRef
+from ..ir.refs import DeviceRef, DtypeRef, TensorRef
 from ..ir.predicate import EventKind
 from ..ir.semantics import BackendSemantics, CapturePolicy
 
@@ -389,9 +389,12 @@ def _build_record_context(
     tensor_requires_grad = _read_field(data, "tensor_requires_grad")
     if isinstance(tensor, torch.Tensor):
         shape = tuple(tensor.shape)
-        dtype = tensor.dtype
-        tensor_device = tensor.device
+        dtype = DtypeRef.from_value(tensor.dtype)
+        tensor_device = DeviceRef.from_value(tensor.device)
         tensor_requires_grad = tensor.requires_grad
+    else:
+        dtype = DtypeRef.from_value(dtype)
+        tensor_device = DeviceRef.from_value(tensor_device)
     raw_label = _read_field(data, "_label_raw", _read_field(data, "raw_label"))
     label = _read_field(data, "label", raw_label)
     if label is None:
@@ -461,8 +464,8 @@ def _record_context_from_event(event: OpEvent) -> RecordContext:
             "func_name": event.function.func_name,
             "parent_labels": tuple(parent.parent_label_raw for parent in event.parents),
             "shape": tensor.shape,
-            "dtype": torch.dtype(tensor.dtype) if isinstance(tensor.dtype, torch.dtype) else None,
-            "tensor_device": torch.device(tensor.device) if tensor.device is not None else None,
+            "dtype": DtypeRef.from_value(tensor.dtype),
+            "tensor_device": DeviceRef.from_value(tensor.device),
             "tensor_requires_grad": tensor.requires_grad,
             "output_index": event.output.multi_output_index,
             "is_bottom_level_func": event.is_bottom_level,
@@ -516,6 +519,7 @@ def _event_from_record(
         raw_index=ctx.raw_index or ctx.event_index,
         type_index=ctx.type_index or 0,
         step_index=ctx.step_index or 0,
+        source_trace=None,
         source_trace_id=None,
         tracing_finished=False,
         construction_done=True,
@@ -562,13 +566,17 @@ def _event_from_record(
             has_saved_args=False,
         ),
         parents=tuple(
-            ParentEdge(parent_label_raw=parent, arg_position=None, edge_use="arg")
+            ParentEdge(parent_label_raw=parent, arg_position=None, edge_use="unknown")
             for parent in ctx.parent_labels
         ),
+        parent_arg_positions={"args": {}, "kwargs": {}},
+        _edge_uses=(),
         params=(),
+        parent_params=(),
         module_stack=_module_frames_from_record_context(ctx),
+        modules=tuple((frame.address, frame.pass_index) for frame in ctx.module_stack),
         backend_semantics=BackendSemantics(
-            grad_fn_object_id=None,
+            backend_grad_handle=None,
             grad_fn_class_name=None,
             autograd_memory=0,
             num_autograd_tensors=0,
@@ -587,6 +595,16 @@ def _event_from_record(
             stream=False,
         ),
         predicate_matched=predicate_matched,
+        pass_index=ctx.pass_index,
+        grad_fn_class_qualname=None,
+        grad_fn_handle=None,
+        equivalence_class=None,
+        is_output_parent=ctx.is_output_parent,
+        has_internal_source_ancestor=False,
+        internal_source_ancestors=frozenset(),
+        input_ancestors=frozenset(),
+        root_ancestors=frozenset(),
+        func_call_id=ctx.func_call_id,
         is_bottom_level=bool(ctx.is_bottom_level_func),
         is_scalar_bool=None,
         bool_value=None,

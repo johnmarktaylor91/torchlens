@@ -7,7 +7,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 import weakref
 
-from .events import ConditionalEvent, ModuleEvent, OpEvent
+from .events import (
+    ConditionalEvent,
+    ModuleEnterEvent,
+    ModuleEvent,
+    ModuleExitEvent,
+    ModulePrepEvent,
+    OpEvent,
+)
 from .predicate import RecordContext
 from .refs import ParamRef, ReservedLabel
 
@@ -23,6 +30,9 @@ class CaptureEvents:
 
     op_events: list[OpEvent] = field(default_factory=list)
     module_events: list[ModuleEvent] = field(default_factory=list)
+    module_prep_events: list[ModulePrepEvent] = field(default_factory=list)
+    module_enter_events: list[ModuleEnterEvent] = field(default_factory=list)
+    module_exit_events: list[ModuleExitEvent] = field(default_factory=list)
     conditional_events: list[ConditionalEvent] = field(default_factory=list)
     param_refs: dict[str, ParamRef] = field(default_factory=dict)
     raw_layer_counter: int = 0
@@ -38,6 +48,7 @@ class CaptureEvents:
     output_variations_by_label_raw: dict[str, list[tuple[Any, ...]]] = field(default_factory=dict)
     replacement_template_by_label_raw: dict[str, str] = field(default_factory=dict)
     module_stack_by_label_raw: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    grad_fn_handles_by_label_raw: dict[str, Any] = field(default_factory=dict)
 
     def append(self, event: OpEvent) -> None:
         """Append a single operation event."""
@@ -133,6 +144,8 @@ def register_live_event(trace: Any, event: OpEvent, live_record: LiveOpRecord) -
     live_record.event = event
     events.append(event)
     events.live_by_raw_label[event.label_raw] = live_record
+    if event.grad_fn_handle is not None:
+        events.grad_fn_handles_by_label_raw[event.label_raw] = event.grad_fn_handle
 
 
 def live_record_for_label(trace: Any, label_raw: str) -> LiveOpRecord:
