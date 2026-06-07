@@ -90,7 +90,7 @@ def _resolve_storage(
     """
 
     if spec.keep_grad and intent.on_disk and not intent.in_ram:
-        message = f"keep_grad=True is not valid for disk-only fastlog {kind} storage"
+        message = f"keep_grad=True is not valid for disk-only {kind} storage"
         if kind == "grad":
             raise InvalidStorageError(message)
         raise PredicateError(message)

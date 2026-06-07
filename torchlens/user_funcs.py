@@ -53,6 +53,7 @@ from ._literals import (
 )
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
+from .fastlog.exceptions import PredicateError
 from .ir import ParentEdge, replace_op_event
 from ._training_validation import TrainingModeConfigError, validate_training_compatibility
 from . import _state
@@ -1145,6 +1146,12 @@ def _run_model_and_save_specified_outs(
             keep_op=save_predicate,
             intervene=intervene_predicate,
             default_op=False,
+            streaming=StreamingOptions(
+                bundle_path=save_outs_to,
+                retain_in_memory=keep_outs_in_memory,
+            )
+            if save_outs_to is not None
+            else None,
             history_size=predicate_history_size,
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,  # type: ignore[arg-type]
@@ -1165,7 +1172,7 @@ def _run_model_and_save_specified_outs(
             gradients_to_save,
             random_seed,
         )
-    except (TorchLensIOError, TorchLensPostfuncError):
+    except (PredicateError, TorchLensIOError, TorchLensPostfuncError):
         raise
     except Exception as exc:
         if trace._out_writer is not None:
@@ -1338,6 +1345,7 @@ def trace(
     intervene: InterventionPredicate | None = None,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
+    storage: StreamingOptions | None = None,
     streaming: StreamingOptions | None = None,
     backward_ready: bool | MissingType = MISSING,
     name: str | None | MissingType = MISSING,
@@ -1475,6 +1483,9 @@ def trace(
             retroactively save payloads. Non-default policies retain up to ``lookback``
             candidate payloads, for a memory cost of roughly ``lookback`` times the
             candidate payload size.
+        storage: Shared storage routing option. ``storage=tl.to_disk(path)``
+            streams predicate-selected saves to a disk bundle during the
+            forward pass. ``None`` preserves the existing in-RAM behavior.
         streaming: Grouped streaming-save options.
         backward_ready: If True, validate training-compatible settings and keep saved
             outs attached to autograd.
@@ -1550,6 +1561,7 @@ def trace(
             "intervene": intervene,
             "lookback": lookback,
             "lookback_payload_policy": lookback_payload_policy,
+            "storage": storage,
             "streaming": streaming,
             "backward_ready": backward_ready,
             "name": name,
@@ -1704,8 +1716,10 @@ def trace(
         save_raw_activations=save_raw_activations,
         save_raw_gradients=save_raw_gradients,
     )
+    if storage is not None and streaming is not None:
+        raise TypeError("Do not pass both `storage` and `streaming`.")
     streaming_options = merge_streaming_options(
-        streaming=streaming,
+        streaming=storage if storage is not None else streaming,
         save_outs_to=save_outs_to,
         keep_outs_in_memory=keep_outs_in_memory,
         out_sink=out_sink,

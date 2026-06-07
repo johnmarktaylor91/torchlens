@@ -1262,10 +1262,16 @@ def _reuse_streamed_blob_ids(
             ("transformed_grad", "_pending_transformed_grad_blob_id"),
         ):
             tensor_blob = getattr(scrubbed_layer, tensor_field, None)
-            if not isinstance(tensor_blob, BlobRef):
-                continue
             pending_blob_id = getattr(live_layer, pending_field, None)
             if pending_blob_id is None:
+                continue
+            if not isinstance(tensor_blob, BlobRef):
+                setattr(
+                    scrubbed_layer,
+                    tensor_field,
+                    BlobRef(blob_id=pending_blob_id, kind=tensor_field),
+                )
+                writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
                 continue
             skipped_blob_ids.add(tensor_blob.blob_id)
             setattr(

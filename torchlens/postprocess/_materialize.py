@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from torch import nn
 import torch
+from torchlens._io import BlobRef as PortableBlobRef
 from torchlens.ir import CaptureEvents
 from torchlens.ir.events import (
     ModuleEnterEvent,
@@ -481,6 +482,14 @@ def _fields_from_event(
             "func_config": dict(function.func_config),
         }
     )
+    if isinstance(tensor.blob_ref, PortableBlobRef):
+        fields_dict["_pending_blob_id"] = tensor.blob_ref.blob_id
+        if tensor.payload is None:
+            fields_dict["out"] = None
+    if transformed is not None and isinstance(transformed.blob_ref, PortableBlobRef):
+        fields_dict["_pending_transformed_out_blob_id"] = transformed.blob_ref.blob_id
+        if transformed.payload is None:
+            fields_dict["transformed_out"] = None
     fields_dict.update(buffer_write_fields)
     fields_dict.update(module_input_fields)
     fields_dict.update(module_output_fields)

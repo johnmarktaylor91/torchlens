@@ -695,8 +695,15 @@ class Op:
             return grad
         if name == "out":
             state = object.__getattribute__(self, "__dict__")
+            out = state.get("out")
             source_ref = state.get("_source_trace_ref")
             source_trace = None if source_ref is None else source_ref()
+            if (
+                out is None
+                and state.get("out_ref") is not None
+                and getattr(source_trace, "_predicate_save_options", None) is not None
+            ):
+                return object.__getattribute__(self, "materialize_out")()
             if (
                 state.get("_tracing_finished")
                 and not state.get("has_saved_activation", False)
@@ -1770,8 +1777,9 @@ class Op:
         torch.Size([2, 3])
         """
 
-        if isinstance(self.out, torch.Tensor):
-            return self.out
+        current_out = self.__dict__.get("out")
+        if isinstance(current_out, torch.Tensor):
+            return current_out
         if self.out_ref is None:
             raise TorchLensIOError("no out_ref to materialize from")
         self._internal_set("out", self.out_ref.materialize(map_location=map_location))

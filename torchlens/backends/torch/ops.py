@@ -134,6 +134,8 @@ from .tensor_tracking import (
     _process_parent_param_ops,
 )
 from ..._errors import TorchLensPostfuncError
+from ..._io import BlobRef
+from ...fastlog._storage_resolver import _resolve_storage
 from ..._training_validation import TrainingModeConfigError
 from ...data_classes.internal_types import FuncExecutionContext
 from ...capture.predicates import _evaluate_intervene_op, _evaluate_keep_op, build_op_record_context
@@ -142,7 +144,13 @@ from ...capture.projections import (
     get_active_recording_state,
 )
 from ...fastlog.exceptions import PredicateError
-from ...fastlog.types import ActivationRecord, CaptureSpec, ModuleStackFrame, RecordContext
+from ...fastlog.types import (
+    ActivationRecord,
+    CaptureSpec,
+    ModuleStackFrame,
+    RecordContext,
+    StorageIntent,
+)
 from ...capture.salient_args import extract_salient_args
 
 if TYPE_CHECKING:
@@ -220,7 +228,11 @@ def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -
         requires_grad=tensor.requires_grad,
         memory=fields_dict["activation_memory"],
         payload=fields_dict["out"],
-        blob_ref=None,
+        blob_ref=(
+            BlobRef(blob_id=fields_dict["_pending_blob_id"], kind="out")  # type: ignore[arg-type]
+            if fields_dict.get("_pending_blob_id") is not None
+            else None
+        ),
         backend_handle_id=str(id(tensor)),
     )
 
@@ -352,7 +364,14 @@ def _op_event_from_log(
             requires_grad=None,
             memory=fields_dict["transformed_activation_memory"],
             payload=fields_dict["transformed_out"],
-            blob_ref=None,
+            blob_ref=(
+                BlobRef(
+                    blob_id=fields_dict["_pending_transformed_out_blob_id"],
+                    kind="transformed_out",
+                )  # type: ignore[arg-type]
+                if fields_dict.get("_pending_transformed_out_blob_id") is not None
+                else None
+            ),
             backend_handle_id=None,
         )
     )
@@ -2858,6 +2877,113 @@ def _stream_activation_fields(trace: "Trace", fields_dict: dict[str, Any]) -> No
         writer.write_blob(blob_id, tensor, kind=kind, label=label)
 
 
+def _save_predicate_activation_fields(
+    trace: "Trace",
+    fields_dict: dict[str, Any],
+    tensor: torch.Tensor,
+    spec: CaptureSpec,
+    ctx: RecordContext,
+    activation_transform: Callable[..., Any] | None,
+) -> None:
+    """Save a ``trace(save=...)`` activation through the shared storage resolver.
+
+    Parameters
+    ----------
+    trace:
+        Active trace.
+    fields_dict:
+        Mutable operation fields for the current output.
+    tensor:
+        Live tensor selected by the predicate.
+    spec:
+        Resolved capture spec for this output.
+    ctx:
+        Predicate context used for transform error messages.
+    activation_transform:
+        Optional activation transform configured for the trace.
+    """
+
+    options = getattr(trace, "_predicate_save_options", None)
+    streaming = None if options is None else options.streaming
+    intent = StorageIntent(
+        in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,
+        on_disk=streaming is not None and streaming.bundle_path is not None,
+    )
+    (
+        ram_payload,
+        disk_payload,
+        transformed_ram_payload,
+        transformed_disk_payload,
+    ) = _resolve_storage(
+        tensor,
+        spec,
+        intent,
+        activation_transform=activation_transform,
+        save_raw_activations=getattr(trace, "save_raw_activations", True),
+        ctx=ctx,
+        kind="activation",
+    )
+    metadata_tensor = ram_payload
+    if metadata_tensor is None:
+        metadata_tensor = disk_payload
+    if metadata_tensor is None:
+        metadata_tensor = tensor
+    fields_dict["shape"] = tuple(metadata_tensor.shape)
+    fields_dict["dtype"] = metadata_tensor.dtype
+    fields_dict["activation_memory"] = get_memory_amount(metadata_tensor)
+    fields_dict["out"] = ram_payload
+    fields_dict["transformed_out"] = transformed_ram_payload
+    transformed_metadata = transformed_ram_payload
+    if transformed_metadata is None:
+        transformed_metadata = transformed_disk_payload
+    fields_dict["transformed_out_shape"] = _shape_or_none(transformed_metadata)
+    fields_dict["transformed_out_dtype"] = _dtype_or_none(transformed_metadata)
+    fields_dict["transformed_activation_memory"] = _memory_or_none(transformed_metadata)
+    fields_dict["has_saved_activation"] = True
+    _stream_predicate_payloads(
+        trace,
+        fields_dict,
+        disk_payload=disk_payload,
+        transformed_disk_payload=transformed_disk_payload,
+    )
+
+
+def _stream_predicate_payloads(
+    trace: "Trace",
+    fields_dict: dict[str, Any],
+    *,
+    disk_payload: torch.Tensor | None,
+    transformed_disk_payload: torch.Tensor | None,
+) -> None:
+    """Write predicate-selected disk payloads during forward capture.
+
+    Parameters
+    ----------
+    trace:
+        Active trace whose writer receives payload blobs.
+    fields_dict:
+        Mutable operation fields receiving pending blob ids.
+    disk_payload:
+        Detached raw payload for disk storage.
+    transformed_disk_payload:
+        Detached transformed payload for disk storage.
+    """
+
+    writer = getattr(trace, "_out_writer", None)
+    if writer is None:
+        return
+    label = fields_dict["_label_raw"]
+    for payload, pending_field, kind in (
+        (disk_payload, "_pending_blob_id", "out"),
+        (transformed_disk_payload, "_pending_transformed_out_blob_id", "transformed_out"),
+    ):
+        if payload is None:
+            continue
+        blob_id = writer.next_blob_id()
+        fields_dict[pending_field] = blob_id
+        writer.write_blob(blob_id, payload, kind=kind, label=label)
+
+
 def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[ModuleStackFrame, ...]:
     """Project exhaustive op fields into predicate module-stack frames.
 
@@ -3313,7 +3439,17 @@ def _make_layer_log_entry(
     else:
         save_this_activation = predicate_spec.save_out
     if keep_by_predicate and save_this_activation:
-        _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, activation_transform)
+        if predicate_spec is None or predicate_ctx is None:
+            _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, activation_transform)
+        else:
+            _save_predicate_activation_fields(
+                self,
+                fields_dict,
+                t,
+                predicate_spec,
+                predicate_ctx,
+                activation_transform,
+            )
     op_event = _op_event_from_log(self, fields_dict, t, fire_results)
     self.capture_events.append(op_event)
     if op_event.grad_fn_handle is not None:

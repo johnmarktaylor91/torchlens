@@ -1493,6 +1493,26 @@ class StreamingOptions:
         return instance
 
 
+def to_disk(path: str | Path, *, retain_in_memory: bool = False) -> StreamingOptions:
+    """Return storage options that stream selected payloads to a bundle.
+
+    Parameters
+    ----------
+    path:
+        Destination bundle directory. The path must not already exist.
+    retain_in_memory:
+        Whether streamed payloads should also remain as RAM copies.
+
+    Returns
+    -------
+    StreamingOptions
+        Storage options suitable for ``trace(..., storage=...)`` and
+        ``record(..., streaming=...)``.
+    """
+
+    return StreamingOptions(bundle_path=path, retain_in_memory=retain_in_memory)
+
+
 def merge_capture_options(
     *,
     capture: CaptureOptions | None,
@@ -1754,6 +1774,7 @@ __all__ = [
     "ReplayOptions",
     "SaveOptions",
     "StreamingOptions",
+    "to_disk",
     "VisualizationOptions",
     "merge_capture_options",
     "merge_intervention_options",

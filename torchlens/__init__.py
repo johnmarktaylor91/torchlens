@@ -99,6 +99,7 @@ from .validation import (
 from .io import load_intervention_spec as _moved_load_intervention_spec
 from .observers import record_span, tap
 from .options import CaptureOptions as _CaptureOptions
+from .options import to_disk
 from .intervention.sites import sites
 from .quantities import Bytes, Duration, Flops, Macs, Quantity
 from .validation.consolidated import validate
