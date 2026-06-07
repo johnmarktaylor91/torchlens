@@ -4,21 +4,29 @@ from __future__ import annotations
 
 import random
 import time
-from collections import OrderedDict, defaultdict
 from contextlib import AbstractContextManager, contextmanager
+from dataclasses import replace
 from typing import Any, Callable, Literal, cast
 
 from ... import _state
-from ...constants import LAYER_PASS_LOG_FIELD_ORDER
 from ...data_classes.layer import Layer
 from ...data_classes.trace import Trace
-from ...data_classes.op import Op, _LAYER_PASS_LOG_DEFAULT_FILL
-from ...quantities import Duration
-from ...ir.events import OpEvent, TraceBuildState
+from ...fastlog.types import CaptureSpec
+from ...ir.buffer import CaptureEvents
+from ...ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    OpEvent,
+    OutputRef,
+    ParentEdge,
+    TraceBuildState,
+)
 from ...ir.intervention import FireResult, FunctionEventInput
-from ...ir.predicate import RecordContext
+from ...ir.predicate import RecordContext, _DEFERRED_VALUE
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...postprocess._materialize import materialize_from_events
+from ...quantities import Duration
 from . import capabilities
 from .model_prep import cleanup_model_session, prepare_model_once, prepare_model_session
 from .tensor_store import MLXTensorLabelStore
@@ -125,7 +133,14 @@ class MLXBackend:
         func_event_input: FunctionEventInput,
         output: object,
     ) -> RecordContext:
-        """Build the selector predicate context for one MLX output."""
+        """Build the selector predicate context for one MLX output.
+
+        MLX's lazy backend guarantees shape, dtype, and device metadata at call
+        time. Value-dependent fields, specifically ``tensor_requires_grad``,
+        ``is_scalar_bool``, and ``bool_value``, are represented by the
+        ``_DEFERRED_VALUE`` sentinel so predicates cannot accidentally consume
+        silently-wrong values or force per-op ``mx.eval``.
+        """
 
         return RecordContext(
             kind="op",
@@ -149,7 +164,7 @@ class MLXBackend:
             shape=self._shape(output),
             dtype=DtypeRef.from_value(self._dtype(output)),
             tensor_device=DeviceRef.from_value(self._device(output)),
-            tensor_requires_grad=None,
+            tensor_requires_grad=_DEFERRED_VALUE,
             output_index=None,
             is_bottom_level_func=func_event_input.is_bottom_level_func,
             time_since_pass_start=0.0,
@@ -160,8 +175,8 @@ class MLXBackend:
             parent_labels_raw=(),
             is_output_parent=False,
             backend_requires_isolation=False,
-            is_scalar_bool=None,
-            bool_value=None,
+            is_scalar_bool=_DEFERRED_VALUE,
+            bool_value=_DEFERRED_VALUE,
         )
 
     def detect_in_place_isolation_required(
@@ -288,14 +303,43 @@ class MLXBackend:
         output_sites: tuple[object, ...],
         reserved_block: tuple[ReservedLabel, ...],
     ) -> tuple[OpEvent, ...]:
-        """Emit Protocol operation events.
+        """Emit topology-complete Protocol operation events for MLX outputs.
 
-        The M7 MLX path writes existing ``Op`` objects directly for smoke
-        compatibility; structured ``OpEvent`` emission is reserved for later
-        unification work.
+        MLX eval timing is deliberately split: shape, dtype, device, parent
+        edges, and container paths are populated at call time; saved payloads
+        remain lazy and are batch-forced in ``finalize_forward_session`` via
+        ``mx.eval``; value-dependent predicate fields are deferred with the
+        ``_DEFERRED_VALUE`` sentinel and projected to ``None`` for stored event
+        metadata.
         """
 
-        return ()
+        events: list[OpEvent] = []
+        policy = self._capture_policy(session)
+        output_by_site = tuple(output_sites)
+        for output, reserved in zip(output_by_site, reserved_block):
+            if not self.is_tensor(output):
+                continue
+            self.tensor_store.set_label(output, reserved.label_raw)
+            if policy.save_payload:
+                getattr(session, "_mlx_saved_payloads").append(output)
+            parents, parent_arg_positions, edge_uses = self._parent_edges(
+                func_event_input.args,
+                dict(func_event_input.kwargs),
+            )
+            event = self._build_event(
+                session=session,
+                kind="op",
+                reserved=reserved,
+                func_event_input=func_event_input,
+                output=output,
+                parents=parents,
+                parent_arg_positions=parent_arg_positions,
+                edge_uses=edge_uses,
+                policy=policy,
+                is_input=False,
+            )
+            events.append(event)
+        return tuple(events)
 
     def finalize_forward_session(self, session: object, trace_state: TraceBuildState) -> None:
         """Materialize deferred MLX payloads in a single batch."""
@@ -376,6 +420,7 @@ class MLXBackend:
         )
         trace.trace_label = name
         trace.backend = cast('Literal["torch", "mlx"]', self.name)
+        trace.capture_events = CaptureEvents()
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
         trace._pre_forward_rng_states = None
@@ -398,6 +443,8 @@ class MLXBackend:
             trace.raw_output = output_transform(output) if callable(output_transform) else None
             self.finalize_forward_session(trace, trace._ensure_build_state())
             self._mark_outputs(trace, output)
+            materialize_from_events(trace, trace.capture_events)
+            delattr(trace, "capture_events")
             self._finish_trace(trace)
             return trace
         finally:
@@ -413,36 +460,39 @@ class MLXBackend:
         kwargs: dict[str, Any],
         output: object,
     ) -> None:
-        """Append one MLX operation to ``trace``."""
+        """Append one MLX operation event to ``trace``."""
 
         if not self.is_tensor(output):
             return
-        raw_index = len(trace.layer_list)
-        type_counts = getattr(trace, "_mlx_type_counts", defaultdict(int))
-        type_counts[op_name] += 1
-        trace._mlx_type_counts = type_counts
-        label = f"{op_name}_{type_counts[op_name]}_1"
-        parents = self._parent_labels(args, kwargs)
-        self.tensor_store.set_label(output, label)
-        trace._mlx_saved_payloads.append(output)
-        op_log = self._build_op_log(
-            trace=trace,
-            label=label,
-            op_name=op_name,
-            func=func,
-            args=args,
-            kwargs=kwargs,
-            output=output,
-            parents=parents,
-            raw_index=raw_index,
-            type_index=type_counts[op_name],
+        events = getattr(trace, "capture_events", None)
+        if events is None:
+            events = CaptureEvents()
+            trace.capture_events = events
+        outputs = tuple(self._iter_arrays(output))
+        reserved = events.reserve_label_block(op_name, len(outputs))
+        func_call_id = events.func_call_id_counter + 1
+        events.func_call_id_counter = func_call_id
+        emitted = self.emit_function_outputs(
+            trace,
+            FunctionEventInput(
+                func=func,
+                func_name=op_name,
+                func_qualname=getattr(func, "__qualname__", None),
+                args=args,
+                kwargs=kwargs,
+                raw_output=output,
+                arg_copies=None,
+                kwarg_copies=None,
+                module_stack=(),
+                is_bottom_level_func=True,
+                func_call_id=func_call_id,
+                expected_output_count=len(outputs),
+            ),
+            output,
+            outputs,
+            reserved,
         )
-        self._register_op_log(trace, op_log)
-        for parent_label in parents:
-            parent = trace.layer_dict_all_keys.get(parent_label)
-            if parent is not None and label not in parent.children:
-                parent.children.append(label)
-                parent.has_children = True
+        events.extend(emitted)
 
     @staticmethod
     def _import_mlx() -> tuple[object, object]:
@@ -478,48 +528,248 @@ class MLXBackend:
         return [input_args]
 
     def _label_source_arrays(self, trace: Trace, args: list[Any], kwargs: dict[Any, Any]) -> None:
-        """Emit resolvable input op logs for MLX source arrays."""
+        """Emit resolvable input source events for MLX source arrays."""
 
         for index, arg in enumerate(args):
             if self.is_tensor(arg):
                 label = f"input.arg_{index}"
                 self.tensor_store.set_label(arg, label)
-                self._register_op_log(
-                    trace,
-                    self._build_op_log(
-                        trace=trace,
-                        label=label,
-                        op_name="input",
-                        func=None,
-                        args=(),
-                        kwargs={},
-                        output=arg,
-                        parents=[],
-                        raw_index=len(trace.layer_list),
-                        type_index=index + 1,
-                        is_input=True,
-                    ),
+                raw_index = trace.capture_events.raw_layer_counter + 1
+                trace.capture_events.raw_layer_counter = raw_index
+                trace.capture_events.append(
+                    self._build_source_event(trace, label, arg, raw_index=raw_index)
                 )
         for key, value in kwargs.items():
             if self.is_tensor(value):
                 label = f"input.{key}"
                 self.tensor_store.set_label(value, label)
-                self._register_op_log(
-                    trace,
-                    self._build_op_log(
-                        trace=trace,
-                        label=label,
-                        op_name="input",
-                        func=None,
-                        args=(),
-                        kwargs={},
-                        output=value,
-                        parents=[],
-                        raw_index=len(trace.layer_list),
-                        type_index=len(trace.layer_list) + 1,
-                        is_input=True,
-                    ),
+                raw_index = trace.capture_events.raw_layer_counter + 1
+                trace.capture_events.raw_layer_counter = raw_index
+                trace.capture_events.append(
+                    self._build_source_event(
+                        trace,
+                        label,
+                        value,
+                        raw_index=raw_index,
+                    )
                 )
+
+    def _capture_policy(self, session: object) -> CapturePolicy:
+        """Return the MLX capture policy for one event."""
+
+        return CapturePolicy(
+            must_keep_topology=True,
+            save_payload=bool(getattr(session, "save_raw_activations", True)),
+            requires_isolation=False,
+            save_args=False,
+            save_code=bool(getattr(session, "save_code_context", False)),
+            save_rng=False,
+            save_grad=False,
+            stream=False,
+        )
+
+    def _build_source_event(
+        self,
+        trace: Trace,
+        label: str,
+        output: object,
+        *,
+        raw_index: int,
+    ) -> OpEvent:
+        """Build an MLX source ``OpEvent`` for an input array."""
+
+        reserved = ReservedLabel(
+            label=label,
+            label_raw=label,
+            raw_index=raw_index,
+            type_index=raw_index,
+            layer_type="input",
+            site=label,
+        )
+        return self._build_event(
+            session=trace,
+            kind="source",
+            reserved=reserved,
+            func_event_input=FunctionEventInput(
+                func=None,
+                func_name="input",
+                func_qualname=None,
+                args=(),
+                kwargs={},
+                raw_output=output,
+                arg_copies=None,
+                kwarg_copies=None,
+                module_stack=(),
+                is_bottom_level_func=True,
+                func_call_id=raw_index,
+                expected_output_count=1,
+            ),
+            output=output,
+            parents=(),
+            parent_arg_positions={"args": {}, "kwargs": {}},
+            edge_uses=(),
+            policy=self._capture_policy(trace),
+            is_input=True,
+        )
+
+    def _build_event(
+        self,
+        *,
+        session: object,
+        kind: str,
+        reserved: ReservedLabel,
+        func_event_input: FunctionEventInput,
+        output: object,
+        parents: tuple[ParentEdge, ...],
+        parent_arg_positions: dict[str, dict[Any, str]],
+        edge_uses: tuple[object, ...],
+        policy: CapturePolicy,
+        is_input: bool,
+    ) -> OpEvent:
+        """Build one topology-complete MLX operation event."""
+
+        tensor_ref = self.tensor_ref(
+            session,
+            output,
+            output if policy.save_payload else None,
+            policy,
+        )
+        input_ancestors = frozenset(
+            edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
+        )
+        return OpEvent(
+            kind=kind,
+            label_raw=reserved.label_raw,
+            layer_label_raw=reserved.label_raw,
+            layer_type=reserved.layer_type,
+            raw_index=reserved.raw_index,
+            type_index=reserved.type_index,
+            step_index=reserved.raw_index,
+            source_trace=session,
+            source_trace_id=None,
+            tracing_finished=False,
+            construction_done=True,
+            function=FunctionCallRef(
+                func=func_event_input.func,
+                func_name=func_event_input.func_name,
+                func_qualname=func_event_input.func_qualname,
+                func_call_id=func_event_input.func_call_id,
+                code_context=(),
+                func_duration=None,
+                flops_forward=None,
+                flops_backward=None,
+                func_rng_states=None,
+                func_autocast_state=None,
+                arg_names=(),
+                num_args_total=len(func_event_input.args) + len(func_event_input.kwargs),
+                num_pos_args=len(func_event_input.args),
+                num_kwargs=len(func_event_input.kwargs),
+                non_tensor_pos_args=tuple(
+                    arg for arg in func_event_input.args if not self.is_tensor(arg)
+                ),
+                non_tensor_kwargs=tuple(
+                    (key, value)
+                    for key, value in func_event_input.kwargs.items()
+                    if not self.is_tensor(value)
+                ),
+                func_non_tensor_args=tuple(
+                    arg for arg in func_event_input.args if not self.is_tensor(arg)
+                ),
+                is_inplace=False,
+                func_config=(),
+            ),
+            output=OutputRef(
+                tensor=tensor_ref,
+                transformed_tensor=None,
+                has_saved_activation=policy.save_payload,
+                output_device="same",
+                activation_transform=getattr(session, "activation_transform", None),
+                detach_saved_activations=bool(getattr(session, "detach_saved_activations", False)),
+                visualizer_path=None,
+                multi_output_index=None,
+                in_multi_output=False,
+                container_path=(),
+                container_spec=None,
+                child_versions=(),
+            ),
+            templates=ArgTemplateRef(
+                saved_args=None,
+                saved_kwargs=None,
+                args_template=None,
+                kwargs_template=None,
+                has_saved_args=False,
+            ),
+            parents=parents,
+            parent_arg_positions=parent_arg_positions,
+            _edge_uses=edge_uses,
+            params=(),
+            parent_params=(),
+            module_stack=func_event_input.module_stack,
+            modules=tuple(
+                (frame.address, frame.call_index) for frame in func_event_input.module_stack
+            ),
+            backend_semantics=self.detect_backend_semantics(session, func_event_input, output),
+            policy=policy,
+            predicate_matched=policy.save_payload,
+            pass_index=1,
+            grad_fn_class_qualname=None,
+            grad_fn_handle=None,
+            equivalence_class=reserved.layer_type,
+            is_output_parent=False,
+            has_internal_source_ancestor=not is_input and not parents,
+            internal_source_ancestors=frozenset(),
+            input_ancestors=input_ancestors,
+            root_ancestors=input_ancestors or frozenset({reserved.label_raw}),
+            func_call_id=func_event_input.func_call_id,
+            is_bottom_level=func_event_input.is_bottom_level_func,
+            is_scalar_bool=None,
+            bool_value=None,
+            intervention_fired=False,
+            intervention_replaced=False,
+            fire_results=(),
+            intervention_template_ref=None,
+            record_context=self.build_record_context(
+                session,
+                reserved,
+                func_event_input,
+                output,
+            ),
+            capture_spec=CaptureSpec(save_out=policy.save_payload, save_metadata=True),
+        )
+
+    def _parent_edges(
+        self,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> tuple[tuple[ParentEdge, ...], dict[str, dict[Any, str]], tuple[object, ...]]:
+        """Return parent edges and arg-position metadata for MLX inputs."""
+
+        edges: list[ParentEdge] = []
+        arg_positions: dict[Any, str] = {}
+        kwarg_positions: dict[Any, str] = {}
+        edge_uses: list[tuple[str, Any, str]] = []
+
+        def _add(label: str, position: Any, use: str) -> None:
+            """Append one unique parent edge."""
+
+            if any(edge.parent_label_raw == label for edge in edges):
+                return
+            edges.append(ParentEdge(parent_label_raw=label, arg_position=position, edge_use=use))
+            edge_uses.append((label, position, use))
+
+        for index, value in enumerate(args):
+            for array in self._iter_arrays(value):
+                label = self.tensor_store.get_label(array)
+                if label is not None:
+                    arg_positions[index] = label
+                    _add(label, index, "arg")
+        for key, value in kwargs.items():
+            for array in self._iter_arrays(value):
+                label = self.tensor_store.get_label(array)
+                if label is not None:
+                    kwarg_positions[key] = label
+                    _add(label, key, "kwarg")
+        return tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses)
 
     def _mark_outputs(self, trace: Trace, output: object) -> None:
         """Mark final output-parent operations for an MLX trace."""
@@ -529,16 +779,44 @@ class MLXBackend:
             if label is None:
                 continue
             trace.output_layers.append(label)
-            op = trace.layer_dict_all_keys.get(label)
-            if op is not None:
-                op.is_output = True
-                op.is_output_parent = True
-                op.is_final_output = True
-                op.io_role = (op.io_role or "") + "O"
+            event = trace.capture_events.op_event_by_label_raw.get(label)
+            if event is None:
+                continue
+            updated = replace(event, is_output_parent=True)
+            trace.capture_events.op_event_by_label_raw[label] = updated
+            for index, candidate in enumerate(trace.capture_events.op_events):
+                if candidate.label_raw == label:
+                    trace.capture_events.op_events[index] = updated
+                    trace.capture_events.live_index.replace(updated)
+                    break
 
     def _finish_trace(self, trace: Trace) -> None:
         """Finalize a manually captured MLX Trace."""
 
+        for raw_index, (label, op_log) in enumerate(trace._raw_layer_dict.items()):
+            pass_label = f"{label}:1"
+            op_log._label_raw = label
+            op_log._layer_label_raw = label
+            op_log.label = pass_label
+            op_log.label_short = pass_label
+            op_log.layer_label = label
+            op_log.layer_label_short = label
+            op_log.lookup_keys = [label, pass_label]
+            op_log.pass_index = 1
+            op_log.num_passes = 1
+            trace.layer_list.append(op_log)
+            trace.layer_dict_main_keys[label] = op_log
+            trace.layer_dict_all_keys[label] = op_log
+            trace.layer_dict_all_keys[pass_label] = op_log
+            trace.op_labels.append(pass_label)
+            trace.layer_labels.append(label)
+            trace.layer_num_calls[label] = 1
+            trace._lookup_keys_to_layer_num_dict[label] = raw_index
+            trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
+            layer_log = Layer(op_log)
+            layer_log.ops[1] = op_log
+            layer_log.call_labels.append(pass_label)
+            trace.layer_logs[label] = layer_log
         trace.num_ops = len(trace.layer_list)
         trace._layers_logged = True
         trace._layers_saved = True
@@ -546,180 +824,6 @@ class MLXBackend:
         trace.has_backward_pass = False
         trace.capture_end_time = time.time()
         trace.backend = cast('Literal["torch", "mlx"]', self.name)
-
-    def _build_op_log(
-        self,
-        *,
-        trace: Trace,
-        label: str,
-        op_name: str,
-        func: object,
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        output: object,
-        parents: list[str],
-        raw_index: int,
-        type_index: int,
-        is_input: bool = False,
-    ) -> Op:
-        """Build a minimal but structurally valid ``Op`` for MLX."""
-
-        fields = dict(_LAYER_PASS_LOG_DEFAULT_FILL)
-        pass_label = f"{label}:1"
-        memory = self._memory(output)
-        fields.update(
-            {
-                "_label_raw": label,
-                "_layer_label_raw": label,
-                "step_index": raw_index + 1,
-                "raw_index": raw_index,
-                "source_trace": trace,
-                "_tracing_finished": True,
-                "label": pass_label,
-                "label_short": pass_label,
-                "layer_label": label,
-                "layer_label_short": label,
-                "type": op_name,
-                "type_index": type_index,
-                "pass_index": 1,
-                "num_passes": 1,
-                "lookup_keys": [label, pass_label],
-                "out": output if trace.save_raw_activations else None,
-                "has_saved_activation": trace.save_raw_activations,
-                "output_device": "same",
-                "activation_transform": trace.activation_transform,
-                "annotations": {},
-                "detach_saved_activations": trace.detach_saved_activations,
-                "has_saved_args": False,
-                "shape": self._shape(output),
-                "dtype": self._dtype(output),
-                "activation_memory": memory,
-                "out_versions_by_child": {},
-                "save_gradients": False,
-                "has_grad": False,
-                "func": func,
-                "func_call_id": raw_index + 1,
-                "func_name": op_name,
-                "func_qualname": getattr(func, "__qualname__", None),
-                "code_context": [],
-                "func_duration": None,
-                "func_rng_states": None,
-                "func_autocast_state": None,
-                "arg_names": [],
-                "num_args_total": len(args) + len(kwargs),
-                "num_pos_args": len(args),
-                "num_kwargs": len(kwargs),
-                "non_tensor_pos_args": tuple(arg for arg in args if not self.is_tensor(arg)),
-                "non_tensor_kwargs": tuple(
-                    (key, value) for key, value in kwargs.items() if not self.is_tensor(value)
-                ),
-                "func_non_tensor_args": tuple(arg for arg in args if not self.is_tensor(arg)),
-                "is_inplace": False,
-                "grad_fn_class_qualname": None,
-                "parent_params": [],
-                "_param_barcodes": [],
-                "parent_param_ops": [],
-                "_param_logs": [],
-                "param_shapes": [],
-                "num_params": 0,
-                "num_params_trainable": 0,
-                "num_params_frozen": 0,
-                "param_memory": 0,
-                "equivalence_class": op_name,
-                "op_equivalence_classes": set(),
-                "recurrent_ops": [],
-                "parents": parents,
-                "parent_arg_positions": list(range(len(parents))),
-                "_edge_uses": ["arg" for _ in parents],
-                "root_ancestors": [],
-                "children": [],
-                "has_children": False,
-                "is_input": is_input,
-                "has_input_ancestor": any(parent.startswith("input.") for parent in parents),
-                "input_ancestors": [parent for parent in parents if parent.startswith("input.")],
-                "min_distance_from_input": 0 if not parents else 1,
-                "max_distance_from_input": 0 if not parents else 1,
-                "is_output": False,
-                "is_output_parent": False,
-                "is_final_output": False,
-                "has_output_descendant": False,
-                "output_descendants": [],
-                "io_role": "I"
-                if is_input or any(parent.startswith("input.") for parent in parents)
-                else "",
-                "is_buffer": False,
-                "is_internal_source": False,
-                "has_internal_source_ancestor": False,
-                "internal_source_parents": [],
-                "internal_source_ancestors": [],
-                "is_internal_sink": False,
-                "is_terminal_bool": False,
-                "is_terminal_conditional_bool": False,
-                "is_scalar_bool": False,
-                "bool_value": None,
-                "in_conditionals": [],
-                "terminal_bool_for": [],
-                "is_in_conditional_body": False,
-                "conditional_branch_stack": [],
-                "conditional_branch_depth": 0,
-                "conditional_entry_children": [],
-                "conditional_then_children": [],
-                "conditional_elif_children": [],
-                "conditional_else_children": [],
-                "conditional_arm_children": {},
-                "module": None,
-                "modules": [],
-                "module_call_stack": [],
-                "input_to_module_calls": [],
-                "module_entry_arg_keys": [],
-                "output_of_modules": [],
-                "output_of_module_calls": [],
-                "is_module_output": False,
-                "is_atomic_module": op_name == "linear",
-                "atomic_module_call": None,
-                "func_config": {},
-            }
-        )
-        op_fields = {field_name: fields[field_name] for field_name in LAYER_PASS_LOG_FIELD_ORDER}
-        return Op(op_fields)
-
-    def _register_op_log(self, trace: Trace, op_log: Op) -> None:
-        """Register an MLX op log on all trace lookup structures.
-
-        Parameters
-        ----------
-        trace:
-            Trace receiving the op log.
-        op_log:
-            Operation log to register.
-        """
-
-        raw_index = len(trace.layer_list)
-        label = op_log.layer_label
-        trace.layer_list.append(op_log)
-        trace.layer_dict_main_keys[label] = op_log
-        trace.layer_dict_all_keys[label] = op_log
-        trace.layer_dict_all_keys[op_log.label] = op_log
-        trace.op_labels.append(op_log.label)
-        trace.layer_labels.append(label)
-        trace.layer_num_calls[label] = 1
-        trace._lookup_keys_to_layer_num_dict[label] = raw_index
-        trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
-        layer_log = Layer(op_log)
-        layer_log.ops[1] = op_log
-        layer_log.call_labels.append(op_log.label)
-        trace.layer_logs[label] = layer_log
-
-    def _parent_labels(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[str]:
-        """Return unique parent labels found in MLX operation inputs."""
-
-        labels: list[str] = []
-        for value in (*args, *kwargs.values()):
-            for array in self._iter_arrays(value):
-                label = self.tensor_store.get_label(array)
-                if label is not None and label not in labels:
-                    labels.append(label)
-        return labels
 
     def _iter_arrays(self, value: object) -> list[object]:
         """Return MLX arrays nested inside ``value``."""

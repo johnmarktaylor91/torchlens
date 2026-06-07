@@ -1582,11 +1582,17 @@ def trace(
         mlx_save_options, mlx_save_predicate = _split_save_options_and_predicate(save)
         if mlx_save_predicate is not None:
             raise NotImplementedError(
-                "trace(save=predicate) is only supported by the PyTorch backend."
+                "MLX backend does not support value-dependent trace(save=predicate) capture. "
+                "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
+                "is_scalar_bool, and bool_value without per-op mx.eval; use static save options "
+                "or the PyTorch backend for value-dependent predicates."
             )
         if intervene is not None:
             raise NotImplementedError(
-                "trace(intervene=predicate) is only supported by the PyTorch backend."
+                "MLX backend does not support value-dependent trace(intervene=predicate) capture. "
+                "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
+                "is_scalar_bool, and bool_value without per-op mx.eval; use the PyTorch backend "
+                "for predicate-time interventions."
             )
         if activation_transform is not MISSING:
             if activation_transform is not MISSING:
