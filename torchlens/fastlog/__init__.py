@@ -26,6 +26,7 @@ from .types import (
     Recording,
     RecordingTrace,
 )
+from ..ir.predicate import MLXValueUnavailableError, _DEFERRED_VALUE
 from ..visualization.fastlog_preview import preview_fastlog as preview
 
 __all__ = [
@@ -36,6 +37,7 @@ __all__ = [
     "GradRecordContext",
     "HaltSignal",
     "InvalidStorageError",
+    "MLXValueUnavailableError",
     "ModuleStackFrame",
     "PredicateError",
     "Recorder",
@@ -47,6 +49,7 @@ __all__ = [
     "RecordContext",
     "RecordContextFieldError",
     "RecoveryError",
+    "_DEFERRED_VALUE",
     "cleanup_partial",
     "dry_run",
     "halt",

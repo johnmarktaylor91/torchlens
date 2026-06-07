@@ -36,7 +36,7 @@ from ..ir.events import (
     ParentEdge,
 )
 from ..ir.refs import DeviceRef, DtypeRef, TensorRef
-from ..ir.predicate import EventKind
+from ..ir.predicate import EventKind, coerce_deferred_value
 from ..ir.semantics import BackendSemantics, CapturePolicy
 
 if TYPE_CHECKING:
@@ -498,12 +498,15 @@ def _event_from_record(
     label_raw = ctx.raw_label or ctx.label
     with pause_logging():
         memory = int(tensor.nelement() * tensor.element_size()) if tensor is not None else 0
+    tensor_requires_grad = cast(bool | None, coerce_deferred_value(ctx.tensor_requires_grad))
+    is_scalar_bool = cast(bool | None, coerce_deferred_value(ctx.is_scalar_bool))
+    bool_value = cast(bool | None, coerce_deferred_value(ctx.bool_value))
     tensor_ref = TensorRef(
         label_raw=label_raw,
         shape=ctx.shape,
         dtype=str(ctx.dtype) if ctx.dtype is not None else None,
         device=str(ctx.tensor_device) if ctx.tensor_device is not None else None,
-        requires_grad=ctx.tensor_requires_grad,
+        requires_grad=tensor_requires_grad,
         memory=memory,
         payload=ram_payload,
         blob_ref=None,
@@ -625,8 +628,8 @@ def _event_from_record(
         root_ancestors=frozenset(),
         func_call_id=ctx.func_call_id,
         is_bottom_level=bool(ctx.is_bottom_level_func),
-        is_scalar_bool=None,
-        bool_value=None,
+        is_scalar_bool=is_scalar_bool,
+        bool_value=bool_value,
         intervention_fired=False,
         intervention_replaced=False,
         fire_results=(),

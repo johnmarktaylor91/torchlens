@@ -34,7 +34,13 @@ from .events import (
 )
 from .intervention import FireResult, FunctionEventInput, InterventionTemplateRef
 from .live_index import LiveIndex, LiveIndexWindowError
-from .predicate import RecordContext
+from .predicate import (
+    MLXValueUnavailableError,
+    RecordContext,
+    _DEFERRED_VALUE,
+    coerce_deferred_value,
+    is_deferred_value,
+)
 from .refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from .semantics import BackendSemantics, CapturePolicy
 
@@ -61,6 +67,7 @@ __all__ = [
     "LiveOpRecord",
     "LiveIndex",
     "LiveIndexWindowError",
+    "MLXValueUnavailableError",
     "ModuleEnterEvent",
     "ModuleEvent",
     "ModuleExitEvent",
@@ -76,6 +83,9 @@ __all__ = [
     "ReservedLabel",
     "TensorRef",
     "TraceBuildState",
+    "_DEFERRED_VALUE",
+    "coerce_deferred_value",
+    "is_deferred_value",
     "live_record_for_label",
     "register_live_event",
     "replace_op_event",

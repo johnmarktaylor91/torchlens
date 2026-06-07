@@ -32,6 +32,7 @@ from .types import (
     StorageIntent,
 )
 from ..ir.refs import DeviceRef, DtypeRef
+from ..ir.predicate import coerce_deferred_value
 
 _GRAD_DTYPES = {
     torch.float16,
@@ -320,6 +321,9 @@ def _ctx_to_json(ctx: Any) -> dict[str, Any]:
     data["recent_ops"] = []
     data["dtype"] = None if ctx.dtype is None else str(ctx.dtype)
     data["tensor_device"] = None if ctx.tensor_device is None else str(ctx.tensor_device)
+    data["tensor_requires_grad"] = coerce_deferred_value(ctx.tensor_requires_grad)
+    data["is_scalar_bool"] = coerce_deferred_value(ctx.is_scalar_bool)
+    data["bool_value"] = coerce_deferred_value(ctx.bool_value)
     return data
 
 
