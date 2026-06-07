@@ -710,7 +710,10 @@ class Op:
                 and getattr(source_trace, "_predicate_save_options", None) is not None
             ):
                 label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
-                raise ValueError(f"Activation for {label} was not saved by trace(save=...).")
+                raise ValueError(
+                    f"op {label} was not saved; no saved payload is available. "
+                    "Re-run with save=... to retain this activation."
+                )
         return object.__getattribute__(self, name)
 
     def __setattr__(self, name: str, value: Any) -> None:

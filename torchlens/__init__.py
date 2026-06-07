@@ -36,10 +36,12 @@ from . import (
 )
 from .semantic import facets
 from ._io.bundle import load, save
+from .captured_run import ActivationLookup, CapturedRun
 from .stats import aggregate
 from .data_classes.layer import Layer
 from .data_classes.op import Op
 from .data_classes.trace import Trace
+from .fastlog import Recording, record
 from .intervention import (
     Bundle,
     add,

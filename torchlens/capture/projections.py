@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Iterator, Protocol, cast
 
 import torch
 
+from .._state import pause_logging
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import (
     ActivationRecord,
@@ -124,6 +125,7 @@ def _empty_recording(options: "RecordingOptions") -> Recording:
         by_pass={},
         by_label={},
         by_address={},
+        orphan_records=[],
         bundle_path=(
             None
             if options.streaming is None or options.streaming.bundle_path is None
@@ -494,26 +496,32 @@ def _event_from_record(
     """Build a lightweight fastlog ``OpEvent`` without materializing an Op."""
 
     label_raw = ctx.raw_label or ctx.label
+    with pause_logging():
+        memory = int(tensor.nelement() * tensor.element_size()) if tensor is not None else 0
     tensor_ref = TensorRef(
         label_raw=label_raw,
         shape=ctx.shape,
         dtype=str(ctx.dtype) if ctx.dtype is not None else None,
         device=str(ctx.tensor_device) if ctx.tensor_device is not None else None,
         requires_grad=ctx.tensor_requires_grad,
-        memory=None,
+        memory=memory,
         payload=ram_payload,
         blob_ref=None,
         backend_handle_id=str(id(tensor)) if tensor is not None else None,
     )
     transformed_ref = None
     if transformed_ram_payload is not None:
+        with pause_logging():
+            transformed_memory = int(
+                transformed_ram_payload.nelement() * transformed_ram_payload.element_size()
+            )
         transformed_ref = TensorRef(
             label_raw=label_raw,
             shape=tuple(transformed_ram_payload.shape),
             dtype=str(transformed_ram_payload.dtype),
             device=str(transformed_ram_payload.device),
             requires_grad=transformed_ram_payload.requires_grad,
-            memory=None,
+            memory=transformed_memory,
             payload=transformed_ram_payload,
             blob_ref=None,
             backend_handle_id=str(id(transformed_ram_payload)),

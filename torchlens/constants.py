@@ -135,6 +135,7 @@ MODEL_LOG_FIELD_ORDER = [
     "layer_labels",
     "op_labels",
     "layer_num_calls",
+    "by_pass",
     "_layer_nums_to_save",
     "num_ops",
     "num_modules",

@@ -439,7 +439,7 @@ def _extract_and_mark_outputs(
         _label_raw = get_tensor_label(t)
         if _label_raw is None:
             continue
-        if self.capture_mode == "exhaustive":
+        if self.capture_mode in {"exhaustive", "predicate"}:
             self.output_layers.append(_label_raw)
             event = self.capture_events.op_event_by_label_raw.get(_label_raw)
             if event is not None:

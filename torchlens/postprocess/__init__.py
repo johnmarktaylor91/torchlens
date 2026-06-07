@@ -74,6 +74,7 @@ if TYPE_CHECKING:
 
 from ..quantities import Bytes
 from ..utils.display import _vprint, _vtimed
+from ..captured_run import remember_event_stream
 
 
 def _drop_transient_capture_state(self: "Trace") -> None:
@@ -169,6 +170,7 @@ def postprocess(
 
     capture_events = getattr(self, "capture_events", None)
     if capture_events is not None:
+        remember_event_stream(self, capture_events)
         with _vtimed(self, "  Step 0: Materialize capture events"):
             materialize_from_events(self, capture_events)
         delattr(self, "capture_events")
@@ -265,6 +267,11 @@ def postprocess(
     # Step 15.5: Build aggregate Layer objects from per-pass Op entries.
     with _vtimed(self, "  Step 15.5: Build layer logs"):
         _build_layer_logs(self)
+        self.by_pass = {}
+        for index, op in enumerate(self.layer_list):
+            pass_index = getattr(op, "pass_index", None)
+            if pass_index is not None:
+                self.by_pass.setdefault(pass_index, []).append(index)
 
     # Step 16: Build structured Module objects from raw module_* dicts.
     with _vtimed(self, "  Step 16: Build module logs"):

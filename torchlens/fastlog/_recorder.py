@@ -6,17 +6,19 @@ from pathlib import Path
 import time
 from types import TracebackType
 from typing import Any, cast
+import warnings
 
 import torch
 from torch import nn
 
-from .._deprecations import MISSING, MissingType, warn_deprecated_alias
+from .._deprecations import MISSING, MissingType
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from ..capture.projections import (
     RecordingState,
     _empty_recording,
     active_recording_state,
 )
+from ..capture.trace import _extract_and_mark_outputs
 from ..data_classes.trace import Trace
 from ..ir import CaptureEvents
 from ..intervention.predicates import InterventionPredicate
@@ -64,6 +66,25 @@ def _rank_prefixed_streaming_options(
         retain_in_memory=streaming.retain_in_memory,
         out_callback=streaming.out_callback,
     )
+
+
+def _resolve_save_alias(
+    *,
+    save: PredicateFn | None | MissingType,
+    keep_op: PredicateFn | None | MissingType,
+) -> PredicateFn | None | MissingType:
+    """Resolve ``save=`` and deprecated ``keep_op=`` recorder predicates."""
+
+    if save is not MISSING and keep_op is not MISSING:
+        raise ValueError("Recorder received both save= and deprecated keep_op=.")
+    if keep_op is not MISSING:
+        warnings.warn(
+            "Recorder(keep_op=...) is deprecated; use Recorder(save=...) instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return keep_op
+    return save
 
 
 def _unwrap_ddp_for_fastlog(
@@ -141,6 +162,7 @@ class Recorder:
         self,
         model: nn.Module,
         *,
+        save: PredicateFn | None | MissingType = MISSING,
         keep_op: PredicateFn | None | MissingType = MISSING,
         keep_module: PredicateFn | None | MissingType = MISSING,
         default_op: bool | CaptureSpec | MissingType = MISSING,
@@ -168,7 +190,7 @@ class Recorder:
         ----------
         model:
             PyTorch module to record.
-        keep_op, keep_module, default_op, default_module, history_size,
+        save, keep_op, keep_module, default_op, default_module, history_size,
         lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
         on_predicate_error, streaming, random_seed:
             Fastlog recording options.
@@ -186,6 +208,13 @@ class Recorder:
         """
 
         reject_compiled_model(model, api_name="torchlens.fastlog.Recorder")
+        keep_op = _resolve_save_alias(save=save, keep_op=keep_op)
+        if keep_module is not MISSING:
+            warnings.warn(
+                "Recorder(keep_module=...) is deprecated; use Recorder(save=...) instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, streaming)
         default_op = _resolve_train_mode_default(
             field_name="default_op",
@@ -224,6 +253,8 @@ class Recorder:
         self._state: RecordingState | None = None
         self._recording: Recording | None = None
         self._capture_events: CaptureEvents | None = None
+        self._output_tensors: list[torch.Tensor] = []
+        self._output_tensor_addresses: list[str] = []
         self._entered = False
         self._exited = False
         self._next_pass_index = 1
@@ -255,6 +286,8 @@ class Recorder:
             self._state.finalize_storage()
             session = type("_FastlogCaptureSession", (), {})()
             session.capture_events = self._capture_events
+            session.output_tensors = self._output_tensors
+            session.output_tensor_addresses = self._output_tensor_addresses
             session._fastlog_recording = self._state.recording
             session.recording_state = self._state
             self._recording = Recording.from_capture_events(session)
@@ -344,7 +377,10 @@ class Recorder:
             raise
         finally:
             self._state.recording.end_times.append(time.time())
+        output_tensors, output_tensor_addresses = _extract_and_mark_outputs(trace, output)
         self._capture_events.extend(trace.capture_events.op_events)
+        self._output_tensors = output_tensors
+        self._output_tensor_addresses = output_tensor_addresses
         object.__setattr__(
             self._state.recording,
             "n_ops",

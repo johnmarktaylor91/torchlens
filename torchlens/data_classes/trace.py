@@ -89,6 +89,7 @@ from .._literals import (
 )
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from ..constants import MODEL_LOG_FIELD_ORDER
+from ..captured_run import CapturedRun
 from ..ir.events import TraceBuildState
 from ..options import (
     InterventionOptions,
@@ -828,7 +829,7 @@ def _append_conditional_arm_edge(
 
 
 @dataclass(init=False, repr=False, eq=False)
-class Trace:
+class Trace(CapturedRun):
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
@@ -1046,6 +1047,7 @@ class Trace:
         "layer_labels": FieldPolicy.KEEP,
         "op_labels": FieldPolicy.KEEP,
         "layer_num_calls": FieldPolicy.KEEP,
+        "by_pass": FieldPolicy.KEEP,
         "_layer_nums_to_save": FieldPolicy.KEEP,
         "num_ops": FieldPolicy.KEEP,
         "num_modules": FieldPolicy.DROP,
@@ -1344,6 +1346,7 @@ class Trace:
         self.op_labels: List[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels: List[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
         self.layer_num_calls: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
+        self.by_pass: dict[int, list[int]] = {}
         self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
         self._grad_layer_nums_to_save: List[int] | str = []
         self.num_ops: int = 0  # total operations after postprocessing

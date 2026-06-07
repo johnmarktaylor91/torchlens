@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import torch
 
+from ..captured_run import CapturedRun
 from ..ir.predicate import EventKind, ModuleStackFrame, RecordContext
 
 if TYPE_CHECKING:
     from ..capture.projections import RecordingState
+    from ..data_classes.trace import Trace
 
 
 def _public_fastlog_layer_label(ctx: RecordContext) -> str:
@@ -259,7 +261,7 @@ class RecordingTrace:
 
 
 @dataclass(frozen=True, slots=True)
-class Recording:
+class Recording(CapturedRun):
     """Result of a fastlog recording session."""
 
     records: list[ActivationRecord]
@@ -276,6 +278,7 @@ class Recording:
     keep_op_repr: str | None
     keep_module_repr: str | None
     history_size: int
+    orphan_records: list[dict[str, Any]] = field(default_factory=list)
     halted: bool = False
     halt_reason: str | None = None
     halts_by_pass: dict[int, str] = field(default_factory=dict)
@@ -289,6 +292,8 @@ class Recording:
     recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
     _capture_events: Any | None = field(default=None, repr=False, compare=False)
+    _output_tensors: list[torch.Tensor] = field(default_factory=list, repr=False, compare=False)
+    _output_tensor_addresses: list[str] = field(default_factory=list, repr=False, compare=False)
     _records_built: bool = field(default=True, repr=False, compare=False)
     _recording_trace: RecordingTrace | None = field(default=None, repr=False, compare=False)
     _recording_state: Any | None = field(default=None, repr=False, compare=False)
@@ -319,6 +324,16 @@ class Recording:
 
         base = session._fastlog_recording
         object.__setattr__(base, "_capture_events", session.capture_events)
+        object.__setattr__(
+            base,
+            "_output_tensors",
+            list(getattr(session, "output_tensors", [])),
+        )
+        object.__setattr__(
+            base,
+            "_output_tensor_addresses",
+            list(getattr(session, "output_tensor_addresses", [])),
+        )
         object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
         object.__setattr__(base, "_records_built", bool(base.records))
         object.__setattr__(base, "_recording_trace", None)
@@ -544,6 +559,42 @@ class Recording:
         from ..postprocess.incremental import enrich_recording
 
         return enrich_recording(self, steps)
+
+    def to_trace(self) -> "Trace":
+        """Cook this recording's event stream into a full ``Trace``.
+
+        Returns
+        -------
+        Trace
+            Trace built by the normal Step-0 materializer and postprocess pipeline.
+
+        Raises
+        ------
+        RuntimeError
+            If the recording does not retain the topology-complete event stream.
+        """
+
+        if self._capture_events is None:
+            raise RuntimeError(
+                "Recording.to_trace() requires retained capture events; disk-recovered "
+                "recordings do not contain enough topology metadata."
+            )
+        from ..data_classes.trace import Trace
+
+        trace = Trace(model_class_name="RecordedModel")
+        trace.capture_mode = "exhaustive"
+        trace._predicate_save_options = object()
+        trace.capture_events = self._capture_events
+        trace.output_layers = [
+            event.label_raw
+            for event in self._capture_events.op_events
+            if getattr(event, "is_output_parent", False)
+        ]
+        trace._postprocess(
+            list(self._output_tensors),
+            list(self._output_tensor_addresses),
+        )
+        return trace
 
 
 def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:

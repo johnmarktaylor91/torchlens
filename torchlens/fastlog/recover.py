@@ -212,6 +212,7 @@ def _recording_from_records(
         by_pass={},
         by_label={},
         by_address={},
+        orphan_records=list(metadata.get("orphan_records", [])),
         bundle_path=bundle_path,
         n_ops=int(metadata.get("n_ops", 1)),
         n_records=len(records),
