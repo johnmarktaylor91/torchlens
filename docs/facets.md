@@ -182,6 +182,9 @@ Use `tl.facet(name)` for a named facet and `tl.head(index, name)` or
 `tl.facet(name).head(index)` for attention-head slices:
 
 ```python
+# Facet recipes often need internal child activations, so this example
+# intentionally saves all payloads. For ordinary selective capture, prefer
+# save=tl.func(...) or save=tl.in_module(...).
 log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
 edited = log.fork("ablated")
 edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())

@@ -24,6 +24,31 @@ sites = log.find_sites(candidate, max_fanout=8)
 exact = tl.label(sites.labels()[0])
 ```
 
+The same selector objects can drive capture-time save and intervention predicates:
+
+```python
+saved = tl.trace(model, x, save=tl.func("relu"))
+windowed = tl.trace(
+    model,
+    x,
+    save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
+    lookback=4,
+    lookback_payload_policy="detached_raw",
+)
+patched = tl.trace(
+    model,
+    x,
+    save=tl.func("relu"),
+    intervene=tl.when(tl.func("relu"), tl.scale(0.5)),
+)
+conditional = tl.trace(
+    model,
+    x,
+    intervene=tl.when(tl.func("relu") & tl.preceded_by(tl.in_module("block")), tl.zero_ablate()),
+    lookback=4,
+)
+```
+
 For saved or replayed specs, prefer exact `tl.label(...)` or another simple
 portable selector after discovery.
 
@@ -92,6 +117,21 @@ finally:
 If a raw hook returns a new tensor, TorchLens instruments that replacement and
 marks the corresponding layer pass with `intervention_replaced=True`, so
 downstream op-level graph structure remains available.
+
+## Capture-Time Recording
+
+`tl.record(..., save=...)` is the sparse capture sibling of `tl.trace(..., save=...)`.
+It returns a `Recording`, not a `Trace`; call `Recording.to_trace()` when you need the full
+postprocessed graph structure later.
+
+```python
+recording = tl.record(model, x, save=tl.func("relu"))
+trace = recording.to_trace()
+streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
+```
+
+`record(keep_op=...)` and `record(keep_module=...)` are deprecated aliases for
+`record(save=...)`.
 
 ## ModelLog Mutators
 

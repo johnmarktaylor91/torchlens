@@ -29,6 +29,32 @@ objects should usually live under submodules (`torchlens.io`, `torchlens.options
 `torchlens.bridge`, `torchlens.errors`, etc.) with moved-name shims only when compatibility
 requires them.
 
+Unified capture examples:
+
+```python
+relu_trace = tl.trace(model, x, save=tl.func("relu"))
+windowed = tl.trace(
+    model,
+    x,
+    save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
+    lookback=4,
+    lookback_payload_policy="detached_raw",
+)
+patched = tl.trace(
+    model,
+    x,
+    save=tl.func("linear"),
+    intervene=tl.when(tl.func("linear"), tl.scale(0.5)),
+)
+streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
+recording = tl.record(model, x, save=tl.func("relu"))
+trace_from_recording = recording.to_trace()
+```
+
+`record(keep_op=...)` and `record(keep_module=...)` are deprecated compatibility aliases for
+`record(save=...)`. `layers_to_save=[...]` still exists as the final-label two-pass path; an
+unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.
+
 ## Constants as Ordering Spec
 FIELD_ORDER tuples define canonical serialized and display field sets. When adding a field,
 update the class definition, the appropriate FIELD_ORDER constant, metadata tests, and any

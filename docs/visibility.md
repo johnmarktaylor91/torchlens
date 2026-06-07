@@ -12,13 +12,17 @@ A leaf op is a single decorated PyTorch operation such as `torch.relu`,
 the most direct intervention targets:
 
 ```python
-log = tl.trace(model, x, intervention_ready=True)
-log.find_sites(tl.func("relu"))
-edited = log.fork("zero_relu").attach_hooks(tl.func("relu"), tl.zero_ablate()).replay()
+log = tl.trace(
+    model,
+    x,
+    save=tl.func("relu"),
+    intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
+)
 ```
 
-Replay works best when the downstream graph is stable and the saved call
-metadata is sufficient to recompute the affected cone.
+For post-hoc replay workflows, capture enough payloads and replay metadata, then fork and attach
+hooks after discovery. Capture-time `intervene=` is the direct single-forward path when the site is
+known in advance.
 
 ## Compound Module
 

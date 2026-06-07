@@ -44,9 +44,11 @@ class Tiny(nn.Module):
 
 model = Tiny()
 x = torch.tensor([[2.0, 3.0]])
-log = tl.trace(model, x, intervention_ready=True)
-edited = log.fork("zero_linear")
-edited.attach_hooks(tl.func("linear"), tl.zero_ablate())
-edited.rerun(model, x)
-RESULT = edited["linear_1_1"].out.detach().tolist()
+log = tl.trace(
+    model,
+    x,
+    save=tl.func("linear"),
+    intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
+)
+RESULT = log["linear_1_1"].out.detach().tolist()
 ```

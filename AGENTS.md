@@ -14,6 +14,8 @@ See `.project-context/architecture.md` for the older full map and
 Key entry points:
 - Main capture: `torchlens/user_funcs.py` - `trace()`, `show_model_graph()`,
   `draw_backward()`, `validate_forward_pass()`
+- Sparse capture: `tl.record(model, x, save=...)` returns `Recording`; `Recording.to_trace()`
+  materializes full graph structure with explicit errors for unsaved payload reads.
 - Lazy decoration: `torchlens/decoration/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and `patch_detached_references()`
 - Forward-pass orchestration: `torchlens/capture/trace.py`
@@ -22,6 +24,28 @@ Key entry points:
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases
 - Visualization: `Trace.draw(order_siblings=True)` applies a Graphviz-only verified
   sibling-ordering post-pass for forward unrolled graphs under the node cap.
+
+Common unified capture patterns:
+
+```python
+relu_trace = tl.trace(model, x, save=tl.func("relu"))
+windowed = tl.trace(
+    model,
+    x,
+    save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
+    lookback=4,
+    lookback_payload_policy="detached_raw",
+)
+patched = tl.trace(
+    model,
+    x,
+    save=tl.func("attn"),
+    intervene=tl.when(tl.func("attn"), tl.zero_ablate()),
+)
+streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
+recording = tl.record(model, x, save=tl.func("relu"))
+trace_from_recording = recording.to_trace()
+```
 
 ## Conventions
 - Conventional commits: prefer `docs(scope):`, `chore(scope):`, `test(scope):` for
@@ -67,6 +91,8 @@ pytest tests/ -m "not slow" -x --tb=short
     `requires_grad` choices.
 11. Sibling ordering is forward/unrolled/dot-only; collapsed, rolled, backward, focused,
     conditional, and large graphs must conservatively no-op.
+12. Predicate `save=` is the primary selective-capture spelling; `record(keep_op=...)` and
+    `record(keep_module=...)` are deprecated aliases.
 
 ## Known Gotchas
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`

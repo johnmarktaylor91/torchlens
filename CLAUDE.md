@@ -21,21 +21,36 @@ extras gate appliance and bridge namespaces; see `pyproject.toml` for the curren
 ```python
 import torchlens as tl
 
-log = tl.trace(model, x)
+log = tl.trace(model, x, save=tl.func("relu"))
 activation = log["linear_1_1"].out
 print(log.summary())
 print(tl.report.explain(log))
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
 ```
 
-Use selectors for intervention discovery:
+Use the unified predicate surface for selective capture, windowed saves, interventions, and
+storage:
 
 ```python
-log = tl.trace(model, x, intervention_ready=True)
-sites = log.find_sites(tl.func("relu"))
-edited = log.fork("zero_relu")
-edited.attach_hooks(tl.func("relu"), tl.zero_ablate())
-edited.rerun(model, x)
+conv_before_relu = tl.func("conv2d") & tl.followed_by(tl.func("relu"))
+log = tl.trace(
+    model,
+    x,
+    save=conv_before_relu,
+    lookback=4,
+    lookback_payload_policy="detached_raw",
+)
+
+ablated = tl.trace(
+    model,
+    x,
+    save=tl.func("relu"),
+    intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
+)
+
+disk_log = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
+recording = tl.record(model, x, save=tl.func("relu"))
+full_structure = recording.to_trace()
 ```
 
 Before debugging wrapper-specific failures, run:
@@ -48,8 +63,9 @@ print(tl.compat.report(model, x).to_markdown())
 
 - Top-level `torchlens.__all__` has 40 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
-- `torchlens.fastlog` is the sparse predicate recorder; it returns `Recording`, not a
-  faithful `Trace`.
+- `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
+  `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
+  payload reads rejected explicitly. `keep_op=` and `keep_module=` are deprecated aliases.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers.

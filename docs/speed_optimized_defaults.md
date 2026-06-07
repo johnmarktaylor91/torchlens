@@ -7,16 +7,12 @@ smallest capture surface that answers your question.
 
 ```python
 import torchlens as tl
-from torchlens.options import CaptureOptions
 
 log = tl.trace(
     model,
     x,
-    capture=CaptureOptions(
-        layers_to_save=["linear_1_1"],
-        keep_unsaved_layers=True,
-        save_source_context=False,
-    ),
+    save=tl.func("linear"),
+    save_code_context=False,
 )
 ```
 
@@ -25,17 +21,47 @@ Use these defaults when speed matters:
 | Setting | Speed-oriented value | Why |
 | --- | --- | --- |
 | Visualization | Omit `Trace.draw()` | Avoid Graphviz/ELK rendering while collecting data. |
-| Saved layers | Specific labels/selectors | Saves activation payloads only where needed. |
-| Unsaved metadata | `keep_unsaved_layers=True` | Keeps graph context while avoiding unnecessary tensor copies. |
-| Source context | `save_source_context=False` | Keeps file/line identity but avoids source-text loading. |
+| Saved layers | `save=tl.func(...)` / `save=tl.in_module(...)` | Saves activation payloads only where needed in the primary single-pass path. |
+| Windowed selection | `lookback=K` with `tl.followed_by(...)` / `tl.preceded_by(...)` | Enables local graph-context predicates without post-hoc filtering. |
+| Lookback payloads | Default `lookback_payload_policy="metadata_only"` | Avoids pinning recent tensors unless retroactive payload saving is required. |
+| Source context | `save_code_context=False` | Keeps file/line identity but avoids source-text loading. |
 | Validation | Run separately | Validation replays the model and should be a gate, not the hot path. |
-| Streaming | Use when activations are large | Moves payload storage to disk while preserving the manifest. |
+| Streaming | `storage=tl.to_disk(path)` | Moves predicate-selected payload storage to disk while preserving the manifest. |
 
-## Fastlog
+## Predicate Capture
 
-For predicate-based capture, use `tl.fastlog.record(...)` when you only need selected events and
-can express the selection with `keep_op` / `keep_module` predicates. Keep predicate functions
-small and deterministic; they run in the logging hot path.
+Use `tl.trace(..., save=...)` when you need a full `Trace` with graph metadata, and use
+`tl.record(..., save=...)` when you only need selected records during tight loops.
+`Recording.to_trace()` materializes the full graph structure later, but reading an unsaved payload
+raises a clear error.
+
+```python
+relu_trace = tl.trace(model, x, save=tl.func("relu"))
+recording = tl.record(model, x, save=tl.func("relu"))
+trace_from_recording = recording.to_trace()
+
+conv_before_relu = tl.func("conv2d") & tl.followed_by(tl.func("relu"))
+windowed = tl.trace(
+    model,
+    x,
+    save=conv_before_relu,
+    lookback=4,
+    lookback_payload_policy="detached_raw",
+)
+
+streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
+```
+
+`tl.fastlog.record(...)` remains available as a compatibility path. `keep_op=` and
+`keep_module=` are deprecated aliases; use `record(save=...)` for new code. Keep predicate
+functions small and deterministic because they run in the logging hot path.
+
+## Final-Label Saves
+
+`layers_to_save=[...]` is still supported when selection depends on final labels that are only known
+after postprocessing. That path runs the legacy two-pass strategy. For recurrent layers,
+`layers_to_save=["attn"]` saves all passes, while `layers_to_save=["attn:2"]` saves only pass 2
+using TorchLens's 1-based pass-label syntax.
 
 ## What Not To Optimize Away
 

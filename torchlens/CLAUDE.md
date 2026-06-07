@@ -12,22 +12,46 @@ import torchlens
   |- exposes 40 top-level public names in __all__
   |- imports submodule namespaces: fastlog, bridge, compat, export, options, report, stats, viz
   |
-trace(model, input)
+trace(model, input, save=..., intervene=..., lookback=..., storage=...)
   |- decoration/model_prep.py  - ensure torch is wrapped, prepare modules/buffers/params
   |- capture/trace.py          - run forward pass with active logging
   |- capture/output_tensors.py - build Op records
   |- postprocess/              - current 20-step graph cleanup/finalization pipeline
   +- returns Trace
 
-tl.fastlog.record(model, input, keep_op=...)
+tl.record(model, input, save=...)
   |- uses the same wrapper hot path
   |- stores predicate-selected RecordContext/ActivationRecord values
-  +- returns Recording, not Trace
+  +- returns Recording; Recording.to_trace() materializes full structure
 ```
 
 Selective `layers_to_save` uses the two-pass strategy: Pass 1 exhaustive metadata, Pass
-2 fast out save. Fastlog uses explicit predicate ops instead and does not
-try to build a faithful full graph.
+2 fast out save. Unqualified recurrent labels save all passes; pass-qualified labels such
+as `"attn:2"` save one 1-based pass. Prefer `save=tl.func(...)`, `save=tl.in_module(...)`,
+and composed predicates for single-pass selective capture. `keep_op=` and `keep_module=`
+remain deprecated `record()` aliases for `save=`.
+
+Common unified capture examples:
+
+```python
+relu_trace = tl.trace(model, x, save=tl.func("relu"))
+windowed = tl.trace(
+    model,
+    x,
+    save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
+    lookback=4,
+    lookback_payload_policy="detached_raw",
+)
+patched = tl.trace(
+    model,
+    x,
+    save=tl.func("attn"),
+    intervene=tl.when(tl.func("attn"), tl.scale(0.5)),
+)
+streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
+recording = tl.record(model, x, save=tl.func("relu"))
+trace_from_recording = recording.to_trace()
+```
 
 `backward_ready=True` is the public opt-in for losses built from saved outs. It keeps
 floating tensors graph-connected, preserves user `requires_grad`, and rejects incompatible
