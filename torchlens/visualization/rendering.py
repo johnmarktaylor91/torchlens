@@ -44,6 +44,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Literal,
     List,
     Mapping,
     Optional,
@@ -51,8 +52,8 @@ from typing import (
     Tuple,
     Union,
     cast,
-    Literal,
 )
+from weakref import WeakKeyDictionary
 
 import graphviz
 import torch
@@ -115,6 +116,7 @@ if TYPE_CHECKING:
     from ..data_classes.module import Module
 
 BaseGraphNode = Union["Op", "Layer"]
+_RENDERING_CACHES: WeakKeyDictionary[Any, dict[str, Any]] = WeakKeyDictionary()
 
 
 @dataclass
@@ -2588,7 +2590,7 @@ def _build_layer_node(
             vis_mode,
             node_label_fields=node_label_fields,
             node_overlay=node_overlay,
-            static_rolling_facets=graphviz_graph.format == "dot",
+            static_rolling_facets=_is_static_rolling_facet_format(graphviz_graph.format),
         ),
         shape=node_shape,
         fillcolor=node_bg_color,
@@ -3333,14 +3335,28 @@ def _rendering_cache(trace: "Trace") -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        Mutable cache owned by the trace instance.
+        Mutable cache held weakly outside the trace instance.
     """
 
-    cache = getattr(trace, "_tl_rendering_cache", None)
-    if not isinstance(cache, dict):
-        cache = {}
-        setattr(trace, "_tl_rendering_cache", cache)
-    return cache
+    return _RENDERING_CACHES.setdefault(trace, {})
+
+
+def _is_static_rolling_facet_format(file_format: str | None) -> bool:
+    """Return whether non-chain rolling facets should be printed on node faces.
+
+    Parameters
+    ----------
+    file_format:
+        Graphviz output format for the render target.
+
+    Returns
+    -------
+    bool
+        ``True`` when the target is a static artifact rather than an interactive
+        display path with hover/tooltips.
+    """
+
+    return (file_format or "").lower() != "html"
 
 
 def _node_for_label(trace: "Trace", label: str) -> GraphNode | None:
@@ -4203,6 +4219,11 @@ def _collapsed_module_rolling_suffix(trace: "Trace", address: str) -> str:
         Suffix beginning with ``" · calls "`` or an empty string.
     """
 
+    cache = _rendering_cache(trace).setdefault("collapsed_module_rolling_suffix", {})
+    cached = cache.get(address)
+    if isinstance(cached, str):
+        return cached
+
     candidate_groups: tuple[tuple[int, ...], ...] = ()
     for layer_log in trace.layer_logs.values():
         if not isinstance(layer_log, Layer) or layer_log.num_passes <= 1:
@@ -4219,8 +4240,11 @@ def _collapsed_module_rolling_suffix(trace: "Trace", address: str) -> str:
         if len(groups) > len(candidate_groups):
             candidate_groups = groups
     if not candidate_groups:
+        cache[address] = ""
         return ""
-    return f" · calls {_format_call_groups(candidate_groups)}"
+    suffix = f" · calls {_format_call_groups(candidate_groups)}"
+    cache[address] = suffix
+    return suffix
 
 
 def _format_rolling_suffix(

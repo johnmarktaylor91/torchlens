@@ -321,10 +321,22 @@ def _normalized_title(trace: tl.Trace, layer_type: str, display_name: str) -> st
 def _render_dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render DOT for assertions."""
 
+    return _render_source(trace, tmp_path, name, "dot", **kwargs)
+
+
+def _render_source(
+    trace: tl.Trace,
+    tmp_path: Path,
+    name: str,
+    file_format: str,
+    **kwargs: object,
+) -> str:
+    """Render a graph format and return the emitted Graphviz source."""
+
     return trace.draw(
         vis_mode="rolled",
         vis_save_only=True,
-        vis_fileformat="dot",
+        vis_fileformat=file_format,
         vis_outpath=str(tmp_path / name),
         **kwargs,
     )
@@ -457,13 +469,41 @@ def test_too_deep_consumer_container_path_surfaces_site_uncertainty() -> None:
 
 
 def test_static_targets_promote_parallel_and_mixed_facets(tmp_path: Path) -> None:
-    """Raw DOT face labels include static-only facet tags for non-chain facets."""
+    """Static face labels include static-only facet tags for non-chain facets."""
 
     fanout_dot = _render_dot(_trace(ParallelFanout()), tmp_path, "static_parallel")
     mixed_dot = _render_dot(_trace(MixedDependency()), tmp_path, "static_mixed")
+    fanout_svg = _render_source(
+        _trace(ParallelFanout()),
+        tmp_path,
+        "static_parallel_svg",
+        "svg",
+    )
+    mixed_pdf = _render_source(
+        _trace(MixedDependency()),
+        tmp_path,
+        "static_mixed_pdf",
+        "pdf",
+    )
 
     assert "linear_1_1 (x4 · parallel)" in fanout_dot
     assert "linear_1_1 (x3 · mixed)" in mixed_dot
+    assert "linear_1_1 (x4 · parallel)" in fanout_svg
+    assert "linear_1_1 (x3 · mixed)" in mixed_pdf
+
+
+def test_render_cache_does_not_mutate_save_or_fork_trace(tmp_path: Path) -> None:
+    """Rendering memoization stays off the trace state and forks."""
+
+    trace = _trace(ParallelSiblingsLoop())
+    _render_dot(trace, tmp_path, "cache_parent")
+
+    assert "_tl_rendering_cache" not in trace.__dict__
+    assert "_tl_rendering_cache" not in trace.__getstate__()
+
+    fork = trace.fork("cache_fork")
+    assert "_tl_rendering_cache" not in fork.__dict__
+    assert "_tl_rendering_cache" not in fork.__getstate__()
 
 
 def test_render_loop_module_rolling_demos() -> None:
