@@ -80,6 +80,57 @@ class WrappedTwoSiteLoop(nn.Module):
         return x
 
 
+class RNNCellLoop(nn.Module):
+    """RNN-cell-style loop with direct hidden-state recurrence."""
+
+    def __init__(self) -> None:
+        """Initialize the recurrent cell."""
+
+        super().__init__()
+        self.cell = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the same cell to the hidden state four times."""
+
+        h = x
+        for _ in range(4):
+            h = self.cell(h)
+        return h
+
+
+class ActivationBlock(nn.Module):
+    """Two-op block whose output feeds the next block call."""
+
+    def __init__(self) -> None:
+        """Initialize the linear and activation layers."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4, bias=False)
+        self.act = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the linear layer and activation."""
+
+        return self.act(self.lin(x))
+
+
+class CollapsedBlockRecurrence(nn.Module):
+    """Repeated block whose collapsed module box carries recurrence."""
+
+    def __init__(self) -> None:
+        """Initialize the recurrent block."""
+
+        super().__init__()
+        self.block = ActivationBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the same block three times in a loop."""
+
+        for _ in range(3):
+            x = self.block(x)
+        return x
+
+
 class TwoDistinctLoops(nn.Module):
     """Shared module used by two distinct loops."""
 
@@ -506,6 +557,41 @@ def test_render_cache_does_not_mutate_save_or_fork_trace(tmp_path: Path) -> None
     assert "_tl_rendering_cache" not in fork.__getstate__()
 
 
+def test_rolled_recurrent_layer_draws_marked_self_edge(tmp_path: Path) -> None:
+    """A recurrent rolled layer keeps its same-layer self-edge as ``↻``."""
+
+    dot = _render_dot(_trace(RNNCellLoop()), tmp_path, "rnn_cell_layer", vis_call_depth=1000)
+
+    assert "linear_1_1 -> linear_1_1" in dot
+    assert 'label="↻"' in dot
+    assert "TorchLens recurrence: endpoint=linear_1_1;" in dot
+    assert "pass_pairs=1->2,2->3,3->4; count=3" in dot
+
+
+def test_collapsed_module_recurrence_draws_marked_self_edge(tmp_path: Path) -> None:
+    """A collapsed recurrent module box keeps its internal self-edge as ``↻``."""
+
+    dot = _render_dot(
+        _trace(CollapsedBlockRecurrence()), tmp_path, "block_recurrence", vis_call_depth=1
+    )
+
+    assert "block -> block" in dot
+    assert 'label="↻"' in dot
+    assert "TorchLens recurrence: endpoint=relu_1_2->linear_1_1@block;" in dot
+    assert "pass_pairs=1->2,2->3; count=2" in dot
+
+
+def test_reused_module_without_loop_carried_dep_has_no_recurrence_self_edge(
+    tmp_path: Path,
+) -> None:
+    """A reused non-recurrent module does not receive a spurious ``↻`` self-edge."""
+
+    dot = _render_dot(_trace(ParallelFanout()), tmp_path, "fanout_no_recurrence", vis_call_depth=1)
+
+    assert "proj -> proj" not in dot
+    assert 'label="↻"' not in dot
+
+
 def test_render_loop_module_rolling_demos() -> None:
     """Render SVG and PDF demos into the committed test-output folder."""
 
@@ -514,6 +600,7 @@ def test_render_loop_module_rolling_demos() -> None:
         ("reused_relu_loop", ReusedReluLoop(), {}),
         ("parallel_fanout", ParallelFanout(), {}),
         ("wrapped_two_site_loop", WrappedTwoSiteLoop(), {}),
+        ("rnn_cell_recurrence", RNNCellLoop(), {"vis_call_depth": 1}),
         ("two_distinct_loops", TwoDistinctLoops(), {"vis_call_depth": 1}),
         ("buffer_rewrite_loops", BufferRewriteLoops(), {"show_buffer_layers": "always"}),
         ("mixed_dependency", MixedDependency(), {}),

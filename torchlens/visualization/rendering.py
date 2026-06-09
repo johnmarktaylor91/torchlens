@@ -177,6 +177,35 @@ class RollingAnnotation:
     metadata: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class RecurrenceSelfEdge:
+    """Render metadata for a genuine loop-carried recurrence self-edge.
+
+    Parameters
+    ----------
+    endpoint:
+        Human-readable endpoint represented by the self-edge.
+    pass_pairs:
+        Adjacent pass pairs proving loop-carried recurrence.
+    count:
+        Number of recurrence pairs represented by this edge.
+    """
+
+    endpoint: str
+    pass_pairs: tuple[tuple[int, int], ...]
+    count: int
+
+    @property
+    def tooltip(self) -> str:
+        """Return Graphviz tooltip metadata for the recurrence edge."""
+
+        pairs = ",".join(f"{tail}->{head}" for tail, head in self.pass_pairs)
+        return (
+            "TorchLens recurrence: "
+            f"endpoint={self.endpoint}; pass_pairs={pairs}; count={self.count}"
+        )
+
+
 @dataclass
 class BoundaryNode:
     """Synthetic node representing a focused module boundary.
@@ -2215,14 +2244,19 @@ def _expand_edges_through_skipped(
             child_node = trace.layer_dict_all_keys.get(child_label)
         if child_node is None:
             continue
-        reached = _walk_skipped_successors(
-            trace,
-            child_node,
-            visible_entries,
-            skipped_labels,
-            vis_mode,
-            seen={_render_node_label(parent_node, vis_mode)},
-        )
+        parent_label = _render_node_label(parent_node, vis_mode)
+        child_render_label = _render_node_label(child_node, vis_mode)
+        if child_render_label == parent_label and child_render_label not in skipped_labels:
+            reached = [child_node]
+        else:
+            reached = _walk_skipped_successors(
+                trace,
+                child_node,
+                visible_entries,
+                skipped_labels,
+                vis_mode,
+                seen={parent_label},
+            )
         for target_node in reached:
             first_child = child_node
             target_label = _render_node_label(target_node, vis_mode)
@@ -4042,6 +4076,152 @@ def _same_layer_dependency_components(layer_log: "Layer") -> tuple[tuple[int, ..
     return tuple(sorted(components, key=lambda values: values[0]))
 
 
+def _same_layer_adjacent_recurrence_pairs(layer_log: "Layer") -> tuple[tuple[int, int], ...]:
+    """Return adjacent pass pairs proving same-layer recurrence.
+
+    Parameters
+    ----------
+    layer_log:
+        Rolled layer to inspect.
+
+    Returns
+    -------
+    tuple[tuple[int, int], ...]
+        Adjacent ``(source_pass, next_pass)`` pairs where the earlier pass can reach
+        the next pass through the captured graph.
+    """
+
+    reachability = _same_layer_reachability(layer_log)
+    return tuple(
+        (pass_index, pass_index + 1)
+        for pass_index in sorted(layer_log.ops)
+        if pass_index + 1 in reachability.get(pass_index, set())
+    )
+
+
+def _module_call_index_for_op(op: "Op", address: str) -> int | None:
+    """Return ``op``'s call index for a module address.
+
+    Parameters
+    ----------
+    op:
+        Operation whose module stack should be inspected.
+    address:
+        Module address to find.
+
+    Returns
+    -------
+    int | None
+        Parsed call index for ``address``, or ``None`` when absent.
+    """
+
+    for module_call in op.modules:
+        parsed = _module_address_and_call(module_call)
+        if parsed is None:
+            continue
+        module_address, call_index = parsed
+        if module_address == address:
+            return call_index
+    return None
+
+
+def _collapsed_module_recurrence_pairs(
+    parent_layer: "Layer",
+    child_layer: "Layer",
+    address: str,
+) -> tuple[tuple[int, int], ...]:
+    """Return adjacent module-call pairs proving a collapsed-box recurrence.
+
+    Parameters
+    ----------
+    parent_layer:
+        Rolled layer producing the internal module-box edge.
+    child_layer:
+        Rolled layer consuming the internal module-box edge.
+    address:
+        Collapsed module address represented by the rendered endpoint.
+
+    Returns
+    -------
+    tuple[tuple[int, int], ...]
+        Adjacent ``(source_call, next_call)`` pairs carried through the collapsed
+        module box.
+    """
+
+    parent_ops_by_label = {op.label: op for op in parent_layer.ops.values()}
+    pairs: set[tuple[int, int]] = set()
+    for child_op in child_layer.ops.values():
+        child_call = _module_call_index_for_op(child_op, address)
+        if child_call is None:
+            continue
+        for parent_label in child_op.parents:
+            parent_op = parent_ops_by_label.get(parent_label)
+            if parent_op is None:
+                continue
+            parent_call = _module_call_index_for_op(parent_op, address)
+            if parent_call is not None and child_call == parent_call + 1:
+                pairs.add((parent_call, child_call))
+    return tuple(sorted(pairs))
+
+
+def _recurrence_self_edge(
+    parent_node: GraphNode,
+    child_node: GraphNode,
+    *,
+    child_is_collapsed_module: bool,
+    parent_is_collapsed_module: bool,
+    endpoint_name: str,
+    vis_mode: str,
+) -> RecurrenceSelfEdge | None:
+    """Return recurrence metadata when a rendered self-edge is genuine.
+
+    Parameters
+    ----------
+    parent_node:
+        Source graph node before endpoint collapsing.
+    child_node:
+        Destination graph node before endpoint collapsing.
+    child_is_collapsed_module:
+        Whether the child endpoint is a collapsed module box.
+    parent_is_collapsed_module:
+        Whether the parent endpoint is a collapsed module box.
+    endpoint_name:
+        Rendered node name shared by the self-edge.
+    vis_mode:
+        Active visualization mode.
+
+    Returns
+    -------
+    RecurrenceSelfEdge | None
+        Metadata for a genuine recurrence self-edge, otherwise ``None``.
+    """
+
+    if vis_mode != "rolled":
+        return None
+    parent_base = _base_node_for_metadata(parent_node)
+    child_base = _base_node_for_metadata(child_node)
+    if not isinstance(parent_base, Layer) or not isinstance(child_base, Layer):
+        return None
+
+    if child_is_collapsed_module or parent_is_collapsed_module:
+        pass_pairs = _collapsed_module_recurrence_pairs(parent_base, child_base, endpoint_name)
+        if not pass_pairs:
+            return None
+        endpoint = f"{parent_base.layer_label}->{child_base.layer_label}@{endpoint_name}"
+        return RecurrenceSelfEdge(endpoint=endpoint, pass_pairs=pass_pairs, count=len(pass_pairs))
+
+    if parent_base.layer_label != child_base.layer_label:
+        return None
+    pass_pairs = _same_layer_adjacent_recurrence_pairs(parent_base)
+    if not pass_pairs:
+        return None
+    return RecurrenceSelfEdge(
+        endpoint=parent_base.layer_label,
+        pass_pairs=pass_pairs,
+        count=len(pass_pairs),
+    )
+
+
 def _call_groups_for_layer(layer_log: "Layer") -> tuple[tuple[int, ...], ...]:
     """Return grouped module calls for disjoint same-layer regions.
 
@@ -4829,14 +5009,29 @@ def _add_edges_for_node(
                 )
             tail_name = hook_name
 
-        # TODO(loop-module-rolling-stage2): distinguish collapsed-module self-edges from
-        # non-collapsed rolled-layer recurrence self-edges, then render the reserved
-        # recurrence marker/metadata for the collapsed-module case instead of dropping it.
-        if tail_name == head_name:
+        recurrence_edge = (
+            _recurrence_self_edge(
+                parent_node,
+                child_node,
+                child_is_collapsed_module=child_is_collapsed_module,
+                parent_is_collapsed_module=parent_is_collapsed_module,
+                endpoint_name=tail_name,
+                vis_mode=vis_mode,
+            )
+            if tail_name == head_name
+            else None
+        )
+        if tail_name == head_name and recurrence_edge is None:
             continue
-        if (tail_name, head_name) in edges_used:
+
+        dedupe_key = (
+            (tail_name, f"{head_name}|{recurrence_edge.tooltip}")
+            if recurrence_edge is not None
+            else (tail_name, head_name)
+        )
+        if dedupe_key in edges_used:
             continue
-        edges_used.add((tail_name, head_name))
+        edges_used.add(dedupe_key)
 
         edge_dict = {
             "tail_name": tail_name,
@@ -4847,12 +5042,21 @@ def _add_edges_for_node(
             "arrowsize": ".7",
             "labelfontsize": "8",
         }
+        if recurrence_edge is not None:
+            edge_dict.update(
+                {
+                    "label": "↻",
+                    "style": f"{edge_style},bold",
+                    "tooltip": recurrence_edge.tooltip,
+                    "constraint": "false",
+                }
+            )
 
         edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
             child_node, BoundaryNode
         )
 
-        if not child_is_collapsed_module and not edge_has_boundary:
+        if recurrence_edge is None and not child_is_collapsed_module and not edge_has_boundary:
             metadata_base = (
                 _base_node_for_metadata(metadata_child) if metadata_child is not None else None
             )

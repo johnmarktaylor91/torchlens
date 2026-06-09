@@ -28,6 +28,15 @@ for _ in range(3):
 
 Label: `lin (x6 · 2 sites ×3)`. The block module rectangularly certifies two sites across three calls.
 
+## RNN Cell Recurrence
+
+```python
+for _ in range(4):
+    h = self.cell(h)
+```
+
+Label: `@cell (x4)`. The rolled recurrent cell also emits a marked `↻` self-edge with pass-pair metadata.
+
 ## Two Distinct Loops
 
 ```python
@@ -63,3 +72,8 @@ for _ in range(3): inside = self.lin(inside)
 ```
 
 Label: `lin (x4 · calls 1,2-4)`. The count stays honest while the hidden call partition is surfaced.
+
+## Known Edges
+
+- `a + b + c` with three sibling calls collapses to two sites because Python lowers it as nested binary adds; this follows the same top-level-slot rule that keeps `stack([...])` at one site.
+- Compound loop and module nesting can yield large but honest counts, for example `lin (x10 · 5 sites)`.

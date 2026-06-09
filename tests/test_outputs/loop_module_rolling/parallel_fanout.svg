@@ -25,7 +25,7 @@
 <title>linear_1_1</title>
 <g id="a_node2"><a xlink:title="TorchLens rolling: facet=fan&#45;out; sites=1">
 <polygon fill="#d9d9d9" stroke="black" points="185,-230.92 0,-230.92 0,-127.92 185,-127.92 185,-230.92"/>
-<text text-anchor="start" x="49" y="-214.22" font-family="Times,serif" font-weight="bold" font-size="14.00">linear_1_1 (x4)</text>
+<text text-anchor="start" x="21.5" y="-214.22" font-family="Times,serif" font-weight="bold" font-size="14.00">linear_1_1 (x4 · parallel)</text>
 <text text-anchor="start" x="61" y="-194.22" font-family="Times,serif" font-size="14.00">(1, 4), 16 B</text>
 <text text-anchor="start" x="10.5" y="-175.22" font-family="Times,serif" font-size="14.00">in_features=4, out_features=4</text>
 <text text-anchor="start" x="34" y="-156.22" font-family="Times,serif" font-size="14.00">params: weight (4, 4)</text>
