@@ -37,8 +37,6 @@ import tempfile
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
-from contextlib import contextmanager
-from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
@@ -117,10 +115,6 @@ if TYPE_CHECKING:
     from ..data_classes.module import Module
 
 BaseGraphNode = Union["Op", "Layer"]
-_ACTIVE_RENDERING_CACHE: ContextVar[dict[str, Any] | None] = ContextVar(
-    "_ACTIVE_RENDERING_CACHE",
-    default=None,
-)
 
 
 @dataclass
@@ -156,65 +150,14 @@ class RollingAnnotation:
 
     Parameters
     ----------
-    site_count:
-        Number of separable structural sites, or ``None`` when uncertain.
-    site_uncertain:
-        Whether site separation is known to be ambiguous.
-    certified_multiplier:
-        Module-certified rectangular multiplier for the sites summary.
-    facet:
-        Dependency facet for same-layer passes: ``"chain"``, ``"fan-out"``, or ``"mixed"``.
     call_groups:
         Optional grouped module-call partitions to show on the face.
     buffer_versions:
         Flat buffer version indices represented by this rolled buffer layer.
-    metadata:
-        Human-readable details suitable for a Graphviz tooltip.
     """
 
-    site_count: int | None = None
-    site_uncertain: bool = False
-    certified_multiplier: int | None = None
-    facet: str | None = None
     call_groups: tuple[tuple[int, ...], ...] = ()
     buffer_versions: tuple[int, ...] = ()
-    metadata: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class RecurrenceSelfEdge:
-    """Render metadata for a genuine loop-carried recurrence self-edge.
-
-    Parameters
-    ----------
-    endpoint:
-        Human-readable endpoint represented by the self-edge.
-    pass_pairs:
-        Pass pairs proving loop-carried recurrence.
-    chains:
-        Distinct recurrence chains represented by this edge.
-    count:
-        Number of recurrence pairs represented by this edge.
-    """
-
-    endpoint: str
-    pass_pairs: tuple[tuple[int, int], ...]
-    count: int
-    chains: tuple[tuple[int, ...], ...] = ()
-
-    @property
-    def tooltip(self) -> str:
-        """Return Graphviz tooltip metadata for the recurrence edge."""
-
-        pairs = ",".join(f"{tail}->{head}" for tail, head in self.pass_pairs)
-        chain_text = ",".join(
-            "->".join(str(pass_index) for pass_index in chain) for chain in self.chains
-        )
-        chain_suffix = f"; chains={chain_text}" if chain_text else ""
-        return (
-            "TorchLens recurrence: "
-            f"endpoint={self.endpoint}; pass_pairs={pairs}; count={self.count}{chain_suffix}"
-        )
 
 
 @dataclass
@@ -708,43 +651,6 @@ def draw(
         ValueError: If ``_layers_logged`` is False (layers were discarded
             by missing final lookup containers).
     """
-    if _ACTIVE_RENDERING_CACHE.get() is None:
-        with _rendering_cache_scope():
-            return draw(
-                self,
-                vis_mode=vis_mode,
-                vis_call_depth=vis_call_depth,
-                vis_outpath=vis_outpath,
-                vis_graph_overrides=vis_graph_overrides,
-                module=module,
-                node_mode=node_mode,
-                node_spec_fn=node_spec_fn,
-                collapsed_node_spec_fn=collapsed_node_spec_fn,
-                collapse_fn=collapse_fn,
-                skip_fn=skip_fn,
-                vis_edge_overrides=vis_edge_overrides,
-                vis_grad_edge_overrides=vis_grad_edge_overrides,
-                vis_module_overrides=vis_module_overrides,
-                vis_save_only=vis_save_only,
-                vis_fileformat=vis_fileformat,
-                show_buffer_layers=show_buffer_layers,
-                direction=direction,
-                vis_node_placement=vis_node_placement,
-                vis_renderer=vis_renderer,
-                vis_theme=vis_theme,
-                vis_intervention_mode=vis_intervention_mode,
-                vis_show_cone=vis_show_cone,
-                code_panel=code_panel,
-                node_overlay=node_overlay,
-                node_label_fields=node_label_fields,
-                show_legend=show_legend,
-                font_size=font_size,
-                dpi=dpi,
-                for_paper=for_paper,
-                return_graph=return_graph,
-                order_siblings=order_siblings,
-            )
-
     if node_mode not in MODE_REGISTRY:
         raise ValueError(
             "Visualization node_style/node_mode must be one of 'default', "
@@ -2422,6 +2328,7 @@ def _add_node_to_graphviz(
     collapse_address = _collapse_address_for_node(
         self,
         node,
+        vis_mode=vis_mode,
         collapse_fn=collapse_fn,
         max_module_depth=vis_call_depth,
     )
@@ -2507,10 +2414,50 @@ def _should_collapse_module(
     return module_log.address_depth >= max_module_depth
 
 
+def _module_has_single_rendered_op(module_log: "Module") -> bool:
+    """Return whether ``module_log`` contains exactly one rendered op.
+
+    Parameters
+    ----------
+    module_log:
+        Module metadata to inspect.
+
+    Returns
+    -------
+    bool
+        True when the module contains one op and should keep op rendering.
+    """
+
+    return int(getattr(module_log, "num_layers", 0) or 0) == 1
+
+
+def _single_op_module_should_keep_op_render(trace: "Trace", address: str) -> bool:
+    """Return whether a one-op module should render as its op rather than collapse.
+
+    Parameters
+    ----------
+    trace:
+        Owning trace.
+    address:
+        Module address without call suffix.
+
+    Returns
+    -------
+    bool
+        True when the module has one op and no split call ranges to show.
+    """
+
+    module_log = cast("Module", trace.modules[address])
+    return _module_has_single_rendered_op(module_log) and not _collapsed_module_rolling_suffix(
+        trace, address
+    )
+
+
 def _collapse_address_for_node(
     trace: "Trace",
     node: GraphNode,
     *,
+    vis_mode: str = "unrolled",
     collapse_fn: CollapseFn | None,
     max_module_depth: int,
 ) -> Optional[str]:
@@ -2522,6 +2469,8 @@ def _collapse_address_for_node(
         Owning Trace.
     node:
         Layer node being rendered.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
     collapse_fn:
         Optional user collapse predicate.
     max_module_depth:
@@ -2545,10 +2494,16 @@ def _collapse_address_for_node(
     if collapse_fn is None:
         if max_module_depth == 0 or len(modules) < max_module_depth:
             return None
-        return cast(str, modules[max_module_depth - 1])
+        address_w_pass = cast(str, modules[max_module_depth - 1])
+        address = address_w_pass.rsplit(":", 1)[0]
+        if vis_mode == "rolled" and _single_op_module_should_keep_op_render(trace, address):
+            return None
+        return address_w_pass
 
     for address_w_pass in modules:
         address = address_w_pass.rsplit(":", 1)[0]
+        if vis_mode == "rolled" and _single_op_module_should_keep_op_render(trace, address):
+            continue
         if _should_collapse_module(
             cast("Module", trace.modules[address]),
             collapse_fn=collapse_fn,
@@ -2589,6 +2544,7 @@ def _is_collapsed_module(
             _collapse_address_for_node(
                 trace,
                 node,
+                vis_mode="unrolled",
                 collapse_fn=collapse_fn,
                 max_module_depth=vis_call_depth,
             )
@@ -2672,7 +2628,6 @@ def _build_layer_node(
             vis_mode,
             node_label_fields=node_label_fields,
             node_overlay=node_overlay,
-            static_rolling_facets=_is_static_rolling_facet_format(graphviz_graph.format),
         ),
         shape=node_shape,
         fillcolor=node_bg_color,
@@ -2681,11 +2636,6 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
-    rolling_annotation = _rolling_annotation(node, vis_mode)
-    if rolling_annotation is not None and rolling_annotation.metadata:
-        default_spec = default_spec.replace(
-            tooltip="TorchLens rolling: " + "; ".join(rolling_annotation.metadata)
-        )
     visualizer_path = getattr(node, "visualizer_path", None)
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
         default_spec = default_spec.replace(
@@ -3279,8 +3229,10 @@ def _build_collapsed_module_node(
         node_title = f"<b>@{address}</b>"
     elif vis_mode == "unrolled" and (module_num_calls > 1):
         node_title = f"<b>@{address}:{call_index}</b>"
+    elif module_suffix:
+        node_title = f"<b>@{address}{module_suffix}</b>"
     else:
-        node_title = f"<b>@{address} (x{module_num_calls}{module_suffix})</b>"
+        node_title = f"<b>@{address} (x{module_num_calls})</b>"
 
     shape_str = format_shape(module_output_shape)
 
@@ -3330,9 +3282,6 @@ def _build_collapsed_module_node(
         style=f"filled,{line_style}",
         extra_attrs={"ordering": "out"},
     )
-    module_annotation = _module_rolling_annotation(self, address)
-    if module_annotation:
-        default_spec = default_spec.replace(tooltip=module_annotation)
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
@@ -3406,60 +3355,6 @@ def _module_address_and_call(module_call: str) -> tuple[str, int] | None:
         return None
 
 
-@contextmanager
-def _rendering_cache_scope() -> Iterator[dict[str, Any]]:
-    """Create a memoization cache scoped to one render operation.
-
-    Yields
-    ------
-    dict[str, Any]
-        Mutable cache visible to rendering helpers for the duration of the scope.
-    """
-
-    token = _ACTIVE_RENDERING_CACHE.set({})
-    try:
-        cache = _ACTIVE_RENDERING_CACHE.get()
-        if cache is None:
-            raise RuntimeError("TorchLens render cache scope was not initialized.")
-        yield cache
-    finally:
-        _ACTIVE_RENDERING_CACHE.reset(token)
-
-
-def _rendering_cache() -> dict[str, Any]:
-    """Return the active render-operation memoization cache.
-
-    Returns
-    -------
-    dict[str, Any]
-        Mutable cache for the current render scope, or a fresh throwaway cache when
-        helpers are called outside a render operation.
-    """
-
-    cache = _ACTIVE_RENDERING_CACHE.get()
-    if cache is None:
-        return {}
-    return cache
-
-
-def _is_static_rolling_facet_format(file_format: str | None) -> bool:
-    """Return whether non-chain rolling facets should be printed on node faces.
-
-    Parameters
-    ----------
-    file_format:
-        Graphviz output format for the render target.
-
-    Returns
-    -------
-    bool
-        ``True`` when the target is a static artifact rather than an interactive
-        display path with hover/tooltips.
-    """
-
-    return (file_format or "").lower() != "html"
-
-
 def _node_for_label(trace: "Trace", label: str) -> GraphNode | None:
     """Return an op or layer-like graph node for ``label`` when available.
 
@@ -3485,255 +3380,13 @@ def _node_for_label(trace: "Trace", label: str) -> GraphNode | None:
             return None
 
 
-def _top_level_arg_position(arg_key: Any) -> tuple[Any, bool]:
-    """Return the top-level argument key for a stored parent-argument key.
-
-    Parameters
-    ----------
-    arg_key:
-        Key from ``parent_arg_positions``. Nested list/tuple/dict positions are stored as
-        ``(outer_key, inner_key)`` and collapse to ``outer_key`` for site separation.
-
-    Returns
-    -------
-    tuple[Any, bool]
-        Top-level argument or keyword key, plus whether the stored key is deeper than
-        the two-level container path this renderer can represent.
-    """
-
-    if isinstance(arg_key, tuple) and arg_key:
-        return arg_key[0], len(arg_key) > 2
-    return arg_key, False
-
-
-def _top_level_slot(arg_kind: str, arg_key: Any) -> tuple[tuple[str, Any], bool]:
-    """Return a canonical top-level argument slot and depth flag.
-
-    Parameters
-    ----------
-    arg_kind:
-        Argument collection name, usually ``"args"`` or ``"kwargs"``.
-    arg_key:
-        Raw argument-position key stored by TorchLens.
-
-    Returns
-    -------
-    tuple[tuple[str, Any], bool]
-        Canonical ``(arg_kind, top_key)`` slot and too-deep flag.
-    """
-
-    top_key, too_deep = _top_level_arg_position(arg_key)
-    return (arg_kind, top_key), too_deep
-
-
-def _raw_consumer_slots_for_op(
-    trace: "Trace",
-    op: "Op",
-    same_layer_labels: set[str],
-) -> tuple[tuple[tuple[str, Any], bool, bool], ...]:
-    """Return direct consumer slots for one op's output.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing the op graph.
-    op:
-        Op whose children should be inspected.
-    same_layer_labels:
-        Labels belonging to the rolled layer currently being partitioned.
-
-    Returns
-    -------
-    tuple[tuple[tuple[str, Any], bool, bool], ...]
-        Distinct ``(slot, child_has_same_layer_descendant, too_deep)`` entries.
-    """
-
-    slots: set[tuple[tuple[str, Any], bool, bool]] = set()
-    for child_label in op.children:
-        child = _node_for_label(trace, child_label)
-        if not isinstance(child, (Op, Layer)):
-            continue
-        if getattr(child, "layer_type", None) == "output":
-            continue
-        child_has_same_layer_descendant = _has_same_layer_descendant(
-            trace,
-            child,
-            same_layer_labels,
-        )
-        for arg_kind, positions in child.parent_arg_positions.items():
-            for arg_key, parent_label in positions.items():
-                if parent_label == op.label:
-                    slot, too_deep = _top_level_slot(arg_kind, arg_key)
-                    slots.add((slot, child_has_same_layer_descendant, too_deep))
-    return tuple(sorted(slots, key=repr))
-
-
-def _has_same_layer_descendant(
-    trace: "Trace",
-    node: GraphNode,
-    same_layer_labels: set[str],
-) -> bool:
-    """Return whether ``node`` can reach a pass in the rolled layer.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing graph nodes.
-    node:
-        Node whose descendants should be searched.
-    same_layer_labels:
-        Labels belonging to the rolled layer currently being partitioned.
-
-    Returns
-    -------
-    bool
-        ``True`` if any descendant is another pass from the same rolled layer.
-    """
-
-    seen: set[str] = set()
-    stack = list(node.children)
-    while stack:
-        label = stack.pop()
-        if label in seen:
-            continue
-        seen.add(label)
-        if label in same_layer_labels:
-            return True
-        child = _node_for_label(trace, label)
-        if child is not None:
-            stack.extend(child.children)
-    return False
-
-
-def _recurrent_consumer_slots(
-    raw_slots_by_pass: Mapping[int, tuple[tuple[tuple[str, Any], bool, bool], ...]],
-) -> set[tuple[str, Any]]:
-    """Return direct consumer slots that recur enough to separate sites.
-
-    Parameters
-    ----------
-    raw_slots_by_pass:
-        Raw direct consumer slots keyed by pass index.
-
-    Returns
-    -------
-    set[tuple[str, Any]]
-        Slots that appear on at least two passes.
-    """
-
-    counts: dict[tuple[str, Any], int] = defaultdict(int)
-    for raw_slots in raw_slots_by_pass.values():
-        for slot, _child_has_same_layer_descendant, _too_deep in raw_slots:
-            counts[slot] += 1
-    return {slot for slot, count in counts.items() if count >= 2}
-
-
-def _consumer_slots_for_signature(
-    trace: "Trace",
-    op: "Op",
-    same_layer_labels: set[str],
-    raw_slots_by_pass: Mapping[int, tuple[tuple[tuple[str, Any], bool, bool], ...]],
-    recurrent_slots: set[tuple[str, Any]],
-    seen: set[str] | None = None,
-) -> tuple[tuple[str, Any], ...]:
-    """Return boundary-quotiented top-level consumer slots for a signature.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing graph nodes.
-    op:
-        Op whose structural consumer position is needed.
-    same_layer_labels:
-        Labels belonging to the rolled layer currently being partitioned.
-    raw_slots_by_pass:
-        Direct raw consumer slots keyed by pass index.
-    recurrent_slots:
-        Direct slots appearing on at least two passes.
-    seen:
-        Same-layer labels already visited while following a chain.
-
-    Returns
-    -------
-    tuple[tuple[str, Any], ...]
-        Distinct consumer slots used for site separation.
-    """
-
-    if seen is None:
-        seen = set()
-    if op.label in seen:
-        return ()
-    seen.add(op.label)
-
-    pass_index = _pass_index_for_op_label(op.label)
-    direct_slots = raw_slots_by_pass.get(pass_index, ())
-    slots: set[tuple[str, Any]] = {
-        slot
-        for slot, child_has_same_layer_descendant, _too_deep in direct_slots
-        if slot in recurrent_slots or not child_has_same_layer_descendant
-    }
-
-    for child_label in op.children:
-        if child_label not in same_layer_labels:
-            continue
-        child = _node_for_label(trace, child_label)
-        if isinstance(child, Op):
-            slots.update(
-                _consumer_slots_for_signature(
-                    trace,
-                    child,
-                    same_layer_labels,
-                    raw_slots_by_pass,
-                    recurrent_slots,
-                    seen,
-                )
-            )
-    if not slots:
-        for parent_label in op.parents:
-            if parent_label not in same_layer_labels:
-                continue
-            parent = _node_for_label(trace, parent_label)
-            if isinstance(parent, Op):
-                slots.update(
-                    _consumer_slots_for_signature(
-                        trace,
-                        parent,
-                        same_layer_labels,
-                        raw_slots_by_pass,
-                        recurrent_slots,
-                        seen,
-                    )
-                )
-    return tuple(sorted(slots, key=repr))
-
-
-def _pass_index_for_op_label(label: str) -> int:
-    """Return the trailing rolled pass index from an op label.
-
-    Parameters
-    ----------
-    label:
-        Op label ending in ``":<pass_index>"``.
-
-    Returns
-    -------
-    int
-        Parsed pass index, or ``0`` when unavailable.
-    """
-
-    try:
-        return int(label.rsplit(":", 1)[1])
-    except (IndexError, ValueError):
-        return 0
-
-
 def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
     """Compute transitive same-layer reachability among passes.
 
     Parameters
     ----------
     layer_log:
-        Rolled layer whose pass dependency facet is needed.
+        Rolled layer whose same-layer pass reachability is needed.
 
     Returns
     -------
@@ -3742,12 +3395,6 @@ def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
     """
 
     trace = layer_log.source_trace
-    cache = _rendering_cache().setdefault("same_layer_reachability", {})
-    cache_key = layer_log.layer_label
-    cached = cache.get(cache_key)
-    if isinstance(cached, dict):
-        return cast(dict[int, set[int]], cached)
-
     same_layer_labels = {op.label for op in layer_log.ops.values()}
     label_to_pass = {op.label: pass_index for pass_index, op in layer_log.ops.items()}
     reachability: dict[int, set[int]] = {pass_index: set() for pass_index in layer_log.ops}
@@ -3765,39 +3412,7 @@ def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
             child = _node_for_label(trace, label)
             if child is not None:
                 stack.extend(child.children)
-    cache[cache_key] = reachability
     return reachability
-
-
-def _dependency_facet(layer_log: "Layer") -> str | None:
-    """Return the rolled dependency facet for a layer.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer to classify.
-
-    Returns
-    -------
-    str | None
-        ``"chain"``, ``"fan-out"``, ``"mixed"``, or ``None`` for single-pass layers.
-    """
-
-    if layer_log.num_passes <= 1:
-        return None
-    reachability = _same_layer_reachability(layer_log)
-    if not any(reachability.values()):
-        return "fan-out"
-
-    pass_indices = sorted(layer_log.ops)
-    incomparable_pairs = 0
-    for index, left in enumerate(pass_indices):
-        for right in pass_indices[index + 1 :]:
-            if right not in reachability[left] and left not in reachability[right]:
-                incomparable_pairs += 1
-    if incomparable_pairs == 0:
-        return "chain"
-    return "mixed"
 
 
 def _common_module_call_indices(layer_log: "Layer") -> dict[str, list[int]]:
@@ -3829,279 +3444,6 @@ def _common_module_call_indices(layer_log: "Layer") -> dict[str, list[int]]:
     for parsed in per_op[1:]:
         common_addresses &= set(parsed)
     return {address: [parsed[address] for parsed in per_op] for address in sorted(common_addresses)}
-
-
-def _pass_module_call_map(layer_log: "Layer") -> dict[int, dict[str, int]]:
-    """Return module call indices keyed by pass and module address.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer whose per-pass module stacks should be inspected.
-
-    Returns
-    -------
-    dict[int, dict[str, int]]
-        Pass index to ``{module_address: call_index}``.
-    """
-
-    pass_modules: dict[int, dict[str, int]] = {}
-    for pass_index, op in layer_log.ops.items():
-        parsed: dict[str, int] = {}
-        for module_call in op.modules:
-            parsed_call = _module_address_and_call(module_call)
-            if parsed_call is not None:
-                address, call_index = parsed_call
-                parsed[address] = call_index
-        pass_modules[pass_index] = parsed
-    return pass_modules
-
-
-def _common_module_call_groups(layer_log: "Layer") -> dict[str, dict[int, tuple[int, ...]]]:
-    """Return region-local call groups for common ancestor modules.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer whose common module ancestors should be grouped.
-
-    Returns
-    -------
-    dict[str, dict[int, tuple[int, ...]]]
-        Module address to call index to pass indices.
-    """
-
-    pass_modules = _pass_module_call_map(layer_log)
-    if not pass_modules:
-        return {}
-    common_addresses: set[str] | None = None
-    for modules in pass_modules.values():
-        if common_addresses is None:
-            common_addresses = set(modules)
-        else:
-            common_addresses &= set(modules)
-    if not common_addresses:
-        return {}
-
-    groups_by_address: dict[str, dict[int, list[int]]] = {
-        address: defaultdict(list) for address in common_addresses
-    }
-    for pass_index, modules in pass_modules.items():
-        for address in common_addresses:
-            groups_by_address[address][modules[address]].append(pass_index)
-    return {
-        address: {
-            call_index: tuple(pass_indices) for call_index, pass_indices in sorted(groups.items())
-        }
-        for address, groups in sorted(groups_by_address.items())
-    }
-
-
-def _module_position_signature(
-    layer_log: "Layer",
-    groups_by_address: Mapping[str, Mapping[int, tuple[int, ...]]],
-) -> dict[int, tuple[tuple[str, int], ...]]:
-    """Return per-pass positions inside equal-sized common module groups.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer whose passes should be annotated.
-    groups_by_address:
-        Common module call groups for the layer.
-
-    Returns
-    -------
-    dict[int, tuple[tuple[str, int], ...]]
-        Pass index to normalized ``(module_address, ordinal_within_call)`` positions.
-    """
-
-    positions: dict[int, list[tuple[str, int]]] = {pass_index: [] for pass_index in layer_log.ops}
-    for address, groups in groups_by_address.items():
-        group_sizes = {len(pass_indices) for pass_indices in groups.values()}
-        if len(groups) <= 1 or len(group_sizes) != 1 or next(iter(group_sizes)) <= 1:
-            continue
-        for pass_indices in groups.values():
-            for ordinal, pass_index in enumerate(pass_indices):
-                positions[pass_index].append((address, ordinal))
-    return {
-        pass_index: tuple(sorted(module_positions))
-        for pass_index, module_positions in positions.items()
-    }
-
-
-def _inbound_signature_for_op(op: "Op") -> tuple[tuple[str, Any], ...]:
-    """Return the top-level inbound argument signature for an op.
-
-    Parameters
-    ----------
-    op:
-        Op whose inbound argument shape should be represented.
-
-    Returns
-    -------
-    tuple[tuple[str, Any], ...]
-        Distinct top-level argument slots occupied by parents.
-    """
-
-    slots: set[tuple[str, Any]] = set()
-    for arg_kind, positions in op.parent_arg_positions.items():
-        for arg_key in positions:
-            slot, _too_deep = _top_level_slot(arg_kind, arg_key)
-            slots.add(slot)
-    return tuple(sorted(slots, key=repr))
-
-
-def _has_too_deep_arg_path(
-    op: "Op",
-    raw_consumer_slots: tuple[tuple[tuple[str, Any], bool, bool], ...],
-) -> bool:
-    """Return whether an op has an unsupported container argument path.
-
-    Parameters
-    ----------
-    op:
-        Op whose inbound paths should be checked.
-    raw_consumer_slots:
-        Direct raw consumer slots for the op.
-
-    Returns
-    -------
-    bool
-        ``True`` when an inbound or outbound consumer path is deeper than supported.
-    """
-
-    for arg_kind, positions in op.parent_arg_positions.items():
-        for arg_key in positions:
-            _slot, too_deep = _top_level_slot(arg_kind, arg_key)
-            if too_deep:
-                return True
-    return any(too_deep for _slot, _child_has_same_layer_descendant, too_deep in raw_consumer_slots)
-
-
-def _separation_signatures_for_layer(
-    layer_log: "Layer",
-) -> tuple[dict[int, tuple[Any, ...]], bool, dict[str, dict[int, tuple[int, ...]]]]:
-    """Return per-pass separation signatures and uncertainty inputs.
-
-    Parameters
-    ----------
-    layer_log:
-        Rolled layer to partition.
-
-    Returns
-    -------
-    tuple[dict[int, tuple[Any, ...]], bool, dict[str, dict[int, tuple[int, ...]]]]
-        Per-pass signatures, whether any path is too deep/ragged, and common module
-        call groups used by certification.
-    """
-
-    trace = layer_log.source_trace
-    cache = _rendering_cache().setdefault("separation_signatures", {})
-    cache_key = layer_log.layer_label
-    cached = cache.get(cache_key)
-    if isinstance(cached, tuple):
-        return cast(
-            tuple[dict[int, tuple[Any, ...]], bool, dict[str, dict[int, tuple[int, ...]]]],
-            cached,
-        )
-
-    groups_by_address = _common_module_call_groups(layer_log)
-    ragged = any(
-        len({len(pass_indices) for pass_indices in groups.values()}) > 1
-        for groups in groups_by_address.values()
-        if len(groups) > 1
-    )
-    module_positions = _module_position_signature(layer_log, groups_by_address)
-    same_layer_labels = {op.label for op in layer_log.ops.values()}
-    raw_slots_by_pass = {
-        pass_index: _raw_consumer_slots_for_op(trace, op, same_layer_labels)
-        for pass_index, op in layer_log.ops.items()
-    }
-    recurrent_slots = _recurrent_consumer_slots(raw_slots_by_pass)
-
-    signatures: dict[int, tuple[Any, ...]] = {}
-    too_deep = False
-    for pass_index, op in layer_log.ops.items():
-        raw_slots = raw_slots_by_pass[pass_index]
-        too_deep = too_deep or _has_too_deep_arg_path(op, raw_slots)
-        signatures[pass_index] = (
-            (),
-            _inbound_signature_for_op(op),
-            _consumer_slots_for_signature(
-                trace,
-                op,
-                same_layer_labels,
-                raw_slots_by_pass,
-                recurrent_slots,
-            ),
-            module_positions[pass_index],
-        )
-
-    result = (signatures, too_deep or ragged, groups_by_address)
-    cache[cache_key] = result
-    return result
-
-
-def _site_count_for_layer(layer_log: "Layer") -> tuple[int | None, bool]:
-    """Return the conservative separable-site count for a rolled layer.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer to partition.
-
-    Returns
-    -------
-    tuple[int | None, bool]
-        Site count and uncertainty flag.
-    """
-
-    if layer_log.num_passes <= 1 or layer_log.is_buffer:
-        return 1, False
-    signatures, site_uncertain, _groups_by_address = _separation_signatures_for_layer(layer_log)
-    if site_uncertain:
-        return None, True
-    site_count = len(set(signatures.values()))
-    call_groups = _call_groups_for_layer(layer_log)
-    if call_groups and site_count != len(call_groups):
-        return 1, False
-    return site_count, False
-
-
-def _module_certified_multiplier(layer_log: "Layer", site_count: int) -> int | None:
-    """Return a module-certified rectangular multiplier for ``site_count``.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer to certify.
-    site_count:
-        Candidate separable-site count.
-
-    Returns
-    -------
-    int | None
-        Certified module call multiplier, or ``None`` when no module rectangularly covers
-        the layer passes.
-    """
-
-    if site_count <= 1:
-        return None
-    signatures, _site_uncertain, groups_by_address = _separation_signatures_for_layer(layer_log)
-    for _address, groups in groups_by_address.items():
-        if len(groups) <= 1 or len(groups) * site_count != layer_log.num_passes:
-            continue
-        if any(len(pass_indices) != site_count for pass_indices in groups.values()):
-            continue
-        signature_multisets = [
-            tuple(sorted((signatures[pass_index] for pass_index in pass_indices), key=repr))
-            for pass_indices in groups.values()
-        ]
-        first = signature_multisets[0]
-        if all(signature_multiset == first for signature_multiset in signature_multisets[1:]):
-            return len(groups)
-    return None
 
 
 def _same_layer_dependency_components(layer_log: "Layer") -> tuple[tuple[int, ...], ...]:
@@ -4143,213 +3485,6 @@ def _same_layer_dependency_components(layer_log: "Layer") -> tuple[tuple[int, ..
     return tuple(sorted(components, key=lambda values: values[0]))
 
 
-def _same_layer_recurrence_pairs(layer_log: "Layer") -> tuple[tuple[int, int], ...]:
-    """Return same-layer pass pairs proving recurrence.
-
-    Parameters
-    ----------
-    layer_log:
-        Rolled layer to inspect.
-
-    Returns
-    -------
-    tuple[tuple[int, int], ...]
-        ``(source_pass, next_same_layer_dependent_pass)`` pairs where the later
-        pass transitively depends on the earlier pass.
-    """
-
-    reachability = _same_layer_reachability(layer_log)
-    pairs: list[tuple[int, int]] = []
-    for pass_index in sorted(layer_log.ops):
-        later_dependents = [
-            target_pass
-            for target_pass in reachability.get(pass_index, set())
-            if target_pass > pass_index
-        ]
-        if later_dependents:
-            pairs.append((pass_index, min(later_dependents)))
-    return tuple(pairs)
-
-
-def _chains_from_recurrence_pairs(
-    pass_pairs: Sequence[tuple[int, int]],
-) -> tuple[tuple[int, ...], ...]:
-    """Return dependency chains represented by recurrence pass pairs.
-
-    Parameters
-    ----------
-    pass_pairs:
-        Source-to-successor pass pairs.
-
-    Returns
-    -------
-    tuple[tuple[int, ...], ...]
-        Distinct chains with at least two passes, sorted by their first pass.
-    """
-
-    successor_by_pass = {source: target for source, target in pass_pairs}
-    predecessor_passes = {target for _source, target in pass_pairs}
-    starts = sorted(source for source, _target in pass_pairs if source not in predecessor_passes)
-    chains: list[tuple[int, ...]] = []
-    for start in starts:
-        chain = [start]
-        seen = {start}
-        current = start
-        while current in successor_by_pass:
-            current = successor_by_pass[current]
-            if current in seen:
-                break
-            seen.add(current)
-            chain.append(current)
-        if len(chain) > 1:
-            chains.append(tuple(chain))
-    return tuple(chains)
-
-
-def _module_call_index_for_op(op: "Op", address: str) -> int | None:
-    """Return ``op``'s call index for a module address.
-
-    Parameters
-    ----------
-    op:
-        Operation whose module stack should be inspected.
-    address:
-        Module address to find.
-
-    Returns
-    -------
-    int | None
-        Parsed call index for ``address``, or ``None`` when absent.
-    """
-
-    for module_call in op.modules:
-        parsed = _module_address_and_call(module_call)
-        if parsed is None:
-            continue
-        module_address, call_index = parsed
-        if module_address == address:
-            return call_index
-    return None
-
-
-def _collapsed_module_recurrence_pairs(
-    parent_layer: "Layer",
-    child_layer: "Layer",
-    address: str,
-) -> tuple[tuple[int, int], ...]:
-    """Return internal op pass pairs proving a collapsed-box recurrence.
-
-    Parameters
-    ----------
-    parent_layer:
-        Rolled layer producing the internal module-box edge.
-    child_layer:
-        Rolled layer consuming the internal module-box edge.
-    address:
-        Collapsed module address represented by the rendered endpoint.
-
-    Returns
-    -------
-    tuple[tuple[int, int], ...]
-        ``(source_pass, next_pass)`` pairs carried across adjacent collapsed module
-        calls through the collapsed module box.
-    """
-
-    parent_ops_by_label = {op.label: op for op in parent_layer.ops.values()}
-    parent_pass_by_label = {op.label: pass_index for pass_index, op in parent_layer.ops.items()}
-    pairs: set[tuple[int, int]] = set()
-    for child_pass, child_op in child_layer.ops.items():
-        child_call = _module_call_index_for_op(child_op, address)
-        if child_call is None:
-            continue
-        for parent_label in child_op.parents:
-            parent_op = parent_ops_by_label.get(parent_label)
-            if parent_op is None:
-                continue
-            parent_call = _module_call_index_for_op(parent_op, address)
-            parent_pass = parent_pass_by_label.get(parent_label)
-            if (
-                parent_call is not None
-                and parent_pass is not None
-                and child_call == parent_call + 1
-            ):
-                pairs.add((parent_pass, child_pass))
-    return tuple(sorted(pairs))
-
-
-def _recurrence_self_edge(
-    parent_node: GraphNode,
-    child_node: GraphNode,
-    *,
-    child_is_collapsed_module: bool,
-    parent_is_collapsed_module: bool,
-    endpoint_name: str,
-    vis_mode: str,
-) -> RecurrenceSelfEdge | None:
-    """Return recurrence metadata when a rendered self-edge is genuine.
-
-    Parameters
-    ----------
-    parent_node:
-        Source graph node before endpoint collapsing.
-    child_node:
-        Destination graph node before endpoint collapsing.
-    child_is_collapsed_module:
-        Whether the child endpoint is a collapsed module box.
-    parent_is_collapsed_module:
-        Whether the parent endpoint is a collapsed module box.
-    endpoint_name:
-        Rendered node name shared by the self-edge.
-    vis_mode:
-        Active visualization mode.
-
-    Returns
-    -------
-    RecurrenceSelfEdge | None
-        Metadata for a genuine recurrence self-edge, otherwise ``None``.
-    """
-
-    if vis_mode != "rolled":
-        return None
-    parent_base = _base_node_for_metadata(parent_node)
-    child_base = _base_node_for_metadata(child_node)
-    if not isinstance(parent_base, Layer) or not isinstance(child_base, Layer):
-        return None
-
-    if child_is_collapsed_module or parent_is_collapsed_module:
-        if parent_base.layer_label == child_base.layer_label:
-            pass_pairs = _same_layer_recurrence_pairs(parent_base)
-            chains = _chains_from_recurrence_pairs(pass_pairs)
-        else:
-            pass_pairs = _collapsed_module_recurrence_pairs(
-                parent_base,
-                child_base,
-                endpoint_name,
-            )
-            chains = _chains_from_recurrence_pairs(pass_pairs)
-        if not pass_pairs:
-            return None
-        endpoint = f"{parent_base.layer_label}->{child_base.layer_label}@{endpoint_name}"
-        return RecurrenceSelfEdge(
-            endpoint=endpoint,
-            pass_pairs=pass_pairs,
-            chains=chains,
-            count=len(pass_pairs),
-        )
-
-    if parent_base.layer_label != child_base.layer_label:
-        return None
-    pass_pairs = _same_layer_recurrence_pairs(parent_base)
-    if not pass_pairs:
-        return None
-    return RecurrenceSelfEdge(
-        endpoint=parent_base.layer_label,
-        pass_pairs=pass_pairs,
-        chains=_chains_from_recurrence_pairs(pass_pairs),
-        count=len(pass_pairs),
-    )
-
-
 def _call_groups_for_layer(layer_log: "Layer") -> tuple[tuple[int, ...], ...]:
     """Return grouped module calls for disjoint same-layer regions.
 
@@ -4361,12 +3496,9 @@ def _call_groups_for_layer(layer_log: "Layer") -> tuple[tuple[int, ...], ...]:
     Returns
     -------
     tuple[tuple[int, ...], ...]
-        Module call-index groups. Empty when there is only one dependency component or no
-        single common module address.
+        Module call-index groups. Empty when there is only one dependency component or
+        no single common module address.
     """
-
-    if _dependency_facet(layer_log) == "fan-out":
-        return ()
 
     common_calls = _common_module_call_indices(layer_log)
     if len(common_calls) != 1:
@@ -4443,76 +3575,15 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
         Annotation for rolled multi-pass layers, otherwise ``None``.
     """
 
-    if _ACTIVE_RENDERING_CACHE.get() is None:
-        with _rendering_cache_scope():
-            return _rolling_annotation(layer_log, vis_mode)
-
     layer_log = _unwrap_focus_node(layer_log)
     if vis_mode != "rolled" or not isinstance(layer_log, Layer) or layer_log.num_passes <= 1:
         return None
 
-    facet = _dependency_facet(layer_log)
-    site_count, site_uncertain = _site_count_for_layer(layer_log)
-    certified_multiplier = (
-        _module_certified_multiplier(layer_log, site_count)
-        if site_count is not None and not site_uncertain
-        else None
-    )
     call_groups = _call_groups_for_layer(layer_log)
     buffer_versions = _buffer_versions_for_layer(layer_log) if layer_log.is_buffer else ()
-    metadata = tuple(
-        item
-        for item in (
-            f"facet={facet}" if facet is not None else None,
-            f"sites={site_count}" if site_count is not None and not site_uncertain else None,
-            "sites=unknown" if site_uncertain else None,
-            f"certified_multiplier={certified_multiplier}"
-            if certified_multiplier is not None
-            else None,
-            f"call_groups={_format_call_groups(call_groups)}" if call_groups else None,
-            f"buffer_versions={_compact_int_ranges(buffer_versions)}" if buffer_versions else None,
-        )
-        if item is not None
-    )
-    return RollingAnnotation(
-        site_count=site_count,
-        site_uncertain=site_uncertain,
-        certified_multiplier=certified_multiplier,
-        facet=facet,
-        call_groups=call_groups,
-        buffer_versions=buffer_versions,
-        metadata=metadata,
-    )
-
-
-def _module_rolling_annotation(trace: "Trace", address: str) -> str | None:
-    """Return collapsed-module rolling metadata for a module address.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing module metadata.
-    address:
-        Aggregate module address.
-
-    Returns
-    -------
-    str | None
-        Tooltip text, or ``None`` when there is no extra rolling metadata.
-    """
-
-    try:
-        module_log = trace.modules[address]
-    except KeyError:
-        module_log = None
-    if module_log is None or getattr(module_log, "num_calls", 1) <= 1:
+    if not call_groups and not buffer_versions:
         return None
-    call_indices = tuple(int(call_index) for call_index in module_log.ops.keys())
-    suffix = _collapsed_module_rolling_suffix(trace, address)
-    details = [f"module_calls={_compact_int_ranges(call_indices)}"]
-    if suffix:
-        details.append(f"partition={suffix.removeprefix(' · calls ')}")
-    return "TorchLens rolling: " + "; ".join(details)
+    return RollingAnnotation(call_groups=call_groups, buffer_versions=buffer_versions)
 
 
 def _collapsed_module_rolling_suffix(trace: "Trace", address: str) -> str:
@@ -4528,17 +3599,8 @@ def _collapsed_module_rolling_suffix(trace: "Trace", address: str) -> str:
     Returns
     -------
     str
-        Suffix beginning with ``" · calls "`` or an empty string.
+        Suffix beginning with ``":"`` or an empty string.
     """
-
-    if _ACTIVE_RENDERING_CACHE.get() is None:
-        with _rendering_cache_scope():
-            return _collapsed_module_rolling_suffix(trace, address)
-
-    cache = _rendering_cache().setdefault("collapsed_module_rolling_suffix", {})
-    cached = cache.get(address)
-    if isinstance(cached, str):
-        return cached
 
     candidate_groups: tuple[tuple[int, ...], ...] = ()
     for layer_log in trace.layer_logs.values():
@@ -4556,48 +3618,27 @@ def _collapsed_module_rolling_suffix(trace: "Trace", address: str) -> str:
         if len(groups) > len(candidate_groups):
             candidate_groups = groups
     if not candidate_groups:
-        cache[address] = ""
         return ""
-    suffix = f" · calls {_format_call_groups(candidate_groups)}"
-    cache[address] = suffix
-    return suffix
+    return f":{_format_call_groups(candidate_groups)}"
 
 
-def _format_rolling_suffix(
-    annotation: RollingAnnotation | None,
-    *,
-    static_facet: bool = False,
-) -> str:
+def _format_rolling_suffix(annotation: RollingAnnotation | None) -> str:
     """Return the face suffix for a rolled annotation.
 
     Parameters
     ----------
     annotation:
         Annotation to render.
-    static_facet:
-        Whether to promote non-chain dependency facets to the face for static targets.
 
     Returns
     -------
     str
-        Suffix beginning with a middle dot, or an empty string.
+        Suffix beginning with a colon, or an empty string.
     """
 
-    if annotation is None:
+    if annotation is None or not annotation.call_groups:
         return ""
-    parts: list[str] = []
-    if annotation.site_uncertain:
-        parts.append("sites?")
-    elif annotation.site_count is not None and annotation.site_count > 1:
-        site_text = f"{annotation.site_count} sites"
-        if annotation.certified_multiplier is not None:
-            site_text += f" ×{annotation.certified_multiplier}"
-        parts.append(site_text)
-    elif annotation.call_groups:
-        parts.append(f"calls {_format_call_groups(annotation.call_groups)}")
-    if static_facet and annotation.facet in {"fan-out", "mixed"}:
-        parts.append("parallel" if annotation.facet == "fan-out" else annotation.facet)
-    return "" if not parts else " · " + " · ".join(parts)
+    return f":{_format_call_groups(annotation.call_groups)}"
 
 
 def _get_node_address_shape_color(
@@ -4645,7 +3686,7 @@ def _get_node_address_shape_color(
             _rolling_annotation(source_node, "rolled") if isinstance(source_node, Layer) else None
         )
         if annotation is not None and annotation.buffer_versions:
-            address = f"{source_node.address} v{_compact_int_ranges(annotation.buffer_versions)}"
+            address = f"{source_node.address}:{_compact_int_ranges(annotation.buffer_versions)}"
         elif self.buffer_num_calls[source_node.address] == 1:
             address = source_node.address
         else:
@@ -4851,7 +3892,6 @@ def compute_default_node_lines(
     *,
     node_label_fields: list[str] | None = None,
     node_overlay: str | OverlayScores | None = None,
-    static_rolling_facets: bool = False,
 ) -> list[str]:
     """Build default plain-text rows for a layer node.
 
@@ -4867,8 +3907,6 @@ def compute_default_node_lines(
         Optional label fields to render instead of the default field set.
     node_overlay:
         Optional overlay to append as an additional label row.
-    static_rolling_facets:
-        Whether to promote non-chain rolling facets to the face for static targets.
 
     Returns
     -------
@@ -4893,10 +3931,11 @@ def compute_default_node_lines(
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
         call_label = f":{layer_log.pass_index}"
     elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
-        call_label = (
-            f" (x{layer_log.num_passes}"
-            f"{_format_rolling_suffix(annotation, static_facet=static_rolling_facets)})"
-        )
+        rolling_suffix = _format_rolling_suffix(annotation)
+        if rolling_suffix:
+            call_label = rolling_suffix
+        else:
+            call_label = f" (x{layer_log.num_passes})"
     else:
         call_label = ""
 
@@ -5073,6 +4112,7 @@ def _add_edges_for_node(
             module_name_w_pass = _collapse_address_for_node(
                 self,
                 parent_node,
+                vis_mode=vis_mode,
                 collapse_fn=collapse_fn,
                 max_module_depth=vis_call_depth,
             )
@@ -5089,6 +4129,7 @@ def _add_edges_for_node(
         child_collapse_address = _collapse_address_for_node(
             self,
             child_node,
+            vis_mode=vis_mode,
             collapse_fn=collapse_fn,
             max_module_depth=vis_call_depth,
         )
@@ -5145,26 +4186,15 @@ def _add_edges_for_node(
                 )
             tail_name = hook_name
 
-        recurrence_edge = (
-            _recurrence_self_edge(
-                parent_node,
-                child_node,
-                child_is_collapsed_module=child_is_collapsed_module,
-                parent_is_collapsed_module=parent_is_collapsed_module,
-                endpoint_name=tail_name,
-                vis_mode=vis_mode,
-            )
-            if tail_name == head_name
-            else None
-        )
-        if tail_name == head_name and recurrence_edge is None:
+        edge_is_self_loop = tail_name == head_name
+        if edge_is_self_loop and not _is_rolled_loop_carried_self_edge(
+            parent_node,
+            child_node,
+            vis_mode,
+        ):
             continue
 
-        dedupe_key = (
-            (tail_name, f"{head_name}|{recurrence_edge.tooltip}")
-            if recurrence_edge is not None
-            else (tail_name, head_name)
-        )
+        dedupe_key = (tail_name, head_name)
         if dedupe_key in edges_used:
             continue
         edges_used.add(dedupe_key)
@@ -5178,21 +4208,11 @@ def _add_edges_for_node(
             "arrowsize": ".7",
             "labelfontsize": "8",
         }
-        if recurrence_edge is not None:
-            edge_dict.update(
-                {
-                    "label": "↻",
-                    "style": f"{edge_style},bold",
-                    "tooltip": recurrence_edge.tooltip,
-                    "constraint": "false",
-                }
-            )
-
         edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
             child_node, BoundaryNode
         )
 
-        if recurrence_edge is None and not child_is_collapsed_module and not edge_has_boundary:
+        if not edge_is_self_loop and not child_is_collapsed_module and not edge_has_boundary:
             metadata_base = (
                 _base_node_for_metadata(metadata_child) if metadata_child is not None else None
             )
@@ -5210,7 +4230,12 @@ def _add_edges_for_node(
                 edge_dict["label"] = edge_label
 
         # Annotate ops for rolled node edge if it varies across ops
-        if vis_mode == "rolled" and metadata_child is not None and not edge_has_boundary:
+        if (
+            not edge_is_self_loop
+            and vis_mode == "rolled"
+            and metadata_child is not None
+            and not edge_has_boundary
+        ):
             metadata_base_for_pass = _base_node_for_metadata(metadata_child)
             parent_base_for_pass = _base_node_for_metadata(parent_node)
             if isinstance(metadata_base_for_pass, Layer) and isinstance(
@@ -5223,7 +4248,12 @@ def _add_edges_for_node(
                 )
 
         # Label the arguments to the next node if multiple inputs
-        if not child_is_collapsed_module and metadata_child is not None and not edge_has_boundary:
+        if (
+            not edge_is_self_loop
+            and not child_is_collapsed_module
+            and metadata_child is not None
+            and not edge_has_boundary
+        ):
             _label_node_arguments_if_needed(
                 self,
                 _base_node_for_metadata(parent_node),
@@ -5253,6 +4283,8 @@ def _add_edges_for_node(
                 both_nodes_collapsed_modules,
                 vis_call_depth,
             )
+        if edge_is_self_loop and _self_loop_is_single_op_module(self, parent_node):
+            module = -1
         # Preserve the edge's LCA cluster key BEFORE the has_input_ancestor loops
         # below clobber the ``module`` loop variable (they reassign it to each
         # node's own module path). Without this, the captured forward edge would
@@ -5304,6 +4336,67 @@ def _add_edges_for_node(
                 graphviz_graph,
                 overrides,  # type: ignore[arg-type]
             )
+
+
+def _is_rolled_loop_carried_self_edge(
+    parent_node: GraphNode,
+    child_node: GraphNode,
+    vis_mode: str,
+) -> bool:
+    """Return whether a same-endpoint edge represents rolled loop-carried flow.
+
+    Parameters
+    ----------
+    parent_node:
+        Rendered source node before endpoint collapsing.
+    child_node:
+        Rendered target node before endpoint collapsing.
+    vis_mode:
+        Active visualization mode.
+
+    Returns
+    -------
+    bool
+        True when the rolled edge advances from an earlier pass to a later pass.
+    """
+
+    if vis_mode != "rolled":
+        return False
+    parent_base = _base_node_for_metadata(parent_node)
+    child_base = _base_node_for_metadata(child_node)
+    if not isinstance(parent_base, Layer) or not isinstance(child_base, Layer):
+        return False
+    parent_passes = parent_base.child_ops_per_layer.get(child_base.layer_label, [])
+    child_passes = child_base.parent_ops_per_layer.get(parent_base.layer_label, [])
+    return any(
+        child_pass > parent_pass
+        for parent_pass, child_pass in zip(parent_passes, child_passes, strict=False)
+    )
+
+
+def _self_loop_is_single_op_module(trace: "Trace", node: GraphNode) -> bool:
+    """Return whether a self-loop belongs to an atomic one-op module.
+
+    Parameters
+    ----------
+    trace:
+        Owning trace.
+    node:
+        Rendered node carrying the self-loop.
+
+    Returns
+    -------
+    bool
+        True when the node's innermost module contains exactly one rendered op.
+    """
+
+    modules = list(getattr(node, "modules", []) or [])
+    if not modules:
+        return False
+    address = str(modules[-1]).rsplit(":", 1)[0]
+    if address not in trace.modules:
+        return False
+    return _module_has_single_rendered_op(cast("Module", trace.modules[address]))
 
 
 def _compute_edge_label(
@@ -6623,12 +5716,21 @@ def _setup_subgraphs_recurse(
 
     else:  # Leaf of this branch: create the subgraph and add all edges.
         emitted_rank_groups = 0
+        cluster_payload = module_edge_dict[subgraph_name]
+        if (
+            sg_ml.num_layers <= 1  # type: ignore[union-attr]
+            and not module_submodule_dict[subgraph_name_w_pass]
+            and not cluster_payload.get("nodes")
+            and not cluster_payload.get("edges")
+            and not cluster_payload.get("rank_groups")
+        ):
+            return emitted_rank_groups
         with starting_subgraph.subgraph(name=cluster_name) as s:
             # Penwidth + cluster attrs come from ``_render_utils`` so the
             # bundle renderer in ``multi_trace/visualization.py`` can build
             # equivalent clusters with the same formula and label format.
             pen_width = compute_module_penwidth(call_depth, max_call_depth)
-            if module_edge_dict[subgraph_name]["has_input_ancestor"]:
+            if cluster_payload["has_input_ancestor"]:
                 line_style = "solid"
             else:
                 line_style = "dashed"
@@ -6650,13 +5752,13 @@ def _setup_subgraphs_recurse(
                 else:
                     module_args[arg_name] = str(arg_val)
             s.attr(**module_args)
-            for chain in module_edge_dict[subgraph_name].get("rank_groups", []):
+            for chain in cluster_payload.get("rank_groups", []):
                 _emit_sibling_rank_group(s, chain)
                 emitted_rank_groups += 1
-            subgraph_nodes = module_edge_dict[subgraph_name].get("nodes", [])
+            subgraph_nodes = cluster_payload.get("nodes", [])
             for node_args in subgraph_nodes:
                 s.node(**node_args)
-            subgraph_edges = module_edge_dict[subgraph_name]["edges"]
+            subgraph_edges = cluster_payload["edges"]
             for edge_dict in subgraph_edges:
                 s.edge(**edge_dict)
             subgraph_children = module_submodule_dict[subgraph_name_w_pass]

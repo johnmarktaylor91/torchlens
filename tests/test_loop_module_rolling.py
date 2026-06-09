@@ -426,6 +426,18 @@ def _render_source(
     )
 
 
+def _dot_self_edge_attrs(dot: str) -> list[str]:
+    """Return DOT attributes for explicit ``name -> name`` self-edges."""
+
+    return [
+        match.group("attrs")
+        for match in re.finditer(
+            r"(?m)^\s*(?P<name>[A-Za-z0-9_.]+) -> (?P=name) \[(?P<attrs>[^\]]*)\]",
+            dot,
+        )
+    ]
+
+
 @pytest.mark.smoke
 def test_reused_single_op_module_count_is_depth_invariant(tmp_path: Path) -> None:
     """A reused single-op module keeps the honest count at shallow and deep depth."""
@@ -436,253 +448,111 @@ def test_reused_single_op_module_count_is_depth_invariant(tmp_path: Path) -> Non
     shallow_dot = _render_dot(trace, tmp_path, "relu_shallow", vis_call_depth=1)
     deep_dot = _render_dot(trace, tmp_path, "relu_deep", vis_call_depth=1000)
 
-    assert "@relu (x4)" in shallow_dot
+    assert "relu_1_1 (x4)" in shallow_dot
     assert "relu_1_1 (x4)" in deep_dot
 
 
-def test_parallel_fanout_is_one_site_with_fanout_metadata() -> None:
-    """Parallel stack fan-out keeps one site and exposes facet metadata."""
-
-    trace = _trace(ParallelFanout())
-    assert _normalized_title(trace, "linear", "proj") == "proj (x4)"
-    annotation = compute_default_node_lines(_first_layer(trace, "linear"), vis_mode="rolled")
-    assert annotation[0] == "linear_1_1 (x4)"
-
-
-def test_wrapped_two_site_loop_gets_module_certified_multiplier() -> None:
-    """A wrapped two-site layer receives ``2 sites ×3``."""
-
-    trace = _trace(WrappedTwoSiteLoop())
-    assert _normalized_title(trace, "linear", "lin") == "lin (x6 · 2 sites ×3)"
-
-
-def test_two_distinct_loops_are_partitioned_not_summed(tmp_path: Path) -> None:
-    """Two loops sharing one module show call partitions on layer and box labels."""
-
-    trace = _trace(TwoDistinctLoops())
-    assert _normalized_title(trace, "linear", "lin") == "lin (x5 · calls 1-2,3-5)"
-
-    dot = _render_dot(trace, tmp_path, "two_loops", vis_call_depth=1)
-    assert "@shared (x5 · calls 1-2,3-5)" in dot
-    assert "@shared (x5)</B>" not in dot
-
-
-def test_buffer_versions_are_surfaced(tmp_path: Path) -> None:
-    """Rolled buffer nodes show flat version sets instead of a bare address."""
-
-    trace = _trace(BufferRewriteLoops())
-    dot = _render_dot(trace, tmp_path, "buffers", show_buffer_layers="always")
-    assert "@state v1-6" in dot
-    assert "buffer_versions=1-6" in dot
-
-
-def test_mixed_chain_fanout_keeps_clean_count_and_metadata(tmp_path: Path) -> None:
-    """Mixed dependency keeps ``proj (x3)`` and exposes ``facet=mixed`` metadata."""
-
-    trace = _trace(MixedDependency())
-    assert _normalized_title(trace, "linear", "proj") == "proj (x3)"
-
-    dot = _render_dot(trace, tmp_path, "mixed")
-    assert "facet=mixed" in dot
-
-
-def test_inside_outside_loop_shows_call_partition() -> None:
-    """A layer called inside and outside a loop shows the honest call partition."""
-
-    trace = _trace(InsideOutsideLoop())
-    assert _normalized_title(trace, "linear", "lin") == "lin (x4 · calls 1,2-4)"
-
-
-def test_parallel_siblings_loop_keeps_two_sites_without_multiplier() -> None:
-    """Parallel siblings in a loop show two sites and no fabricated multiplier."""
-
-    trace = _trace(ParallelSiblingsLoop())
-    assert _normalized_title(trace, "linear", "lin") == "lin (x8 · 2 sites)"
-
-
-def test_integral_ragged_module_body_is_uncertain_without_multiplier() -> None:
-    """Uneven per-module body sizes show honest site uncertainty and no ``×P``."""
-
-    trace = _trace(IntegralRaggedBlocks())
-    title = _normalized_title(trace, "linear", "lin")
-    assert title == "lin (x4 · sites?)"
-    assert "×" not in title
-
-
-def test_non_uniform_equal_cardinality_body_rejects_multiplier() -> None:
-    """Equal-sized module calls with different site signatures do not certify ``×P``."""
-
-    trace = _trace(NonUniformBodyCalls())
-    title = _normalized_title(trace, "linear", "lin")
-    assert title == "lin (x4 · 3 sites)"
-    assert "×2" not in title
-
-
-def test_ragged_block_loop_surfaces_site_uncertainty() -> None:
-    """A 2, 2, 3 repeated block body shows ``sites?`` instead of a fabricated count."""
-
-    trace = _trace(RaggedBlockLoop())
-    assert _normalized_title(trace, "linear", "lin") == "lin (x7 · sites?)"
-
-
-def test_mixed_facet_does_not_collapse_sites(tmp_path: Path) -> None:
-    """Mixed facet remains metadata and does not force the site partition to one."""
-
-    trace = _trace(MixedWithSites())
-    assert _normalized_title(trace, "linear", "lin") == "lin (x3 · 2 sites)"
-
-    dot = _render_dot(trace, tmp_path, "mixed_with_sites")
-    assert "facet=mixed" in dot
-    assert "linear_1_1 (x3 · 2 sites · mixed)" in dot
-
-
-def test_too_deep_consumer_container_path_surfaces_site_uncertainty() -> None:
-    """A consumer arg path beyond the two-level renderer scheme shows ``sites?``."""
-
-    trace = _trace(StackFanoutForDeepArgMutation())
-    layer = _first_layer(trace, "linear")
-    first_op = next(iter(layer.ops.values()))
-    stack_label = first_op.children[0]
-    stack_op = trace.layer_dict_all_keys[stack_label]
-    stack_op.parent_arg_positions["args"] = {
-        (0, 0, 0): "linear_1_1:1",
-        (0, 0, 1): "linear_1_1:2",
-    }
-
-    assert _normalized_title(trace, "linear", "lin") == "lin (x2 · sites?)"
-
-
-def test_static_targets_promote_parallel_and_mixed_facets(tmp_path: Path) -> None:
-    """Static face labels include static-only facet tags for non-chain facets."""
-
-    fanout_dot = _render_dot(_trace(ParallelFanout()), tmp_path, "static_parallel")
-    mixed_dot = _render_dot(_trace(MixedDependency()), tmp_path, "static_mixed")
-    fanout_svg = _render_source(
-        _trace(ParallelFanout()),
-        tmp_path,
-        "static_parallel_svg",
-        "svg",
-    )
-    mixed_pdf = _render_source(
-        _trace(MixedDependency()),
-        tmp_path,
-        "static_mixed_pdf",
-        "pdf",
-    )
-
-    assert "linear_1_1 (x4 · parallel)" in fanout_dot
-    assert "linear_1_1 (x3 · mixed)" in mixed_dot
-    assert "linear_1_1 (x4 · parallel)" in fanout_svg
-    assert "linear_1_1 (x3 · mixed)" in mixed_pdf
-
-
-def test_render_cache_does_not_mutate_save_or_fork_trace(tmp_path: Path) -> None:
-    """Rendering memoization stays off the trace state and forks."""
-
-    trace = _trace(ParallelSiblingsLoop())
-    _render_dot(trace, tmp_path, "cache_parent")
-
-    assert "_tl_rendering_cache" not in trace.__dict__
-    assert "_tl_rendering_cache" not in trace.__getstate__()
-
-    fork = trace.fork("cache_fork")
-    assert "_tl_rendering_cache" not in fork.__dict__
-    assert "_tl_rendering_cache" not in fork.__getstate__()
-
-
-def test_render_cache_is_fresh_after_same_trace_structural_mutation(tmp_path: Path) -> None:
-    """A second render sees in-place structural edits on the same trace."""
-
-    trace = _trace(StackFanoutForDeepArgMutation())
-    layer = _first_layer(trace, "linear")
-
-    before_dot = _render_dot(trace, tmp_path, "cache_before_mutation", vis_call_depth=1000)
-    assert f"{layer.layer_label} (x2" in before_dot
-    assert f"{layer.layer_label} (x2 · sites?" not in before_dot
-
-    first_op = next(iter(layer.ops.values()))
-    stack_label = first_op.children[0]
-    stack_op = trace.layer_dict_all_keys[stack_label]
-    stack_op.parent_arg_positions["args"] = {
-        (0, 0, 0): "linear_1_1:1",
-        (0, 0, 1): "linear_1_1:2",
-    }
-
-    after_dot = _render_dot(trace, tmp_path, "cache_after_mutation", vis_call_depth=1000)
-    assert f"{layer.layer_label} (x2 · sites?" in after_dot
-
-
-def test_rolled_recurrent_layer_draws_marked_self_edge(tmp_path: Path) -> None:
-    """A recurrent rolled layer keeps its same-layer self-edge as ``↻``."""
-
-    dot = _render_dot(_trace(RNNCellLoop()), tmp_path, "rnn_cell_layer", vis_call_depth=1000)
-
-    assert "linear_1_1 -> linear_1_1" in dot
-    assert 'label="↻"' in dot
-    assert "TorchLens recurrence: endpoint=linear_1_1;" in dot
-    assert "pass_pairs=1->2,2->3,3->4; count=3" in dot
-
-
-def test_collapsed_module_recurrence_draws_marked_self_edge(tmp_path: Path) -> None:
-    """A collapsed recurrent module box keeps its internal self-edge as ``↻``."""
-
-    dot = _render_dot(
-        _trace(CollapsedBlockRecurrence()), tmp_path, "block_recurrence", vis_call_depth=1
-    )
-
-    assert "block -> block" in dot
-    assert 'label="↻"' in dot
-    assert "TorchLens recurrence: endpoint=relu_1_2->linear_1_1@block;" in dot
-    assert "pass_pairs=1->2,2->3" in dot
-    assert "count=2" in dot
-
-
-def test_reused_module_without_loop_carried_dep_has_no_recurrence_self_edge(
-    tmp_path: Path,
-) -> None:
-    """A reused non-recurrent module does not receive a spurious ``↻`` self-edge."""
-
-    dot = _render_dot(_trace(ParallelFanout()), tmp_path, "fanout_no_recurrence", vis_call_depth=1)
-
-    assert "proj -> proj" not in dot
+def test_multi_op_loop_body_keeps_plain_counts(tmp_path: Path) -> None:
+    """A Linear -> ReLU loop body shows honest counts without site suffixes."""
+
+    trace = _trace(CollapsedBlockRecurrence())
+    assert _normalized_title(trace, "linear", "lin") == "lin (x3)"
+    assert _normalized_title(trace, "relu", "relu") == "relu (x3)"
+
+    dot = _render_dot(trace, tmp_path, "multiop_loop", vis_call_depth=1000)
+    assert "sites" not in dot
+    assert "×" not in dot
     assert 'label="↻"' not in dot
 
 
-def test_interleaved_same_layer_recurrences_keep_distinct_chains(tmp_path: Path) -> None:
-    """Two same-layer recurrence sites remain distinct in deep and collapsed views."""
+def test_colon_call_ranges_disambiguate_split_regions(tmp_path: Path) -> None:
+    """Reused modules in split regions use compact colon ranges."""
 
-    trace = _trace(SharedTwoSiteRecurrences())
-    deep_dot = _render_dot(trace, tmp_path, "two_site_recurrence_deep", vis_call_depth=1000)
-    collapsed_dot = _render_dot(trace, tmp_path, "two_site_recurrence_collapsed", vis_call_depth=1)
+    distinct_trace = _trace(TwoDistinctLoops())
+    assert _normalized_title(distinct_trace, "linear", "lin") == "lin:1-2,3-5"
+    distinct_dot = _render_dot(distinct_trace, tmp_path, "two_loops", vis_call_depth=1)
+    assert "@shared:1-2,3-5" in distinct_dot
+    assert "calls" not in distinct_dot
 
-    for dot in (deep_dot, collapsed_dot):
-        assert 'label="↻"' in dot
-        assert "pass_pairs=1->3,2->4,3->5,4->6" in dot
-        assert "chains=1->3->5,2->4->6" in dot
-        assert "pass_pairs=1->2,2->3" not in dot
+    inside_outside_trace = _trace(InsideOutsideLoop())
+    assert _normalized_title(inside_outside_trace, "linear", "lin") == "lin:1,2-4"
 
-    layer = _first_layer(trace, "linear")
-    assert f"{layer.layer_label} -> {layer.layer_label}" in deep_dot
-    assert "block -> block" in collapsed_dot
+
+def test_clean_reused_block_keeps_plain_counts(tmp_path: Path) -> None:
+    """A reused multi-op block in one loop keeps plain module and op counts."""
+
+    trace = _trace(CollapsedBlockRecurrence())
+    expanded_dot = _render_dot(trace, tmp_path, "block_expanded", vis_call_depth=1000)
+    collapsed_dot = _render_dot(trace, tmp_path, "block_collapsed", vis_call_depth=1)
+
+    assert "linear_1_1 (x3)" in expanded_dot
+    assert "relu_1_2 (x3)" in expanded_dot
+    assert "@block (x3)" in collapsed_dot
+    assert 'label="↻"' not in expanded_dot
+    assert 'label="↻"' not in collapsed_dot
+
+
+def test_buffer_versions_use_colon_ranges(tmp_path: Path) -> None:
+    """Rolled buffer nodes use the module-address colon range form."""
+
+    trace = _trace(BufferRewriteLoops())
+    dot = _render_dot(trace, tmp_path, "buffers", show_buffer_layers="always")
+    assert "@state:1-6" in dot
+    assert "@state v1-6" not in dot
+    assert "buffer_versions" not in dot
+
+
+def test_recurrent_self_loop_is_clean_and_fanout_has_none(tmp_path: Path) -> None:
+    """Rolled recurrence keeps one clean self-edge; parallel fan-out has none."""
+
+    recurrent_trace = _trace(ReusedReluLoop())
+    recurrent_dot = _render_dot(recurrent_trace, tmp_path, "relu_self_edge", vis_call_depth=1000)
+    recurrent_self_edges = _dot_self_edge_attrs(recurrent_dot)
+    assert len(recurrent_self_edges) == 1
+    recurrent_attrs = recurrent_self_edges[0]
+    assert "label=" not in recurrent_attrs
+    assert "headlabel=" not in recurrent_attrs
+    assert "taillabel=" not in recurrent_attrs
+    assert "↻" not in recurrent_attrs
+    assert " In " not in recurrent_attrs
+    assert " Out " not in recurrent_attrs
+
+    fanout_trace = _trace(ParallelFanout())
+    fanout_dot = _render_dot(fanout_trace, tmp_path, "parallel_fanout", vis_call_depth=1000)
+    assert _dot_self_edge_attrs(fanout_dot) == []
+
+
+def test_atomic_single_op_module_collapse_preserves_op_render(tmp_path: Path) -> None:
+    """Single-op modules render identically at expanded and collapsed depths."""
+
+    trace = _trace(ReusedReluLoop())
+    expanded_dot = _render_dot(trace, tmp_path, "relu_expanded", vis_call_depth=1000)
+    collapsed_dot = _render_dot(trace, tmp_path, "relu_collapsed", vis_call_depth=1)
+
+    assert "cluster_relu" not in expanded_dot
+    assert "cluster_relu" not in collapsed_dot
+    assert "relu_1_1 (x4)" in expanded_dot
+    assert "relu_1_1 (x4)" in collapsed_dot
+    assert "@relu (x4)" not in collapsed_dot
+    assert 'label="↻"' not in expanded_dot
+    assert 'label="↻"' not in collapsed_dot
 
 
 def test_render_loop_module_rolling_demos() -> None:
-    """Render SVG and PDF demos into the committed test-output folder."""
+    """Render SVG and PNG demos into the committed test-output folder."""
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     demos: list[tuple[str, nn.Module, dict[str, object]]] = [
-        ("reused_relu_loop", ReusedReluLoop(), {}),
-        ("parallel_fanout", ParallelFanout(), {}),
-        ("wrapped_two_site_loop", WrappedTwoSiteLoop(), {}),
-        ("rnn_cell_recurrence", RNNCellLoop(), {"vis_call_depth": 1}),
-        ("two_distinct_loops", TwoDistinctLoops(), {"vis_call_depth": 1}),
+        ("multiop_loop_body_expanded", CollapsedBlockRecurrence(), {"vis_call_depth": 1000}),
+        ("reused_module_inside_outside_loop", InsideOutsideLoop(), {}),
+        ("reused_block_loop_expanded", CollapsedBlockRecurrence(), {"vis_call_depth": 1000}),
+        ("reused_block_loop_collapsed", CollapsedBlockRecurrence(), {"vis_call_depth": 1}),
         ("buffer_rewrite_loops", BufferRewriteLoops(), {"show_buffer_layers": "always"}),
-        ("mixed_dependency", MixedDependency(), {}),
-        ("inside_outside_loop", InsideOutsideLoop(), {}),
+        ("two_distinct_loops", TwoDistinctLoops(), {"vis_call_depth": 1}),
     ]
     for name, model, kwargs in demos:
         trace = _trace(model)
-        for file_format in ("svg", "pdf"):
+        for file_format in ("svg", "png"):
             trace.draw(
                 vis_mode="rolled",
                 vis_save_only=True,
