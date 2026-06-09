@@ -159,6 +159,141 @@ class InsideOutsideLoop(nn.Module):
         return outside + inside
 
 
+class ParallelSiblingsLoop(nn.Module):
+    """Shared layer used at two sibling sites in each loop body."""
+
+    def __init__(self) -> None:
+        """Initialize the shared linear layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run four loop bodies with two parallel sibling calls each."""
+
+        for _ in range(4):
+            a = self.lin(x)
+            b = self.lin(x)
+            x = a + b
+        return x
+
+
+class VariableLinearBlock(nn.Module):
+    """Block that applies a shared linear layer ``n`` times."""
+
+    def __init__(self) -> None:
+        """Initialize the shared linear layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor, n: int) -> torch.Tensor:
+        """Apply the linear layer ``n`` times."""
+
+        for _ in range(n):
+            x = self.lin(x)
+        return x
+
+
+class RaggedBlockLoop(nn.Module):
+    """Loop whose block expands to a ragged number of linear passes."""
+
+    def __init__(self) -> None:
+        """Initialize the variable block."""
+
+        super().__init__()
+        self.block = VariableLinearBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the block with a 2, 2, 3 pass pattern."""
+
+        for n in (2, 2, 3):
+            x = self.block(x, n)
+        return x
+
+
+class IntegralRaggedBlocks(nn.Module):
+    """Two block calls with non-rectangular 3 and 1 pass bodies."""
+
+    def __init__(self) -> None:
+        """Initialize the variable block."""
+
+        super().__init__()
+        self.block = VariableLinearBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the block with uneven body sizes."""
+
+        x = self.block(x, 3)
+        return self.block(x, 1)
+
+
+class ModeDependentBlock(nn.Module):
+    """Block whose two calls have equal cardinality but different structure."""
+
+    def __init__(self) -> None:
+        """Initialize the shared linear layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor, mode: str) -> torch.Tensor:
+        """Run either a parallel or chained two-call body."""
+
+        if mode == "parallel":
+            return self.lin(x) + self.lin(x)
+        return self.lin(self.lin(x))
+
+
+class NonUniformBodyCalls(nn.Module):
+    """Two equal-sized block calls with different separation signatures."""
+
+    def __init__(self) -> None:
+        """Initialize the mode-dependent block."""
+
+        super().__init__()
+        self.block = ModeDependentBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a parallel body followed by a chain body."""
+
+        x = self.block(x, "parallel")
+        return self.block(x, "chain")
+
+
+class MixedWithSites(nn.Module):
+    """Mixed dependency that still has separable structural sites."""
+
+    def __init__(self) -> None:
+        """Initialize the shared linear layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create a chain plus an independent sibling before a join."""
+
+        a = self.lin(x)
+        b = self.lin(a)
+        c = self.lin(x)
+        return b + c
+
+
+class StackFanoutForDeepArgMutation(nn.Module):
+    """Stack fan-out used to mutate a consumer path beyond renderer support."""
+
+    def __init__(self) -> None:
+        """Initialize the shared linear layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Stack two calls so both feed one consumer op."""
+
+        return torch.stack([self.lin(x), self.lin(x)])
+
+
 def _trace(model: nn.Module) -> tl.Trace:
     """Trace a demo model deterministically."""
 
@@ -260,6 +395,75 @@ def test_inside_outside_loop_shows_call_partition() -> None:
 
     trace = _trace(InsideOutsideLoop())
     assert _normalized_title(trace, "linear", "lin") == "lin (x4 · calls 1,2-4)"
+
+
+def test_parallel_siblings_loop_keeps_two_sites_without_multiplier() -> None:
+    """Parallel siblings in a loop show two sites and no fabricated multiplier."""
+
+    trace = _trace(ParallelSiblingsLoop())
+    assert _normalized_title(trace, "linear", "lin") == "lin (x8 · 2 sites)"
+
+
+def test_integral_ragged_module_body_is_uncertain_without_multiplier() -> None:
+    """Uneven per-module body sizes show honest site uncertainty and no ``×P``."""
+
+    trace = _trace(IntegralRaggedBlocks())
+    title = _normalized_title(trace, "linear", "lin")
+    assert title == "lin (x4 · sites?)"
+    assert "×" not in title
+
+
+def test_non_uniform_equal_cardinality_body_rejects_multiplier() -> None:
+    """Equal-sized module calls with different site signatures do not certify ``×P``."""
+
+    trace = _trace(NonUniformBodyCalls())
+    title = _normalized_title(trace, "linear", "lin")
+    assert title == "lin (x4 · 3 sites)"
+    assert "×2" not in title
+
+
+def test_ragged_block_loop_surfaces_site_uncertainty() -> None:
+    """A 2, 2, 3 repeated block body shows ``sites?`` instead of a fabricated count."""
+
+    trace = _trace(RaggedBlockLoop())
+    assert _normalized_title(trace, "linear", "lin") == "lin (x7 · sites?)"
+
+
+def test_mixed_facet_does_not_collapse_sites(tmp_path: Path) -> None:
+    """Mixed facet remains metadata and does not force the site partition to one."""
+
+    trace = _trace(MixedWithSites())
+    assert _normalized_title(trace, "linear", "lin") == "lin (x3 · 2 sites)"
+
+    dot = _render_dot(trace, tmp_path, "mixed_with_sites")
+    assert "facet=mixed" in dot
+    assert "linear_1_1 (x3 · 2 sites · mixed)" in dot
+
+
+def test_too_deep_consumer_container_path_surfaces_site_uncertainty() -> None:
+    """A consumer arg path beyond the two-level renderer scheme shows ``sites?``."""
+
+    trace = _trace(StackFanoutForDeepArgMutation())
+    layer = _first_layer(trace, "linear")
+    first_op = next(iter(layer.ops.values()))
+    stack_label = first_op.children[0]
+    stack_op = trace.layer_dict_all_keys[stack_label]
+    stack_op.parent_arg_positions["args"] = {
+        (0, 0, 0): "linear_1_1:1",
+        (0, 0, 1): "linear_1_1:2",
+    }
+
+    assert _normalized_title(trace, "linear", "lin") == "lin (x2 · sites?)"
+
+
+def test_static_targets_promote_parallel_and_mixed_facets(tmp_path: Path) -> None:
+    """Raw DOT face labels include static-only facet tags for non-chain facets."""
+
+    fanout_dot = _render_dot(_trace(ParallelFanout()), tmp_path, "static_parallel")
+    mixed_dot = _render_dot(_trace(MixedDependency()), tmp_path, "static_mixed")
+
+    assert "linear_1_1 (x4 · parallel)" in fanout_dot
+    assert "linear_1_1 (x3 · mixed)" in mixed_dot
 
 
 def test_render_loop_module_rolling_demos() -> None:

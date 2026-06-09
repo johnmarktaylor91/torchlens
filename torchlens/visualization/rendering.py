@@ -158,8 +158,6 @@ class RollingAnnotation:
         Module-certified rectangular multiplier for the sites summary.
     facet:
         Dependency facet for same-layer passes: ``"chain"``, ``"fan-out"``, or ``"mixed"``.
-    call_ranges:
-        Optional module-call partition to show on the face.
     call_groups:
         Optional grouped module-call partitions to show on the face.
     buffer_versions:
@@ -172,7 +170,6 @@ class RollingAnnotation:
     site_uncertain: bool = False
     certified_multiplier: int | None = None
     facet: str | None = None
-    call_ranges: tuple[int, ...] = ()
     call_groups: tuple[tuple[int, ...], ...] = ()
     buffer_versions: tuple[int, ...] = ()
     metadata: tuple[str, ...] = ()
@@ -2591,6 +2588,7 @@ def _build_layer_node(
             vis_mode,
             node_label_fields=node_label_fields,
             node_overlay=node_overlay,
+            static_rolling_facets=graphviz_graph.format == "dot",
         ),
         shape=node_shape,
         fillcolor=node_bg_color,
@@ -3324,7 +3322,53 @@ def _module_address_and_call(module_call: str) -> tuple[str, int] | None:
         return None
 
 
-def _top_level_arg_position(arg_key: Any) -> Any:
+def _rendering_cache(trace: "Trace") -> dict[str, Any]:
+    """Return the per-trace rendering memoization cache.
+
+    Parameters
+    ----------
+    trace:
+        Trace being rendered.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mutable cache owned by the trace instance.
+    """
+
+    cache = getattr(trace, "_tl_rendering_cache", None)
+    if not isinstance(cache, dict):
+        cache = {}
+        setattr(trace, "_tl_rendering_cache", cache)
+    return cache
+
+
+def _node_for_label(trace: "Trace", label: str) -> GraphNode | None:
+    """Return an op or layer-like graph node for ``label`` when available.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing graph nodes.
+    label:
+        Layer or op label to resolve.
+
+    Returns
+    -------
+    GraphNode | None
+        Matching node, or ``None`` if the label is not present.
+    """
+
+    try:
+        return cast(GraphNode, trace.layer_dict_all_keys[label])
+    except KeyError:
+        try:
+            return cast(GraphNode, trace.ops[label])
+        except KeyError:
+            return None
+
+
+def _top_level_arg_position(arg_key: Any) -> tuple[Any, bool]:
     """Return the top-level argument key for a stored parent-argument key.
 
     Parameters
@@ -3335,17 +3379,42 @@ def _top_level_arg_position(arg_key: Any) -> Any:
 
     Returns
     -------
-    Any
-        Top-level argument or keyword key.
+    tuple[Any, bool]
+        Top-level argument or keyword key, plus whether the stored key is deeper than
+        the two-level container path this renderer can represent.
     """
 
     if isinstance(arg_key, tuple) and arg_key:
-        return arg_key[0]
-    return arg_key
+        return arg_key[0], len(arg_key) > 2
+    return arg_key, False
 
 
-def _consumer_slots_for_op(trace: "Trace", op: "Op") -> tuple[tuple[str, Any], ...]:
-    """Return top-level consumer slots occupied by one op's output.
+def _top_level_slot(arg_kind: str, arg_key: Any) -> tuple[tuple[str, Any], bool]:
+    """Return a canonical top-level argument slot and depth flag.
+
+    Parameters
+    ----------
+    arg_kind:
+        Argument collection name, usually ``"args"`` or ``"kwargs"``.
+    arg_key:
+        Raw argument-position key stored by TorchLens.
+
+    Returns
+    -------
+    tuple[tuple[str, Any], bool]
+        Canonical ``(arg_kind, top_key)`` slot and too-deep flag.
+    """
+
+    top_key, too_deep = _top_level_arg_position(arg_key)
+    return (arg_kind, top_key), too_deep
+
+
+def _raw_consumer_slots_for_op(
+    trace: "Trace",
+    op: "Op",
+    same_layer_labels: set[str],
+) -> tuple[tuple[tuple[str, Any], bool, bool], ...]:
+    """Return direct consumer slots for one op's output.
 
     Parameters
     ----------
@@ -3353,30 +3422,192 @@ def _consumer_slots_for_op(trace: "Trace", op: "Op") -> tuple[tuple[str, Any], .
         Trace containing the op graph.
     op:
         Op whose children should be inspected.
+    same_layer_labels:
+        Labels belonging to the rolled layer currently being partitioned.
+
+    Returns
+    -------
+    tuple[tuple[tuple[str, Any], bool, bool], ...]
+        Distinct ``(slot, child_has_same_layer_descendant, too_deep)`` entries.
+    """
+
+    slots: set[tuple[tuple[str, Any], bool, bool]] = set()
+    for child_label in op.children:
+        child = _node_for_label(trace, child_label)
+        if not isinstance(child, (Op, Layer)):
+            continue
+        if getattr(child, "layer_type", None) == "output":
+            continue
+        child_has_same_layer_descendant = _has_same_layer_descendant(
+            trace,
+            child,
+            same_layer_labels,
+        )
+        for arg_kind, positions in child.parent_arg_positions.items():
+            for arg_key, parent_label in positions.items():
+                if parent_label == op.label:
+                    slot, too_deep = _top_level_slot(arg_kind, arg_key)
+                    slots.add((slot, child_has_same_layer_descendant, too_deep))
+    return tuple(sorted(slots, key=repr))
+
+
+def _has_same_layer_descendant(
+    trace: "Trace",
+    node: GraphNode,
+    same_layer_labels: set[str],
+) -> bool:
+    """Return whether ``node`` can reach a pass in the rolled layer.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing graph nodes.
+    node:
+        Node whose descendants should be searched.
+    same_layer_labels:
+        Labels belonging to the rolled layer currently being partitioned.
+
+    Returns
+    -------
+    bool
+        ``True`` if any descendant is another pass from the same rolled layer.
+    """
+
+    seen: set[str] = set()
+    stack = list(node.children)
+    while stack:
+        label = stack.pop()
+        if label in seen:
+            continue
+        seen.add(label)
+        if label in same_layer_labels:
+            return True
+        child = _node_for_label(trace, label)
+        if child is not None:
+            stack.extend(child.children)
+    return False
+
+
+def _recurrent_consumer_slots(
+    raw_slots_by_pass: Mapping[int, tuple[tuple[tuple[str, Any], bool, bool], ...]],
+) -> set[tuple[str, Any]]:
+    """Return direct consumer slots that recur enough to separate sites.
+
+    Parameters
+    ----------
+    raw_slots_by_pass:
+        Raw direct consumer slots keyed by pass index.
+
+    Returns
+    -------
+    set[tuple[str, Any]]
+        Slots that appear on at least two passes.
+    """
+
+    counts: dict[tuple[str, Any], int] = defaultdict(int)
+    for raw_slots in raw_slots_by_pass.values():
+        for slot, _child_has_same_layer_descendant, _too_deep in raw_slots:
+            counts[slot] += 1
+    return {slot for slot, count in counts.items() if count >= 2}
+
+
+def _consumer_slots_for_signature(
+    trace: "Trace",
+    op: "Op",
+    same_layer_labels: set[str],
+    raw_slots_by_pass: Mapping[int, tuple[tuple[tuple[str, Any], bool, bool], ...]],
+    recurrent_slots: set[tuple[str, Any]],
+    seen: set[str] | None = None,
+) -> tuple[tuple[str, Any], ...]:
+    """Return boundary-quotiented top-level consumer slots for a signature.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing graph nodes.
+    op:
+        Op whose structural consumer position is needed.
+    same_layer_labels:
+        Labels belonging to the rolled layer currently being partitioned.
+    raw_slots_by_pass:
+        Direct raw consumer slots keyed by pass index.
+    recurrent_slots:
+        Direct slots appearing on at least two passes.
+    seen:
+        Same-layer labels already visited while following a chain.
 
     Returns
     -------
     tuple[tuple[str, Any], ...]
-        Distinct ``(arg_kind, top_key)`` slots. Child identity is intentionally excluded so
-        stack/list fan-out remains one site when every pass occupies the same top-level slot.
+        Distinct consumer slots used for site separation.
     """
 
-    slots: set[tuple[str, Any]] = set()
+    if seen is None:
+        seen = set()
+    if op.label in seen:
+        return ()
+    seen.add(op.label)
+
+    pass_index = _pass_index_for_op_label(op.label)
+    direct_slots = raw_slots_by_pass.get(pass_index, ())
+    slots: set[tuple[str, Any]] = {
+        slot
+        for slot, child_has_same_layer_descendant, _too_deep in direct_slots
+        if slot in recurrent_slots or not child_has_same_layer_descendant
+    }
+
     for child_label in op.children:
-        try:
-            child = trace.layer_dict_all_keys[child_label]
-        except KeyError:
-            try:
-                child = trace.ops[child_label]
-            except KeyError:
-                continue
-        if child is None:
+        if child_label not in same_layer_labels:
             continue
-        for arg_kind, positions in child.parent_arg_positions.items():
-            for arg_key, parent_label in positions.items():
-                if parent_label == op.label:
-                    slots.add((arg_kind, _top_level_arg_position(arg_key)))
+        child = _node_for_label(trace, child_label)
+        if isinstance(child, Op):
+            slots.update(
+                _consumer_slots_for_signature(
+                    trace,
+                    child,
+                    same_layer_labels,
+                    raw_slots_by_pass,
+                    recurrent_slots,
+                    seen,
+                )
+            )
+    if not slots:
+        for parent_label in op.parents:
+            if parent_label not in same_layer_labels:
+                continue
+            parent = _node_for_label(trace, parent_label)
+            if isinstance(parent, Op):
+                slots.update(
+                    _consumer_slots_for_signature(
+                        trace,
+                        parent,
+                        same_layer_labels,
+                        raw_slots_by_pass,
+                        recurrent_slots,
+                        seen,
+                    )
+                )
     return tuple(sorted(slots, key=repr))
+
+
+def _pass_index_for_op_label(label: str) -> int:
+    """Return the trailing rolled pass index from an op label.
+
+    Parameters
+    ----------
+    label:
+        Op label ending in ``":<pass_index>"``.
+
+    Returns
+    -------
+    int
+        Parsed pass index, or ``0`` when unavailable.
+    """
+
+    try:
+        return int(label.rsplit(":", 1)[1])
+    except (IndexError, ValueError):
+        return 0
 
 
 def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
@@ -3394,6 +3625,12 @@ def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
     """
 
     trace = layer_log.source_trace
+    cache = _rendering_cache(trace).setdefault("same_layer_reachability", {})
+    cache_key = layer_log.layer_label
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict):
+        return cast(dict[int, set[int]], cached)
+
     same_layer_labels = {op.label for op in layer_log.ops.values()}
     label_to_pass = {op.label: pass_index for pass_index, op in layer_log.ops.items()}
     reachability: dict[int, set[int]] = {pass_index: set() for pass_index in layer_log.ops}
@@ -3408,15 +3645,10 @@ def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
             seen.add(label)
             if label in same_layer_labels:
                 reachability[pass_index].add(label_to_pass[label])
-            try:
-                child = trace.layer_dict_all_keys[label]
-            except KeyError:
-                try:
-                    child = trace.ops[label]
-                except KeyError:
-                    child = None
+            child = _node_for_label(trace, label)
             if child is not None:
                 stack.extend(child.children)
+    cache[cache_key] = reachability
     return reachability
 
 
@@ -3482,6 +3714,244 @@ def _common_module_call_indices(layer_log: "Layer") -> dict[str, list[int]]:
     return {address: [parsed[address] for parsed in per_op] for address in sorted(common_addresses)}
 
 
+def _pass_module_call_map(layer_log: "Layer") -> dict[int, dict[str, int]]:
+    """Return module call indices keyed by pass and module address.
+
+    Parameters
+    ----------
+    layer_log:
+        Layer whose per-pass module stacks should be inspected.
+
+    Returns
+    -------
+    dict[int, dict[str, int]]
+        Pass index to ``{module_address: call_index}``.
+    """
+
+    pass_modules: dict[int, dict[str, int]] = {}
+    for pass_index, op in layer_log.ops.items():
+        parsed: dict[str, int] = {}
+        for module_call in op.modules:
+            parsed_call = _module_address_and_call(module_call)
+            if parsed_call is not None:
+                address, call_index = parsed_call
+                parsed[address] = call_index
+        pass_modules[pass_index] = parsed
+    return pass_modules
+
+
+def _common_module_call_groups(layer_log: "Layer") -> dict[str, dict[int, tuple[int, ...]]]:
+    """Return region-local call groups for common ancestor modules.
+
+    Parameters
+    ----------
+    layer_log:
+        Layer whose common module ancestors should be grouped.
+
+    Returns
+    -------
+    dict[str, dict[int, tuple[int, ...]]]
+        Module address to call index to pass indices.
+    """
+
+    pass_modules = _pass_module_call_map(layer_log)
+    if not pass_modules:
+        return {}
+    common_addresses: set[str] | None = None
+    for modules in pass_modules.values():
+        if common_addresses is None:
+            common_addresses = set(modules)
+        else:
+            common_addresses &= set(modules)
+    if not common_addresses:
+        return {}
+
+    groups_by_address: dict[str, dict[int, list[int]]] = {
+        address: defaultdict(list) for address in common_addresses
+    }
+    for pass_index, modules in pass_modules.items():
+        for address in common_addresses:
+            groups_by_address[address][modules[address]].append(pass_index)
+    return {
+        address: {
+            call_index: tuple(pass_indices) for call_index, pass_indices in sorted(groups.items())
+        }
+        for address, groups in sorted(groups_by_address.items())
+    }
+
+
+def _module_position_signature(
+    layer_log: "Layer",
+    groups_by_address: Mapping[str, Mapping[int, tuple[int, ...]]],
+) -> dict[int, tuple[tuple[str, int], ...]]:
+    """Return per-pass positions inside equal-sized common module groups.
+
+    Parameters
+    ----------
+    layer_log:
+        Layer whose passes should be annotated.
+    groups_by_address:
+        Common module call groups for the layer.
+
+    Returns
+    -------
+    dict[int, tuple[tuple[str, int], ...]]
+        Pass index to normalized ``(module_address, ordinal_within_call)`` positions.
+    """
+
+    positions: dict[int, list[tuple[str, int]]] = {pass_index: [] for pass_index in layer_log.ops}
+    for address, groups in groups_by_address.items():
+        group_sizes = {len(pass_indices) for pass_indices in groups.values()}
+        if len(groups) <= 1 or len(group_sizes) != 1 or next(iter(group_sizes)) <= 1:
+            continue
+        for pass_indices in groups.values():
+            for ordinal, pass_index in enumerate(pass_indices):
+                positions[pass_index].append((address, ordinal))
+    return {
+        pass_index: tuple(sorted(module_positions))
+        for pass_index, module_positions in positions.items()
+    }
+
+
+def _inbound_signature_for_op(op: "Op") -> tuple[tuple[str, Any], ...]:
+    """Return the top-level inbound argument signature for an op.
+
+    Parameters
+    ----------
+    op:
+        Op whose inbound argument shape should be represented.
+
+    Returns
+    -------
+    tuple[tuple[str, Any], ...]
+        Distinct top-level argument slots occupied by parents.
+    """
+
+    slots: set[tuple[str, Any]] = set()
+    for arg_kind, positions in op.parent_arg_positions.items():
+        for arg_key in positions:
+            slot, _too_deep = _top_level_slot(arg_kind, arg_key)
+            slots.add(slot)
+    return tuple(sorted(slots, key=repr))
+
+
+def _has_too_deep_arg_path(
+    op: "Op",
+    raw_consumer_slots: tuple[tuple[tuple[str, Any], bool, bool], ...],
+) -> bool:
+    """Return whether an op has an unsupported container argument path.
+
+    Parameters
+    ----------
+    op:
+        Op whose inbound paths should be checked.
+    raw_consumer_slots:
+        Direct raw consumer slots for the op.
+
+    Returns
+    -------
+    bool
+        ``True`` when an inbound or outbound consumer path is deeper than supported.
+    """
+
+    for arg_kind, positions in op.parent_arg_positions.items():
+        for arg_key in positions:
+            _slot, too_deep = _top_level_slot(arg_kind, arg_key)
+            if too_deep:
+                return True
+    return any(too_deep for _slot, _child_has_same_layer_descendant, too_deep in raw_consumer_slots)
+
+
+def _separation_signatures_for_layer(
+    layer_log: "Layer",
+) -> tuple[dict[int, tuple[Any, ...]], bool, dict[str, dict[int, tuple[int, ...]]]]:
+    """Return per-pass separation signatures and uncertainty inputs.
+
+    Parameters
+    ----------
+    layer_log:
+        Rolled layer to partition.
+
+    Returns
+    -------
+    tuple[dict[int, tuple[Any, ...]], bool, dict[str, dict[int, tuple[int, ...]]]]
+        Per-pass signatures, whether any path is too deep/ragged, and common module
+        call groups used by certification.
+    """
+
+    trace = layer_log.source_trace
+    cache = _rendering_cache(trace).setdefault("separation_signatures", {})
+    cache_key = layer_log.layer_label
+    cached = cache.get(cache_key)
+    if isinstance(cached, tuple):
+        return cast(
+            tuple[dict[int, tuple[Any, ...]], bool, dict[str, dict[int, tuple[int, ...]]]],
+            cached,
+        )
+
+    groups_by_address = _common_module_call_groups(layer_log)
+    ragged = any(
+        len({len(pass_indices) for pass_indices in groups.values()}) > 1
+        for groups in groups_by_address.values()
+        if len(groups) > 1
+    )
+    module_positions = _module_position_signature(layer_log, groups_by_address)
+    same_layer_labels = {op.label for op in layer_log.ops.values()}
+    raw_slots_by_pass = {
+        pass_index: _raw_consumer_slots_for_op(trace, op, same_layer_labels)
+        for pass_index, op in layer_log.ops.items()
+    }
+    recurrent_slots = _recurrent_consumer_slots(raw_slots_by_pass)
+
+    signatures: dict[int, tuple[Any, ...]] = {}
+    too_deep = False
+    for pass_index, op in layer_log.ops.items():
+        raw_slots = raw_slots_by_pass[pass_index]
+        too_deep = too_deep or _has_too_deep_arg_path(op, raw_slots)
+        signatures[pass_index] = (
+            (),
+            _inbound_signature_for_op(op),
+            _consumer_slots_for_signature(
+                trace,
+                op,
+                same_layer_labels,
+                raw_slots_by_pass,
+                recurrent_slots,
+            ),
+            module_positions[pass_index],
+        )
+
+    result = (signatures, too_deep or ragged, groups_by_address)
+    cache[cache_key] = result
+    return result
+
+
+def _site_count_for_layer(layer_log: "Layer") -> tuple[int | None, bool]:
+    """Return the conservative separable-site count for a rolled layer.
+
+    Parameters
+    ----------
+    layer_log:
+        Layer to partition.
+
+    Returns
+    -------
+    tuple[int | None, bool]
+        Site count and uncertainty flag.
+    """
+
+    if layer_log.num_passes <= 1 or layer_log.is_buffer:
+        return 1, False
+    signatures, site_uncertain, _groups_by_address = _separation_signatures_for_layer(layer_log)
+    if site_uncertain:
+        return None, True
+    site_count = len(set(signatures.values()))
+    call_groups = _call_groups_for_layer(layer_log)
+    if call_groups and site_count != len(call_groups):
+        return 1, False
+    return site_count, False
+
+
 def _module_certified_multiplier(layer_log: "Layer", site_count: int) -> int | None:
     """Return a module-certified rectangular multiplier for ``site_count``.
 
@@ -3501,100 +3971,20 @@ def _module_certified_multiplier(layer_log: "Layer", site_count: int) -> int | N
 
     if site_count <= 1:
         return None
-    trace = layer_log.source_trace
-    for address, call_indices in _common_module_call_indices(layer_log).items():
-        try:
-            module_log = trace.modules[address]
-        except KeyError:
-            module_log = None
-        module_num_calls = getattr(module_log, "num_calls", 1)
-        if module_num_calls <= 1 or module_num_calls * site_count != layer_log.num_passes:
+    signatures, _site_uncertain, groups_by_address = _separation_signatures_for_layer(layer_log)
+    for _address, groups in groups_by_address.items():
+        if len(groups) <= 1 or len(groups) * site_count != layer_log.num_passes:
             continue
-        group_counts: dict[int, int] = defaultdict(int)
-        for call_index in call_indices:
-            group_counts[call_index] += 1
-        if set(group_counts) == set(range(1, module_num_calls + 1)) and all(
-            count == site_count for count in group_counts.values()
-        ):
-            return int(module_num_calls)
+        if any(len(pass_indices) != site_count for pass_indices in groups.values()):
+            continue
+        signature_multisets = [
+            tuple(sorted((signatures[pass_index] for pass_index in pass_indices), key=repr))
+            for pass_indices in groups.values()
+        ]
+        first = signature_multisets[0]
+        if all(signature_multiset == first for signature_multiset in signature_multisets[1:]):
+            return len(groups)
     return None
-
-
-def _site_count_for_layer(layer_log: "Layer", facet: str | None) -> tuple[int | None, bool]:
-    """Return the conservative separable-site count for a rolled layer.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer to partition.
-    facet:
-        Dependency facet already computed for this layer.
-
-    Returns
-    -------
-    tuple[int | None, bool]
-        Site count and uncertainty flag.
-    """
-
-    if layer_log.num_passes <= 1:
-        return 1, False
-
-    common_calls = _common_module_call_indices(layer_log)
-    candidate_counts: list[int] = []
-    for call_indices in common_calls.values():
-        unique_calls = len(set(call_indices))
-        if unique_calls > 1 and layer_log.num_passes % unique_calls == 0:
-            candidate_counts.append(layer_log.num_passes // unique_calls)
-    if candidate_counts:
-        site_count = max(candidate_counts)
-        if site_count > 1:
-            return site_count, False
-
-    if facet == "mixed":
-        return 1, False
-
-    inbound_signatures = []
-    consumer_signatures = []
-    for op in layer_log.ops.values():
-        inbound = tuple(
-            sorted(
-                (
-                    arg_kind,
-                    _top_level_arg_position(arg_key),
-                    layer_log.source_trace[parent_label].layer_label,
-                )
-                for arg_kind, positions in op.parent_arg_positions.items()
-                for arg_key, parent_label in positions.items()
-            )
-        )
-        inbound_signatures.append(inbound)
-        consumer_signatures.append(_consumer_slots_for_op(layer_log.source_trace, op))
-
-    signatures = set(zip(inbound_signatures, consumer_signatures, strict=False))
-    if len(signatures) > 1 and facet != "chain":
-        return len(signatures), False
-    return 1, False
-
-
-def _call_partition_for_layer(layer_log: "Layer", site_count: int | None) -> tuple[int, ...]:
-    """Return call indices that should be surfaced as a partition annotation.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer to inspect.
-    site_count:
-        Site count chosen for the layer.
-
-    Returns
-    -------
-    tuple[int, ...]
-        Call indices for the innermost common module address when they represent a
-        non-rectangular partition that would otherwise be hidden.
-    """
-
-    del layer_log, site_count
-    return ()
 
 
 def _same_layer_dependency_components(layer_log: "Layer") -> tuple[tuple[int, ...], ...]:
@@ -3657,13 +4047,20 @@ def _call_groups_for_layer(layer_log: "Layer") -> tuple[tuple[int, ...], ...]:
     common_calls = _common_module_call_indices(layer_log)
     if len(common_calls) != 1:
         return ()
-    call_indices = next(iter(common_calls.values()))
+    pass_to_call_index = {
+        pass_index: call_index
+        for pass_index, call_index in zip(
+            layer_log.ops,
+            next(iter(common_calls.values())),
+            strict=True,
+        )
+    }
     components = _same_layer_dependency_components(layer_log)
     if len(components) <= 1:
         return ()
     groups: list[tuple[int, ...]] = []
     for component in components:
-        groups.append(tuple(call_indices[pass_index - 1] for pass_index in component))
+        groups.append(tuple(pass_to_call_index[pass_index] for pass_index in component))
     return tuple(groups)
 
 
@@ -3727,13 +4124,12 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
         return None
 
     facet = _dependency_facet(layer_log)
-    site_count, site_uncertain = _site_count_for_layer(layer_log, facet)
+    site_count, site_uncertain = _site_count_for_layer(layer_log)
     certified_multiplier = (
         _module_certified_multiplier(layer_log, site_count)
         if site_count is not None and not site_uncertain
         else None
     )
-    call_ranges = _call_partition_for_layer(layer_log, site_count)
     call_groups = _call_groups_for_layer(layer_log)
     buffer_versions = _buffer_versions_for_layer(layer_log) if layer_log.is_buffer else ()
     metadata = tuple(
@@ -3745,7 +4141,6 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
             f"certified_multiplier={certified_multiplier}"
             if certified_multiplier is not None
             else None,
-            f"calls={_compact_int_ranges(call_ranges)}" if call_ranges else None,
             f"call_groups={_format_call_groups(call_groups)}" if call_groups else None,
             f"buffer_versions={_compact_int_ranges(buffer_versions)}" if buffer_versions else None,
         )
@@ -3756,7 +4151,6 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
         site_uncertain=site_uncertain,
         certified_multiplier=certified_multiplier,
         facet=facet,
-        call_ranges=call_ranges,
         call_groups=call_groups,
         buffer_versions=buffer_versions,
         metadata=metadata,
@@ -3829,13 +4223,19 @@ def _collapsed_module_rolling_suffix(trace: "Trace", address: str) -> str:
     return f" · calls {_format_call_groups(candidate_groups)}"
 
 
-def _format_rolling_suffix(annotation: RollingAnnotation | None) -> str:
+def _format_rolling_suffix(
+    annotation: RollingAnnotation | None,
+    *,
+    static_facet: bool = False,
+) -> str:
     """Return the face suffix for a rolled annotation.
 
     Parameters
     ----------
     annotation:
         Annotation to render.
+    static_facet:
+        Whether to promote non-chain dependency facets to the face for static targets.
 
     Returns
     -------
@@ -3846,17 +4246,17 @@ def _format_rolling_suffix(annotation: RollingAnnotation | None) -> str:
     if annotation is None:
         return ""
     parts: list[str] = []
-    if annotation.call_groups:
-        parts.append(f"calls {_format_call_groups(annotation.call_groups)}")
-    elif annotation.call_ranges:
-        parts.append(f"calls {_compact_int_ranges(annotation.call_ranges)}")
-    elif annotation.site_uncertain:
+    if annotation.site_uncertain:
         parts.append("sites?")
     elif annotation.site_count is not None and annotation.site_count > 1:
         site_text = f"{annotation.site_count} sites"
         if annotation.certified_multiplier is not None:
             site_text += f" ×{annotation.certified_multiplier}"
         parts.append(site_text)
+    elif annotation.call_groups:
+        parts.append(f"calls {_format_call_groups(annotation.call_groups)}")
+    if static_facet and annotation.facet in {"fan-out", "mixed"}:
+        parts.append("parallel" if annotation.facet == "fan-out" else annotation.facet)
     return "" if not parts else " · " + " · ".join(parts)
 
 
@@ -4111,6 +4511,7 @@ def compute_default_node_lines(
     *,
     node_label_fields: list[str] | None = None,
     node_overlay: str | OverlayScores | None = None,
+    static_rolling_facets: bool = False,
 ) -> list[str]:
     """Build default plain-text rows for a layer node.
 
@@ -4126,6 +4527,8 @@ def compute_default_node_lines(
         Optional label fields to render instead of the default field set.
     node_overlay:
         Optional overlay to append as an additional label row.
+    static_rolling_facets:
+        Whether to promote non-chain rolling facets to the face for static targets.
 
     Returns
     -------
@@ -4150,7 +4553,10 @@ def compute_default_node_lines(
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
         call_label = f":{layer_log.pass_index}"
     elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
-        call_label = f" (x{layer_log.num_passes}{_format_rolling_suffix(annotation)})"
+        call_label = (
+            f" (x{layer_log.num_passes}"
+            f"{_format_rolling_suffix(annotation, static_facet=static_rolling_facets)})"
+        )
     else:
         call_label = ""
 
@@ -4399,9 +4805,9 @@ def _add_edges_for_node(
                 )
             tail_name = hook_name
 
-        # TODO(loop-module-rolling-stage2): if this self-edge folds a loop-carried dependency
-        # into a collapsed module box, render the reserved recurrence marker and metadata
-        # instead of dropping it here.
+        # TODO(loop-module-rolling-stage2): distinguish collapsed-module self-edges from
+        # non-collapsed rolled-layer recurrence self-edges, then render the reserved
+        # recurrence marker/metadata for the collapsed-module case instead of dropping it.
         if tail_name == head_name:
             continue
         if (tail_name, head_name) in edges_used:
