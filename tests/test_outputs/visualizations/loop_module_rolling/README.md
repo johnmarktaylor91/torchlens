@@ -161,5 +161,9 @@ Rolled nodes keep honest execution counts when repeated calls form one continuou
 Atomic (single-op leaf) modules render as rectangles marked with their address at every depth;
 multi-op modules collapse to a `box3d` summary. Colon ranges appear on the marking when they
 disambiguate split regions or parallel repeated calls, and are not duplicated as a title count.
-Recurrence self-edges are plain arrows with `Out` and `In` pass labels; the `↻` icon is
-intentionally absent.
+Recurrence self-edges are plain arrows (the `↻` icon is intentionally absent) whose `Out`
+and `In` pass ranges are merged into a single midpoint label -- graphviz reserves layout
+space for a midpoint edge label, so it never crowds the node the way separate head/tail
+labels do. `In` sits above `Out` for the default bottom-up layout and flips for top-down.
+Non-self-loop edges keep separate head/tail labels (those edges may also carry argument or
+conditional midpoint labels, which a combined label would collide with).

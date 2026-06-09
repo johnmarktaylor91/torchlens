@@ -906,6 +906,7 @@ def draw(
             node_overlay,
             node_label_fields,
             captured_forward_edges,
+            rankdir,
         )
 
     if vis_intervention_mode == "as_node":
@@ -2426,6 +2427,7 @@ def _add_node_to_graphviz(
     node_overlay: str | OverlayScores | None = None,
     node_label_fields: list[str] | None = None,
     captured_forward_edges: list[CapturedForwardEdge] | None = None,
+    rankdir: str = "BT",
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -2495,6 +2497,7 @@ def _add_node_to_graphviz(
         vis_intervention_mode,
         intervention_site_labels,
         captured_forward_edges,
+        rankdir,
     )
 
 
@@ -4227,6 +4230,7 @@ def _add_edges_for_node(
     vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
     intervention_site_labels: set[str] | None = None,
     captured_forward_edges: list[CapturedForwardEdge] | None = None,
+    rankdir: str = "BT",
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -4414,6 +4418,8 @@ def _add_edges_for_node(
                     metadata_base_for_pass,
                     parent_base_for_pass,
                     edge_dict,
+                    is_self_loop=edge_is_self_loop,
+                    rankdir=rankdir,
                 )
 
         # Label the arguments to the next node if multiple inputs
@@ -5143,6 +5149,9 @@ def _label_rolled_call_indexs(
     child_node: "Layer",
     parent_node: "Layer",
     edge_dict: Dict[str, Any],
+    *,
+    is_self_loop: bool = False,
+    rankdir: str = "BT",
 ) -> None:
     """Add pass-number annotations to edges in rolled mode.
 
@@ -5152,19 +5161,46 @@ def _label_rolled_call_indexs(
     ``"Out 1,3"`` / ``"In 2,4"``.  Uses ``int_list_to_compact_str`` for
     concise range notation (e.g., ``"1-3"`` instead of ``"1,2,3"``).
 
+    Self-loops are special-cased: their head/tail labels crowd against the node
+    and (unlike forward edges) a recurrence self-edge never carries argument or
+    conditional midpoint labels.  So the ``In``/``Out`` annotations are merged
+    into a single midpoint ``label``, which Graphviz reserves layout space for
+    (it is modeled as a dummy node), eliminating the overlap.  The ``In`` line is
+    placed above ``Out`` for bottom-up graphs (flow points up) and flipped for
+    top-down ones.
+
     Args:
         child_node: The child Layer node.
         parent_node: The parent Layer node.
-        edge_dict: Mutable dict of edge attributes; taillabel/headlabel may be added.
+        edge_dict: Mutable dict of edge attributes; taillabel/headlabel/label may be added.
+        is_self_loop: Whether this edge is a node's recurrence self-loop.
+        rankdir: Graphviz rank direction, used to order a self-loop's combined label.
     """
     parent_call_indexs = parent_node.child_ops_per_layer[child_node.layer_label]
     child_call_indexs = child_node.parent_ops_per_layer[parent_node.layer_label]
-    if parent_node.edges_vary_across_ops:
-        edge_dict["taillabel"] = f"  Out {int_list_to_compact_str(parent_call_indexs)}  "
+    out_label = (
+        f"Out {int_list_to_compact_str(parent_call_indexs)}"
+        if parent_node.edges_vary_across_ops
+        else None
+    )
+    in_label = (
+        f"In {int_list_to_compact_str(child_call_indexs)}"
+        if child_node.edges_vary_across_ops
+        else None
+    )
 
-    # Mark the head label with the argument if need be:
-    if child_node.edges_vary_across_ops:
-        edge_dict["headlabel"] = f"  In {int_list_to_compact_str(child_call_indexs)}  "
+    if is_self_loop and out_label is not None and in_label is not None:
+        top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
+        edge_dict["label"] = f"{top}\n{bottom}"
+        # Harmonize with the head/tail label size (a midpoint label uses the
+        # edge ``fontsize``, which defaults larger than ``labelfontsize``).
+        edge_dict["fontsize"] = "8"
+        return
+
+    if out_label is not None:
+        edge_dict["taillabel"] = f"  {out_label}  "
+    if in_label is not None:
+        edge_dict["headlabel"] = f"  {in_label}  "
 
 
 def _get_lowest_module_for_two_render_nodes(

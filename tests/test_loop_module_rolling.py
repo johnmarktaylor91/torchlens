@@ -723,22 +723,53 @@ def test_buffer_versions_use_colon_ranges(tmp_path: Path) -> None:
     assert "buffer_versions" not in dot
 
 
-def test_recurrent_self_loop_is_clean_and_fanout_has_none(tmp_path: Path) -> None:
-    """Rolled recurrence keeps one labeled self-edge; parallel fan-out has none."""
+def test_recurrent_self_loop_combines_in_out_into_one_midpoint_label(tmp_path: Path) -> None:
+    """A rolled recurrence self-loop merges In/Out into one midpoint label.
+
+    Self-loops crowd separate head/tail labels against the node, and a recurrence
+    self-edge never carries argument/conditional labels, so the In/Out pass ranges
+    are merged into a single midpoint ``label`` (which graphviz reserves layout
+    space for), with ``In`` above ``Out`` for the default bottom-up layout and a
+    harmonized font size. Parallel fan-out has no self-edge at all.
+    """
 
     recurrent_trace = _trace(ReusedReluLoop())
     recurrent_dot = _render_dot(recurrent_trace, tmp_path, "relu_self_edge", vis_call_depth=1000)
     recurrent_self_edges = _dot_self_edge_attrs(recurrent_dot)
     assert len(recurrent_self_edges) == 1
     recurrent_attrs = recurrent_self_edges[0]
-    assert re.search(r"(^|\s)label=", recurrent_attrs) is None
-    assert 'headlabel="  In 2-4  "' in recurrent_attrs
-    assert 'taillabel="  Out 1-3  "' in recurrent_attrs
+    # One combined midpoint label, not separate head/tail labels.
+    assert "headlabel" not in recurrent_attrs
+    assert "taillabel" not in recurrent_attrs
+    label_match = re.search(r'label="([^"]*)"', recurrent_attrs)
+    assert label_match is not None
+    label_text = label_match.group(1)
+    assert "In 2-4" in label_text
+    assert "Out 1-3" in label_text
+    # In is placed above Out for the bottom-up default; font harmonized to 8.
+    assert label_text.index("In 2-4") < label_text.index("Out 1-3")
+    assert "fontsize=8" in recurrent_attrs
     assert "↻" not in recurrent_attrs
 
     fanout_trace = _trace(ParallelFanout())
     fanout_dot = _render_dot(fanout_trace, tmp_path, "parallel_fanout", vis_call_depth=1000)
     assert _dot_self_edge_attrs(fanout_dot) == []
+
+
+def test_self_loop_label_order_flips_with_layout_direction(tmp_path: Path) -> None:
+    """The self-loop's In/Out order follows flow: In above Out only bottom-up."""
+
+    trace = _trace(ReusedReluLoop())
+    topdown_dot = _render_dot(
+        trace, tmp_path, "relu_topdown", vis_call_depth=1000, vis_direction="topdown"
+    )
+    self_edges = _dot_self_edge_attrs(topdown_dot)
+    assert len(self_edges) == 1
+    label_match = re.search(r'label="([^"]*)"', self_edges[0])
+    assert label_match is not None
+    label_text = label_match.group(1)
+    # Top-down flow points down, so Out (tail) is placed above In (head).
+    assert label_text.index("Out 1-3") < label_text.index("In 2-4")
 
 
 def test_atomic_single_op_module_collapse_preserves_op_render(tmp_path: Path) -> None:
