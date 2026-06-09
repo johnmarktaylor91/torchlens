@@ -13,7 +13,7 @@ import torchlens as tl
 from torchlens.visualization.rendering import compute_default_node_lines
 
 
-OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "loop_module_rolling"
+OUTPUT_DIR = Path(__file__).parent / "test_outputs" / "visualizations" / "loop_module_rolling"
 
 
 class ReusedReluLoop(nn.Module):
