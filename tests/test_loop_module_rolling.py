@@ -772,6 +772,22 @@ def test_self_loop_label_order_flips_with_layout_direction(tmp_path: Path) -> No
     assert label_text.index("Out 1-3") < label_text.index("In 2-4")
 
 
+def test_head_tail_labels_get_blank_line_padding(tmp_path: Path) -> None:
+    """Non-self-loop In/Out labels carry a blank line above and below.
+
+    Head/tail labels are not allocated layout space, so they crowd the node where
+    an edge attaches -- worst at oblique entries. A blank line above and below
+    each label pushes the visible text along its edge, away from the node, which
+    clears the occlusion. Self-loops use a combined midpoint label and are
+    unaffected by this padding.
+    """
+
+    dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_pad", vis_call_depth=1000)
+
+    assert r'taillabel="\n  Out 1-2  \n"' in dot
+    assert r'headlabel="\n  In 2-3  \n"' in dot
+
+
 def test_atomic_single_op_module_collapse_preserves_op_render(tmp_path: Path) -> None:
     """Single-op modules render as the same atomic rectangle at every depth.
 

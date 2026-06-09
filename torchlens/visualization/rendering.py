@@ -5197,10 +5197,15 @@ def _label_rolled_call_indexs(
         edge_dict["fontsize"] = "8"
         return
 
+    # Head/tail labels are not allocated layout space, so they crowd the node
+    # where an edge meets it -- worst at oblique entries. Pad each label with a
+    # blank line above and below (plus horizontal spaces): the blank lines push
+    # the visible text along the edge, away from the node it attaches to, and the
+    # spaces keep neighbouring labels horizontally separated.
     if out_label is not None:
-        edge_dict["taillabel"] = f"  {out_label}  "
+        edge_dict["taillabel"] = f"\\n  {out_label}  \\n"
     if in_label is not None:
-        edge_dict["headlabel"] = f"  {in_label}  "
+        edge_dict["headlabel"] = f"\\n  {in_label}  \\n"
 
 
 def _get_lowest_module_for_two_render_nodes(

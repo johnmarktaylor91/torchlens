@@ -166,4 +166,8 @@ and `In` pass ranges are merged into a single midpoint label -- graphviz reserve
 space for a midpoint edge label, so it never crowds the node the way separate head/tail
 labels do. `In` sits above `Out` for the default bottom-up layout and flips for top-down.
 Non-self-loop edges keep separate head/tail labels (those edges may also carry argument or
-conditional midpoint labels, which a combined label would collide with).
+conditional midpoint labels, which a combined label would collide with). Each head/tail label
+is padded with a blank line above and below: since graphviz does not reserve space for
+head/tail labels, the blank lines push the visible text along its edge, away from the node it
+attaches to, which clears the occlusion that otherwise occurs where an edge meets a node at an
+oblique angle.
