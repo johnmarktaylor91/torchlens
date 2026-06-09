@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 import importlib
 from math import prod
@@ -151,10 +151,19 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
         live_module_forward_args,
     )
     input_io_roles = _input_io_roles(trace, events.op_events)
+    # Count ops per innermost module call so a single-op (atomic) leaf module can
+    # be told apart from a multi-op one. The innermost module of an op is the last
+    # frame of its capture-time module stack.
+    innermost_module_op_counts: Counter[tuple[str, int]] = Counter(
+        (event.module_stack[-1].address, event.module_stack[-1].call_index)
+        for event in events.op_events
+        if event.module_stack
+    )
     module_output_fields = _module_output_fields(
         events.module_exit_events,
         {event.label_raw: event for event in events.op_events},
         _module_role_hints_by_address(events.module_prep_events),
+        innermost_module_op_counts,
     )
     buffer_write_fields = _buffer_write_fields(trace, op_event_labels)
     output_versions = _output_versions_by_parent(events)
@@ -1176,6 +1185,7 @@ def _module_output_fields(
     exit_events: list[ModuleExitEvent],
     op_events_by_label: dict[str, OpEvent],
     role_hints_by_address: dict[str, object],
+    innermost_module_op_counts: "Counter[tuple[str, int]]",
 ) -> dict[str, dict[str, object]]:
     """Fold module-exit events into per-op sibling fields.
 
@@ -1187,6 +1197,9 @@ def _module_output_fields(
         Operation events keyed by raw label.
     role_hints_by_address
         Semantic output-role hints keyed by module address.
+    innermost_module_op_counts
+        Number of ops whose innermost module is each ``(address, call_index)``.
+        A module call containing exactly one op is an atomic (single-op) leaf.
 
     Returns
     -------
@@ -1215,11 +1228,21 @@ def _module_output_fields(
                     role_hints,
                     output_index,
                 )
-        for label_raw, stack, is_atomic, atomic_call in event.per_output_atomic:
+        for label_raw, stack, _is_atomic, _atomic_call in event.per_output_atomic:
             fields = by_label.setdefault(label_raw, _empty_module_output_fields())
             fields["module_call_stack"] = _module_stack_addresses(stack)
-            fields["is_atomic_module"] = is_atomic
-            fields["atomic_module_call"] = atomic_call
+            # A module output op is an atomic (single-op leaf) module exit when its
+            # innermost module call contains exactly one op. This is computed from
+            # the finalized op-to-module map rather than at capture time so that
+            # sibling/side ops (e.g. a BatchNorm ``num_batches_tracked`` bump) are
+            # counted and multi-op leaves are not mis-flagged as atomic.
+            if not stack:
+                continue
+            innermost = stack[-1]
+            innermost_call = (innermost.address, innermost.call_index)
+            if innermost_module_op_counts.get(innermost_call, 0) == 1:
+                fields["is_atomic_module"] = True
+                fields["atomic_module_call"] = innermost_call
     return by_label
 
 

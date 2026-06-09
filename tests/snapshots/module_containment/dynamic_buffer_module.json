@@ -375,13 +375,13 @@
       "step_index": 2
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "child.proj:1",
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "child.proj.linear",
       "input_to_modules": [],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,

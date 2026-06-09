@@ -102,7 +102,12 @@ from .themes import (
     theme_graph_attrs,
     theme_node_attrs,
 )
-from .code_panel import CodePanelOption, render_code_panel_subgraph, resolve_code_panel_source
+from .code_panel import (
+    CodePanelOption,
+    compose_graph_with_code_panel,
+    render_code_panel_subgraph,
+    resolve_code_panel_source,
+)
 from ._render_utils import (
     compute_module_penwidth,
     direction_to_rankdir,
@@ -937,12 +942,18 @@ def draw(
     )
     if show_legend:
         _add_legend_to_graphviz(dot, theme)
-    if source_text is not None:
+    # A code panel is composed side by side (separate render) when the output
+    # format supports it, so the code never distorts the graph's layout. Only
+    # fall back to an in-graph subgraph for formats we cannot compose.
+    compose_code_panel = source_text is not None and _code_panel_composition_available(
+        vis_fileformat, engine
+    )
+    if source_text is not None and not compose_code_panel:
         render_code_panel_subgraph(dot, source_text)
 
     if in_notebook() and not vis_save_only:
         try:
-            from IPython.display import display  # #72: lazy import
+            from IPython.display import SVG, display  # #72: lazy import
         except ImportError as e:
             raise ImportError(
                 "IPython is required for this feature. Install with "
@@ -950,7 +961,14 @@ def draw(
             ) from e
 
         display_fn = cast(Any, display)
-        display_fn(dot)
+        if compose_code_panel:
+            # Compose the graph SVG beside a standalone code panel so the inline
+            # preview matches the saved output and leaves the graph undistorted.
+            graph_svg = dot.pipe(format="svg").decode("utf-8")
+            combined_svg = compose_graph_with_code_panel(graph_svg, cast(str, source_text))
+            display_fn(SVG(combined_svg))
+        else:
+            display_fn(dot)
 
     # ELK was already handled above (early return). Only dot/sfdp reach here.
     from ._elk_internal.layout import render_with_sfdp
@@ -979,8 +997,18 @@ def draw(
         else:
             # dot engine (default for small graphs)
             rendered_path = f"{vis_outpath}.{vis_fileformat}"
-            cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
-            subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+            if compose_code_panel:
+                _write_composed_code_panel(
+                    dot.engine,
+                    source_path,
+                    cast(str, source_text),
+                    rendered_path,
+                    vis_fileformat,
+                    _RENDER_TIMEOUT,
+                )
+            else:
+                cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+                subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
             if not vis_save_only:
                 _view_rendered_file(rendered_path)
         _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
@@ -1001,6 +1029,72 @@ def draw(
     if return_graph:
         return dot
     return source_override or dot.source
+
+
+_CODE_PANEL_COMPOSED_FORMATS = frozenset({"svg", "pdf", "png"})
+
+
+def _code_panel_composition_available(file_format: str, engine: str) -> bool:
+    """Return whether a code panel can be composed side by side for this output.
+
+    Side-by-side composition renders the graph and the code panel as separate
+    SVGs and joins them, which keeps the graph's proportions untouched (the code
+    no longer participates in Graphviz layout). It needs a vector-capable target
+    format and the ``cairosvg`` rasterizer for non-SVG outputs.
+    """
+
+    if engine == "sfdp" or file_format not in _CODE_PANEL_COMPOSED_FORMATS:
+        return False
+    if file_format == "svg":
+        return True
+    try:
+        import cairosvg  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+def _render_graph_only_svg(engine: str, source_path: str, timeout: int) -> str:
+    """Render a saved DOT source to an SVG string (no code panel)."""
+
+    completed = subprocess.run(
+        [engine, "-Tsvg", source_path],
+        timeout=timeout,
+        check=True,
+        capture_output=True,
+    )
+    return completed.stdout.decode("utf-8")
+
+
+def _write_composed_code_panel(
+    engine: str,
+    source_path: str,
+    source_text: str,
+    rendered_path: str,
+    file_format: str,
+    timeout: int,
+) -> None:
+    """Render the graph and code panel separately and write the joined output.
+
+    The graph is rendered to SVG without any code subgraph, composed beside a
+    standalone code-panel SVG, then written in ``file_format``. SVG is written
+    directly; PDF and PNG are converted from the composed SVG with ``cairosvg``
+    so vectors are preserved.
+    """
+
+    graph_svg = _render_graph_only_svg(engine, source_path, timeout)
+    combined_svg = compose_graph_with_code_panel(graph_svg, source_text)
+    if file_format == "svg":
+        with open(rendered_path, "w", encoding="utf-8") as svg_file:
+            svg_file.write(combined_svg)
+        return
+    import cairosvg
+
+    svg_bytes = combined_svg.encode("utf-8")
+    if file_format == "pdf":
+        cairosvg.svg2pdf(bytestring=svg_bytes, write_to=rendered_path)
+    else:  # png, rendered at 2x for crispness
+        cairosvg.svg2png(bytestring=svg_bytes, write_to=rendered_path, scale=2.0)
 
 
 def _add_legend_to_graphviz(dot: graphviz.Digraph, theme: VisualizationTheme) -> None:
@@ -1163,12 +1257,17 @@ def render_backward_graph(
         getattr(self, "_source_code_blob", {}),
         getattr(self, "_source_model_ref", None),
     )
-    if source_text is not None:
+    # Compose the code panel side by side when the format supports it so it never
+    # distorts the backward graph; otherwise fall back to an in-graph subgraph.
+    compose_code_panel = source_text is not None and _code_panel_composition_available(
+        vis_fileformat, dot.engine
+    )
+    if source_text is not None and not compose_code_panel:
         render_code_panel_subgraph(dot, source_text)
 
     if in_notebook() and not vis_save_only:
         try:
-            from IPython.display import display
+            from IPython.display import SVG, display
         except ImportError as e:
             raise ImportError(
                 "IPython is required for this feature. Install with "
@@ -1176,14 +1275,29 @@ def render_backward_graph(
             ) from e
 
         display_fn = cast(Any, display)
-        display_fn(dot)
+        if compose_code_panel:
+            graph_svg = dot.pipe(format="svg").decode("utf-8")
+            combined_svg = compose_graph_with_code_panel(graph_svg, cast(str, source_text))
+            display_fn(SVG(combined_svg))
+        else:
+            display_fn(dot)
 
     _RENDER_TIMEOUT = 120
     source_path = dot.save(vis_outpath)
     try:
         rendered_path = f"{vis_outpath}.{vis_fileformat}"
-        cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
-        subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+        if compose_code_panel:
+            _write_composed_code_panel(
+                dot.engine,
+                source_path,
+                cast(str, source_text),
+                rendered_path,
+                vis_fileformat,
+                _RENDER_TIMEOUT,
+            )
+        else:
+            cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+            subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
         if not vis_save_only:
             _view_rendered_file(rendered_path)
         _vprint(self, f"Backward graph saved to {vis_outpath}.{vis_fileformat}")
@@ -2486,7 +2600,12 @@ def _collapse_address_for_node(
         return None
 
     modules = list(node.modules)
-    if getattr(node, "is_atomic_module", False) and len(modules) > 1:
+    # An atomic (single-op) module is already maximally collapsed: it renders as
+    # its own rectangle and is never absorbed into a box3d collapse on its own
+    # account, even at the top level or when reused across split call sites. Drop
+    # its innermost (own) module address so only genuinely-collapsible ancestor
+    # modules remain eligible to absorb it.
+    if getattr(node, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     if not modules:
         return None
@@ -3537,6 +3656,51 @@ def _format_call_groups(call_groups: Sequence[Sequence[int]]) -> str:
     return ",".join(_compact_int_ranges(group) for group in call_groups)
 
 
+def _atomic_module_split_range(trace: "Trace", layer_log: GraphNode, address: str) -> str:
+    """Return the call-range an atomic module rectangle should mark, or ``""``.
+
+    An atomic (single-op) module renders as a rectangle per call site. When the
+    module is reused across split sites the rectangle's ``@module`` marking carries
+    the call range that distinguishes it, e.g. ``@shared:1-2,3-5`` for a single
+    rolled node spanning two loops, or ``@relu:1`` / ``@relu:2-4`` for two separate
+    rectangles. A module used at a single contiguous site needs no range (the
+    title's ``(xN)`` count suffices), so this returns ``""``.
+
+    Parameters
+    ----------
+    trace:
+        Owning trace.
+    layer_log:
+        Atomic module layer being rendered.
+    address:
+        The atomic module's address.
+
+    Returns
+    -------
+    str
+        Compact call range (no leading colon), or ``""`` when not split.
+    """
+
+    if not isinstance(layer_log, Layer):
+        return ""
+    groups = _call_groups_for_layer(layer_log)
+    if groups:
+        return _format_call_groups(groups)
+    sibling_atomic_layers = sum(
+        1
+        for other in trace.layer_logs.values()
+        if isinstance(other, Layer)
+        and getattr(other, "is_atomic_module", False)
+        and other.modules
+        and other.modules[-1].rsplit(":", 1)[0] == address
+    )
+    if sibling_atomic_layers > 1:
+        calls = _common_module_call_indices(layer_log).get(address, [])
+        if calls:
+            return _compact_int_ranges(calls)
+    return ""
+
+
 def _buffer_versions_for_layer(layer_log: "Layer") -> tuple[int, ...]:
     """Return flat buffer versions represented by a layer.
 
@@ -3676,7 +3840,8 @@ def _get_node_address_shape_color(
         else:
             sample_module_pass = node.modules[-1]
             module = sample_module_pass.split(":")[0]
-            node_address = module
+            split_range = _atomic_module_split_range(self, source_node, module)
+            node_address = f"{module}:{split_range}" if split_range else module
 
         node_address = "<br/>@" + node_address
         node_shape = "box"
@@ -3928,14 +4093,23 @@ def compute_default_node_lines(
         return selected_lines
 
     annotation = _rolling_annotation(layer_log, vis_mode)
+    # An atomic module rectangle carries its split call range on the ``@module``
+    # marking (e.g. ``@shared:1-2,3-5``); keep the title's count clean and
+    # non-redundant in that case, and fall back to a plain ``(xN)`` count.
+    atomic_marking_has_range = getattr(layer_log, "is_atomic_module", False) and (
+        ":" in node_address
+    )
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
         call_label = f":{layer_log.pass_index}"
     elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
-        rolling_suffix = _format_rolling_suffix(annotation)
-        if rolling_suffix:
-            call_label = rolling_suffix
+        if atomic_marking_has_range:
+            call_label = ""
         else:
-            call_label = f" (x{layer_log.num_passes})"
+            rolling_suffix = _format_rolling_suffix(annotation)
+            if rolling_suffix:
+                call_label = rolling_suffix
+            else:
+                call_label = f" (x{layer_log.num_passes})"
     else:
         call_label = ""
 
@@ -4230,12 +4404,7 @@ def _add_edges_for_node(
                 edge_dict["label"] = edge_label
 
         # Annotate ops for rolled node edge if it varies across ops
-        if (
-            not edge_is_self_loop
-            and vis_mode == "rolled"
-            and metadata_child is not None
-            and not edge_has_boundary
-        ):
+        if vis_mode == "rolled" and metadata_child is not None and not edge_has_boundary:
             metadata_base_for_pass = _base_node_for_metadata(metadata_child)
             parent_base_for_pass = _base_node_for_metadata(parent_node)
             if isinstance(metadata_base_for_pass, Layer) and isinstance(

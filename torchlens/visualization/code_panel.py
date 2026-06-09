@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import html
 import inspect
+import re
 import textwrap
 import weakref
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any, Literal, TypeAlias, cast
 
 import graphviz
@@ -226,6 +228,161 @@ def render_code_panel_subgraph(
         dot.edge("__tl_graph_panel_anchor", "__tl_code_panel_node", style="invis", weight="10")
     else:
         dot.edge("__tl_code_panel_node", "__tl_graph_panel_anchor", style="invis", weight="10")
+
+
+def _code_panel_label(source_text: str) -> str:
+    """Build the HTML-like Graphviz label for a code panel."""
+
+    rows = _source_text_to_html_rows(source_text)
+    header_row = "<TR><TD ALIGN='LEFT'><B>Source code</B></TD></TR>"
+    return (
+        "<<TABLE BORDER='0' CELLBORDER='0' CELLSPACING='0' CELLPADDING='2'>"
+        f"{header_row}{''.join(rows)}"
+        "</TABLE>>"
+    )
+
+
+def render_code_panel_svg(source_text: str) -> str:
+    """Render a standalone code panel to its own SVG string.
+
+    The panel is rendered as an independent Graphviz document so it never
+    participates in the computational graph's layout. Callers compose the two
+    SVGs side by side, which keeps the graph's proportions untouched.
+
+    Parameters
+    ----------
+    source_text:
+        Source code to display.
+
+    Returns
+    -------
+    str
+        SVG document for the code panel.
+    """
+
+    panel = graphviz.Digraph()
+    panel.attr("graph", bgcolor="transparent", margin="0")
+    with panel.subgraph(name="cluster_torchlens_code_panel") as cluster:
+        cluster.attr(
+            label="",
+            style="filled,rounded",
+            fillcolor="#FAFAFA",
+            color="#A8A8A8",
+            margin="12",
+        )
+        cluster.node(
+            "__tl_code_panel_node",
+            label=_code_panel_label(source_text),
+            shape="plaintext",
+            fontname="Courier",
+            margin="0",
+        )
+    return panel.pipe(format="svg").decode("utf-8")
+
+
+def _parse_svg_geometry(svg: str) -> SimpleNamespace:
+    """Extract a Graphviz SVG's point dimensions, viewBox, and inner markup.
+
+    Parameters
+    ----------
+    svg:
+        Graphviz-emitted SVG document.
+
+    Returns
+    -------
+    SimpleNamespace
+        ``width``/``height`` (points), ``viewbox`` string, and ``inner`` markup.
+    """
+
+    root = re.search(r"<svg\b([^>]*)>", svg, re.S)
+    if root is None:
+        raise ValueError("Could not locate an <svg> root element.")
+    attrs = root.group(1)
+    width_match = re.search(r'width="([\d.]+)pt"', attrs)
+    height_match = re.search(r'height="([\d.]+)pt"', attrs)
+    viewbox_match = re.search(r'viewBox="([^"]+)"', attrs)
+    if not (width_match and height_match and viewbox_match):
+        raise ValueError("SVG root is missing width/height/viewBox.")
+    inner = svg[root.end() : svg.rindex("</svg>")]
+    return SimpleNamespace(
+        width=float(width_match.group(1)),
+        height=float(height_match.group(1)),
+        viewbox=viewbox_match.group(1),
+        inner=inner,
+    )
+
+
+def compose_svgs_horizontally(left_svg: str, right_svg: str, *, gap: float = 24.0) -> str:
+    """Place two SVGs side by side in one wrapper SVG, preserving vectors.
+
+    Each source SVG is nested unchanged via its own ``viewBox`` so neither one's
+    layout is reflowed; they are only translated. Both are vertically centered in
+    a white canvas.
+
+    Parameters
+    ----------
+    left_svg:
+        SVG rendered on the left.
+    right_svg:
+        SVG rendered on the right.
+    gap:
+        Horizontal gap in points between the two panels.
+
+    Returns
+    -------
+    str
+        Combined SVG document.
+    """
+
+    left = _parse_svg_geometry(left_svg)
+    right = _parse_svg_geometry(right_svg)
+    total_width = left.width + gap + right.width
+    total_height = max(left.height, right.height)
+    left_y = (total_height - left.height) / 2
+    right_y = (total_height - right.height) / 2
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n'
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink" '
+        f'width="{total_width:.2f}pt" height="{total_height:.2f}pt" '
+        f'viewBox="0 0 {total_width:.2f} {total_height:.2f}">'
+        '<rect x="0" y="0" width="100%" height="100%" fill="white"/>'
+        f'<svg x="0" y="{left_y:.2f}" width="{left.width:.2f}" '
+        f'height="{left.height:.2f}" viewBox="{left.viewbox}" overflow="visible">'
+        f"{left.inner}</svg>"
+        f'<svg x="{left.width + gap:.2f}" y="{right_y:.2f}" '
+        f'width="{right.width:.2f}" height="{right.height:.2f}" '
+        f'viewBox="{right.viewbox}" overflow="visible">{right.inner}</svg>'
+        "</svg>"
+    )
+
+
+def compose_graph_with_code_panel(
+    graph_svg: str, source_text: str, *, side: CodePanelSide = "right"
+) -> str:
+    """Return ``graph_svg`` composed beside a separately-rendered code panel.
+
+    Parameters
+    ----------
+    graph_svg:
+        SVG of the computational graph (rendered without any code panel).
+    source_text:
+        Source code to render in the side panel.
+    side:
+        Which side the code panel goes on relative to the graph.
+
+    Returns
+    -------
+    str
+        Combined SVG document.
+    """
+
+    if side not in {"right", "left"}:
+        raise ValueError("side must be either 'right' or 'left'.")
+    code_svg = render_code_panel_svg(source_text)
+    if side == "right":
+        return compose_svgs_horizontally(graph_svg, code_svg)
+    return compose_svgs_horizontally(code_svg, graph_svg)
 
 
 def _get_source_or_empty(obj: object) -> str:

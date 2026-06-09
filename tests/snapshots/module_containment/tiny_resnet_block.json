@@ -1108,7 +1108,7 @@
       "step_index": 0
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "first.0:1",
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "first.0.conv2d",
@@ -1116,7 +1116,7 @@
         "first.1:1"
       ],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,
@@ -1513,7 +1513,7 @@
       "step_index": 0
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "first.2:1",
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": "first.2.relu",
@@ -1522,7 +1522,7 @@
         "second.0:1"
       ],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,
@@ -1564,7 +1564,7 @@
       "step_index": 4
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "second.0:1",
       "func_name": "conv2d",
       "fx_call_index": 0,
       "fx_qualpath": "second.0.conv2d",
@@ -1572,7 +1572,7 @@
         "second.1:1"
       ],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,
@@ -1809,13 +1809,13 @@
       "step_index": 8
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "out_relu:1",
       "func_name": "relu",
       "fx_call_index": 0,
       "fx_qualpath": "out_relu.relu",
       "input_to_modules": [],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,

@@ -1634,19 +1634,14 @@ def module_forward_decorator(
 
 
 def _is_bottom_level_submodule_exit(trace: "Trace", t: torch.Tensor, submodule: nn.Module) -> bool:
-    """Check whether this tensor is exiting a "bottom-level" (leaf) submodule.
+    """Reserved capture-time hook for bottom-level submodule exits.
 
-    A bottom-level submodule is one where the tensor's computation happened
-    entirely within it — none of the tensor's parents were computed in a
-    deeper submodule. This is used for visualization (bottom-level exits
-    get special rendering) and module nesting analysis.
-
-    **Three cases**:
-    1. Already marked — return True immediately (cached from prior check).
-    2. Tensor was initialized inside the model (e.g. a buffer) and no tensors
-       entered this submodule — it's a leaf-generated tensor.
-    3. All parent tensors' most recent ``module_call_stack`` is this submodule —
-       the computation stayed within this module.
+    Atomic (single-op leaf) module detection is computed in postprocess from the
+    finalized op-to-module map (see ``_materialize._module_output_fields``), where
+    the full set of ops contained by each module call is available. Computing it
+    here at capture time cannot see sibling/side ops (e.g. a BatchNorm's
+    ``num_batches_tracked`` increment) and so would mis-flag multi-op leaves as
+    atomic. This stub keeps the call site stable and always defers.
     """
     tensor_label = get_tensor_label(t)
     if tensor_label is None:

@@ -507,7 +507,7 @@
       "step_index": 2
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "negative.0:1",
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "negative.0.linear",
@@ -515,7 +515,7 @@
         "negative.1:1"
       ],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,
@@ -550,7 +550,7 @@
       "step_index": 3
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "negative.1:1",
       "func_name": "tanh",
       "fx_call_index": 0,
       "fx_qualpath": "negative.1.tanh",
@@ -558,7 +558,7 @@
         "negative.2:1"
       ],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,
@@ -593,13 +593,13 @@
       "step_index": 4
     },
     {
-      "atomic_module_call": null,
+      "atomic_module_call": "negative.2:1",
       "func_name": "linear",
       "fx_call_index": 0,
       "fx_qualpath": "negative.2.linear",
       "input_to_modules": [],
       "intervention_replaced": false,
-      "is_atomic_module": false,
+      "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
       "is_module_output": true,

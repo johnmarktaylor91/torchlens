@@ -121,14 +121,20 @@ def test_live_preview_summary_reads_events_during_capture() -> None:
 
 
 def test_atomic_module_classification_matches_phase1_expectation() -> None:
-    """Atomic-module output classification should match the Phase 1 trace shape."""
+    """A nested ``Sequential(Linear, ReLU)`` exposes two atomic leaf modules.
+
+    ``block.0`` (a bare ``nn.Linear``) and ``block.1`` (a bare ``nn.ReLU``) are each
+    single-op leaf modules, so they classify as atomic module outputs. The parent
+    ``block`` is multi-op and is not atomic. (Atomic detection was dormant before
+    the detector was restored, which is why this once expected ``False``.)
+    """
 
     log = tl.trace(_AtomicBlockModel(), torch.randn(1, 3), layers_to_save="all")
     by_func = {op.func_name: op for op in log.ops if op.func_name in {"linear", "relu"}}
 
     assert by_func["linear"].is_module_output is True
-    assert by_func["linear"].is_atomic_module is False
-    assert by_func["linear"].atomic_module_call is None
+    assert by_func["linear"].is_atomic_module is True
+    assert by_func["linear"].atomic_module_call == "block.0:1"
     assert by_func["relu"].is_module_output is True
-    assert by_func["relu"].is_atomic_module is False
-    assert by_func["relu"].atomic_module_call is None
+    assert by_func["relu"].is_atomic_module is True
+    assert by_func["relu"].atomic_module_call == "block.1:1"

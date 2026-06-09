@@ -63,12 +63,19 @@ def test_collapse_fn_overrides_call_depth(tmp_path: Any) -> None:
 
 
 def test_call_depth_unchanged_when_no_collapse_fn(tmp_path: Any) -> None:
-    """Legacy vis_call_depth collapse behavior should remain available."""
+    """Legacy vis_call_depth collapse still applies to multi-op modules.
+
+    In ``Sequential(Sequential(Linear, ReLU), Linear)`` the inner Sequential is
+    multi-op and collapses to a ``box3d`` summary, while the outer bare ``Linear``
+    is an atomic single-op module that stays a rectangle (already maximally
+    collapsed). So exactly one ``box3d`` node remains, and both module markings
+    are still shown.
+    """
 
     log = tl.trace(_nested_model(), torch.randn(1, 4))
 
     dot = _render_dot(log, tmp_path, vis_call_depth=1)
 
-    assert dot.count("shape=box3d") == 2
+    assert dot.count("shape=box3d") == 1
     assert "@0" in dot
     assert "@1" in dot

@@ -33,6 +33,43 @@ class ReusedReluLoop(nn.Module):
         return x
 
 
+class InsideOutsideRelu(nn.Module):
+    """ReLU module fed in a continuous chain (outside call feeds the loop)."""
+
+    def __init__(self) -> None:
+        """Initialize the reused ReLU."""
+
+        super().__init__()
+        self.relu = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Chain ReLU once outside the loop into four calls inside it."""
+
+        y = self.relu(x)
+        for _ in range(4):
+            y = self.relu(y)
+        return y
+
+
+class InsideOutsideReluSeparable(nn.Module):
+    """Atomic ReLU module used at a separable outside site plus a loop."""
+
+    def __init__(self) -> None:
+        """Initialize the reused ReLU."""
+
+        super().__init__()
+        self.relu = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call ReLU once on its own, then three times on an independent stream."""
+
+        outside = self.relu(x)
+        inside = x + 1
+        for _ in range(3):
+            inside = self.relu(inside)
+        return outside + inside
+
+
 class ParallelFanout(nn.Module):
     """Shared projection used as parallel fan-out into stack."""
 
@@ -114,6 +151,23 @@ class ActivationBlock(nn.Module):
         return self.act(self.lin(x))
 
 
+class MlpBlock(nn.Module):
+    """Three-op feed-forward block."""
+
+    def __init__(self) -> None:
+        """Initialize the block layers."""
+
+        super().__init__()
+        self.lin1 = nn.Linear(4, 4, bias=False)
+        self.act = nn.ReLU()
+        self.lin2 = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply Linear -> ReLU -> Linear."""
+
+        return self.lin2(self.act(self.lin1(x)))
+
+
 class CollapsedBlockRecurrence(nn.Module):
     """Repeated block whose collapsed module box carries recurrence."""
 
@@ -127,6 +181,78 @@ class CollapsedBlockRecurrence(nn.Module):
         """Call the same block three times in a loop."""
 
         for _ in range(3):
+            x = self.block(x)
+        return x
+
+
+class InsideOutsideBlock(nn.Module):
+    """Multi-op block called once before a loop and repeatedly inside it."""
+
+    def __init__(self) -> None:
+        """Initialize the reused block."""
+
+        super().__init__()
+        self.block = ActivationBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the block once outside the loop, then four times inside it."""
+
+        y = self.block(x)
+        for _ in range(4):
+            y = self.block(y)
+        return y
+
+
+class DeepLoopBody(nn.Module):
+    """Loop body with three operations."""
+
+    def __init__(self) -> None:
+        """Initialize the body layers."""
+
+        super().__init__()
+        self.fc = nn.Linear(4, 4, bias=False)
+        self.act = nn.ReLU()
+        self.norm = nn.LayerNorm(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a three-op body three times."""
+
+        for _ in range(3):
+            x = self.norm(self.act(self.fc(x)))
+        return x
+
+
+class TanhRNNCellLoop(nn.Module):
+    """Small recurrent cell with a multi-op loop body."""
+
+    def __init__(self) -> None:
+        """Initialize the hidden projection."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a recurrent tanh cell four times."""
+
+        h = x
+        for _ in range(4):
+            h = torch.tanh(self.lin(h))
+        return h
+
+
+class RepeatedBlockStack(nn.Module):
+    """Canonical repeated block stack."""
+
+    def __init__(self) -> None:
+        """Initialize the repeated MLP block."""
+
+        super().__init__()
+        self.block = MlpBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the same three-op block four times."""
+
+        for _ in range(4):
             x = self.block(x)
         return x
 
@@ -259,6 +385,26 @@ class ParallelSiblingsLoop(nn.Module):
             a = self.lin(x)
             b = self.lin(x)
             x = a + b
+        return x
+
+
+class NestedLoopBlock(nn.Module):
+    """Nested loop reusing the same projection."""
+
+    def __init__(self) -> None:
+        """Initialize the reused projection."""
+
+        super().__init__()
+        self.proj = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run two outer iterations with two inner projection calls each."""
+
+        for _ in range(2):
+            residual = x
+            for _ in range(2):
+                x = self.proj(x)
+            x = x + residual
         return x
 
 
@@ -438,6 +584,20 @@ def _dot_self_edge_attrs(dot: str) -> list[str]:
     ]
 
 
+def _dot_node_shapes(dot: str) -> dict[str, str]:
+    """Map each DOT node title (``<B>...</B>``) to its graphviz ``shape``."""
+
+    shapes: dict[str, str] = {}
+    for line in dot.splitlines():
+        if "shape=" not in line or "->" in line:
+            continue
+        shape_match = re.search(r"shape=(\w+)", line)
+        title_match = re.search(r"<B>(.*?)</B>", line)
+        if shape_match and title_match:
+            shapes[title_match.group(1)] = shape_match.group(1)
+    return shapes
+
+
 @pytest.mark.smoke
 def test_reused_single_op_module_count_is_depth_invariant(tmp_path: Path) -> None:
     """A reused single-op module keeps the honest count at shallow and deep depth."""
@@ -478,6 +638,67 @@ def test_colon_call_ranges_disambiguate_split_regions(tmp_path: Path) -> None:
     assert _normalized_title(inside_outside_trace, "linear", "lin") == "lin:1,2-4"
 
 
+def test_inside_outside_relu_continuous_chain_is_one_atomic_rectangle(tmp_path: Path) -> None:
+    """A continuous relu chain rolls to one atomic-module rectangle with a plain count.
+
+    ``InsideOutsideRelu`` feeds each relu into the next, so all five calls form one
+    recurrent chain at a single site -- it rolls to one node, marked as the atomic
+    ``@relu`` module (a rectangle), with a plain ``(x5)`` count and no split range.
+    """
+
+    trace = _trace(InsideOutsideRelu())
+    assert _normalized_title(trace, "relu", "relu") == "relu (x5)"
+
+    dot = _render_dot(trace, tmp_path, "inside_outside_relu", vis_call_depth=1)
+    assert "relu_1_1 (x5)" in dot
+    # Atomic single-op module is marked as a module and rendered as a rectangle.
+    assert "@relu" in dot
+    assert _dot_node_shapes(dot).get("relu_1_1 (x5)") == "box"
+    # Single contiguous site -> no split call range on the marking.
+    assert "@relu:" not in dot
+
+
+def test_separable_atomic_module_marks_distinct_calls(tmp_path: Path) -> None:
+    """An atomic module reused at separable outside+inside sites labels its calls.
+
+    Unlike the continuous chain, ``InsideOutsideReluSeparable`` uses the relu at an
+    independent outside site plus a loop, so it renders as two atomic rectangles
+    whose markings disambiguate the calls (``@relu:1`` and ``@relu:2-4``). The
+    rectangles are identical at shallow and deep call depth -- an atomic module is
+    already maximally collapsed.
+    """
+
+    trace = _trace(InsideOutsideReluSeparable())
+    shallow_dot = _render_dot(trace, tmp_path, "relu_sep_shallow", vis_call_depth=1)
+    deep_dot = _render_dot(trace, tmp_path, "relu_sep_deep", vis_call_depth=1000)
+
+    for dot in (shallow_dot, deep_dot):
+        shapes = _dot_node_shapes(dot)
+        assert shapes.get("relu_1_1") == "box"
+        assert shapes.get("relu_2_3") == "box"
+        assert "@relu:1" in dot
+        assert "@relu:2-4" in dot
+        # The range lives on the marking, never duplicated as a title count.
+        assert "relu_1_1 (x" not in dot
+        # Atomic modules never collapse into a box3d module summary.
+        assert "box3d" not in dot
+
+
+def test_inside_outside_block_module_uses_plain_count(tmp_path: Path) -> None:
+    """A collapsed multi-op block used outside and inside one loop shows plain counts."""
+
+    trace = _trace(InsideOutsideBlock())
+    expanded_dot = _render_dot(
+        trace, tmp_path, "inside_outside_block_expanded", vis_call_depth=1000
+    )
+    collapsed_dot = _render_dot(trace, tmp_path, "inside_outside_block_collapsed", vis_call_depth=1)
+
+    assert "linear_1_1 (x5)" in expanded_dot
+    assert "relu_1_2 (x5)" in expanded_dot
+    assert "@block (x5)" in collapsed_dot
+    assert "@block:1,2-5" not in collapsed_dot
+
+
 def test_clean_reused_block_keeps_plain_counts(tmp_path: Path) -> None:
     """A reused multi-op block in one loop keeps plain module and op counts."""
 
@@ -503,19 +724,17 @@ def test_buffer_versions_use_colon_ranges(tmp_path: Path) -> None:
 
 
 def test_recurrent_self_loop_is_clean_and_fanout_has_none(tmp_path: Path) -> None:
-    """Rolled recurrence keeps one clean self-edge; parallel fan-out has none."""
+    """Rolled recurrence keeps one labeled self-edge; parallel fan-out has none."""
 
     recurrent_trace = _trace(ReusedReluLoop())
     recurrent_dot = _render_dot(recurrent_trace, tmp_path, "relu_self_edge", vis_call_depth=1000)
     recurrent_self_edges = _dot_self_edge_attrs(recurrent_dot)
     assert len(recurrent_self_edges) == 1
     recurrent_attrs = recurrent_self_edges[0]
-    assert "label=" not in recurrent_attrs
-    assert "headlabel=" not in recurrent_attrs
-    assert "taillabel=" not in recurrent_attrs
+    assert re.search(r"(^|\s)label=", recurrent_attrs) is None
+    assert 'headlabel="  In 2-4  "' in recurrent_attrs
+    assert 'taillabel="  Out 1-3  "' in recurrent_attrs
     assert "↻" not in recurrent_attrs
-    assert " In " not in recurrent_attrs
-    assert " Out " not in recurrent_attrs
 
     fanout_trace = _trace(ParallelFanout())
     fanout_dot = _render_dot(fanout_trace, tmp_path, "parallel_fanout", vis_call_depth=1000)
@@ -523,40 +742,83 @@ def test_recurrent_self_loop_is_clean_and_fanout_has_none(tmp_path: Path) -> Non
 
 
 def test_atomic_single_op_module_collapse_preserves_op_render(tmp_path: Path) -> None:
-    """Single-op modules render identically at expanded and collapsed depths."""
+    """Single-op modules render as the same atomic rectangle at every depth.
+
+    An atomic module is already maximally collapsed: it renders as a rectangle
+    marked ``@relu`` (never an ellipse op, never a ``box3d`` collapsed-module
+    summary, never a ``cluster_relu`` box), identically at shallow and deep depth.
+    """
 
     trace = _trace(ReusedReluLoop())
     expanded_dot = _render_dot(trace, tmp_path, "relu_expanded", vis_call_depth=1000)
     collapsed_dot = _render_dot(trace, tmp_path, "relu_collapsed", vis_call_depth=1)
 
-    assert "cluster_relu" not in expanded_dot
-    assert "cluster_relu" not in collapsed_dot
-    assert "relu_1_1 (x4)" in expanded_dot
-    assert "relu_1_1 (x4)" in collapsed_dot
-    assert "@relu (x4)" not in collapsed_dot
-    assert 'label="↻"' not in expanded_dot
-    assert 'label="↻"' not in collapsed_dot
+    for dot in (expanded_dot, collapsed_dot):
+        assert "cluster_relu" not in dot
+        assert "box3d" not in dot
+        assert "relu_1_1 (x4)" in dot
+        # Marked as a module and rendered as a rectangle (not an ellipse op).
+        assert "@relu" in dot
+        assert _dot_node_shapes(dot).get("relu_1_1 (x4)") == "box"
+        assert 'label="↻"' not in dot
 
 
 def test_render_loop_module_rolling_demos() -> None:
-    """Render SVG and PNG demos into the committed test-output folder."""
+    """Render SVG, PDF, and PNG demos into the committed test-output folder."""
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    demos: list[tuple[str, nn.Module, dict[str, object]]] = [
-        ("multiop_loop_body_expanded", CollapsedBlockRecurrence(), {"vis_call_depth": 1000}),
-        ("reused_module_inside_outside_loop", InsideOutsideLoop(), {}),
-        ("reused_block_loop_expanded", CollapsedBlockRecurrence(), {"vis_call_depth": 1000}),
-        ("reused_block_loop_collapsed", CollapsedBlockRecurrence(), {"vis_call_depth": 1}),
-        ("buffer_rewrite_loops", BufferRewriteLoops(), {"show_buffer_layers": "always"}),
-        ("two_distinct_loops", TwoDistinctLoops(), {"vis_call_depth": 1}),
+    demos: list[tuple[str, nn.Module, dict[str, object], str]] = [
+        ("inside_outside_relu", InsideOutsideRelu(), {"vis_call_depth": 1}, "init+forward"),
+        (
+            "inside_outside_relu_separable",
+            InsideOutsideReluSeparable(),
+            {"vis_call_depth": 1},
+            "init+forward",
+        ),
+        (
+            "inside_outside_block_collapsed",
+            InsideOutsideBlock(),
+            {"vis_call_depth": 1},
+            "init+forward",
+        ),
+        (
+            "inside_outside_block_expanded",
+            InsideOutsideBlock(),
+            {"vis_call_depth": 1000},
+            "init+forward",
+        ),
+        ("deep_loop_body", DeepLoopBody(), {"vis_call_depth": 1000}, "init+forward"),
+        ("rnn_cell", TanhRNNCellLoop(), {"vis_call_depth": 1000}, "init+forward"),
+        (
+            "repeated_block_stack_collapsed",
+            RepeatedBlockStack(),
+            {"vis_call_depth": 1},
+            "init+forward",
+        ),
+        (
+            "repeated_block_stack_expanded",
+            RepeatedBlockStack(),
+            {"vis_call_depth": 1000},
+            "init+forward",
+        ),
+        ("two_distinct_loops", TwoDistinctLoops(), {"vis_call_depth": 1}, "init+forward"),
+        (
+            "buffer_loop",
+            BufferRewriteLoops(),
+            {"show_buffer_layers": "always"},
+            "init+forward",
+        ),
+        ("nested_loop", NestedLoopBlock(), {"vis_call_depth": 1}, "init+forward"),
+        ("parallel_fanout", ParallelFanout(), {"vis_call_depth": 1}, "init+forward"),
     ]
-    for name, model, kwargs in demos:
+    for name, model, kwargs, code_panel in demos:
         trace = _trace(model)
-        for file_format in ("svg", "png"):
+        for file_format in ("svg", "pdf", "png"):
             trace.draw(
                 vis_mode="rolled",
                 vis_save_only=True,
                 vis_fileformat=file_format,
                 vis_outpath=str(OUTPUT_DIR / name),
+                code_panel=code_panel,
                 **kwargs,
             )
