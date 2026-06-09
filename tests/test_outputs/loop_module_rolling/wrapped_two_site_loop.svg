@@ -54,7 +54,7 @@
 <!-- linear_1_1&#45;&gt;linear_1_1 -->
 <g id="edge3" class="edge">
 <title>linear_1_1&#45;&gt;linear_1_1</title>
-<g id="a_edge3"><a xlink:title="TorchLens recurrence: endpoint=linear_1_1; pass_pairs=1&#45;&gt;2,2&#45;&gt;3,3&#45;&gt;4,4&#45;&gt;5,5&#45;&gt;6; count=5">
+<g id="a_edge3"><a xlink:title="TorchLens recurrence: endpoint=linear_1_1; pass_pairs=1&#45;&gt;2,2&#45;&gt;3,3&#45;&gt;4,4&#45;&gt;5,5&#45;&gt;6; count=5; chains=1&#45;&gt;2&#45;&gt;3&#45;&gt;4&#45;&gt;5&#45;&gt;6">
 <path fill="none" stroke="black" stroke-width="2" d="M283.06,-181.49C295.75,-184.06 303.81,-188.34 303.81,-194.32 303.81,-198.9 299.09,-202.48 291.18,-205.06"/>
 <polygon fill="black" stroke="black" stroke-width="2" points="292.16,-202.28 286,-206.39 293.39,-207.02 292.16,-202.28"/>
 </a>

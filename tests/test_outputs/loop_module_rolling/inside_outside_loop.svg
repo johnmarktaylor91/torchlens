@@ -61,7 +61,7 @@
 <!-- linear_1_1&#45;&gt;linear_1_1 -->
 <g id="edge6" class="edge">
 <title>linear_1_1&#45;&gt;linear_1_1</title>
-<g id="a_edge6"><a xlink:title="TorchLens recurrence: endpoint=linear_1_1; pass_pairs=2&#45;&gt;3,3&#45;&gt;4; count=2">
+<g id="a_edge6"><a xlink:title="TorchLens recurrence: endpoint=linear_1_1; pass_pairs=2&#45;&gt;3,3&#45;&gt;4; count=2; chains=2&#45;&gt;3&#45;&gt;4">
 <path fill="none" stroke="black" stroke-width="2" d="M329.97,-279.2C342.58,-281.63 350.39,-285.35 350.39,-290.37 350.39,-294.22 345.81,-297.3 338,-299.63"/>
 <polygon fill="black" stroke="black" stroke-width="2" points="339.15,-296.84 332.91,-300.85 340.29,-301.6 339.15,-296.84"/>
 </a>

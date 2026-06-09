@@ -46,7 +46,7 @@
 <!-- relu_1_1&#45;&gt;relu_1_1 -->
 <g id="edge3" class="edge">
 <title>relu_1_1&#45;&gt;relu_1_1</title>
-<g id="a_edge3"><a xlink:title="TorchLens recurrence: endpoint=relu_1_1; pass_pairs=1&#45;&gt;2,2&#45;&gt;3,3&#45;&gt;4; count=3">
+<g id="a_edge3"><a xlink:title="TorchLens recurrence: endpoint=relu_1_1; pass_pairs=1&#45;&gt;2,2&#45;&gt;3,3&#45;&gt;4; count=3; chains=1&#45;&gt;2&#45;&gt;3&#45;&gt;4">
 <path fill="none" stroke="black" stroke-width="2" d="M151.44,-152.44C163.3,-153.62 171.59,-156.62 171.59,-161.45 171.59,-165.08 166.93,-167.67 159.59,-169.24"/>
 <polygon fill="black" stroke="black" stroke-width="2" points="160.99,-166.55 154.43,-170.01 161.72,-171.39 160.99,-166.55"/>
 </a>

@@ -36,7 +36,9 @@ import sys
 import tempfile
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
@@ -53,7 +55,6 @@ from typing import (
     Union,
     cast,
 )
-from weakref import WeakKeyDictionary
 
 import graphviz
 import torch
@@ -116,7 +117,10 @@ if TYPE_CHECKING:
     from ..data_classes.module import Module
 
 BaseGraphNode = Union["Op", "Layer"]
-_RENDERING_CACHES: WeakKeyDictionary[Any, dict[str, Any]] = WeakKeyDictionary()
+_ACTIVE_RENDERING_CACHE: ContextVar[dict[str, Any] | None] = ContextVar(
+    "_ACTIVE_RENDERING_CACHE",
+    default=None,
+)
 
 
 @dataclass
@@ -186,7 +190,9 @@ class RecurrenceSelfEdge:
     endpoint:
         Human-readable endpoint represented by the self-edge.
     pass_pairs:
-        Adjacent pass pairs proving loop-carried recurrence.
+        Pass pairs proving loop-carried recurrence.
+    chains:
+        Distinct recurrence chains represented by this edge.
     count:
         Number of recurrence pairs represented by this edge.
     """
@@ -194,15 +200,20 @@ class RecurrenceSelfEdge:
     endpoint: str
     pass_pairs: tuple[tuple[int, int], ...]
     count: int
+    chains: tuple[tuple[int, ...], ...] = ()
 
     @property
     def tooltip(self) -> str:
         """Return Graphviz tooltip metadata for the recurrence edge."""
 
         pairs = ",".join(f"{tail}->{head}" for tail, head in self.pass_pairs)
+        chain_text = ",".join(
+            "->".join(str(pass_index) for pass_index in chain) for chain in self.chains
+        )
+        chain_suffix = f"; chains={chain_text}" if chain_text else ""
         return (
             "TorchLens recurrence: "
-            f"endpoint={self.endpoint}; pass_pairs={pairs}; count={self.count}"
+            f"endpoint={self.endpoint}; pass_pairs={pairs}; count={self.count}{chain_suffix}"
         )
 
 
@@ -697,6 +708,43 @@ def draw(
         ValueError: If ``_layers_logged`` is False (layers were discarded
             by missing final lookup containers).
     """
+    if _ACTIVE_RENDERING_CACHE.get() is None:
+        with _rendering_cache_scope():
+            return draw(
+                self,
+                vis_mode=vis_mode,
+                vis_call_depth=vis_call_depth,
+                vis_outpath=vis_outpath,
+                vis_graph_overrides=vis_graph_overrides,
+                module=module,
+                node_mode=node_mode,
+                node_spec_fn=node_spec_fn,
+                collapsed_node_spec_fn=collapsed_node_spec_fn,
+                collapse_fn=collapse_fn,
+                skip_fn=skip_fn,
+                vis_edge_overrides=vis_edge_overrides,
+                vis_grad_edge_overrides=vis_grad_edge_overrides,
+                vis_module_overrides=vis_module_overrides,
+                vis_save_only=vis_save_only,
+                vis_fileformat=vis_fileformat,
+                show_buffer_layers=show_buffer_layers,
+                direction=direction,
+                vis_node_placement=vis_node_placement,
+                vis_renderer=vis_renderer,
+                vis_theme=vis_theme,
+                vis_intervention_mode=vis_intervention_mode,
+                vis_show_cone=vis_show_cone,
+                code_panel=code_panel,
+                node_overlay=node_overlay,
+                node_label_fields=node_label_fields,
+                show_legend=show_legend,
+                font_size=font_size,
+                dpi=dpi,
+                for_paper=for_paper,
+                return_graph=return_graph,
+                order_siblings=order_siblings,
+            )
+
     if node_mode not in MODE_REGISTRY:
         raise ValueError(
             "Visualization node_style/node_mode must be one of 'default', "
@@ -3358,21 +3406,40 @@ def _module_address_and_call(module_call: str) -> tuple[str, int] | None:
         return None
 
 
-def _rendering_cache(trace: "Trace") -> dict[str, Any]:
-    """Return the per-trace rendering memoization cache.
+@contextmanager
+def _rendering_cache_scope() -> Iterator[dict[str, Any]]:
+    """Create a memoization cache scoped to one render operation.
 
-    Parameters
-    ----------
-    trace:
-        Trace being rendered.
+    Yields
+    ------
+    dict[str, Any]
+        Mutable cache visible to rendering helpers for the duration of the scope.
+    """
+
+    token = _ACTIVE_RENDERING_CACHE.set({})
+    try:
+        cache = _ACTIVE_RENDERING_CACHE.get()
+        if cache is None:
+            raise RuntimeError("TorchLens render cache scope was not initialized.")
+        yield cache
+    finally:
+        _ACTIVE_RENDERING_CACHE.reset(token)
+
+
+def _rendering_cache() -> dict[str, Any]:
+    """Return the active render-operation memoization cache.
 
     Returns
     -------
     dict[str, Any]
-        Mutable cache held weakly outside the trace instance.
+        Mutable cache for the current render scope, or a fresh throwaway cache when
+        helpers are called outside a render operation.
     """
 
-    return _RENDERING_CACHES.setdefault(trace, {})
+    cache = _ACTIVE_RENDERING_CACHE.get()
+    if cache is None:
+        return {}
+    return cache
 
 
 def _is_static_rolling_facet_format(file_format: str | None) -> bool:
@@ -3675,7 +3742,7 @@ def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
     """
 
     trace = layer_log.source_trace
-    cache = _rendering_cache(trace).setdefault("same_layer_reachability", {})
+    cache = _rendering_cache().setdefault("same_layer_reachability", {})
     cache_key = layer_log.layer_label
     cached = cache.get(cache_key)
     if isinstance(cached, dict):
@@ -3930,7 +3997,7 @@ def _separation_signatures_for_layer(
     """
 
     trace = layer_log.source_trace
-    cache = _rendering_cache(trace).setdefault("separation_signatures", {})
+    cache = _rendering_cache().setdefault("separation_signatures", {})
     cache_key = layer_log.layer_label
     cached = cache.get(cache_key)
     if isinstance(cached, tuple):
@@ -4076,8 +4143,8 @@ def _same_layer_dependency_components(layer_log: "Layer") -> tuple[tuple[int, ..
     return tuple(sorted(components, key=lambda values: values[0]))
 
 
-def _same_layer_adjacent_recurrence_pairs(layer_log: "Layer") -> tuple[tuple[int, int], ...]:
-    """Return adjacent pass pairs proving same-layer recurrence.
+def _same_layer_recurrence_pairs(layer_log: "Layer") -> tuple[tuple[int, int], ...]:
+    """Return same-layer pass pairs proving recurrence.
 
     Parameters
     ----------
@@ -4087,16 +4154,56 @@ def _same_layer_adjacent_recurrence_pairs(layer_log: "Layer") -> tuple[tuple[int
     Returns
     -------
     tuple[tuple[int, int], ...]
-        Adjacent ``(source_pass, next_pass)`` pairs where the earlier pass can reach
-        the next pass through the captured graph.
+        ``(source_pass, next_same_layer_dependent_pass)`` pairs where the later
+        pass transitively depends on the earlier pass.
     """
 
     reachability = _same_layer_reachability(layer_log)
-    return tuple(
-        (pass_index, pass_index + 1)
-        for pass_index in sorted(layer_log.ops)
-        if pass_index + 1 in reachability.get(pass_index, set())
-    )
+    pairs: list[tuple[int, int]] = []
+    for pass_index in sorted(layer_log.ops):
+        later_dependents = [
+            target_pass
+            for target_pass in reachability.get(pass_index, set())
+            if target_pass > pass_index
+        ]
+        if later_dependents:
+            pairs.append((pass_index, min(later_dependents)))
+    return tuple(pairs)
+
+
+def _chains_from_recurrence_pairs(
+    pass_pairs: Sequence[tuple[int, int]],
+) -> tuple[tuple[int, ...], ...]:
+    """Return dependency chains represented by recurrence pass pairs.
+
+    Parameters
+    ----------
+    pass_pairs:
+        Source-to-successor pass pairs.
+
+    Returns
+    -------
+    tuple[tuple[int, ...], ...]
+        Distinct chains with at least two passes, sorted by their first pass.
+    """
+
+    successor_by_pass = {source: target for source, target in pass_pairs}
+    predecessor_passes = {target for _source, target in pass_pairs}
+    starts = sorted(source for source, _target in pass_pairs if source not in predecessor_passes)
+    chains: list[tuple[int, ...]] = []
+    for start in starts:
+        chain = [start]
+        seen = {start}
+        current = start
+        while current in successor_by_pass:
+            current = successor_by_pass[current]
+            if current in seen:
+                break
+            seen.add(current)
+            chain.append(current)
+        if len(chain) > 1:
+            chains.append(tuple(chain))
+    return tuple(chains)
 
 
 def _module_call_index_for_op(op: "Op", address: str) -> int | None:
@@ -4130,7 +4237,7 @@ def _collapsed_module_recurrence_pairs(
     child_layer: "Layer",
     address: str,
 ) -> tuple[tuple[int, int], ...]:
-    """Return adjacent module-call pairs proving a collapsed-box recurrence.
+    """Return internal op pass pairs proving a collapsed-box recurrence.
 
     Parameters
     ----------
@@ -4144,13 +4251,14 @@ def _collapsed_module_recurrence_pairs(
     Returns
     -------
     tuple[tuple[int, int], ...]
-        Adjacent ``(source_call, next_call)`` pairs carried through the collapsed
-        module box.
+        ``(source_pass, next_pass)`` pairs carried across adjacent collapsed module
+        calls through the collapsed module box.
     """
 
     parent_ops_by_label = {op.label: op for op in parent_layer.ops.values()}
+    parent_pass_by_label = {op.label: pass_index for pass_index, op in parent_layer.ops.items()}
     pairs: set[tuple[int, int]] = set()
-    for child_op in child_layer.ops.values():
+    for child_pass, child_op in child_layer.ops.items():
         child_call = _module_call_index_for_op(child_op, address)
         if child_call is None:
             continue
@@ -4159,8 +4267,13 @@ def _collapsed_module_recurrence_pairs(
             if parent_op is None:
                 continue
             parent_call = _module_call_index_for_op(parent_op, address)
-            if parent_call is not None and child_call == parent_call + 1:
-                pairs.add((parent_call, child_call))
+            parent_pass = parent_pass_by_label.get(parent_label)
+            if (
+                parent_call is not None
+                and parent_pass is not None
+                and child_call == parent_call + 1
+            ):
+                pairs.add((parent_pass, child_pass))
     return tuple(sorted(pairs))
 
 
@@ -4204,20 +4317,35 @@ def _recurrence_self_edge(
         return None
 
     if child_is_collapsed_module or parent_is_collapsed_module:
-        pass_pairs = _collapsed_module_recurrence_pairs(parent_base, child_base, endpoint_name)
+        if parent_base.layer_label == child_base.layer_label:
+            pass_pairs = _same_layer_recurrence_pairs(parent_base)
+            chains = _chains_from_recurrence_pairs(pass_pairs)
+        else:
+            pass_pairs = _collapsed_module_recurrence_pairs(
+                parent_base,
+                child_base,
+                endpoint_name,
+            )
+            chains = _chains_from_recurrence_pairs(pass_pairs)
         if not pass_pairs:
             return None
         endpoint = f"{parent_base.layer_label}->{child_base.layer_label}@{endpoint_name}"
-        return RecurrenceSelfEdge(endpoint=endpoint, pass_pairs=pass_pairs, count=len(pass_pairs))
+        return RecurrenceSelfEdge(
+            endpoint=endpoint,
+            pass_pairs=pass_pairs,
+            chains=chains,
+            count=len(pass_pairs),
+        )
 
     if parent_base.layer_label != child_base.layer_label:
         return None
-    pass_pairs = _same_layer_adjacent_recurrence_pairs(parent_base)
+    pass_pairs = _same_layer_recurrence_pairs(parent_base)
     if not pass_pairs:
         return None
     return RecurrenceSelfEdge(
         endpoint=parent_base.layer_label,
         pass_pairs=pass_pairs,
+        chains=_chains_from_recurrence_pairs(pass_pairs),
         count=len(pass_pairs),
     )
 
@@ -4315,6 +4443,10 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
         Annotation for rolled multi-pass layers, otherwise ``None``.
     """
 
+    if _ACTIVE_RENDERING_CACHE.get() is None:
+        with _rendering_cache_scope():
+            return _rolling_annotation(layer_log, vis_mode)
+
     layer_log = _unwrap_focus_node(layer_log)
     if vis_mode != "rolled" or not isinstance(layer_log, Layer) or layer_log.num_passes <= 1:
         return None
@@ -4399,7 +4531,11 @@ def _collapsed_module_rolling_suffix(trace: "Trace", address: str) -> str:
         Suffix beginning with ``" · calls "`` or an empty string.
     """
 
-    cache = _rendering_cache(trace).setdefault("collapsed_module_rolling_suffix", {})
+    if _ACTIVE_RENDERING_CACHE.get() is None:
+        with _rendering_cache_scope():
+            return _collapsed_module_rolling_suffix(trace, address)
+
+    cache = _rendering_cache().setdefault("collapsed_module_rolling_suffix", {})
     cached = cache.get(address)
     if isinstance(cached, str):
         return cached

@@ -52,7 +52,7 @@
 <!-- cell&#45;&gt;cell -->
 <g id="edge3" class="edge">
 <title>cell&#45;&gt;cell</title>
-<g id="a_edge3"><a xlink:title="TorchLens recurrence: endpoint=linear_1_1&#45;&gt;linear_1_1@cell; pass_pairs=1&#45;&gt;2,2&#45;&gt;3,3&#45;&gt;4; count=3">
+<g id="a_edge3"><a xlink:title="TorchLens recurrence: endpoint=linear_1_1&#45;&gt;linear_1_1@cell; pass_pairs=1&#45;&gt;2,2&#45;&gt;3,3&#45;&gt;4; count=3; chains=1&#45;&gt;2&#45;&gt;3&#45;&gt;4">
 <path fill="none" stroke="black" stroke-width="2" d="M171.94,-168.78C182.48,-170.73 189.5,-174.61 189.5,-180.42 189.5,-184.6 185.87,-187.78 179.92,-189.96"/>
 <polygon fill="black" stroke="black" stroke-width="2" points="181.01,-187.14 174.87,-191.3 182.26,-191.88 181.01,-187.14"/>
 </a>

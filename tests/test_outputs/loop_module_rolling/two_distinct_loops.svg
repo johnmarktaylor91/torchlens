@@ -65,7 +65,7 @@
 <!-- shared&#45;&gt;shared -->
 <g id="edge6" class="edge">
 <title>shared&#45;&gt;shared</title>
-<g id="a_edge6"><a xlink:title="TorchLens recurrence: endpoint=linear_1_1&#45;&gt;linear_1_1@shared; pass_pairs=1&#45;&gt;2,3&#45;&gt;4,4&#45;&gt;5; count=3">
+<g id="a_edge6"><a xlink:title="TorchLens recurrence: endpoint=linear_1_1&#45;&gt;linear_1_1@shared; pass_pairs=1&#45;&gt;2,3&#45;&gt;4,4&#45;&gt;5; count=3; chains=1&#45;&gt;2,3&#45;&gt;4&#45;&gt;5">
 <path fill="none" stroke="black" stroke-width="2" d="M195.78,-271.2C206.5,-273.25 213.5,-277.01 213.5,-282.48 213.5,-286.41 209.88,-289.46 203.87,-291.62"/>
 <polygon fill="black" stroke="black" stroke-width="2" points="204.85,-288.83 198.71,-292.98 206.1,-293.57 204.85,-288.83"/>
 </a>

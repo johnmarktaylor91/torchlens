@@ -131,6 +131,39 @@ class CollapsedBlockRecurrence(nn.Module):
         return x
 
 
+class SharedTwoSiteBlock(nn.Module):
+    """Block that applies one shared layer to two recurrent streams."""
+
+    def __init__(self) -> None:
+        """Initialize the shared linear layer."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4, bias=False)
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Apply the shared layer independently to two streams."""
+
+        return self.lin(x), self.lin(y)
+
+
+class SharedTwoSiteRecurrences(nn.Module):
+    """Two interleaved recurrent chains through the same internal layer."""
+
+    def __init__(self) -> None:
+        """Initialize the shared two-site recurrent block."""
+
+        super().__init__()
+        self.block = SharedTwoSiteBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run three block calls carrying two separate recurrent streams."""
+
+        y = x + 1
+        for _ in range(3):
+            x, y = self.block(x, y)
+        return x + y
+
+
 class TwoDistinctLoops(nn.Module):
     """Shared module used by two distinct loops."""
 
@@ -557,6 +590,28 @@ def test_render_cache_does_not_mutate_save_or_fork_trace(tmp_path: Path) -> None
     assert "_tl_rendering_cache" not in fork.__getstate__()
 
 
+def test_render_cache_is_fresh_after_same_trace_structural_mutation(tmp_path: Path) -> None:
+    """A second render sees in-place structural edits on the same trace."""
+
+    trace = _trace(StackFanoutForDeepArgMutation())
+    layer = _first_layer(trace, "linear")
+
+    before_dot = _render_dot(trace, tmp_path, "cache_before_mutation", vis_call_depth=1000)
+    assert f"{layer.layer_label} (x2" in before_dot
+    assert f"{layer.layer_label} (x2 · sites?" not in before_dot
+
+    first_op = next(iter(layer.ops.values()))
+    stack_label = first_op.children[0]
+    stack_op = trace.layer_dict_all_keys[stack_label]
+    stack_op.parent_arg_positions["args"] = {
+        (0, 0, 0): "linear_1_1:1",
+        (0, 0, 1): "linear_1_1:2",
+    }
+
+    after_dot = _render_dot(trace, tmp_path, "cache_after_mutation", vis_call_depth=1000)
+    assert f"{layer.layer_label} (x2 · sites?" in after_dot
+
+
 def test_rolled_recurrent_layer_draws_marked_self_edge(tmp_path: Path) -> None:
     """A recurrent rolled layer keeps its same-layer self-edge as ``↻``."""
 
@@ -578,7 +633,8 @@ def test_collapsed_module_recurrence_draws_marked_self_edge(tmp_path: Path) -> N
     assert "block -> block" in dot
     assert 'label="↻"' in dot
     assert "TorchLens recurrence: endpoint=relu_1_2->linear_1_1@block;" in dot
-    assert "pass_pairs=1->2,2->3; count=2" in dot
+    assert "pass_pairs=1->2,2->3" in dot
+    assert "count=2" in dot
 
 
 def test_reused_module_without_loop_carried_dep_has_no_recurrence_self_edge(
@@ -590,6 +646,24 @@ def test_reused_module_without_loop_carried_dep_has_no_recurrence_self_edge(
 
     assert "proj -> proj" not in dot
     assert 'label="↻"' not in dot
+
+
+def test_interleaved_same_layer_recurrences_keep_distinct_chains(tmp_path: Path) -> None:
+    """Two same-layer recurrence sites remain distinct in deep and collapsed views."""
+
+    trace = _trace(SharedTwoSiteRecurrences())
+    deep_dot = _render_dot(trace, tmp_path, "two_site_recurrence_deep", vis_call_depth=1000)
+    collapsed_dot = _render_dot(trace, tmp_path, "two_site_recurrence_collapsed", vis_call_depth=1)
+
+    for dot in (deep_dot, collapsed_dot):
+        assert 'label="↻"' in dot
+        assert "pass_pairs=1->3,2->4,3->5,4->6" in dot
+        assert "chains=1->3->5,2->4->6" in dot
+        assert "pass_pairs=1->2,2->3" not in dot
+
+    layer = _first_layer(trace, "linear")
+    assert f"{layer.layer_label} -> {layer.layer_label}" in deep_dot
+    assert "block -> block" in collapsed_dot
 
 
 def test_render_loop_module_rolling_demos() -> None:

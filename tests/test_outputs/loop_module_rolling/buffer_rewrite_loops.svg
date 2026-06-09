@@ -40,7 +40,7 @@
 <!-- add_1_1&#45;&gt;add_1_1 -->
 <g id="edge4" class="edge">
 <title>add_1_1&#45;&gt;add_1_1</title>
-<g id="a_edge4"><a xlink:title="TorchLens recurrence: endpoint=add_1_1; pass_pairs=1&#45;&gt;2,2&#45;&gt;3,3&#45;&gt;4,4&#45;&gt;5; count=4">
+<g id="a_edge4"><a xlink:title="TorchLens recurrence: endpoint=add_1_1; pass_pairs=1&#45;&gt;2,2&#45;&gt;3,3&#45;&gt;4,4&#45;&gt;5; count=4; chains=1&#45;&gt;2&#45;&gt;3&#45;&gt;4&#45;&gt;5">
 <path fill="none" stroke="black" stroke-width="2" d="M133.41,-152.41C145.37,-153.55 153.76,-156.57 153.76,-161.45 153.76,-165.11 149.04,-167.72 141.64,-169.28"/>
 <polygon fill="black" stroke="black" stroke-width="2" points="142.98,-166.61 136.41,-170.05 143.69,-171.46 142.98,-166.61"/>
 </a>
