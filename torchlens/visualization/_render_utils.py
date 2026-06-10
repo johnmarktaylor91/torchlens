@@ -250,6 +250,9 @@ def make_module_cluster_attrs(
         "style": f"filled,{line_style}",
         "fillcolor": fillcolor,
         "penwidth": str(penwidth),
+        # Extra breathing room between the cluster border and the nodes/edge
+        # labels inside it (graphviz default is 8pt, which crowds the border).
+        "margin": "20",
     }
 
 
