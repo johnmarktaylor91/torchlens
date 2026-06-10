@@ -584,6 +584,34 @@ def _dot_self_edge_attrs(dot: str) -> list[str]:
     ]
 
 
+def _dot_edge_attrs(dot: str, tail: str, head: str) -> list[str]:
+    """Return DOT attributes for explicit ``tail -> head`` edges."""
+
+    return [
+        match.group("attrs")
+        for match in re.finditer(
+            rf"(?m)^\s*{re.escape(tail)} -> {re.escape(head)} \[(?P<attrs>[^\]]*)\]",
+            dot,
+        )
+    ]
+
+
+def _html_label_lines(attrs: str, kind: str) -> list[str] | None:
+    """Return the visible text lines of an HTML ``kind=<...>`` edge label.
+
+    ``kind`` is ``"label"``, ``"headlabel"``, or ``"taillabel"``.  Returns None
+    when the edge carries no such HTML label.  Tags (including ``<BR/>`` line
+    breaks) are treated as line separators, so a two-line combined label yields
+    two entries.
+    """
+
+    match = re.search(rf"(?<![a-z]){kind}=<<TABLE[^>]*>(?P<body>.*?)</TABLE>>", attrs)
+    if match is None:
+        return None
+    text = re.sub(r"<[^>]+>", "\n", match.group("body"))
+    return [line.strip() for line in text.split("\n") if line.strip()]
+
+
 def _dot_node_shapes(dot: str) -> dict[str, str]:
     """Map each DOT node title (``<B>...</B>``) to its graphviz ``shape``."""
 
@@ -728,9 +756,9 @@ def test_recurrent_self_loop_combines_in_out_into_one_midpoint_label(tmp_path: P
 
     Self-loops crowd separate head/tail labels against the node, and a recurrence
     self-edge never carries argument/conditional labels, so the In/Out pass ranges
-    are merged into a single midpoint ``label`` (which graphviz reserves layout
-    space for), with ``In`` above ``Out`` for the default bottom-up layout and a
-    harmonized font size. Parallel fan-out has no self-edge at all.
+    are merged into a single two-line HTML midpoint ``label`` (which graphviz
+    reserves layout space for), with ``In`` above ``Out`` for the default
+    bottom-up layout. Parallel fan-out has no self-edge at all.
     """
 
     recurrent_trace = _trace(ReusedReluLoop())
@@ -741,14 +769,8 @@ def test_recurrent_self_loop_combines_in_out_into_one_midpoint_label(tmp_path: P
     # One combined midpoint label, not separate head/tail labels.
     assert "headlabel" not in recurrent_attrs
     assert "taillabel" not in recurrent_attrs
-    label_match = re.search(r'label="([^"]*)"', recurrent_attrs)
-    assert label_match is not None
-    label_text = label_match.group(1)
-    assert "In 2-4" in label_text
-    assert "Out 1-3" in label_text
-    # In is placed above Out for the bottom-up default; font harmonized to 8.
-    assert label_text.index("In 2-4") < label_text.index("Out 1-3")
-    assert "fontsize=8" in recurrent_attrs
+    # HTML form, In above Out for the bottom-up default.
+    assert _html_label_lines(recurrent_attrs, "label") == ["In 2-4", "Out 1-3"]
     assert "↻" not in recurrent_attrs
 
     fanout_trace = _trace(ParallelFanout())
@@ -765,27 +787,110 @@ def test_self_loop_label_order_flips_with_layout_direction(tmp_path: Path) -> No
     )
     self_edges = _dot_self_edge_attrs(topdown_dot)
     assert len(self_edges) == 1
-    label_match = re.search(r'label="([^"]*)"', self_edges[0])
-    assert label_match is not None
-    label_text = label_match.group(1)
     # Top-down flow points down, so Out (tail) is placed above In (head).
-    assert label_text.index("Out 1-3") < label_text.index("In 2-4")
+    assert _html_label_lines(self_edges[0], "label") == ["Out 1-3", "In 2-4"]
 
 
-def test_head_tail_labels_get_blank_line_padding(tmp_path: Path) -> None:
-    """Non-self-loop In/Out labels carry a blank line above and below.
+def test_recurrence_back_edge_merges_in_out_into_one_midpoint_label(tmp_path: Path) -> None:
+    """A rolled recurrence back-edge merges In/Out into one midpoint label.
 
-    Head/tail labels are not allocated layout space, so they crowd the node where
-    an edge attaches -- worst at oblique entries. A blank line above and below
-    each label pushes the visible text along its edge, away from the node, which
-    clears the occlusion. Self-loops use a combined midpoint label and are
-    unaffected by this padding.
+    ``TanhRNNCellLoop`` rolls to a two-op cycle whose back-edge
+    (``tanh_1_2 -> linear_1_1``) runs anti-parallel to the forward edge between
+    the same two nodes; four head/tail labels would fight for that narrow band,
+    so the back-edge's annotations merge into one midpoint ``label`` (graphviz
+    reserves dummy-node space for it, pushing the anti-parallel curves apart).
+    The forward edge keeps its separate head/tail labels: a forward edge may
+    also carry argument or conditional midpoint labels.
     """
 
-    dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_pad", vis_call_depth=1000)
+    dot = _render_dot(_trace(TanhRNNCellLoop()), tmp_path, "rnn_back_edge", vis_call_depth=1000)
 
-    assert r'taillabel="\n  Out 1-2  \n"' in dot
-    assert r'headlabel="\n  In 2-3  \n"' in dot
+    back_edges = _dot_edge_attrs(dot, "tanh_1_2", "linear_1_1")
+    assert len(back_edges) == 1
+    back_attrs = back_edges[0]
+    assert "headlabel" not in back_attrs
+    assert "taillabel" not in back_attrs
+    assert _html_label_lines(back_attrs, "label") == ["In 2-4", "Out 1-3"]
+
+    forward_edges = _dot_edge_attrs(dot, "linear_1_1", "tanh_1_2")
+    assert len(forward_edges) == 1
+    forward_attrs = forward_edges[0]
+    assert _html_label_lines(forward_attrs, "headlabel") == ["In 1-4"]
+    assert _html_label_lines(forward_attrs, "taillabel") == ["Out 1-4"]
+    assert _html_label_lines(forward_attrs, "label") is None
+
+
+def test_buffer_edges_merge_annotations_into_midpoint_labels(tmp_path: Path) -> None:
+    """Buffer-incident edges merge their pass annotations into midpoint labels.
+
+    A buffer's read and write edges run anti-parallel in the same narrow band
+    (the geometry the back-edge merge solves), and the read edge curves enough
+    that even its own head label collides with its own spline -- so buffer
+    edges always merge. The double-annotation read edge gets a two-line
+    midpoint label; single-annotation edges get a one-line midpoint label
+    instead of a head/tail label.
+    """
+
+    dot = _render_dot(
+        _trace(BufferRewriteLoops()), tmp_path, "buffer_edges", show_buffer_layers="always"
+    )
+
+    read_edges = _dot_edge_attrs(dot, "buffer_1", "add_1_1")
+    assert len(read_edges) == 1
+    assert _html_label_lines(read_edges[0], "label") == ["In 1-5", "Out 1-5"]
+
+    fanout_read_edges = _dot_edge_attrs(dot, "buffer_1", "add_2_2")
+    assert len(fanout_read_edges) == 1
+    assert _html_label_lines(fanout_read_edges[0], "label") == ["Out 1-5"]
+
+    write_edges = _dot_edge_attrs(dot, "add_2_2", "buffer_1")
+    assert len(write_edges) == 1
+    assert _html_label_lines(write_edges[0], "label") == ["In 2-6"]
+
+    for attrs in (read_edges[0], fanout_read_edges[0], write_edges[0]):
+        assert "headlabel" not in attrs
+        assert "taillabel" not in attrs
+
+
+def test_varying_forward_edges_keep_html_head_tail_labels(tmp_path: Path) -> None:
+    """Forward edges that vary across passes keep HTML head/tail In/Out labels.
+
+    ``DeepLoopBody`` is a three-op cycle: its body edges stay forward edges with
+    separate head/tail labels, emitted as borderless one-cell HTML tables so the
+    text keeps an even transparent margin from the node and arrowhead (graphviz
+    allocates no layout space for plain head/tail labels). Body edges of a
+    >=3-op cycle bow near the merged back-edge midpoint label, so they carry
+    audit-derived per-edge ``labeldistance``/``labelangle`` placement attrs;
+    straight edges (e.g. the input edge) keep graphviz's default placement.
+    """
+
+    dot = _render_dot(_trace(DeepLoopBody()), tmp_path, "deep_forward", vis_call_depth=1000)
+
+    body_out = _dot_edge_attrs(dot, "linear_1_1", "relu_1_2")
+    assert len(body_out) == 1
+    assert _html_label_lines(body_out[0], "taillabel") == ["Out 1-3"]
+
+    body_in = _dot_edge_attrs(dot, "relu_1_2", "layernorm_1_3")
+    assert len(body_in) == 1
+    assert _html_label_lines(body_in[0], "headlabel") == ["In 1-3"]
+
+    # Cycle body edges carry tuned tangent-relative placement (values are
+    # tunable constants -- assert presence, not numbers).
+    for attrs in (body_out[0], body_in[0]):
+        assert "labeldistance=" in attrs
+        assert "labelangle=" in attrs
+
+    # The straight input edge keeps default placement and its head label.
+    input_edge = _dot_edge_attrs(dot, "input_1", "linear_1_1")
+    assert len(input_edge) == 1
+    assert _html_label_lines(input_edge[0], "headlabel") == ["In 1"]
+    assert "labeldistance=" not in input_edge[0]
+    assert "labelangle=" not in input_edge[0]
+
+    # The cycle's back-edge merges to a midpoint label like any recurrence.
+    back_edge = _dot_edge_attrs(dot, "layernorm_1_3", "linear_1_1")
+    assert len(back_edge) == 1
+    assert _html_label_lines(back_edge[0], "label") == ["In 2-3", "Out 1-2"]
 
 
 def test_atomic_single_op_module_collapse_preserves_op_render(tmp_path: Path) -> None:
