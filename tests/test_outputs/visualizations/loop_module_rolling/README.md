@@ -17,8 +17,8 @@ for _ in range(4):
     y = self.relu(y)
 ```
 
-Labels: atomic module rectangle `relu_1_1 (x5)` marked `@relu`; recurrence self-edge
-`Out 1-4` to `In 2-5`.
+Labels: atomic module rectangle `relu_1_1 (x5)` marked `@relu`; recurrence self-edge with
+one merged midpoint label, `In 2-5` over `Out 1-4`.
 A continuous chain: each relu feeds the next, so all five calls roll into one atomic-module
 rectangle at a single site with a plain `(x5)` count (no split range).
 
@@ -32,7 +32,8 @@ for _ in range(3):
 return outside + inside
 ```
 
-Labels: two atomic rectangles `relu_1_1` marked `@relu:1` and `relu_2_3` marked `@relu:2-4`.
+Labels: two atomic rectangles `relu_1_1` marked `@relu:1` and `relu_2_3` marked `@relu:2-4`;
+the loop site's self-edge carries a merged midpoint label, `In 2-3` over `Out 1-2`.
 The same atomic module used at a separable outside site plus a loop renders as one rectangle
 per site, with the distinguishing call range carried on the `@relu` marking.
 
@@ -44,7 +45,8 @@ for _ in range(4):
     y = self.block(y)
 ```
 
-Labels: collapsed module box `@block (x5)`; self-edge `Out 1-4` to `In 2-5`.
+Labels: collapsed module box `@block (x5)`; self-edge with one merged midpoint label,
+`In 2-5` over `Out 1-4`.
 Shows call labeling for a multi-op module used both outside and inside one recurrent loop.
 
 ## inside_outside_block_expanded
@@ -55,8 +57,9 @@ for _ in range(4):
     y = self.block(y)
 ```
 
-Labels: `linear_1_1 (x5)` and `relu_1_2 (x5)`; loop-carried edge from ReLU to Linear is
-`Out 1-4` to `In 2-5`.
+Labels: `linear_1_1 (x5)` and `relu_1_2 (x5)`; the recurrence back-edge from ReLU to Linear
+carries one merged midpoint label, `In 2-5` over `Out 1-4`, while the forward Linear-to-ReLU
+edge keeps head/tail labels `Out 1-5` / `In 1-5`.
 Shows the same inside/outside block expanded to its internal operations.
 
 ## deep_loop_body
@@ -67,7 +70,8 @@ for _ in range(3):
 ```
 
 Labels: `linear_1_1 (x3)`, `relu_1_2 (x3)`, `layernorm_1_3 (x3)`;
-loop-carried edge from LayerNorm to Linear is `Out 1-2` to `In 2-3`.
+the recurrence back-edge from LayerNorm to Linear carries one merged midpoint label,
+`In 2-3` over `Out 1-2`, while the body edges keep head/tail labels (`Out 1-3`, `In 1-3`).
 Shows a realistic three-op loop body without module collapse.
 
 ## rnn_cell
@@ -78,8 +82,9 @@ for _ in range(4):
     h = torch.tanh(self.lin(h))
 ```
 
-Labels: `linear_1_1 (x4)` and `tanh_1_2 (x4)`; recurrent edge from Tanh to Linear is
-`Out 1-3` to `In 2-4`.
+Labels: `linear_1_1 (x4)` and `tanh_1_2 (x4)`; the recurrence back-edge from Tanh to Linear
+carries one merged midpoint label, `In 2-4` over `Out 1-3`, while the forward Linear-to-Tanh
+edge keeps head/tail labels `Out 1-4` / `In 1-4`.
 Shows a genuine recurrent cell with labeled loop-carried dependency and no recurrence icon.
 
 ## repeated_block_stack_collapsed
@@ -89,7 +94,8 @@ for _ in range(4):
     x = self.block(x)  # Linear -> ReLU -> Linear
 ```
 
-Labels: collapsed module box `@block (x4)`; self-edge `Out 1-3` to `In 2-4`.
+Labels: collapsed module box `@block (x4)`; self-edge with one merged midpoint label,
+`In 2-4` over `Out 1-3`.
 Shows the canonical repeated block stack at collapsed module depth.
 
 ## repeated_block_stack_expanded
@@ -100,7 +106,8 @@ for _ in range(4):
 ```
 
 Labels: `linear_1_1 (x4)`, `relu_1_2 (x4)`, `linear_2_3 (x4)`;
-loop-carried edge from the second Linear to the first Linear is `Out 1-3` to `In 2-4`.
+the recurrence back-edge from the second Linear to the first carries one merged midpoint
+label, `In 2-4` over `Out 1-3`, while the body edges keep head/tail labels.
 Shows the canonical repeated block stack expanded to its three internal operations.
 
 ## two_distinct_loops
@@ -112,8 +119,8 @@ for _ in range(3):
     second = self.shared(second)
 ```
 
-Labels: atomic shared-module rectangle marked `@shared:1-2,3-5`; recurrence self-edge
-`Out 1,3-4` to `In 2,4-5`.
+Labels: atomic shared-module rectangle marked `@shared:1-2,3-5`; recurrence self-edge with
+one merged midpoint label, `In 2,4-5` over `Out 1,3-4`.
 The shared single-op module rolls into one atomic rectangle whose marking carries compact
 colon ranges for the two separate loop regions.
 
@@ -129,7 +136,10 @@ for _ in range(3):
 ```
 
 Labels: buffer address `@state:1-6`, `add_1_1 (x5)`, `add_2_2 (x5)`;
-carried data edge on `add_1_1` is `Out 1-4` to `In 2-5`.
+the `add_1_1` self-edge carries a merged midpoint label, `In 2-5` over `Out 1-4`. Every
+buffer-incident edge also merges to a midpoint label: the read edge into `add_1_1` is
+two-line (`In 1-5` over `Out 1-5`), and the single-annotation read (`Out 1-5`) and write
+(`In 2-6`) edges are one-line.
 Shows buffer version ranges and dashed buffer edges across two loops.
 
 ## nested_loop
@@ -142,8 +152,10 @@ for _ in range(2):
     x = x + residual
 ```
 
-Labels: `linear_1_1 (x4)` and `add_1_3 (x2)`; inner-loop self-edge is `Out 1,3`
-to `In 2,4`.
+Labels: `linear_1_1 (x4)` and `add_1_3 (x2)`; the inner-loop self-edge carries a merged
+midpoint label, `In 2,4` over `Out 1,3`. The congested band between the projection and the
+residual add (back-edge plus its anti-parallel forward partner, next to two self-loops)
+merges those edges' annotations into midpoint labels too.
 Shows nested-loop pass ranges and a second carried edge across outer iterations.
 
 ## parallel_fanout
@@ -152,7 +164,8 @@ Shows nested-loop pass ranges and a second carried edge across outer iterations.
 return torch.stack([self.proj(x) for _ in range(4)])
 ```
 
-Label: `linear_1_1:1,2,3,4`; no recurrence self-edge.
+Labels: atomic rectangle `linear_1_1` marked `@proj:1,2,3,4`; no recurrence self-edge and
+no In/Out edge labels.
 Shows parallel fan-out as a contrast case where repeated calls do not imply loop-carried flow.
 
 ## Label Contract
@@ -161,13 +174,38 @@ Rolled nodes keep honest execution counts when repeated calls form one continuou
 Atomic (single-op leaf) modules render as rectangles marked with their address at every depth;
 multi-op modules collapse to a `box3d` summary. Colon ranges appear on the marking when they
 disambiguate split regions or parallel repeated calls, and are not duplicated as a title count.
-Recurrence self-edges are plain arrows (the `↻` icon is intentionally absent) whose `Out`
-and `In` pass ranges are merged into a single midpoint label -- graphviz reserves layout
-space for a midpoint edge label, so it never crowds the node the way separate head/tail
-labels do. `In` sits above `Out` for the default bottom-up layout and flips for top-down.
-Non-self-loop edges keep separate head/tail labels (those edges may also carry argument or
-conditional midpoint labels, which a combined label would collide with). Each head/tail label
-is padded with a blank line above and below: since graphviz does not reserve space for
-head/tail labels, the blank lines push the visible text along its edge, away from the node it
-attaches to, which clears the occlusion that otherwise occurs where an edge meets a node at an
-oblique angle.
+
+Edges whose pass membership varies across a layer's ops carry `In <passes>` / `Out <passes>`
+annotations. Where each annotation lives depends on the edge's structural class:
+
+- **Varying forward edges** keep separate head/tail labels, emitted as borderless one-cell
+  HTML tables whose cell padding gives the text a small, even transparent margin on every
+  side -- enough to read as belonging to that endpoint without touching the node or
+  arrowhead. They stay head/tail labels because a forward edge may also carry an argument
+  or conditional midpoint label, which a combined midpoint label would collide with.
+- **Recurrence self-loops** merge `In`/`Out` into a single two-line midpoint label (the `↻`
+  icon is intentionally absent). graphviz models a midpoint label as a dummy node and
+  reserves layout space for it, so it never crowds the node the way head/tail labels would
+  on a tight self-arc. `In` sits above `Out` for the default bottom-up layout and flips for
+  top-down.
+- **Recurrence back-edges** (and the congested forward partner of a back-edge whose band
+  also holds a self-loop) merge the same way: the back-edge runs anti-parallel to its
+  forward edge, so four head/tail labels would fight for the narrow gap between the two
+  curves -- and the reserved midpoint spot also pushes the anti-parallel curves apart. The
+  merge only happens when no argument/conditional label can claim the midpoint.
+- **Buffer-incident edges** always merge, even when only one of `In`/`Out` is present
+  (rendered as a one-line midpoint label): a buffer's read and write edges run
+  anti-parallel in the same narrow band, and the read edge curves enough that even its own
+  head label would collide with its own spline.
+
+graphviz does not reserve layout space for head/tail labels, so the remaining ones are
+fine-tuned by structure: edges whose splines bow near the labeled endpoint (cycle body
+edges bowed by a merged back-edge midpoint label, skip edges into self-loop layers) get
+per-edge `labeldistance`/`labelangle` attrs that re-anchor the label to the edge's end
+tangent. The values were chosen by an offline audit-scored placement sweep over a 16-model
+rolled inspection set (the 12 demos here plus 4 extra recurrence stress models); the same
+exact-geometry audit (label vs label, node outline, spline, arrowhead, cluster border,
+computed from `dot -Tjson` layouts) is a permanent regression gate in
+`tests/test_label_geometry.py`, which requires zero hard violations on every graph in that
+set. Module clusters carry an extra margin so the border does not crowd the nodes or labels
+inside.
