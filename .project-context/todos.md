@@ -1,5 +1,27 @@
 # Task & Bug Tracker
 
+## What's left — quick index (regenerated 2026-06-07)
+
+A glance at the OPEN work, grouped by theme (rough counts; see sections below for detail):
+
+- **Capture coverage gaps (~5):** comprehensive functorch/`torch.func` transform coverage (vmap/grad/jac/`functional_call`) — the big one; quantized-tensor validation crash; device-context injection under active logging; multi-GPU RNG capture; arg/kwarg tensor extraction gaps.
+- **Backward-pass sprint (~7):** unified backward-pass untangling (recurrent grad_fn semantics, type_index schemes, name introspection), first-class `BackwardPass` records, higher-order gradients, auto-suppress grad_fn when `backward_ready=False`, backward call-site context, per-layer grad oracle redesign, fastlog gradient support.
+- **Perf north-star (~25):** halt-implies-sub-baseline benchmark rows, leaner `rerun`, zero-copy `save_mode="reference"`, lazy fastlog ctx; plus the low-level PERF-* backlog (model-prep PERF-36..39, 1M-scale PERF-29..35, and assorted O(n^2)/GC items).
+- **Pre-2.0 naming/API polish (~15):** holistic naming pass (selectors, comparison verbs, symmetric pairs, `peek`->`pluck`), 0-based accessor indexing, strict-type accessors, `__repr__`/`.locator` audit, capture_config namespace migration, fastlog/trace predicate unification, several deferred renames.
+- **Visualization (~10):** rip ELK out (promote pure-Python Kahn layout), more built-in themes + custom-visuals interface, DenseNet layout, rolled-view loop-vs-module collision, combined fwd+bwd render, multi-output module rendering, bundle-diff color scale, large-graph rendering, direct-SVG path.
+- **Docs (~10):** `docs/performance.md`, `docs/for-ai-agents.md`, promote glossary to exhaustive reference, elevator-pitch + substrate/metadata framing, comparison-page concessions, ELK setup guide, speed-default advertising, postfunc persistence story.
+- **Low-level bug/GC/perf backlog (migrated from memory todo.md):** ~13 correctness/capture bugs (ELK-IF-THEN, BFLOAT16-TOL, etc.), open GC-* refs, open PERF-* refs, deferred design decisions (#9/#55/#93/#102), refactoring candidates, investigate/revisit items. See the dedicated section near the end.
+- **Big/strategic features (~20):** capture-path unification + backend adapter (MLX/JAX), `to_dataframe` + the creative-metadata tooling tiers, attribution methods, tensor-slicing recipes + `op.outs`, input/output transform library, container handling, stacked multi-pass log, interactive Jupyter viewer, cross-model RSA alignment, circuit-tracer UI primitives.
+
+### Code panel truncates long source lines at its right inner edge (filed 2026-06-10)
+
+Observed during the rolled-view edge-label sprint round-B review: in the composed demo
+fixtures, long code lines (e.g. a full `def forward(...)` signature) run to the code
+panel's right inner edge and get cut, while the panel box itself stays intact. Graph and
+labels unaffected. Fix candidates: wrap long lines, widen the panel to fit the longest
+line, or shrink the panel font. Lives in `torchlens/visualization/code_panel.py` (panel
+SVG sizing/composition).
+
 ## Architectural endpoint (JMT 2026-05-15)
 
 > "Configurable capture + postprocess + output, all on one substrate. Pay only for what you use."
@@ -1763,19 +1785,6 @@ Estimated remaining: ~4-8h codex once mid-forward consumers are
 audited. Worth scheduling as its own focused sprint rather than
 bundling with other cleanups.
 
-### Mypy accessor typing errors — DONE (Mini-Sprint α item 1 @0f54ba5)
-
-Resolved in commit `0f54ba5`. `mypy torchlens/data_classes/` is now
-clean (16 source files, 0 errors). Codex fixed broader leakage too.
-
-### Golden parity pickle size — DONE (Mini-Sprint α item 2 @0947830)
-
-Resolved in commit `0947830`. Both resnet50 goldens now 131KB (was 765KB).
-Solution: gzip-compressed pickle storage with transparent read/write
-support in the parity test (input shape stayed similar; metadata
-dominates pickle size more than input HW does, so compression was the
-practical fix).
-
 ### Fastlog vs bare-forward perf benchmark gap (raised 2026-05-11)
 
 There's no direct benchmark of `tl.fastlog.record(...)` overhead vs bare
@@ -1842,15 +1851,8 @@ implementation-spec maintenance list were resolved in `da15b5f`.
 
 ## Bugs
 
-### [FIXED 2026-06-01, commit ea5dd69] distilbert_ffn facet recipe targets a stale transformers class name (filed 2026-06-01)
-
-The built-in MLP facet recipe at `torchlens/semantic/recipes/mlp.py:58` registered against
-`class_name="DistilBertFFN"`, but transformers >= 4.57 renamed that module class to `FFN`.
-On current transformers the recipe matched NOTHING, so DistilBERT FFN facets silently failed to
-populate. FIXED: changed to `class_name=("FFN", "DistilBertFFN")` (exact-match tuple, mirrors the
-existing `distilbert_attention` convention) so both current and legacy names resolve. Verified on
-a real DistilBERT (facets populate non-empty); added `tests/semantic/test_mlp_recipes.py` (current
-class + legacy class + real-model regression guards). Surfaced 2026-06-01 during HF notebook finalization.
+(No open bugs in this section — the distilbert_ffn facet recipe bug was FIXED 2026-06-01,
+commit ea5dd69, and archived under "## Completed (recent)".)
 
 ## Creative utility ideas from exhaustive metadata (filed 2026-05-23)
 
@@ -2372,55 +2374,9 @@ later.
 
 ---
 
-### [BIG, important] TorchLens does not capture buffer WRITES/OVERWRITES (raised 2026-06-04) — [DONE 2026-06-05, local main commits 91e1645..6e3a291 + 430357a]
-
-SHIPPED. All three write kinds now captured as validatable version nodes (reassignment via
-scoped class `__setattr__`; in-place via storage snapshot; fused/native via post-op value
-snapshot). `num_overwrites` correct for BatchNorm train; `copy_` source edge restored;
-mid-forward reassignment caught at any nesting level. Persistent `Buffer` entity shipped;
-`Buffer(Op)` retired. Gradient flow verified; tripwire non-vacuous; `docs/buffers.md` + glossary
-lockstep. RNN-cell loop-detection crash root-caused + fixed (`_scrub_per_op_equivalence_lists`).
-See `.research/buffer-build_SUMMARY.md`. Original analysis below (archival):
-
-Discovered during the buffer-sprint adversarial review (Codex + Claude both proved it
-empirically). TorchLens currently captures only buffer READS as graph nodes; the WRITE
-side is largely invisible:
-- **BatchNorm train**: running-stat update is inside the fused `batch_norm` kernel ->
-  only the initial (pre-update) read is captured; `num_overwrites=0`.
-- **In-place (`mul_`/`add_`/`copy_`)**: captured as a plain compute op with
-  `is_buffer=False`, NO buffer linkage, no new buffer version; `copy_` drops its source edge.
-- **Mid-forward reassignment (`self.b = y+1`)**: invisible — `_tag_untagged_buffers`
-  (`backends/torch/model_prep.py:724`) only tags at module-entry, so an assigned-then-read
-  buffer isn't even a buffer node.
-- Two-loop overwrite collapses into ONE Layer (`equivalence_class="buffer_<address>"`
-  ignores loop position).
-- `trace.buffers` ALREADY LIES for overwritten buffers (`num_overwrites` returns 0;
-  collapsed-per-address accessor sees 1 of N ops; shared aliases undiscovered).
-
-This is the proposal's flagged "hard part" (detecting overwrites), and it is NOT built.
-Making buffer VERSIONING real (the dual-label, `value_after`, BatchNorm/in-place history)
-requires a **capture-pipeline sub-project** ("Option B" in
-`.research/buffer-sprint/SCOPE_NOTE.md`): intercept `nn.Module.__setattr__`/`register_buffer`;
-post-call buffer snapshot/diff for fused ops; detect in-place ops mutating buffer-tagged
-receivers and synthesize the write-version + rewire reads; fix `copy_` source edge; give
-buffers loop-position context. WEEKS, risky (wrapper hot path + loop detection + validation).
-Separate from the data-model refactor. See `.research/buffer-sprint/` for full empirical
-findings.
-
-**UPDATE 2026-06-05 (overnight effort):** The PROMISE this threatened (perfect replay) is
-INTACT — the recurrent "failure" was a validator GT-aliasing false-negative, now FIXED + merged
-(`39a5029`). Replay survives buffer mutation via `out_versions_by_child`. So the write-version
-model is a data-model ENRICHMENT, not a replay requirement. Two dual-lab adversarial rounds
-demolished the cheap `_version`-diff approach (systematic false-negative on fused BatchNorm;
-alias/view/`.data` evasion; global `__setattr__` leak; new-identity-node double-modeling). The
-**VALIDATED, lower-risk design** (both labs converged): build the version chain as a VIEW over
-the existing `out_versions_by_child` value-diff (catches BatchNorm via value compare, under
-`save_arg_values=True` precondition); the existing mutating op IS the version producer (no new
-nodes); module-EXIT re-scan for reassignment (no global monkeypatch); keep "node only if read",
-unread-write history on the entity. TWO DECISIONS for JMT first: (a) `save_arg_values=True`
-precondition acceptable (memory)? (b) re-measure the dual-label/two-loop split once writes are
-real. Full design + review evidence in `.research/buffer-sprint/PLAN_PHASE2.md` +
-`PLAN2_REVIEW_*.md` + `.research/buffer-overnight_SUMMARY.md`.
+(Buffer WRITES/OVERWRITES capture — the "[BIG]" 2026-06-04 item — SHIPPED 2026-06-05, local
+main commits 91e1645..6e3a291 + 430357a; archived under "## Completed (recent)". The
+layer-vs-op parity follow-on remains open: see "Unify buffer layer-vs-op treatment" above.)
 
 ---
 
@@ -3657,7 +3613,398 @@ but are natural follow-ons. Pick up after MVP ships.
   LRU cap and/or a public cache-clear API. Source: profiling audit
   Finding #6.
 
+## Low-level backlog (migrated from memory todo.md, 2026-06-07)
+
+These items were folded in from the 33-day-old curated memory checklist
+(`~/.claude/projects/.../memory/todo.md`, now retired to a pointer stub). They are mostly
+low-level GC / perf / correctness items the rest of this tracker does not cover. IDs (GC-1,
+PERF-3, ELK-IF-THEN, #9, etc.) are preserved verbatim. Items explicitly marked done in the
+memory file were dropped; duplicates of items already tracked above were dropped. Where an item
+plausibly overlaps a recently-shipped local-main sprint (intervention API 2.16.0 / facets /
+buffer write-capture / capture-unification+MLX), it is FLAGGED "VERIFY" rather than deleted.
+
+> **Bug-reference note (from memory file):** `bugs_by_file.md` tracked 170 numbered bugs —
+> 161 FIXED, 0 OPEN, 5 TRIAGED OUT, 4 DEFERRED as of the memory snapshot. The 4 deferred design
+> decisions (#9/#55/#93/#102) are carried below; the rest were resolved.
+
+### Correctness / capture bugs
+
+- **ELK-IF-THEN**: `render_elk_direct()` in elk_layout.py:954-1013 has ZERO conditional branch
+  code. rendering.py:970-982 correctly labels IF/THEN edges, but ELK path never checks
+  `cond_branch_start_children` or `cond_branch_then_children`. Users see arg labels but NO
+  IF/THEN labels in ELK mode. (NOTE: ELK is slated for removal — see "Retire ELK from
+  visualization" above; this may become moot if ELK is ripped out.)
+- **BFLOAT16-TOL**: `MAX_FLOATING_POINT_TOLERANCE = 3e-6` (utils/tensor_utils.py:27) is 2,600x
+  too tight for bfloat16 (epsilon ~7.8e-3). `tensor_nanequal()` has no dtype-specific tolerance
+  adjustment. Validation replay with `allow_tolerance=True` (core.py:568) will always fail for
+  bfloat16 models. (Validation-tripwire-adjacent: fix by making tolerance dtype-aware, NOT by
+  broadening the global tolerance — see Validation Integrity in CLAUDE.md.)
+- **FUNC-CALL-LOC-LEAK**: `FuncCallLocation._frame_func_obj` set at func_call_location.py:98 but
+  only released at line 171 in `_load_source()`, which is triggered by lazy property access.
+  Normal code only accesses `.file` (NOT lazy) so `_load_source()` never called. ~260-1010
+  objects per pass, each holding a function object reference. Severity: LOW-MODERATE
+  (~0.3-5 MB per pass).
+- **ARG-KWARGS-MISSING**: `extract_tensors_and_params()` in arg_positions.py doesn't extract
+  tensors passed as keyword args for many common functions (linear, cat, where, normal).
+  `tensor_kwargs=()` in static table entries means `linear(x, weight=w, bias=b)` only finds `x`.
+  ~637 functions may need a tensor_kwargs audit. (Cross-ref: the "Audit function-argument-name
+  introspection (Op.arg_names + companions)" Active Task above tracks the broader FUNC_ARG_SPECS
+  coverage question — this is the concrete kwarg-extraction symptom.)
+- **ELK-EDGE-LABEL-DEDUP**: Edge deduplication (elk_layout.py:990-992) keeps only the first edge
+  between a pair, dropping later edges' arg labels. If the first edge lacks a label and the
+  second has it, the label is lost. (Also moot if ELK is removed.)
+- **TO-PANDAS-NEW-FIELDS**: `to_pandas()` in interface.py:420-472 and layer_log.py:649-671
+  missing `func_config` and `cond_branch_then_children` columns added in PR #127.
+- **COND-THEN-MULTIPASS**: `cond_branch_then_children` not merged for multi-pass LayerLog
+  (layer_log.py:141-146). Only first pass value used.
+- **INVARIANT-COND-THEN**: No invariant check for `cond_branch_then_children` <->
+  `conditional_then_edges` consistency (invariants.py). Also no check that same-layer ops agree
+  on `in_cond_branch`.
+- **HASH-COLLISION**: `make_short_barcode_from_input` (hashing.py:42-62) uses Python `hash()` +
+  base64 truncation. ~0.3-0.5% collision risk at 1K params. Could cause false same-layer grouping.
+- **RNG-MULTI-GPU**: `rng.py:70` only captures RNG state for cuda device 0. Multi-GPU models get
+  non-deterministic validation replays.
+- **QUANTIZED-CRASH**: `tensor_nanequal()` (tensor_utils.py:90) calls `.isinf()` which raises
+  AttributeError on quantized tensors. Validation crashes for quantized models.
+- **DEVICE-CONTEXT-LOGGING**: DeviceContext bypass (`_maybe_inject_device_kwarg`) only runs in
+  the fast path when logging is disabled (torch_funcs.py:241). During active logging, factory
+  functions (`torch.zeros`, `torch.ones`) don't get device injection. Breaks HuggingFace
+  `from_pretrained` under logging.
+- **VALIDATE-STATE-RESTORE**: `validate_forward_pass` (user_funcs.py:535-552) saves the model
+  state_dict at line 535 but `load_state_dict()` at line 552 only runs if no exception. If the
+  forward pass raises, model params remain mutated. Needs try/finally. (Related to the newer
+  "Validation can't reset non-registered mutable state" item above, but distinct: this is the
+  exception-path leak for REGISTERED params/buffers.)
+- **INTERVENTION-MISSING-TENSOR-LABEL** (likely resolved by intervention API 2.16.0 — VERIFY):
+  Replacement tensors injected via the intervention API (or any `register_forward_hook`
+  returning a new tensor) mid-forward-pass don't carry `tl_tensor_label_raw`, causing
+  `_handle_module_exit` (decoration/model_prep.py:672) to raise `AttributeError: 'Tensor' object
+  has no attribute 'tl_tensor_label_raw'` when the modified tensor flows out of the next module.
+  Discovered fleet EXP_19 (quant_sensitivity) 2026-05-04. Fix plan was two-layer: (1) propagate
+  `tl_*` attrs from original to replacement in the intervention API; (2) defensive auto-relabel
+  in `_handle_module_exit` for user-injected tensors (mark `intervention_replaced=True`). Also
+  affects ANY raw `register_forward_hook` returning a fresh tensor. NOTE: lesson
+  `lesson_intervention_breaks_instrumentation.md` says the whole class was addressed; confirm the
+  raw-hook path too. (See also Validation Integrity in CLAUDE.md — a placeholder op in PLAIN
+  capture must still FAIL the invariant; only genuine user interventions may be exempt.)
+- **INTERVENTION-MISSING-LABEL-RAW** (likely resolved by intervention API 2.16.0 — VERIFY):
+  Companion to the above. The original fix patched `_handle_module_exit` but missed
+  `_extract_and_mark_outputs` (capture/trace.py:438), which checks `tl__label_raw` (DOUBLE
+  underscore — a different attr). Replacement tensors that reach the model OUTPUT crash there.
+  Discovered 2026-05-05. Fix: propagate `tl__label_raw` from original to replacement, OR make
+  `_extract_and_mark_outputs` tolerate the missing attr and re-instrument. ~30 LoC + 1-2 tests.
+- **LABEL-NAME-UNIFICATION** (likely resolved/superseded by intervention API 2.16.0 + the `_tl`
+  namespace refactor — VERIFY): Two label-attribute names existed in runtime: canonical
+  `tl__label_raw` (double-underscore) and vestigial `tl_tensor_label_raw` (in
+  `intervention/runtime.py:_TL_REPLACEMENT_ATTRS`). Unify to a single `tl_label_raw` (single
+  underscores, no `tensor_` infix) to match the `tl_*` namespace; drop `tl_tensor_label_raw` from
+  the propagation list. The double-underscore ambiguity contributed to the missed second crash
+  site above. Mechanical search-and-replace + grep verify + test. (Confirm against the shipped
+  `_tl` namespace refactor `0e4509d` — attr naming may already have moved under `obj._tl`.)
+- **mypy regression in output_tensors.py**: All 8 original mypy bugs (#154-161) FIXED in PR #97,
+  but 2 regression errors remained in `torchlens/capture/output_tensors.py`: line 336
+  "Incompatible types in assignment"; line 341 "Argument 5 to `extract_salient_args` has
+  incompatible type". (VERIFY against current code — file may have been renamed/moved in the
+  record-filename cleanup; re-run `mypy torchlens/`.)
+
+### Deferred design decisions
+
+These need substantive design changes, not simple fixes (the 4 deferred bugs from
+`bugs_by_file.md`):
+
+- **#9**: Lookup key overwrite for multi-exit modules — last-writer-wins in
+  `layer_dict_all_keys`. Needs redesign of key mapping. (postprocess/finalization.py)
+- **#55**: `recurrent_group` model-level dict never populated. Dead metadata field.
+  (model_log.py)
+- **#93**: Fast pass `children_tensor_versions` cleared but never rebuilt. Needs fast-path tensor
+  variation tracking. (capture/output_tensors.py)
+- **#102**: ModuleLog stale labels when `keep_unsaved_layers=False`. Needs post-removal filtering
+  of module dicts. (postprocess/finalization.py)
+
+### Investigate / revisit
+
+- **JIT compatibility with GPTBigCode**: `torch.jit.script` in transformers' GPTBigCode attention
+  code fails because TorchLens's decorated wrapper has a `DType` type hint that JIT can't parse
+  (torch_funcs.py ~line 2104). Investigate: (1) can we strip/replace type hints on wrappers
+  registered in `torch.jit._builtins._builtin_table`? (2) should decorated wrappers use
+  JIT-compatible type annotations? (3) are other models affected?
+- **DOT empty PDF issue**: PDF appears empty/blank for graphs with many nodes. The DOT source and
+  rendering likely succeed, but the output is visually empty (nodes laid out outside the viewable
+  area, or wrong viewport/bounding box). Investigate page size, bounding box, graph attributes,
+  or engine behavior at scale. (Cross-ref the "Large graph rendering" entry below + the
+  large-graph/ELK-removal work above.)
+- **vmap/functorch logging**: cross-reference — this is covered comprehensively by the
+  "Comprehensive functorch / `torch.func` transform coverage" Active Task at the top of this
+  file (the big CAPTURE COVERAGE GAP item). The memory-file note: currently we skip ALL logging
+  inside vmap transforms (`_is_inside_functorch_transform`), so ops inside vmapped functions are
+  invisible. NOT duplicated here — see the Active Task for the full treatment.
+- **Large graph rendering**: Graphviz `dot` hangs on graphs with 4000+ nodes (e.g. keypointrcnn
+  eval = 4,676 nodes); we time out after 120s with a warning. Explore: (1) auto-switch to `sfdp`
+  above a node threshold (fast, loses hierarchical layout), (2) auto-set `vis_nesting_depth` to
+  collapse modules for large graphs, (3) hybrid. See rendering.py `_RENDER_TIMEOUT`. (Cross-ref
+  the ELK-removal plan above, which proposes promoting the pure-Python Kahn rank layout for the
+  3500-100k band.)
+- **safe_copy audit**: Revisit `safe_copy` (utils/tensor_utils.py) — JMT wants a review of the
+  approach to see if it can be handled better.
+- **_trim_and_reorder elimination**: Skip runtime field reordering in
+  `_trim_and_reorder_layer_entry_fields` (labeling.py); handle ordering at display time only (in
+  `__repr__`/serialization). Currently 0.075s for 685 calls.
+
+### Garbage collection backlog
+
+Open GC items only (GC-6/7/13/14 were FIXED; dropped). Several pin model parameters or create
+circular refs that block GC.
+
+- **GC-1**: `ParamLog._param_ref` pins ALL model parameters indefinitely. Fix: extract gradient
+  info eagerly, then `_param_ref = None`.
+- **GC-2**: `source_model_log` circular ref on every LayerPassLog. Fix: `weakref.ref()`.
+- **GC-3**: `_source_model_log` circular ref on every ModuleLog. Fix: `weakref.ref()`.
+- **GC-4**: `source_model_log` circular ref on every LayerLog. Fix: `weakref.ref()`.
+- **GC-5**: `_raw_tensor_dict` never cleared after postprocessing. Fix: clear after postprocess.
+- **GC-8**: `_add_backward_hook` closure captures ModelLog. Fix: weakref.
+- **GC-9**: `parent_param_logs` (via ParamLog._param_ref) pins params. Partially fixed.
+- **GC-10**: `func_applied` stores function object per LayerPassLog. Fix: store name only.
+- **GC-11**: `ModulePassLog.forward_args/forward_kwargs` may hold tensor refs.
+- **GC-12**: `cleanup()` incomplete — LayerPassLogs stripped but never removed from containers.
+
+### Performance backlog
+
+Open PERF items only (PERF-1/2/12/14/18-28 were FIXED; dropped). Class names below predate the
+`-Log` removal — verify against current record classes.
+
+General / postprocess / loop-detection:
+
+- **PERF-3**: Quadratic gradient sorting — may still have an O(N^2) pattern in some paths.
+- **PERF-4**: O(n^2) cleanup pattern — batch cleanup needed.
+- **PERF-5**: `_build_module_logs` O(M^2) parent lookup. Fix: precompute reverse mapping.
+- **PERF-6**: O(modules x params) param filtering. Fix: precompute dict.
+- **PERF-7**: Loop detection deque re-sorted every iteration.
+- **PERF-8**: `list.pop(0)` in `_pop_frontier_node` — O(n) shift.
+- **PERF-9**: Param types recomputed for every pair in loop detection.
+- **PERF-10**: Per-tensor duplication of model-level settings.
+- **PERF-11**: Triple source-code storage in FuncCallLocation (code_context, _str, _labeled).
+- **PERF-13**: `copy.copy` on every field for multi-output tensors.
+- **PERF-15**: 17 separate module dicts on ModelLog — redundant with ModuleLog.
+- **PERF-16**: LayerPassLog could use `__slots__` (~40% memory savings).
+- **PERF-17**: Full graph scan per buffer merge.
+
+Model-prep bottlenecks (identified 2026-03-08; at 500K nodes `_prepare_model_session` takes
+minutes before the forward even starts):
+
+- **PERF-36**: `_create_session_param_logs` (model_prep.py:256) walks the module tree via
+  string-split address for EVERY parameter — O(P x D). Fix: cache module lookups by address or
+  use parent back-references.
+- **PERF-37**: `_capture_module_metadata` (model_prep.py:419-420) calls `dir(module)` on every
+  module AND recomputes `dir(nn.Module)` inside the loop. Fix: compute `nn_module_attrs` once
+  outside loop; skip `dir()` when metadata not needed.
+- **PERF-38**: `_traverse_model_modules` (model_prep.py:93) does O(N x D) string concatenation
+  for module addresses, called multiple times per session. Fix: pre-compute addresses in
+  `_prepare_model_once` and reuse.
+- **PERF-39**: `patch_model_instance` (torch_funcs.py:736) iterates all N modules x all
+  attributes. Fix: skip when mapping is empty (after first call).
+
+1M-scale bottlenecks (identified 2026-03-08; at 1M nodes with `layers_to_save=None`,
+`detect_loops=False`, forward alone takes 60+ min — pure per-op Python overhead):
+
+- **PERF-29**: `get_tensor_memory_amount` calls `pause_logging()` context manager per tensor —
+  1M enter/exit cycles. Fix: compute `nelement() * element_size()` on the raw tensor directly, or
+  call the original unwrapped `Tensor.nelement`/`element_size` to bypass logging (no pause needed).
+- **PERF-30**: 131-field dict construction per operation before creating LayerPassLog. Fix: lazy
+  field population (only populate on access), or split hot fields (label, parents, children,
+  func_applied) from cold fields (populated on demand).
+- **PERF-31**: LayerPassLog `__init__` processes all 131 fields via `__dict__.update(fields_dict)`
+  + field ordering; at 1M ops, object construction dominates. Fix: combine with PERF-16
+  (`__slots__`).
+- **PERF-32**: 18-step postprocessing pipeline — even O(n) passes are expensive at 1M. Fix:
+  profile each step, fuse passes where possible (e.g. graph_traversal + labeling into one scan),
+  skip unnecessary steps when `detect_loops=False`.
+- **PERF-33**: Add per-phase timing instrumentation to `log_forward_pass` for large graphs
+  (capture time, each postprocess step time, render time). Essential for identifying which phases
+  dominate at scale.
+- **PERF-34**: Batch postprocessing with numpy/pandas.
+- **PERF-35**: Verbose mode for `log_forward_pass` — print progress during capture (every N ops),
+  postprocessing (per step), and rendering, for long-running 1M+ graphs that appear frozen. Many
+  postprocess steps iterate all layers doing simple field reads/writes — could be vectorized
+  (extract fields to columnar arrays, compute in batch, write back). Especially
+  `_mark_input_output_distances` (BFS over 1M nodes), `_assign_final_labels` (1M string ops),
+  `_build_layer_logs` (1M merge ops).
+
+### Refactoring candidates
+
+- **Graph node superclass hierarchy** — InputLog/OutputLog as subclasses of GraphNodeLog.
+  (Cross-ref the newer "Consider a broader Op-subclassing refactor" item above, which is the same
+  idea generalized to all op-roles.)
+- **Simplify log_function_output_tensors_exhaustive** — very large/complex core function.
+- **Fast-pass inline code redundancy** — output layer contents populated inline but overwritten
+  by `postprocess_fast`.
+- **`to_pandas()` missing type conversions** — `is_internally_initialized`, min/max distances.
+- **More @property conversions** — candidate fields with gotchas: `has_children` (semantics are
+  "non-output children"), `is_submodule_output` (flag False despite populated `modules_exited`),
+  `has_saved_activations` (timing concerns in fast pass), `has_gradient` (cleanup may null
+  `gradient` while flag stays True), `args_captured` (`captured_args` can be populated by
+  validation without the flag), `has_input_ancestor` (independently set in control_flow.py —
+  verify sync with `input_ancestors`), `has_internally_initialized_ancestor` (same pattern),
+  `has_child_tensor_variations` (likely `len(children_tensor_versions) > 0`, needs testing),
+  `is_branching` / `has_conditional_branching` (derivable but iterate all layers per access —
+  cache or leave stored).
+- **Design limitations (not bugs)**: "Max nesting wins" module heuristic (wrong when parents come
+  from different nesting depths); `parent_layer_arg_locs` only 2 levels deep (deeper-nested tensor
+  parents missed); `_find_output_ancestors` incomplete `output_descendants` (Step 4 flood
+  corrects it, but Step 4 is conditional).
+- **Validation perturbation exemption system (tabled)**: LSTM exemption inconsistent, arglocs
+  check overly broad, output identity is a no-op. (Touch with care — Validation Integrity tripwire
+  applies; do NOT broaden an exemption to pass a test.)
+- **Minor**: Visualizer creates an extra DOT source file alongside the PDF (graphviz `render()`
+  side effect) — should only produce the PDF; watch for other passthrough modules like
+  `nn.Identity` (modules that don't call any torch function internally).
+
+### Planned / future features
+
+- **Optional loop detection** — make full loop detection (isomorphic subgraph expansion) optional
+  for large graphs. When disabled, only group layers sharing the same parameters (same-param
+  grouping). Full detection is quadratic-ish and dominates postprocessing at 1M+ nodes. Could be
+  a `detect_loops=False` param on `log_forward_pass`/`show_model_graph`. (Cross-ref PERF-32.)
+- **Support gradient arrows in rolled mode**.
+- **Add state space model (SSM) tests** — Mamba/S4/S5.
+- **Lightweight forward_lineno capture**: always capture forward method line number per operation
+  (~200ns overhead) so THEN detection works without `save_source_context=True`. Frame walk: find
+  the frame whose `f_back.f_code.co_name == 'decorated_forward'`, read `f_lineno`.
+- **ELSE branch detection**: use AST `If.orelse` line ranges to identify else-branch children.
+  Requires solving the mapping problem (which `If` corresponds to which terminal boolean). (THEN
+  detection shipped in PR #127; ELSE remains.)
+- **torch.compile / FX graph capture backend**: alternative capture mode using `torch.compile`
+  with a custom backend instead of decoration. FX graph gives ops, edges, module hierarchy, and
+  params for free — no runtime interception. Activations still need one forward pass. Would replace
+  `decoration/` + `capture/` while reusing `data_classes/`, `postprocess/`, `visualization/`,
+  `validation/`. Gaps: no gradient hooks (forward-only graph), loops unrolled by Dynamo, graph
+  breaks give partial coverage, dynamic control flow needs `torch.cond`/`torch.while_loop`.
+  (Cross-ref the single-substrate / backend-adapter architectural endpoint at the top of this
+  file — this is the FX/`torch.compile` family of the same "alternate dispatch" coverage story.)
+- **Explore MLX mode** (likely resolved by the capture-unification + MLX backend sprint
+  2026-06-06 — VERIFY): investigate supporting Apple's MLX alongside PyTorch. Per project memory,
+  the capture-unification branch (local main, not pushed) shipped MLX topology-complete capture
+  events and 13 MLX tests. Confirm coverage matches this entry's questions: (1) does the
+  decoration/interception strategy work with `mlx.nn.Module`? (2) MLX function hooks / overridable
+  dispatch? (3) separate mode vs standalone package? (4) which features translate vs need
+  rethinking (autograd hooks, grad_fn metadata).
+- **Deeper Lightning compatibility**: basic `log_forward_pass` on a LightningModule works.
+  Blockers for full integration: (1) FSDP/DeepSpeed sharded params break param barcoding (needs
+  name-based barcoding), (2) `Trainer(compile=True)` bypasses Python wrappers, (3) logging inside
+  `training_step` mid-training needs a different entry point, (4) cross-device tensor movement —
+  test `safe_copy` on multi-device scenarios.
+- **DDP / parallel processing support**: DDP works out of the box (separate processes = separate
+  `_state.py` globals). Add: (1) `rank` param or auto-detect to only log on rank 0, (2) a simple
+  DDP test. DataParallel (threading) is broken — global state not thread-local; fix would require
+  `threading.local()` for all `_state` globals + solving shared-module `tl_*` attrs. Low priority
+  (DP deprecated in favor of DDP).
+- **Multi-torch-version CI testing**: GitHub Actions matrix against 2-3 torch versions (latest,
+  latest-1, oldest supported). Add a `TORCH_VERSION` tuple to `_state.py` for version guards.
+  Risks: functions added/removed/renamed across versions, signature changes, `grad_fn` name
+  changes, internal API changes (`torch.jit._builtins`, `torch.overrides`). `decorate_all_once`
+  is already resilient; `ORIG_TORCH_FUNCS` / `FUNC_ARG_SPECS` may reference nonexistent functions
+  on older versions. Use `@pytest.mark.skipif` for version-specific features.
+- **Custom graph layout/renderer**: roll our own graph optimizer + renderer instead of
+  ELK/Graphviz. Eliminates Node.js dependency, OS stack-limit issues, subprocess overhead; full
+  control over layout + output (could target SVG directly). Investigate Sugiyama in pure Python
+  (or Rust/C extension), or a force-directed approach tuned for DAGs. (Cross-ref the ELK-removal
+  plan + dagua integration — dagua is the eventual large-graph answer.)
+- **Direct SVG generation for 1M+ nodes**: bypass neato entirely for very large graphs. ELK
+  provides positions; generate SVG directly (straight lines + rectangles + text, since we already
+  use `splines=line` at scale). Eliminates the neato memory bottleneck and the giant DOT
+  intermediary.
+- **250k and 1M trophy renders**: run during computer downtime (no other processes). 250k failed
+  twice (V8 OOM at 32GB heap, then `std::bad_alloc` under concurrent test load). Needs exclusive
+  machine access; ELK layout ~50-60 min at 250k plus neato. If `std::bad_alloc` persists solo,
+  try `nesting_depth=1` or direct SVG.
+- **Visualization gallery on GitHub Pages**: after CI, collect SVG outputs from
+  `tests/test_outputs/visualizations/`, generate a lightweight HTML gallery (thumbnails + zoom),
+  push to `gh-pages`. Auto-updates per CI run. Public URL `johnmarktaylor91.github.io/torchlens`.
+  Use SVG for zoomability. (Cross-ref the "Auto-published model menagerie" item above — overlapping
+  CI-gallery infra.)
+- **Move module/param tagging to id-keyed dict**: replace `tl_*` attributes on modules and params
+  with `_state._module_metadata = {id(module): {...}}` (and similar for params) — long-lived
+  objects, no id-reuse risk; eliminates cleanup headaches in `_cleanup_model_session`. Keep tensor
+  `tl_*` attributes as-is (id-reuse risk from GC of short-lived intermediates makes direct
+  attribute tagging safest there). (Cross-ref the "Tensor-id-keyed metadata" item above, which was
+  marked SUPERSEDED for the TENSOR side by the `_tl` namespace refactor — this module/param-side
+  variant may still be live; VERIFY against `0e4509d`.)
+- **Capture and expose module inputs/outputs**: add per-module input/output tensor references or
+  summaries to ModuleLog/ModulePassLog. Today `module_forward_decorator` tracks entry/exit but
+  doesn't store the actual input/output tensors accessibly. Would enable "what were the inputs to
+  encoder.layer.0?" Separate from `salient_args` (per-operation, not per-module). (Possible
+  overlap with the "Convenience fields for Op/Layer INPUTS" Active Task — consolidate.)
+- **Resolve `_op` naming for torchvision C++ ops**: TorchLens logs all `torch.ops.*` PyCapsule
+  calls as `_op`, losing the real function name (nms, roi_align, etc.). Inspect
+  `func_applied.__name__` / PyCapsule repr, or hook the `torch.ops` namespace to map operator
+  names before they become PyCapsules. `_op` is blanket-exempted from perturbation (these C
+  extensions segfault on invalid inputs).
+- **ELK spline cutoff tuning**: currently switches from curved splines (`splines=true`) to
+  straight lines (`splines=line`) at 1000 nodes (elk_layout.py:1048) — conservative; could bump to
+  3000-5000 for nicer curves on medium graphs. Benchmark the sweet spot. (Moot if ELK is removed.)
+- **id-keyed tagging** — see "Move module/param tagging to id-keyed dict" above.
+
+### Dagua feature ideas (may belong in the dagua repo's tracker, not torchlens)
+
+These were filed in the torchlens memory file but concern the dagua GPU layout engine
+(`~/projects/dagua`), which will eventually replace rendering.py + elk_layout.py. They probably
+belong in dagua's own tracker — preserved here so they aren't lost; relocate when convenient.
+
+- **Differentiable edge routing (Phase 2 optimization)**: after node placement converges (Phase 1),
+  freeze node positions and optimize Bezier control points as learnable parameters. Loss terms on
+  control points: edge bundling (nearby same-direction edges attract — "cable highway"),
+  edge-node avoidance (penalize curves too close to non-endpoint nodes), curvature smoothness,
+  crossing minimization (on actual curves, not straight-line proxies), parallelism reward. Hard
+  constraints: endpoints fixed at source/target ports, only interior control points free. 2-4
+  floats per edge (tractable; separate from N x 2 node placement). A genuine differentiator over
+  Graphviz/ELK heuristic routing.
+- **VRAM-aware adaptive device placement**: replace hardcoded thresholds in the multilevel
+  pipeline with dynamic VRAM checks. Three fixed cutoffs today: `projection.py` CPU fallback at
+  N>1M (should check if argsort fits in free VRAM); `multilevel.py` CPU fallback at edge tensor
+  >200MB (should check actual free VRAM); `multilevel.py` cache clearing between levels (should be
+  conditional on VRAM pressure). Each should call `torch.cuda.mem_get_info()` and fall back to CPU
+  only when it won't fit. Add a `_vram_limit` config / `DAGUA_VRAM_LIMIT_MB` env to impose an
+  artificial ceiling for testing simulated GPU sizes; `@pytest.mark.rare` test runs the same graph
+  at multiple simulated limits asserting no OOM, GPU never exceeds the limit, outputs finite.
+- **VRAM instrumentation for debugging/optimization**: optional GPU memory logging at key decision
+  points (`DAGUA_LOG_VRAM=1` / `config.log_vram=True`): start of `_layout_inner`; after each loss
+  term; before/after `project_overlaps`; in `multilevel_layout` before/after each level's
+  `_layout_inner`, after `empty_cache()`, after prolongation; peak per level via
+  `max_memory_allocated()`. Format `[VRAM] {context}: {allocated_MB}MB / {total_MB}MB ({pct}%
+  used)`. Informs the VRAM-aware thresholds above.
+- **Maximize GPU utilization across all stages**: edge-streaming keeps edges on CPU (prevents OOM
+  but leaves most VRAM idle). Goal: use as much GPU as possible per stage without going over. Per
+  level estimate total memory needed and compare to free VRAM; keep edge_index on GPU when it
+  fits, stream from CPU when not (consider partial edge_index on GPU). Coarsest levels (few nodes,
+  many edges) need streaming; mid levels may fit entirely; finest levels are position-dominated.
+  Target `stage_peak / total_vram` 70-85% at every level, not 10-25%.
+- **VRAM-aware projection**: `project_overlaps` falls back to CPU unconditionally when N>1M on GPU.
+  The argsort on 50M nodes needs ~590MB — fits on an 11GB card with 3GB free. Check
+  `mem_get_info()` first; on 24GB+ keep the entire projection on GPU. Estimate ~N*12 bytes for
+  sort_key + indices, compare to free VRAM, fall back only when it genuinely won't fit.
+
 ## Completed (recent)
+
+### 2026-06-07 archived from Active Tasks / Bugs during todo consolidation
+
+Moved here (cut from the Active Tasks / Bugs sections) because each was explicitly marked
+DONE/FIXED in place:
+
+- **Buffer WRITES/OVERWRITES capture** — DONE 2026-06-05, local main commits
+  `91e1645..6e3a291` + `430357a`. All three write kinds captured as validatable version nodes
+  (reassignment via scoped class `__setattr__`; in-place via storage snapshot; fused/native via
+  post-op value snapshot); `Buffer` first-class entity (`Buffer(Op)` retired); gradient flow
+  verified; tripwire non-vacuous; RNN-cell loop-detection crash fixed
+  (`_scrub_per_op_equivalence_lists`); `docs/buffers.md` + glossary lockstep. Full record:
+  `.research/buffer-build_SUMMARY.md`. (Layer-vs-op parity follow-on still OPEN — see Active.)
+- **distilbert_ffn facet recipe stale-class bug** — FIXED 2026-06-01, commit `ea5dd69`.
+  `torchlens/semantic/recipes/mlp.py` recipe matched nothing on transformers >= 4.57 (class
+  `DistilBertFFN` renamed to `FFN`); changed to `class_name=("FFN", "DistilBertFFN")` tuple.
+  Verified on real DistilBERT; added `tests/semantic/test_mlp_recipes.py`.
+- **Mypy accessor typing errors** — DONE (Mini-Sprint α item 1), commit `0f54ba5`.
+  `mypy torchlens/data_classes/` clean (16 files, 0 errors); broader leakage also fixed.
+- **Golden parity pickle size** — DONE (Mini-Sprint α item 2), commit `0947830`. Both resnet50
+  goldens now 131KB (was 765KB) via gzip-compressed pickle storage with transparent read/write
+  in the parity test.
 
 ### 2026-06-01 glossary-code conformance + record-filename cleanup (commits bdf4f23..4f1b34f)
 
