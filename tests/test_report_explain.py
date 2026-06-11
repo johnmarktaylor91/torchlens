@@ -60,12 +60,13 @@ def test_report_namespace_is_not_top_level_all() -> None:
     ``facet`` / ``head`` selectors. Capture-unification P4 added the
     ``followed_by`` / ``preceded_by`` predicate-window selectors.
     Capture-unification P5 added ``when``, ``add``, and ``replace_with``.
+    torch.func transform capture added ``func_transform``.
     """
 
     assert hasattr(tl.report, "explain")
     assert "report" not in tl.__all__
     assert "explain" not in tl.__all__
-    assert len(tl.__all__) == 59
+    assert len(tl.__all__) == 60
 
 
 def test_explain_returns_sensible_string_for_each_audience() -> None:
