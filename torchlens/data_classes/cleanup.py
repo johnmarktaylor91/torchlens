@@ -42,6 +42,9 @@ def cleanup(self: "Trace") -> None:
     not be used further. No long-lived safetensors handles need to be
     closed here because lazy materialization opens and closes files per call.
     """
+    from ..backends.torch.backward import _purge_trace_from_backward_registry
+
+    _purge_trace_from_backward_registry(self)
     # GC-1: Release parameter references to allow model GC.
     if hasattr(self, "param_logs"):
         for pl in self.param_logs:

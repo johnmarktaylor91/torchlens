@@ -1314,6 +1314,9 @@ def unwrap_torch() -> None:
     """
     _state._logging_enabled = False
     _state._active_trace = None
+    from .backward import uninstall_autograd_wrappers
+
+    uninstall_autograd_wrappers()
 
     if not _state._decorated_to_orig:
         _state._is_decorated = False
@@ -1386,12 +1389,16 @@ def wrap_torch() -> None:
 
     Safe to call multiple times — no-op if already wrapped.
     """
+    from .backward import install_autograd_wrappers
+
     if _state._is_decorated:
+        install_autograd_wrappers()
         return
 
     if not _state._orig_to_decorated:
         # First time: full decoration
         decorate_all_once()
+        install_autograd_wrappers()
         patch_detached_references()
         return
 
@@ -1423,6 +1430,7 @@ def wrap_torch() -> None:
     # Recreate decorated identity in case wrapper references shifted
     _state._decorated_identity = torch_func_decorator(identity, "identity")
     _state._is_decorated = True
+    install_autograd_wrappers()
     patch_detached_references()
 
     # Re-wrapping __getitem__ pollutes sq_item again; clear it.

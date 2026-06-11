@@ -5298,6 +5298,19 @@ class Trace(CapturedRun):
 
         return _impl(self)
 
+    def disarm_triggers(self) -> None:
+        """Detach this Trace from global autograd backward interception.
+
+        Returns
+        -------
+        None
+            Future plain ``loss.backward()`` or ``torch.autograd.*`` calls will
+            not record into this Trace.
+        """
+        from ..backends.torch.backward import disarm_triggers as _impl
+
+        _impl(self)
+
     def _remove_log_entry(
         self,
         log_entry: Op,

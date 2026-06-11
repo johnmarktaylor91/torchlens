@@ -8,6 +8,7 @@ import re
 import time
 import weakref
 from collections import deque
+from collections.abc import Sequence
 from typing import Any, Callable, Iterator, Literal, cast
 
 import torch
@@ -23,6 +24,225 @@ from ...ir.events import (
     GradFnFired,
 )
 from .tensor_tracking import _ensure_backward_event_stream
+
+_BACKWARD_GRAD_FN_REGISTRY: dict[int, weakref.ReferenceType[Any]] = {}
+_ORIGINAL_AUTOGRAD_BACKWARD: Callable[..., Any] | None = None
+_ORIGINAL_AUTOGRAD_GRAD: Callable[..., Any] | None = None
+_AUTOGRAD_WRAPPERS_INSTALLED = False
+
+
+def _strong_grad_fn_refs(trace: Any) -> list[Any]:
+    """Return the trace-owned grad-fn strong-reference list.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns runtime autograd node references.
+
+    Returns
+    -------
+    list[Any]
+        Mutable list holding grad-fn wrapper objects for the trace lifetime.
+    """
+
+    return trace.__dict__.setdefault("_backward_gradfn_refs", [])
+
+
+def _register_forward_grad_fn(trace: Any, grad_fn_handle: Any, _raw_label: str | None) -> None:
+    """Register a pinned forward grad-fn object for later autograd triggers.
+
+    Parameters
+    ----------
+    trace:
+        Trace that recorded the forward operation.
+    grad_fn_handle:
+        Live PyTorch autograd node wrapper from the operation output.
+    _raw_label:
+        Raw TorchLens op label associated with the output tensor, if known.
+
+    Returns
+    -------
+    None
+        The process registry and trace strong-ref set are updated in place.
+    """
+
+    if grad_fn_handle is None:
+        return
+    refs = _strong_grad_fn_refs(trace)
+    refs.append(grad_fn_handle)
+    grad_fn_object_id = id(grad_fn_handle)
+    _BACKWARD_GRAD_FN_REGISTRY[grad_fn_object_id] = weakref.ref(trace)
+
+
+def _purge_trace_from_backward_registry(trace: Any) -> None:
+    """Remove every registry key currently owned by ``trace``.
+
+    Parameters
+    ----------
+    trace:
+        Trace being cleaned up or disarmed.
+
+    Returns
+    -------
+    None
+        Matching process-registry entries are removed.
+    """
+
+    stale_ids = [
+        grad_fn_object_id
+        for grad_fn_object_id, trace_ref in _BACKWARD_GRAD_FN_REGISTRY.items()
+        if trace_ref() is trace or trace_ref() is None
+    ]
+    for grad_fn_object_id in stale_ids:
+        _BACKWARD_GRAD_FN_REGISTRY.pop(grad_fn_object_id, None)
+
+
+def _close_implicit_backward_pass_if_open(trace: Any) -> None:
+    """Close an implicit backward bracket at a synchronization point.
+
+    Parameters
+    ----------
+    trace:
+        Trace that may have an orphan tensor-hook bracket open.
+
+    Returns
+    -------
+    None
+        An implicit ``BackwardPassEnd`` is appended when needed.
+    """
+
+    if not getattr(trace, "_implicit_backward_pass_open", False):
+        return
+    pass_index = getattr(trace, "_active_backward_pass_index", None)
+    if pass_index is None:
+        return
+    events = _ensure_backward_event_stream(trace)
+    events.append_backward(
+        BackwardPassEnd(
+            pass_index=int(pass_index),
+            duration=None,
+            peak_memory=None,
+            status="ok",
+            order_attribution_coverage=None,
+        )
+    )
+    trace.num_backward_passes = max(int(getattr(trace, "num_backward_passes", 0)), int(pass_index))
+    trace.__dict__.pop("_active_backward_pass_index", None)
+    trace._implicit_backward_pass_open = False
+
+
+def _root_tensors(value: Any) -> tuple[torch.Tensor, ...]:
+    """Flatten autograd root arguments into tensors.
+
+    Parameters
+    ----------
+    value:
+        Tensor or nested sequence passed to an autograd engine entry.
+
+    Returns
+    -------
+    tuple[torch.Tensor, ...]
+        Tensor roots in left-to-right order.
+    """
+
+    if isinstance(value, torch.Tensor):
+        return (value,)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        tensors: list[torch.Tensor] = []
+        for item in value:
+            tensors.extend(_root_tensors(item))
+        return tuple(tensors)
+    return ()
+
+
+def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
+    """Find live traces whose pinned grad-fn ids appear under ``roots``.
+
+    Parameters
+    ----------
+    roots:
+        Tensor or nested tensor sequence passed to an autograd entry point.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Matched traces in discovery order, without duplicates.
+    """
+
+    if not _BACKWARD_GRAD_FN_REGISTRY:
+        return ()
+    matched: list[Any] = []
+    matched_ids: set[int] = set()
+    stale_ids: list[int] = []
+    queue: deque[Any] = deque(
+        root.grad_fn for root in _root_tensors(roots) if root.grad_fn is not None
+    )
+    seen: set[int] = set()
+    while queue:
+        grad_fn_handle = queue.popleft()
+        grad_fn_object_id = id(grad_fn_handle)
+        if grad_fn_object_id in seen:
+            continue
+        seen.add(grad_fn_object_id)
+        trace_ref = _BACKWARD_GRAD_FN_REGISTRY.get(grad_fn_object_id)
+        if trace_ref is not None:
+            trace = trace_ref()
+            if trace is None or not hasattr(trace, "layer_list"):
+                stale_ids.append(grad_fn_object_id)
+            elif id(trace) not in matched_ids and not getattr(
+                trace, "_tl_backward_triggers_disarmed", False
+            ):
+                matched.append(trace)
+                matched_ids.add(id(trace))
+        queue.extend(_iter_next_grad_fns(grad_fn_handle))
+    for stale_id in stale_ids:
+        _BACKWARD_GRAD_FN_REGISTRY.pop(stale_id, None)
+    return tuple(matched)
+
+
+def _autograd_roots_from_call(
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    root_kwarg: str,
+) -> Any:
+    """Return root tensors from an autograd wrapper call.
+
+    Parameters
+    ----------
+    args:
+        Positional arguments passed to the wrapped function.
+    kwargs:
+        Keyword arguments passed to the wrapped function.
+    root_kwarg:
+        Keyword name that carries roots for this autograd entry.
+
+    Returns
+    -------
+    Any
+        Original root argument object, or ``None`` when absent.
+    """
+
+    if args:
+        return args[0]
+    return kwargs.get(root_kwarg)
+
+
+def _first_root_tensor(roots: Any) -> torch.Tensor | None:
+    """Return the first tensor in an autograd root object.
+
+    Parameters
+    ----------
+    roots:
+        Tensor or nested sequence of tensors.
+
+    Returns
+    -------
+    torch.Tensor | None
+        First tensor root, if one exists.
+    """
+
+    tensors = _root_tensors(roots)
+    return tensors[0] if tensors else None
 
 
 def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
@@ -905,6 +1125,9 @@ def _run_backward_with_capture(
     previous_trace = _state._active_trace
     previous_plan = _state._active_hook_plan
     previous_spec = _state._active_intervention_spec
+    if getattr(trace, "_tl_active_backward_bracket", False):
+        return backward_callable()
+    _close_implicit_backward_pass_if_open(trace)
     _state._active_trace = trace
     _state._active_intervention_spec = getattr(trace, "_intervention_spec", None)
     _state._active_hook_plan = [
@@ -943,6 +1166,7 @@ def _run_backward_with_capture(
     backward_start_time = time.time()
     status = "ok"
     result = None
+    trace._tl_active_backward_bracket = True
     try:
         result = backward_callable()
     except Exception:
@@ -956,6 +1180,7 @@ def _run_backward_with_capture(
         _state._active_trace = previous_trace
         _state._active_hook_plan = previous_plan
         _state._active_intervention_spec = previous_spec
+        trace.__dict__.pop("_tl_active_backward_bracket", None)
         _backend, after = _memory_snapshot(loss.device)
         peak_delta = max(0, after - before)
         duration = time.time() - backward_start_time
@@ -977,6 +1202,163 @@ def _run_backward_with_capture(
         )
         trace.__dict__.pop("_active_backward_pass_index", None)
     return result
+
+
+def disarm_triggers(trace: Any) -> None:
+    """Detach a trace from global autograd trigger interception.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose future tensor-hook and autograd-wrapper capture should be
+        disabled.
+
+    Returns
+    -------
+    None
+        Registry state is updated in place.
+    """
+
+    trace._tl_backward_triggers_disarmed = True
+    _purge_trace_from_backward_registry(trace)
+
+
+def _capture_autograd_engine_call(
+    roots: Any,
+    engine_callable: Callable[[], Any],
+    *,
+    trigger: Literal["autograd_backward", "autograd_grad"],
+    engine_flags: dict[str, object] | None,
+) -> Any:
+    """Run a global autograd entry through TorchLens capture when roots match.
+
+    Parameters
+    ----------
+    roots:
+        Tensor roots passed to the autograd engine.
+    engine_callable:
+        Zero-argument callable invoking the original PyTorch autograd function.
+    trigger:
+        Trigger label to store on ``BackwardPassStart``.
+    engine_flags:
+        Best-effort keyword metadata from the engine invocation.
+
+    Returns
+    -------
+    Any
+        Return value from ``engine_callable``.
+    """
+
+    matched_traces = tuple(
+        trace
+        for trace in _traces_for_roots(roots)
+        if not getattr(trace, "_tl_active_backward_bracket", False)
+    )
+    loss = _first_root_tensor(roots)
+    if loss is None or not matched_traces:
+        return engine_callable()
+    if len(matched_traces) == 1:
+        return _run_backward_with_capture(
+            matched_traces[0],
+            loss,
+            engine_callable,
+            trigger=trigger,
+            engine_flags=engine_flags,
+        )
+
+    # P1 supports multi-trace bracket opening by nesting setup and running the
+    # engine once through the innermost capture. Later projection phases will
+    # refine per-trace outer_context metadata.
+    def nested_call(index: int) -> Any:
+        """Run nested capture setup for all matched traces."""
+
+        if index == len(matched_traces):
+            return engine_callable()
+        return _run_backward_with_capture(
+            matched_traces[index],
+            loss,
+            lambda: nested_call(index + 1),
+            trigger=trigger,
+            outer_context=None if index == 0 else f"{trigger}:multi_trace",
+            engine_flags=engine_flags,
+        )
+
+    return nested_call(0)
+
+
+def install_autograd_wrappers() -> None:
+    """Install global autograd trigger wrappers idempotently.
+
+    Returns
+    -------
+    None
+        ``torch.autograd.backward`` and ``torch.autograd.grad`` are patched once.
+    """
+
+    global _AUTOGRAD_WRAPPERS_INSTALLED, _ORIGINAL_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_GRAD
+    if _AUTOGRAD_WRAPPERS_INSTALLED:
+        return
+    _ORIGINAL_AUTOGRAD_BACKWARD = torch.autograd.backward
+    _ORIGINAL_AUTOGRAD_GRAD = torch.autograd.grad
+
+    def wrapped_backward(*args: Any, **kwargs: Any) -> Any:
+        """Route ``torch.autograd.backward`` through TorchLens when roots match."""
+
+        original = cast(Callable[..., Any], _ORIGINAL_AUTOGRAD_BACKWARD)
+        roots = _autograd_roots_from_call(args, kwargs, "tensors")
+
+        def run() -> Any:
+            """Invoke the original autograd backward function."""
+
+            return original(*args, **kwargs)
+
+        return _capture_autograd_engine_call(
+            roots,
+            run,
+            trigger="autograd_backward",
+            engine_flags=dict(kwargs),
+        )
+
+    def wrapped_grad(*args: Any, **kwargs: Any) -> Any:
+        """Route ``torch.autograd.grad`` through TorchLens when roots match."""
+
+        original = cast(Callable[..., Any], _ORIGINAL_AUTOGRAD_GRAD)
+        roots = _autograd_roots_from_call(args, kwargs, "outputs")
+
+        def run() -> Any:
+            """Invoke the original autograd grad function."""
+
+            return original(*args, **kwargs)
+
+        return _capture_autograd_engine_call(
+            roots,
+            run,
+            trigger="autograd_grad",
+            engine_flags=dict(kwargs),
+        )
+
+    torch.autograd.backward = wrapped_backward
+    torch.autograd.grad = wrapped_grad
+    _AUTOGRAD_WRAPPERS_INSTALLED = True
+
+
+def uninstall_autograd_wrappers() -> None:
+    """Restore original global autograd entry points when installed.
+
+    Returns
+    -------
+    None
+        PyTorch autograd functions are restored in place.
+    """
+
+    global _AUTOGRAD_WRAPPERS_INSTALLED
+    if not _AUTOGRAD_WRAPPERS_INSTALLED:
+        return
+    if _ORIGINAL_AUTOGRAD_BACKWARD is not None:
+        torch.autograd.backward = _ORIGINAL_AUTOGRAD_BACKWARD
+    if _ORIGINAL_AUTOGRAD_GRAD is not None:
+        torch.autograd.grad = _ORIGINAL_AUTOGRAD_GRAD
+    _AUTOGRAD_WRAPPERS_INSTALLED = False
 
 
 def _ensure_layer_grad_hooks(trace: Any) -> None:

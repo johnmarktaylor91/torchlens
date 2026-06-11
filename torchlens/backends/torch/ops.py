@@ -2320,6 +2320,13 @@ def log_function_output_tensors_fast(
         previous_shape = orig_layer_entry.shape
 
         _add_tensor_backward_hook(self, out, _label_raw)  # Must pass RAW label (#86)
+        grad_fn_cls = type(out.grad_fn) if out.grad_fn is not None else None
+        orig_layer_entry.grad_fn_class_name = None if grad_fn_cls is None else grad_fn_cls.__name__
+        orig_layer_entry.grad_fn_class_qualname = (
+            None if grad_fn_cls is None else f"{grad_fn_cls.__module__}.{grad_fn_cls.__qualname__}"
+        )
+        orig_layer_entry.grad_fn_object_id = id(out.grad_fn) if out.grad_fn is not None else None
+        orig_layer_entry.grad_fn_handle = out.grad_fn
 
         # Structural integrity check: verify counter, type, label, and parents
         # all match the exhaustive pass.  Any mismatch means dynamic control flow
