@@ -78,6 +78,8 @@ print(tl.compat.report(model, x).to_markdown())
 
 - Do not log `torch.compile`, TorchScript, or `torch.export` artifacts; log the eager
   source module.
+- Do not expect `torch.func` / functorch transforms to expose per-element internal ops;
+  TorchLens captures transform calls as boundary nodes with provenance edges.
 - Do not run captures concurrently across Python threads or worker processes.
 - Do not expect fused kernels to expose hidden internal tensors.
 - Do not put opaque callables in portable artifacts unless audit-only behavior is

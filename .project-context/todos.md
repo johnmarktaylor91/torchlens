@@ -93,6 +93,13 @@ Current state (perf benchmark 2026-05-14, commit `3409c25`):
 
 **Why it matters / urgency.** `torch.func`/vmap adoption is rising fast in mainstream libraries — transformers' mask construction is now vmap-based **by default** — so this gap will silently hit **more and more** models over time, precisely in the spot where validation must stay armed. Connects to the **single-substrate architectural endpoint** (above): alternate-dispatch coverage is a capture-breadth axis the unified substrate should own.
 
+**Follow-ups from torch.func transform boundary build (filed 2026-06-11):**
+- Add an opt-in expand-inside view for transform nodes; default remains boundary-node capture.
+- Investigate wrapping `autograd.Function.apply` as a boundary/source of opaque custom ops.
+- Promote provenance warnings to a hard invariant after burn-in, likely behind validation strictness.
+- Add P6 visualization styling for transform nodes (`fn`, config, and chain display).
+- Watch `torch.func.functionalize` and `torch.cond` for new provenance/alternate-dispatch leaks.
+
 **Sizing.** Pre-2.0-launch: the narrow mask fix + armed tripwire (shipped) is sufficient. Comprehensive transform coverage is its own **post-launch sprint** (est. multi-day; touches `decoration/` + the dispatch layer; needs the semantics decision first). Best folded into the capture-path-unification / backend-adapter refactor since that already reworks the dispatch layer.
 
 ### Follow-up benchmark: `fastlog_halt_early`

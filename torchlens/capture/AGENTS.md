@@ -48,3 +48,7 @@
 - Keyword tensor coverage should be checked whenever adding static specs.
 - Fast capture assumes deterministic graph shape between ops; random/control-flow drift is
   a hard error.
+- `torch.func` / functorch wrappers log transform boundary ops and run the inner callable
+  under paused logging. Preserve the boundary parent edge and transform metadata.
+- Unlabeled tensor args are provenance markers, not graph parents. Inputs, params, buffers,
+  and module tensor attributes should remain known sources; foreign captured tensors should warn.

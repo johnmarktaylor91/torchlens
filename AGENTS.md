@@ -93,6 +93,8 @@ pytest tests/ -m "not slow" -x --tb=short
     conditional, and large graphs must conservatively no-op.
 12. Predicate `save=` is the primary selective-capture spelling; `record(keep_op=...)` and
     `record(keep_module=...)` are deprecated aliases.
+13. `torch.func` / functorch transforms are captured as boundary ops; do not expect their
+    per-element internal eager operations to appear unless a future expand-inside mode exists.
 
 ## Known Gotchas
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`

@@ -27,6 +27,12 @@ operation. `trace.py` owns the forward session; `output_tensors.py` creates raw
 inputs and buffers. `backward.py` runs after a forward log when backward capture is
 requested.
 
+`torch.func` / functorch transform entry points are captured as single boundary
+ops. The boundary op stores transform metadata, a replay callable, and parent edges
+from the transform inputs; the inner transformed function runs with logging paused.
+Unattributed tensor-argument markers are collected during arg resolution and warned
+once in postprocess.
+
 Fastlog reuses the wrapper hot path but stores `ActivationRecord` data through
 `fastlog/_orchestrator.py` instead of building a full `Trace`.
 

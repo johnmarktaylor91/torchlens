@@ -76,6 +76,11 @@ label lists; resolve through the owning Trace accessor when records are needed.
 `backward_ready=True` keeps saved floating tensors graph-connected, rejects contradictory
 detaching/disk-only configs, and must restore all flags in `finally` paths.
 
+Transform boundary ops carry `is_transform`, `transform_kind`, `transform_chain`,
+`transform_config`, lazy `transform_fn_source`, and diagnostic
+`unattributed_tensor_args`. Synthetic output ops should clear transform/provenance
+role fields so `Trace.transforms` only reports real transform boundary nodes.
+
 ## Circular References
 
 ```

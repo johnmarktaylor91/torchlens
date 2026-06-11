@@ -63,5 +63,10 @@ intervention metadata for removed layers. Keep it in sync with any new cross-ref
 ## Known Risks
 - `to_pandas()` can lag new metadata fields; check tests before assuming export coverage.
 - `FuncCallLocation` source properties are lazy; avoid keeping live frame/function objects.
+- Transform boundary ops use `is_transform`, `transform_kind`, `transform_chain`,
+  `transform_config`, and lazy `transform_fn_source`; keep these fields in sync with
+  `constants.py`, portable save/load, pandas exclusions, and output-node cleanup.
+- `unattributed_tensor_args` is diagnostic provenance metadata. Synthetic output nodes
+  must not inherit it or transform role fields from their parent op.
 - Removing or renaming labels requires updating conditional, intervention, module, and lookup
   references together.
