@@ -262,12 +262,17 @@ def test_densenet_is_safe_noop(tmp_path: Path) -> None:
             torch.randn(1, 3, 224, 224),
         )
         try:
-            ordered_source = _draw_source(log, tmp_path, "densenet_ordered")
+            # DenseNet's dense skips push the auto engine to rank layout; pin
+            # dot so this test keeps exercising the sibling-ordering post-pass.
+            ordered_source = _draw_source(
+                log, tmp_path, "densenet_ordered", vis_node_placement="dot"
+            )
             baseline_source = _draw_source(
                 log,
                 tmp_path,
                 "densenet_baseline",
                 order_siblings=False,
+                vis_node_placement="dot",
             )
             decision = log._last_sibling_ordering_decision
         finally:

@@ -409,6 +409,36 @@ class TestRankEngineRendering:
         assert calls == ["rank"]
         assert source == "digraph { rank_path }"
 
+    def test_rank_path_sets_trivial_sibling_ordering_decision(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+    ) -> None:
+        """The rank engine skips sibling ordering but still sets the decision."""
+
+        monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 10)
+        monkeypatch.setattr(
+            rank_layout,
+            "render_rank_layout",
+            lambda *args, **kwargs: "digraph { rank_path }",
+        )
+        model = RandomGraphModel(target_nodes=80, seed=42)
+        trace = trace_fn(model, torch.randn(2, 64))
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                trace.draw(
+                    vis_node_placement="auto",
+                    vis_save_only=True,
+                    vis_fileformat="svg",
+                    vis_outpath=str(tmp_path / "rank_decision"),
+                )
+            decision = trace._last_sibling_ordering_decision
+        finally:
+            trace.cleanup()
+        assert decision.candidate_count == 0
+        assert decision.survivor_count == 0
+
     def test_manual_dot_forces_dot(
         self,
         monkeypatch: pytest.MonkeyPatch,

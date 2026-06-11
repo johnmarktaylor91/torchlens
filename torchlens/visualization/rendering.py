@@ -785,6 +785,9 @@ def draw(
     )
     layout_cost = estimate_rank_layout_cost(cost_node_labels, cost_edges)
     engine = get_node_placement_engine(vis_node_placement, layout_cost)
+    # The sibling-ordering post-pass only runs on the dot engine; set the
+    # trivial decision up front so the attribute exists on every path.
+    self._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
     if vis_node_placement == "auto" and engine == "rank":
         warnings.warn(
             RANK_LAYOUT_NOTICE.format(
