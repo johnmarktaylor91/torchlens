@@ -95,6 +95,27 @@ class Accessor(Generic[T]):
         """Return ``(key, value)`` pairs."""
         return list(self._dict.items())
 
+    def to_pandas(self) -> Any:
+        """Return a dataframe containing one row per accessor item.
+
+        Returns
+        -------
+        Any
+            Pandas DataFrame built from each item's ``to_pandas`` export.
+        """
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        frames = [item.to_pandas() for item in self._list if hasattr(item, "to_pandas")]
+        if not frames:
+            return pd.DataFrame()
+        return pd.concat(frames, ignore_index=True)
+
     def _resolve_pass_qualified(self, key: str) -> T | None:
         """Resolve a pass-qualified key, if supported by the subclass.
 

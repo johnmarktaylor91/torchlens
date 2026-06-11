@@ -1261,7 +1261,7 @@ def _reuse_streamed_blob_ids(
             ("grad", "_pending_grad_blob_id"),
             ("transformed_grad", "_pending_transformed_grad_blob_id"),
         ):
-            tensor_blob = getattr(scrubbed_layer, tensor_field, None)
+            tensor_blob = getattr(scrubbed_layer, "__dict__", {}).get(tensor_field)
             pending_blob_id = getattr(live_layer, pending_field, None)
             if pending_blob_id is None:
                 continue
@@ -1280,9 +1280,54 @@ def _reuse_streamed_blob_ids(
                 BlobRef(blob_id=pending_blob_id, kind=tensor_blob.kind),
             )
             writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
+            _reuse_streamed_grad_record_blob_ids(
+                scrubbed_layer,
+                tensor_field=tensor_field,
+                pending_blob_id=pending_blob_id,
+                skipped_blob_ids=skipped_blob_ids,
+            )
 
     filtered_blob_specs = [spec for spec in blob_specs if spec[0] not in skipped_blob_ids]
     return scrubbed_state, filtered_blob_specs
+
+
+def _reuse_streamed_grad_record_blob_ids(
+    scrubbed_layer: Any,
+    *,
+    tensor_field: str,
+    pending_blob_id: str,
+    skipped_blob_ids: set[str],
+) -> None:
+    """Rewrite per-pass gradient record blob ids to the streamed direct blob id.
+
+    Parameters
+    ----------
+    scrubbed_layer:
+        Scrubbed Op whose gradient records should be patched.
+    tensor_field:
+        Direct tensor field being reused.
+    pending_blob_id:
+        Blob id already written by the streaming writer.
+    skipped_blob_ids:
+        Blob ids that should be filtered from scrub-generated blob specs.
+    """
+
+    record_field = {
+        "grad": "grad",
+        "transformed_grad": "transformed_grad",
+    }.get(tensor_field)
+    if record_field is None:
+        return
+    for grad_record in getattr(scrubbed_layer, "_grad_records", ()):
+        record_blob = getattr(grad_record, "__dict__", {}).get(record_field)
+        if not isinstance(record_blob, BlobRef):
+            continue
+        skipped_blob_ids.add(record_blob.blob_id)
+        setattr(
+            grad_record,
+            record_field,
+            BlobRef(blob_id=pending_blob_id, kind=record_blob.kind),
+        )
 
 
 def _attach_streamed_tensor_refs(

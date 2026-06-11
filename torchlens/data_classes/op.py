@@ -37,7 +37,19 @@ import copy
 import hashlib
 import weakref
 import warnings
-from typing import Any, Callable, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple, Union, cast
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    TYPE_CHECKING,
+    Tuple,
+    Union,
+    cast,
+)
 
 import torch
 
@@ -186,6 +198,18 @@ class GradientRecord:
     timestamp:
         Event timestamp.
     """
+
+    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+        "owner": FieldPolicy.WEAKREF_STRIP,
+        "ordinal": FieldPolicy.KEEP,
+        "backward_pass_index": FieldPolicy.KEEP,
+        "grad": FieldPolicy.BLOB,
+        "transformed_grad": FieldPolicy.BLOB,
+        "shape": FieldPolicy.KEEP,
+        "dtype": FieldPolicy.KEEP,
+        "memory": FieldPolicy.KEEP,
+        "timestamp": FieldPolicy.KEEP,
+    }
 
     def __init__(
         self,
@@ -787,7 +811,7 @@ class Op:
         "func_config": FieldPolicy.BLOB_RECURSIVE,
         "out_ref": FieldPolicy.DROP,
         "grad_ref": FieldPolicy.DROP,
-        "_grad_records": FieldPolicy.DROP,
+        "_grad_records": FieldPolicy.BLOB_RECURSIVE,
         "_pending_blob_id": FieldPolicy.DROP,
         "_pending_transformed_out_blob_id": FieldPolicy.DROP,
         "_pending_grad_blob_id": FieldPolicy.DROP,
@@ -806,7 +830,10 @@ class Op:
             if records:
                 saved = [record for record in records if record.grad is not None]
                 if len(saved) == 1:
-                    return saved[0].grad
+                    grad = saved[0].grad
+                    if isinstance(grad, torch.Tensor) and state.get("grad") is None:
+                        object.__getattribute__(self, "_internal_set")("grad", grad)
+                    return grad
                 if len(saved) > 1:
                     label = (
                         state.get("label") or state.get("layer_label") or state.get("_label_raw")

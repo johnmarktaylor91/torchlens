@@ -1021,7 +1021,7 @@ def _maybe_make_fast_copy_spec(
 
     if not bool(getattr(live_layer, has_field, False)):
         return None
-    if getattr(scrubbed_layer, tensor_field, None) is not None:
+    if getattr(scrubbed_layer, "__dict__", {}).get(tensor_field) is not None:
         return None
     live_field_value = getattr(live_layer, "__dict__", {}).get(tensor_field)
     if live_field_value is not None:

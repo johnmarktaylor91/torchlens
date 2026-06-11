@@ -14,7 +14,6 @@ from typing import Any, Callable, Iterator, Literal, cast
 import torch
 
 from ..._deprecations import MISSING, MissingType
-from ..._io.streaming import BundleStreamWriter
 from ...quantities import Bytes, Duration
 from ..._state import pause_logging
 from ...data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
@@ -1686,35 +1685,6 @@ def _ensure_layer_grad_hooks(trace: Any) -> None:
         trace._grad_layer_nums_to_save = "all"
 
 
-def _configure_grad_streaming(
-    trace: Any,
-    *,
-    save_grads_to: str | None,
-    keep_grads_in_memory: bool | None,
-) -> None:
-    """Configure deferred bundle finalization for streamed grads.
-
-    Parameters
-    ----------
-    trace:
-        Trace receiving streamed grad blobs.
-    save_grads_to:
-        Optional bundle path for grad streaming.
-    keep_grads_in_memory:
-        Whether grads should remain in memory after finalization.
-    """
-
-    if keep_grads_in_memory is not None:
-        trace._grad_stream_retain_in_memory = keep_grads_in_memory
-    if save_grads_to is not None:
-        if getattr(trace, "_out_writer", None) is not None:
-            raise ValueError("Cannot set save_grads_to after a streaming writer exists.")
-        trace._out_writer = BundleStreamWriter(save_grads_to)
-        trace._defer_streaming_bundle_finalization = True
-        if getattr(trace, "save_grads", None) in (None, False):
-            trace.save_grads = "all"
-
-
 def _finalize_grad_streaming(trace: Any) -> None:
     """Finalize a deferred grad-streaming bundle after backward capture."""
 
@@ -1748,8 +1718,6 @@ def log_backward(
     loss: torch.Tensor,
     *,
     save_grads: Any | MissingType = MISSING,
-    save_grads_to: str | None = None,
-    keep_grads_in_memory: bool | None = None,
     **backward_kwargs: Any,
 ) -> Any:
     """Run ``loss.backward`` while capturing the backward graph.
@@ -1770,11 +1738,6 @@ def log_backward(
     Any
         The same Trace, for chaining.
     """
-    _configure_grad_streaming(
-        self,
-        save_grads_to=save_grads_to,
-        keep_grads_in_memory=keep_grads_in_memory,
-    )
     _ensure_layer_grad_hooks(self)
 
     def run() -> Any:
@@ -1801,22 +1764,13 @@ class RecordingBackward:
         trace: Any,
         *,
         save_grads: Any | MissingType = MISSING,
-        save_grads_to: str | None = None,
-        keep_grads_in_memory: bool | None = None,
     ) -> None:
         self.trace = trace
         self.save_grads = save_grads
-        self.save_grads_to = save_grads_to
-        self.keep_grads_in_memory = keep_grads_in_memory
         self._original_backward: Callable[..., Any] | None = None
 
     def __enter__(self) -> "RecordingBackward":
         """Patch ``torch.Tensor.backward`` and return this context object."""
-        _configure_grad_streaming(
-            self.trace,
-            save_grads_to=self.save_grads_to,
-            keep_grads_in_memory=self.keep_grads_in_memory,
-        )
         _ensure_layer_grad_hooks(self.trace)
         self._original_backward = torch.Tensor.backward
         trace = self.trace
@@ -1853,8 +1807,6 @@ def recording_backward(
     self: Any,
     *,
     save_grads: Any | MissingType = MISSING,
-    save_grads_to: str | None = None,
-    keep_grads_in_memory: bool | None = None,
 ) -> RecordingBackward:
     """Return a context manager that records user-managed backward calls.
 
@@ -1866,6 +1818,4 @@ def recording_backward(
     return RecordingBackward(
         self,
         save_grads=save_grads,
-        save_grads_to=save_grads_to,
-        keep_grads_in_memory=keep_grads_in_memory,
     )

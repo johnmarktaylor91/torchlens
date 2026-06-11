@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import torch
 from torch import nn
@@ -229,6 +231,48 @@ def test_to_pandas_represents_ambiguous_grad_without_raising() -> None:
         assert grad_rows["grad"].isna().all()
     finally:
         trace.cleanup()
+
+
+def test_backward_accessors_to_pandas_do_not_raise_on_multiple_calls() -> None:
+    """Backward accessors export dataframe rows without touching loud payload properties."""
+
+    trace = _trace_with_two_backward_passes()
+    try:
+        grad_fns_frame = trace.grad_fns.to_pandas()
+        grad_fn_calls_frame = trace.grad_fn_calls.to_pandas()
+        backward_passes_frame = trace.backward_passes.to_pandas()
+        assert not grad_fns_frame.empty
+        assert not grad_fn_calls_frame.empty
+        assert not backward_passes_frame.empty
+        assert "backward_duration" in grad_fns_frame.columns
+        assert "total_backward_duration" in grad_fns_frame.columns
+        assert backward_passes_frame["pass_index"].tolist() == [1, 2]
+    finally:
+        trace.cleanup()
+
+
+def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
+    """Portable save/load preserves per-pass gradient records and accessors."""
+
+    trace = _trace_with_two_backward_passes()
+    bundle_path = tmp_path / "backward_grads.tlspec"
+    try:
+        op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
+        expected_label = op.label
+        expected_grads = [record.grad.detach().clone() for record in op.grads]
+        tl.save(trace, bundle_path)
+    finally:
+        trace.cleanup()
+
+    loaded = tl.load(bundle_path)
+    try:
+        loaded_op = loaded.ops[expected_label]
+        assert [record.backward_pass_index for record in loaded_op.grads] == [1, 2]
+        assert loaded_op.grads[0].owner is loaded_op
+        assert torch.equal(loaded_op.grads.for_pass(1).grad, expected_grads[0])
+        assert torch.equal(loaded_op.grads.for_pass(2).grad, expected_grads[1])
+    finally:
+        loaded.cleanup()
 
 
 def test_total_backward_memory_counts_unique_saved_payload_refs() -> None:

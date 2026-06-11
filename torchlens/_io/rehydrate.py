@@ -391,7 +391,7 @@ def _materialize_recursive_blob_refs(
     bundle_path: Path,
     map_location: str | torch.device,
 ) -> Any:
-    """Materialize ``BlobRef`` objects inside nested containers."""
+    """Materialize ``BlobRef`` objects inside nested containers and portable objects."""
 
     if isinstance(value, BlobRef):
         return _materialize_blob_ref(value, manifest_index, bundle_path, map_location)
@@ -458,6 +458,22 @@ def _materialize_recursive_blob_refs(
             )
             for item in value
         }
+    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    if spec is not None and type(value).__name__ == "GradientRecord":
+        for field_name, field_value in list(vars(value).items()):
+            if field_name not in spec:
+                continue
+            _assign_rehydrated_field(
+                value,
+                field_name,
+                _materialize_recursive_blob_refs(
+                    field_value,
+                    manifest_index=manifest_index,
+                    bundle_path=bundle_path,
+                    map_location=map_location,
+                ),
+            )
+        return value
     return value
 
 

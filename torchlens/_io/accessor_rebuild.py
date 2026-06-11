@@ -52,6 +52,8 @@ def rebuild_trace_accessors(
 
     buffer_versions: dict[str, list["Op"]] = {}
     for entry in trace.layer_list:
+        for grad_record in getattr(entry, "_grad_records", ()):
+            grad_record.owner = entry
         if getattr(entry, "is_buffer", False) and entry.address is not None:
             buffer_versions.setdefault(entry.address, []).append(entry)
     buffer_dict = {
