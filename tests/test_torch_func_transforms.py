@@ -184,6 +184,82 @@ class AutogradHessianModel(nn.Module):
         return hessian.sum()
 
 
+class FunctionalCallBasicModel(nn.Module):
+    """Use ``torch.func.functional_call`` with substituted parameters."""
+
+    def __init__(self) -> None:
+        """Initialize the inner module."""
+
+        super().__init__()
+        self.inner = nn.Linear(3, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a functional_call with tensor substitutions.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Inner module output.
+        """
+
+        params = {name: value + 1.0 for name, value in self.inner.named_parameters()}
+        return torch.func.functional_call(self.inner, params, (x,))
+
+
+class FunctionalCallBufferModel(nn.Module):
+    """Use ``functional_call`` with a substituted buffer."""
+
+    def __init__(self) -> None:
+        """Initialize the inner module with a buffer."""
+
+        super().__init__()
+        self.inner = nn.Module()
+        self.inner.register_buffer("offset", torch.ones(3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a functional_call with a buffer substitution.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Shifted tensor.
+        """
+
+        offset = cast(torch.Tensor, self.inner.offset)
+        buffers = {"offset": offset + 2.0}
+
+        def forward(module: nn.Module, value: torch.Tensor) -> torch.Tensor:
+            """Apply the module buffer.
+
+            Parameters
+            ----------
+            module:
+                Module carrying the buffer.
+            value:
+                Input tensor.
+
+            Returns
+            -------
+            torch.Tensor
+                Shifted tensor.
+            """
+
+            return value + cast(torch.Tensor, module.offset)
+
+        self.inner.forward = forward.__get__(self.inner, nn.Module)  # type: ignore[method-assign]
+        return torch.func.functional_call(self.inner, buffers, (x,))
+
+
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""
@@ -277,3 +353,24 @@ def test_autograd_functional_direct_call_boundary(
     assert transform_ops[0].parents == ["input_1"]
     assert transform_ops[0].is_transform is True
     assert transform_ops[0].transform_kind == kind
+
+
+def test_functional_call_substituted_params_are_tensor_parents() -> None:
+    """Substituted params are graph parents, not registered Param claims."""
+
+    log = tl.trace(FunctionalCallBasicModel().eval(), torch.randn(3), layers_to_save="all")
+    linear = next(op for op in log.ops if op.type == "linear")
+
+    assert linear.module == "inner:1"
+    assert len(linear.parents) == 3
+    assert linear.parents[0] == "input_1"
+    assert linear.parent_params == []
+
+
+def test_functional_call_substituted_buffers_are_tensor_parents() -> None:
+    """Substituted buffers are graph parents under functional_call."""
+
+    log = tl.trace(FunctionalCallBufferModel().eval(), torch.randn(3), layers_to_save="all")
+    add_ops = [op for op in log.ops if op.type == "add"]
+
+    assert any("input_1" in op.parents and len(op.parents) == 2 for op in add_ops)
