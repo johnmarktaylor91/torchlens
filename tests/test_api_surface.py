@@ -34,6 +34,7 @@ TARGET_ALL = [
     "add",
     "label",
     "func",
+    "func_transform",
     "followed_by",
     "grad_fn",
     "intervening",
@@ -96,7 +97,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_59() -> None:
+def test_all_size_exactly_60() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -107,9 +108,10 @@ def test_all_size_exactly_59() -> None:
     P2 adds `facet` and `head` selectors = 54; capture-unification P4 adds
     `followed_by` and `preceded_by` predicate-window selectors = 56.
     Capture-unification P5 adds `when`, `add`, and `replace_with` = 59.
+    torch.func transform capture adds `func_transform` = 60.
     """
 
-    assert len(torchlens.__all__) == 59
+    assert len(torchlens.__all__) == 60
     assert torchlens.__all__ == TARGET_ALL
 
 
