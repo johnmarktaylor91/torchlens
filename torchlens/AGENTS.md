@@ -88,7 +88,7 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
   legacy THEN/ELIF/ELSE views.
 - Primary structures are `Trace.conditional_records`, `conditional_arm_entry_edges`,
   `conditional_edge_call_indices`, and `conditional_arm_children`.
-- Graphviz renders IF/THEN/ELIF/ELSE labels; ELK and dagua conditional support remains more
+- Graphviz renders IF/THEN/ELIF/ELSE labels; dagua conditional support remains more
   limited than Graphviz.
 
 ## Release Safety

@@ -2203,8 +2203,7 @@ def show_model_graph(
             and ``False`` maps to ``"never"``.
         vis_direction: Deprecated alias for ``visualization.direction``.
         vis_node_placement: Deprecated alias for ``visualization.layout_engine``.
-            ``"elk"`` remains accepted as an internal backend escape hatch;
-            public API callers should prefer ``"auto"``.
+            Accepts ``"auto"``, ``"dot"``, or ``"rank"``.
         vis_renderer: Deprecated alias for ``visualization.renderer``. The
             ``"dagua"`` renderer is experimental and requires
             ``from torchlens.experimental import dagua`` before use.

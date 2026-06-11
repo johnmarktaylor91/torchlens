@@ -79,7 +79,7 @@ detaching or disk-only out storage.
 - `fastlog/` - sparse predicate recording with RAM/disk storage and recovery.
 - `postprocess/` - graph cleanup, conditionals, loop detection, labeling, finalization.
 - `validation/` - forward replay, backward validation, metadata invariants, `.tlspec` schema checks.
-- `visualization/` - Graphviz rendering, ELK layout, NodeSpec, themes, overlays, bundle diff.
+- `visualization/` - Graphviz rendering, rank layout, NodeSpec, themes, overlays, bundle diff.
 - `intervention/` - selectors, sites, hooks, helpers, Bundle, fork/replay/rerun/save.
 - `intervention/_super/` - internal Bundle-level Super* aligned views and accessors.
 - `intervention/_topology/` - internal bundle supergraph and topology diff support.

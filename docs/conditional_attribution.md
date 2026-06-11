@@ -54,7 +54,6 @@ not emit confident branch attribution.
 The sprint intentionally deferred a few follow-on items:
 
 - dagua conditional-edge rendering
-- ELK conditional-edge rendering
 - while-loop body attribution
 
 Reference: `.project-context/plans/if-else-attribution/plan.md` (v7).

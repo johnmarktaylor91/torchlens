@@ -618,9 +618,8 @@ def draw(
             deprecated but supported: ``True`` maps to ``"always"`` and
             ``False`` maps to ``"never"``.
         direction: Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
-        vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``, ``'elk'``,
-            or ``'sfdp'``. ``'elk'`` remains accepted as an internal backend escape
-            hatch; the public API default is ``'auto'``.
+        vis_node_placement: Layout engine: ``'auto'`` (default), ``'dot'``,
+            or ``'rank'``.
         vis_renderer: Renderer backend: ``'graphviz'`` or experimental
             ``'dagua'``. Import ``torchlens.experimental.dagua`` before using
             the Dagua renderer.
@@ -756,7 +755,12 @@ def draw(
     rankdir = direction_to_rankdir(direction)
 
     # Resolve the layout engine early to potentially skip graphviz.Digraph construction.
-    from ._elk_internal.layout import get_node_placement_engine
+    from ._rank_layout_internal.layout import (
+        RANK_LAYOUT_COST_THRESHOLD,
+        RANK_LAYOUT_NOTICE,
+        estimate_rank_layout_cost,
+        get_node_placement_engine,
+    )
 
     edge_map, skipped_labels = _build_skip_filtered_edge_map(
         self,
@@ -771,16 +775,25 @@ def draw(
         getattr(self, "_source_model_ref", None),
     )
     num_nodes = len(entries_to_plot) - len(skipped_labels)
-    engine = get_node_placement_engine(vis_node_placement, num_nodes)
-    if vis_intervention_mode == "as_node" and engine == "elk":
-        engine = "dot"
-    if source_text is not None and engine == "elk":
-        # The code panel is implemented in pure Graphviz so the graph and source
-        # remain in one output file. ELK's direct renderer byops Digraph
-        # construction, so panel renders stay on the Graphviz path.
-        engine = "dot"
+    cost_node_labels, cost_edges = _rank_layout_cost_inputs(
+        self,
+        entries_to_plot,
+        edge_map,
+        vis_mode=vis_mode,
+        vis_call_depth=vis_call_depth,
+        collapse_fn=collapse_fn,
+    )
+    layout_cost = estimate_rank_layout_cost(cost_node_labels, cost_edges)
+    engine = get_node_placement_engine(vis_node_placement, layout_cost)
+    if vis_node_placement == "auto" and engine == "rank":
+        warnings.warn(
+            RANK_LAYOUT_NOTICE.format(
+                cost=layout_cost,
+                threshold=RANK_LAYOUT_COST_THRESHOLD,
+            )
+        )
     _vprint(self, f"Rendering {vis_mode} graph ({num_nodes} nodes, format={vis_fileformat})")
-    _vprint(self, f"Layout engine: {engine}")
+    _vprint(self, f"Layout engine: {engine} (estimated cost={layout_cost})")
 
     if self.num_params == 0:
         params_detail = "0 params"
@@ -805,14 +818,12 @@ def draw(
             "Direct writes detected - recipe propagation will overlay<br align='left'/>>"
         )
 
-    # ELK fast path: skip graphviz.Digraph construction entirely.
-    # Generates DOT directly with ELK positions and cluster subgraphs (module boxes).
-    # If ELK layout fails (OOM, timeout), render_elk_direct falls back internally
-    # to sfdp — still using the fast DOT-text path, never graphviz.Digraph.
-    if engine == "elk":
-        from ._elk_internal.layout import render_elk_direct
+    # Rank fast path: skip graphviz.Digraph construction entirely.
+    # Generates DOT directly with topological-rank positions and cluster boxes.
+    if engine == "rank":
+        from ._rank_layout_internal.layout import render_rank_layout
 
-        result = render_elk_direct(
+        result = render_rank_layout(
             self,
             entries_to_plot,
             vis_mode,
@@ -971,9 +982,7 @@ def draw(
         else:
             display_fn(dot)
 
-    # ELK was already handled above (early return). Only dot/sfdp reach here.
-    from ._elk_internal.layout import render_with_sfdp
-
+    # Rank was already handled above (early return). Only dot reaches here.
     _RENDER_TIMEOUT = 120  # seconds
     source_override = None
     self._last_sibling_ordering_decision = SiblingOrderDecision(0, 0, {}, ())
@@ -991,31 +1000,28 @@ def draw(
     with open(source_path, "w", encoding="utf-8") as source_file:
         source_file.write(final_source)
     try:
-        if engine == "sfdp":
-            render_with_sfdp(source_path, vis_outpath, vis_fileformat, vis_save_only)
+        # dot engine (default for local-topology graphs)
+        rendered_path = f"{vis_outpath}.{vis_fileformat}"
+        if compose_code_panel:
+            _write_composed_code_panel(
+                dot.engine,
+                source_path,
+                cast(str, source_text),
+                rendered_path,
+                vis_fileformat,
+                _RENDER_TIMEOUT,
+            )
         else:
-            # dot engine (default for small graphs)
-            rendered_path = f"{vis_outpath}.{vis_fileformat}"
-            if compose_code_panel:
-                _write_composed_code_panel(
-                    dot.engine,
-                    source_path,
-                    cast(str, source_text),
-                    rendered_path,
-                    vis_fileformat,
-                    _RENDER_TIMEOUT,
-                )
-            else:
-                cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
-                subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
-            if not vis_save_only:
-                _view_rendered_file(rendered_path)
+            cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+            subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+        if not vis_save_only:
+            _view_rendered_file(rendered_path)
         _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
     except subprocess.TimeoutExpired:
         warnings.warn(
             f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for graph with "
             f"{self.num_tensors} nodes. DOT source saved to "
-            f"'{source_path}'. Consider using vis_node_placement='sfdp' or "
+            f"'{source_path}'. Consider using vis_node_placement='rank' or "
             f"vis_call_depth to collapse modules."
         )
     except subprocess.CalledProcessError as e:
@@ -1042,7 +1048,7 @@ def _code_panel_composition_available(file_format: str, engine: str) -> bool:
     format and the ``cairosvg`` rasterizer for non-SVG outputs.
     """
 
-    if engine == "sfdp" or file_format not in _CODE_PANEL_COMPOSED_FORMATS:
+    if engine == "rank" or file_format not in _CODE_PANEL_COMPOSED_FORMATS:
         return False
     if file_format == "svg":
         return True
@@ -2012,6 +2018,110 @@ def _build_skip_filtered_edge_map(
             vis_mode,
         )
     return edge_map, skipped_labels
+
+
+def _rank_layout_cost_inputs(
+    trace: "Trace",
+    entries_to_plot: Mapping[str, GraphNode],
+    edge_map: Mapping[str, Sequence[RenderEdge]],
+    *,
+    vis_mode: str,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+) -> tuple[set[str], list[tuple[str, str]]]:
+    """Convert rendered edges into node and edge labels for rank-cost estimation.
+
+    Parameters
+    ----------
+    trace:
+        Owning Trace.
+    entries_to_plot:
+        Candidate nodes for the current visualization mode.
+    edge_map:
+        Skip-filtered render edge map.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    vis_call_depth:
+        Module nesting depth for collapsed modules.
+    collapse_fn:
+        Optional user collapse predicate.
+
+    Returns
+    -------
+    tuple[set[str], list[tuple[str, str]]]
+        Render-node labels and directed render edges.
+    """
+
+    nodes_by_render_label = {
+        _render_node_label(node, vis_mode): node for node in entries_to_plot.values()
+    }
+    node_labels: set[str] = set()
+    edges: list[tuple[str, str]] = []
+    for source_label, render_edges in edge_map.items():
+        source_node = nodes_by_render_label.get(source_label)
+        if source_node is None:
+            continue
+        source_name = _rank_cost_node_name(
+            trace,
+            source_node,
+            vis_mode=vis_mode,
+            vis_call_depth=vis_call_depth,
+            collapse_fn=collapse_fn,
+        )
+        node_labels.add(source_name)
+        for render_edge in render_edges:
+            target_name = _rank_cost_node_name(
+                trace,
+                render_edge.target,
+                vis_mode=vis_mode,
+                vis_call_depth=vis_call_depth,
+                collapse_fn=collapse_fn,
+            )
+            node_labels.add(target_name)
+            if source_name != target_name:
+                edges.append((source_name, target_name))
+    return node_labels, edges
+
+
+def _rank_cost_node_name(
+    trace: "Trace",
+    node: GraphNode,
+    *,
+    vis_mode: str,
+    vis_call_depth: int,
+    collapse_fn: CollapseFn | None,
+) -> str:
+    """Return the render node name used for rank-cost estimation.
+
+    Parameters
+    ----------
+    trace:
+        Owning Trace.
+    node:
+        Render node.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``.
+    vis_call_depth:
+        Module nesting depth for collapsed modules.
+    collapse_fn:
+        Optional user collapse predicate.
+
+    Returns
+    -------
+    str
+        Name matching the final rendered node after collapse decisions.
+    """
+
+    collapse_address = _collapse_address_for_node(
+        trace,
+        node,
+        collapse_fn=collapse_fn,
+        max_module_depth=vis_call_depth,
+    )
+    if collapse_address is None:
+        return node.layer_label.replace(":", "pass")
+    parts = collapse_address.rsplit(":", 1)
+    return "pass".join(parts) if vis_mode == "unrolled" else parts[0]
 
 
 def _render_node_label(node: GraphNode, vis_mode: str) -> str:

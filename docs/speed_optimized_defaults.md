@@ -20,7 +20,7 @@ Use these defaults when speed matters:
 
 | Setting | Speed-oriented value | Why |
 | --- | --- | --- |
-| Visualization | Omit `Trace.draw()` | Avoid Graphviz/ELK rendering while collecting data. |
+| Visualization | Omit `Trace.draw()` | Avoid graph rendering while collecting data. |
 | Saved layers | `save=tl.func(...)` / `save=tl.in_module(...)` | Saves activation payloads only where needed in the primary single-pass path. |
 | Windowed selection | `lookback=K` with `tl.followed_by(...)` / `tl.preceded_by(...)` | Enables local graph-context predicates without post-hoc filtering. |
 | Lookback payloads | Default `lookback_payload_policy="metadata_only"` | Avoids pinning recent tensors unless retroactive payload saving is required. |

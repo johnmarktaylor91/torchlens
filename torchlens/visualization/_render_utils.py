@@ -109,7 +109,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing-only
 # so it stays cheap and immutable).
 _KNOWN_EXTS = ("pdf", "png", "jpg", "svg", "jpeg", "bmp", "pic", "tif", "tiff")
 
-# Default subprocess timeout for the dot/sfdp render call. Mirrors the
+# Default subprocess timeout for Graphviz render calls. Mirrors the
 # legacy literal that lived inside ``rendering.draw``.
 RENDER_TIMEOUT_SECONDS = 120
 

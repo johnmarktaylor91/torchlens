@@ -39,4 +39,4 @@ python scripts/render_large_graph.py 250000
 python scripts/render_large_graph.py 1000000 --format png --seed 123
 ```
 
-Use this for stress-testing ELK/topological layout behavior, not for normal unit tests.
+Use this for stress-testing rank layout behavior, not for normal unit tests.

@@ -1,19 +1,26 @@
-"""Tests for large graph rendering and the RandomGraphModel generator."""
+"""Tests for large graph rendering, rank layout, and RandomGraphModel."""
+
+from __future__ import annotations
 
 import os
+import warnings
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 import torch
+from torch import nn
 
-from torchlens import trace as trace_fn, show_model_graph
+from torchlens import trace as trace_fn
 from torchlens.user_funcs import validate_forward_pass
-from torchlens.visualization._elk_internal.layout import (
-    elk_available,
+from torchlens.visualization._rank_layout_internal import layout as rank_layout
+from torchlens.visualization._rank_layout_internal.layout import (
+    RANK_LAYOUT_COST_THRESHOLD,
+    SPAN_LOCAL,
+    _compute_topological_layout,
+    compute_rank_depths,
+    estimate_rank_layout_cost,
     get_node_placement_engine,
-    build_elk_graph,
-    build_elk_graph_hierarchical,
-    inject_elk_positions,
-    _ELK_NODE_THRESHOLD,
 )
 
 from example_models import RandomGraphModel
@@ -22,551 +29,520 @@ VIS_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "test_outputs", "visual
 
 
 @pytest.fixture(autouse=True)
-def _ensure_output_dir():
+def _ensure_output_dir() -> Iterator[None]:
+    """Create the visualization output directory for tests that render files."""
+
     os.makedirs(VIS_OUTPUT_DIR, exist_ok=True)
+    yield
 
 
-def _count_nodes(model, x):
-    """Log forward pass and return node count."""
-    ml = trace_fn(model, x)
-    count = len(ml.layer_list)
-    ml.cleanup()
+def _count_nodes(model: nn.Module, x: torch.Tensor) -> int:
+    """Log a forward pass and return the number of captured layers."""
+
+    trace = trace_fn(model, x)
+    count = len(trace.layer_list)
+    trace.cleanup()
     return count
 
 
-# -----------------------------------------------
-# RandomGraphModel tests
-# -----------------------------------------------
+def _draw_model(model: nn.Module, x: torch.Tensor, **kwargs: Any) -> str:
+    """Trace a model, draw it, and return the generated DOT source."""
+
+    trace = trace_fn(model, x)
+    try:
+        return str(trace.draw(**kwargs))
+    finally:
+        trace.cleanup()
+
+
+def _chain_edges(num_nodes: int) -> list[tuple[str, str]]:
+    """Build local chain edges for estimator tests."""
+
+    return [(f"n{i}", f"n{i + 1}") for i in range(num_nodes - 1)]
+
+
+def _hub_edges(num_nodes: int, fanout: int) -> list[tuple[str, str]]:
+    """Build a chain plus long-range hub edges for estimator tests."""
+
+    edges = _chain_edges(num_nodes)
+    step = max(1, num_nodes // fanout)
+    edges.extend(("n0", f"n{i}") for i in range(step, num_nodes, step))
+    return edges
+
+
+def _synthetic_node_data(num_nodes: int) -> dict[str, dict[str, Any]]:
+    """Build minimal node data for rank-layout scale tests."""
+
+    return {
+        f"n{i}": {
+            "attrs": {"label": f"n{i}"},
+            "node_label": f"n{i}",
+        }
+        for i in range(num_nodes)
+    }
+
+
+def _synthetic_rank_edges(num_nodes: int) -> list[dict[str, str]]:
+    """Build minimal rank-layout edge dictionaries for a chain."""
+
+    return [
+        {"tail_name": source, "head_name": target} for source, target in _chain_edges(num_nodes)
+    ]
 
 
 class TestRandomGraphModel:
     """Verify the random model generator produces approximately correct node counts."""
 
-    def test_small_model(self):
+    def test_small_model(self) -> None:
+        """A 500-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=500, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 400 < count < 600, f"Expected ~500 nodes, got {count}"
 
     @pytest.mark.slow
-    def test_3k_nodes(self):
+    def test_3k_nodes(self) -> None:
+        """A 3k-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=3000, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 2500 < count < 3500, f"Expected ~3000 nodes, got {count}"
 
     @pytest.mark.slow
-    def test_5k_nodes(self):
+    def test_5k_nodes(self) -> None:
+        """A 5k-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=5000, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 4500 < count < 5500, f"Expected ~5000 nodes, got {count}"
 
     @pytest.mark.slow
-    def test_10k_nodes(self):
+    def test_10k_nodes(self) -> None:
+        """A 10k-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=10000, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 9000 < count < 11000, f"Expected ~10000 nodes, got {count}"
 
     @pytest.mark.slow
-    def test_20k_nodes(self):
+    @pytest.mark.rare
+    def test_20k_nodes(self) -> None:
+        """A 20k-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=20000, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 18000 < count < 22000, f"Expected ~20000 nodes, got {count}"
 
     @pytest.mark.slow
-    def test_50k_nodes(self):
+    @pytest.mark.rare
+    def test_50k_nodes(self) -> None:
+        """A 50k-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=50000, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 45000 < count < 55000, f"Expected ~50000 nodes, got {count}"
 
     @pytest.mark.slow
     @pytest.mark.rare
-    def test_100k_nodes(self):
+    def test_100k_nodes(self) -> None:
+        """A 100k-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=100000, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 90000 < count < 110000, f"Expected ~100000 nodes, got {count}"
 
     @pytest.mark.slow
     @pytest.mark.rare
-    def test_250k_nodes(self):
+    def test_250k_nodes(self) -> None:
+        """A 250k-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=250000, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 225000 < count < 275000, f"Expected ~250000 nodes, got {count}"
 
     @pytest.mark.slow
     @pytest.mark.rare
-    def test_1M_nodes(self):
+    def test_1m_nodes(self) -> None:
+        """A 1M-node target lands near the requested scale."""
+
         model = RandomGraphModel(target_nodes=1000000, seed=42)
-        x = torch.randn(2, 64)
-        count = _count_nodes(model, x)
+        count = _count_nodes(model, torch.randn(2, 64))
         assert 900000 < count < 1100000, f"Expected ~1000000 nodes, got {count}"
 
-    def test_deterministic(self):
-        """Same seed produces same structure."""
+    def test_deterministic(self) -> None:
+        """Same seed produces the same structure."""
+
         m1 = RandomGraphModel(target_nodes=1000, seed=123)
         m2 = RandomGraphModel(target_nodes=1000, seed=123)
-        p1 = sum(p.numel() for p in m1.parameters())
-        p2 = sum(p.numel() for p in m2.parameters())
-        assert p1 == p2
+        assert sum(p.numel() for p in m1.parameters()) == sum(p.numel() for p in m2.parameters())
 
-    def test_different_seeds(self):
+    def test_different_seeds(self) -> None:
         """Different seeds produce different structures."""
+
         m1 = RandomGraphModel(target_nodes=1000, seed=1)
         m2 = RandomGraphModel(target_nodes=1000, seed=2)
-        p1 = sum(p.numel() for p in m1.parameters())
-        p2 = sum(p.numel() for p in m2.parameters())
-        assert p1 != p2
+        assert sum(p.numel() for p in m1.parameters()) != sum(p.numel() for p in m2.parameters())
 
-    def test_call_depth(self):
+    def test_call_depth(self) -> None:
         """Module nesting creates expected hierarchy."""
-        model = RandomGraphModel(target_nodes=500, call_depth=4, seed=42)
-        ml = trace_fn(model, torch.randn(2, 64))
-        max_depth = max(len(ml[label].modules) for label in ml.layer_labels)
-        assert max_depth >= 3
-        ml.cleanup()
 
-    def test_validation_small(self):
-        """Validation ops for small random model."""
+        model = RandomGraphModel(target_nodes=500, call_depth=4, seed=42)
+        trace = trace_fn(model, torch.randn(2, 64))
+        max_depth = max(len(trace[label].modules) for label in trace.layer_labels)
+        assert max_depth >= 3
+        trace.cleanup()
+
+    def test_validation_small(self) -> None:
+        """Validation succeeds for a small random model."""
+
         model = RandomGraphModel(target_nodes=200, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
-    def test_validation_1k(self):
-        """Validation ops for 1k-node random model."""
+    def test_validation_1k(self) -> None:
+        """Validation succeeds for a 1k-node random model."""
+
         model = RandomGraphModel(target_nodes=1000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
-    def test_validation_3k(self):
-        """Validation ops for 3k-node random model."""
+    def test_validation_3k(self) -> None:
+        """Validation succeeds for a 3k-node random model."""
+
         model = RandomGraphModel(target_nodes=3000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
-    def test_validation_5k(self):
-        """Validation ops for 5k-node random model."""
+    def test_validation_5k(self) -> None:
+        """Validation succeeds for a 5k-node random model."""
+
         model = RandomGraphModel(target_nodes=5000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
-    def test_validation_10k(self):
-        """Validation ops for 10k-node random model."""
+    def test_validation_10k(self) -> None:
+        """Validation succeeds for a 10k-node random model."""
+
         model = RandomGraphModel(target_nodes=10000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
-    def test_validation_20k(self):
-        """Validation ops for 20k-node random model."""
+    @pytest.mark.rare
+    def test_validation_20k(self) -> None:
+        """Validation succeeds for a 20k-node random model."""
+
         model = RandomGraphModel(target_nodes=20000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     @pytest.mark.rare
-    def test_validation_50k(self):
-        """Validation ops for 50k-node random model."""
+    def test_validation_50k(self) -> None:
+        """Validation succeeds for a 50k-node random model."""
+
         model = RandomGraphModel(target_nodes=50000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.slow
     @pytest.mark.rare
-    def test_validation_100k(self):
-        """Validation ops for 100k-node random model."""
+    def test_validation_100k(self) -> None:
+        """Validation succeeds for a 100k-node random model."""
+
         model = RandomGraphModel(target_nodes=100000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
     @pytest.mark.skip(
         reason="250k-node validation OOMs / hangs for hours on most machines. "
-        "Run manually with: pytest tests/test_large_graphs.py::TestRandomGraphModel::test_validation_250k --no-skip"
+        "Run manually with: pytest tests/test_large_graphs.py::"
+        "TestRandomGraphModel::test_validation_250k --no-skip"
     )
     @pytest.mark.slow
     @pytest.mark.rare
-    def test_validation_250k(self):
-        """Validation ops for 250k-node random model."""
+    def test_validation_250k(self) -> None:
+        """Validation for 250k-node random models is manual-only."""
+
         model = RandomGraphModel(target_nodes=250000, seed=42)
         assert validate_forward_pass(model, torch.randn(2, 64))
 
 
-# -----------------------------------------------
-# Engine selection tests
-# -----------------------------------------------
+class TestRankLayoutUtilities:
+    """Test rank layout helpers without invoking Graphviz."""
 
+    def test_depths_for_chain(self) -> None:
+        """A local chain gets monotonically increasing depths."""
 
-class TestEngineSelection:
-    """Test get_node_placement_engine logic."""
+        labels = {f"n{i}" for i in range(5)}
+        depths = compute_rank_depths(labels, _chain_edges(5))
+        assert depths == {"n0": 0, "n1": 1, "n2": 2, "n3": 3, "n4": 4}
 
-    def test_auto_selects_dot_for_small(self):
-        assert get_node_placement_engine("auto", 500) == "dot"
+    def test_local_topology_stays_under_threshold(self) -> None:
+        """The measured local 5k topology stays on dot with the calibrated threshold."""
 
-    def test_auto_selects_non_dot_for_large(self):
-        engine = get_node_placement_engine("auto", 5000)
-        assert engine in ("elk", "sfdp")
+        labels = {f"n{i}" for i in range(5000)}
+        cost = estimate_rank_layout_cost(labels, _chain_edges(5000))
+        assert cost == 5000
+        assert SPAN_LOCAL == 12
+        assert cost < RANK_LAYOUT_COST_THRESHOLD
+        assert get_node_placement_engine("auto", cost) == "dot"
 
-    def test_dot_always_returns_dot(self):
-        assert get_node_placement_engine("dot", 10000) == "dot"
+    def test_hub_topology_exceeds_threshold(self) -> None:
+        """Long hub edges exceed the threshold even at moderate node counts."""
 
-    def test_sfdp_always_returns_sfdp(self):
-        assert get_node_placement_engine("sfdp", 100) == "sfdp"
+        labels = {f"n{i}" for i in range(3500)}
+        cost = estimate_rank_layout_cost(labels, _hub_edges(3500, fanout=24))
+        assert cost > RANK_LAYOUT_COST_THRESHOLD
+        assert get_node_placement_engine("auto", cost) == "rank"
 
-    def test_elk_falls_back_when_unavailable(self):
-        if not elk_available():
-            assert get_node_placement_engine("elk", 100) == "sfdp"
+    def test_manual_engines_force_selection(self) -> None:
+        """Explicit dot and rank choices bypass auto cost selection."""
 
-    def test_threshold_boundary(self):
-        assert get_node_placement_engine("auto", _ELK_NODE_THRESHOLD - 1) == "dot"
-        engine = get_node_placement_engine("auto", _ELK_NODE_THRESHOLD)
-        assert engine in ("elk", "sfdp")
+        assert get_node_placement_engine("dot", RANK_LAYOUT_COST_THRESHOLD + 1) == "dot"
+        assert get_node_placement_engine("rank", 1) == "rank"
 
+    def test_topological_layout_returns_module_boxes(self) -> None:
+        """The Kahn layout returns positions and compound boxes for modules."""
 
-# -----------------------------------------------
-# ELK utilities tests (don't require elkjs)
-# -----------------------------------------------
-
-
-class TestElkUtilities:
-    """Test ELK helper functions that don't need Node.js."""
-
-    def test_build_elk_graph_from_dot_quoted(self):
-        dot_source = """
-        digraph {
-            "node_a" [label="A"]
-            "node_b" [label="B"]
-            "node_a" -> "node_b"
+        node_data = {
+            "a": {"attrs": {"label": "A"}, "node_label": "a"},
+            "b": {"attrs": {"label": "B"}, "node_label": "b"},
         }
-        """
-        elk = build_elk_graph(dot_source)
-        assert len(elk["children"]) == 2
-        assert len(elk["edges"]) == 1
-
-    def test_build_elk_graph_from_dot_unquoted(self):
-        dot_source = """
-        digraph {
-            node [ordering=out]
-            node_a [label="A"]
-            node_b [label="B"]
-            node_c [label="C"]
-            node_a -> node_b
-            node_b -> node_c
-        }
-        """
-        elk = build_elk_graph(dot_source)
-        assert len(elk["children"]) == 3
-        assert len(elk["edges"]) == 2
-        node_ids = {c["id"] for c in elk["children"]}
-        assert node_ids == {"node_a", "node_b", "node_c"}
-
-    def test_inject_positions_quoted(self):
-        dot_source = '"my_node" [label="test"]'
-        positioned = {"children": [{"id": "my_node", "x": 0, "y": 0, "width": 150, "height": 40}]}
-        result = inject_elk_positions(dot_source, positioned)
-        assert 'pos="' in result
-
-    def test_inject_positions_unquoted(self):
-        dot_source = 'my_node [label="test"]'
-        positioned = {"children": [{"id": "my_node", "x": 0, "y": 0, "width": 150, "height": 40}]}
-        result = inject_elk_positions(dot_source, positioned)
-        assert 'pos="' in result
-
-    def test_inject_positions_empty(self):
-        dot_source = 'my_node [label="test"]'
-        result = inject_elk_positions(dot_source, {"children": []})
-        assert result == dot_source
-
-    def test_build_hierarchical_has_groups(self):
-        """Hierarchical builder creates compound nodes for module nesting."""
-        model = RandomGraphModel(target_nodes=500, call_depth=3, seed=42)
-        ml = trace_fn(model, torch.randn(2, 64))
-        entries = ml.layer_dict_main_keys
-        elk = build_elk_graph_hierarchical(entries)
-        # Should have at least one group_ compound node at top level.
-        group_ids = [c["id"] for c in elk["children"] if c["id"].startswith("group_")]
-        assert len(group_ids) > 0, "Expected module groups in hierarchical ELK graph"
-        # Groups should have children.
-        for child in elk["children"]:
-            if child["id"].startswith("group_"):
-                assert "children" in child and len(child["children"]) > 0
-        ml.cleanup()
-
-    def test_inject_positions_hierarchical(self):
-        """Position injection works with nested compound nodes."""
-        positioned = {
-            "children": [
-                {
-                    "id": "group_mod1",
-                    "x": 0,
-                    "y": 0,
-                    "children": [
-                        {"id": "node_a", "x": 10, "y": 20, "width": 150, "height": 40},
-                        {"id": "node_b", "x": 10, "y": 80, "width": 150, "height": 40},
-                    ],
-                },
-                {"id": "node_c", "x": 200, "y": 0, "width": 150, "height": 40},
-            ]
-        }
-        dot_source = 'node_a [label="A"]\nnode_b [label="B"]\nnode_c [label="C"]'
-        result = inject_elk_positions(dot_source, positioned)
-        # All three leaf nodes should have positions.
-        assert result.count('pos="') == 3
+        edges = [{"tail_name": "a", "head_name": "b"}]
+        sizes = {"a": (100.0, 40.0), "b": (100.0, 40.0)}
+        positions, compound_bboxes, max_y = _compute_topological_layout(
+            node_data,
+            edges,
+            sizes,
+            {"module": ["a", "b"]},
+            {},
+        )
+        assert set(positions) == {"a", "b"}
+        assert "group_module" in compound_bboxes
+        assert max_y > 0
 
 
-# -----------------------------------------------
-# Rendering tests
-# -----------------------------------------------
+class TestRankLayoutScale:
+    """Exercise the kept rank layout at large synthetic scales."""
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("num_nodes", [3000, 5000])
+    def test_rank_layout_scale_smoke(self, num_nodes: int) -> None:
+        """Rank layout computes positions for common large-graph sizes."""
+
+        node_data = _synthetic_node_data(num_nodes)
+        edges = _synthetic_rank_edges(num_nodes)
+        sizes = {f"n{i}": (20.0, 10.0) for i in range(num_nodes)}
+        positions, compound_bboxes, max_y = _compute_topological_layout(
+            node_data,
+            edges,
+            sizes,
+            {},
+            {},
+        )
+        assert len(positions) == num_nodes
+        assert compound_bboxes == {}
+        assert max_y > 0
+
+    @pytest.mark.slow
+    @pytest.mark.rare
+    @pytest.mark.parametrize("num_nodes", [10000, 20000, 50000, 100000, 250000, 1000000])
+    def test_rank_layout_scale_rare(self, num_nodes: int) -> None:
+        """Rank layout scale ladder for expensive manual runs."""
+
+        node_data = _synthetic_node_data(num_nodes)
+        edges = _synthetic_rank_edges(num_nodes)
+        sizes = {f"n{i}": (20.0, 10.0) for i in range(num_nodes)}
+        positions, _, max_y = _compute_topological_layout(node_data, edges, sizes, {}, {})
+        assert len(positions) == num_nodes
+        assert max_y > 0
 
 
-class TestLargeGraphRendering:
-    """Test visualization at scale."""
+class TestRankEngineRendering:
+    """Test renderer integration for dot, rank, auto, and legacy values."""
 
-    def test_dot_renders_small_graph(self):
-        """dot engine works for small graphs."""
-        model = RandomGraphModel(target_nodes=200, seed=42)
-        show_model_graph(
+    def test_auto_local_topology_renders_with_dot(self, tmp_path: Any) -> None:
+        """A local small graph renders through dot without the rank notice."""
+
+        model = RandomGraphModel(target_nodes=80, seed=42)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            source = _draw_model(
+                model,
+                torch.randn(2, 64),
+                vis_node_placement="auto",
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_outpath=str(tmp_path / "auto_dot"),
+            )
+        assert "digraph" in source
+        assert not any("auto-selected rank layout" in str(w.message) for w in caught)
+
+    def test_auto_hub_topology_selects_rank(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+    ) -> None:
+        """A high-cost auto render selects rank and emits the selection notice."""
+
+        calls: list[str] = []
+
+        def fake_render_rank_layout(*args: Any, **kwargs: Any) -> str:
+            """Record rank renderer use without invoking neato."""
+
+            calls.append("rank")
+            return "digraph { rank_path }"
+
+        monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 10)
+        monkeypatch.setattr(
+            rank_layout,
+            "render_rank_layout",
+            fake_render_rank_layout,
+        )
+        model = RandomGraphModel(target_nodes=80, seed=42)
+        with pytest.warns(UserWarning, match="auto-selected rank layout"):
+            source = _draw_model(
+                model,
+                torch.randn(2, 64),
+                vis_node_placement="auto",
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_outpath=str(tmp_path / "auto_rank"),
+            )
+        assert calls == ["rank"]
+        assert source == "digraph { rank_path }"
+
+    def test_manual_dot_forces_dot(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+    ) -> None:
+        """Explicit dot does not call the rank renderer even under a low threshold."""
+
+        def fail_render_rank_layout(*args: Any, **kwargs: Any) -> str:
+            """Fail if explicit dot accidentally reaches the rank renderer."""
+
+            raise AssertionError("rank renderer should not be called")
+
+        monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 0)
+        monkeypatch.setattr(rank_layout, "render_rank_layout", fail_render_rank_layout)
+        model = RandomGraphModel(target_nodes=60, seed=42)
+        source = _draw_model(
             model,
             torch.randn(2, 64),
             vis_node_placement="dot",
             vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "dot_200"),
-        )
-
-    @pytest.mark.slow
-    def test_sfdp_renders_large_graph(self):
-        """sfdp engine works for large graphs."""
-        model = RandomGraphModel(target_nodes=3000, seed=42)
-        show_model_graph(
-            model,
-            torch.randn(2, 64),
-            vis_node_placement="sfdp",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "sfdp_3k"),
-        )
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.slow
-    def test_elk_renders_3k(self):
-        """ELK engine works for 3k-node graphs."""
-        model = RandomGraphModel(target_nodes=3000, seed=42)
-        show_model_graph(
-            model,
-            torch.randn(2, 64),
-            vis_node_placement="elk",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_3k"),
-        )
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.slow
-    def test_elk_renders_5k(self):
-        """ELK engine works for 5k-node graphs."""
-        model = RandomGraphModel(target_nodes=5000, seed=42)
-        show_model_graph(
-            model,
-            torch.randn(2, 64),
-            vis_node_placement="elk",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_5k"),
-        )
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.slow
-    def test_elk_renders_10k(self):
-        """ELK engine works for 10k-node graphs."""
-        model = RandomGraphModel(target_nodes=10000, seed=42)
-        show_model_graph(
-            model,
-            torch.randn(2, 64),
-            vis_node_placement="elk",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_10k"),
-        )
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.slow
-    def test_elk_renders_20k(self):
-        """ELK engine works for 20k-node graphs."""
-        model = RandomGraphModel(target_nodes=20000, seed=42)
-        show_model_graph(
-            model,
-            torch.randn(2, 64),
-            vis_node_placement="elk",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_20k"),
-        )
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.slow
-    def test_elk_renders_50k(self):
-        """ELK engine works for 50k-node graphs."""
-        model = RandomGraphModel(target_nodes=50000, seed=42)
-        show_model_graph(
-            model,
-            torch.randn(2, 64),
-            vis_node_placement="elk",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_50k"),
-        )
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.slow
-    @pytest.mark.rare
-    def test_elk_renders_100k(self):
-        """ELK engine works for 100k-node graphs."""
-        model = RandomGraphModel(target_nodes=100000, seed=42)
-        show_model_graph(
-            model,
-            torch.randn(2, 64),
-            vis_node_placement="elk",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_100k"),
-        )
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.rare
-    def test_elk_renders_250k(self):
-        """ELK engine works for 250k-node graphs."""
-        model = RandomGraphModel(target_nodes=250000, seed=42)
-        show_model_graph(
-            model,
-            torch.randn(2, 64),
-            vis_node_placement="elk",
             vis_fileformat="svg",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_250k"),
+            vis_outpath=str(tmp_path / "manual_dot"),
         )
+        assert "digraph" in source
 
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.rare
-    def test_elk_renders_1M(self):
-        """ELK engine works for 1M-node graphs. The trophy file."""
-        model = RandomGraphModel(target_nodes=1000000, seed=42)
-        show_model_graph(
+    def test_manual_rank_forces_rank(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+    ) -> None:
+        """Explicit rank calls the rank renderer without an auto notice."""
+
+        calls: list[str] = []
+
+        def fake_render_rank_layout(*args: Any, **kwargs: Any) -> str:
+            """Record rank renderer use without invoking neato."""
+
+            calls.append("rank")
+            return "digraph { manual_rank }"
+
+        monkeypatch.setattr(rank_layout, "render_rank_layout", fake_render_rank_layout)
+        model = RandomGraphModel(target_nodes=60, seed=42)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            source = _draw_model(
+                model,
+                torch.randn(2, 64),
+                vis_node_placement="rank",
+                vis_save_only=True,
+                vis_fileformat="svg",
+                vis_outpath=str(tmp_path / "manual_rank"),
+            )
+        assert calls == ["rank"]
+        assert source == "digraph { manual_rank }"
+        assert not any("auto-selected rank layout" in str(w.message) for w in caught)
+
+    def test_removed_engine_values_are_rejected(self, tmp_path: Any) -> None:
+        """The retired 'elk' and 'sfdp' engine values raise like any bad value."""
+
+        model = RandomGraphModel(target_nodes=60, seed=42)
+        for removed in ("elk", "sfdp"):
+            with pytest.raises(ValueError, match="'auto', 'dot', or 'rank'"):
+                _draw_model(
+                    model,
+                    torch.randn(2, 64),
+                    vis_node_placement=removed,
+                    vis_save_only=True,
+                    vis_fileformat="svg",
+                    vis_outpath=str(tmp_path / f"removed_{removed}"),
+                )
+
+    def test_rank_svg_contains_labels_and_module_boxes(self, tmp_path: Any) -> None:
+        """The rank renderer writes an SVG with node labels and module boxes."""
+
+        model = RandomGraphModel(target_nodes=80, call_depth=2, seed=42)
+        outpath = tmp_path / "rank_svg"
+        source = _draw_model(
             model,
             torch.randn(2, 64),
-            vis_node_placement="elk",
+            vis_node_placement="rank",
+            vis_save_only=True,
             vis_fileformat="svg",
-            vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "elk_1M"),
+            vis_outpath=str(outpath),
         )
+        svg = outpath.with_suffix(".svg").read_text(encoding="utf-8")
+        assert "input" in svg
+        assert "output" in svg
+        assert "cluster_" in source
+        assert "@layers" in source
 
-    def test_vis_node_placement_forwarded(self):
-        """vis_node_placement parameter reaches draw."""
-        model = RandomGraphModel(target_nodes=200, seed=42)
-        ml = trace_fn(model, torch.randn(2, 64))
-        ml.draw(
+    def test_vis_node_placement_forwarded(self, tmp_path: Any) -> None:
+        """vis_node_placement parameter reaches Trace.draw."""
+
+        model = RandomGraphModel(target_nodes=80, seed=42)
+        trace = trace_fn(model, torch.randn(2, 64))
+        source = trace.draw(
             vis_mode="unrolled",
             vis_save_only=True,
-            vis_outpath=os.path.join(VIS_OUTPUT_DIR, "placement_test"),
+            vis_fileformat="svg",
+            vis_outpath=str(tmp_path / "placement_test"),
             vis_node_placement="dot",
         )
-        ml.cleanup()
-
-
-# -----------------------------------------------
-# dot vs ELK aesthetic comparison (manual inspection)
-# -----------------------------------------------
-
-
-class TestDotVsElkComparison:
-    """Generate side-by-side dot and ELK renders for visual comparison.
-
-    Run with: pytest tests/test_large_graphs.py -k "TestDotVsElk" -v
-    Then inspect tests/test_outputs/visualizations/large/compare_*/
-    """
-
-    COMPARE_DIR = os.path.join(VIS_OUTPUT_DIR, "dot_vs_elk")
-
-    @pytest.fixture(autouse=True)
-    def _ensure_compare_dir(self):
-        os.makedirs(self.COMPARE_DIR, exist_ok=True)
-
-    def _render_both(self, model, x, name):
-        """Render with both dot and ELK, save side by side."""
-        # dot
-        show_model_graph(
-            model,
-            x,
-            vis_save_only=True,
-            vis_mode="unrolled",
-            vis_node_placement="dot",
-            vis_outpath=os.path.join(self.COMPARE_DIR, f"{name}_dot"),
-        )
-        # ELK
-        show_model_graph(
-            model,
-            x,
-            vis_save_only=True,
-            vis_mode="unrolled",
-            vis_node_placement="elk",
-            vis_outpath=os.path.join(self.COMPARE_DIR, f"{name}_elk"),
-        )
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    def test_compare_15_nodes(self):
-        """Tiny model — easiest to spot aesthetic differences."""
-        model = RandomGraphModel(target_nodes=15, seed=42, call_depth=1)
-        self._render_both(model, torch.randn(2, 64), "15n")
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    def test_compare_100_nodes(self):
-        """Small model with moderate nesting."""
-        model = RandomGraphModel(target_nodes=100, seed=42, call_depth=2)
-        self._render_both(model, torch.randn(2, 64), "100n")
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    def test_compare_500_nodes(self):
-        """Medium model — complexity where differences become visible."""
-        model = RandomGraphModel(target_nodes=500, seed=42, call_depth=2)
-        self._render_both(model, torch.randn(2, 64), "500n")
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    def test_compare_1k_nodes(self):
-        """Larger model — still renderable by both engines."""
-        model = RandomGraphModel(target_nodes=1000, seed=42, call_depth=3)
-        self._render_both(model, torch.randn(2, 64), "1k")
-
-    @pytest.mark.skipif(not elk_available(), reason="elkjs not installed")
-    @pytest.mark.slow
-    def test_compare_3k_nodes(self):
-        """Near the ELK threshold — last size where dot is comfortable."""
-        model = RandomGraphModel(target_nodes=3000, seed=42, call_depth=3)
-        self._render_both(model, torch.randn(2, 64), "3k")
-
-
-# -----------------------------------------------
-# Benchmark (manual inspection)
-# -----------------------------------------------
+        assert "digraph" in source
+        trace.cleanup()
 
 
 class TestDotThresholdBenchmark:
-    """Empirical benchmark to calibrate _ELK_NODE_THRESHOLD."""
+    """Manual benchmark for recalibrating the rank-layout threshold."""
 
     @pytest.mark.slow
-    def test_benchmark_dot_scaling(self):
-        """Time graphviz dot at various node counts."""
+    def test_benchmark_dot_scaling(self, tmp_path: Any) -> None:
+        """Time graphviz dot at representative local-topology node counts."""
+
         import time
 
         for target in [500, 1000, 2000, 3000, 3500, 4000]:
             model = RandomGraphModel(target_nodes=target, seed=42)
             x = torch.randn(2, 64)
-            ml = trace_fn(model, x)
-            actual_nodes = len(ml.layer_labels)
+            trace = trace_fn(model, x)
+            actual_nodes = len(trace.layer_labels)
             start = time.time()
             try:
-                ml.draw(
+                trace.draw(
                     vis_mode="unrolled",
                     vis_save_only=True,
-                    vis_outpath=os.path.join(VIS_OUTPUT_DIR, f"bench_{target}"),
+                    vis_outpath=str(tmp_path / f"bench_{target}"),
                     vis_node_placement="dot",
                 )
                 elapsed = time.time() - start
                 print(f"  {target} target ({actual_nodes} actual): {elapsed:.1f}s")
-            except Exception as e:
+            except Exception as exc:
                 elapsed = time.time() - start
                 print(
-                    f"  {target} target ({actual_nodes} actual): FAILED after {elapsed:.1f}s — {e}"
+                    f"  {target} target ({actual_nodes} actual): FAILED "
+                    f"after {elapsed:.1f}s - {exc}"
                 )
-            ml.cleanup()
+            trace.cleanup()

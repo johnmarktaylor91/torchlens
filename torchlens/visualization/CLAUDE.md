@@ -2,15 +2,16 @@
 
 ## What This Does
 Renders TorchLens graph structures and related previews. Graphviz is the primary public
-renderer. Large graph layout can use the internal ELK backend. Experimental Dagua rendering
-lives under `torchlens.experimental.dagua` and requires explicit opt-in.
+renderer. Long-range-edge graphs can switch to the internal rank layout backend.
+Experimental Dagua rendering lives under `torchlens.experimental.dagua` and requires
+explicit opt-in.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `rendering.py` | Main Graphviz forward/backward rendering, module focus, skip/collapse, intervention nodes |
-| `_elk_internal/layout.py` | ELK/sfdp/topological layout backend for large graphs |
+| `_rank_layout_internal/layout.py` | Cost estimator and pure-Python rank layout backend for large graphs |
 | `code_panel.py` | Source-code side panel helpers for Graphviz |
 | `node_spec.py` | Public `NodeSpec`, HTML label rendering, intervention node specs |
 | `modes.py` | Node mode presets: default, profiling, vision, attention |
@@ -30,8 +31,7 @@ lives under `torchlens.experimental.dagua` and requires explicit opt-in.
 
 ## Code Panel
 `code_panel=True`, `"forward"`, `"class"`, or `"init+forward"` adds a Graphviz side panel
-from source captured at logging time. Callable code panels require a live model. ELK direct
-rendering byops this path.
+from source captured at logging time. Callable code panels require a live model.
 
 ## Visualization Modes
 - `vis_mode="unrolled"` renders per-pass `Op` nodes.
@@ -53,7 +53,8 @@ Graph, edge, grad-edge, and module styling use dict/callable override options.
 Graphviz renders IF/THEN/ELIF/ELSE arm labels from cond-id-aware metadata. Intervention-ready
 logs can render hook nodes and cone/site styling through `node_spec.py` helpers.
 
-## ELK Backend
-`_elk_internal/layout.py` uses Node.js ELK when available, falls back to sfdp/topological
-layout when needed, and byops ELK for very large graphs. Some Graphviz-only features
-remain unavailable or less complete on the ELK path.
+## Layout Backend
+`vis_node_placement="auto"` chooses Graphviz `dot` for local-topology graphs and switches
+to `_rank_layout_internal/layout.py` when the estimated cost exceeds 20,000 units. The
+cost is `num_nodes + sum(rank_span)` for edges whose topological rank span is greater than
+12. Explicit `"dot"` and `"rank"` values force the engine.

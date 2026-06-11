@@ -1,4 +1,4 @@
-"""Render a large random graph with ELK layout.
+"""Render a large random graph with rank layout.
 
 Usage:
     python scripts/render_large_graph.py NUM_NODES [OPTIONS]
@@ -22,8 +22,10 @@ from example_models import RandomGraphModel
 from torchlens import log_forward_pass
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Render a large random graph with ELK layout.")
+def main() -> None:
+    """Render a large random graph from captured TorchLens metadata."""
+
+    parser = argparse.ArgumentParser(description="Render a large random graph with rank layout.")
     parser.add_argument("num_nodes", type=int, help="Target number of nodes in the graph")
     parser.add_argument("--format", default="svg", help="Output format (default: svg)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
@@ -35,7 +37,7 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
-    label = f"elk_{args.num_nodes // 1000}k"
+    label = f"rank_{args.num_nodes // 1000}k"
 
     t0 = time.time()
     print(f"Building RandomGraphModel with target_nodes={args.num_nodes}...", flush=True)
@@ -47,7 +49,7 @@ def main():
     ml = log_forward_pass(model, x, layers_to_save=None, verbose=True)
     print(f"Forward pass logged ({time.time() - t0:.1f}s)", flush=True)
 
-    # Free model parameters and autograd graphs before the memory-heavy ELK render.
+    # Free model parameters and autograd graphs before the graph render.
     del model, x
     gc.collect()
     if torch.cuda.is_available():
@@ -59,7 +61,7 @@ def main():
         vis_outpath=os.path.join(args.outdir, label),
         vis_save_only=True,
         vis_fileformat=args.format,
-        vis_node_placement="elk",
+        vis_node_placement="rank",
     )
 
     total = time.time() - t0

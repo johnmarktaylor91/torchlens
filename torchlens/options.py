@@ -355,6 +355,30 @@ def _validate_node_style(node_style: VisNodeModeLiteral) -> None:
         )
 
 
+def _normalize_layout(layout: VisNodePlacementLiteral) -> VisNodePlacementLiteral:
+    """Normalize visualization layout names and warn on removed backends.
+
+    Parameters
+    ----------
+    layout:
+        Candidate layout engine name.
+
+    Returns
+    -------
+    VisNodePlacementLiteral
+        Normalized layout engine name.
+
+    Raises
+    ------
+    ValueError
+        If ``layout`` is not supported.
+    """
+
+    if layout not in {"auto", "dot", "rank"}:
+        raise ValueError("Visualization layout must be one of 'auto', 'dot', or 'rank'.")
+    return layout
+
+
 def _validate_intervention_mode(intervention_mode: VisInterventionModeLiteral) -> None:
     """Validate an intervention visualization mode name.
 
@@ -962,8 +986,7 @@ class VisualizationOptions:
     module_overrides:
         Module cluster style overrides.
     layout:
-        Layout engine selector. ``"elk"`` remains accepted as an internal
-        backend escape hatch; public API callers should prefer ``"auto"``.
+        Layout engine selector: ``"auto"``, ``"dot"``, or ``"rank"``.
     renderer:
         Renderer backend selector.
     theme:
@@ -1134,7 +1157,9 @@ class VisualizationOptions:
             "module_overrides": _resolve_option_value(
                 "module_overrides", module_overrides, None, specified_fields
             ),
-            "layout": _resolve_option_value("layout", layout, "auto", specified_fields),
+            "layout": _normalize_layout(
+                _resolve_option_value("layout", layout, "auto", specified_fields)
+            ),
             "renderer": _resolve_option_value("renderer", renderer, "graphviz", specified_fields),
             "theme": _resolve_option_value("theme", theme, "torchlens", specified_fields),
             "intervention_mode": _resolve_option_value(
@@ -1209,6 +1234,8 @@ class VisualizationOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
+        values = dict(values)
+        values["layout"] = _normalize_layout(values["layout"])
         _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
         _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
         _validate_buffer_visibility(values["show_buffers"])

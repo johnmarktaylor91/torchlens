@@ -32,10 +32,11 @@ Renders `GradFn` nodes and grad edges captured by `capture/backward.py`.
 - `node_spec.py` owns `NodeSpec`, `render_lines_to_html()`, and intervention node specs.
 - `modes.py` owns default/profiling/vision/attention preset functions.
 
-### ELK
-`_elk_internal/layout.py` exposes `render_elk_direct()`, `render_with_elk()`,
-`render_with_sfdp()`, and `get_node_placement_engine()`. It uses Node.js workers, V8 heap
-sizing, topological seeding, and fallback layout for unavailable ELK.
+### Rank Layout
+`_rank_layout_internal/layout.py` exposes `render_rank_layout()`,
+`estimate_rank_layout_cost()`, and `get_node_placement_engine()`. Auto layout uses a
+cost trigger based on topological rank spans and switches from Graphviz `dot` to the
+pure-Python rank layout above 20,000 cost units.
 
 ## Other Modules
 - `themes.py`: theme registry and semantic attrs.
@@ -48,10 +49,10 @@ sizing, topological seeding, and fallback layout for unavailable ELK.
 ## Gotchas
 - Graphviz render writes a DOT source file alongside rendered output.
 - Sibling ordering is intentionally scoped to forward unrolled Graphviz dot renders under
-  the node cap. Rolled, collapsed, focused, backward, conditional, ELK, Dagua, and large
-  graph paths should no-op.
-- ELK paths do not support every Graphviz feature; verify conditional labels, module clusters,
-  and code panels after layout changes.
+  the node cap. Rolled, collapsed, focused, backward, conditional, rank-layout, Dagua, and
+  large graph paths should no-op.
+- The rank-layout path is a direct DOT writer rendered through `neato -n`; verify module
+  clusters and edge labels after layout changes.
 - `show_model_graph()` should cleanup temporary logs in `finally`.
 - Buffer visibility has multiple modes; use `_normalize_buffer_visibility()`.
 - Intervention node rendering depends on `intervention_ready` metadata.

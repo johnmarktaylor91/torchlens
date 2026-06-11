@@ -29,7 +29,6 @@ RETIRED_NAMES = {
 }
 VISUALIZATION_ALLOWLIST = (
     "tl_legend_",
-    "tl_elk_",
     "__tl_graph_panel_anchor",
     "__tl_code_panel_node",
 )
