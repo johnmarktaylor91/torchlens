@@ -1946,7 +1946,7 @@ def _build_shared_fields_dict(
     # Grad info
     fields_dict["grad"] = None
     fields_dict["transformed_grad"] = None
-    fields_dict["save_gradients"] = self.save_gradients
+    fields_dict["save_gradients"] = getattr(self, "save_grads", None) not in (None, False)
     fields_dict["has_grad"] = False
     fields_dict["grad_shape"] = None
     fields_dict["transformed_grad_shape"] = None

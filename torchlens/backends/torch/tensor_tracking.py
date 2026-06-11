@@ -77,7 +77,7 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
         active_trace = trace_ref()
         if active_trace is not None:
             _emit_tensor_grad_event(active_trace, grad, tensor_label)
-            if getattr(active_trace, "save_gradients", False):
+            if getattr(active_trace, "save_grads", None) not in (None, False):
                 _log_tensor_grad(active_trace, grad, tensor_label)
 
     if t.grad_fn is not None:
@@ -286,7 +286,7 @@ def _active_save_grads_policy(trace: "Trace") -> Any:
 
     if hasattr(trace, "_active_save_grads_policy"):
         return getattr(trace, "_active_save_grads_policy")
-    return getattr(trace, "save_grads", getattr(trace, "gradients_to_save", None))
+    return getattr(trace, "save_grads", None)
 
 
 def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None:

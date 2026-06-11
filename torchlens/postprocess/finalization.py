@@ -1161,7 +1161,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     scrubbed_state, blob_specs, unsupported_tensor_records = scrub_for_save(
         self,
         include_outs=True,
-        include_grads=self.save_gradients,
+        include_grads=self.save_grads not in (None, False),
         include_saved_args=self.save_arg_values,
         include_rng_states=self.save_rng_states,
     )

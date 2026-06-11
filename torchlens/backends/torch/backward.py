@@ -1433,9 +1433,7 @@ def _run_backward_with_capture(
     previous_save_grads_policy = getattr(trace, "_active_save_grads_policy", None)
     previous_had_save_grads_policy = "_active_save_grads_policy" in trace.__dict__
     active_save_grads_policy = (
-        getattr(trace, "save_grads", getattr(trace, "gradients_to_save", None))
-        if save_grads is MISSING
-        else save_grads
+        getattr(trace, "save_grads", None) if save_grads is MISSING else save_grads
     )
     trace._active_save_grads_policy = active_save_grads_policy
     _state._active_trace = trace
@@ -1684,7 +1682,6 @@ def _ensure_layer_grad_hooks(trace: Any) -> None:
     trace:
         Trace whose saved outs should receive grad hooks.
     """
-    trace.save_gradients = True
     if getattr(trace, "_grad_layer_nums_to_save", None) in [None, [], "none"]:
         trace._grad_layer_nums_to_save = "all"
 
@@ -1708,13 +1705,14 @@ def _configure_grad_streaming(
     """
 
     if keep_grads_in_memory is not None:
-        trace._keep_grads_in_memory = keep_grads_in_memory
+        trace._grad_stream_retain_in_memory = keep_grads_in_memory
     if save_grads_to is not None:
         if getattr(trace, "_out_writer", None) is not None:
             raise ValueError("Cannot set save_grads_to after a streaming writer exists.")
         trace._out_writer = BundleStreamWriter(save_grads_to)
         trace._defer_streaming_bundle_finalization = True
-        trace.save_gradients = True
+        if getattr(trace, "save_grads", None) in (None, False):
+            trace.save_grads = "all"
 
 
 def _finalize_grad_streaming(trace: Any) -> None:
@@ -1733,13 +1731,13 @@ def _finalize_grad_streaming(trace: Any) -> None:
     _finalize_streamed_bundle(trace)
     if not getattr(trace, "_keep_outs_in_memory", True):
         _evict_streamed_outs(trace)
-    if not getattr(trace, "_keep_grads_in_memory", True):
+    if not getattr(trace, "_grad_stream_retain_in_memory", True):
         _evict_streamed_grads(trace)
     for field_name in (
         "_out_writer",
         "_out_sink",
         "_keep_outs_in_memory",
-        "_keep_grads_in_memory",
+        "_grad_stream_retain_in_memory",
         "_defer_streaming_bundle_finalization",
     ):
         trace.__dict__.pop(field_name, None)

@@ -1088,8 +1088,7 @@ def _run_model_and_save_specified_outs(
         save_raw_gradients=save_raw_gradients,
         keep_orphans=keep_orphans,
         save_arg_values=save_arg_values,
-        save_gradients=save_grads,
-        gradients_to_save=grads_to_save,
+        save_grads=grads_to_save if save_grads else None,
         detach_saved_activations=detach_saved_activations,
         mark_layer_depths=mark_layer_depths,
         num_context_lines=num_context_lines,
@@ -1133,7 +1132,7 @@ def _run_model_and_save_specified_outs(
     trace._source_model_ref = make_weak_model_ref(model)
     trace._out_sink = out_sink
     trace._keep_outs_in_memory = keep_outs_in_memory
-    trace._keep_grads_in_memory = keep_grads_in_memory
+    trace._grad_stream_retain_in_memory = keep_grads_in_memory
     trace._defer_streaming_bundle_finalization = save_grads_to is not None
     trace._in_exhaustive_pass = True
     trace.raise_on_nan = raise_on_nan
@@ -2003,8 +2002,7 @@ def trace(
         next(capture_progress, None)
         _vprint(trace, "Two-pass mode: Pass 2 (fast, saving requested layers)")
         trace.save_grads = save_grads_policy
-        trace.save_gradients = save_gradients
-        trace.gradients_to_save = grads_to_save_resolved
+        trace.save_grads = grads_to_save_resolved if save_gradients else None
         trace.save_new_outs(
             model=model,
             input_args=cast(torch.Tensor | list[Any], input_args),

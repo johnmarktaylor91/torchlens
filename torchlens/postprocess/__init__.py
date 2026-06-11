@@ -141,6 +141,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
                 "_out_sink",
                 "_keep_outs_in_memory",
                 "_keep_grads_in_memory",
+                "_grad_stream_retain_in_memory",
                 "_defer_streaming_bundle_finalization",
             ]
         )
@@ -150,6 +151,7 @@ def _drop_transient_capture_state(self: "Trace") -> None:
                 "_out_writer",
                 "_keep_outs_in_memory",
                 "_keep_grads_in_memory",
+                "_grad_stream_retain_in_memory",
                 "_defer_streaming_bundle_finalization",
             ]
         )

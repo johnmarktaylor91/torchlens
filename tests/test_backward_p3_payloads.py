@@ -77,8 +77,8 @@ def test_save_grads_is_the_trace_side_public_surface() -> None:
     trace = tl.trace(model, x, layers_to_save="all", save_grads=True)
     try:
         assert trace.save_grads is True
-        assert trace.save_gradients is True
-        assert trace.gradients_to_save == "all"
+        assert not hasattr(trace, "save_gradients")
+        assert not hasattr(trace, "gradients_to_save")
     finally:
         trace.cleanup()
 

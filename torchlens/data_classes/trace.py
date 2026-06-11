@@ -215,6 +215,29 @@ _MODEL_LOG_DEFAULT_FILL = {
 _MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION
 
 
+def _legacy_save_grads_from_state(state: dict[str, Any]) -> Any:
+    """Return the canonical ``save_grads`` value for legacy trace state.
+
+    Parameters
+    ----------
+    state:
+        Pickled or tlspec-restored trace state, possibly containing pre-P3
+        gradient-save aliases.
+
+    Returns
+    -------
+    Any
+        Canonical ``save_grads`` policy.
+    """
+
+    if "save_grads" in state:
+        return state["save_grads"]
+    if not state.get("save_gradients", False):
+        return None
+    gradients_to_save = state.get("gradients_to_save", "all")
+    return "all" if gradients_to_save is True else gradients_to_save
+
+
 @dataclass
 class ResolvedPreprocessing:
     """Structured provenance for automatic input preprocessing.
@@ -1063,9 +1086,7 @@ class Trace(CapturedRun):
         "facet_registry_snapshot": FieldPolicy.DROP,
         "_out_hash_cache": FieldPolicy.DROP,
         "save_arg_values": FieldPolicy.KEEP,
-        "save_grads": FieldPolicy.DROP,
-        "save_gradients": FieldPolicy.KEEP,
-        "gradients_to_save": FieldPolicy.KEEP,
+        "save_grads": FieldPolicy.KEEP,
         "_grad_layer_nums_to_save": FieldPolicy.KEEP,
         "grad_transform": FieldPolicy.DROP,
         "grad_transform_repr": FieldPolicy.KEEP,
@@ -1188,7 +1209,7 @@ class Trace(CapturedRun):
         "_mlx_type_counts": FieldPolicy.DROP,
         "_out_writer": FieldPolicy.DROP,
         "_keep_outs_in_memory": FieldPolicy.DROP,
-        "_keep_grads_in_memory": FieldPolicy.DROP,
+        "_grad_stream_retain_in_memory": FieldPolicy.DROP,
         "_defer_streaming_bundle_finalization": FieldPolicy.DROP,
         "_out_sink": FieldPolicy.DROP,
         "_capture_events": FieldPolicy.DROP,
@@ -1230,8 +1251,7 @@ class Trace(CapturedRun):
         save_raw_gradients: bool = True,
         keep_orphans: bool = False,
         save_arg_values: bool = False,
-        save_gradients: bool = False,
-        gradients_to_save: Any = "all",
+        save_grads: Any = None,
         detach_saved_activations: bool = False,
         mark_layer_depths: bool = True,
         num_context_lines: int = 7,
@@ -1266,8 +1286,9 @@ class Trace(CapturedRun):
             keep_orphans: If True, orphan island ops remain in raw metadata and
                 are exposed via ``trace.orphans``.
             save_arg_values: Whether to deep-copy each operation's input arguments.
-            save_gradients: Whether to register grad hooks for backward pass.
-            gradients_to_save: Which layer grads should be saved.
+            save_grads: Which backward gradients should be retained. ``True``
+                saves all gradients, ``False``/``None`` saves no payloads, and
+                selectors/predicates save matching gradient records.
             detach_saved_activations: Whether to detach saved tensors from the autograd graph.
             mark_layer_depths: Whether to compute BFS distances from
                 inputs/outputs for each layer.
@@ -1374,11 +1395,7 @@ class Trace(CapturedRun):
         self.recording_kept: bool = True
         self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
         self.save_arg_values = save_arg_values
-        self.save_grads = (
-            "all" if save_gradients and gradients_to_save is True else gradients_to_save
-        )
-        self.save_gradients = save_gradients
-        self.gradients_to_save = gradients_to_save
+        self.save_grads = "all" if save_grads is True else save_grads
         self.save_code_context = save_code_context
         self.save_rng_states = save_rng_states
         self.recurrence_detection = recurrence_detection
@@ -1409,7 +1426,6 @@ class Trace(CapturedRun):
         self._output_container_specs_by_raw_label: dict[str, Any] = {}
         self._out_writer: Optional["BundleStreamWriter"] = None
         self._keep_outs_in_memory: bool = True
-        self._keep_grads_in_memory: bool = True
         self._defer_streaming_bundle_finalization: bool = False
         self._out_sink: Optional[Callable[[str, torch.Tensor], None]] = None
         # Model structure info (computed @properties: is_recurrent,
@@ -2902,8 +2918,7 @@ class Trace(CapturedRun):
                 "grad_transform": None,
                 "grad_transform_repr": None,
                 "save_raw_gradients": True,
-                "save_grads": state.get("gradients_to_save", None),
-                "gradients_to_save": "all",
+                "save_grads": _legacy_save_grads_from_state(state),
                 "_grad_layer_nums_to_save": [],
                 "has_backward_pass": False,
                 "grad_fn_logs": OrderedDict(),
@@ -2920,7 +2935,6 @@ class Trace(CapturedRun):
                 "_module" + "_build_data": None,
                 "_out_writer": None,
                 "_keep_outs_in_memory": True,
-                "_keep_grads_in_memory": True,
                 "_defer_streaming_bundle_finalization": False,
                 "_out_sink": None,
                 "append_history": [],
@@ -2961,6 +2975,10 @@ class Trace(CapturedRun):
                 "forward_peak_memory": 0,
             },
         )
+        state.pop("save_gradients", None)
+        state.pop("gradients_to_save", None)
+        state.pop("_keep_grads_in_memory", None)
+        state.pop("_grad_stream_retain_in_memory", None)
         if state.get("_intervention_spec") is None:
             state["_intervention_spec"] = InterventionSpec()
         if not state.get("relationship_evidence"):
