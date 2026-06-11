@@ -12,7 +12,6 @@ import pytest
 from torchlens.ir import (
     ArgTemplateRef,
     BackendSemantics,
-    BackwardSidecar,
     BlobRef,
     BufferEvent,
     CaptureEvents,
@@ -402,17 +401,6 @@ def _build_ir_instances() -> dict[str, object]:
         module_exit_events=[module_exit_event],
         conditional_events=[conditional_event],
     )
-    backward_sidecar = BackwardSidecar(
-        backend_name="torch",
-        has_backward_pass=False,
-        grad_fn_logs={},
-        grad_fn_order=(),
-        backward_root_grad_fn_object_ids=None,
-        num_backward_passes=0,
-        backward_peak_memory=None,
-        backward_memory_backend=None,
-    )
-
     return {
         "blob_ref": blob_ref,
         "deferred_ref": deferred_ref,
@@ -440,7 +428,6 @@ def _build_ir_instances() -> dict[str, object]:
         "record_context": record_context,
         "intervention_state": intervention_state,
         "trace_build_state": trace_build_state,
-        "backward_sidecar": backward_sidecar,
     }
 
 
@@ -475,7 +462,6 @@ def test_imports_every_public_ir_type() -> None:
         "record_context",
         "intervention_state",
         "trace_build_state",
-        "backward_sidecar",
     }
 
 
@@ -504,7 +490,6 @@ def test_frozen_dataclasses_are_frozen_and_slotted() -> None:
         "reserved_label",
         "function_event_input",
         "record_context",
-        "backward_sidecar",
     }
 
     for name in frozen_names:

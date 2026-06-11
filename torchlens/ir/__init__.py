@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from .backward import BackwardSidecar
 from .buffer import (
     CaptureEvents,
     LiveOpRecord,
@@ -54,7 +53,6 @@ __all__ = [
     "BackendSemantics",
     "BackwardPassEnd",
     "BackwardPassStart",
-    "BackwardSidecar",
     "BlobRef",
     "BufferEvent",
     "BufferWriteEvent",
