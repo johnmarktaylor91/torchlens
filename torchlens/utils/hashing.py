@@ -9,8 +9,9 @@ They serve two purposes:
    even when the same ``torch.Tensor`` object is reused by in-place ops.
 
 2. **Deterministic barcodes** (``make_short_barcode_from_input``): derived
-   from the *content* of a tensor's creation arguments (param data pointers,
-   buffer shapes, etc.). Two tensors with the same deterministic barcode
+   from the *structure* of a tensor's creation arguments (shape/dtype/scalar
+   tokens; Parameters and tensor values are excluded). Two tensors with the
+   same deterministic barcode
    originated from the same parameter/buffer and are candidates for
    *same-layer grouping* in loop detection — the barcode is the key signal
    that separate forward-pass operations actually reference the same weight.
