@@ -157,6 +157,12 @@ def tensor_nanequal(
     if tensor_a.dtype != tensor_b.dtype:
         return False
 
+    # Meta tensors carry no data: with shape and dtype already matched there
+    # is nothing left to compare, and any content op (torch.equal, .isinf())
+    # raises "Cannot copy out of meta tensor" on them.
+    if tensor_a.is_meta or tensor_b.is_meta:
+        return tensor_a.is_meta and tensor_b.is_meta
+
     with pause_logging():
         if tensor_a.is_quantized or tensor_b.is_quantized:
             return _quantized_tensor_equal(tensor_a, tensor_b)

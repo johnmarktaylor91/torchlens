@@ -1005,6 +1005,32 @@ FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
 )
 
+# Matrix-multiply family whose second operand kwarg is NOT named "other":
+# torch.mm(input, mat2), torch.bmm(input, mat2), torch.mv(input, vec).
+# The generic _P01_BINARY entry only knows ("input", "other"), so the kwarg
+# form (e.g. torch.bmm(a, mat2=b)) would drop the second tensor.
+_MM_SPEC = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "mat2"))
+FUNC_ARG_SPECS["mm"] = _MM_SPEC
+FUNC_ARG_SPECS["bmm"] = _MM_SPEC
+FUNC_ARG_SPECS["mv"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "vec"))
+
+# torch.normal(mean, std) — kwargs are "mean"/"std", not "input"/"other".
+# (Also covers tensor.normal_(mean=..., std=...), whose kwargs are floats and
+# are simply ignored by the tensor-type check.)
+FUNC_ARG_SPECS["normal"] = ArgSpec(positions=(0, 1), tensor_kwargs=("mean", "std"))
+
+# Ternary functions with their real schema kwarg names. The shared _P012
+# entry has no tensor_kwargs, so keyword-passed operands were dropped.
+FUNC_ARG_SPECS["addmm"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "mat1", "mat2"))
+_ADDBMM_SPEC = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "batch1", "batch2"))
+FUNC_ARG_SPECS["addbmm"] = _ADDBMM_SPEC
+FUNC_ARG_SPECS["baddbmm"] = _ADDBMM_SPEC
+FUNC_ARG_SPECS["addmv"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "mat", "vec"))
+_ADDC_SPEC = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "tensor1", "tensor2"))
+FUNC_ARG_SPECS["addcmul"] = _ADDC_SPEC
+FUNC_ARG_SPECS["addcdiv"] = _ADDC_SPEC
+FUNC_ARG_SPECS["lerp"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "end", "weight"))
+
 # Tensor iterator and subclass custom_methods
 for _name in [
     "iter",

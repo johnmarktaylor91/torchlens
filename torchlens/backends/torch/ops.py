@@ -2775,7 +2775,10 @@ def _save_activation_fields(
 
         save_raw_activations = getattr(trace, "save_raw_activations", True)
         store_raw = save_raw_activations or activation_transform is None
-        if store_raw and not getattr(trace, "save_arg_values", False):
+        # Meta tensors (e.g. factory outputs under a ``torch.device("meta")``
+        # context) carry no data, so content hashing/dedup is impossible —
+        # store them directly without deduplication.
+        if store_raw and not getattr(trace, "save_arg_values", False) and not raw_out.is_meta:
             hash_cache = getattr(trace, "_out_hash_cache", None)
             if hash_cache is None:
                 hash_cache = {}
