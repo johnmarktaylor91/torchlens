@@ -1,26 +1,17 @@
 # Task & Bug Tracker
 
-## What's left — quick index (regenerated 2026-06-10)
+## What's left — quick index (regenerated 2026-06-11)
 
 A glance at the OPEN work, grouped by theme (rough counts; see sections below for detail):
 
-- **Capture coverage gaps (~4):** comprehensive functorch/`torch.func` transform coverage (vmap/grad/jac/`functional_call`) — the big one; device-context injection under active logging; multi-GPU RNG capture; arg/kwarg tensor extraction gaps.
+- **Capture coverage gaps (~2):** comprehensive functorch/`torch.func` transform coverage (vmap/grad/jac/`functional_call`) — the big one; multi-GPU RNG capture. (Device-context/meta-tensor gap FIXED `f9daf5f`; kwarg symptom set FIXED `f9daf5f` — broader kwarg audit still open.)
 - **Backward-pass sprint (~7):** unified backward-pass untangling (recurrent grad_fn semantics, type_index schemes, name introspection), first-class `BackwardPass` records, higher-order gradients, auto-suppress grad_fn when `backward_ready=False`, backward call-site context, per-layer grad oracle redesign, fastlog gradient support.
 - **Perf north-star (~23):** halt-implies-sub-baseline benchmark rows, leaner `rerun`, zero-copy `save_mode="reference"`, lazy fastlog ctx; plus the low-level PERF-* backlog (model-prep PERF-36..39, 1M-scale PERF-29..35, and assorted O(n^2)/GC items).
 - **Pre-2.0 naming/API polish (~14):** holistic naming pass (selectors, comparison verbs, symmetric pairs, `peek`->`pluck`), 0-based accessor indexing, strict-type accessors, `__repr__`/`.locator` audit, capture_config namespace migration, residual save-selection renames (`module_filter`->`save_predicate`, fastlog naming), several deferred renames.
-- **Visualization (~10):** rip ELK out (promote pure-Python Kahn layout), more built-in themes + custom-visuals interface, DenseNet layout, code-panel long-line truncation, combined fwd+bwd render, multi-output module rendering, bundle-diff color scale, large-graph rendering, direct-SVG path.
+- **Visualization (~9):** rip ELK out (promote pure-Python Kahn layout), more built-in themes + custom-visuals interface, DenseNet layout, combined fwd+bwd render, multi-output module rendering, bundle-diff color scale, large-graph rendering, direct-SVG path. (Code-panel long-line truncation FIXED `8fa0907`.)
 - **Docs (~10):** `docs/performance.md`, `docs/for-ai-agents.md`, promote glossary to exhaustive reference, elevator-pitch + substrate/metadata framing, comparison-page concessions, ELK setup guide, speed-default advertising, postfunc persistence story.
-- **Low-level bug/GC/perf backlog (migrated from memory todo.md):** ~11 correctness/capture bugs (ELK-IF-THEN, RNG-MULTI-GPU, ARG-KWARGS-MISSING, etc.), open GC-* refs, open PERF-* refs, deferred design decisions (#9/#55/#93/#102), refactoring candidates, investigate/revisit items. See the dedicated section near the end.
+- **Low-level bug/GC/perf backlog (migrated from memory todo.md):** ~5 correctness/capture bugs (ELK-IF-THEN, RNG-MULTI-GPU, ARG-KWARGS-MISSING audit residue, etc.), open GC-* refs, open PERF-* refs, deferred design decisions (#9/#55/#93/#102), refactoring candidates, investigate/revisit items. See the dedicated section near the end.
 - **Big/strategic features (~19):** JAX backend adapter (capture-path unification + MLX backend SHIPPED 2026-06-06), `to_dataframe` + the creative-metadata tooling tiers, attribution methods, tensor-slicing recipes + `op.outs`, input/output transform library, container handling, stacked multi-pass log, interactive Jupyter viewer, cross-model RSA alignment, circuit-tracer UI primitives.
-
-### Code panel truncates long source lines at its right inner edge (filed 2026-06-10)
-
-Observed during the rolled-view edge-label sprint round-B review: in the composed demo
-fixtures, long code lines (e.g. a full `def forward(...)` signature) run to the code
-panel's right inner edge and get cut, while the panel box itself stays intact. Graph and
-labels unaffected. Fix candidates: wrap long lines, widen the panel to fit the longest
-line, or shrink the panel font. Lives in `torchlens/visualization/code_panel.py` (panel
-SVG sizing/composition).
 
 ## Architectural endpoint (JMT 2026-05-15)
 
@@ -196,17 +187,17 @@ Original 2026-05-27 status (historical): facets v8 shipped `3ada85d`+`9406863`; 
 
 **Open items, in priority order:**
 
-1. **`keys()` vs accessibility mismatch.** Recipes declare facet names via `facets=(...)` at registration time so `view.keys()` is cheap (doesn't invoke the recipe). But the recipe at compute time may legitimately produce only a subset of the declared keys (e.g., when `param.value` is None, `add_if_present` skips the entry). Result: `view.keys()` lists `gamma` but `view.gamma` can raise `AttributeError`. Two possible fixes: (a) make `keys()` reflect actually-computed contents (requires invoking the recipe on first `keys()` call -- loses the cheap-list property), or (b) have access fall back to `None` instead of raising. JMT to decide which contract is right. Currently the notebook works around this with `.get('gamma')` and `.has('gamma')` checks -- workable but not elegant.
+1. **`keys()` vs accessibility mismatch.** [VERIFIED LIVE 2026-06-11 — `facets.py:917-932` `keys()` returns declared names without invoking recipes; `_compute()` only populates what recipes return via `add_if_present`; `__getitem__` raises `KeyError` if key absent from cache after compute.] Two possible fixes: (a) make `keys()` reflect actually-computed contents (requires invoking the recipe on first `keys()` call -- loses the cheap-list property), or (b) have access fall back to `None` instead of raising. JMT to decide which contract is right. Currently the notebook works around this with `.get('gamma')` and `.has('gamma')` checks -- workable but not elegant.
 
-2. **`Module.cls` stores the class, not the instance.** This tripped Codex during the sprint (LayerNorm recipe used `cls.weight` -- always None) and tripped Claude during the notebook example (user recipe used `mod.modules[...]` -- doesn't exist on Module). Recipes have to know to read scalar config from `module.custom_attributes` and submodule outputs from the trace via `_source_trace`. Worth either: (a) renaming `Module.cls` to something more honest like `Module.module_class` to surface the "class not instance" distinction, or (b) adding sugar like `Module.config_attr(name)` and `Module.child(name)` that wraps the common access patterns. Either would prevent future recipes from hitting the same trap.
+2. **`Module.cls` stores the class, not the instance.** [VERIFIED LIVE 2026-06-11 — `data_classes/module.py:452` `self.cls = cls`; `param.py:236` also reads `module.cls`. No `module_class` alias found.] This tripped Codex during the sprint (LayerNorm recipe used `cls.weight` -- always None) and tripped Claude during the notebook example (user recipe used `mod.modules[...]` -- doesn't exist on Module). Recipes have to know to read scalar config from `module.custom_attributes` and submodule outputs from the trace via `_source_trace`. Worth either: (a) renaming `Module.cls` to something more honest like `Module.module_class` to surface the "class not instance" distinction, or (b) adding sugar like `Module.config_attr(name)` and `Module.child(name)` that wraps the common access patterns. Either would prevent future recipes from hitting the same trap.
 
-3. **LayerNorm `gamma` / `beta` need eagerly-loaded `param.value`.** In default capture mode `param.value` may be None, so the norm recipe degrades to omitting those facets. Either: (a) add a capture flag that keeps param tensor refs in-memory through trace lifecycle, (b) have `param.value` lazy-resolve from the live module at access time (with a clear error when the model is no longer reachable), or (c) accept the degradation and document it. Same concern applies to any future recipe that wants raw weight tensors (MLP weights, attention projection weights, etc.).
+3. **LayerNorm `gamma` / `beta` need eagerly-loaded param tensors.** [VERIFIED 2026-06-11 — `recipes/_helpers.py:136-153` `parameter_spec()` looks up `module.params` (Param records in the Trace) via `param.name` match; falls back to `module.cls.attr` (class attribute, not tensor). As long as Param records are in the Trace, gamma/beta work. Degradation still possible for loaded-from-disk traces where Param tensors were not saved.] Either: (a) add a capture flag that keeps param tensor refs in-memory through trace lifecycle, (b) have param lazy-resolve from the live module at access time (with a clear error when model unreachable), or (c) accept the degradation and document it.
 
-4. **Recipe-self-recursion.** A user recipe that accesses `mod.facets.X` from inside itself recurses infinitely (the FacetView re-iterates ALL matching recipes including itself). The notebook example sidesteps this by computing from `mod.calls[0].out` directly. Either: (a) detect recursion and raise an informative error, (b) document the limitation in the spec and notebook clearly, or (c) restructure FacetView to support inter-recipe dependencies (more invasive).
+4. **Recipe-self-recursion.** [VERIFIED LIVE 2026-06-11 — `facets.py:1004-1032` `_compute()` has no recursion guard; if a recipe calls `self._record.facets.X` it will re-enter `_compute()` (already-in-progress, `self._computed=False`) and loop. No guard found.] Either: (a) detect recursion and raise an informative error, (b) document the limitation in the spec and notebook clearly, or (c) restructure FacetView to support inter-recipe dependencies (more invasive).
 
-5. **Glossary should call out the `del record.facets` vs `record.facets.invalidate()` distinction more clearly.** `invalidate()` clears the value cache but keeps the matched-recipe set. `del record.facets` (or `del record._facets_cache`) drops the entire FacetView and re-matches on next access -- needed to pick up newly-registered recipes mid-session. Notebook now uses `del attn0.facets` for the user-recipe example; spec text should make this distinction explicit.
+5. **Glossary should call out the `del record.facets` vs `record.facets.invalidate()` distinction more clearly.** [VERIFIED LIVE 2026-06-11 — `facets.py:942-946` `invalidate()` clears `_cache` and sets `_computed=False`; `del record.facets` drops the FacetView entirely (FacetView is lazily created on next access). Contract needs documenting clearly.] Notebook now uses `del attn0.facets` for the user-recipe example; spec text should make this distinction explicit.
 
-6. **Notebook gotcha worth documenting:** users registering recipes for module classes that already have a built-in recipe (e.g., adding extra facets to `DistilBertSdpaAttention`) will see `recipe_source` become a tuple. That's correct multi-recipe-merge behavior, but worth showing in the docs.
+6. **Notebook gotcha worth documenting:** [VERIFIED LIVE 2026-06-11 — `facets.py:902-914` `recipe_source` property returns `tuple[str, ...]` when multiple recipes match; type annotation confirms `str | tuple[str, ...] | None`.] Users registering recipes for module classes that already have a built-in recipe (e.g., adding extra facets to `DistilBertSdpaAttention`) will see `recipe_source` become a tuple. That's correct multi-recipe-merge behavior, but worth showing in the docs.
 
 7. **[DESIGN, raised 2026-06-02] Integrated treatment of slices / facets / outs / multi-output.** JMT takeaway: these are currently three+ disjoint concepts that overlap at the edges and should be presented as ONE coherent addressing model rather than bolted-on siblings. Verified state as of 2026-06-02:
    - `facets` (v8, SHIPPED) already covers **semantic, recipe-driven** named views, and the built-in attention recipes ALREADY slice fused QKV internally (`recipes/attention.py:134` GPT-2: `c_attn_out.split(...)` -> `q`/`k`/`v` reshaped into heads; GQA handled). So `module.facets.q/k/v` is the 80% mech-interp read case and it's DONE.
@@ -1081,11 +1072,11 @@ The 2026-05-14 perf benchmarks (commits `3409c25` + `30dc452`) surface concrete 
 
 **Content outline:**
 
-1. **Decision tree** ("which TL mode should I use?")
-   - "I want one activation from one layer, fast as possible" -> `fastlog.record(...) + tl.fastlog.halt()`. Sub-1x raw forward on deep models.
-   - "I want all module outputs, peer-tool equivalent" -> `fastlog.record(default_module=True, default_op=False)`. ~5x raw forward.
-   - "I want every-op metadata, no tensors saved" -> `log_forward_pass(layers_to_save=[], vis_opt='none')`. Wrapper overhead floor.
-   - "I want everything, full inspect+intervene+viz" -> `log_forward_pass(intervention_ready=True)`. Substrate mode; pay the data cost.
+1. **Decision tree** ("which TL mode should I use?") [API spellings refreshed 2026-06-11]
+   - "I want one activation from one layer, fast as possible" -> `tl.record(model, x, save=...) + halt()`. Sub-1x raw forward on deep models.
+   - "I want all module outputs, peer-tool equivalent" -> `tl.record(model, x, save=tl.in_module(...))`. ~5x raw forward.
+   - "I want every-op metadata, no tensors saved" -> `tl.trace(model, x, save=tl.nothing(), visualization=tl.VisOpts(mode='none'))`. Wrapper overhead floor.
+   - "I want everything, full inspect+intervene+viz" -> `tl.trace(model, x, intervention_ready=True)`. Substrate mode; pay the data cost.
    - "I want to capture once, swap inputs N times" -> capture + `Trace.rerun(model, x_2)` per input. Same cost as fresh capture per call but writes into existing Trace.
    - "I want to apply an intervention without recomputing" -> `Trace.replay(...)`. ~20x raw forward (cached state).
 
@@ -1095,10 +1086,10 @@ The 2026-05-14 perf benchmarks (commits `3409c25` + `30dc452`) surface concrete 
 
 4. **Knob reference:**
    - `intervention_ready` (cost vs functionality)
-   - `vis_opt` (cost vs viz output)
-   - `layers_to_save` (scope control)
-   - `module_filter`
-   - `fastlog` predicates
+   - `vis_mode` (was `vis_opt` — verify current kwarg name; current public kwarg is `visualization=` or `vis_mode=` on `Trace.draw()`)
+   - `save=` predicate (scope control; was `layers_to_save=`)
+   - `save_predicate` (was `module_filter`; rename still pending)
+   - `tl.record(save=...)` predicates for sparse capture
    - Future: `save_mode="reference"` once that ships from the perf sprint (link to changelog)
 
 5. **When NOT to reach for TorchLens:**
@@ -1623,27 +1614,27 @@ modes + variance reporting. Output to a new `benchmarks/fastlog_overhead_results
 
 ### Fastlog API ergonomics review (raised 2026-05-11, post capture-pipeline-unification)
 
-JMT hasn't used the fastlog API yet. After the capture-pipeline-unification
-sprint lands (M1-M8 complete + merged), do a hands-on review of `tl.fastlog`:
+JMT hasn't used the fastlog API yet. Unblocked by capture unification 2026-06-06; body refreshed 2026-06-11.
+Do a hands-on review of `tl.record` (the unified sparse-capture entry point):
 
-- `tl.fastlog.record(model, x, keep_op=...)` ergonomics
-- `Recording` / `RecordingTrace` / `ActivationRecord` access patterns
-- `RecordingTrace.draw()` graph visualization quality
+- `tl.record(model, x, save=...)` ergonomics (formerly `tl.fastlog.record(model, x, keep_op=...)`)
+- `Recording` / `RecordingTrace` access patterns (`Recording` is the canonical class; `RecordingTrace` is a legacy internal type still used in `visualization/fastlog_live.py`)
+- `Recording.draw()` / `RecordingTrace.draw()` graph visualization quality
 - `RecordingTrace.timeline_html()` interactive view
 - `RecordingTrace.repredicate(...)` — re-evaluate a different predicate against the stored event stream (probably the killer feature; verify it's discoverable in docs)
 - Predicate composition with intervention selectors (`tl.func`, `tl.module`, `tl.label`, `tl.contains`, `tl.where`, `tl.in_module`)
-- Storage modes (RAM, disk, RAM+disk mirror) — when does each make sense from a user POV?
+- Storage modes (RAM, disk, RAM+disk mirror via `storage=tl.to_disk(...)`) — when does each make sense from a user POV?
 - Disk bundle recovery via `tl.fastlog.recover()` — does it work cleanly?
 - `dry_run()` workflow — predicate iteration without payload retention
 
 After hands-on: file friction-points as separate items, possibly bundle
-into a fastlog ergonomics sprint. Particularly relevant once the unified
-pipeline ships (Recording becomes a lazy projection over CaptureEvents
-per AD-1; verify user experience is identical post-refactor).
+into a fastlog ergonomics sprint. The unified pipeline shipped 2026-06-06
+(Recording is a lazy projection over CapturedRun); verify user experience
+is clean post-refactor.
 
-Decision deferred under AD-1: should fastlog disk format unify into
-`.tlspec` v4 or stay separate? Try the API first; that question may
-become obvious one way or the other after real usage.
+Decision deferred: should fastlog disk format unify into `.tlspec` v4 or
+stay separate? Try the API first; that question may become obvious after
+real usage.
 
 ### Intervention API naming sprint leftovers (raised cycle 2 round 7, 2026-04-29)
 
@@ -2025,18 +2016,6 @@ layer-vs-op parity follow-on remains open: see "Unify buffer layer-vs-op treatme
 
 ---
 
-### Static buffer as a model's SOLE output -> MetadataInvariantError (raised 2026-06-05)
-
-A model whose ONLY output is a static buffer (`def forward(s,x): return s.b`, no other
-consumer) captures no output layer -> `tl.trace` "succeeds" but has no `output_1`, and
-`validate_forward_pass` raises `MetadataInvariantError: No output layers found`
-(`validation/invariants.py:414`). Real bug (a valid model errors), but the fix is in
-load-bearing postprocess (output-layer creation `graph_traversal.py` Step 1 / orphan pruning
-Step 3) -> needs care, not an overnight rush. Repro: `/tmp/orphan_diag2.py`. Found during the
-buffer overnight effort.
-
----
-
 ### Validation can't reset non-registered mutable state (raised 2026-06-05)
 
 `validate_forward_pass` snapshots/restores `state_dict`, which only covers registered params/
@@ -2046,6 +2025,8 @@ already-mutated state -> false-negative. Narrow/non-idiomatic (real models use
 `register_buffer`, which validates correctly). Fix option: deep-copy the model (or all
 TorchLens-tagged buffer-like state) for the GT run, or document as unsupported. Repro:
 `/tmp/listinplace_diag.py`. Found during the buffer overnight effort.
+
+(needs JMT design call: deep-copy model for GT run vs document-as-unsupported — deliberately not auto-fixed 2026-06-11)
 
 ---
 
@@ -2154,23 +2135,21 @@ behavior across all module-touching surfaces and fix gaps:
   return? Today this is one-of-the-tensors (probably the first); should be
   a structured handle that exposes `.outputs[0]`, `.outputs[1]`, etc., or
   named fields if the module returns a dict.
-- **Saved activations.** `save_new_activations` and the layer save path
-  need to handle tuple/dict outputs without dropping the non-primary
-  tensors. Verify each output tensor's `LayerPassLog` is captured.
+- **Saved activations.** [VERIFIED 2026-06-11 — `container_path` / `multi_output_index` / `multi_output_name` all SHIPPED on Op (`data_classes/op.py:596-598`; `ir/events.py:52-54`; `postprocess/_materialize.py:412-414`). Each container-unpacked tensor gets its own Op with correct container-path provenance. This sub-item is DONE.] [DONE/OBSOLETE — verified via `multi_output_index`/`container_path` on Op]
 - **Module hooks (intervention API).** When a hook is registered at a
   module address that returns a tuple, the post-hook receives the tuple
   (mirroring `nn.Module.register_forward_hook`). Hook can return a
-  modified tuple. Pre-hooks similar. Document the contract.
+  modified tuple. Pre-hooks similar. Document the contract. [OPEN — documentation gap]
 - **Visualization.** Multi-output modules should render with multiple
-  output edges, one per output tensor, optionally labeled.
+  output edges, one per output tensor, optionally labeled. [OPEN — viz gap]
 - **Bundle compatibility.** TraceBundle / Supergraph need to handle
   multi-output modules as part of topology — each output is its own
-  graph node, all attributed to the same module.
+  graph node, all attributed to the same module. [OPEN — bundle gap; `multi_output_name` is KEPT in portable spec so this is recoverable]
 
-This is a torchlens-wide audit, not just an intervention concern.
-Surfaces affected: `data_classes/module_log.py`, `capture/output_tensors.py`,
-`postprocess/`, `visualization/`, `_lookup_keys.py`. Estimate: 1-2 weeks
-including tests against LSTM/GRU/MultiheadAttention/HF model fixtures.
+This is a torchlens-wide audit, not just an intervention concern. Structural
+capture (`container_path`/`multi_output_*`) DONE 2026-06-11. Remaining open:
+module-output addressing ergonomics, hook contract docs, viz, bundle parity.
+Estimate: a few days including tests against LSTM/GRU/MultiheadAttention/HF fixtures.
 
 ### Multi-trace V2 (deferred from 2026-04-27 sprint design)
 
@@ -3206,41 +3185,24 @@ buffer write-capture / capture-unification+MLX), it is FLAGGED "VERIFY" rather t
   code. rendering.py:970-982 correctly labels IF/THEN edges, but ELK path never checks
   `cond_branch_start_children` or `cond_branch_then_children`. Users see arg labels but NO
   IF/THEN labels in ELK mode. (NOTE: ELK is slated for removal — see "Retire ELK from
-  visualization" above; this may become moot if ELK is ripped out.)
-- **FUNC-CALL-LOC-LEAK**: `FuncCallLocation._frame_func_obj` set at func_call_location.py:98 but
-  only released at line 171 in `_load_source()`, which is triggered by lazy property access.
-  Normal code only accesses `.file` (NOT lazy) so `_load_source()` never called. ~260-1010
-  objects per pass, each holding a function object reference. Severity: LOW-MODERATE
-  (~0.3-5 MB per pass).
-- **ARG-KWARGS-MISSING**: `extract_tensors_and_params()` in arg_positions.py doesn't extract
-  tensors passed as keyword args for many common functions (linear, cat, where, normal).
-  `tensor_kwargs=()` in static table entries means `linear(x, weight=w, bias=b)` only finds `x`.
-  ~637 functions may need a tensor_kwargs audit. (Cross-ref: the "Audit function-argument-name
-  introspection (Op.arg_names + companions)" Active Task above tracks the broader FUNC_ARG_SPECS
-  coverage question — this is the concrete kwarg-extraction symptom.)
+  visualization" above; this may become moot if ELK is ripped out. Decision 2026-06-11: skip
+  fixes while "Retire ELK" is the plan; fold into that work.)
+- **ARG-KWARGS-MISSING** [PARTIAL FIX `f9daf5f`]: Named symptom functions FIXED in `f9daf5f`:
+  normal (mean/std), mm/bmm (mat2), mv (vec), addmm (mat1/mat2), addbmm/baddbmm
+  (batch1/batch2), addmv (mat/vec), addcmul/addcdiv (tensor1/tensor2), lerp (end/weight).
+  Regression tests in `tests/test_arg_kwargs_extraction.py`. REMAINING: broader audit still
+  open — dot (tensor), outer (vec2), scatter/gather index/src kwargs, loss-function target
+  kwargs, einsum/tensordot. AND newly-found adjacent gap: zeros_like/new_* factories use the
+  no-tensor-args spec and drop their positional source tensor as a parent. ~637 functions may
+  still need audit. (Cross-ref: "Audit function-argument-name introspection" Active Task tracks
+  the FUNC_ARG_SPECS coverage question broadly.)
 - **ELK-EDGE-LABEL-DEDUP**: Edge deduplication (elk_layout.py:990-992) keeps only the first edge
   between a pair, dropping later edges' arg labels. If the first edge lacks a label and the
-  second has it, the label is lost. (Also moot if ELK is removed.)
-- **TO-PANDAS-NEW-FIELDS**: `to_pandas()` in interface.py:420-472 and layer_log.py:649-671
-  missing `func_config` and `cond_branch_then_children` columns added in PR #127.
-- **COND-THEN-MULTIPASS**: `cond_branch_then_children` not merged for multi-pass LayerLog
-  (layer_log.py:141-146). Only first pass value used.
-- **INVARIANT-COND-THEN**: No invariant check for `cond_branch_then_children` <->
-  `conditional_then_edges` consistency (invariants.py). Also no check that same-layer ops agree
-  on `in_cond_branch`.
-- **HASH-COLLISION**: `make_short_barcode_from_input` (hashing.py:42-62) uses Python `hash()` +
-  base64 truncation. ~0.3-0.5% collision risk at 1K params. Could cause false same-layer grouping.
+  second has it, the label is lost. (Decision 2026-06-11: skip fixes while "Retire ELK" is the
+  plan; fold into that work.)
 - **RNG-MULTI-GPU**: `rng.py:70` only captures RNG state for cuda device 0. Multi-GPU models get
-  non-deterministic validation replays.
-- **DEVICE-CONTEXT-LOGGING**: DeviceContext bypass (`_maybe_inject_device_kwarg`) only runs in
-  the fast path when logging is disabled (torch_funcs.py:241). During active logging, factory
-  functions (`torch.zeros`, `torch.ones`) don't get device injection. Breaks HuggingFace
-  `from_pretrained` under logging.
-- **VALIDATE-STATE-RESTORE**: `validate_forward_pass` (user_funcs.py:535-552) saves the model
-  state_dict at line 535 but `load_state_dict()` at line 552 only runs if no exception. If the
-  forward pass raises, model params remain mutated. Needs try/finally. (Related to the newer
-  "Validation can't reset non-registered mutable state" item above, but distinct: this is the
-  exception-path leak for REGISTERED params/buffers.)
+  non-deterministic validation replays. (BLOCKED on hardware: dev box has 1 GPU — needs a
+  multi-GPU machine to fix+verify; 2026-06-11.)
 ### Deferred design decisions
 
 These need substantive design changes, not simple fixes (the 4 deferred bugs from
@@ -3511,6 +3473,40 @@ belong in dagua's own tracker — preserved here so they aren't lost; relocate w
   sort_key + indices, compare to free VRAM, fall back only when it genuinely won't fit.
 
 ## Completed (recent)
+
+### 2026-06-11 bug-fix sweep
+
+Items fixed in today's sweep; removed from open sections above.
+
+- **TO-PANDAS-NEW-FIELDS** — fixed in `6310f06`: `to_pandas` now DERIVES columns from
+  `LAYER_PASS_LOG_FIELD_ORDER` minus a documented exclusion list, with a test enforcing
+  every field is column-or-excluded; live-accessor fields (input_ops) excluded so
+  detached/disk-loaded traces still export cleanly.
+- **COND-THEN-MULTIPASS** — fixed in `6310f06`: conditional membership merged across
+  passes on rolled Layers.
+- **INVARIANT-COND-THEN** — fixed in `6310f06`: two NEW invariants added (14: arm-entry
+  edges must exist in rolled topology; 15: per-op body roles agree with
+  conditional_branch_stack id+arm).
+- **Static buffer as a model's SOLE output -> MetadataInvariantError** — fixed in
+  `6310f06`: output parent labels resolved pre-Step-0; untouched returned buffers
+  late-logged (memoized per tensor — `return self.buf, self.buf` works); mixed
+  attributed/unattributed output alignment pinned by tests; validate_forward_pass clean.
+- **DEVICE-CONTEXT-LOGGING** — fixed in `f9daf5f`: the device-kwarg injection itself
+  already ran on the logging path since `b55e16b`; the remaining real bug was capture
+  crashing on data-less META tensors (content-hash dedup `.cpu()`, aliasing
+  `torch.equal`, `tensor_nanequal`) — all now meta-aware; meta-device models trace
+  end-to-end including meta tensors as full-save outputs.
+- **FUNC-CALL-LOC-LEAK** — already fixed in `b55e16b` (2.0 overhaul phase 14); stale
+  tracker entry. Now regression-locked by 12 tests in `648837a`
+  (`tests/test_utility_validation_runner_regressions.py`).
+- **HASH-COLLISION** — already fixed in `b55e16b`; salted-hash barcodes replaced with
+  sha256; stale tracker entry. Now regression-locked in `648837a`. NOTE: old barcodes
+  leaked into persisted `.tlspec` op_kind via equivalence_class, so cross-process
+  artifact comparability depends on the sha256 fix.
+- **VALIDATE-STATE-RESTORE** — already fixed in `b55e16b`; stale tracker entry. Now
+  regression-locked in `648837a`.
+- **Code panel truncates long source lines** — fixed in `8fa0907`: panel sized from real
+  monospace metrics (graphviz fallback Courier under-measures ~22%); wrap past 120 chars.
 
 ### 2026-06-10 archived during todo audit
 
