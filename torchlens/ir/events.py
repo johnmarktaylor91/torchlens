@@ -13,6 +13,15 @@ if TYPE_CHECKING:
 
 OpEventKind = Literal["op", "source", "synthetic_output", "intervention_replacement"]
 EdgeUseKind = Literal["arg", "kwarg", "container", "module", "buffer", "output"]
+BackwardTrigger = Literal[
+    "backward",
+    "autograd_grad",
+    "autograd_backward",
+    "recording_backward",
+    "implicit",
+    "replay",
+]
+BackwardStatus = Literal["ok", "error"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +34,79 @@ class BlobRef:
     shape: tuple[int, ...] | None
     byte_length: int | None
     sha256: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class BackwardPassStart:
+    """Core event marking the beginning of one autograd engine invocation."""
+
+    pass_index: int
+    trigger: BackwardTrigger
+    implicit: bool
+    outer_context: str | None
+    call_context_ref: object | None
+    root_meta: tuple[object, ...]
+    root_grad_arguments: object | None
+    inputs_subset: tuple[object, ...]
+    order: int | None
+    origin_backward_pass: int | None
+    save_grads_policy_repr: str | None
+    engine_flags: dict[str, object] | None
+    timestamp: float
+
+
+@dataclass(frozen=True, slots=True)
+class OpGradObserved:
+    """Core event emitted when a tensor hook observes an operation gradient."""
+
+    op_label: str
+    pass_index: int
+    payload_ref: object | None
+    shape: tuple[int, ...] | None
+    dtype: str | None
+    memory: int | None
+    timestamp: float
+    seq: int
+
+
+@dataclass(frozen=True, slots=True)
+class BackwardPassEnd:
+    """Core event marking completion of one autograd engine invocation."""
+
+    pass_index: int
+    duration: float | None
+    peak_memory: int | None
+    status: BackwardStatus
+    order_attribution_coverage: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class GradFnDiscovered:
+    """Torch enrichment event for a discovered autograd node object."""
+
+    object_id: int
+    class_name: str
+    class_qualname: str
+    is_custom: bool
+    op_label: str | None
+    param_ref: object | None
+    created_in_pass: int | None
+    creator_object_id: int | None
+    source: dict[str, object | None]
+    topology: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class GradFnFired:
+    """Torch enrichment event emitted from an autograd node hook."""
+
+    object_id: int
+    pass_index: int
+    grad_input_refs: object | None
+    grad_output_refs: object | None
+    intervention_fire_ref: object | None
+    timestamp: float
+    seq: int
 
 
 @dataclass(frozen=True, slots=True)

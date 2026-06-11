@@ -30,13 +30,17 @@ Key concepts:
 """
 
 import itertools as it
+import time
+import warnings
 import weakref
 from typing import TYPE_CHECKING, Any
 
 import torch
 
 from ._tl import get_param_meta, get_tensor_label, increment_param_call_index, set_param_meta
+from ...ir.events import BackwardPassStart, OpGradObserved
 from ...data_classes.op import Op
+from ..._state import pause_logging
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 
 if TYPE_CHECKING:
@@ -59,16 +63,103 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
         tensor_label: Raw tensor label (e.g. ``"conv2d_3_47_raw"``) used to
             look up the corresponding log entry when the grad arrives.
     """
+    hooked_tensors = trace.__dict__.setdefault("_tl_backward_hooked_tensor_keys", set())
+    hook_key = (tensor_label, id(t))
+    if hook_key in hooked_tensors:
+        return
+    hooked_tensors.add(hook_key)
+
     # Weak reference prevents Trace -> tensor -> hook -> Trace ref cycle.
     trace_ref = weakref.ref(trace)
 
     def log_grad_to_model_history(grad: torch.Tensor) -> None:
         active_trace = trace_ref()
         if active_trace is not None:
-            _log_tensor_grad(active_trace, grad, tensor_label)
+            _emit_tensor_grad_event(active_trace, grad, tensor_label)
+            if getattr(active_trace, "save_gradients", False):
+                _log_tensor_grad(active_trace, grad, tensor_label)
 
     if (t.grad_fn is not None) or t.requires_grad:
         t.register_hook(log_grad_to_model_history)  # type: ignore[no-untyped-call]
+
+
+def _ensure_backward_event_stream(trace: "Trace") -> Any:
+    """Return the mutable capture event bundle for backward sidecar emission."""
+
+    events = getattr(trace, "_capture_events", None)
+    if events is not None:
+        return events
+    events = getattr(trace, "capture_events", None)
+    if events is not None:
+        return events
+    from ...ir import CaptureEvents
+
+    events = CaptureEvents()
+    trace._capture_events = events
+    return events
+
+
+def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
+    """Return an active backward pass index, opening an implicit pass if needed."""
+
+    pass_index = getattr(trace, "_active_backward_pass_index", None)
+    if pass_index is not None:
+        return int(pass_index)
+    pass_index = int(getattr(trace, "num_backward_passes", 0)) + 1
+    trace._active_backward_pass_index = pass_index
+    trace._implicit_backward_pass_open = True
+    if not getattr(trace, "_warned_implicit_backward_pass", False):
+        warnings.warn(
+            "TorchLens observed gradients outside a managed backward trigger; recording an "
+            "implicit backward pass. Use trace.log_backward(), trace.backward(), or a TorchLens "
+            "autograd trigger for precise pass boundaries.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        trace._warned_implicit_backward_pass = True
+    events = _ensure_backward_event_stream(trace)
+    events.append_backward(
+        BackwardPassStart(
+            pass_index=pass_index,
+            trigger="implicit",
+            implicit=True,
+            outer_context=None,
+            call_context_ref=None,
+            root_meta=(),
+            root_grad_arguments=None,
+            inputs_subset=(),
+            order=None,
+            origin_backward_pass=None,
+            save_grads_policy_repr=repr(getattr(trace, "gradients_to_save", None)),
+            engine_flags=None,
+            timestamp=time.time(),
+        )
+    )
+    return pass_index
+
+
+def _emit_tensor_grad_event(trace: "Trace", grad: torch.Tensor, tensor_label: str) -> None:
+    """Append an ``OpGradObserved`` event for a tensor hook firing."""
+
+    if getattr(trace, "_tl_backward_triggers_disarmed", False):
+        return
+    events = _ensure_backward_event_stream(trace)
+    pass_index = _ensure_backward_pass_for_tensor_hook(trace)
+    final_label = getattr(trace, "_raw_to_final_layer_labels", {}).get(tensor_label, tensor_label)
+    with pause_logging():
+        memory = int(grad.nelement() * grad.element_size())
+    events.append_backward(
+        OpGradObserved(
+            op_label=final_label,
+            pass_index=pass_index,
+            payload_ref=None,
+            shape=tuple(grad.shape),
+            dtype=str(grad.dtype),
+            memory=memory,
+            timestamp=time.time(),
+            seq=events.next_backward_seq(),
+        )
+    )
 
 
 def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None:
@@ -84,6 +175,8 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
         _label_raw: Raw tensor label used to look up the final label.
     """
     self.has_gradients = True
+    if _label_raw not in self._raw_to_final_layer_labels:
+        return
     tensor_label = self._raw_to_final_layer_labels[_label_raw]
     layer_log_entry = self[tensor_label]
     layers_to_update = [tensor_label]

@@ -213,6 +213,7 @@ def postprocess(
     output_parent_labels = _resolve_output_parent_labels(self, output_tensors)
     if capture_events is not None:
         remember_event_stream(self, capture_events)
+        self._capture_events = capture_events
         with _vtimed(self, "  Step 0: Materialize capture events"):
             materialize_from_events(self, capture_events)
         delattr(self, "capture_events")

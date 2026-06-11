@@ -2042,8 +2042,7 @@ def _tag_tensor_and_track_variations(
     """
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
-    if self.save_gradients:
-        _add_tensor_backward_hook(self, out, out_label)
+    _add_tensor_backward_hook(self, out, out_label)
 
     child_event = self.capture_events.live_index.require_event(new_layer_entry._label_raw)
     for parent_label in new_layer_entry.parents:
@@ -2320,8 +2319,7 @@ def log_function_output_tensors_fast(
         orig_layer_entry = self[orig_tensor_label]
         previous_shape = orig_layer_entry.shape
 
-        if self.save_gradients:
-            _add_tensor_backward_hook(self, out, _label_raw)  # Must pass RAW label (#86)
+        _add_tensor_backward_hook(self, out, _label_raw)  # Must pass RAW label (#86)
 
         # Structural integrity check: verify counter, type, label, and parents
         # all match the exhaustive pass.  Any mismatch means dynamic control flow

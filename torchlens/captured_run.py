@@ -62,6 +62,15 @@ class CapturedRun:
         return tuple(events.op_events)
 
     @property
+    def backward_events(self) -> tuple[Any, ...]:
+        """Return the runtime-only backward sidecar event stream."""
+
+        events = self.event_stream
+        if events is None:
+            return ()
+        return tuple(getattr(events, "backward_events", ()))
+
+    @property
     def sibling_events(self) -> tuple[Any, ...]:
         """Return non-op sibling capture events in chronological groups."""
 

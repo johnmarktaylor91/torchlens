@@ -1242,10 +1242,9 @@ def _ensure_module_output_tensor_logged(
         # is_internal_source set must appear in trace.internal_source_ops.
         trace.internal_source_ops.append(new_entry._label_raw)
     set_tensor_label(tensor, new_entry._label_raw)
-    if trace.save_gradients:
-        from .ops import _add_tensor_backward_hook
+    from .ops import _add_tensor_backward_hook
 
-        _add_tensor_backward_hook(trace, tensor, new_entry._label_raw)
+    _add_tensor_backward_hook(trace, tensor, new_entry._label_raw)
 
 
 def _wrap_user_forward_hooks(module: nn.Module) -> None:

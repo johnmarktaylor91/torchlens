@@ -16,7 +16,13 @@ from ..._io.streaming import BundleStreamWriter
 from ...quantities import Bytes, Duration
 from ..._state import pause_logging
 from ...data_classes.grad_fn import GradFn
-from .tensor_tracking import _add_tensor_backward_hook
+from ...ir.events import (
+    BackwardPassEnd,
+    BackwardPassStart,
+    GradFnDiscovered,
+    GradFnFired,
+)
+from .tensor_tracking import _ensure_backward_event_stream
 
 
 def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
@@ -309,6 +315,28 @@ def _make_grad_fn_hook(
         with pause_logging():
             grad_fn_handle._log_call(stored_grad_inputs, stored_grad_outputs, time.time())
         call_index = len(grad_fn_handle.calls)
+        refs = live_trace.__dict__.setdefault("_backward_gradfn_refs", [])
+        for grad_value in tuple(grad_inputs or ()):
+            if isinstance(grad_value, torch.Tensor) and grad_value.grad_fn is not None:
+                refs.append(grad_value.grad_fn)
+        events = _ensure_backward_event_stream(live_trace)
+        events.append_backward(
+            GradFnFired(
+                object_id=grad_fn_object_id,
+                pass_index=int(
+                    getattr(
+                        live_trace,
+                        "_active_backward_pass_index",
+                        getattr(live_trace, "num_backward_passes", 0) + 1,
+                    )
+                ),
+                grad_input_refs=stored_grad_inputs,
+                grad_output_refs=stored_grad_outputs,
+                intervention_fire_ref=None,
+                timestamp=time.time(),
+                seq=events.next_backward_seq(),
+            )
+        )
         if is_accumulate_grad:
             return None
         from ...intervention.runtime import _apply_live_backward_hooks
@@ -502,6 +530,33 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             param_address = trace._param_log_by_pid.get(id(param)) if param is not None else None
             if param_address is not None:
                 trace._grad_fn_param_refs[grad_fn_record.label] = param_address
+        source_fields = {
+            key: getattr(grad_fn_record, key)
+            for key in (
+                "class_source_file",
+                "class_source_line",
+                "init_source_file",
+                "init_source_line",
+                "forward_source_file",
+                "forward_source_line",
+                "backward_source_file",
+                "backward_source_line",
+            )
+        }
+        _ensure_backward_event_stream(trace).append_backward(
+            GradFnDiscovered(
+                object_id=grad_fn_object_id,
+                class_name=grad_fn_record.class_name,
+                class_qualname=grad_fn_record.class_qualname,
+                is_custom=grad_fn_record.is_custom,
+                op_label=layer_label,
+                param_ref=trace._grad_fn_param_refs.get(grad_fn_record.label),
+                created_in_pass=None,
+                creator_object_id=None,
+                source=source_fields,
+                topology=tuple(id(next_fn) for next_fn in next_grad_fns),
+            )
+        )
         if layer_label is not None:
             layer = trace[layer_label]
             layer.grad_fn = grad_fn_record
@@ -823,6 +878,10 @@ def _run_backward_with_capture(
     trace: Any,
     loss: torch.Tensor,
     backward_callable: Callable[[], Any],
+    *,
+    trigger: str = "backward",
+    outer_context: str | None = None,
+    engine_flags: dict[str, object] | None = None,
 ) -> Any:
     """Capture a backward graph, run backward, and record memory delta.
 
@@ -852,11 +911,43 @@ def _run_backward_with_capture(
         *normalize_hooks_from_spec(_state._active_intervention_spec),
         *getattr(trace, "_initial_hook_plan", ()),
     ]
+    pass_index = int(getattr(trace, "num_backward_passes", 0)) + 1
+    events = _ensure_backward_event_stream(trace)
+    trace._active_backward_pass_index = pass_index
+    trace._implicit_backward_pass_open = False
+    events.append_backward(
+        BackwardPassStart(
+            pass_index=pass_index,
+            trigger=cast(Any, trigger),
+            implicit=False,
+            outer_context=outer_context,
+            call_context_ref=None,
+            root_meta=(
+                {
+                    "shape": tuple(loss.shape),
+                    "dtype": str(loss.dtype),
+                    "device": str(loss.device),
+                },
+            ),
+            root_grad_arguments=None,
+            inputs_subset=(),
+            order=None,
+            origin_backward_pass=None,
+            save_grads_policy_repr=repr(getattr(trace, "gradients_to_save", None)),
+            engine_flags=engine_flags,
+            timestamp=time.time(),
+        )
+    )
     handles = _walk_and_hook_backward_graph(trace, loss)
     backend, before = _reset_peak_memory(loss.device)
     backward_start_time = time.time()
+    status = "ok"
+    result = None
     try:
         result = backward_callable()
+    except Exception:
+        status = "error"
+        raise
     finally:
         for handle in handles:
             with contextlib.suppress(Exception):
@@ -865,34 +956,40 @@ def _run_backward_with_capture(
         _state._active_trace = previous_trace
         _state._active_hook_plan = previous_plan
         _state._active_intervention_spec = previous_spec
-    _backend, after = _memory_snapshot(loss.device)
-    trace.backward_memory_backend = backend
-    trace.backward_peak_memory += Bytes(max(0, after - before))
-    trace.backward_durations.append(Duration(time.time() - backward_start_time))
-    trace.total_param_gradient_memory = Bytes(
-        sum(int(param_log.gradient_memory) for param_log in getattr(trace, "param_logs", []))
-    )
-    trace.num_backward_passes += 1
+        _backend, after = _memory_snapshot(loss.device)
+        peak_delta = max(0, after - before)
+        duration = time.time() - backward_start_time
+        trace.backward_memory_backend = backend
+        trace.backward_peak_memory += Bytes(peak_delta)
+        trace.backward_durations.append(Duration(duration))
+        trace.total_param_gradient_memory = Bytes(
+            sum(int(param_log.gradient_memory) for param_log in getattr(trace, "param_logs", []))
+        )
+        trace.num_backward_passes = max(int(getattr(trace, "num_backward_passes", 0)), pass_index)
+        events.append_backward(
+            BackwardPassEnd(
+                pass_index=pass_index,
+                duration=duration,
+                peak_memory=peak_delta,
+                status=cast(Any, status),
+                order_attribution_coverage=None,
+            )
+        )
+        trace.__dict__.pop("_active_backward_pass_index", None)
     return result
 
 
 def _ensure_layer_grad_hooks(trace: Any) -> None:
-    """Register tensor grad hooks lazily for saved graph-connected outs.
+    """Enable legacy gradient retention after op-record-time hook installation.
 
     Parameters
     ----------
     trace:
         Trace whose saved outs should receive grad hooks.
     """
-    if getattr(trace, "save_gradients", False):
-        return
     trace.save_gradients = True
     if getattr(trace, "_grad_layer_nums_to_save", None) in [None, [], "none"]:
         trace._grad_layer_nums_to_save = "all"
-    for layer in getattr(trace, "layer_list", []):
-        out = getattr(layer, "out", None)
-        if isinstance(out, torch.Tensor):
-            _add_tensor_backward_hook(trace, out, layer._label_raw)
 
 
 def _configure_grad_streaming(
@@ -984,7 +1081,13 @@ def log_backward(
         """Run the user's requested backward call."""
         return loss.backward(**backward_kwargs)  # type: ignore[no-untyped-call]
 
-    _run_backward_with_capture(self, loss, run)
+    _run_backward_with_capture(
+        self,
+        loss,
+        run,
+        trigger="backward",
+        engine_flags=dict(backward_kwargs),
+    )
     _finalize_grad_streaming(self)
     return self
 
@@ -1023,7 +1126,13 @@ class RecordingBackward:
                 """Run the original Tensor.backward implementation."""
                 return original_backward(tensor_self, *args, **kwargs)  # type: ignore[no-untyped-call]
 
-            return _run_backward_with_capture(trace, tensor_self, run)
+            return _run_backward_with_capture(
+                trace,
+                tensor_self,
+                run,
+                trigger="recording_backward",
+                engine_flags=dict(kwargs),
+            )
 
         torch.Tensor.backward = wrapped_backward  # type: ignore[assignment, method-assign]
         return self

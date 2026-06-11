@@ -8,11 +8,16 @@ from typing import TYPE_CHECKING, Any
 import weakref
 
 from .events import (
+    BackwardPassEnd,
+    BackwardPassStart,
     ConditionalEvent,
+    GradFnDiscovered,
+    GradFnFired,
     ModuleEnterEvent,
     ModuleEvent,
     ModuleExitEvent,
     ModulePrepEvent,
+    OpGradObserved,
     OpEvent,
     OutputVersionEvent,
 )
@@ -37,6 +42,9 @@ class CaptureEvents:
     module_exit_events: list[ModuleExitEvent] = field(default_factory=list)
     conditional_events: list[ConditionalEvent] = field(default_factory=list)
     output_version_events: list[OutputVersionEvent] = field(default_factory=list)
+    backward_events: list[
+        BackwardPassStart | OpGradObserved | BackwardPassEnd | GradFnDiscovered | GradFnFired
+    ] = field(default_factory=list)
     param_refs: dict[str, ParamRef] = field(default_factory=dict)
     raw_layer_counter: int = 0
     raw_layer_type_counter: dict[str, int] = field(default_factory=dict)
@@ -53,12 +61,31 @@ class CaptureEvents:
     replacement_template_by_label_raw: dict[str, str] = field(default_factory=dict)
     module_stack_by_label_raw: dict[str, tuple[str, ...]] = field(default_factory=dict)
     grad_fn_handles_by_label_raw: dict[str, Any] = field(default_factory=dict)
+    backward_event_seq: int = 0
+
+    def next_backward_seq(self) -> int:
+        """Return the next monotonic backward event sequence number."""
+
+        self.backward_event_seq += 1
+        return self.backward_event_seq
 
     def append(self, event: OpEvent) -> None:
         """Append a single operation event."""
         self.op_events.append(event)
         self.op_event_by_label_raw[event.label_raw] = event
         self.live_index.append(event)
+
+    def append_backward(
+        self,
+        event: BackwardPassStart
+        | OpGradObserved
+        | BackwardPassEnd
+        | GradFnDiscovered
+        | GradFnFired,
+    ) -> None:
+        """Append a backward sidecar event."""
+
+        self.backward_events.append(event)
 
     def extend(self, events: tuple[OpEvent, ...] | list[OpEvent]) -> None:
         """Append multiple operation events in order."""

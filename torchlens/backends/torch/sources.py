@@ -466,9 +466,8 @@ def log_source_tensor_exhaustive(
         self.buffer_layers.append(tensor_label)
         self.internal_source_ops.append(tensor_label)
 
-    # Register backward hook for grad capture if requested.
-    if self.save_gradients:
-        _add_tensor_backward_hook(self, t, tensor_label)
+    # Register backward hook for sidecar capture; payload retention is decided at fire time.
+    _add_tensor_backward_hook(self, t, tensor_label)
 
 
 def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
