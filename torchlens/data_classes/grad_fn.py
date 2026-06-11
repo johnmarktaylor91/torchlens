@@ -56,6 +56,42 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
             return resolved
         raise KeyError(f"GradFn call '{key}' not found in scoped calls.")
 
+    def for_pass(self, pass_index: int) -> GradFnCall:
+        """Return this GradFn's call for a one-based backward pass number.
+
+        Parameters
+        ----------
+        pass_index:
+            Global one-based backward pass number.
+
+        Returns
+        -------
+        GradFnCall
+            Call that fired during ``pass_index``.
+        """
+
+        matches = [
+            call
+            for call in self._dict.values()
+            if getattr(call, "backward_pass_index", None) == pass_index
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            raise ValueError(
+                f"GradFn '{self._label}' fired {len(matches)} times in backward pass "
+                f"{pass_index}; use 0-based positional access."
+            )
+        available = [
+            getattr(call, "backward_pass_index", None)
+            for call in self._dict.values()
+            if getattr(call, "backward_pass_index", None) is not None
+        ]
+        raise KeyError(
+            f"GradFn '{self._label}' did not participate in backward pass {pass_index}; "
+            f"participated in passes {available}."
+        )
+
     def __setitem__(self, key: int, value: GradFnCall) -> None:
         """Set a GradFnCall by 1-based call index."""
 
@@ -137,6 +173,13 @@ class GradFn:
         "class_name": FieldPolicy.KEEP,
         "class_qualname": FieldPolicy.KEEP,
         "is_custom": FieldPolicy.KEEP,
+        "order": FieldPolicy.KEEP,
+        "origin_backward_pass": FieldPolicy.KEEP,
+        "creator_object_id": FieldPolicy.KEEP,
+        "differentiates": FieldPolicy.KEEP,
+        "modules": FieldPolicy.KEEP,
+        "module_address": FieldPolicy.KEEP,
+        "module_membership_source": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,
         "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
@@ -179,6 +222,13 @@ class GradFn:
     step_index: int = 0
     has_op: bool = False
     op_label: str | None = None
+    order: int | None = None
+    origin_backward_pass: int | None = None
+    creator_object_id: int | None = None
+    differentiates: str | None = None
+    modules: list[str] = field(default_factory=list)
+    module_address: str | None = None
+    module_membership_source: str | None = None
     next_grad_fn_ids: list[int] = field(default_factory=list)
     parents: list[str] = field(default_factory=list)
     children: list[str] = field(default_factory=list)
@@ -236,6 +286,13 @@ class GradFn:
                 "siblings": [],
                 "co_parents": [],
                 "calls": {},
+                "order": None,
+                "origin_backward_pass": None,
+                "creator_object_id": None,
+                "differentiates": None,
+                "modules": [],
+                "module_address": None,
+                "module_membership_source": None,
                 "_source_trace_ref": None,
                 "class_source_file": None,
                 "class_source_line": None,

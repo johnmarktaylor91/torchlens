@@ -126,6 +126,7 @@ from .interface import (
     _str_after_pass,
     _str_during_pass,
 )
+from .backward_pass import BackwardPass, BackwardPassAccessor
 from .grad_fn import GradFnAccessor, GradFn
 from .layer import Layer, OpAccessor
 from .op import Op, TensorLog
@@ -990,6 +991,7 @@ class Trace(CapturedRun):
     capture_start_time: float
     capture_end_time: float
     backward_root_grad_fn_object_ids: list[int]
+    backward_pass_logs: Dict[int, BackwardPass]
     code_context: list["FuncCallLocation"]
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -1189,6 +1191,8 @@ class Trace(CapturedRun):
         "_capture_events": FieldPolicy.DROP,
         "_tl_backward_hooked_tensor_keys": FieldPolicy.DROP,
         "_active_backward_pass_index": FieldPolicy.DROP,
+        "_backward_roots_by_pass": FieldPolicy.DROP,
+        "_backward_projection_event_count": FieldPolicy.DROP,
         "_implicit_backward_pass_open": FieldPolicy.DROP,
         "_warned_implicit_backward_pass": FieldPolicy.DROP,
         "_tl_backward_triggers_disarmed": FieldPolicy.DROP,
@@ -1201,6 +1205,7 @@ class Trace(CapturedRun):
         "has_backward_pass": FieldPolicy.KEEP,
         "grad_fn_logs": FieldPolicy.KEEP,
         "grad_fn_order": FieldPolicy.KEEP,
+        "backward_pass_logs": FieldPolicy.KEEP,
         "_grad_fn_param_refs": FieldPolicy.KEEP,
         "_param_log_by_pid": FieldPolicy.DROP,
         "backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
@@ -1487,6 +1492,7 @@ class Trace(CapturedRun):
         self.has_backward_pass: bool = False
         self.grad_fn_logs: Dict[int, GradFn] = OrderedDict()
         self.grad_fn_order: List[int] = []
+        self.backward_pass_logs: Dict[int, BackwardPass] = OrderedDict()
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
         self.backward_root_grad_fn_object_ids: list[int] = []
@@ -2893,6 +2899,7 @@ class Trace(CapturedRun):
                 "has_backward_pass": False,
                 "grad_fn_logs": OrderedDict(),
                 "grad_fn_order": [],
+                "backward_pass_logs": OrderedDict(),
                 "backward_root_grad_fn_object_ids": [],
                 "backward_durations": [],
                 "num_backward_passes": 0,
@@ -3869,18 +3876,51 @@ class Trace(CapturedRun):
     @property
     def grad_fns(self) -> GradFnAccessor:
         """Access backward grad_fn_handle metadata by label, index, pass label, or substring."""
+        self._sync_backward_projection_if_needed()
         return GradFnAccessor(self.grad_fn_logs, self.grad_fn_order)
 
     @property
     def grad_fn_calls(self) -> TraceGradFnCallAccessor:
         """Access per-invocation GradFnCall records by qualified label or index."""
 
+        self._sync_backward_projection_if_needed()
         calls: OrderedDict[str, Any] = OrderedDict()
         for grad_fn_handle in self.grad_fns:
             for call_index, call in grad_fn_handle.calls.items():
                 call.source_trace = self
                 calls[f"{grad_fn_handle.label}:{call_index}"] = call
         return TraceGradFnCallAccessor(calls)
+
+    @property
+    def backward_passes(self) -> BackwardPassAccessor:
+        """Access backward pass records by 0-based position or named pass number."""
+
+        self._sync_backward_projection_if_needed()
+        return BackwardPassAccessor(self.backward_pass_logs)
+
+    @property
+    def last_backward_pass(self) -> BackwardPass | None:
+        """Return the most recent backward pass record, if any."""
+
+        backward_passes = self.backward_passes
+        if not backward_passes:
+            return None
+        return backward_passes[-1]
+
+    def _sync_backward_projection_if_needed(self) -> None:
+        """Synchronize lazy backward projections from runtime sidecar events."""
+
+        if getattr(self, "_tl_active_backward_bracket", False):
+            return
+        if not getattr(self, "backward_events", ()):
+            return
+        from ..backends.torch.backward import (
+            _close_implicit_backward_pass_if_open,
+            _materialize_backward_projections,
+        )
+
+        _close_implicit_backward_pass_if_open(self)
+        _materialize_backward_projections(self)
 
     @property
     def num_grad_fn_calls(self) -> int:

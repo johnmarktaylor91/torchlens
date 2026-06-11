@@ -5,6 +5,7 @@ from collections.abc import Callable
 import torch
 
 from .data_classes.buffer import Buffer
+from .data_classes.backward_pass import BackwardPass
 from .data_classes.func_call_location import FuncCallLocation
 from .data_classes.grad_fn import GradFn
 from .data_classes.grad_fn_call import GradFnCall
@@ -19,6 +20,7 @@ GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 __all__ = [
     "ActivationPostfunc",
+    "BackwardPass",
     "Buffer",
     "Bytes",
     "Duration",

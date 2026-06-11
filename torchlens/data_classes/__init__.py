@@ -1,6 +1,7 @@
 """Core data structures for representing a logged forward pass."""
 
 from .buffer import BufferAccessor, Buffer
+from .backward_pass import BackwardPass, BackwardPassAccessor
 from .func_call_location import FuncCallLocation
 from .grad_fn import GradFnAccessor, GradFn
 from .grad_fn_call import GradFnCall

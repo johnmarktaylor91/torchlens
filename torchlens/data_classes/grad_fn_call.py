@@ -20,21 +20,37 @@ class GradFnCall:
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "call_index": FieldPolicy.KEEP,
+        "ordinal": FieldPolicy.KEEP,
+        "backward_pass_index": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
+        "intervention_fire_ref": FieldPolicy.KEEP,
+        "timestamp": FieldPolicy.KEEP,
         "_time_started": FieldPolicy.KEEP,
         "_time_finished": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
 
     call_index: int
+    ordinal: int | None = None
+    backward_pass_index: int | None = None
     label: str = ""
     grad_inputs: Any = None
     grad_outputs: Any = None
+    intervention_fire_ref: object | None = None
+    timestamp: float | None = None
     _time_started: float | None = None
     _time_finished: float | None = None
     _source_trace_ref: Any = None
+
+    def __post_init__(self) -> None:
+        """Fill pass-projection defaults derived from legacy call fields."""
+
+        if self.ordinal is None:
+            self.ordinal = self.call_index
+        if self.timestamp is None:
+            self.timestamp = self._time_finished
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -52,8 +68,12 @@ class GradFnCall:
             state,
             defaults={
                 "label": "",
+                "ordinal": state.get("call_index"),
+                "backward_pass_index": None,
                 "grad_inputs": None,
                 "grad_outputs": None,
+                "intervention_fire_ref": None,
+                "timestamp": None,
                 "_time_started": None,
                 "_time_finished": None,
                 "_source_trace_ref": None,
@@ -63,6 +83,8 @@ class GradFnCall:
             state["_time_started"] = 0.0
             state["_time_finished"] = float(state.pop("duration"))
         self.__dict__.update(state)
+        if self.ordinal is None:
+            self.ordinal = self.call_index
 
     @property
     def source_trace(self) -> Any:

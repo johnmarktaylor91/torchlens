@@ -7,7 +7,7 @@ import inspect
 import re
 import time
 import weakref
-from collections import deque
+from collections import OrderedDict, deque
 from collections.abc import Sequence
 from typing import Any, Callable, Iterator, Literal, cast
 
@@ -17,11 +17,14 @@ from ..._io.streaming import BundleStreamWriter
 from ...quantities import Bytes, Duration
 from ..._state import pause_logging
 from ...data_classes.grad_fn import GradFn
+from ...data_classes.grad_fn_call import GradFnCall
+from ...data_classes.backward_pass import BackwardPass
 from ...ir.events import (
     BackwardPassEnd,
     BackwardPassStart,
     GradFnDiscovered,
     GradFnFired,
+    OpGradObserved,
 )
 from .tensor_tracking import _ensure_backward_event_stream
 
@@ -129,6 +132,7 @@ def _close_implicit_backward_pass_if_open(trace: Any) -> None:
     trace.num_backward_passes = max(int(getattr(trace, "num_backward_passes", 0)), int(pass_index))
     trace.__dict__.pop("_active_backward_pass_index", None)
     trace._implicit_backward_pass_open = False
+    _materialize_backward_projections(trace)
 
 
 def _root_tensors(value: Any) -> tuple[torch.Tensor, ...]:
@@ -457,7 +461,7 @@ def _normalize_grad_fn_type(grad_fn_handle: Any) -> str:
 def _grad_fn_label_parts(
     trace: Any,
     type: str,
-    layer_label: str | None,
+    _layer_label: str | None,
     type_counter: dict[str, int],
     total_num: int,
 ) -> tuple[int, int, str]:
@@ -469,7 +473,7 @@ def _grad_fn_label_parts(
         Trace being updated.
     type:
         Normalized grad_fn_handle type.
-    layer_label:
+    _layer_label:
         Matching forward layer label, or ``None`` for intervening grad_fns.
     type_counter:
         Running per-type counter for intervening grad_fns.
@@ -481,15 +485,203 @@ def _grad_fn_label_parts(
     tuple[int, int, str]
         GradFn type index, total index, and user-facing label.
     """
-    if layer_label is not None:
-        layer = trace.layers[layer_label]
-        type_num = layer.type_index
-        total_num = layer.step_index
-    else:
-        type_counter[type] = type_counter.get(type, 0) + 1
-        type_num = type_counter[type]
+    del trace, _layer_label
+    type_counter[type] = type_counter.get(type, 0) + 1
+    type_num = type_counter[type]
     label = f"{type}_back_{type_num}_{total_num}"
     return type_num, total_num, label
+
+
+def _grad_fn_type_from_class_name(class_name: str) -> str:
+    """Normalize an autograd class name for native backward labels."""
+
+    return re.sub(r"Backward\d*$", "", class_name).lower()
+
+
+def _materialize_backward_projections(trace: Any) -> None:
+    """Rebuild backward-facing Trace records from sidecar events.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose runtime backward event sidecar is authoritative.
+
+    Returns
+    -------
+    None
+        ``grad_fn_logs``, ``grad_fn_order``, ``backward_pass_logs``, and
+        related counters are replaced in place.
+    """
+
+    if getattr(trace, "_tl_active_backward_bracket", False):
+        return
+    if getattr(trace, "_tl_materializing_backward_projection", False):
+        return
+    events = list(getattr(_ensure_backward_event_stream(trace), "backward_events", ()))
+    if not events:
+        return
+    if getattr(trace, "_backward_projection_event_count", None) == len(events):
+        return
+    trace._tl_materializing_backward_projection = True
+    try:
+        _materialize_backward_projections_impl(trace, events)
+    finally:
+        trace.__dict__.pop("_tl_materializing_backward_projection", None)
+
+
+def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> None:
+    """Rebuild backward projections from an already-snapshotted event list."""
+
+    starts: dict[int, BackwardPassStart] = {}
+    ends: dict[int, BackwardPassEnd] = {}
+    discovered: OrderedDict[int, GradFnDiscovered] = OrderedDict()
+    latest_topology: dict[int, tuple[int, ...]] = {}
+    fired_events: list[GradFnFired] = []
+    op_grad_passes: set[int] = set()
+    for event in events:
+        if isinstance(event, BackwardPassStart):
+            starts[event.pass_index] = event
+        elif isinstance(event, BackwardPassEnd):
+            ends[event.pass_index] = event
+        elif isinstance(event, GradFnDiscovered):
+            if event.object_id not in discovered:
+                discovered[event.object_id] = event
+            latest_topology[event.object_id] = event.topology
+        elif isinstance(event, GradFnFired):
+            fired_events.append(event)
+        elif isinstance(event, OpGradObserved):
+            op_grad_passes.add(event.pass_index)
+
+    grad_fn_logs: OrderedDict[int, GradFn] = OrderedDict()
+    type_counter: dict[str, int] = {}
+    object_to_label: dict[int, str] = {}
+    for ordinal_index, (object_id, event) in enumerate(discovered.items()):
+        grad_fn_type = _grad_fn_type_from_class_name(event.class_name)
+        step_index = ordinal_index + 1
+        type_index, step_index, label = _grad_fn_label_parts(
+            trace,
+            grad_fn_type,
+            event.op_label,
+            type_counter,
+            step_index,
+        )
+        source_fields = cast(dict[str, Any], dict(event.source))
+        modules: list[str] = []
+        module_address = None
+        module_membership_source = None
+        if event.op_label is not None and event.op_label in getattr(
+            trace, "layer_dict_all_keys", {}
+        ):
+            op = trace[event.op_label]
+            module_address = getattr(op, "module_address", None)
+            if module_address is not None:
+                modules = [module_address]
+                module_membership_source = "paired"
+        grad_fn_record = GradFn(
+            grad_fn_object_id=object_id,
+            class_name=event.class_name,
+            class_qualname=event.class_qualname,
+            label=label,
+            type=grad_fn_type,
+            type_index=type_index,
+            ordinal_index=ordinal_index,
+            step_index=step_index,
+            is_custom=event.is_custom,
+            has_op=event.op_label is not None,
+            op_label=event.op_label,
+            order=1,
+            origin_backward_pass=event.created_in_pass,
+            creator_object_id=event.creator_object_id,
+            modules=modules,
+            module_address=module_address,
+            module_membership_source=module_membership_source,
+            next_grad_fn_ids=list(latest_topology.get(object_id, event.topology)),
+            **source_fields,
+        )
+        grad_fn_record.source_trace = trace
+        grad_fn_logs[object_id] = grad_fn_record
+        object_to_label[object_id] = label
+
+    for object_id, grad_fn_record in grad_fn_logs.items():
+        if grad_fn_record.creator_object_id is not None:
+            grad_fn_record.differentiates = object_to_label.get(grad_fn_record.creator_object_id)
+
+    trace.grad_fn_logs = grad_fn_logs
+    trace.grad_fn_order = list(grad_fn_logs)
+
+    pass_to_calls: dict[int, list[GradFnCall]] = {}
+    per_object_ordinals: dict[int, int] = {}
+    for event in sorted(fired_events, key=lambda item: (item.pass_index, item.timestamp, item.seq)):
+        grad_fn_record = trace.grad_fn_logs.get(event.object_id)
+        if grad_fn_record is None:
+            continue
+        ordinal = per_object_ordinals.get(event.object_id, 0) + 1
+        per_object_ordinals[event.object_id] = ordinal
+        call = GradFnCall(
+            call_index=ordinal,
+            ordinal=ordinal,
+            backward_pass_index=event.pass_index,
+            label=grad_fn_record.label,
+            grad_inputs=event.grad_input_refs,
+            grad_outputs=event.grad_output_refs,
+            intervention_fire_ref=event.intervention_fire_ref,
+            timestamp=event.timestamp,
+            _time_started=event.timestamp,
+            _time_finished=event.timestamp,
+        )
+        call.source_trace = trace
+        grad_fn_record.calls[ordinal] = call
+        pass_to_calls.setdefault(event.pass_index, []).append(call)
+
+    _sync_grad_fn_graph_relations(trace)
+
+    roots_by_pass = getattr(trace, "_backward_roots_by_pass", {})
+    backward_pass_logs: OrderedDict[int, BackwardPass] = OrderedDict()
+    pass_indices = sorted(set(starts) | set(ends) | set(pass_to_calls) | op_grad_passes)
+    for pass_index in pass_indices:
+        start = starts.get(pass_index)
+        end = ends.get(pass_index)
+        pass_record = BackwardPass(
+            pass_index=pass_index,
+            trigger=start.trigger if start is not None else "implicit",
+            implicit=start.implicit if start is not None else True,
+            outer_context=start.outer_context if start is not None else None,
+            call_context=start.call_context_ref if start is not None else None,
+            root_grad_fn_ids=list(roots_by_pass.get(pass_index, ())),
+            root_meta=tuple(start.root_meta) if start is not None else (),
+            root_grad_arguments=start.root_grad_arguments if start is not None else None,
+            inputs_subset=tuple(start.inputs_subset) if start is not None else (),
+            order=start.order if start is not None else None,
+            origin_backward_pass=start.origin_backward_pass if start is not None else None,
+            engine_flags=start.engine_flags if start is not None else None,
+            save_grads_policy=start.save_grads_policy_repr if start is not None else None,
+            duration=None if end is None or end.duration is None else Duration(end.duration),
+            peak_memory=end.peak_memory if end is not None else None,
+            status=end.status if end is not None else "ok",
+            order_attribution_coverage=(
+                end.order_attribution_coverage if end is not None else None
+            ),
+            grad_fn_calls=pass_to_calls.get(pass_index, []),
+        )
+        pass_record.source_trace = trace
+        backward_pass_logs[pass_index] = pass_record
+
+    trace.backward_pass_logs = backward_pass_logs
+    trace.backward_root_grad_fn_object_ids = [
+        root_id for roots in roots_by_pass.values() for root_id in roots
+    ]
+    trace.num_backward_passes = max(pass_indices) if pass_indices else 0
+    trace.has_backward_pass = bool(pass_indices)
+    trace.num_saved_grad_fn_calls = len(trace.saved_grad_fn_calls)
+    trace.num_saved_grad_fns = len(trace.saved_grad_fns)
+    trace._backward_projection_event_count = len(events)
+
+    for grad_fn_record in trace.grad_fn_logs.values():
+        if grad_fn_record.op is not None:
+            grad_fn_record.op.grad_fn = grad_fn_record
+            parent_layer = trace.layer_logs.get(grad_fn_record.op.layer_label)
+            if parent_layer is not None:
+                parent_layer.grad_fn = grad_fn_record
 
 
 def _make_grad_fn_hook(
@@ -699,6 +891,13 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
     root_grad_fn_id = id(loss.grad_fn)
     if root_grad_fn_id not in trace.backward_root_grad_fn_object_ids:
         trace.backward_root_grad_fn_object_ids.append(root_grad_fn_id)
+    pass_index = int(
+        getattr(trace, "_active_backward_pass_index", getattr(trace, "num_backward_passes", 0) + 1)
+    )
+    roots_by_pass = trace.__dict__.setdefault("_backward_roots_by_pass", {})
+    roots_by_pass.setdefault(pass_index, [])
+    if root_grad_fn_id not in roots_by_pass[pass_index]:
+        roots_by_pass[pass_index].append(root_grad_fn_id)
     trace.has_backward_pass = True
 
     while queue:
@@ -1201,6 +1400,7 @@ def _run_backward_with_capture(
             )
         )
         trace.__dict__.pop("_active_backward_pass_index", None)
+        _materialize_backward_projections(trace)
     return result
 
 

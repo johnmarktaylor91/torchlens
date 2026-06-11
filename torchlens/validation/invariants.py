@@ -213,6 +213,9 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
     """
 
     name = "backward_graph_invariants"
+    sync_projection = getattr(trace, "_sync_backward_projection_if_needed", None)
+    if callable(sync_projection):
+        sync_projection()
     if not trace.grad_fn_logs:
         return
 
@@ -237,6 +240,11 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
 
     layer_labels = set(trace.layer_labels)
     for grad_fn_object_id, grad_fn_handle in trace.grad_fn_logs.items():
+        if not re.fullmatch(r"[a-z0-9_]+_back_[1-9]\d*_[1-9]\d*", grad_fn_handle.label):
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_handle.label!r} does not match backward-native label grammar",
+            )
         if grad_fn_handle.has_op and grad_fn_handle.op_label not in layer_labels:
             raise MetadataInvariantError(
                 name,
@@ -253,6 +261,23 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                 name,
                 f"{grad_fn_handle.label} stored id {grad_fn_handle.grad_fn_object_id!r} under {grad_fn_object_id!r}",
             )
+        call_ordinals = sorted(grad_fn_handle.calls.keys())
+        if call_ordinals != list(range(1, len(call_ordinals) + 1)):
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_handle.label} has non-dense local call ordinals {call_ordinals!r}",
+            )
+        for ordinal, call in grad_fn_handle.calls.items():
+            if call.ordinal != ordinal or call.call_index != ordinal:
+                raise MetadataInvariantError(
+                    name,
+                    f"{grad_fn_handle.label}:{ordinal} has inconsistent local ordinal fields",
+                )
+            if call.backward_pass_index is None:
+                raise MetadataInvariantError(
+                    name,
+                    f"{grad_fn_handle.label}:{ordinal} is missing backward_pass_index",
+                )
 
     for layer in trace.layer_list:
         grad_fn_object_id = layer.grad_fn_object_id
@@ -273,16 +298,36 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
             "saved_grad_ops does not match layers with saved grad tensors",
         )
 
-    max_call_index = 0
-    for grad_fn_handle in trace.grad_fn_logs.values():
-        if grad_fn_handle.calls:
-            max_call_index = max(max_call_index, max(grad_fn_handle.calls))
-    if max_call_index > trace.num_backward_passes:
+    expected_pass_indices = list(range(1, trace.num_backward_passes + 1))
+    actual_pass_indices = sorted(getattr(trace, "backward_pass_logs", {}).keys())
+    if actual_pass_indices != expected_pass_indices:
         raise MetadataInvariantError(
             name,
-            f"num_backward_passes={trace.num_backward_passes} is less than max grad_fn_handle call "
-            f"index {max_call_index}",
+            f"backward_pass_logs keys {actual_pass_indices!r} are not dense "
+            f"1..{trace.num_backward_passes}",
         )
+    valid_pass_indices = set(actual_pass_indices)
+    for pass_index, backward_pass in getattr(trace, "backward_pass_logs", {}).items():
+        if backward_pass.pass_index != pass_index:
+            raise MetadataInvariantError(
+                name,
+                f"BackwardPass stored index {backward_pass.pass_index!r} under {pass_index!r}",
+            )
+        for call in backward_pass.grad_fn_calls:
+            if call.backward_pass_index != pass_index:
+                raise MetadataInvariantError(
+                    name,
+                    f"{call.call_label} is attached to pass {pass_index} but records "
+                    f"pass {call.backward_pass_index}",
+                )
+    for grad_fn_handle in trace.grad_fn_logs.values():
+        for call in grad_fn_handle.calls.values():
+            if call.backward_pass_index not in valid_pass_indices:
+                raise MetadataInvariantError(
+                    name,
+                    f"{call.call_label} references missing backward pass "
+                    f"{call.backward_pass_index}",
+                )
 
 
 def _is_func_call_id_exempt(layer: "Op") -> bool:
