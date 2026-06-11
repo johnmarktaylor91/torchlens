@@ -216,6 +216,24 @@ class GradientRecord:
 
         return self.grad is not None or self.transformed_grad is not None
 
+    @property
+    def transformed_grad_shape(self) -> tuple[int, ...] | None:
+        """Return the transformed gradient payload shape, when tensor-like."""
+
+        return _shape_or_none(self.transformed_grad)
+
+    @property
+    def transformed_grad_dtype(self) -> torch.dtype | None:
+        """Return the transformed gradient payload dtype, when tensor-like."""
+
+        return _dtype_or_none(self.transformed_grad)
+
+    @property
+    def transformed_gradient_memory(self) -> Bytes | None:
+        """Return transformed gradient payload memory, when tensor-like."""
+
+        return _memory_or_none(self.transformed_grad)
+
 
 class GradientRecordAccessor(Accessor[GradientRecord]):
     """Accessor for per-owner gradient records."""

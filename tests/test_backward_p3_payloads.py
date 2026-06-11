@@ -151,6 +151,73 @@ def test_save_grads_predicate_can_select_backward_pass() -> None:
         trace.cleanup()
 
 
+def test_grad_transform_is_projected_per_backward_pass() -> None:
+    """Per-pass gradient records retain transformed payloads from the event stream."""
+
+    torch.manual_seed(0)
+    model = _PayloadModel()
+    x = torch.randn(4, 3, requires_grad=True)
+    trace = tl.trace(
+        model,
+        x,
+        layers_to_save="all",
+        save_grads=True,
+        grad_transform=lambda grad: grad.mean(),
+    )
+    try:
+        loss = trace[trace.output_layers[0]].out
+        trace.log_backward(loss, retain_graph=True)
+        trace.log_backward(loss, retain_graph=True)
+        op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
+        assert all(record.transformed_grad is not None for record in op.grads)
+        assert all(record.transformed_grad_shape == () for record in op.grads)
+        assert torch.equal(op.grads.for_pass(1).transformed_grad, op.grads[0].grad.mean())
+        assert torch.equal(op.grads.for_pass(2).transformed_grad, op.grads[1].grad.mean())
+    finally:
+        trace.cleanup()
+
+
+def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
+    """Raw-disabled grad capture stores transformed per-pass payloads only."""
+
+    torch.manual_seed(0)
+    model = _PayloadModel()
+    x = torch.randn(4, 3, requires_grad=True)
+    trace = tl.trace(
+        model,
+        x,
+        layers_to_save="all",
+        save_grads=True,
+        grad_transform=lambda grad: grad.mean(),
+        save_raw_gradients=False,
+    )
+    try:
+        loss = trace[trace.output_layers[0]].out
+        trace.log_backward(loss)
+        op = next(op for op in trace.saved_grad_ops if len(op.grads) == 1)
+        record = op.grads.for_pass(1)
+        assert record.grad is None
+        assert record.transformed_grad is not None
+        assert op.grad is None
+        assert op.transformed_grad is not None
+        expected_backward_memory = sum(
+            int(record.transformed_gradient_memory or 0)
+            for saved_op in trace.saved_grad_ops
+            for record in saved_op.grads
+            if record.transformed_grad is not None
+        )
+        expected_gradient_memory = sum(
+            int(record.memory)
+            for saved_op in trace.saved_grad_ops
+            for record in saved_op.grads
+            if record.is_saved
+        )
+        assert trace.total_backward_memory == expected_backward_memory
+        assert trace.total_gradient_memory == expected_gradient_memory
+    finally:
+        trace.cleanup()
+
+
 def test_to_pandas_represents_ambiguous_grad_without_raising() -> None:
     """Trace.to_pandas exposes ambiguous per-pass grads as None plus a count."""
 

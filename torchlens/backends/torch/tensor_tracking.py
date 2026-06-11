@@ -153,12 +153,13 @@ def _emit_tensor_grad_event(trace: "Trace", grad: torch.Tensor, tensor_label: st
     final_label = getattr(trace, "_raw_to_final_layer_labels", {}).get(tensor_label, tensor_label)
     with pause_logging():
         memory = int(grad.nelement() * grad.element_size())
-        payload = grad.detach().clone() if _should_save_grad_payload(trace, final_label) else None
+        payload, transformed_payload = _build_grad_payloads(trace, grad, final_label)
     events.append_backward(
         OpGradObserved(
             op_label=final_label,
             pass_index=pass_index,
             payload_ref=payload,
+            transformed_payload_ref=transformed_payload,
             shape=tuple(grad.shape),
             dtype=str(grad.dtype),
             memory=memory,
@@ -166,6 +167,54 @@ def _emit_tensor_grad_event(trace: "Trace", grad: torch.Tensor, tensor_label: st
             seq=events.next_backward_seq(),
         )
     )
+
+
+def _build_grad_payloads(
+    trace: "Trace", grad: torch.Tensor, layer_label: str
+) -> tuple[torch.Tensor | None, Any | None]:
+    """Return raw and transformed payloads for one observed op gradient.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the observed gradient.
+    grad:
+        Raw gradient tensor emitted by autograd.
+    layer_label:
+        Final operation label for the hook firing.
+
+    Returns
+    -------
+    tuple[torch.Tensor | None, Any | None]
+        Raw payload and transformed payload retained for this event.
+    """
+
+    if not _should_save_grad_payload(trace, layer_label):
+        return None, None
+    op = trace[layer_label]
+    grad_transform = getattr(trace, "grad_transform", None)
+    save_raw_gradients = getattr(trace, "save_raw_gradients", True)
+    raw_payload = grad.detach().clone() if save_raw_gradients or grad_transform is None else None
+    if grad_transform is None:
+        return raw_payload, None
+    writer = getattr(trace, "_out_writer", None)
+    transformed_payload = op._apply_transform(
+        grad,
+        grad_transform,
+        transform_kind="grad",
+        streaming_active=writer is not None,
+    )
+    op._validate_train_mode_transform_output(
+        grad,
+        transformed_payload,
+        transform_kind="grad",
+    )
+    op._validate_streaming_transform_output(
+        transformed_payload,
+        transform_kind="grad",
+        streaming_active=writer is not None,
+    )
+    return raw_payload, transformed_payload
 
 
 def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:

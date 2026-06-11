@@ -17,6 +17,7 @@ from ..._deprecations import MISSING, MissingType
 from ..._io.streaming import BundleStreamWriter
 from ...quantities import Bytes, Duration
 from ..._state import pause_logging
+from ...data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ...data_classes.grad_fn import GradFn
 from ...data_classes.grad_fn_call import GradFnCall
 from ...data_classes.backward_pass import BackwardPass
@@ -651,26 +652,37 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
             continue
         op = trace[event.op_label]
         payload = event.payload_ref if isinstance(event.payload_ref, torch.Tensor) else None
+        transformed_payload = event.transformed_payload_ref
         op._record_gradient(
             backward_pass_index=event.pass_index,
             grad=payload,
-            transformed_grad=None,
+            transformed_grad=transformed_payload,
             shape=event.shape,
             dtype=event.dtype,
             memory=event.memory,
             timestamp=event.timestamp,
         )
-        if payload is None:
+        if payload is None and transformed_payload is None:
             continue
         op.has_grad = True
-        op.grad_shape = tuple(payload.shape)
-        op.grad_dtype = payload.dtype
+        if event.shape is not None:
+            op.grad_shape = tuple(event.shape)
+        if event.dtype is not None:
+            op.grad_dtype = _torch_dtype_from_string(event.dtype)
         op.gradient_memory = Bytes(event.memory or 0)
+        op._internal_set("grad", payload)
+        op._internal_set("transformed_grad", transformed_payload)
+        op.transformed_grad_shape = _shape_or_none(transformed_payload)
+        op.transformed_grad_dtype = _dtype_or_none(transformed_payload)
+        op.transformed_gradient_memory = _memory_or_none(transformed_payload)
         saved_grad_labels.add(op.layer_label)
-        payload_id = id(payload)
-        if payload_id not in unique_payload_ids:
-            unique_payload_ids.add(payload_id)
-            total_backward_memory += int(event.memory or 0)
+        for payload_ref, payload_memory in _retained_grad_payload_refs(
+            payload, transformed_payload, raw_memory=event.memory
+        ):
+            payload_id = id(payload_ref)
+            if payload_id not in unique_payload_ids:
+                unique_payload_ids.add(payload_id)
+                total_backward_memory += payload_memory
         total_gradient_memory += int(event.memory or 0)
     trace._saved_grads_set = saved_grad_labels
     trace.saved_gradient_memory = Bytes(total_gradient_memory)
@@ -724,6 +736,34 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
             parent_layer = trace.layer_logs.get(grad_fn_record.op.layer_label)
             if parent_layer is not None:
                 parent_layer.grad_fn = grad_fn_record
+
+
+def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:
+    """Return a ``torch.dtype`` for canonical dtype strings when possible."""
+
+    if dtype_name.startswith("torch."):
+        dtype_attr = dtype_name.removeprefix("torch.")
+        dtype = getattr(torch, dtype_attr, None)
+        if isinstance(dtype, torch.dtype):
+            return dtype
+    return dtype_name
+
+
+def _retained_grad_payload_refs(
+    raw_payload: torch.Tensor | None,
+    transformed_payload: Any | None,
+    *,
+    raw_memory: int | None,
+) -> list[tuple[Any, int]]:
+    """Return retained gradient payload refs paired with their memory cost."""
+
+    payloads: list[tuple[Any, int]] = []
+    if raw_payload is not None:
+        payloads.append((raw_payload, int(raw_memory or 0)))
+    transformed_memory = _memory_or_none(transformed_payload)
+    if transformed_payload is not None and transformed_memory is not None:
+        payloads.append((transformed_payload, int(transformed_memory)))
+    return payloads
 
 
 def _make_grad_fn_hook(

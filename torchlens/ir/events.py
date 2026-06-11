@@ -62,6 +62,7 @@ class OpGradObserved:
     op_label: str
     pass_index: int
     payload_ref: object | None
+    transformed_payload_ref: object | None
     shape: tuple[int, ...] | None
     dtype: str | None
     memory: int | None
