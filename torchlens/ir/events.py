@@ -298,6 +298,7 @@ class OpEvent:
     intervention_template_ref: InterventionTemplateRef | None
     record_context: object | None = None
     capture_spec: object | None = None
+    unattributed_tensor_args: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

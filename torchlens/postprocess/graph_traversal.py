@@ -307,6 +307,14 @@ def _add_output_layers(
 
         # Clear func_config on synthetic output nodes:
         new_output_node.func_config = {}
+        new_output_node.is_transform = False
+        new_output_node.transform_kind = None
+        new_output_node.transform_chain = ()
+        new_output_node.transform_config = {}
+        new_output_node.transform_fn_name = None
+        new_output_node.transform_fn_qualname = None
+        new_output_node.transform_fn_source = None
+        new_output_node.unattributed_tensor_args = ()
 
         # Fix layer equivalence information:
         new_output_node.recurrent_ops = []

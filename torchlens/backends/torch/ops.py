@@ -48,7 +48,7 @@ import torch
 
 from ... import _state as _st
 from ..._state import pause_logging
-from ._tl import get_label_list, get_param_meta, get_tensor_label, set_tensor_label
+from ._tl import get_label_list, get_param_meta, get_tensor_label, get_tensor_meta, set_tensor_label
 from .aliasing import (
     detect_torch_alias_contract,
     get_parent_contents_for_contract_position,
@@ -504,6 +504,7 @@ def _op_event_from_log(
         transform_fn_name=fields_dict.get("transform_fn_name"),
         transform_fn_qualname=fields_dict.get("transform_fn_qualname"),
         transform_fn_source=fields_dict.get("transform_fn_source"),
+        unattributed_tensor_args=tuple(fields_dict.get("unattributed_tensor_args") or ()),
         is_output_parent=fields_dict["is_output_parent"],
         has_internal_source_ancestor=fields_dict["has_internal_source_ancestor"],
         internal_source_ancestors=frozenset(fields_dict["internal_source_ancestors"]),
@@ -996,6 +997,70 @@ def _build_edge_use_records(
             )
         )
     return _edge_uses
+
+
+def _tensor_has_known_provenance(value: torch.Tensor) -> bool:
+    """Return whether a tensor carries TorchLens input/op/buffer provenance.
+
+    Parameters
+    ----------
+    value:
+        Tensor argument to inspect.
+
+    Returns
+    -------
+    bool
+        True when the tensor is a Parameter or has TorchLens tensor metadata.
+    """
+
+    if isinstance(value, torch.nn.Parameter):
+        return True
+    meta = get_tensor_meta(value)
+    return meta is not None and any(
+        item is not None for item in (meta.label_raw, meta.address, meta.buffer_source)
+    )
+
+
+def _unattributed_tensor_arg_positions(
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> tuple[str, ...]:
+    """Find tensor arguments that will not become graph parents or known sources.
+
+    Parameters
+    ----------
+    args:
+        Positional function arguments.
+    kwargs:
+        Keyword function arguments.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Stable argument-position strings such as ``"arg1"`` or ``"kw:mask.0"``.
+    """
+
+    positions: list[str] = []
+
+    def visit(value: Any, path: str) -> None:
+        """Append unattributed tensor positions under ``path``."""
+
+        if isinstance(value, torch.Tensor):
+            if not _tensor_has_known_provenance(value):
+                positions.append(path)
+            return
+        if isinstance(value, (list, tuple)):
+            for index, item in enumerate(value):
+                visit(item, f"{path}.{index}")
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                visit(item, f"{path}.{key}")
+
+    for index, arg in enumerate(args):
+        visit(arg, f"arg{index}")
+    for key, value in kwargs.items():
+        visit(value, f"kw:{key}")
+    return tuple(positions)
 
 
 def log_function_output_tensors(
@@ -1928,6 +1993,7 @@ def _build_shared_fields_dict(
     fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
     fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
     fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
+    fields_dict["unattributed_tensor_args"] = _unattributed_tensor_arg_positions(args, kwargs)
 
     # Function config — lightweight hyperparameter extraction, always on.
     param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))

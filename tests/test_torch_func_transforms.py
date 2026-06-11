@@ -1,5 +1,6 @@
 """Tests for torch.func transform boundary capture."""
 
+import warnings
 from pathlib import Path
 from typing import cast
 
@@ -262,6 +263,175 @@ class FunctionalCallBufferModel(nn.Module):
         return torch.func.functional_call(self.inner, buffers, (x,))
 
 
+class ForeignArgTensorModel(nn.Module):
+    """Consume a tensor held outside the module as an op argument."""
+
+    def __init__(self, foreign: torch.Tensor) -> None:
+        """Store a foreign tensor supplied by the test."""
+
+        super().__init__()
+        self._foreign = foreign
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add the foreign tensor to the input.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Shifted tensor.
+        """
+
+        return x + self._foreign
+
+
+class ModuleAttrTensorModel(nn.Module):
+    """Consume a plain tensor module attribute as an op argument."""
+
+    def __init__(self) -> None:
+        """Initialize the module tensor attribute."""
+
+        super().__init__()
+        self.offset = torch.ones(3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add the module tensor attribute to the input.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Shifted tensor.
+        """
+
+        return x + self.offset
+
+
+class PreBuiltTransformModel(nn.Module):
+    """Use a transform callable built before ``forward`` runs."""
+
+    def __init__(self) -> None:
+        """Build the transform callable after explicit wrapping."""
+
+        super().__init__()
+        wrap_torch()
+        self.vmapped = torch.vmap(lambda row: row * 2.0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Invoke the prebuilt transform callable.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Transformed tensor.
+        """
+
+        return self.vmapped(x)
+
+
+class RawPreBuiltTransformModel(nn.Module):
+    """Use a raw prebuilt transform callable to exercise retained warnings."""
+
+    def __init__(self) -> None:
+        """Build a raw transform callable via ``_decorated_to_orig``."""
+
+        super().__init__()
+        wrap_torch()
+        raw_vmap = _state._decorated_to_orig[id(torch.vmap)]
+        self.vmapped = raw_vmap(lambda row: row * 2.0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Invoke the raw prebuilt transform callable.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Transformed tensor.
+        """
+
+        return self.vmapped(x)
+
+
+class RaisingInnerFnModel(nn.Module):
+    """Raise from inside a transform callable."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Raise while a transform boundary is active.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            This method always raises.
+        """
+
+        def raise_inner(row: torch.Tensor) -> torch.Tensor:
+            """Raise from the transform body."""
+
+            raise RuntimeError("inner transform failure")
+
+        return torch.vmap(raise_inner)(x)
+
+
+class HFStyleMaskModel(nn.Module):
+    """Reproduce runtime attribute-style vmap mask construction."""
+
+    def _mask_rows(self, x: torch.Tensor) -> torch.Tensor:
+        """Build a row mask through attribute lookup.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Boolean mask.
+        """
+
+        vmap = torch.vmap
+        return vmap(lambda row: row > 0)(x)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the runtime-built mask.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Masked tensor.
+        """
+
+        return x.masked_fill(self._mask_rows(x), 0.0)
+
+
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""
@@ -278,6 +448,7 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert vmap_ops[0].transform_chain == ("vmap",)
     assert vmap_ops[0].transform_config["in_dims"] == 0
     assert vmap_ops[0].transform_fn_name == "<lambda>"
+    assert vmap_ops[0].transform_fn_source is not None
     assert log.transforms == (vmap_ops[0],)
     assert any(op.type == "maskedfill" and "vmap_1_1" in op.parents for op in log.ops)
 
@@ -406,3 +577,107 @@ def test_transform_selector_intervention_no_crash() -> None:
     )
 
     assert [op.transform_kind for op in log.transforms] == ["vmap"]
+
+
+def test_provenance_warning_foreign_tensor_contract() -> None:
+    """Foreign arg tensors warn; module tensor attributes do not."""
+
+    x = torch.randn(3)
+    with pytest.warns(UserWarning, match="no graph/source provenance") as caught:
+        foreign_log = tl.trace(ForeignArgTensorModel(torch.ones(3)).eval(), x)
+
+    assert len(caught) == 1
+    assert "arg1" in str(caught[0].message)
+    add_op = next(op for op in foreign_log.ops if op.type == "add")
+    assert add_op.unattributed_tensor_args == ("arg1",)
+
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        module_log = tl.trace(ModuleAttrTensorModel().eval(), x)
+
+    provenance_warnings = [
+        record for record in records if "no graph/source provenance" in str(record.message)
+    ]
+    assert provenance_warnings == []
+    module_add = next(op for op in module_log.ops if op.type == "add")
+    assert module_add.unattributed_tensor_args == ()
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_prebuilt_transform_wrap_order_and_raw_warning_contract() -> None:
+    """Prebuilt decorated transforms capture; raw prebuilt transforms retain warning."""
+
+    x = torch.randn(3, 4)
+    decorated_log = tl.trace(PreBuiltTransformModel().eval(), x, layers_to_save="all")
+
+    assert [op.transform_kind for op in decorated_log.transforms] == ["vmap"]
+    assert decorated_log.transforms[0].parents == ["input_1"]
+
+    with pytest.warns(UserWarning, match="functorch"):
+        raw_log = tl.trace(RawPreBuiltTransformModel().eval(), x, layers_to_save="all")
+
+    assert raw_log.transforms == ()
+    assert torch.allclose(RawPreBuiltTransformModel().eval()(x), x * 2.0)
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_raising_inner_transform_cleans_up_logging_state() -> None:
+    """Exceptions from transform bodies leave logging state sane."""
+
+    with pytest.raises(RuntimeError, match="inner transform failure"):
+        tl.trace(RaisingInnerFnModel().eval(), torch.randn(3, 4))
+
+    assert _state._logging_enabled is False
+    log = tl.trace(VmapMaskModel().eval(), torch.randn(3, 4))
+    assert [op.transform_kind for op in log.transforms] == ["vmap"]
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_hf_style_runtime_vmap_mask_regression() -> None:
+    """Attribute-style runtime vmap lookup captures a clean boundary node."""
+
+    x = torch.randn(3, 4)
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        log = tl.trace(HFStyleMaskModel().eval(), x, layers_to_save="all")
+
+    assert [op.transform_kind for op in log.transforms] == ["vmap"]
+    assert log.transforms[0].parents == ["input_1"]
+    assert not any("functorch" in str(record.message).lower() for record in records)
+    assert not any("no graph/source provenance" in str(record.message) for record in records)
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
+    """Cross-cutting matrix rows work for vmap transform boundary capture."""
+
+    x = torch.randn(3, 4)
+    model = VmapMaskModel().eval()
+    expected = model(x)
+    assert torch.allclose(model(x), expected)
+
+    log = tl.trace(model, x, layers_to_save=["vmap_1_1"])
+    transform = log.transforms[0]
+    assert transform.has_saved_activation is True
+    assert isinstance(transform.out, torch.Tensor)
+    assert torch.equal(transform.out, x > 0)
+    assert tl.validate_forward_pass(VmapMaskModel().eval(), x) is True
+
+    predicate_log = tl.trace(VmapMaskModel().eval(), x, save=tl.func_transform("vmap"))
+    assert [op.label for op in predicate_log.transforms] == ["vmap_1_1:1"]
+
+    recording = cast(Recording, tl.record(VmapMaskModel().eval(), x, save=tl.func_transform()))
+    assert recording.records[0].ctx.transform_kind == "vmap"
+
+    path = tmp_path / "matrix-vmap.tlspec"
+    tl.save(predicate_log, path)
+    loaded = cast(Trace, tl.load(path))
+    assert loaded.transforms[0].transform_kind == "vmap"
+
+    intervened = tl.trace(
+        VmapMaskModel().eval(),
+        x,
+        layers_to_save="all",
+        intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
+    )
+    assert intervened.transforms[0].intervention_replaced is True

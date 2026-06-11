@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, List
 
 import time
 import torch
+import warnings
 
 from ..utils.tensor_utils import _is_cuda_available, safe_copy
 from ..utils.hashing import compute_graph_shape_hash
@@ -76,6 +77,41 @@ if TYPE_CHECKING:
 from ..quantities import Bytes
 from ..utils.display import _vprint, _vtimed
 from ..captured_run import remember_event_stream
+
+
+def _warn_unattributed_tensor_args(self: "Trace") -> None:
+    """Warn once for tensor arguments without graph/source provenance.
+
+    Parameters
+    ----------
+    self:
+        Trace being postprocessed.
+
+    Returns
+    -------
+    None
+        Emits at most one aggregate warning.
+    """
+
+    offenders: list[str] = []
+    for op in getattr(self, "layer_list", ()):
+        if getattr(op, "type", None) == "output":
+            continue
+        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
+        if not positions:
+            continue
+        label = getattr(op, "label", None) or getattr(op, "layer_label", None) or op._label_raw
+        offenders.append(f"{label} ({', '.join(positions)})")
+    if not offenders:
+        return
+    warnings.warn(
+        "TorchLens found tensor arguments with no graph/source provenance. "
+        "These are usually tensors captured from outside the traced model; "
+        "module tensor attributes, inputs, parameters, and buffers are known sources. "
+        "Offending ops/arg positions: " + "; ".join(offenders),
+        UserWarning,
+        stacklevel=2,
+    )
 
 
 def _drop_transient_capture_state(self: "Trace") -> None:
@@ -251,6 +287,7 @@ def postprocess(
     # Step 11: Remove unsaved layers, build lookup key mappings
     with _vtimed(self, "  Step 11: Build lookup keys"):
         _remove_unwanted_entries_and_log_remaining(self)
+        _warn_unattributed_tensor_args(self)
 
     # Step 12: Undecorate all saved tensors and remove saved grad_fns.
     with _vtimed(self, "  Step 12: Undecorate tensors"):

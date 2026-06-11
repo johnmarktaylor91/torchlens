@@ -50,6 +50,7 @@ import torch
 
 from ... import _state
 from ...constants import ORIG_TORCH_FUNCS
+from ...data_classes.func_call_location import FuncCallLocation
 from ._tl import (
     get_buffer_address,
     get_tensor_label,
@@ -279,6 +280,39 @@ def _callable_code_location(callable_obj: Callable[..., Any]) -> str | None:
     return f"{code.co_filename}:{code.co_firstlineno}"
 
 
+def _callable_source_location(callable_obj: Callable[..., Any]) -> FuncCallLocation | None:
+    """Return a lazy source location for a callable when code metadata is available.
+
+    Parameters
+    ----------
+    callable_obj:
+        Callable, partial, or bound method to inspect.
+
+    Returns
+    -------
+    FuncCallLocation | None
+        Lazy source location, or ``None`` for native/builtin callables.
+    """
+
+    target = callable_obj
+    if isinstance(target, partial):
+        target = target.func
+    target = getattr(target, "__func__", target)
+    code = getattr(target, "__code__", None)
+    if code is None:
+        return None
+    return FuncCallLocation(
+        file=code.co_filename,
+        line_number=code.co_firstlineno,
+        func_name=getattr(target, "__name__", type(target).__name__),
+        num_context_lines_requested=1,
+        _frame_func_obj=target,
+        code_firstlineno=code.co_firstlineno,
+        func_qualname=getattr(target, "__qualname__", None),
+        source_loading_enabled=True,
+    )
+
+
 def _transform_builder_config(
     transform_kind: str,
     builder_args: tuple[Any, ...],
@@ -358,7 +392,7 @@ def _set_transform_metadata(
         "__tl_transform_config__": transform_config,
         "__tl_transform_fn_name__": getattr(inner_fn, "__name__", None),
         "__tl_transform_fn_qualname__": getattr(inner_fn, "__qualname__", None),
-        "__tl_transform_fn_source__": None,
+        "__tl_transform_fn_source__": _callable_source_location(inner_fn),
     }
     for name, value in metadata.items():
         try:

@@ -608,6 +608,7 @@ class Op:
         "transform_fn_name": FieldPolicy.KEEP,
         "transform_fn_qualname": FieldPolicy.KEEP,
         "transform_fn_source": FieldPolicy.KEEP,
+        "unattributed_tensor_args": FieldPolicy.KEEP,
         "parent_params": FieldPolicy.KEEP,
         "_param_barcodes": FieldPolicy.KEEP,
         "parent_param_ops": FieldPolicy.KEEP,
@@ -935,6 +936,7 @@ class Op:
         self.transform_fn_name = fields_dict["transform_fn_name"]
         self.transform_fn_qualname = fields_dict["transform_fn_qualname"]
         self.transform_fn_source = fields_dict["transform_fn_source"]
+        self.unattributed_tensor_args = fields_dict["unattributed_tensor_args"]
 
         # Param info:
         self.parent_params = fields_dict["parent_params"]

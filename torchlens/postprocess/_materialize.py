@@ -420,6 +420,7 @@ def _fields_from_event(
             "transform_fn_name": event.transform_fn_name,
             "transform_fn_qualname": event.transform_fn_qualname,
             "transform_fn_source": event.transform_fn_source,
+            "unattributed_tensor_args": tuple(event.unattributed_tensor_args),
             "parent_params": parent_params,
             "_param_barcodes": [param.barcode for param in params],
             "parent_param_ops": parent_param_ops,

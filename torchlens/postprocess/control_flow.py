@@ -676,6 +676,8 @@ def _fix_buffer_layers(self: "Trace") -> None:
                     safe_copy(self[layer.buffer_source].out, detach_tensor=True)
                 )
 
+        if layer.address is None:
+            layer.address = f"anonymous_buffer_{layer._label_raw}"
         buffer_hash = str(layer.modules) + str(layer.buffer_source) + layer.address
         buffer_hash_groups[buffer_hash].append(layer_label)
 

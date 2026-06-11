@@ -310,6 +310,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "transform_fn_name",
     "transform_fn_qualname",
     "transform_fn_source",
+    "unattributed_tensor_args",
     # Param info
     "parent_params",
     "_param_barcodes",
