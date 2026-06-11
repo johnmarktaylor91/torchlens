@@ -377,6 +377,10 @@ _UNARY_FUNCS = [
     "trunc",
     "frac",
     "fix",
+    # Symbolic-shape unary (exercised by meta-device / symbolic-shape paths)
+    "symfloat",
+    "symint",
+    "symnot",
     "reciprocal",
     "square",
     "nantonum",
@@ -698,6 +702,9 @@ _BINARY_FUNCS = [
     "minimum",
     "fmax",
     "fmin",
+    # Symbolic-shape binary (exercised by meta-device / symbolic-shape paths)
+    "symmax",
+    "symmin",
     # Logical / bitwise binary
     "logicaland",
     "logicalor",
