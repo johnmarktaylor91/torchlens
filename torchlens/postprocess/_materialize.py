@@ -413,6 +413,13 @@ def _fields_from_event(
             "multi_output_name": None,
             "container_path": tuple(output.container_path),
             "container_spec": output.container_spec,
+            "is_transform": event.is_transform,
+            "transform_kind": event.transform_kind,
+            "transform_chain": tuple(event.transform_chain),
+            "transform_config": dict(event.transform_config),
+            "transform_fn_name": event.transform_fn_name,
+            "transform_fn_qualname": event.transform_fn_qualname,
+            "transform_fn_source": event.transform_fn_source,
             "parent_params": parent_params,
             "_param_barcodes": [param.barcode for param in params],
             "parent_param_ops": parent_param_ops,
@@ -599,6 +606,10 @@ def _base_equivalence_class(event: OpEvent) -> str | None:
     """
 
     equivalence_class = event.equivalence_class
+    if event.is_transform and event.transform_kind is not None:
+        code_location = event.transform_config.get("fn_code_location")
+        fingerprint = code_location if code_location is not None else event.transform_fn_qualname
+        return f"{event.transform_kind}:{fingerprint}"
     if equivalence_class is None or not event.modules:
         return equivalence_class
     module_suffix = "_".join(address for address, _call_index in event.modules)

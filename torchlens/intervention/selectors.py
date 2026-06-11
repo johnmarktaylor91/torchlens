@@ -12,6 +12,7 @@ from .types import TargetSpec
 SelectorKind: TypeAlias = Literal[
     "label",
     "func",
+    "func_transform",
     "module",
     "output",
     "contains",
@@ -199,6 +200,32 @@ class FuncSelector(BaseSelector):
         object.__setattr__(self, "selector_value", selector_value)
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "output", output)
+
+
+@dataclass(frozen=True, repr=False)
+class FuncTransformSelector(BaseSelector):
+    """Torch function-transform selector.
+
+    Parameters
+    ----------
+    kind:
+        Optional unsanitized transform kind to match.
+    """
+
+    kind: str | None = None
+
+    def __init__(self, kind: str | None = None) -> None:
+        """Create a transform selector.
+
+        Parameters
+        ----------
+        kind:
+            Optional transform kind such as ``"vmap"`` or ``"grad"``.
+        """
+
+        object.__setattr__(self, "selector_kind", "func_transform")
+        object.__setattr__(self, "selector_value", kind)
+        object.__setattr__(self, "kind", kind)
 
 
 @dataclass(frozen=True, repr=False)
@@ -744,6 +771,24 @@ def func(name: str, *, output: int | str | None = None) -> FuncSelector:
     return FuncSelector(name, output=output)
 
 
+def func_transform(kind: str | None = None) -> FuncTransformSelector:
+    """Create a torch.func transform selector.
+
+    Parameters
+    ----------
+    kind:
+        Optional transform kind to match. Unsanitized and sanitized spellings
+        are both accepted.
+
+    Returns
+    -------
+    FuncTransformSelector
+        Immutable selector.
+    """
+
+    return FuncTransformSelector(kind)
+
+
 def followed_by(inner: SelectorLike) -> FollowedBySelector:
     """Create a retroactive successor selector.
 
@@ -1060,6 +1105,23 @@ def _context_module_candidates(ctx: Any) -> tuple[str, ...]:
     return tuple(candidates)
 
 
+def _sanitize_transform_kind(kind: object) -> str:
+    """Return the transform-kind spelling used for labels.
+
+    Parameters
+    ----------
+    kind:
+        Transform kind or selector value.
+
+    Returns
+    -------
+    str
+        Lowercase spelling with underscores and dots removed.
+    """
+
+    return str(kind).lower().replace("_", "").replace(".", "")
+
+
 def _selector_matches_record_context(selector: BaseSelector, ctx: Any) -> bool:
     """Evaluate a selector as a capture-time predicate.
 
@@ -1094,6 +1156,16 @@ def _selector_matches_record_context(selector: BaseSelector, ctx: Any) -> bool:
         func_name = getattr(ctx, "func_name", None)
         layer_type = getattr(ctx, "layer_type", None)
         return str(name) in {str(func_name), str(layer_type)}
+    if kind == "func_transform":
+        if not bool(getattr(ctx, "is_transform", False)):
+            return False
+        value = selector.selector_value
+        if value is None:
+            return True
+        transform_kind = getattr(ctx, "transform_kind", None)
+        if transform_kind is None:
+            return False
+        return _sanitize_transform_kind(transform_kind) == _sanitize_transform_kind(value)
     if kind == "module":
         target = str(selector.selector_value)
         return any(
@@ -1175,7 +1247,7 @@ def _classify_selector_direction(
         kind = sel.selector_kind
         if kind in {"grad_fn", "intervening", "label"}:
             return "backward"
-        if kind == "func":
+        if kind in {"func", "func_transform"}:
             return "forward"
         if kind in {
             "label",
@@ -1192,7 +1264,7 @@ def _classify_selector_direction(
             return None
     if isinstance(sel, (GradFnSelector, InterveningSelector, GradFnLabelSelector)):
         return "backward"
-    if isinstance(sel, FuncSelector):
+    if isinstance(sel, (FuncSelector, FuncTransformSelector)):
         return "forward"
     if isinstance(
         sel,
@@ -1248,6 +1320,7 @@ __all__ = [
     "CompositeSelector",
     "ContainsSelector",
     "FuncSelector",
+    "FuncTransformSelector",
     "FollowedBySelector",
     "FacetSelector",
     "GradFnLabelSelector",
@@ -1264,6 +1337,7 @@ __all__ = [
     "contains",
     "facet",
     "func",
+    "func_transform",
     "followed_by",
     "grad_fn",
     "label",

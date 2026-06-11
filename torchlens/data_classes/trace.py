@@ -274,6 +274,7 @@ _TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
         "activation_transform",
         "interventions",
         "code_context",
+        "transform_fn_source",
         "args_template",
         "kwargs_template",
         "container_spec",
@@ -3560,6 +3561,18 @@ class Trace(CapturedRun):
             _TRACE_OP_ACCESSOR_CACHE[self] = (cache_key, accessor)
             return accessor
         return cache_entry[1]
+
+    @property
+    def transforms(self) -> tuple[Op, ...]:
+        """Return transform-boundary operation records.
+
+        Returns
+        -------
+        tuple[Op, ...]
+            Ops whose ``is_transform`` role flag is true.
+        """
+
+        return tuple(op for op in self.ops if getattr(op, "is_transform", False))
 
     @property
     def layers(self) -> "LayerAccessor":

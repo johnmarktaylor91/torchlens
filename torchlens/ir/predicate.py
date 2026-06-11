@@ -151,6 +151,8 @@ class RecordContext:
     backend_requires_isolation: bool = False
     is_scalar_bool: bool | None | _DeferredValue = None
     bool_value: bool | None | _DeferredValue = None
+    is_transform: bool = False
+    transform_kind: str | None = None
     window_miss: bool = False
 
     def __getattr__(self, name: str) -> Any:

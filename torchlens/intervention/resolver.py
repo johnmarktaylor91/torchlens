@@ -39,7 +39,9 @@ if TYPE_CHECKING:
     Site: TypeAlias = Op | Layer | GradFn
 else:
     Site: TypeAlias = Any
-DIRECTION_AGNOSTIC_KINDS = frozenset({"label", "in_module", "module", "contains", "predicate"})
+DIRECTION_AGNOSTIC_KINDS = frozenset(
+    {"label", "in_module", "module", "contains", "predicate", "func_transform"}
+)
 
 
 def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionRegistryKey:
@@ -493,6 +495,8 @@ def _resolve_unchecked(
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "func":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
+    if kind == "func_transform":
+        return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "module":
         return tuple(site for site in sites if _resolve_site_kind(site, kind, value))
     if kind == "output":
@@ -585,6 +589,17 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
                 site, value.get("output")
             )
         return site.func_name == value
+    if kind == "func_transform":
+        if not bool(getattr(site, "is_transform", False)):
+            return False
+        if value is None:
+            return True
+        transform_kind = getattr(site, "transform_kind", None)
+        if transform_kind is None:
+            return False
+        normalized_site = str(transform_kind).lower().replace("_", "").replace(".", "")
+        normalized_value = str(value).lower().replace("_", "").replace(".", "")
+        return normalized_site == normalized_value
     if kind == "output":
         return _output_matches(site, value)
     if kind == "module":
@@ -741,6 +756,7 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         contains,
         facet,
         func,
+        func_transform,
         grad_fn,
         head,
         intervening,
@@ -756,6 +772,8 @@ def _selector_from_spec(kind: str, value: Any, metadata: dict[str, Any]) -> Base
         if isinstance(value, dict):
             return func(str(value.get("name")), output=value.get("output"))
         return func(str(value))
+    if kind == "func_transform":
+        return func_transform(None if value is None else str(value))
     if kind == "module":
         return module(str(value))
     if kind == "output":

@@ -245,6 +245,73 @@ def _transform_tags(callable_obj: Callable[..., Any]) -> tuple[str, ...]:
     return ()
 
 
+def _callable_code_location(callable_obj: Callable[..., Any]) -> str | None:
+    """Return a best-effort code-location fingerprint for a callable.
+
+    Parameters
+    ----------
+    callable_obj:
+        Callable, partial, or bound method to inspect.
+
+    Returns
+    -------
+    str | None
+        ``filename:firstlineno`` when available.
+    """
+
+    target = callable_obj
+    if isinstance(target, partial):
+        target = target.func
+    target = getattr(target, "__func__", target)
+    code = getattr(target, "__code__", None)
+    if code is None:
+        return None
+    return f"{code.co_filename}:{code.co_firstlineno}"
+
+
+def _transform_builder_config(
+    transform_kind: str,
+    builder_args: tuple[Any, ...],
+    builder_kwargs: dict[str, Any],
+    inner_fn: Callable[..., Any],
+) -> dict[str, Any]:
+    """Build serializable metadata for a transform builder invocation.
+
+    Parameters
+    ----------
+    transform_kind:
+        Transform kind being built.
+    builder_args:
+        Positional builder arguments after the inner function.
+    builder_kwargs:
+        Keyword builder arguments.
+    inner_fn:
+        User callable being transformed.
+
+    Returns
+    -------
+    dict[str, Any]
+        Best-effort transform configuration.
+    """
+
+    config = dict(builder_kwargs)
+    if transform_kind == "vmap":
+        if builder_args:
+            config.setdefault("in_dims", builder_args[0])
+        if len(builder_args) > 1:
+            config.setdefault("out_dims", builder_args[1])
+        config.setdefault("in_dims", 0)
+        config.setdefault("out_dims", 0)
+    elif transform_kind == "grad":
+        if builder_args:
+            config.setdefault("argnums", builder_args[0])
+        config.setdefault("argnums", 0)
+    code_location = _callable_code_location(inner_fn)
+    if code_location is not None:
+        config["fn_code_location"] = code_location
+    return config
+
+
 def transform_builder_decorator(
     builder: Callable[..., Any],
     transform_kind: str,
@@ -273,6 +340,14 @@ def transform_builder_decorator(
         inner_tags = _transform_tags(func)
         tags = (transform_kind, *inner_tags)
         raw_built = built
+        transform_config = _transform_builder_config(transform_kind, args, kwargs, func)
+        raw_built.__tl_is_transform_boundary__ = True  # type: ignore[attr-defined]
+        raw_built.__tl_transform_tags__ = tags  # type: ignore[attr-defined]
+        raw_built.__tl_transform_kind__ = transform_kind  # type: ignore[attr-defined]
+        raw_built.__tl_transform_config__ = transform_config  # type: ignore[attr-defined]
+        raw_built.__tl_transform_fn_name__ = getattr(func, "__name__", None)  # type: ignore[attr-defined]
+        raw_built.__tl_transform_fn_qualname__ = getattr(func, "__qualname__", None)  # type: ignore[attr-defined]
+        raw_built.__tl_transform_fn_source__ = None  # type: ignore[attr-defined]
 
         @wraps(raw_built)
         def wrapped_transform(*call_args: Any, **call_kwargs: Any) -> Any:
@@ -319,8 +394,13 @@ def transform_builder_decorator(
                 )
             return out_orig
 
+        wrapped_transform.__tl_is_transform_boundary__ = True  # type: ignore[attr-defined]
         wrapped_transform.__tl_transform_tags__ = tags  # type: ignore[attr-defined]
         wrapped_transform.__tl_transform_kind__ = transform_kind  # type: ignore[attr-defined]
+        wrapped_transform.__tl_transform_config__ = transform_config  # type: ignore[attr-defined]
+        wrapped_transform.__tl_transform_fn_name__ = getattr(func, "__name__", None)  # type: ignore[attr-defined]
+        wrapped_transform.__tl_transform_fn_qualname__ = getattr(func, "__qualname__", None)  # type: ignore[attr-defined]
+        wrapped_transform.__tl_transform_fn_source__ = None  # type: ignore[attr-defined]
         return wrapped_transform
 
     return wrapped_builder

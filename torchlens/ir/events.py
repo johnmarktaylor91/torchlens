@@ -276,6 +276,13 @@ class OpEvent:
     grad_fn_class_qualname: str | None
     grad_fn_handle: object | None
     equivalence_class: str | None
+    is_transform: bool
+    transform_kind: str | None
+    transform_chain: tuple[str, ...]
+    transform_config: dict[str, object]
+    transform_fn_name: str | None
+    transform_fn_qualname: str | None
+    transform_fn_source: object | None
     is_output_parent: bool
     has_internal_source_ancestor: bool
     internal_source_ancestors: frozenset[str]

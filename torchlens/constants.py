@@ -302,6 +302,14 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "multi_output_name",
     "container_path",
     "container_spec",
+    # Transform boundary info
+    "is_transform",
+    "transform_kind",
+    "transform_chain",
+    "transform_config",
+    "transform_fn_name",
+    "transform_fn_qualname",
+    "transform_fn_source",
     # Param info
     "parent_params",
     "_param_barcodes",

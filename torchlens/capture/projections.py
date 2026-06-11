@@ -434,6 +434,8 @@ def _build_record_context(
         label_raw=str(raw_label) if raw_label is not None else "",
         label_prefix=str(label).rsplit("_", 2)[0] if isinstance(label, str) else "",
         parent_labels_raw=parent_labels,
+        is_transform=bool(_read_field(data, "is_transform", False)),
+        transform_kind=_read_field(data, "transform_kind"),
     )
 
 
@@ -621,6 +623,13 @@ def _event_from_record(
         grad_fn_class_qualname=None,
         grad_fn_handle=None,
         equivalence_class=None,
+        is_transform=False,
+        transform_kind=None,
+        transform_chain=(),
+        transform_config={},
+        transform_fn_name=None,
+        transform_fn_qualname=None,
+        transform_fn_source=None,
         is_output_parent=ctx.is_output_parent,
         has_internal_source_ancestor=False,
         internal_source_ancestors=frozenset(),

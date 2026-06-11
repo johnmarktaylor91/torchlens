@@ -133,6 +133,7 @@ from .tensor_tracking import (
     _make_raw_param_group_barcode,
     _process_parent_param_ops,
 )
+
 from ..._errors import TorchLensPostfuncError
 from ..._io import BlobRef
 from ...fastlog._storage_resolver import _resolve_storage
@@ -159,6 +160,23 @@ if TYPE_CHECKING:
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
 _LIVE_FIRE_RESULTS_ATTR = "_tl_live_fire_results"
+TRANSFORM_FUNC_NAMES = frozenset(
+    {
+        "vmap",
+        "grad",
+        "grad_and_value",
+        "jacrev",
+        "jacfwd",
+        "hessian",
+        "vjp",
+        "jvp",
+        "linearize",
+        "vjpfn",
+        "jvpfn",
+        "linearizefn",
+    }
+)
+"""Function names reserved for torch.func transform boundary ops."""
 
 
 @dataclass(slots=True)
@@ -473,6 +491,13 @@ def _op_event_from_log(
         grad_fn_class_qualname=fields_dict["grad_fn_class_qualname"],
         grad_fn_handle=fields_dict["grad_fn_handle"],
         equivalence_class=fields_dict["equivalence_class"],
+        is_transform=bool(fields_dict.get("is_transform", False)),
+        transform_kind=fields_dict.get("transform_kind"),
+        transform_chain=tuple(fields_dict.get("transform_chain", ())),
+        transform_config=dict(fields_dict.get("transform_config", {})),
+        transform_fn_name=fields_dict.get("transform_fn_name"),
+        transform_fn_qualname=fields_dict.get("transform_fn_qualname"),
+        transform_fn_source=fields_dict.get("transform_fn_source"),
         is_output_parent=fields_dict["is_output_parent"],
         has_internal_source_ancestor=fields_dict["has_internal_source_ancestor"],
         internal_source_ancestors=frozenset(fields_dict["internal_source_ancestors"]),
@@ -1210,6 +1235,8 @@ def _apply_predicate_mode_interventions_to_outputs(
             address=module_frame.address if module_frame else None,
             module_type=module_frame.module_type if module_frame else None,
             module_pass_index=module_frame.pass_index if module_frame else None,
+            is_transform=func_name in TRANSFORM_FUNC_NAMES,
+            transform_kind=func_name if func_name in TRANSFORM_FUNC_NAMES else None,
         )
         decision = _evaluate_intervene_op(ctx, options)
         if decision is None:
@@ -1557,6 +1584,10 @@ def log_function_output_tensors_predicate(
             address=module_frame.address if module_frame else None,
             module_type=module_frame.module_type if module_frame else None,
             module_pass_index=module_frame.pass_index if module_frame else None,
+            is_transform=bool(getattr(func, "__tl_is_transform_boundary__", False))
+            or func_name in TRANSFORM_FUNC_NAMES,
+            transform_kind=getattr(func, "__tl_transform_kind__", None)
+            or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
         )
         try:
             if out.grad_fn is not None:
@@ -1879,6 +1910,18 @@ def _build_shared_fields_dict(
     )
     parent_param_ops = _build_param_fields(self, fields_dict, arg_parameters)
     _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
+    is_transform = bool(getattr(func, "__tl_is_transform_boundary__", False)) or (
+        func_name in TRANSFORM_FUNC_NAMES
+    )
+    fields_dict["is_transform"] = is_transform
+    fields_dict["transform_kind"] = getattr(func, "__tl_transform_kind__", None) or (
+        func_name if is_transform else None
+    )
+    fields_dict["transform_chain"] = tuple(getattr(func, "__tl_transform_tags__", ()))
+    fields_dict["transform_config"] = dict(getattr(func, "__tl_transform_config__", {}))
+    fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
+    fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
+    fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
 
     # Function config — lightweight hyperparameter extraction, always on.
     param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))
@@ -3299,6 +3342,8 @@ def _build_trace_predicate_context(
         address=fields_dict.get("module"),
         module_type=None,
         module_pass_index=None,
+        is_transform=bool(fields_dict.get("is_transform", False)),
+        transform_kind=fields_dict.get("transform_kind"),
     )
 
 

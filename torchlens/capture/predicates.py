@@ -240,6 +240,8 @@ def build_op_record_context(
     address: str | None = None,
     module_type: str | None = None,
     module_pass_index: int | None = None,
+    is_transform: bool = False,
+    transform_kind: str | None = None,
 ) -> RecordContext:
     """Build the unified operation ``RecordContext`` used by all capture paths.
 
@@ -309,6 +311,8 @@ def build_op_record_context(
             "address": address,
             "module_type": module_type,
             "module_pass_index": module_pass_index,
+            "is_transform": is_transform,
+            "transform_kind": transform_kind,
         },
         module_stack=module_stack,
         history=tuple(history),

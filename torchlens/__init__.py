@@ -42,7 +42,7 @@ from .data_classes.layer import Layer
 from .data_classes.op import Op
 from .data_classes.trace import Trace
 from .fastlog import Recording, record
-from .intervention import (
+from .intervention import (  # type: ignore[no-redef]
     Bundle,
     add,
     bwd_hook,
@@ -51,6 +51,7 @@ from .intervention import (
     do,
     facet,
     func,
+    func_transform,
     followed_by,
     grad_clamp,
     grad_clip,
@@ -838,6 +839,7 @@ __all__ = [
     "add",
     "label",
     "func",
+    "func_transform",
     "followed_by",
     "grad_fn",
     "intervening",

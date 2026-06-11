@@ -597,6 +597,13 @@ class Op:
         "multi_output_name": FieldPolicy.KEEP,
         "container_path": FieldPolicy.KEEP,
         "container_spec": FieldPolicy.KEEP,
+        "is_transform": FieldPolicy.KEEP,
+        "transform_kind": FieldPolicy.KEEP,
+        "transform_chain": FieldPolicy.KEEP,
+        "transform_config": FieldPolicy.KEEP,
+        "transform_fn_name": FieldPolicy.KEEP,
+        "transform_fn_qualname": FieldPolicy.KEEP,
+        "transform_fn_source": FieldPolicy.KEEP,
         "parent_params": FieldPolicy.KEEP,
         "_param_barcodes": FieldPolicy.KEEP,
         "parent_param_ops": FieldPolicy.KEEP,
@@ -917,6 +924,13 @@ class Op:
         self.multi_output_name = fields_dict["multi_output_name"]
         self.container_path = fields_dict["container_path"]
         self.container_spec = fields_dict["container_spec"]
+        self.is_transform = fields_dict["is_transform"]
+        self.transform_kind = fields_dict["transform_kind"]
+        self.transform_chain = fields_dict["transform_chain"]
+        self.transform_config = fields_dict["transform_config"]
+        self.transform_fn_name = fields_dict["transform_fn_name"]
+        self.transform_fn_qualname = fields_dict["transform_fn_qualname"]
+        self.transform_fn_source = fields_dict["transform_fn_source"]
 
         # Param info:
         self.parent_params = fields_dict["parent_params"]

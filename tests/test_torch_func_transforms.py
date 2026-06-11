@@ -3,8 +3,10 @@
 import pytest
 import torch
 import torch.nn as nn
+from typing import cast
 
 import torchlens as tl
+from torchlens import Recording
 
 
 _HAS_TORCH_FUNC = hasattr(torch, "func")
@@ -105,6 +107,12 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert len(vmap_ops) == 1
     assert vmap_ops[0].label == "vmap_1_1:1"
     assert vmap_ops[0].parents == ["input_1"]
+    assert vmap_ops[0].is_transform is True
+    assert vmap_ops[0].transform_kind == "vmap"
+    assert vmap_ops[0].transform_chain == ("vmap",)
+    assert vmap_ops[0].transform_config["in_dims"] == 0
+    assert vmap_ops[0].transform_fn_name == "<lambda>"
+    assert log.transforms == (vmap_ops[0],)
     assert any(op.type == "maskedfill" and "vmap_1_1" in op.parents for op in log.ops)
 
 
@@ -118,6 +126,10 @@ def test_grad_boundary_node_has_clean_parent_edge() -> None:
 
     assert len(grad_ops) == 1
     assert grad_ops[0].parents == ["input_1"]
+    assert grad_ops[0].is_transform is True
+    assert grad_ops[0].transform_kind == "grad"
+    assert grad_ops[0].transform_chain == ("grad",)
+    assert grad_ops[0].transform_config["argnums"] == 0
     assert any(op.type == "add" and "grad_1_1" in op.parents for op in log.ops)
 
 
@@ -129,3 +141,17 @@ def test_grad_over_module_boundary_does_not_crash() -> None:
     log = tl.trace(GradOverModuleModel().eval(), x, layers_to_save="all")
 
     assert [op for op in log.ops if op.type == "grad"]
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_func_transform_selector_matches_trace_and_record() -> None:
+    """Transform predicates match both Trace and Recording capture paths."""
+
+    x = torch.randn(3, 4)
+    log = tl.trace(VmapMaskModel().eval(), x, save=tl.func_transform("vmap"))
+    recording = cast(Recording, tl.record(VmapMaskModel().eval(), x, save=tl.func_transform()))
+
+    assert [op.label for op in log.transforms] == ["vmap_1_1:1"]
+    assert len(recording.records) == 1
+    assert recording.records[0].ctx.is_transform is True
+    assert recording.records[0].ctx.transform_kind == "vmap"
