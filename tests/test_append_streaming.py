@@ -46,8 +46,9 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
     trace = tl.trace(
         model,
         torch.randn(1, 3),
-        save_grads_to=tmp_path / "streaming_bundle.tl",
+        storage=tl.to_disk(tmp_path / "streaming_bundle.tl"),
         layers_to_save="all",
+        save_grads=True,
         intervention_ready=True,
     )
 

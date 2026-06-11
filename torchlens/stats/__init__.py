@@ -496,7 +496,7 @@ def aggregate(
             model,
             model_input,
             layers_to_save=capture_layers,
-            gradients_to_save=capture_layers if target == "grad" else None,
+            save_grads=capture_layers if target == "grad" else None,
         )
         try:
             if target == "grad":

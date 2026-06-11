@@ -185,7 +185,7 @@ def test_residual_facets_read_and_grad() -> None:
 
     model = TransformerBlock()
     x = torch.randn(2, 4, requires_grad=True)
-    log = tl.trace(model, x, layers_to_save="all", backward_ready=True, gradients_to_save="all")
+    log = tl.trace(model, x, layers_to_save="all", backward_ready=True, save_grads="all")
     log.log_backward(log[log.output_layers[0]].out.sum())
     facets = log.modules["self"].facets
 

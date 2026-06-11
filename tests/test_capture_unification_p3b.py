@@ -128,7 +128,7 @@ def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None
         TinyLinear(),
         torch.randn(2, 4),
         layers_to_save=["linear"],
-        gradients_to_save=["linear"],
+        save_grads=["linear"],
         backward_ready=True,
     )
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]

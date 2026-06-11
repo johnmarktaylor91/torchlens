@@ -573,7 +573,7 @@ class FacetSpec:
         label = self.home_label or self.home_address or "<unknown>"
         return (
             f"Facet gradient unavailable for home {label!r}: {detail}. "
-            "Recapture with backward_ready=True and gradients_to_save including "
+            "Recapture with backward_ready=True and save_grads including "
             f"{label!r}, then run trace.log_backward(...) or a recorded backward pass."
         )
 

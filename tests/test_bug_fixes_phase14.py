@@ -348,7 +348,7 @@ def test_rolled_forward_graph_supports_grad_arrows(tmp_path: Path) -> None:
     trace = tl.trace(
         _ResidualRecurrentModel(),
         torch.randn(2, 3, requires_grad=True),
-        gradients_to_save="all",
+        save_grads="all",
     )
     trace[trace.output_layers[0]].out.backward()
     dot = trace.draw(

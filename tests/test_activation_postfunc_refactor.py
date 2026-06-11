@@ -94,7 +94,7 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
-        gradients_to_save="all",
+        save_grads="all",
         grad_transform=lambda t: t.mean(),
     )
     trace.log_backward(_output_loss(trace))
@@ -116,7 +116,7 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4, requires_grad=True),
-        gradients_to_save="all",
+        save_grads="all",
         grad_transform=lambda t: t.mean(),
         save_raw_gradients=False,
     )

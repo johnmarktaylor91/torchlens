@@ -133,7 +133,7 @@ def test_gradient_transform_alias_silent() -> None:
         trace = tl.trace(
             TinyRelu(),
             _input(),
-            gradients_to_save="all",
+            save_grads="all",
             grad_transform=lambda grad: torch.zeros_like(grad),
         )
     trace.log_backward(trace[trace.output_layers[-1]].out.sum())

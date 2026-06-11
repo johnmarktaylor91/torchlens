@@ -259,7 +259,6 @@ _TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
         # Tensor payloads (bulk data; access via ``layer.out`` / ``layer.grad``):
         "out",
         "transformed_out",
-        "grad",
         "transformed_grad",
         "input_activations",
         "saved_args",
@@ -4869,6 +4868,7 @@ class Trace(CapturedRun):
             "has_co_parents",
             "uses_params",
             "is_module_input",
+            "num_saved_grads",
         ]
         fields_for_df = list(
             dict.fromkeys(
@@ -4906,14 +4906,21 @@ class Trace(CapturedRun):
             "is_terminal_conditional_bool": bool,
         }
 
-        model_df_dictlist = []
+        model_df_dictlist: list[dict[str, Any]] = []
         for layer_entry in self.layer_list:
-            layer_dict = {}
+            layer_dict: dict[str, Any] = {}
             for field_name in fields_for_df:
                 if field_name == "conditional_branch_stack":
                     layer_dict[field_name] = _format_conditional_branch_stack(
                         layer_entry.conditional_branch_stack
                     )
+                elif field_name == "grad":
+                    grad_records = getattr(layer_entry, "_grad_records", ())
+                    layer_dict[field_name] = (
+                        next(iter(grad_records)).grad if len(grad_records) == 1 else None
+                    )
+                elif field_name == "num_saved_grads":
+                    layer_dict[field_name] = len(getattr(layer_entry, "_grad_records", ()))
                 else:
                     layer_dict[field_name] = getattr(layer_entry, field_name)
             model_df_dictlist.append(layer_dict)

@@ -352,7 +352,7 @@ def validate_backward_pass(
             logged_inputs,
             input_kwargs=logged_kwargs,
             layers_to_save="all",
-            gradients_to_save="all",
+            save_grads="all",
             random_seed=random_seed,
         )
         logged_output = _reconstruct_candidate_output_for_loss(trace)
@@ -474,7 +474,7 @@ def _validate_layer_grads(
             candidate_inputs,
             input_kwargs=candidate_kwargs,
             layers_to_save="all",
-            gradients_to_save="all",
+            save_grads="all",
             random_seed=random_seed,
         )
         candidate_output = _reconstruct_candidate_output_for_loss(candidate_trace)

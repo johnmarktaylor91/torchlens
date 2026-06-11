@@ -42,8 +42,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "keep_orphans",
     "output_device",
     "save_arg_values",
-    "save_gradients",
-    "gradients_to_save",
+    "save_grads",
     "save_code_context",
     "save_rng_states",
     "random_seed",
@@ -141,8 +140,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
     "save_arg_values": "save_arg_values",
-    "save_gradients": "save_gradients",
-    "gradients_to_save": "gradients_to_save",
+    "save_grads": "save_grads",
     "save_code_context": "save_code_context",
     "save_rng_states": "save_rng_states",
     "random_seed": "random_seed",
@@ -583,10 +581,9 @@ class CaptureOptions:
         Device placement for saved tensors.
     save_arg_values:
         Whether non-tensor function arguments are captured.
-    save_gradients:
-        Whether backward grads are captured.
-    gradients_to_save:
-        Gradient layer selector; defaults to the out selector when explicitly enabled.
+    save_grads:
+        Backward gradient-retention policy. ``True`` captures all gradients,
+        ``False``/``None`` disables capture, and selectors restrict retention.
     save_code_context:
         Whether source-text context is captured in addition to source identity.
     save_rng_states:
@@ -647,8 +644,7 @@ class CaptureOptions:
     keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
     save_arg_values: bool = False
-    save_gradients: bool = False
-    gradients_to_save: str | list[Any] | None = "all"
+    save_grads: bool | str | list[Any] | Callable[[Any], Any] | None = None
     save_code_context: bool = False
     save_rng_states: bool = False
     random_seed: int | None = None
@@ -685,8 +681,7 @@ class CaptureOptions:
         keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
         save_arg_values: bool | MissingType = MISSING,
-        save_gradients: bool | MissingType = MISSING,
-        gradients_to_save: str | list[Any] | None | MissingType = MISSING,
+        save_grads: bool | str | list[Any] | Callable[[Any], Any] | None | MissingType = MISSING,
         save_code_context: bool | MissingType = MISSING,
         save_rng_states: bool | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
@@ -764,12 +759,7 @@ class CaptureOptions:
             "save_arg_values": _resolve_option_value(
                 "save_arg_values", save_arg_values, False, specified_fields
             ),
-            "save_gradients": _resolve_option_value(
-                "save_gradients", save_gradients, False, specified_fields
-            ),
-            "gradients_to_save": _resolve_option_value(
-                "gradients_to_save", gradients_to_save, "all", specified_fields
-            ),
+            "save_grads": _resolve_option_value("save_grads", save_grads, None, specified_fields),
             "save_code_context": _resolve_option_value(
                 "save_code_context", save_code_context, False, specified_fields
             ),

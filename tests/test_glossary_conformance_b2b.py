@@ -34,7 +34,7 @@ def _make_trace() -> Any:
 
     model = _B2bModel()
     x = torch.randn(3, 4, requires_grad=True)
-    return tl.trace(model, x, layers_to_save="all", gradients_to_save="all")
+    return tl.trace(model, x, layers_to_save="all", save_grads="all")
 
 
 @pytest.mark.smoke

@@ -484,11 +484,11 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     out.write(_field_dump(log.params, "ParamAccessor"))
 
     # ===== G. Gradient System =====
-    # Only for models with params — log with save_gradients=True and run backward
+    # Only for models with params — log with save_grads=True and run backward
     if len(log.params) > 0:
-        out.write(_section("G. Gradient System (save_gradients=True + backward)", level=2))
+        out.write(_section("G. Gradient System (save_grads=True + backward)", level=2))
         try:
-            grad_log = trace_fn(model, x, save_gradients=True, random_seed=42)
+            grad_log = trace_fn(model, x, save_grads=True, random_seed=42)
             output_label = grad_log.output_layers[0]
             output_tensor = grad_log[output_label].out
             output_tensor.sum().backward()
@@ -877,7 +877,7 @@ VIS_GALLERY = [
     ),
 ]
 
-# Gradient visualization gallery — rendered with save_gradients=True + backward()
+# Gradient visualization gallery — rendered with save_grads=True + backward()
 # (filename_stem, caption, model_class_name, input_shape_desc, vis_mode, depth, direction)
 GRADIENT_VIS_GALLERY = [
     (
@@ -1393,10 +1393,10 @@ def _vis(
 def _vis_grad(model, x, filename, vis_mode="unrolled", depth=1000, direction="bottomup"):
     """Generate a visualization PDF with grad backward arrows.
 
-    Uses trace_fn(save_gradients=True) + backward() + draw()
-    since show_model_graph() hardcodes save_gradients=False.
+    Uses trace_fn(save_grads=True) + backward() + draw()
+    since show_model_graph() hardcodes save_grads=False.
     """
-    log = trace_fn(model, x, save_gradients=True, random_seed=42)
+    log = trace_fn(model, x, save_grads=True, random_seed=42)
     output = log[log.output_layers[0]].out
     output.sum().backward()
     log.draw(
@@ -1493,7 +1493,7 @@ def test_aesthetic_loop_visualizations():
 
 
 def test_aesthetic_grad_visualizations():
-    """Gradient backward arrows (blue) — requires save_gradients=True + backward().
+    """Gradient backward arrows (blue) — requires save_grads=True + backward().
 
     Note: grad edges only render in unrolled mode.
     TODO: Consider supporting grad arrows in rolled mode.

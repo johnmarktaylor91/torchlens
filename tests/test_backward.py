@@ -134,7 +134,7 @@ class _BatchNormBackwardModel(nn.Module):
 def _logged_model(
     *,
     layers_to_save: str | list[str] | None = "all",
-    gradients_to_save: str | list[str] | None = "all",
+    save_grads: str | list[str] | None = "all",
 ) -> tuple[nn.Module, torch.Tensor, tl.Trace]:
     """Create a logged tiny model.
 
@@ -149,7 +149,7 @@ def _logged_model(
         model,
         x,
         layers_to_save=layers_to_save,
-        gradients_to_save=gradients_to_save,
+        save_grads=save_grads,
     )
     return model, x, trace
 
@@ -235,20 +235,21 @@ def test_grad_fn_naming_and_indexing() -> None:
 
 
 @pytest.mark.smoke
-def test_grads_to_save_default_matches_layers_to_save() -> None:
-    """save_gradients uses layers_to_save when gradients_to_save is omitted."""
+def test_save_grads_true_captures_all_grads() -> None:
+    """save_grads=True captures all gradients independent of layers_to_save."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, layers_to_save=["relu"], save_gradients=True)
+    trace = tl.trace(model, x, layers_to_save=["relu"], save_grads=True)
     trace.log_backward(_output_loss(trace))
     assert trace.saved_grad_ops
-    assert all("relu" in label for label in trace.saved_grad_ops.keys())
+    assert any("relu" in label for label in trace.saved_grad_ops.keys())
+    assert any("linear" in label for label in trace.saved_grad_ops.keys())
 
 
 @pytest.mark.smoke
 def test_grads_to_save_independent_override() -> None:
-    """gradients_to_save can be broader than layers_to_save."""
-    _model, _x, trace = _logged_model(layers_to_save="all", gradients_to_save=["relu"])
+    """save_grads selectors are independent from layers_to_save."""
+    _model, _x, trace = _logged_model(layers_to_save="all", save_grads=["relu"])
     trace.log_backward(_output_loss(trace))
     assert trace.saved_grad_ops
     assert all("relu" in label for label in trace.saved_grad_ops.keys())
@@ -256,7 +257,7 @@ def test_grads_to_save_independent_override() -> None:
 
 @pytest.mark.smoke
 def test_auto_train_mode_when_backward_opted_in() -> None:
-    """Explicit gradients_to_save auto-enables backward_ready."""
+    """Explicit save_grads selectors auto-enable backward_ready."""
     _model, _x, trace = _logged_model()
     assert trace.backward_ready is True
 
@@ -267,7 +268,7 @@ def test_auto_train_mode_conflict_with_explicit_false() -> None:
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     with pytest.raises(ValueError, match="requires backward_ready=True"):
-        tl.trace(model, x, gradients_to_save="all", backward_ready=False)
+        tl.trace(model, x, save_grads="all", backward_ready=False)
 
 
 @pytest.mark.smoke
@@ -278,7 +279,7 @@ def test_grad_transform_applied() -> None:
     trace = tl.trace(
         model,
         x,
-        gradients_to_save="all",
+        save_grads="all",
         grad_transform=lambda grad: torch.zeros_like(grad),
     )
     trace.log_backward(_output_loss(trace))
@@ -321,7 +322,7 @@ def test_custom_autograd_function_captured_with_is_custom_flag() -> None:
     """Custom autograd.Function grad_fns are captured and flagged."""
     model = _CustomModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, gradients_to_save="all")
+    trace = tl.trace(model, x, save_grads="all")
     trace.log_backward(_output_loss(trace))
     assert any(grad_fn_handle.is_custom for grad_fn_handle in trace.grad_fn_logs.values())
 
@@ -331,7 +332,7 @@ def test_implicit_hook_firing_preserved() -> None:
     """Calling backward outside log_backward still populates Layer grads."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, save_gradients=True)
+    trace = tl.trace(model, x, save_grads=True)
     _output_loss(trace).backward()
     assert trace.saved_grad_ops
 
@@ -495,7 +496,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     torch.manual_seed(0)
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace1 = tl.trace(model, x, gradients_to_save="all", random_seed=42)
+    trace1 = tl.trace(model, x, save_grads="all", random_seed=42)
     trace1.log_backward(_output_loss(trace1))
     labels1 = {
         grad_fn_handle.label
@@ -504,7 +505,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     }
     trace1.cleanup()
 
-    trace2 = tl.trace(model, x, gradients_to_save="all", random_seed=42)
+    trace2 = tl.trace(model, x, save_grads="all", random_seed=42)
     trace2.log_backward(_output_loss(trace2))
     labels2 = {
         grad_fn_handle.label

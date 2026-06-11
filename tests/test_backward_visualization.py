@@ -75,7 +75,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Model log after backward capture.
     """
 
-    trace = tl.trace(model, x, gradients_to_save="all")
+    trace = tl.trace(model, x, save_grads="all")
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
@@ -178,7 +178,7 @@ def test_draw_backward_errors_without_log_backward() -> None:
     trace = tl.trace(
         _LinearReluModel(),
         torch.randn(2, 3, requires_grad=True),
-        gradients_to_save="all",
+        save_grads="all",
     )
 
     with pytest.raises(ValueError, match="call log_backward\\(loss\\) first"):

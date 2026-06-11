@@ -372,15 +372,15 @@ class TestGradientTracking:
             assert pl.grad_shape is None
 
     def test_no_grad_without_save_grads(self):
-        mh = trace_fn(_make_simple_model(), _simple_input(), save_gradients=False)
-        # Even if we could call backward, save_gradients=False means no hooks
+        mh = trace_fn(_make_simple_model(), _simple_input(), save_grads=False)
+        # Even if we could call backward, save_grads=False means no hooks
         for pl in mh.params:
             assert pl.has_grad is False
 
     def test_grad_after_backward(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_grads=True)
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -395,7 +395,7 @@ class TestGradientTracking:
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_grads=True)
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -409,7 +409,7 @@ class TestGradientTracking:
     def test_tle_grad_saved(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_grads=True)
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -423,7 +423,7 @@ class TestGradientTracking:
     def test_saved_grad_ops_populated(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_grads=True)
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -434,7 +434,7 @@ class TestGradientTracking:
     def test_grad_shape_matches_param_shape(self):
         model = _make_simple_model()
         x = _simple_input()
-        mh = trace_fn(model, x, save_gradients=True)
+        mh = trace_fn(model, x, save_grads=True)
         output = mh["output_1"].out
         output.sum().backward()
 
@@ -614,7 +614,7 @@ class TestIntegration:
 
     def test_grad_tracking_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
-        mh = trace_fn(model, input_2d, save_gradients=True)
+        mh = trace_fn(model, input_2d, save_grads=True)
         output = mh["output_1"].out
         output.sum().backward()
 

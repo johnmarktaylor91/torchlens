@@ -378,7 +378,7 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
     missing = facet.grad
     assert isinstance(missing, MissingGradient)
     assert "backward_ready=True" in missing.reason
-    assert "gradients_to_save" in missing.reason
+    assert "save_grads" in missing.reason
     with pytest.raises(RuntimeError, match="Facet gradient unavailable"):
         torch.add(missing, 1)
 
@@ -407,7 +407,7 @@ def test_facetspec_grad_matches_manual_slice_when_saved() -> None:
         op = module.trace.ops[module.calls[0].output_ops[0]]
         return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
 
-    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all", gradients_to_save="all")
+    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all", save_grads="all")
     log.log_backward(log[log.output_layers[0]].out.sum())
     facet = log.modules["linear"].facets["first_feature"]
     home = log.ops[log.modules["linear"].calls[0].output_ops[0]]
@@ -440,7 +440,7 @@ def test_facetspec_grad_missing_for_unselected_home() -> None:
         op = module.trace.ops[module.calls[0].output_ops[0]]
         return {"first_feature": FacetSpec.from_home(op, recipe_id="first_feature").select(-1, 0)}
 
-    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all", gradients_to_save=["relu"])
+    log = tl.trace(Tiny(), torch.randn(4, 3), layers_to_save="all", save_grads=["relu"])
     log.log_backward(log[log.output_layers[0]].out.sum())
     missing = log.modules["linear"].facets["first_feature"].grad
 
@@ -709,7 +709,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
         model,
         x,
         layers_to_save="all",
-        gradients_to_save="all",
+        save_grads="all",
         save_arg_values=True,
     )
     log.log_backward(_trace_output(log).sum())

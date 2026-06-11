@@ -477,7 +477,7 @@ def test_walk_detects_accumulategrad_via_type_name() -> None:
 
     model = nn.Linear(3, 1)
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, random_seed=123, save_gradients=True)
+    trace = tl.trace(model, x, random_seed=123, save_grads=True)
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     assert trace._grad_fn_param_refs

@@ -387,7 +387,7 @@ def _make_backward_log() -> Trace:
 
     model = _SimpleFF()
     x = torch.randn(2, 5, requires_grad=True)
-    log = trace_fn(model, x, gradients_to_save="all", random_seed=42)
+    log = trace_fn(model, x, save_grads="all", random_seed=42)
     log.log_backward(log[log.output_layers[0]].out.sum())
     return log
 

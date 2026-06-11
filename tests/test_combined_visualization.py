@@ -84,7 +84,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Trace with backward metadata.
     """
 
-    trace = tl.trace(model, x, gradients_to_save="all")
+    trace = tl.trace(model, x, save_grads="all")
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
 

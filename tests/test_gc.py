@@ -156,7 +156,7 @@ class TestTraceGC:
         """backward(), release_param_refs(), verify grad info is cached."""
         model = _TwoLayerNet()
         x = torch.randn(1, 5)
-        trace = tl.trace(model, x, save_gradients=True)
+        trace = tl.trace(model, x, save_grads=True)
         # Run backward to populate grads
         out = model(x)
         out.sum().backward()

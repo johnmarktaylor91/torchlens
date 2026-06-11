@@ -360,8 +360,7 @@ class MLXBackend:
         activation_transform: object | None = None,
         save_raw_activations: bool = True,
         detach_saved_activations: bool = False,
-        save_gradients: bool = False,
-        gradients_to_save: str | list[Any] | None = "all",
+        save_grads: bool | str | list[Any] | object | None = None,
         random_seed: int | None = None,
         num_context_lines: int = 7,
         save_arg_values: bool = False,
@@ -383,7 +382,7 @@ class MLXBackend:
     ) -> Trace:
         """Capture an MLX forward pass into a smoke-compatible Trace."""
 
-        if save_gradients:
+        if save_grads:
             raise NotImplementedError("backward capture is not supported on the mlx backend")
         if output_device != "same":
             raise ValueError("MLX backend only supports output_device='same' in technical preview.")
@@ -397,7 +396,7 @@ class MLXBackend:
             keep_orphans=keep_orphans,
             save_arg_values=save_arg_values,
             save_gradients=False,
-            gradients_to_save=gradients_to_save,
+            gradients_to_save=None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=False,
             num_context_lines=num_context_lines,

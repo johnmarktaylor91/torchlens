@@ -168,8 +168,7 @@ def _trace_mlx_model(
     save_raw_activations: bool | MissingType,
     save_raw_gradients: bool | MissingType,
     save_arg_values: bool | MissingType,
-    save_gradients: bool | MissingType,
-    gradients_to_save: str | list[Any] | None | MissingType,
+    save_grads: bool | str | list[Any] | PredicateFn | BaseSelector | None | MissingType,
     save_code_context: bool | MissingType,
     save_rng_states: bool | MissingType,
     random_seed: int | None | MissingType,
@@ -215,8 +214,7 @@ def _trace_mlx_model(
         keep_orphans=keep_orphans,
         output_device=output_device,
         save_arg_values=save_arg_values,
-        save_gradients=save_gradients,
-        gradients_to_save=gradients_to_save,
+        save_grads=save_grads,
         save_code_context=save_code_context,
         save_rng_states=save_rng_states,
         random_seed=random_seed,
@@ -258,7 +256,7 @@ def _trace_mlx_model(
         )
     if visualization is not None and visualization.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
-    if capture_options.save_gradients:
+    if capture_options.save_grads:
         raise NotImplementedError("backward capture is not supported on the mlx backend")
     raw_input = None
     model_input_args = input_args
@@ -285,8 +283,7 @@ def _trace_mlx_model(
         activation_transform=save_options.activation_transform,
         save_raw_activations=save_options.save_raw_activations,
         detach_saved_activations=capture_options.detach_saved_activations,
-        save_gradients=capture_options.save_gradients,
-        gradients_to_save=capture_options.gradients_to_save,
+        save_grads=capture_options.save_grads,
         random_seed=capture_options.random_seed,
         num_context_lines=capture_options.source_context_lines,
         save_arg_values=capture_options.save_arg_values,
@@ -929,8 +926,8 @@ def _run_model_and_save_specified_outs(
     mark_layer_depths: bool = False,
     detach_saved_activations: bool = False,
     save_arg_values: bool = False,
-    save_gradients: bool = False,
-    gradients_to_save: str | list[int | str] | None = "all",
+    save_grads: bool = False,
+    grads_to_save: str | list[int | str] | None = "all",
     random_seed: int | None = None,
     num_context_lines: int = 7,
     optimizer: Any = None,
@@ -996,8 +993,8 @@ def _run_model_and_save_specified_outs(
         detach_saved_activations: If True, saved tensors are detached from the autograd graph.
         save_arg_values: If True, store the non-tensor arguments to each function call.
             Required for validation replay (``validate_saved_outs``).
-        save_gradients: If True, register backward hooks to capture grads.
-        gradients_to_save: Which layer grads to save.
+        save_grads: If True, register backward hooks to capture grads.
+        grads_to_save: Which layer grads to save.
         random_seed: Fixed RNG seed for reproducibility (important for stochastic models).
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
@@ -1091,8 +1088,8 @@ def _run_model_and_save_specified_outs(
         save_raw_gradients=save_raw_gradients,
         keep_orphans=keep_orphans,
         save_arg_values=save_arg_values,
-        save_gradients=save_gradients,
-        gradients_to_save=gradients_to_save,
+        save_gradients=save_grads,
+        gradients_to_save=grads_to_save,
         detach_saved_activations=detach_saved_activations,
         mark_layer_depths=mark_layer_depths,
         num_context_lines=num_context_lines,
@@ -1169,7 +1166,7 @@ def _run_model_and_save_specified_outs(
             cast(torch.Tensor | list[Any], input_args),
             input_kwargs,
             layers_to_save,
-            gradients_to_save,
+            grads_to_save,
             random_seed,
         )
     except (PredicateError, TorchLensIOError, TorchLensPostfuncError):
@@ -1320,8 +1317,7 @@ def trace(
     mark_layer_depths: bool | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
     save_arg_values: bool | MissingType = MISSING,
-    save_gradients: bool | MissingType = MISSING,
-    gradients_to_save: str | list[Any] | None | MissingType = MISSING,
+    save_grads: bool | str | list[Any] | PredicateFn | BaseSelector | None | MissingType = MISSING,
     save_code_context: bool | MissingType = MISSING,
     save_rng_states: bool | MissingType = MISSING,
     reconstruction_ready: bool | MissingType = MISSING,
@@ -1330,8 +1326,6 @@ def trace(
     optimizer: Any | MissingType = MISSING,
     save_outs_to: str | Path | None | MissingType = MISSING,
     keep_outs_in_memory: bool | MissingType = MISSING,
-    save_grads_to: str | Path | None | MissingType = MISSING,
-    keep_grads_in_memory: bool | MissingType = MISSING,
     out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
     intervention_ready: bool | MissingType = MISSING,
     hooks: Any | None | MissingType = MISSING,
@@ -1426,9 +1420,9 @@ def trace(
         detach_saved_activations: If True, detach saved tensors from the autograd graph.
         save_arg_values: Store non-tensor args for each function call (needed for
             ``validate_forward_pass``).
-        save_gradients: Capture grads during a subsequent backward pass.
-        gradients_to_save: Which layer grads to save. When omitted, explicit
-            backward capture uses the same selection as ``layers_to_save``.
+        save_grads: Capture grads during subsequent backward passes. ``True`` captures
+            all gradients, ``False``/``None`` disables capture, and selectors restrict
+            retention.
         save_code_context: Python call-stack identity is always recorded for each
             tensor operation. If False (default), identity fields such as ``file``,
             ``line_number``, ``func_name``, ``code_firstlineno``,
@@ -1453,11 +1447,6 @@ def trace(
         save_outs_to: Deprecated alias for ``streaming.bundle_path``.
         keep_outs_in_memory: Deprecated alias for
             ``streaming.retain_in_memory``.
-        save_grads_to: Optional portable bundle directory for streaming saved grads.
-            If omitted while ``save_outs_to`` is set and grad capture is enabled,
-            grads are written into the same bundle path.
-        keep_grads_in_memory: Whether streamed grads should remain in memory after
-            ``log_backward`` or ``recording_backward`` finalizes the bundle.
         out_sink: Deprecated alias for ``streaming.out_callback``.
         intervention_ready: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
@@ -1536,8 +1525,7 @@ def trace(
             "mark_layer_depths": mark_layer_depths,
             "detach_saved_activations": detach_saved_activations,
             "save_arg_values": save_arg_values,
-            "save_gradients": save_gradients,
-            "gradients_to_save": gradients_to_save,
+            "save_grads": save_grads,
             "save_code_context": save_code_context,
             "save_rng_states": save_rng_states,
             "reconstruction_ready": reconstruction_ready,
@@ -1546,8 +1534,6 @@ def trace(
             "optimizer": optimizer,
             "save_outs_to": save_outs_to,
             "keep_outs_in_memory": keep_outs_in_memory,
-            "save_grads_to": save_grads_to,
-            "keep_grads_in_memory": keep_grads_in_memory,
             "out_sink": out_sink,
             "intervention_ready": intervention_ready,
             "hooks": hooks,
@@ -1620,8 +1606,7 @@ def trace(
             save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
             save_arg_values=save_arg_values,
-            save_gradients=save_gradients,
-            gradients_to_save=gradients_to_save,
+            save_grads=save_grads,
             save_code_context=save_code_context,
             save_rng_states=save_rng_states,
             random_seed=random_seed,
@@ -1660,8 +1645,7 @@ def trace(
         keep_orphans=keep_orphans,
         output_device=output_device,
         save_arg_values=save_arg_values,
-        save_gradients=save_gradients,
-        gradients_to_save=gradients_to_save,
+        save_grads=save_grads,
         save_code_context=save_code_context,
         save_rng_states=save_rng_states,
         random_seed=random_seed,
@@ -1746,7 +1730,6 @@ def trace(
     save_raw_activations = save_options.save_raw_activations
     save_raw_gradients = save_options.save_raw_gradients
     save_arg_values = capture_options.save_arg_values
-    save_gradients = capture_options.save_gradients
     save_code_context = capture_options.save_code_context
     save_rng_states = capture_options.save_rng_states
     random_seed = capture_options.random_seed
@@ -1768,10 +1751,18 @@ def trace(
     facet_recipes = None if isinstance(recipes, MissingType) else recipes
     if capture_options.stop_after is not None:
         raise NotImplementedError("stop_after is only supported by torchlens.peek.")
-    save_grads_to_value = None if isinstance(save_grads_to, MissingType) else save_grads_to
-    keep_grads_in_memory_value = (
-        True if isinstance(keep_grads_in_memory, MissingType) else keep_grads_in_memory
-    )
+    save_grads_policy = capture_options.save_grads
+    save_gradients = save_grads_policy not in (None, False)
+    if save_grads_policy is True:
+        grads_to_save_resolved: str | list[Any] | None = "all"
+    elif save_grads_policy in (None, False):
+        grads_to_save_resolved = None
+    elif callable(save_grads_policy):
+        grads_to_save_resolved = "all"
+    else:
+        grads_to_save_resolved = cast("str | list[Any] | None", save_grads_policy)
+    save_grads_to_value = streaming_options.bundle_path if save_gradients else None
+    keep_grads_in_memory_value = streaming_options.retain_in_memory
 
     if output_device not in ["same", "cpu", "cuda"]:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
@@ -1779,32 +1770,25 @@ def trace(
         raise ValueError("save_outs_to and out_sink are mutually exclusive.")
     train_mode_explicit = capture_options.is_field_explicit("backward_ready")
     train_mode_value = capture_options.backward_ready
-    backward_opted_in = capture_options.is_field_explicit("gradients_to_save")
+    backward_opted_in = (
+        capture_options.is_field_explicit("save_grads")
+        and save_gradients
+        and save_grads_policy is not True
+    )
     grad_streaming_requested = save_grads_to_value is not None
     if grad_streaming_requested:
         save_gradients = True
     if backward_opted_in:
         if train_mode_explicit and train_mode_value is False:
             raise ValueError(
-                "gradients_to_save opts into backward capture, which requires backward_ready=True. "
+                "save_grads opts into backward capture, which requires backward_ready=True. "
                 "Omit backward_ready or set backward_ready=True."
             )
         train_mode_value = True
         save_gradients = True
-    grads_to_save_resolved = (
-        capture_options.gradients_to_save if backward_opted_in else layers_to_save
-    )
-    if save_gradients and save_grads_to_value is None and streaming_options.bundle_path is not None:
-        save_grads_to_value = streaming_options.bundle_path
-    if (
-        save_grads_to_value is not None
-        and streaming_options.bundle_path is not None
-        and Path(save_grads_to_value) != Path(streaming_options.bundle_path)
-    ):
-        raise ValueError("save_outs_to and save_grads_to must use the same bundle path.")
     if train_mode_value and save_grads_to_value is not None:
         raise TrainingModeConfigError(
-            "backward_ready=True is not compatible with slow/replay grad disk saves"
+            "backward_ready=True is not compatible with disk-backed gradient storage"
         )
 
     validate_training_compatibility(
@@ -1824,25 +1808,25 @@ def trace(
     if intervention_ready and uses_two_pass:
         raise InterventionReadyConflictError(
             "intervention_ready=True is not compatible with selective two-pass "
-            "layers_to_save or gradients_to_save. Use a predicate save=... capture "
-            "or set layers_to_save/gradients_to_save to 'all', 'none', None, or []."
+            "layers_to_save or save_grads. Use a predicate save=... capture "
+            "or set layers_to_save/save_grads to 'all', 'none', None, or []."
         )
     if hooks is not None and uses_two_pass:
         raise InterventionReadyConflictError(
             "hooks/intervention capture is not compatible with selective two-pass "
-            "layers_to_save or gradients_to_save. Use a predicate save=... capture "
+            "layers_to_save or save_grads. Use a predicate save=... capture "
             "for single-pass selective saving."
         )
     if intervene is not None and uses_two_pass:
         raise InterventionReadyConflictError(
             "intervene=predicate capture is not compatible with selective two-pass "
-            "layers_to_save or gradients_to_save. Use predicate save=... capture "
+            "layers_to_save or save_grads. Use predicate save=... capture "
             "for single-pass selective saving."
         )
     if save_predicate is not None and uses_two_pass:
         raise ValueError(
             "trace(save=predicate) is single-pass selective save and cannot be combined with "
-            "specific layers_to_save or gradients_to_save in this phase."
+            "specific layers_to_save or save_grads in this phase."
         )
     log_name = name if name is not None else _state._auto_name(model)
     cache_path: Path | None = None
@@ -1853,8 +1837,7 @@ def trace(
             "keep_orphans": keep_orphans,
             "output_device": output_device,
             "save_arg_values": save_arg_values,
-            "save_gradients": save_gradients,
-            "gradients_to_save": grads_to_save_resolved,
+            "save_grads": repr(save_grads_policy),
             "save_code_context": save_code_context,
             "save_rng_states": save_rng_states,
             "source_context_lines": source_context_lines,
@@ -1890,7 +1873,7 @@ def trace(
         )
     if save_grads_to_value is not None and uses_two_pass:
         raise TorchLensIOError(
-            'save_grads_to is only supported with gradients_to_save="all" in this '
+            "storage=to_disk(...) gradient streaming is only supported with save_grads=True "
             "release. Capture all grads and filter post-hoc with torchlens.save(...)."
         )
 
@@ -1911,8 +1894,8 @@ def trace(
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,
-            save_gradients=save_gradients,
-            gradients_to_save=grads_to_save_resolved,
+            save_grads=save_gradients,
+            grads_to_save=grads_to_save_resolved,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
@@ -1976,8 +1959,8 @@ def trace(
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,
-            save_gradients=False,
-            gradients_to_save=None,
+            save_grads=False,
+            grads_to_save=None,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
             optimizer=optimizer,
@@ -2281,7 +2264,7 @@ def show_model_graph(
         activation_transform=None,
         mark_layer_depths=False,
         detach_saved_activations=False,
-        save_gradients=False,
+        save_grads=False,
         random_seed=random_seed,
         recurrence_detection=recurrence_detection_enabled,
         verbose=verbose,
@@ -2899,7 +2882,7 @@ def validate_forward_pass(
             activation_transform=None,
             mark_layer_depths=False,
             detach_saved_activations=False,
-            save_gradients=False,
+            save_grads=False,
             save_arg_values=True,
             random_seed=random_seed,
             save_rng_states=True,

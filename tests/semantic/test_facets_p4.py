@@ -219,5 +219,5 @@ def test_attribution_patch_requires_grad_capture() -> None:
             clean,
             corrupted,
             _metric,
-            trace_kwargs={"backward_ready": True, "gradients_to_save": None},
+            trace_kwargs={"backward_ready": True, "save_grads": None},
         )

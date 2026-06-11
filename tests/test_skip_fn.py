@@ -194,7 +194,7 @@ def test_skip_preserves_grad_edge_kind(tmp_path: Any) -> None:
     """Skipping a forward node should preserve grad edge styling."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 1))
-    log = tl.trace(model, torch.randn(1, 4), save_gradients=True)
+    log = tl.trace(model, torch.randn(1, 4), save_grads=True)
     output = log[log.output_layers[0]].out
     output.sum().backward()
 

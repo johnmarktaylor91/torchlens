@@ -302,7 +302,7 @@ def test_backward_edges_gate_on_backward_capture() -> None:
         BackwardModel(),
         torch.randn(2, 4, requires_grad=True),
         backward_ready=True,
-        save_gradients=True,
+        save_grads=True,
     )
     assert trace.num_backward_edges is None
     loss = trace[trace.output_layers[0]].out

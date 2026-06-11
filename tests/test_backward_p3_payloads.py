@@ -47,7 +47,7 @@ def _trace_with_two_backward_passes() -> tl.Trace:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(model, x, layers_to_save="all", gradients_to_save="all")
+    trace = tl.trace(model, x, layers_to_save="all", save_grads=True)
     loss = trace[trace.output_layers[0]].out
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss, retain_graph=True)
@@ -68,6 +68,25 @@ def test_op_grads_are_local_dense_per_pass_records() -> None:
         trace.cleanup()
 
 
+def test_save_grads_is_the_trace_side_public_surface() -> None:
+    """Trace accepts save_grads and rejects removed gradient-save aliases."""
+
+    torch.manual_seed(0)
+    model = _PayloadModel()
+    x = torch.randn(4, 3, requires_grad=True)
+    trace = tl.trace(model, x, layers_to_save="all", save_grads=True)
+    try:
+        assert trace.save_gradients is True
+        assert trace.gradients_to_save == "all"
+    finally:
+        trace.cleanup()
+
+    with pytest.raises(TypeError):
+        tl.trace(model, x, layers_to_save="all", save_gradients=True)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        tl.trace(model, x, layers_to_save="all", gradients_to_save="all")  # type: ignore[call-arg]
+
+
 def test_op_grad_is_loud_when_multiple_passes_are_saved() -> None:
     """Plain Op.grad raises when several per-pass gradients are retained."""
 
@@ -76,6 +95,19 @@ def test_op_grad_is_loud_when_multiple_passes_are_saved() -> None:
         op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
         with pytest.raises(ValueError, match=r"use op\.grads\[\.\.\.\] / op\.grad_for\(bwd=k\)"):
             _ = op.grad
+    finally:
+        trace.cleanup()
+
+
+def test_to_pandas_represents_ambiguous_grad_without_raising() -> None:
+    """Trace.to_pandas exposes ambiguous per-pass grads as None plus a count."""
+
+    trace = _trace_with_two_backward_passes()
+    try:
+        frame = trace.to_pandas()
+        grad_rows = frame[frame["num_saved_grads"] > 1]
+        assert not grad_rows.empty
+        assert grad_rows["grad"].isna().all()
     finally:
         trace.cleanup()
 
@@ -103,7 +135,7 @@ def test_param_grads_capture_accumulategrad_increments() -> None:
     torch.manual_seed(0)
     model = _PayloadModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(model, x, layers_to_save="all", gradients_to_save="all")
+    trace = tl.trace(model, x, layers_to_save="all", save_grads=True)
     try:
         loss = trace[trace.output_layers[0]].out
         trace.log_backward(loss)

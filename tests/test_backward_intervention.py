@@ -66,7 +66,7 @@ def _trace() -> tuple[_EncoderModel, torch.Tensor, tl.Trace]:
 
     model = _EncoderModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, gradients_to_save="all")
+    trace = tl.trace(model, x, save_grads="all")
     return model, x, trace
 
 

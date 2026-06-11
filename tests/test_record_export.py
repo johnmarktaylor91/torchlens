@@ -47,7 +47,7 @@ def record_export_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _RecordExportModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, gradients_to_save="all")
+    trace = tl.trace(model, x, save_grads="all")
     trace.log_backward(trace[trace.output_layers[0]].out, retain_graph=True)
     return trace
 

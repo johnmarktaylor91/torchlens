@@ -44,7 +44,7 @@ class _TinyStreamingBackwardModel(nn.Module):
 def _logged_backward_stream(
     bundle_path: Path,
     *,
-    keep_grads_in_memory: bool = True,
+    retain_in_memory: bool = True,
 ) -> tuple[tl.Trace, dict[str, torch.Tensor]]:
     """Capture a backward pass with streamed grads.
 
@@ -52,8 +52,8 @@ def _logged_backward_stream(
     ----------
     bundle_path:
         Destination bundle path.
-    keep_grads_in_memory:
-        Whether grads should remain in memory after bundle finalization.
+    retain_in_memory:
+        Whether streamed payloads should remain in memory after bundle finalization.
 
     Returns
     -------
@@ -68,14 +68,13 @@ def _logged_backward_stream(
         model,
         inputs,
         layers_to_save="all",
-        save_gradients=True,
-        save_grads_to=bundle_path,
-        keep_grads_in_memory=keep_grads_in_memory,
+        save_grads=True,
+        storage=tl.to_disk(bundle_path, retain_in_memory=retain_in_memory),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     expected = (
         {label: trace[label].grad.detach().clone() for label in trace.saved_grad_ops.keys()}
-        if keep_grads_in_memory
+        if retain_in_memory
         else {}
     )
     return trace, expected
@@ -142,25 +141,25 @@ def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
     model = _TinyStreamingBackwardModel()
     inputs = torch.randn(2, 3, requires_grad=True)
 
-    with pytest.raises(ValueError, match="grad disk saves"):
+    with pytest.raises(ValueError, match="disk-backed gradient storage"):
         tl.trace(
             model,
             inputs,
             layers_to_save="all",
-            save_gradients=True,
-            save_grads_to=tmp_path / "bad.tl",
+            save_grads=True,
+            storage=tl.to_disk(tmp_path / "bad.tl"),
             backward_ready=True,
         )
 
 
 @pytest.mark.smoke
-def test_keep_grads_in_memory_false(tmp_path: Path) -> None:
+def test_retain_in_memory_false_for_grad_streaming(tmp_path: Path) -> None:
     """Explicit grad eviction should keep lazy refs and drop live tensors."""
 
     bundle_path = tmp_path / "backward_stream.tl"
     trace, _expected = _logged_backward_stream(
         bundle_path,
-        keep_grads_in_memory=False,
+        retain_in_memory=False,
     )
     layer = trace[list(trace.saved_grad_ops.keys())[0]]
 

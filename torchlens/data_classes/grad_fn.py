@@ -470,25 +470,18 @@ class GradFn:
         return [f"{self.label}:{call_index}" for call_index in self.calls.keys()]
 
     @property
-    def backward_duration(self) -> Duration:
-        """Return this GradFn's single-call backward duration.
+    def backward_duration(self) -> Duration | None:
+        """Return this GradFn's single-call backward duration, if unambiguous.
 
         Returns
         -------
-        Duration
-            Backward duration for the only call.
-
-        Raises
-        ------
-        ValueError
-            If this GradFn has multiple calls.
+        Duration | None
+            Backward duration for the only call, or ``None`` when the GradFn has
+            zero or multiple calls.
         """
 
         if len(self.calls) != 1:
-            raise ValueError(
-                f"GradFn '{self.label}' has {len(self.calls)} calls. Access "
-                "backward_duration on a specific call or use total_backward_duration."
-            )
+            return None
         return next(iter(self.calls.values())).backward_duration
 
     @property

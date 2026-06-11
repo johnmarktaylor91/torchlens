@@ -53,7 +53,7 @@ def _trace_for_plain_backward() -> tl.Trace:
     torch.manual_seed(0)
     model = _PlainBackwardModel()
     x = torch.randn(3, 4, requires_grad=True)
-    return tl.trace(model, x, layers_to_save="all", gradients_to_save="all")
+    return tl.trace(model, x, layers_to_save="all", save_grads="all")
 
 
 def _backward_starts(trace: tl.Trace) -> list[BackwardPassStart]:
@@ -173,7 +173,7 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
     torch.manual_seed(0)
     model = _PlainBackwardModel()
     x = torch.randn(3, 4, requires_grad=True)
-    trace = tl.trace(model, x, layers_to_save=["linear_2"], gradients_to_save="all")
+    trace = tl.trace(model, x, layers_to_save=["linear_2"], save_grads="all")
     grad_fn_object_id = trace["linear_2"].grad_fn_object_id
     assert grad_fn_object_id is not None
     registered_ids = {

@@ -294,7 +294,7 @@ def attribution_patch_attention_heads(
         P3 facet convention ``[batch, pos, head, d_model]``.
     trace_kwargs:
         Extra keyword arguments forwarded to ``tl.trace``. By default this
-        helper captures all gradients; passing ``gradients_to_save=None`` is a
+        helper captures all gradients; passing ``save_grads=None`` is a
         useful way to verify the missing-gradient error path.
 
     Returns
@@ -304,7 +304,7 @@ def attribution_patch_attention_heads(
     """
 
     grad_trace_kwargs = dict(trace_kwargs or {})
-    grad_trace_kwargs.setdefault("gradients_to_save", "all")
+    grad_trace_kwargs.setdefault("save_grads", True)
     clean_log, corrupted_log = _baseline_traces(
         model, clean_input, corrupted_input, trace_kwargs=grad_trace_kwargs
     )

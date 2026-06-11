@@ -17,7 +17,7 @@ def test_backward_pass_module_attribution() -> None:
         torch.nn.Linear(16, 4),
     )
     x = torch.randn(2, 8, requires_grad=True)
-    trace = tl.trace(model, x, gradients_to_save="all")
+    trace = tl.trace(model, x, save_grads=True)
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     forward_ops_with_modules = [op for op in trace.layer_list if getattr(op, "modules", [])]
