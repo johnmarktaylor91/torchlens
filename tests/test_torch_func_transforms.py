@@ -1,14 +1,16 @@
 """Tests for torch.func transform boundary capture."""
 
+from pathlib import Path
+from typing import cast
+
 import pytest
 import torch
 import torch.nn as nn
-from typing import cast
 
 import torchlens as tl
 from torchlens import _state
+from torchlens import Recording, Trace
 from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens import Recording
 
 
 _HAS_TORCH_FUNC = hasattr(torch, "func")
@@ -374,3 +376,33 @@ def test_functional_call_substituted_buffers_are_tensor_parents() -> None:
     add_ops = [op for op in log.ops if op.type == "add"]
 
     assert any("input_1" in op.parents and len(op.parents) == 2 for op in add_ops)
+
+
+def test_transform_metadata_pandas_and_tlspec_round_trip(tmp_path: Path) -> None:
+    """Transform metadata is tabular and portable."""
+
+    x = torch.randn(3, 4)
+    log = tl.trace(VmapMaskModel().eval(), x, layers_to_save="all")
+    dataframe = log.to_pandas()
+    path = tmp_path / "vmap.tlspec"
+
+    tl.save(log, path)
+    loaded = cast(Trace, tl.load(path))
+
+    assert bool(dataframe.loc[dataframe["type"] == "vmap", "is_transform"].iloc[0])
+    assert dataframe.loc[dataframe["type"] == "vmap", "transform_kind"].iloc[0] == "vmap"
+    assert loaded.transforms[0].transform_kind == "vmap"
+    assert loaded.transforms[0].transform_config["in_dims"] == 0
+
+
+def test_transform_selector_intervention_no_crash() -> None:
+    """Transform selector can be used as an intervention predicate."""
+
+    x = torch.randn(3, 4)
+    log = tl.trace(
+        VmapMaskModel().eval(),
+        x,
+        intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
+    )
+
+    assert [op.transform_kind for op in log.transforms] == ["vmap"]
