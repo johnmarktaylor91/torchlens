@@ -6,6 +6,8 @@ import torch.nn as nn
 from typing import cast
 
 import torchlens as tl
+from torchlens import _state
+from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens import Recording
 
 
@@ -96,6 +98,50 @@ class GradOverModuleModel(nn.Module):
         return torch.func.grad(loss_fn)(x)
 
 
+class RawGradOverModuleModel(nn.Module):
+    """Use an explicitly uninstrumented raw grad builder over a module."""
+
+    def __init__(self) -> None:
+        """Initialize the raw builder and inner module."""
+
+        super().__init__()
+        wrap_torch()
+        self.raw_grad = _state._decorated_to_orig[id(torch.func.grad)]
+        self.inner = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a raw-transform gradient through an inner module.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Raw-transform-computed gradient.
+        """
+
+        def loss_fn(z: torch.Tensor) -> torch.Tensor:
+            """Return a scalar inner-module loss.
+
+            Parameters
+            ----------
+            z:
+                Input tensor.
+
+            Returns
+            -------
+            torch.Tensor
+                Scalar loss.
+            """
+
+            return self.inner(z).sum()
+
+        return self.raw_grad(loss_fn)(x)
+
+
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""
@@ -141,6 +187,16 @@ def test_grad_over_module_boundary_does_not_crash() -> None:
     log = tl.trace(GradOverModuleModel().eval(), x, layers_to_save="all")
 
     assert [op for op in log.ops if op.type == "grad"]
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_raw_grad_over_module_wrapper_tensor_leak_does_not_crash() -> None:
+    """Hardening guards tolerate wrapper tensors from uninstrumented transforms."""
+
+    x = torch.randn(4)
+    log = tl.trace(RawGradOverModuleModel().eval(), x, layers_to_save="all")
+
+    assert log.output_layers
 
 
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")

@@ -123,6 +123,32 @@ def _quantized_tensor_equal(tensor_a: torch.Tensor, tensor_b: torch.Tensor) -> b
     )
 
 
+def is_functorch_wrapped_tensor(value: Any) -> bool:
+    """Return whether ``value`` is a functorch wrapper tensor.
+
+    Parameters
+    ----------
+    value:
+        Object to inspect.
+
+    Returns
+    -------
+    bool
+        True when PyTorch reports a functorch wrapper tensor.
+    """
+
+    if not isinstance(value, torch.Tensor):
+        return False
+    try:
+        checker = torch._C._functorch.is_functorch_wrapped_tensor  # type: ignore[attr-defined]
+    except AttributeError:
+        return False
+    try:
+        return bool(checker(value))
+    except RuntimeError:
+        return False
+
+
 def tensor_nanequal(
     tensor_a: torch.Tensor, tensor_b: torch.Tensor, allow_tolerance: bool = False
 ) -> bool:
@@ -150,6 +176,9 @@ def tensor_nanequal(
         True if the tensors are considered equal.
     """
     from .._state import pause_logging
+
+    if is_functorch_wrapped_tensor(tensor_a) or is_functorch_wrapped_tensor(tensor_b):
+        return False
 
     if tensor_a.shape != tensor_b.shape:
         return False

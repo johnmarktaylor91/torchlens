@@ -62,7 +62,13 @@ from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
 )
-from ...utils.tensor_utils import get_memory_amount, safe_copy, safe_to, tensor_nanequal
+from ...utils.tensor_utils import (
+    get_memory_amount,
+    is_functorch_wrapped_tensor,
+    safe_copy,
+    safe_to,
+    tensor_nanequal,
+)
 from ...utils.collections import index_nested, ensure_iterable
 from ...capture.flops import compute_backward_flops, compute_forward_flops
 from ...capture.projections import LiveOpView
@@ -2462,6 +2468,8 @@ def _add_autograd_saved_tensor(
     tuple of int
         ``(bytes, tensor_count)`` contribution for this tensor.
     """
+    if is_functorch_wrapped_tensor(tensor):
+        return 0, 0
     try:
         data_ptr = tensor.data_ptr()
     except Exception:

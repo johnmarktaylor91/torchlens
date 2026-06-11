@@ -68,7 +68,7 @@ from ...ir import (
     ModulePrepEvent,
     replace_op_event,
 )
-from ...utils.tensor_utils import get_memory_amount
+from ...utils.tensor_utils import get_memory_amount, is_functorch_wrapped_tensor
 from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
@@ -870,6 +870,8 @@ def _record_module_entry_metadata(
     input_tensor_labels = set()
     input_tensor_labels_at_entry = []
     for t in input_tensors:
+        if is_functorch_wrapped_tensor(t):
+            continue
         # Lazily register buffer tensors that haven't been logged yet.
         label = get_tensor_label(t)
         buffer_address = cast(str, get_buffer_address(t))

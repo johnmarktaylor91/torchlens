@@ -62,6 +62,7 @@ from .._state import pause_logging
 from ..utils.tensor_utils import (
     concatenate_batch_tensors,
     get_memory_amount,
+    is_functorch_wrapped_tensor,
     print_override,
     safe_copy,
     safe_to,
@@ -459,6 +460,9 @@ def _tensor_content_hash(value: torch.Tensor) -> str:
     str
         SHA-256 digest.
     """
+
+    if is_functorch_wrapped_tensor(value):
+        return f"functorch_wrapped_tensor:{id(value)}"
 
     with pause_logging():
         tensor = safe_copy(value, detach_tensor=True).cpu().contiguous()
