@@ -152,11 +152,12 @@ def _emit_tensor_grad_event(trace: "Trace", grad: torch.Tensor, tensor_label: st
     final_label = getattr(trace, "_raw_to_final_layer_labels", {}).get(tensor_label, tensor_label)
     with pause_logging():
         memory = int(grad.nelement() * grad.element_size())
+        payload = grad.detach().clone() if _should_save_grad_payload(trace, final_label) else None
     events.append_backward(
         OpGradObserved(
             op_label=final_label,
             pass_index=pass_index,
-            payload_ref=None,
+            payload_ref=payload,
             shape=tuple(grad.shape),
             dtype=str(grad.dtype),
             memory=memory,
@@ -164,6 +165,21 @@ def _emit_tensor_grad_event(trace: "Trace", grad: torch.Tensor, tensor_label: st
             seq=events.next_backward_seq(),
         )
     )
+
+
+def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
+    """Return whether a tensor-hook gradient should retain its payload."""
+
+    if not getattr(trace, "save_gradients", False):
+        return False
+    if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
+        return False
+    selection = getattr(trace, "_grad_layer_nums_to_save", "all")
+    if selection in [None, "none", []]:
+        return False
+    if selection == "all":
+        return True
+    return trace[layer_label].raw_index in selection
 
 
 def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None:

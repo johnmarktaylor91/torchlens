@@ -29,6 +29,7 @@ from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_v
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..quantities import Bytes
 from ._accessor_base import Accessor
+from .op import GradientRecord, GradientRecordAccessor
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -81,6 +82,7 @@ class Param:
         "_grad_shape": FieldPolicy.KEEP,
         "_grad_dtype": FieldPolicy.KEEP,
         "_grad_memory": FieldPolicy.KEEP,
+        "_grad_records": FieldPolicy.DROP,
     }
 
     def __init__(
@@ -124,6 +126,7 @@ class Param:
         self._grad_shape: Optional[Tuple[int, ...]] = None
         self._grad_dtype: Optional[torch.dtype] = None
         self._grad_memory: Bytes = Bytes(0)
+        self._grad_records: list[GradientRecord] = []
 
     @property
     def is_quantized(self) -> bool:
@@ -267,6 +270,47 @@ class Param:
         """
 
         return None if self._param_ref is None else self._param_ref.grad
+
+    @property
+    def grads(self) -> GradientRecordAccessor:
+        """Per-pass accumulating gradient increments observed for this parameter."""
+
+        return GradientRecordAccessor(self._grad_records)
+
+    def _record_gradient_increment(
+        self,
+        *,
+        backward_pass_index: int,
+        grad: torch.Tensor,
+        timestamp: float,
+    ) -> None:
+        """Append one AccumulateGrad increment for this parameter.
+
+        Parameters
+        ----------
+        backward_pass_index:
+            One-based global backward pass number.
+        grad:
+            Incoming gradient increment.
+        timestamp:
+            Event timestamp.
+        """
+
+        saved = grad.detach().clone()
+        memory = int(saved.nelement() * saved.element_size())
+        self._grad_records.append(
+            GradientRecord(
+                owner=self,
+                ordinal=len(self._grad_records) + 1,
+                backward_pass_index=backward_pass_index,
+                grad=saved,
+                transformed_grad=None,
+                shape=tuple(saved.shape),
+                dtype=str(saved.dtype),
+                memory=memory,
+                timestamp=timestamp,
+            )
+        )
 
     def _check_param_grad(self) -> None:
         """Lazily check if the parameter has a grad and cache the result.

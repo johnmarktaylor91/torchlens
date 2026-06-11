@@ -538,6 +538,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
     latest_topology: dict[int, tuple[int, ...]] = {}
     fired_events: list[GradFnFired] = []
     op_grad_passes: set[int] = set()
+    op_grad_events: list[OpGradObserved] = []
     for event in events:
         if isinstance(event, BackwardPassStart):
             starts[event.pass_index] = event
@@ -551,6 +552,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
             fired_events.append(event)
         elif isinstance(event, OpGradObserved):
             op_grad_passes.add(event.pass_index)
+            op_grad_events.append(event)
 
     grad_fn_logs: OrderedDict[int, GradFn] = OrderedDict()
     type_counter: dict[str, int] = {}
@@ -634,6 +636,45 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
         pass_to_calls.setdefault(event.pass_index, []).append(call)
 
     _sync_grad_fn_graph_relations(trace)
+
+    unique_payload_ids: set[int] = set()
+    total_gradient_memory = 0
+    total_backward_memory = 0
+    saved_grad_labels: set[str] = set()
+    for op in getattr(trace, "layer_list", []):
+        op.__dict__.setdefault("_grad_records", []).clear()
+    for event in sorted(
+        op_grad_events, key=lambda item: (item.pass_index, item.timestamp, item.seq)
+    ):
+        if event.op_label not in getattr(trace, "layer_dict_all_keys", {}):
+            continue
+        op = trace[event.op_label]
+        payload = event.payload_ref if isinstance(event.payload_ref, torch.Tensor) else None
+        op._record_gradient(
+            backward_pass_index=event.pass_index,
+            grad=payload,
+            transformed_grad=None,
+            shape=event.shape,
+            dtype=event.dtype,
+            memory=event.memory,
+            timestamp=event.timestamp,
+        )
+        if payload is None:
+            continue
+        op.has_grad = True
+        op.grad_shape = tuple(payload.shape)
+        op.grad_dtype = payload.dtype
+        op.gradient_memory = Bytes(event.memory or 0)
+        saved_grad_labels.add(op.layer_label)
+        payload_id = id(payload)
+        if payload_id not in unique_payload_ids:
+            unique_payload_ids.add(payload_id)
+            total_backward_memory += int(event.memory or 0)
+        total_gradient_memory += int(event.memory or 0)
+    trace._saved_grads_set = saved_grad_labels
+    trace.saved_gradient_memory = Bytes(total_gradient_memory)
+    trace.total_gradient_memory = Bytes(total_gradient_memory)
+    trace.total_backward_memory = Bytes(total_backward_memory)
 
     roots_by_pass = getattr(trace, "_backward_roots_by_pass", {})
     backward_pass_logs: OrderedDict[int, BackwardPass] = OrderedDict()
@@ -732,24 +773,41 @@ def _make_grad_fn_hook(
             if isinstance(grad_value, torch.Tensor) and grad_value.grad_fn is not None:
                 refs.append(grad_value.grad_fn)
         events = _ensure_backward_event_stream(live_trace)
+        event_timestamp = time.time()
+        pass_index = int(
+            getattr(
+                live_trace,
+                "_active_backward_pass_index",
+                getattr(live_trace, "num_backward_passes", 0) + 1,
+            )
+        )
         events.append_backward(
             GradFnFired(
                 object_id=grad_fn_object_id,
-                pass_index=int(
-                    getattr(
-                        live_trace,
-                        "_active_backward_pass_index",
-                        getattr(live_trace, "num_backward_passes", 0) + 1,
-                    )
-                ),
+                pass_index=pass_index,
                 grad_input_refs=stored_grad_inputs,
                 grad_output_refs=stored_grad_outputs,
                 intervention_fire_ref=None,
-                timestamp=time.time(),
+                timestamp=event_timestamp,
                 seq=events.next_backward_seq(),
             )
         )
         if is_accumulate_grad:
+            param_address = getattr(live_trace, "_grad_fn_param_refs_by_object_id", {}).get(
+                grad_fn_object_id
+            )
+            param_log = (
+                live_trace.param_logs[param_address]
+                if param_address is not None and param_address in live_trace.param_logs
+                else None
+            )
+            picked = _first_tensor_from_hook_args(hook_args)
+            if param_log is not None and picked is not None:
+                param_log._record_gradient_increment(
+                    backward_pass_index=pass_index,
+                    grad=picked[2],
+                    timestamp=event_timestamp,
+                )
             return None
         from ...intervention.runtime import _apply_live_backward_hooks
 
@@ -949,6 +1007,9 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             param_address = trace._param_log_by_pid.get(id(param)) if param is not None else None
             if param_address is not None:
                 trace._grad_fn_param_refs[grad_fn_record.label] = param_address
+                trace.__dict__.setdefault("_grad_fn_param_refs_by_object_id", {})[
+                    grad_fn_object_id
+                ] = param_address
         source_fields = {
             key: getattr(grad_fn_record, key)
             for key in (

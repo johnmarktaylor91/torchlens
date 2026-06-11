@@ -198,6 +198,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "is_appended": False,
     "relationship_evidence": {},
     "total_gradient_memory": 0,
+    "total_backward_memory": 0,
     "saved_gradient_memory": 0,
     "num_saved_layers": 0,
     "num_saved_module_calls": 0,
@@ -1143,6 +1144,7 @@ class Trace(CapturedRun):
         "op_equivalence_classes": FieldPolicy.KEEP,
         "total_activation_memory": FieldPolicy.KEEP,
         "total_gradient_memory": FieldPolicy.KEEP,
+        "total_backward_memory": FieldPolicy.KEEP,
         "total_autograd_memory": FieldPolicy.KEEP,
         "num_saved_ops": FieldPolicy.KEEP,
         "saved_activation_memory": FieldPolicy.KEEP,
@@ -1207,6 +1209,7 @@ class Trace(CapturedRun):
         "grad_fn_order": FieldPolicy.KEEP,
         "backward_pass_logs": FieldPolicy.KEEP,
         "_grad_fn_param_refs": FieldPolicy.KEEP,
+        "_grad_fn_param_refs_by_object_id": FieldPolicy.DROP,
         "_param_log_by_pid": FieldPolicy.DROP,
         "backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
         "backward_durations": FieldPolicy.KEEP,
@@ -1459,6 +1462,7 @@ class Trace(CapturedRun):
         # Aggregate tensor statistics (computed during postprocessing):
         self.total_activation_memory: Bytes = Bytes(0)
         self.total_gradient_memory: Bytes = Bytes(0)
+        self.total_backward_memory: Bytes = Bytes(0)
         self.total_autograd_memory: Bytes | None = None
         self.num_saved_ops: int = 0  # layers with has_saved_activation=True
         self.saved_activation_memory: Bytes = Bytes(0)

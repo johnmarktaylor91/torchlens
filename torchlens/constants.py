@@ -167,6 +167,7 @@ MODEL_LOG_FIELD_ORDER = [
     # Tensor info:
     "total_activation_memory",
     "total_gradient_memory",
+    "total_backward_memory",
     "total_autograd_memory",
     "num_saved_ops",
     "saved_activation_memory",

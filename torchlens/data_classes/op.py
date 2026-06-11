@@ -59,6 +59,7 @@ from ..intervention.types import LAYER_PASS_LOG_FIELD_FORK_POLICY
 from ..intervention.errors import DirectActivationWriteWarning
 from ..quantities import Bytes, Flops, Macs, as_bytes, as_duration, as_flops, as_macs
 from .._state import pause_logging
+from ._accessor_base import Accessor
 from ..utils.tensor_utils import (
     concatenate_batch_tensors,
     get_memory_amount,
@@ -159,6 +160,87 @@ def _summarize_value(value: Any) -> str:
     if len(text) > 60:
         text = text[:57] + "..."
     return text
+
+
+class GradientRecord:
+    """Saved gradient payload observed for one op during one backward pass.
+
+    Parameters
+    ----------
+    owner:
+        Op that received the gradient.
+    ordinal:
+        One-based local ordinal for this owner.
+    backward_pass_index:
+        One-based global backward pass number.
+    grad:
+        Saved raw gradient tensor, if retained.
+    transformed_grad:
+        Saved transformed gradient tensor, if retained.
+    shape:
+        Observed raw gradient shape.
+    dtype:
+        Observed raw gradient dtype string.
+    memory:
+        Observed raw gradient memory in bytes.
+    timestamp:
+        Event timestamp.
+    """
+
+    def __init__(
+        self,
+        *,
+        owner: Any,
+        ordinal: int,
+        backward_pass_index: int,
+        grad: torch.Tensor | None,
+        transformed_grad: Any | None,
+        shape: tuple[int, ...] | None,
+        dtype: str | None,
+        memory: int | None,
+        timestamp: float,
+    ) -> None:
+        self.owner = owner
+        self.ordinal = ordinal
+        self.backward_pass_index = backward_pass_index
+        self.grad = grad
+        self.transformed_grad = transformed_grad
+        self.shape = shape
+        self.dtype = dtype
+        self.memory = Bytes(memory or 0)
+        self.timestamp = timestamp
+
+    @property
+    def is_saved(self) -> bool:
+        """Return whether this record retained a payload."""
+
+        return self.grad is not None or self.transformed_grad is not None
+
+
+class GradientRecordAccessor(Accessor[GradientRecord]):
+    """Accessor for per-owner gradient records."""
+
+    def __init__(self, records: list[GradientRecord]) -> None:
+        """Initialize from records in local ordinal order."""
+
+        super().__init__({str(record.ordinal): record for record in records}, item_list=records)
+
+    def for_pass(self, pass_index: int) -> GradientRecord:
+        """Return the gradient record for a one-based backward pass number."""
+
+        matches = [record for record in self._list if record.backward_pass_index == pass_index]
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            raise ValueError(
+                f"Multiple gradient records participated in pass {pass_index}; "
+                "use positional indexing on .grads."
+            )
+        available = [record.backward_pass_index for record in self._list]
+        raise KeyError(
+            f"Gradient record for backward pass {pass_index} not found; participated in "
+            f"passes {available}."
+        )
 
 
 def _summarize_call_args(saved_args: Any, non_tensor_pos_args: Any) -> str | None:
@@ -687,6 +769,7 @@ class Op:
         "func_config": FieldPolicy.BLOB_RECURSIVE,
         "out_ref": FieldPolicy.DROP,
         "grad_ref": FieldPolicy.DROP,
+        "_grad_records": FieldPolicy.DROP,
         "_pending_blob_id": FieldPolicy.DROP,
         "_pending_transformed_out_blob_id": FieldPolicy.DROP,
         "_pending_grad_blob_id": FieldPolicy.DROP,
@@ -701,6 +784,20 @@ class Op:
 
         if name == "grad":
             state = object.__getattribute__(self, "__dict__")
+            records = state.get("_grad_records")
+            if records:
+                saved = [record for record in records if record.grad is not None]
+                if len(saved) == 1:
+                    return saved[0].grad
+                if len(saved) > 1:
+                    label = (
+                        state.get("label") or state.get("layer_label") or state.get("_label_raw")
+                    )
+                    passes = [record.backward_pass_index for record in saved]
+                    raise ValueError(
+                        f"op {label} has gradients saved from multiple backward passes {passes}; "
+                        "use op.grads[...] / op.grad_for(bwd=k)."
+                    )
             grad = state.get("grad")
             if grad is None and state.get("grad_ref") is not None:
                 return object.__getattribute__(self, "materialize_grad")()
@@ -1037,6 +1134,7 @@ class Op:
         self._pending_transformed_out_blob_id: Optional[str] = None
         self._pending_grad_blob_id: Optional[str] = None
         self._pending_transformed_grad_blob_id: Optional[str] = None
+        self._grad_records: list[GradientRecord] = []
         object.__setattr__(self, "_construction_done", True)
 
     @property
@@ -1165,6 +1263,87 @@ class Op:
 
         grad_fn_handle = self.grad_fn_handle
         return None if grad_fn_handle is None else type(grad_fn_handle)
+
+    @property
+    def grads(self) -> GradientRecordAccessor:
+        """Per-pass gradient records saved for this Op."""
+
+        return GradientRecordAccessor(self.__dict__.setdefault("_grad_records", []))
+
+    def grad_for(self, *, bwd: int) -> torch.Tensor:
+        """Return the saved gradient tensor for one backward pass.
+
+        Parameters
+        ----------
+        bwd:
+            One-based backward pass number.
+
+        Returns
+        -------
+        torch.Tensor
+            Saved raw gradient tensor for the requested pass.
+        """
+
+        record = self.grads.for_pass(bwd)
+        if record.grad is None:
+            raise ValueError(
+                f"op {self.label} has no saved gradient payload for backward pass {bwd}."
+            )
+        return record.grad
+
+    def _record_gradient(
+        self,
+        *,
+        backward_pass_index: int,
+        grad: torch.Tensor | None,
+        transformed_grad: Any | None,
+        shape: tuple[int, ...] | None,
+        dtype: str | None,
+        memory: int | None,
+        timestamp: float,
+    ) -> GradientRecord:
+        """Append or replace the projected gradient record for one pass.
+
+        Parameters
+        ----------
+        backward_pass_index:
+            One-based global backward pass number.
+        grad:
+            Saved raw gradient tensor, if retained.
+        transformed_grad:
+            Saved transformed gradient tensor, if retained.
+        shape:
+            Observed raw gradient shape.
+        dtype:
+            Observed raw gradient dtype string.
+        memory:
+            Observed raw gradient memory in bytes.
+        timestamp:
+            Event timestamp.
+
+        Returns
+        -------
+        GradientRecord
+            Appended record.
+        """
+
+        records = self.__dict__.setdefault("_grad_records", [])
+        records[:] = [
+            record for record in records if record.backward_pass_index != backward_pass_index
+        ]
+        record = GradientRecord(
+            owner=self,
+            ordinal=len(records) + 1,
+            backward_pass_index=backward_pass_index,
+            grad=grad,
+            transformed_grad=transformed_grad,
+            shape=shape,
+            dtype=dtype,
+            memory=memory,
+            timestamp=timestamp,
+        )
+        records.append(record)
+        return record
 
     @property
     def grad_fn_label(self) -> str | None:
