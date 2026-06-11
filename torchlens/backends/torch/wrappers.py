@@ -43,7 +43,7 @@ import types
 import warnings
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from functools import wraps
+from functools import partial, wraps
 from typing import Any, TYPE_CHECKING, cast
 
 import torch
@@ -211,6 +211,153 @@ def _is_inside_functorch_transform() -> bool:
         return maybe_current_level() is not None
     except (ImportError, AttributeError):
         return False
+
+
+TRANSFORM_BUILDER_SITES: tuple[tuple[str, str, str], ...] = (
+    ("torch", "vmap", "vmap"),
+    ("torch.func", "vmap", "vmap"),
+    ("torch.func", "grad", "grad"),
+    ("torch._functorch.apis", "vmap", "vmap"),
+    ("torch._functorch.apis", "grad", "grad"),
+)
+"""Torch transform builders instrumented as returned-callable boundaries."""
+
+
+def _transform_tags(callable_obj: Callable[..., Any]) -> tuple[str, ...]:
+    """Return TorchLens transform tags carried by a callable.
+
+    Parameters
+    ----------
+    callable_obj:
+        Callable or partial to inspect.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Transform tags, outermost first, or an empty tuple when unavailable.
+    """
+
+    tags = getattr(callable_obj, "__tl_transform_tags__", ())
+    if tags:
+        return tuple(tags)
+    if isinstance(callable_obj, partial):
+        return _transform_tags(callable_obj.func)
+    return ()
+
+
+def transform_builder_decorator(
+    builder: Callable[..., Any],
+    transform_kind: str,
+) -> Callable[..., Any]:
+    """Wrap a torch.func-style transform builder.
+
+    Parameters
+    ----------
+    builder:
+        Original transform builder such as ``torch.func.vmap``.
+    transform_kind:
+        Unsanitized transform kind recorded on returned callables.
+
+    Returns
+    -------
+    Callable[..., Any]
+        Builder wrapper that instruments returned callables unconditionally.
+    """
+
+    @wraps(builder)
+    def wrapped_builder(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        built = builder(func, *args, **kwargs)
+        if not callable(built) or hasattr(built, "__tl_transform_tags__"):
+            return built
+
+        inner_tags = _transform_tags(func)
+        tags = (transform_kind, *inner_tags)
+        raw_built = built
+
+        @wraps(raw_built)
+        def wrapped_transform(*call_args: Any, **call_kwargs: Any) -> Any:
+            if not _state._logging_enabled or _state._active_trace is None:
+                return raw_built(*call_args, **call_kwargs)
+
+            trace = cast(Any, _state._active_trace)
+            capture_start_time = time.time()
+            save_rng = getattr(trace, "save_rng_states", False)
+            rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
+            autocast_state = log_current_autocast_state()
+            func_call_id = _state.next_func_call_id()
+            with _state.pause_logging():
+                out_orig = raw_built(*call_args, **call_kwargs)
+            exec_ctx = FuncExecutionContext(
+                time_elapsed=time.time() - capture_start_time,
+                rng_states=rng_states,
+                autocast_state=autocast_state,
+            )
+            out_orig = apply_live_hooks_to_outputs(
+                trace,
+                raw_built,
+                transform_kind,
+                call_args,
+                call_kwargs,
+                out_orig,
+                exec_ctx,
+                True,
+                func_call_id,
+            )
+            if _collect_output_tensors(out_orig):
+                log_function_output_tensors(
+                    trace,
+                    raw_built,
+                    transform_kind,
+                    call_args,
+                    call_kwargs,
+                    call_args,
+                    call_kwargs,
+                    out_orig,
+                    exec_ctx,
+                    True,
+                    func_call_id,
+                )
+            return out_orig
+
+        wrapped_transform.__tl_transform_tags__ = tags  # type: ignore[attr-defined]
+        wrapped_transform.__tl_transform_kind__ = transform_kind  # type: ignore[attr-defined]
+        return wrapped_transform
+
+    return wrapped_builder
+
+
+def _decorate_transform_builders() -> None:
+    """Install transform-builder decorators listed in ``TRANSFORM_BUILDER_SITES``.
+
+    Returns
+    -------
+    None
+        Torch namespaces and decoration maps are updated in place.
+    """
+
+    for namespace_name, attr_name, transform_kind in TRANSFORM_BUILDER_SITES:
+        namespace_key = namespace_name.removeprefix("torch.")
+        namespace = torch if namespace_name == "torch" else nested_getattr(torch, namespace_key)
+        if not hasattr(namespace, attr_name):
+            continue
+        current = getattr(namespace, attr_name)
+        if id(current) in _state._decorated_to_orig:
+            continue
+        if id(current) in _state._orig_to_decorated:
+            decorated = _state._orig_to_decorated[id(current)]
+        else:
+            decorated = transform_builder_decorator(current, transform_kind)
+            mark_decorated_function(decorated)
+            _state._orig_to_decorated[id(current)] = decorated
+            _state._decorated_to_orig[id(decorated)] = current
+            _state._decorated_func_mapper[decorated] = current
+            _state._decorated_func_mapper[current] = decorated
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                setattr(namespace, attr_name, decorated)
+        except (AttributeError, TypeError):
+            pass
 
 
 # Functions that should never be logged — they are metadata queries, not
@@ -807,6 +954,7 @@ def decorate_all_once() -> None:
     # instead of monkey-patching torch.identity (which doesn't exist in PyTorch
     # type stubs and causes mypy errors).
     _state._decorated_identity = torch_func_decorator(identity, "identity")
+    _decorate_transform_builders()
     _state._is_decorated = True
 
     # Wrapping __getitem__ on torch.Tensor pollutes the C-level sq_item slot,
@@ -902,6 +1050,24 @@ def unwrap_torch() -> None:
         except (AttributeError, TypeError):
             pass
 
+    for namespace_name, func_name, _transform_kind in TRANSFORM_BUILDER_SITES:
+        namespace_key = namespace_name.removeprefix("torch.")
+        local_func_namespace = (
+            torch if namespace_name == "torch" else nested_getattr(torch, namespace_key)
+        )
+        if not hasattr(local_func_namespace, func_name):
+            continue
+        current = getattr(local_func_namespace, func_name)
+        orig = _state._decorated_to_orig.get(id(current))
+        if orig is None:
+            continue
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                setattr(local_func_namespace, func_name, orig)
+        except (AttributeError, TypeError):
+            pass
+
     _replace_detached_references(_state._decorated_to_orig)
     _state._is_decorated = False
 
@@ -948,6 +1114,8 @@ def wrap_torch() -> None:
                 setattr(local_func_namespace, func_name, decorated)
         except (AttributeError, TypeError):
             pass
+
+    _decorate_transform_builders()
 
     _replace_detached_references(_state._orig_to_decorated)
     # Recreate decorated identity in case wrapper references shifted
