@@ -3,8 +3,8 @@
 Covers:
     - Nested ``trace`` / ``active_logging`` must raise rather than
       silently corrupt the outer Trace.
-    - functorch / vmap / grad transforms emit a one-shot UserWarning so the
-      user knows their log is incomplete (rather than silently empty).
+    - Instrumented functorch / vmap / grad transforms do not warn, while raw
+      uninstrumented transform regions retain the one-shot warning.
     - pyproject pins ``torch>=2.4`` (matching the autocast API already in use)
       and advertises Python 3.13 support.
 """
@@ -19,6 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens.backends.torch.wrappers import wrap_torch
 
 
 class _Tiny(nn.Module):
@@ -104,9 +105,7 @@ _HAS_FUNCTORCH_VMAP = hasattr(torch, "func") and hasattr(torch.func, "vmap")
 
 @pytest.mark.skipif(not _HAS_FUNCTORCH_VMAP, reason="torch.func.vmap not available")
 def test_vmap_emits_userwarning_once_per_session() -> None:
-    """When a model's forward uses torch.func.vmap, TorchLens skips the inner ops
-    but must warn once so the user knows the log is incomplete.
-    """
+    """Instrumented vmap emits no functorch warning."""
 
     class VmappedSum(nn.Module):
         """Uses vmap internally but returns a tensor from a normal (loggable) op
@@ -129,19 +128,29 @@ def test_vmap_emits_userwarning_once_per_session() -> None:
         for w in caught
         if issubclass(w.category, UserWarning) and "functorch" in str(w.message).lower()
     ]
-    assert len(vmap_warnings) == 1, (
-        f"Expected exactly one functorch warning, got {len(vmap_warnings)}: "
-        f"{[str(w.message) for w in vmap_warnings]}"
-    )
+    assert vmap_warnings == []
 
 
 @pytest.mark.skipif(not _HAS_FUNCTORCH_VMAP, reason="torch.func.vmap not available")
 def test_vmap_warning_flag_resets_between_sessions() -> None:
-    """Each call to trace starts with a fresh warning flag."""
+    """Raw uninstrumented vmap still warns once per trace session."""
+
+    wrap_torch()
+    raw_vmap = _state._decorated_to_orig[id(torch.func.vmap)]
 
     class VmappedSum(nn.Module):
+        """Use a raw prebuilt vmap callable to exercise the retained warning."""
+
+        def __init__(self) -> None:
+            """Initialize the raw transform callable after wrapping is installed."""
+
+            super().__init__()
+            self.vmapped_sum = raw_vmap(lambda row: row.sum())
+
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = torch.func.vmap(lambda row: row.sum())(x)
+            """Run the raw vmap callable and consume its output outside the transform."""
+
+            v = self.vmapped_sum(x)
             return v + 1
 
     model = VmappedSum()

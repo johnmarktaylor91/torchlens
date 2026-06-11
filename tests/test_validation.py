@@ -1016,7 +1016,7 @@ def _functionless_replacement_ops(log: "Trace") -> list:
     ]
 
 
-def test_plain_trace_vmap_mask_has_no_functionless_replacement():
+def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
     """TRIPWIRE: an untraced vmap-built mask must not become a placeholder.
 
     Reintroducing the old behavior (logging the untagged mask as a functionless
@@ -1034,15 +1034,12 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement():
     assert _functionless_replacement_ops(log) == []
     assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
 
-    # The mask is instead logged as a legitimate internal source.
-    internal_sources = [
-        op
-        for op in log.ops
-        if getattr(op, "is_internal_source", False)
-        and op.func is None
-        and not getattr(op, "is_buffer", False)
-    ]
-    assert any(op.type == "internalsource" for op in internal_sources)
+    # The mask is instead logged as a transform boundary node with a clean parent edge.
+    transform_ops = [op for op in log.ops if getattr(op, "is_transform", False)]
+    assert [op.type for op in transform_ops] == ["vmap"]
+    assert transform_ops[0].transform_chain == ("vmap", "vmap")
+    assert transform_ops[0].parents == ["arange_1_1", "arange_2_2"]
+    assert any("vmap_1_3" in op.parents for op in log.ops if op.type == "add")
 
     # Validation passes legitimately (not via an exemption hiding the gap).
     check_metadata_invariants(log)

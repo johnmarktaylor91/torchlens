@@ -389,7 +389,7 @@ def transform_builder_decorator(
     @wraps(builder)
     def wrapped_builder(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         built = builder(func, *args, **kwargs)
-        if not callable(built) or hasattr(built, "__tl_transform_tags__"):
+        if not callable(built):
             return built
 
         inner_tags = _transform_tags(func)
