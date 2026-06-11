@@ -491,3 +491,129 @@ def test_invariant_13_legacy_if_view_is_bidirectionally_consistent() -> None:
         _assert_invariant_error(trace, ("Invariant 13", "conditional_branch_edges"))
     finally:
         trace.cleanup()
+
+
+def test_invariant_14_arm_entry_edges_must_be_real_graph_edges() -> None:
+    """Invariant 14 fails when a conditional arm-entry edge has no graph edge.
+
+    The corruption is applied consistently across every conditional structure
+    (arm-entry edges, per-op and Layer ``conditional_arm_children``, derived
+    THEN views, and rolled edge passes) so that invariants 1-13 all still pass
+    and only the new graph-edge cross-check can catch it.
+    """
+
+    trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
+    try:
+        event = _get_only_event(trace)
+        parent_label, _child_label = trace.conditional_arm_entry_edges[(event.id, "then")][0]
+        bogus_child_label = trace.input_layers[0]
+        assert bogus_child_label not in trace.layer_logs[parent_label].children
+
+        trace.conditional_arm_entry_edges[(event.id, "then")].append(
+            (parent_label, bogus_child_label)
+        )
+        trace.conditional_edge_call_indices[(parent_label, bogus_child_label, event.id, "then")] = [
+            1
+        ]
+
+        parent_layer_log = trace.layer_logs[parent_label]
+        parent_layer_log.conditional_arm_children[event.id]["then"].append(bogus_child_label)
+        _sync_layer_log_child_views(parent_layer_log)
+        for parent_op in parent_layer_log.ops.values():
+            parent_op.conditional_arm_children.setdefault(event.id, {}).setdefault(
+                "then", []
+            ).append(bogus_child_label)
+            parent_op.conditional_then_children = sorted(
+                set(parent_op.conditional_then_children) | {bogus_child_label}
+            )
+
+        _assert_invariant_error(trace, ("Invariant 14", bogus_child_label))
+    finally:
+        trace.cleanup()
+
+
+def test_invariant_15_branch_depth_must_match_stack() -> None:
+    """Invariant 15 fails when an op's branch depth disagrees with its stack."""
+
+    trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
+    try:
+        arm_op = next(
+            layer for layer in trace.layer_list if len(layer.conditional_branch_stack) > 0
+        )
+        arm_op.conditional_branch_depth = len(arm_op.conditional_branch_stack) + 1
+        _assert_invariant_error(trace, ("Invariant 15", "conditional_branch_depth"))
+    finally:
+        trace.cleanup()
+
+
+def test_invariant_15_body_role_requires_branch_stack() -> None:
+    """Invariant 15 fails when a body role appears on an op with no stack."""
+
+    from torchlens.data_classes.trace import ConditionalRoleRef
+
+    trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
+    try:
+        stackless_op = next(
+            layer
+            for layer in trace.layer_list
+            if len(layer.conditional_branch_stack) == 0 and not (layer.in_conditionals or [])
+        )
+        stackless_op.in_conditionals = [
+            ConditionalRoleRef(
+                conditional_id="cond_bogus",
+                arm_index=0,
+                arm_kind="then",
+                role="body",
+            )
+        ]
+        _assert_invariant_error(trace, ("Invariant 15", "body"))
+    finally:
+        trace.cleanup()
+
+
+def test_invariant_15_body_role_must_match_branch_stack_entry() -> None:
+    """Invariant 15 fails when a body role names the wrong conditional arm."""
+
+    from torchlens.data_classes.trace import ConditionalRoleRef
+
+    trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
+    try:
+        body_op = next(
+            layer
+            for layer in trace.layer_list
+            if any(role.role == "body" for role in (layer.in_conditionals or []))
+        )
+        body_role = next(role for role in body_op.in_conditionals if role.role == "body")
+        wrong_arm_kind = "else" if body_role.arm_kind == "then" else "then"
+        wrong_arm_index = 1 if body_role.arm_index == 0 else 0
+        body_op.in_conditionals = [
+            ConditionalRoleRef(
+                conditional_id=body_role.conditional_id,
+                arm_index=wrong_arm_index,
+                arm_kind=wrong_arm_kind,
+                role=body_role.role,
+            )
+        ]
+
+        _assert_invariant_error(
+            trace,
+            ("Invariant 15", "body role", "conditional_branch_stack", wrong_arm_kind),
+        )
+    finally:
+        trace.cleanup()
+
+
+def test_clean_nested_and_multipass_models_pass_new_invariants() -> None:
+    """Healthy nested and recurrent conditional models satisfy invariants 14-15."""
+
+    nested_trace = _log_model(NestedIfModel(), torch.ones(2, 3))
+    try:
+        assert check_metadata_invariants(nested_trace) is True
+    finally:
+        nested_trace.cleanup()
+
+    recurrent_trace = _log_model(AlternatingRecurrentIfModel(), torch.ones(1, 4))
+    try:
+        assert check_metadata_invariants(recurrent_trace) is True
+    finally:
+        recurrent_trace.cleanup()

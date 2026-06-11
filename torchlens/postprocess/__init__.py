@@ -58,6 +58,7 @@ from .graph_traversal import (
     _find_output_ancestors,
     _mark_layer_depths,
     _remove_orphan_nodes,
+    _resolve_output_parent_labels,
 )
 from .labeling import (
     _log_final_info_for_layers,
@@ -169,6 +170,11 @@ def postprocess(
         return
 
     capture_events = getattr(self, "capture_events", None)
+    # Resolve each output tensor's graph parent BEFORE materializing events:
+    # a registered buffer returned directly from forward() without ever being
+    # used by a traced op has no graph node yet, and is logged here as a late
+    # buffer source event so it materializes with everything else.
+    output_parent_labels = _resolve_output_parent_labels(self, output_tensors)
     if capture_events is not None:
         remember_event_stream(self, capture_events)
         with _vtimed(self, "  Step 0: Materialize capture events"):
@@ -193,7 +199,7 @@ def postprocess(
 
     # Step 1: Add dedicated output nodes
     with _vtimed(self, "  Step 1: Add output layers"):
-        _add_output_layers(self, output_tensors, output_tensor_addresses)
+        _add_output_layers(self, output_tensors, output_tensor_addresses, output_parent_labels)
 
     # Step 2: Trace which nodes are ancestors of output nodes
     with _vtimed(self, "  Step 2: Trace output ancestors"):

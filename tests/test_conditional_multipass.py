@@ -327,3 +327,70 @@ def test_non_conditional_recurrent_model_keeps_empty_aggregate_views() -> None:
     assert linear_layer.conditional_then_children == []
     assert linear_layer.conditional_elif_children == {}
     assert linear_layer.conditional_else_children == []
+
+
+class SecondPassOnlyThenModel(nn.Module):
+    """Model whose multi-pass parent only enters the THEN arm on pass 2.
+
+    Regression model for COND-THEN-MULTIPASS: the rolled ``Layer`` for the
+    repeated parent linear must reflect THEN-arm children contributed by pass
+    2 even though pass 1 contributes none (the old merge kept only the first
+    pass's conditional child views).
+    """
+
+    def __init__(self) -> None:
+        """Initialise the repeated parent and the THEN-arm branch layer."""
+        super().__init__()
+        self.parent = nn.Linear(4, 4)
+        self.branch = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run two parent passes; only the second triggers the THEN arm.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Final recurrent output.
+        """
+        for call_index in range(1, 3):
+            x = self.parent(x)
+            branch_marker = (x.mean() * 0) + (1.0 if call_index == 2 else -1.0)
+            if branch_marker > 0:
+                x = x + self.branch(x)
+        return x
+
+
+def test_then_children_from_second_pass_survive_layer_merge() -> None:
+    """THEN children seen only on pass 2 must appear on the rolled Layer."""
+    trace = _log_model(SecondPassOnlyThenModel())
+    conditional_id = _get_only_event(trace)
+    parent_layer = _find_multi_pass_linear_layer(trace)
+
+    branch_layers = [
+        layer
+        for layer in trace.layer_logs.values()
+        if layer.func_name == "linear" and layer.num_passes == 1
+    ]
+    assert len(branch_layers) == 1
+    branch_label = branch_layers[0].layer_label
+
+    # Pass 1 contributes no conditional children; pass 2 contributes the
+    # THEN-arm entries.  (``ops`` is keyed by 1-based pass index via items().)
+    pass_ops = dict(parent_layer.ops.items())
+    assert pass_ops[1].conditional_arm_children == {}
+    pass_two_then_children = [
+        child_label.rsplit(":", 1)[0] if child_label.rsplit(":", 1)[-1].isdigit() else child_label
+        for child_label in pass_ops[2].conditional_arm_children[conditional_id]["then"]
+    ]
+    assert branch_label in pass_two_then_children
+
+    # The rolled aggregate must reflect pass 2, not just pass 1.
+    assert branch_label in parent_layer.conditional_arm_children[conditional_id]["then"]
+    assert branch_label in parent_layer.conditional_then_children
+    assert parent_layer.conditional_elif_children == {}
+    assert parent_layer.conditional_else_children == []

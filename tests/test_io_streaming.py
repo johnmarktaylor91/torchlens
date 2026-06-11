@@ -110,12 +110,15 @@ def test_streaming_writes_blobs_before_postprocess(
         self: Trace,
         output_tensors: list[torch.Tensor],
         output_tensor_addresses: list[str],
+        output_parent_labels: list[str | None] | None = None,
     ) -> None:
         tmp_dirs = _tmp_dirs_for(bundle_path)
         observed["tmp_dirs"] = tmp_dirs
         observed["final_exists"] = bundle_path.exists()
         observed["blob_files"] = sorted(tmp_dirs[0].glob("blobs/*.safetensors")) if tmp_dirs else []
-        original_add_output_layers(self, output_tensors, output_tensor_addresses)
+        original_add_output_layers(
+            self, output_tensors, output_tensor_addresses, output_parent_labels
+        )
 
     monkeypatch.setattr(postprocess_module, "_add_output_layers", _capturing_add_output_layers)
 

@@ -10,7 +10,7 @@ and raises ``MetadataInvariantError`` on the first failure.
   D. Op field consistency (shape, dtype, pass numbering, nesting)
   E. Recurrence / loop invariants (is_recurrent, pass dicts)
   F. Branching invariants (is_branching)
-  F2. Conditional metadata invariants (13 conditional consistency checks)
+  F2. Conditional metadata invariants (15 conditional consistency checks)
   G. Op <-> Layer cross-references (pass numbering, back-pointers)
   H. Module <-> Layer containment (layers, module pass layers, reverse check)
   I. Module hierarchy (address parent-child bidirectionality, pass consistency)
@@ -1431,6 +1431,104 @@ def _check_conditional_invariants(ml: "Trace") -> None:
                     13,
                     f"{parent_layer.layer_label}.conditional_entry_children includes "
                     f"{bool_label!r} but conditional_branch_edges={ml.conditional_branch_edges}",
+                )
+
+    # Invariant 14: conditional arm-entry edges correspond to real graph edges.
+    # Invariants 1-2 tie the THEN/ELIF/ELSE child views to the arm-entry edges;
+    # this check closes the loop by tying those edges to the actual rolled
+    # parent->child topology, so conditional edge metadata can never reference
+    # an edge that does not exist in the graph.
+    rolled_graph_edges: set[tuple[str, str]] = set()
+    for layer in ml.layer_list:
+        for child_label in layer.children:
+            rolled_graph_edges.add((layer.layer_label, _strip_pass_suffix(child_label)))
+    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
+        for parent_label, child_label in edge_list:
+            rolled_edge = (
+                _strip_pass_suffix(parent_label),
+                _strip_pass_suffix(child_label),
+            )
+            if rolled_edge not in rolled_graph_edges:
+                _fail_conditional_invariant(
+                    name,
+                    14,
+                    f"conditional_arm_entry_edges[{(conditional_id, branch_kind)}] includes "
+                    f"({parent_label!r}, {child_label!r}) but the graph has no "
+                    f"{rolled_edge[0]} -> {rolled_edge[1]} edge",
+                )
+
+    # Invariant 15: per-op conditional-branch membership records agree.
+    # ``conditional_branch_stack`` is the canonical per-op record of arm
+    # membership; the depth counter and any 'body' roles in
+    # ``in_conditionals`` must be consistent with it.
+    event_id_by_bool_label: dict[str, int] = {}
+    for event in ml.conditional_records:
+        for bool_label in event.bool_layers:
+            event_id_by_bool_label[bool_label] = event.id
+    event_id_by_conditional_id: dict[str, int] = {}
+    branch_kind_by_conditional_arm: dict[tuple[str, int], str] = {}
+    for conditional in getattr(ml, "conditionals", []) or []:
+        for arm in conditional.arms:
+            if arm.terminal_bool_op_label is not None:
+                event_id = event_id_by_bool_label.get(arm.terminal_bool_op_label)
+                if event_id is not None:
+                    event_id_by_conditional_id[conditional.id] = event_id
+                    break
+        for arm_index, arm in enumerate(conditional.arms):
+            if arm.kind == "elif":
+                branch_kind_by_conditional_arm[(conditional.id, arm_index)] = f"elif_{arm_index}"
+            else:
+                branch_kind_by_conditional_arm[(conditional.id, arm_index)] = arm.kind
+    stack_entries_by_layer_label: dict[str, set[tuple[int, str]]] = {}
+    for layer in ml.layer_list:
+        stack_entries_by_layer_label.setdefault(layer.layer_label, set()).update(
+            layer.conditional_branch_stack
+        )
+
+    for layer in ml.layer_list:
+        if layer.conditional_branch_depth != len(layer.conditional_branch_stack):
+            _fail_conditional_invariant(
+                name,
+                15,
+                f"{layer.label} has conditional_branch_depth="
+                f"{layer.conditional_branch_depth} but len(conditional_branch_stack)="
+                f"{len(layer.conditional_branch_stack)}",
+            )
+        has_body_role = any(role.role == "body" for role in (layer.in_conditionals or []))
+        if has_body_role and not layer.conditional_branch_stack:
+            _fail_conditional_invariant(
+                name,
+                15,
+                f"{layer.label} has a 'body' conditional role in in_conditionals but an "
+                f"empty conditional_branch_stack",
+            )
+        stack_entries = set(layer.conditional_branch_stack)
+        for role in layer.in_conditionals or []:
+            if role.role != "body":
+                continue
+            expected_event_id = event_id_by_conditional_id.get(role.conditional_id)
+            if expected_event_id is None:
+                _fail_conditional_invariant(
+                    name,
+                    15,
+                    f"{layer.label} has body role conditional_id={role.conditional_id!r} "
+                    f"but no matching conditional event was found",
+                )
+            expected_branch_kind = branch_kind_by_conditional_arm.get(
+                (role.conditional_id, role.arm_index), role.arm_kind
+            )
+            expected_stack_entry = (expected_event_id, expected_branch_kind)
+            layer_stack_entries = stack_entries_by_layer_label.get(layer.layer_label, set())
+            if (
+                expected_stack_entry not in stack_entries
+                and expected_stack_entry not in layer_stack_entries
+            ):
+                _fail_conditional_invariant(
+                    name,
+                    15,
+                    f"{layer.label} has body role conditional_id={role.conditional_id!r} "
+                    f"arm_kind={role.arm_kind!r} but conditional_branch_stack="
+                    f"{layer.conditional_branch_stack}; expected entry {expected_stack_entry}",
                 )
 
 

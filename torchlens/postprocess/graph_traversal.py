@@ -9,6 +9,7 @@ Step 4 (_mark_layer_depths): Optional forward/backward BFS recording
     min/max hop counts from input and output nodes.
 """
 
+import dataclasses
 from collections import OrderedDict
 from typing import TYPE_CHECKING, cast
 
@@ -25,8 +26,162 @@ if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
 
+def _resolve_output_parent_labels(
+    self: "Trace", output_tensors: list[torch.Tensor]
+) -> list["str | None"]:
+    """Resolve the raw graph parent label for every model output tensor.
+
+    When every output was attributed during capture, ``self.output_layers``
+    already pairs positionally with the output tensors and is returned as-is.
+    Otherwise some outputs have no graph entry, and the historical positional
+    pairing silently shifted every value/address binding. This walks the
+    outputs explicitly, keeping capture-attributed labels in output order, and
+    handles the one attributable gap: a registered buffer returned directly
+    from ``forward()`` without ever being touched by a traced op. Such a
+    buffer has no label and no graph node, so a buffer-only model used to
+    "trace" with an empty ``output_layers`` list and then fail
+    ``validate_forward_pass`` with "No output layers found". For exactly that
+    case the buffer is logged as a late source node through the same pathway
+    as capture-time buffer reads, so Step 1 can bind a proper ``output_N``
+    node to the buffer's value.
+
+    Must run BEFORE Step 0 event materialization: the late source node is
+    appended to the capture event stream and materializes with every other op.
+
+    Parameters
+    ----------
+    self:
+        Trace being postprocessed.
+    output_tensors:
+        The actual output tensors returned by the model's ``forward()``.
+
+    Returns
+    -------
+    list[str | None]
+        One raw parent label per output tensor; ``None`` for output tensors
+        TorchLens cannot attribute (e.g. user-injected tensors), which Step 1
+        skips exactly as before.
+    """
+    from collections import deque
+
+    from ..backends.torch._tl import clear_tensor_label, get_tensor_label
+    from ..backends.torch.sources import log_source_tensor
+
+    # Common case: capture attributed every output -- the existing positional
+    # pairing is exact, and nothing needs synthesizing.
+    if len(self.output_layers) == len(output_tensors):
+        return list(self.output_layers)
+
+    capture_events = getattr(self, "capture_events", None)
+    pending_labels = deque(self.output_layers)
+    buffer_label_set = set(self.buffer_layers)
+    parent_labels: list[str | None] = []
+    buffer_addresses_by_id: dict[int, str] | None = None
+    late_buffer_labels_by_tensor_id: dict[int, str | None] = {}
+    for output_tensor in output_tensors:
+        parent_label = get_tensor_label(output_tensor)
+        if parent_label is not None:
+            # Attributed at capture and still tagged; keep the queue in step.
+            if pending_labels and pending_labels[0] == parent_label:
+                pending_labels.popleft()
+            parent_labels.append(parent_label)
+            continue
+
+        # Lazily index the source model's registered buffers by identity.
+        if buffer_addresses_by_id is None:
+            model_ref = getattr(self, "_source_model_ref", None)
+            model = model_ref() if model_ref is not None else None
+            buffer_addresses_by_id = (
+                {id(buffer): address for address, buffer in model.named_buffers()}
+                if model is not None
+                else {}
+            )
+        buffer_address = buffer_addresses_by_id.get(id(output_tensor))
+        if buffer_address is None:
+            # Untraceable user-injected output: skip, exactly as before.
+            parent_labels.append(None)
+            continue
+
+        # The tensor IS a registered buffer with no live label. Session
+        # cleanup strips capture labels from model state, so a capture-time
+        # attribution for this position would be waiting at the queue head as
+        # a buffer node for the same address.
+        head_label = pending_labels[0] if pending_labels else None
+        if (
+            head_label is not None
+            and head_label in buffer_label_set
+            and _event_buffer_address_matches(self, head_label, buffer_address)
+        ):
+            parent_labels.append(pending_labels.popleft())
+            continue
+
+        if capture_events is None:
+            parent_labels.append(None)
+            continue
+
+        tensor_id = id(output_tensor)
+        if tensor_id in late_buffer_labels_by_tensor_id:
+            parent_labels.append(late_buffer_labels_by_tensor_id[tensor_id])
+            continue
+
+        # Genuinely unlogged static buffer returned as a model output: log it
+        # as a late buffer source so it materializes with everything else.
+        log_source_tensor(self, output_tensor, "buffer", buffer_address)
+        parent_label = get_tensor_label(output_tensor)
+        late_buffer_labels_by_tensor_id[tensor_id] = parent_label
+        # Don't leak this session's label onto the model's live buffer: a
+        # stale label would make the NEXT capture skip re-registering it.
+        clear_tensor_label(output_tensor)
+        # Mirror capture-time output marking on the synthesized event.
+        if parent_label is not None:
+            event = capture_events.op_event_by_label_raw.get(parent_label)
+            if event is not None:
+                updated_event = dataclasses.replace(event, is_output_parent=True)
+                capture_events.op_event_by_label_raw[parent_label] = updated_event
+                for index, existing_event in enumerate(capture_events.op_events):
+                    if existing_event.label_raw == parent_label:
+                        capture_events.op_events[index] = updated_event
+                        break
+        parent_labels.append(parent_label)
+    return parent_labels
+
+
+def _event_buffer_address_matches(self: "Trace", label_raw: str, buffer_address: str) -> bool:
+    """Return whether a raw buffer node was logged for one buffer address.
+
+    Parameters
+    ----------
+    self:
+        Trace being postprocessed.
+    label_raw:
+        Raw label of a candidate buffer source node.
+    buffer_address:
+        Registered-buffer address to compare against.
+
+    Returns
+    -------
+    bool
+        ``True`` when the node's buffer equivalence class names the address.
+    """
+
+    capture_events = getattr(self, "capture_events", None)
+    if capture_events is None:
+        return False
+    event = capture_events.op_event_by_label_raw.get(label_raw)
+    equivalence_class = getattr(event, "equivalence_class", None) if event is not None else None
+    if not equivalence_class or not equivalence_class.startswith("buffer_"):
+        return False
+    candidate = equivalence_class.removeprefix("buffer_")
+    # The equivalence class may carry a module-stack suffix appended directly
+    # after the address, so accept a prefix match as well as an exact one.
+    return candidate == buffer_address or candidate.startswith(buffer_address)
+
+
 def _add_output_layers(
-    self: "Trace", output_tensors: list[torch.Tensor], output_addresses: list[str]
+    self: "Trace",
+    output_tensors: list[torch.Tensor],
+    output_addresses: list[str],
+    output_parent_labels: "list[str | None] | None" = None,
 ) -> None:
     """Step 1: Add dedicated output nodes to the graph.
 
@@ -37,27 +192,45 @@ def _add_output_layers(
     no params, no containing module). The original output tensor becomes the
     parent of the new output node.
 
+    Output tensors are paired with their graph parents through
+    ``output_parent_labels`` (one entry per output tensor, ``None`` for
+    unattributable tensors, which are skipped). This keeps tensors, addresses,
+    and parents aligned even when some outputs have no graph entry --
+    previously a leading unlabeled output silently shifted every pairing.
+
     Also detects child_tensor_variations: if the actual output tensor differs
     from the parent's saved out (e.g., due to in-place ops or transform),
     the difference is recorded for validation.
     """
+    if output_parent_labels is None:
+        # Legacy alignment: callers that predate per-tensor parent resolution
+        # paired ``self.output_layers`` positionally with the output tensors.
+        output_parent_labels = list(self.output_layers)
+
+    paired_outputs = [
+        (parent_label, output_tensor, output_address)
+        for parent_label, output_tensor, output_address in zip(
+            output_parent_labels, output_tensors, output_addresses
+        )
+        if parent_label is not None
+    ]
     new_output_layers = []
-    for i, output_layer_label in enumerate(self.output_layers):
+    for i, (output_layer_label, output_tensor, output_address_suffix) in enumerate(paired_outputs):
         output_node = self[output_layer_label]
         new_output_node = cast(Op, output_node.copy())
         new_output_node.layer_type = "output"
         new_output_node.is_output = True
         new_output_node.is_input = False
         new_output_node.is_buffer = False
-        if i == len(self.output_layers) - 1:
+        if i == len(paired_outputs) - 1:
             new_output_node.is_final_output = True
         self._layer_counter += 1
         new_output_node._label_raw = f"output_{i + 1}_raw"
         new_output_node._layer_label_raw = new_output_node._label_raw
         new_output_node.raw_index = self._layer_counter
         output_address = "output"
-        if output_addresses[i] != "":
-            output_address += f".{output_addresses[i]}"
+        if output_address_suffix != "":
+            output_address += f".{output_address_suffix}"
         new_output_node.io_role = output_address
         container_path_meta = getattr(self, "_output_container_specs_by_raw_label", {}).get(
             output_node._label_raw
@@ -91,7 +264,7 @@ def _add_output_layers(
         new_output_node.num_autograd_tensors = None
         new_output_node.bytes_delta_at_call = Bytes(0)
         new_output_node.bytes_peak_at_call = Bytes(0)
-        new_output_node._internal_set("saved_args", [output_tensors[i]])
+        new_output_node._internal_set("saved_args", [output_tensor])
         new_output_node._internal_set("saved_kwargs", {})
 
         # Strip any params:
@@ -148,7 +321,7 @@ def _add_output_layers(
         new_output_node.has_out_variations = False
         new_output_node.out_versions_by_child = {}
         if output_node.has_saved_activation:
-            actual_output = safe_copy(output_tensors[i])
+            actual_output = safe_copy(output_tensor)
             if output_node.output_device not in [str(actual_output.device), "same"]:
                 actual_output = safe_to(actual_output, output_node.output_device)
             actual_output_raw = actual_output

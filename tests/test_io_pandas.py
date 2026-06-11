@@ -282,3 +282,96 @@ def test_tabular_exports_round_trip(
         parquet_df = pd.read_parquet(parquet_path)
         assert list(parquet_df.columns) == list(expected_df.columns)
         assert len(parquet_df) == len(expected_df)
+
+
+class _CondConvModel(nn.Module):
+    """Conv-plus-conditional model for layer-pass dataframe column checks."""
+
+    def __init__(self) -> None:
+        """Build the conv layer whose call produces a non-empty func_config."""
+
+        super().__init__()
+        self.conv = nn.Conv2d(1, 2, 3, stride=2, padding=1)
+        # Deterministic positive weights so the THEN branch always fires.
+        nn.init.constant_(self.conv.weight, 0.1)
+        nn.init.constant_(self.conv.bias, 0.0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a conv followed by a tensor-driven conditional.
+
+        Parameters
+        ----------
+        x:
+            Input image tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Branch-selected output tensor.
+        """
+
+        y = self.conv(x)
+        if y.mean() > 0:
+            y = torch.relu(y)
+        else:
+            y = torch.sigmoid(y)
+        return y
+
+
+def test_trace_to_pandas_covers_all_op_fields() -> None:
+    """Every Op field is either a dataframe column or explicitly excluded.
+
+    Regression gate for TO-PANDAS-NEW-FIELDS: fields added to the Op data
+    model (``LAYER_PASS_LOG_FIELD_ORDER``) must never silently fail to appear
+    in ``Trace.to_pandas()``. New fields must either become columns or be
+    added to the documented exclusion list.
+    """
+
+    from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER
+    from torchlens.data_classes.trace import _TO_PANDAS_EXCLUDED_OP_FIELDS
+
+    log = trace_fn(_CondConvModel(), torch.rand(1, 1, 8, 8), layers_to_save="all")
+    try:
+        model_df = log.to_pandas()
+        columns = list(model_df.columns)
+
+        # No duplicate columns.
+        assert len(columns) == len(set(columns))
+
+        # Complete coverage: every Op field is a column or excluded.
+        unaccounted = [
+            field_name
+            for field_name in LAYER_PASS_LOG_FIELD_ORDER
+            if field_name not in columns and field_name not in _TO_PANDAS_EXCLUDED_OP_FIELDS
+        ]
+        assert unaccounted == []
+
+        # Exclusions and columns are disjoint.
+        assert not (_TO_PANDAS_EXCLUDED_OP_FIELDS & set(columns))
+
+        # Excluded fields are real Op fields (no stale exclusion entries).
+        assert _TO_PANDAS_EXCLUDED_OP_FIELDS <= set(LAYER_PASS_LOG_FIELD_ORDER)
+    finally:
+        log.cleanup()
+
+
+def test_trace_to_pandas_func_config_and_conditional_values() -> None:
+    """``func_config`` and ``conditional_then_children`` carry per-op values."""
+
+    log = trace_fn(_CondConvModel(), torch.rand(1, 1, 8, 8), layers_to_save="all")
+    try:
+        model_df = log.to_pandas()
+
+        assert "func_config" in model_df.columns
+        assert "conditional_then_children" in model_df.columns
+
+        conv_row = model_df[model_df["layer_label"] == "conv2d_1_1"].iloc[0]
+        assert conv_row["func_config"] == log["conv2d_1_1"].func_config
+        assert conv_row["func_config"]["stride"] == (2, 2)
+        assert conv_row["conditional_then_children"] == ["relu_1_4"]
+
+        relu_row = model_df[model_df["layer_label"] == "relu_1_4"].iloc[0]
+        assert relu_row["func_config"] == {}
+        assert relu_row["conditional_then_children"] == []
+    finally:
+        log.cleanup()

@@ -88,7 +88,7 @@ from .._literals import (
     VisRendererLiteral,
 )
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
-from ..constants import MODEL_LOG_FIELD_ORDER
+from ..constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from ..captured_run import CapturedRun
 from ..ir.events import TraceBuildState
 from ..options import (
@@ -235,6 +235,64 @@ class ResolvedPreprocessing:
     verified: bool
     config: dict[str, Any]
     description: str
+
+
+# Op fields deliberately omitted from ``Trace.to_pandas()`` columns. Every
+# field in ``LAYER_PASS_LOG_FIELD_ORDER`` must either appear as a dataframe
+# column or be listed here -- ``tests/test_io_pandas.py`` enforces this so new
+# Op fields can never silently fail to reach the layer-pass table again
+# (regression gate for TO-PANDAS-NEW-FIELDS).
+_TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
+    {
+        # Internal / private bookkeeping (not part of the user-facing table):
+        "_label_raw",
+        "_layer_label_raw",
+        "_tracing_finished",
+        "_construction_done",
+        "_param_barcodes",
+        "_param_logs",
+        "_edge_uses",
+        "_address_normalized",
+        "source_trace",
+        # Tensor payloads (bulk data; access via ``layer.out`` / ``layer.grad``):
+        "out",
+        "transformed_out",
+        "grad",
+        "transformed_grad",
+        "input_activations",
+        "saved_args",
+        "saved_kwargs",
+        "out_versions_by_child",
+        # Live objects, callables, and rich records (not scalar table cells):
+        "input_ops",  # live accessor over parent Op records; needs an attached
+        # source trace and raises on disk-loaded logs -- the `parents` label
+        # column already carries the relationship.
+        "func",
+        "grad_fn",
+        "grad_fn_handle",
+        "grad_fn_object_id",
+        "activation_transform",
+        "interventions",
+        "code_context",
+        "args_template",
+        "kwargs_template",
+        "container_spec",
+        "parent_param_ops",
+        "atomic_module_call",
+        "module_entry_arg_keys",
+        "annotations",
+        # Live-trace-derived views (raise on detached/rehydrated logs; the
+        # ``parents`` column plus parent rows carry the same information):
+        "input_ops",
+        "input_shapes",
+        "input_dtypes",
+        "input_memory",
+        # Bulky state snapshots and internal viz paths:
+        "func_rng_states",
+        "func_autocast_state",
+        "visualizer_path",
+    }
+)
 
 
 def _init_module_hierarchy_data() -> dict[str, Any]:
@@ -4728,67 +4786,38 @@ class Trace(CapturedRun):
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
 
-        fields_for_df = [
+        # Identity columns lead the table; the remaining columns follow the
+        # canonical Op field order minus the documented exclusions, plus the
+        # handful of property-backed convenience columns that are not stored
+        # fields. ``dict.fromkeys`` removes duplicates while keeping the lead
+        # block's positions.
+        lead_columns = [
             "layer_label",
             "label",
-            "layer_label",
             "layer_label_short",
             "label_short",
-            "layer_label_short",
             "layer_type",
-            "type_index",
-            "step_index",
-            "num_passes",
-            "pass_index",
-            "step_index",
-            "shape",
-            "dtype",
-            "activation_memory",
-            "func_name",
-            "func_config",
-            "func_duration",
-            "is_inplace",
-            "grad_fn_class_name",
-            "is_input",
-            "is_output",
-            "is_buffer",
-            "in_multi_output",
-            "multi_output_index",
-            "parents",
+        ]
+        property_columns = [
             "has_parents",
-            "root_ancestors",
-            "children",
-            "has_children",
-            "output_descendants",
             "siblings",
             "has_siblings",
             "co_parents",
             "has_co_parents",
-            "is_internal_source",
-            "min_distance_from_input",
-            "max_distance_from_input",
-            "min_distance_to_output",
-            "max_distance_to_output",
             "uses_params",
-            "num_params",
-            "param_shapes",
-            "param_memory",
-            "module_call_stack",
-            "output_of_modules",
             "is_module_input",
-            "is_module_output",
-            "module",
-            "modules",
-            "conditional_branch_depth",
-            "is_terminal_conditional_bool",
-            "conditional_context_kind",
-            "conditional_wrapper_kind",
-            "terminal_conditional_id",
-            "conditional_branch_stack",
-            "conditional_then_children",
-            "conditional_elif_children",
-            "conditional_else_children",
         ]
+        fields_for_df = list(
+            dict.fromkeys(
+                lead_columns
+                + [
+                    field_name
+                    for field_name in LAYER_PASS_LOG_FIELD_ORDER
+                    if field_name not in _TO_PANDAS_EXCLUDED_OP_FIELDS
+                ]
+                + property_columns
+            )
+        )
 
         fields_to_change_type = {
             "type_index": int,

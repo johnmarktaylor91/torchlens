@@ -23,7 +23,8 @@ eviction. Step order is load-bearing.
 
 | Step | Function | What |
 |------|----------|------|
-| 1 | `_add_output_layers` | Create dedicated output nodes |
+| pre-0 | `_resolve_output_parent_labels` | Pair each output tensor with its graph parent; late-log returned-but-never-traced buffers as source events |
+| 1 | `_add_output_layers` | Create dedicated output nodes (skips unattributable outputs) |
 | 2 | `_find_output_ancestors` | Mark nodes connected to model output |
 | 3 | `_remove_orphan_nodes` | Drop unconnected raw nodes |
 | 4 | `_mark_layer_depths` | Optional input/output distance metadata |
