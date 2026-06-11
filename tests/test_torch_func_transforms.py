@@ -142,6 +142,48 @@ class RawGradOverModuleModel(nn.Module):
         return self.raw_grad(loss_fn)(x)
 
 
+class AutogradJacobianModel(nn.Module):
+    """Use legacy ``torch.autograd.functional.jacobian`` in forward."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a jacobian reduced to the input shape.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Reduced jacobian.
+        """
+
+        jac = torch.autograd.functional.jacobian(lambda z: z * z, x)
+        return jac.diagonal().sum()
+
+
+class AutogradHessianModel(nn.Module):
+    """Use legacy ``torch.autograd.functional.hessian`` in forward."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a hessian reduction.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Reduced hessian.
+        """
+
+        hessian = torch.autograd.functional.hessian(lambda z: (z * z).sum(), x)
+        return hessian.sum()
+
+
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""
@@ -211,3 +253,27 @@ def test_func_transform_selector_matches_trace_and_record() -> None:
     assert len(recording.records) == 1
     assert recording.records[0].ctx.is_transform is True
     assert recording.records[0].ctx.transform_kind == "vmap"
+
+
+@pytest.mark.parametrize(
+    ("model", "op_type", "kind"),
+    [
+        (AutogradJacobianModel(), "autogradjacobian", "autograd.jacobian"),
+        (AutogradHessianModel(), "autogradhessian", "autograd.hessian"),
+    ],
+)
+def test_autograd_functional_direct_call_boundary(
+    model: nn.Module,
+    op_type: str,
+    kind: str,
+) -> None:
+    """Legacy autograd.functional transforms emit direct-call boundary nodes."""
+
+    x = torch.randn(3)
+    log = tl.trace(model.eval(), x, layers_to_save="all")
+    transform_ops = [op for op in log.ops if op.type == op_type]
+
+    assert len(transform_ops) == 1
+    assert transform_ops[0].parents == ["input_1"]
+    assert transform_ops[0].is_transform is True
+    assert transform_ops[0].transform_kind == kind

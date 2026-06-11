@@ -222,6 +222,16 @@ TRANSFORM_BUILDER_SITES: tuple[tuple[str, str, str], ...] = (
 )
 """Torch transform builders instrumented as returned-callable boundaries."""
 
+DIRECT_TRANSFORM_SITES: tuple[tuple[str, str, str, str], ...] = (
+    ("torch.autograd.functional", "jacobian", "autograd.jacobian", "autogradjacobian"),
+    ("torch.autograd.functional", "hessian", "autograd.hessian", "autogradhessian"),
+    ("torch.autograd.functional", "vjp", "autograd.vjp", "autogradvjp"),
+    ("torch.autograd.functional", "jvp", "autograd.jvp", "autogradjvp"),
+    ("torch.autograd.functional", "hvp", "autograd.hvp", "autogradhvp"),
+    ("torch.autograd.functional", "vhp", "autograd.vhp", "autogradvhp"),
+)
+"""Torch autograd.functional direct-call transform entry points."""
+
 
 def _transform_tags(callable_obj: Callable[..., Any]) -> tuple[str, ...]:
     """Return TorchLens transform tags carried by a callable.
@@ -312,6 +322,51 @@ def _transform_builder_config(
     return config
 
 
+def _set_transform_metadata(
+    callable_obj: Callable[..., Any],
+    *,
+    transform_kind: str,
+    tags: tuple[str, ...],
+    transform_config: dict[str, Any],
+    inner_fn: Callable[..., Any],
+) -> None:
+    """Attach TorchLens transform metadata to a callable when possible.
+
+    Parameters
+    ----------
+    callable_obj:
+        Callable receiving metadata.
+    transform_kind:
+        Unsanitized transform kind.
+    tags:
+        Transform chain tags.
+    transform_config:
+        Captured transform configuration.
+    inner_fn:
+        User function being transformed.
+
+    Returns
+    -------
+    None
+        Metadata is attached best-effort.
+    """
+
+    metadata = {
+        "__tl_is_transform_boundary__": True,
+        "__tl_transform_tags__": tags,
+        "__tl_transform_kind__": transform_kind,
+        "__tl_transform_config__": transform_config,
+        "__tl_transform_fn_name__": getattr(inner_fn, "__name__", None),
+        "__tl_transform_fn_qualname__": getattr(inner_fn, "__qualname__", None),
+        "__tl_transform_fn_source__": None,
+    }
+    for name, value in metadata.items():
+        try:
+            setattr(callable_obj, name, value)
+        except (AttributeError, TypeError):
+            pass
+
+
 def transform_builder_decorator(
     builder: Callable[..., Any],
     transform_kind: str,
@@ -341,13 +396,13 @@ def transform_builder_decorator(
         tags = (transform_kind, *inner_tags)
         raw_built = built
         transform_config = _transform_builder_config(transform_kind, args, kwargs, func)
-        raw_built.__tl_is_transform_boundary__ = True  # type: ignore[attr-defined]
-        raw_built.__tl_transform_tags__ = tags  # type: ignore[attr-defined]
-        raw_built.__tl_transform_kind__ = transform_kind  # type: ignore[attr-defined]
-        raw_built.__tl_transform_config__ = transform_config  # type: ignore[attr-defined]
-        raw_built.__tl_transform_fn_name__ = getattr(func, "__name__", None)  # type: ignore[attr-defined]
-        raw_built.__tl_transform_fn_qualname__ = getattr(func, "__qualname__", None)  # type: ignore[attr-defined]
-        raw_built.__tl_transform_fn_source__ = None  # type: ignore[attr-defined]
+        _set_transform_metadata(
+            raw_built,
+            transform_kind=transform_kind,
+            tags=tags,
+            transform_config=transform_config,
+            inner_fn=func,
+        )
 
         @wraps(raw_built)
         def wrapped_transform(*call_args: Any, **call_kwargs: Any) -> Any:
@@ -394,16 +449,97 @@ def transform_builder_decorator(
                 )
             return out_orig
 
-        wrapped_transform.__tl_is_transform_boundary__ = True  # type: ignore[attr-defined]
-        wrapped_transform.__tl_transform_tags__ = tags  # type: ignore[attr-defined]
-        wrapped_transform.__tl_transform_kind__ = transform_kind  # type: ignore[attr-defined]
-        wrapped_transform.__tl_transform_config__ = transform_config  # type: ignore[attr-defined]
-        wrapped_transform.__tl_transform_fn_name__ = getattr(func, "__name__", None)  # type: ignore[attr-defined]
-        wrapped_transform.__tl_transform_fn_qualname__ = getattr(func, "__qualname__", None)  # type: ignore[attr-defined]
-        wrapped_transform.__tl_transform_fn_source__ = None  # type: ignore[attr-defined]
+        _set_transform_metadata(
+            wrapped_transform,
+            transform_kind=transform_kind,
+            tags=tags,
+            transform_config=transform_config,
+            inner_fn=func,
+        )
         return wrapped_transform
 
     return wrapped_builder
+
+
+def direct_transform_decorator(
+    direct_func: Callable[..., Any],
+    transform_kind: str,
+    func_name: str,
+) -> Callable[..., Any]:
+    """Wrap an autograd.functional direct-call transform.
+
+    Parameters
+    ----------
+    direct_func:
+        Original direct-call transform.
+    transform_kind:
+        Unsanitized transform kind.
+    func_name:
+        Sanitized TorchLens label type.
+
+    Returns
+    -------
+    Callable[..., Any]
+        Toggle-gated direct transform wrapper.
+    """
+
+    @wraps(direct_func)
+    def wrapped_direct(user_fn: Callable[..., Any], inputs: Any, *args: Any, **kwargs: Any) -> Any:
+        if not _state._logging_enabled or _state._active_trace is None:
+            return direct_func(user_fn, inputs, *args, **kwargs)
+
+        trace = cast(Any, _state._active_trace)
+        call_args = (inputs,)
+        raw_replay = partial(direct_func, user_fn, *args, **kwargs)
+        transform_config = dict(kwargs)
+        transform_config["fn_code_location"] = _callable_code_location(user_fn)
+        _set_transform_metadata(
+            raw_replay,
+            transform_kind=transform_kind,
+            tags=(transform_kind,),
+            transform_config=transform_config,
+            inner_fn=user_fn,
+        )
+        capture_start_time = time.time()
+        save_rng = getattr(trace, "save_rng_states", False)
+        rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
+        autocast_state = log_current_autocast_state()
+        func_call_id = _state.next_func_call_id()
+        with _state.pause_logging():
+            out_orig = direct_func(user_fn, inputs, *args, **kwargs)
+        exec_ctx = FuncExecutionContext(
+            time_elapsed=time.time() - capture_start_time,
+            rng_states=rng_states,
+            autocast_state=autocast_state,
+        )
+        out_orig = apply_live_hooks_to_outputs(
+            trace,
+            raw_replay,
+            func_name,
+            call_args,
+            {},
+            out_orig,
+            exec_ctx,
+            True,
+            func_call_id,
+        )
+        if _collect_output_tensors(out_orig):
+            log_function_output_tensors(
+                trace,
+                raw_replay,
+                func_name,
+                call_args,
+                {},
+                call_args,
+                {},
+                out_orig,
+                exec_ctx,
+                True,
+                func_call_id,
+            )
+        return out_orig
+
+    return wrapped_direct
 
 
 def _decorate_transform_builders() -> None:
@@ -427,6 +563,40 @@ def _decorate_transform_builders() -> None:
             decorated = _state._orig_to_decorated[id(current)]
         else:
             decorated = transform_builder_decorator(current, transform_kind)
+            mark_decorated_function(decorated)
+            _state._orig_to_decorated[id(current)] = decorated
+            _state._decorated_to_orig[id(decorated)] = current
+            _state._decorated_func_mapper[decorated] = current
+            _state._decorated_func_mapper[current] = decorated
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                setattr(namespace, attr_name, decorated)
+        except (AttributeError, TypeError):
+            pass
+
+
+def _decorate_direct_transforms() -> None:
+    """Install direct-call transform decorators.
+
+    Returns
+    -------
+    None
+        Torch namespaces and decoration maps are updated in place.
+    """
+
+    for namespace_name, attr_name, transform_kind, func_name in DIRECT_TRANSFORM_SITES:
+        namespace_key = namespace_name.removeprefix("torch.")
+        namespace = nested_getattr(torch, namespace_key)
+        if not hasattr(namespace, attr_name):
+            continue
+        current = getattr(namespace, attr_name)
+        if id(current) in _state._decorated_to_orig:
+            continue
+        if id(current) in _state._orig_to_decorated:
+            decorated = _state._orig_to_decorated[id(current)]
+        else:
+            decorated = direct_transform_decorator(current, transform_kind, func_name)
             mark_decorated_function(decorated)
             _state._orig_to_decorated[id(current)] = decorated
             _state._decorated_to_orig[id(decorated)] = current
@@ -1035,6 +1205,7 @@ def decorate_all_once() -> None:
     # type stubs and causes mypy errors).
     _state._decorated_identity = torch_func_decorator(identity, "identity")
     _decorate_transform_builders()
+    _decorate_direct_transforms()
     _state._is_decorated = True
 
     # Wrapping __getitem__ on torch.Tensor pollutes the C-level sq_item slot,
@@ -1148,6 +1319,22 @@ def unwrap_torch() -> None:
         except (AttributeError, TypeError):
             pass
 
+    for namespace_name, func_name, _transform_kind, _label_name in DIRECT_TRANSFORM_SITES:
+        namespace_key = namespace_name.removeprefix("torch.")
+        local_func_namespace = nested_getattr(torch, namespace_key)
+        if not hasattr(local_func_namespace, func_name):
+            continue
+        current = getattr(local_func_namespace, func_name)
+        orig = _state._decorated_to_orig.get(id(current))
+        if orig is None:
+            continue
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                setattr(local_func_namespace, func_name, orig)
+        except (AttributeError, TypeError):
+            pass
+
     _replace_detached_references(_state._decorated_to_orig)
     _state._is_decorated = False
 
@@ -1196,6 +1383,7 @@ def wrap_torch() -> None:
             pass
 
     _decorate_transform_builders()
+    _decorate_direct_transforms()
 
     _replace_detached_references(_state._orig_to_decorated)
     # Recreate decorated identity in case wrapper references shifted
