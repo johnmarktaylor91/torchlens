@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html
+import re
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +11,79 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.visualization.code_panel import (
+    MAX_CODE_PANEL_LINE_CHARS,
+    _wrap_source_line,
+    render_code_panel_svg,
+)
+
+# Design advance width of the monospace fonts rasterizers resolve "Courier" to
+# (Courier/Nimbus Mono/Liberation Mono/Noto Sans Mono are all 0.600 em;
+# DejaVu Sans Mono is 0.602 em). Used to compute true rendered text extents,
+# independently of whatever sizing factor the panel implementation uses.
+_TRUE_MONOSPACE_ADVANCE_EM = 0.602
+
+
+def _panel_geometry(svg: str) -> tuple[float, float, list[tuple[float, str]]]:
+    """Parse a code-panel SVG's canvas width, box right edge, and text runs.
+
+    Parameters
+    ----------
+    svg:
+        SVG document produced by ``render_code_panel_svg``.
+
+    Returns
+    -------
+    tuple[float, float, list[tuple[float, str]]]
+        Canvas width in points, panel-box right edge in points, and one
+        ``(right_extent, content)`` pair per monospace text run, where
+        ``right_extent`` is the run's true rendered right edge computed from
+        monospace font metrics.
+    """
+
+    width_match = re.search(r'width="([\d.]+)pt"', svg)
+    assert width_match is not None
+    canvas_width = float(width_match.group(1))
+    box_match = re.search(r'<path fill="#fafafa"[^>]*\bd="([^"]+)"', svg)
+    assert box_match is not None
+    box_right = max(float(x) for x, _y in re.findall(r"(-?[\d.]+),(-?[\d.]+)", box_match.group(1)))
+    runs: list[tuple[float, str]] = []
+    for text_match in re.finditer(r"<text\b([^>]*)>([^<]*)</text>", svg):
+        attrs, raw_content = text_match.group(1), text_match.group(2)
+        if 'font-family="Courier' not in attrs:
+            continue
+        x_match = re.search(r'\bx="(-?[\d.]+)"', attrs)
+        size_match = re.search(r'\bfont-size="([\d.]+)"', attrs)
+        assert x_match is not None and size_match is not None
+        content = html.unescape(raw_content)
+        right_extent = float(x_match.group(1)) + len(content) * _TRUE_MONOSPACE_ADVANCE_EM * float(
+            size_match.group(1)
+        )
+        runs.append((right_extent, content))
+    return canvas_width, box_right, runs
+
+
+def _panel_code_lines(svg: str) -> list[str]:
+    """Return the displayed code lines of a panel SVG, nbsp-normalized.
+
+    Parameters
+    ----------
+    svg:
+        SVG document produced by ``render_code_panel_svg``.
+
+    Returns
+    -------
+    list[str]
+        Monospace text-run contents with non-breaking spaces normalized to
+        regular spaces, excluding the source-link row.
+    """
+
+    _, _, runs = _panel_geometry(svg)
+    return [
+        content.replace("\xa0", " ")
+        for _, content in runs
+        if content not in ("Open source", "Source code")
+    ]
 
 
 def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
@@ -173,3 +248,81 @@ def test_code_panel_truncates_long_source(tmp_path: Path) -> None:
     assert "... 5 more lines" in svg
     assert "line 119" in svg
     assert "line 120" not in svg
+
+
+def test_code_panel_long_line_fits_inside_panel_box() -> None:
+    """A long single line must never extend past the panel box or canvas.
+
+    Graphviz under-measures Courier text, so without explicit monospace
+    sizing the rendered glyph run overruns the panel box and gets clipped at
+    the SVG viewport during composition/rasterization.
+    """
+
+    long_line = (
+        "def forward(self, x: torch.Tensor, "
+        "attention_mask: torch.Tensor | None = None) -> torch.Tensor:"
+    )
+    assert len(long_line) <= MAX_CODE_PANEL_LINE_CHARS
+    svg = render_code_panel_svg(long_line)
+    canvas_width, box_right, runs = _panel_geometry(svg)
+
+    assert runs, "expected monospace text runs in the panel SVG"
+    for right_extent, content in runs:
+        assert right_extent <= box_right, (
+            f"text run {content!r} extends to {right_extent:.1f}pt, past the "
+            f"panel box right edge at {box_right:.1f}pt"
+        )
+        assert right_extent <= canvas_width, (
+            f"text run {content!r} extends to {right_extent:.1f}pt, past the "
+            f"SVG canvas edge at {canvas_width:.1f}pt"
+        )
+
+
+def test_code_panel_wraps_lines_beyond_char_cap() -> None:
+    """Lines beyond the character cap wrap with a hanging indent, unclipped."""
+
+    words = " ".join(f"word{idx:03d}" for idx in range(40))
+    long_line = f"        result = compute({words})"
+    assert len(long_line) > MAX_CODE_PANEL_LINE_CHARS
+    svg = render_code_panel_svg(long_line)
+    canvas_width, box_right, runs = _panel_geometry(svg)
+    code_lines = [line for line in _panel_code_lines(svg) if line.strip()]
+
+    assert len(code_lines) > 1, "expected the long line to wrap into multiple rows"
+    assert all(len(line) <= MAX_CODE_PANEL_LINE_CHARS for line in code_lines)
+    assert code_lines[0].startswith("        result = compute(")
+    assert all(line.startswith(" " * 12) for line in code_lines[1:])
+    rejoined = " ".join(line.strip() for line in code_lines)
+    for idx in range(40):
+        assert f"word{idx:03d}" in rejoined
+    for right_extent, content in runs:
+        assert right_extent <= box_right, f"wrapped run {content!r} overruns the panel box"
+        assert right_extent <= canvas_width, f"wrapped run {content!r} overruns the canvas"
+
+
+def test_wrap_source_line_short_line_unchanged() -> None:
+    """Lines within the cap pass through wrapping untouched."""
+
+    line = "    return self.linear(x).relu()"
+    assert _wrap_source_line(line) == [line]
+
+
+def test_wrap_source_line_hard_splits_monster_tokens() -> None:
+    """An unbreakable token longer than the cap is hard-split, never clipped."""
+
+    line = "x" * 400
+    pieces = _wrap_source_line(line)
+
+    assert len(pieces) > 1
+    assert all(len(piece) <= MAX_CODE_PANEL_LINE_CHARS for piece in pieces)
+    assert "".join(piece.lstrip(" ") for piece in pieces) == line
+
+
+def test_wrap_source_line_pathological_indent_still_wraps() -> None:
+    """Indent nearly as wide as the cap falls back to a shallow hanging indent."""
+
+    line = " " * (MAX_CODE_PANEL_LINE_CHARS - 4) + " ".join(["token"] * 30)
+    pieces = _wrap_source_line(line)
+
+    assert all(len(piece) <= MAX_CODE_PANEL_LINE_CHARS for piece in pieces)
+    assert sum(piece.count("token") for piece in pieces) == 30

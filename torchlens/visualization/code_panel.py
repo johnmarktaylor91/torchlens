@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import inspect
+import math
 import re
 import textwrap
 import weakref
@@ -22,6 +23,23 @@ CodePanelSide: TypeAlias = Literal["right", "left"]
 
 MAX_CODE_PANEL_LINES = 120
 MIN_CODE_PANEL_DISPLAY_LINES = 36
+# Display lines longer than this wrap (hanging indent) instead of widening the
+# panel further. Chosen from the data: the widest demo source line is 79 chars,
+# so 120 leaves generous headroom while bounding the panel at a readable width.
+MAX_CODE_PANEL_LINE_CHARS = 120
+# Graphviz's default label font size; the panel label never overrides it.
+CODE_PANEL_FONT_SIZE_PT = 14.0
+# Per-character advance used to size the panel box. Graphviz under-measures
+# Courier (~0.48 em/char on systems without real Courier metrics) while SVG
+# rasterizers resolve "Courier" to true monospace fonts at 0.600-0.602 em/char
+# (Courier/Nimbus Mono/Liberation Mono/Noto Sans Mono/DejaVu Sans Mono), so the
+# box must be sized from monospace math, with ~3% safety margin, not trusted to
+# Graphviz's estimate.
+CODE_PANEL_CHAR_ADVANCE_EM = 0.62
+_CODE_PANEL_WRAP_INDENT = "    "
+# Minimum content characters a wrapped continuation line must be able to hold;
+# pathologically deep indents fall back to a shallow hanging indent instead.
+_CODE_PANEL_MIN_WRAP_CONTENT_CHARS = 16
 
 
 class SourceText(str):
@@ -198,13 +216,7 @@ def render_code_panel_subgraph(
     if side not in {"right", "left"}:
         raise ValueError("side must be either 'right' or 'left'.")
 
-    rows = _source_text_to_html_rows(source_text)
-    header_row = "<TR><TD ALIGN='LEFT'><B>Source code</B></TD></TR>"
-    label = (
-        "<<TABLE BORDER='0' CELLBORDER='0' CELLSPACING='0' CELLPADDING='2'>"
-        f"{header_row}{''.join(rows)}"
-        "</TABLE>>"
-    )
+    label = _code_panel_label(source_text)
     # Pure Graphviz keeps graph and code in one output file. The invisible edge
     # gives the otherwise detached code cluster a directional relationship to the
     # main graph without adding a rendering dependency or second composition pass.
@@ -231,10 +243,28 @@ def render_code_panel_subgraph(
 
 
 def _code_panel_label(source_text: str) -> str:
-    """Build the HTML-like Graphviz label for a code panel."""
+    """Build the HTML-like Graphviz label for a code panel.
 
-    rows = _source_text_to_html_rows(source_text)
-    header_row = "<TR><TD ALIGN='LEFT'><B>Source code</B></TD></TR>"
+    The header cell carries an explicit minimum ``WIDTH`` computed from true
+    monospace metrics so the single table column -- and therefore the panel
+    box -- is always wide enough for the longest displayed line, regardless of
+    how Graphviz estimates Courier text widths.
+
+    Parameters
+    ----------
+    source_text:
+        Source code to display.
+
+    Returns
+    -------
+    str
+        HTML-like label string for the panel node.
+    """
+
+    displayed_lines = _displayed_source_lines(source_text)
+    rows = _source_text_to_html_rows(source_text, displayed_lines)
+    min_width = _code_panel_min_width_points(displayed_lines)
+    header_row = f"<TR><TD ALIGN='LEFT' WIDTH='{min_width}'><B>Source code</B></TD></TR>"
     return (
         "<<TABLE BORDER='0' CELLBORDER='0' CELLSPACING='0' CELLPADDING='2'>"
         f"{header_row}{''.join(rows)}"
@@ -411,8 +441,51 @@ def _get_source_or_empty(obj: object) -> str:
         return ""
 
 
-def _source_text_to_html_rows(source_text: str) -> list[str]:
-    """Convert source text into escaped Graphviz HTML table rows.
+def _wrap_source_line(line: str, max_chars: int = MAX_CODE_PANEL_LINE_CHARS) -> list[str]:
+    """Wrap one display line to a character cap with a hanging indent.
+
+    Wrapping breaks at word boundaries when possible (hard-splitting only
+    tokens longer than the cap) and indents continuation lines four spaces
+    past the original indent so wrapped code stays visually attached to its
+    source line.
+
+    Parameters
+    ----------
+    line:
+        Tab-expanded source line.
+    max_chars:
+        Maximum characters per displayed line.
+
+    Returns
+    -------
+    list[str]
+        One or more display lines, each at most ``max_chars`` characters.
+    """
+
+    if len(line) <= max_chars:
+        return [line]
+    stripped = line.lstrip(" ")
+    indent = line[: len(line) - len(stripped)]
+    # Clamp pathologically deep indents so every wrapped line keeps room for
+    # real content; otherwise textwrap would be forced into mid-word splits.
+    max_indent_chars = max(0, max_chars - _CODE_PANEL_MIN_WRAP_CONTENT_CHARS)
+    indent = indent[:max_indent_chars]
+    continuation_indent = (indent + _CODE_PANEL_WRAP_INDENT)[:max_indent_chars]
+    wrapped = textwrap.wrap(
+        stripped,
+        width=max_chars,
+        initial_indent=indent,
+        subsequent_indent=continuation_indent,
+        break_long_words=True,
+        break_on_hyphens=False,
+        replace_whitespace=False,
+        drop_whitespace=True,
+    )
+    return wrapped or [""]
+
+
+def _displayed_source_lines(source_text: str) -> list[str]:
+    """Expand, wrap, and truncate source text into panel display lines.
 
     Parameters
     ----------
@@ -422,14 +495,57 @@ def _source_text_to_html_rows(source_text: str) -> list[str]:
     Returns
     -------
     list[str]
-        HTML table-row strings suitable for an HTML-like Graphviz label.
+        Display lines, each at most ``MAX_CODE_PANEL_LINE_CHARS`` characters,
+        capped at ``MAX_CODE_PANEL_LINES`` rows plus a truncation marker.
     """
 
     source_lines = source_text.expandtabs(4).splitlines() or [""]
-    extra_line_count = max(0, len(source_lines) - MAX_CODE_PANEL_LINES)
-    displayed_lines = source_lines[:MAX_CODE_PANEL_LINES]
+    wrapped_lines: list[str] = []
+    for source_line in source_lines:
+        wrapped_lines.extend(_wrap_source_line(source_line))
+    extra_line_count = max(0, len(wrapped_lines) - MAX_CODE_PANEL_LINES)
+    displayed_lines = wrapped_lines[:MAX_CODE_PANEL_LINES]
     if extra_line_count:
         displayed_lines.append(f"... {extra_line_count} more lines")
+    return displayed_lines
+
+
+def _code_panel_min_width_points(displayed_lines: list[str]) -> int:
+    """Compute the minimum panel column width for true monospace metrics.
+
+    Parameters
+    ----------
+    displayed_lines:
+        Display lines produced by ``_displayed_source_lines``.
+
+    Returns
+    -------
+    int
+        Minimum table-column width in points that fits the longest displayed
+        line at ``CODE_PANEL_CHAR_ADVANCE_EM`` per character.
+    """
+
+    longest_chars = max((len(line) for line in displayed_lines), default=0)
+    longest_chars = max(longest_chars, len("Source code"), len("Open source"))
+    return math.ceil(longest_chars * CODE_PANEL_CHAR_ADVANCE_EM * CODE_PANEL_FONT_SIZE_PT)
+
+
+def _source_text_to_html_rows(source_text: str, displayed_lines: list[str]) -> list[str]:
+    """Convert source text into escaped Graphviz HTML table rows.
+
+    Parameters
+    ----------
+    source_text:
+        Source code to display (carries optional file-line metadata).
+    displayed_lines:
+        Display lines produced by ``_displayed_source_lines``.
+
+    Returns
+    -------
+    list[str]
+        HTML table-row strings suitable for an HTML-like Graphviz label.
+    """
+
     rows = []
     file_path = getattr(source_text, "file_path", None)
     line_number = getattr(source_text, "line_number", None)

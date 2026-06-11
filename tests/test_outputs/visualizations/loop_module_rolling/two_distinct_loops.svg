@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="740.00pt" height="670.00pt" viewBox="0 0 740.00 670.00"><rect x="0" y="0" width="100%" height="100%" fill="white"/><svg x="0" y="23.50" width="258.00" height="623.00" viewBox="0.00 0.00 258.00 622.96" overflow="visible">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="852.00pt" height="670.00pt" viewBox="0 0 852.00 670.00"><rect x="0" y="0" width="100%" height="100%" fill="white"/><svg x="0" y="23.50" width="258.00" height="623.00" viewBox="0.00 0.00 258.00 622.96" overflow="visible">
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 618.96)">
 <title>TwoDistinctLoops</title>
 <polygon fill="white" stroke="none" points="-4,4 -4,-618.96 254,-618.96 254,4 -4,4"/>
@@ -88,37 +88,37 @@
 <polygon fill="black" stroke="black" points="90.05,-464.26 92.5,-471.26 94.95,-464.26 90.05,-464.26"/>
 </g>
 </g>
-</svg><svg x="282.00" y="0.00" width="458.00" height="670.00" viewBox="0.00 0.00 458.00 670.00" overflow="visible">
+</svg><svg x="282.00" y="0.00" width="570.00" height="670.00" viewBox="0.00 0.00 570.00 670.00" overflow="visible">
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 666)">
 <g id="clust1" class="cluster">
 <title>cluster_torchlens_code_panel</title>
-<path fill="#fafafa" stroke="#a8a8a8" d="M20,-8C20,-8 430,-8 430,-8 436,-8 442,-14 442,-20 442,-20 442,-642 442,-642 442,-648 436,-654 430,-654 430,-654 20,-654 20,-654 14,-654 8,-648 8,-642 8,-642 8,-20 8,-20 8,-14 14,-8 20,-8"/>
+<path fill="#fafafa" stroke="#a8a8a8" d="M20,-8C20,-8 542,-8 542,-8 548,-8 554,-14 554,-20 554,-20 554,-642 554,-642 554,-648 548,-654 542,-654 542,-654 20,-654 20,-654 14,-654 8,-648 8,-642 8,-642 8,-20 8,-20 8,-14 14,-8 20,-8"/>
 </g>
 <!-- __tl_code_panel_node -->
 <g id="node1" class="node">
 <title>__tl_code_panel_node</title>
-<text text-anchor="start" x="22" y="-629.8" font-family="Courier,monospace" font-weight="bold" font-size="14.00">Source code</text>
+<text text-anchor="start" x="23" y="-629.8" font-family="Courier,monospace" font-weight="bold" font-size="14.00">Source code</text>
 <g id="a_node1_0"><a xlink:href="vscode://file//home/jtaylor/projects/torchlens/tests/test_loop_module_rolling.py:296" xlink:title="/home/jtaylor/projects/torchlens/tests/test_loop_module_rolling.py:296">
-<text text-anchor="start" x="22" y="-609.8" font-family="Courier,monospace" font-size="14.00" fill="#0366d6">Open source</text>
+<text text-anchor="start" x="23" y="-609.8" font-family="Courier,monospace" font-size="14.00" fill="#0366d6">Open source</text>
 </a>
 </g>
-<text text-anchor="start" x="22" y="-590.8" font-family="Courier,monospace" font-size="14.00">def __init__(self) &#45;&gt; None:</text>
-<text text-anchor="start" x="22" y="-571.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;&quot;&quot;&quot;Initialize the shared module.&quot;&quot;&quot;</text>
-<text text-anchor="start" x="22" y="-552.8" font-family="Courier,monospace" font-size="14.00"> </text>
-<text text-anchor="start" x="22" y="-533.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;super().__init__()</text>
-<text text-anchor="start" x="22" y="-514.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;self.shared = nn.Linear(4, 4, bias=False)</text>
-<text text-anchor="start" x="22" y="-495.8" font-family="Courier,monospace" font-size="14.00"> </text>
-<text text-anchor="start" x="22" y="-476.8" font-family="Courier,monospace" font-size="14.00">def forward(self, x: torch.Tensor) &#45;&gt; torch.Tensor:</text>
-<text text-anchor="start" x="22" y="-457.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;&quot;&quot;&quot;Run two separate loops that reuse the same module.&quot;&quot;&quot;</text>
-<text text-anchor="start" x="22" y="-438.8" font-family="Courier,monospace" font-size="14.00"> </text>
-<text text-anchor="start" x="22" y="-419.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;first = x</text>
-<text text-anchor="start" x="22" y="-400.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;for _ in range(2):</text>
-<text text-anchor="start" x="22" y="-381.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;first = self.shared(first)</text>
-<text text-anchor="start" x="22" y="-362.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;second = x + 1</text>
-<text text-anchor="start" x="22" y="-343.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;for _ in range(3):</text>
-<text text-anchor="start" x="22" y="-324.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;second = self.shared(second)</text>
-<text text-anchor="start" x="22" y="-305.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;return first + second</text>
-<text text-anchor="start" x="22" y="-156.3" font-family="Courier,monospace" font-size="14.00" fill="#fafafa"> </text>
+<text text-anchor="start" x="23" y="-590.8" font-family="Courier,monospace" font-size="14.00">def __init__(self) &#45;&gt; None:</text>
+<text text-anchor="start" x="23" y="-571.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;&quot;&quot;&quot;Initialize the shared module.&quot;&quot;&quot;</text>
+<text text-anchor="start" x="23" y="-552.8" font-family="Courier,monospace" font-size="14.00"> </text>
+<text text-anchor="start" x="23" y="-533.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;super().__init__()</text>
+<text text-anchor="start" x="23" y="-514.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;self.shared = nn.Linear(4, 4, bias=False)</text>
+<text text-anchor="start" x="23" y="-495.8" font-family="Courier,monospace" font-size="14.00"> </text>
+<text text-anchor="start" x="23" y="-476.8" font-family="Courier,monospace" font-size="14.00">def forward(self, x: torch.Tensor) &#45;&gt; torch.Tensor:</text>
+<text text-anchor="start" x="23" y="-457.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;&quot;&quot;&quot;Run two separate loops that reuse the same module.&quot;&quot;&quot;</text>
+<text text-anchor="start" x="23" y="-438.8" font-family="Courier,monospace" font-size="14.00"> </text>
+<text text-anchor="start" x="23" y="-419.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;first = x</text>
+<text text-anchor="start" x="23" y="-400.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;for _ in range(2):</text>
+<text text-anchor="start" x="23" y="-381.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;first = self.shared(first)</text>
+<text text-anchor="start" x="23" y="-362.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;second = x + 1</text>
+<text text-anchor="start" x="23" y="-343.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;for _ in range(3):</text>
+<text text-anchor="start" x="23" y="-324.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;second = self.shared(second)</text>
+<text text-anchor="start" x="23" y="-305.8" font-family="Courier,monospace" font-size="14.00"> &#160;&#160;&#160;return first + second</text>
+<text text-anchor="start" x="23" y="-156.3" font-family="Courier,monospace" font-size="14.00" fill="#fafafa"> </text>
 </g>
 </g>
 </svg></svg>
