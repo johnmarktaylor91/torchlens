@@ -76,6 +76,7 @@ def test_save_grads_is_the_trace_side_public_surface() -> None:
     x = torch.randn(4, 3, requires_grad=True)
     trace = tl.trace(model, x, layers_to_save="all", save_grads=True)
     try:
+        assert trace.save_grads is True
         assert trace.save_gradients is True
         assert trace.gradients_to_save == "all"
     finally:
@@ -95,6 +96,57 @@ def test_op_grad_is_loud_when_multiple_passes_are_saved() -> None:
         op = next(op for op in trace.saved_grad_ops if len(op.grads) == 2)
         with pytest.raises(ValueError, match=r"use op\.grads\[\.\.\.\] / op\.grad_for\(bwd=k\)"):
             _ = op.grad
+    finally:
+        trace.cleanup()
+
+
+def test_log_backward_save_grads_override_widens_and_narrows_payloads() -> None:
+    """Per-trigger save_grads overrides decide payload retention at hook fire time."""
+
+    torch.manual_seed(0)
+    model = _PayloadModel()
+    x = torch.randn(4, 3, requires_grad=True)
+    trace = tl.trace(model, x, layers_to_save="all", save_grads=False)
+    try:
+        loss = trace[trace.output_layers[0]].out
+        trace.log_backward(loss, retain_graph=True, save_grads=True)
+        assert any(record.grad is not None for op in trace.ops for record in op.grads)
+
+        trace.log_backward(loss, retain_graph=True, save_grads=None)
+        second_pass_records = [
+            record for op in trace.ops for record in op.grads if record.backward_pass_index == 2
+        ]
+        assert second_pass_records
+        assert all(record.grad is None for record in second_pass_records)
+        assert [pass_record.save_grads_policy for pass_record in trace.backward_passes] == [
+            "True",
+            "None",
+        ]
+    finally:
+        trace.cleanup()
+
+
+def test_save_grads_predicate_can_select_backward_pass() -> None:
+    """Trace-side save_grads predicates can match the current backward pass."""
+
+    torch.manual_seed(0)
+    model = _PayloadModel()
+    x = torch.randn(4, 3, requires_grad=True)
+    trace = tl.trace(model, x, layers_to_save="all", save_grads=tl.in_backward_pass(2))
+    try:
+        loss = trace[trace.output_layers[0]].out
+        trace.log_backward(loss, retain_graph=True)
+        trace.log_backward(loss, retain_graph=True)
+        first_pass_records = [
+            record for op in trace.ops for record in op.grads if record.backward_pass_index == 1
+        ]
+        second_pass_records = [
+            record for op in trace.ops for record in op.grads if record.backward_pass_index == 2
+        ]
+        assert first_pass_records
+        assert second_pass_records
+        assert all(record.grad is None for record in first_pass_records)
+        assert any(record.grad is not None for record in second_pass_records)
     finally:
         trace.cleanup()
 

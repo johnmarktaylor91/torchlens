@@ -618,6 +618,50 @@ class GradFnLabelSelector(BaseSelector):
 
 
 @dataclass(frozen=True, repr=False)
+class GradKindSelector(BaseSelector):
+    """Backward gradient-kind selector for grad inputs or grad outputs."""
+
+    grad_kind: Literal["grad_input", "grad_output"]
+    direction: Literal["backward"] = "backward"
+
+    def __init__(self, grad_kind: Literal["grad_input", "grad_output"]) -> None:
+        """Create a gradient-kind selector.
+
+        Parameters
+        ----------
+        grad_kind:
+            Gradient event kind to match.
+        """
+
+        object.__setattr__(self, "selector_kind", "grad_kind")
+        object.__setattr__(self, "selector_value", grad_kind)
+        object.__setattr__(self, "grad_kind", grad_kind)
+        object.__setattr__(self, "direction", "backward")
+
+
+@dataclass(frozen=True, repr=False)
+class BackwardPassSelector(BaseSelector):
+    """Backward selector matching one global backward pass number."""
+
+    pass_index: int
+    direction: Literal["backward"] = "backward"
+
+    def __init__(self, pass_index: int) -> None:
+        """Create a backward-pass selector.
+
+        Parameters
+        ----------
+        pass_index:
+            One-based backward pass number to match.
+        """
+
+        object.__setattr__(self, "selector_kind", "backward_pass")
+        object.__setattr__(self, "selector_value", pass_index)
+        object.__setattr__(self, "pass_index", pass_index)
+        object.__setattr__(self, "direction", "backward")
+
+
+@dataclass(frozen=True, repr=False)
 class CompositeSelector(BaseSelector):
     """Selector composed with ``&`` or ``|``.
 
@@ -984,6 +1028,47 @@ def grad_fn_label(name: str) -> GradFnLabelSelector:
     return GradFnLabelSelector(name)
 
 
+def grad_input() -> GradKindSelector:
+    """Create a selector matching backward grad-input events.
+
+    Returns
+    -------
+    GradKindSelector
+        Immutable selector.
+    """
+
+    return GradKindSelector("grad_input")
+
+
+def grad_output() -> GradKindSelector:
+    """Create a selector matching backward grad-output events.
+
+    Returns
+    -------
+    GradKindSelector
+        Immutable selector.
+    """
+
+    return GradKindSelector("grad_output")
+
+
+def in_backward_pass(pass_index: int) -> BackwardPassSelector:
+    """Create a selector matching one backward pass number.
+
+    Parameters
+    ----------
+    pass_index:
+        One-based backward pass number.
+
+    Returns
+    -------
+    BackwardPassSelector
+        Immutable selector.
+    """
+
+    return BackwardPassSelector(pass_index)
+
+
 @overload
 def in_module(address_or_layer: str) -> InModuleSelector:
     """Create a module-containment selector.
@@ -1181,6 +1266,13 @@ def _selector_matches_record_context(selector: BaseSelector, ctx: Any) -> bool:
     if kind == "predicate":
         predicate = getattr(selector, "predicate")
         return bool(predicate(ctx))
+    if kind == "grad_kind":
+        return getattr(ctx, "grad_kind", None) == selector.selector_value
+    if kind == "backward_pass":
+        ctx_pass = getattr(ctx, "backward_pass_index", None)
+        if ctx_pass is None:
+            ctx_pass = getattr(ctx, "pass_index", None)
+        return ctx_pass == selector.selector_value
     if kind == "preceded_by" and isinstance(selector, PrecededBySelector):
         parent_labels = set(
             getattr(ctx, "parent_labels_raw", ()) or getattr(ctx, "parent_labels", ())
@@ -1262,7 +1354,16 @@ def _classify_selector_direction(
             "not",
         }:
             return None
-    if isinstance(sel, (GradFnSelector, InterveningSelector, GradFnLabelSelector)):
+    if isinstance(
+        sel,
+        (
+            GradFnSelector,
+            InterveningSelector,
+            GradFnLabelSelector,
+            GradKindSelector,
+            BackwardPassSelector,
+        ),
+    ):
         return "backward"
     if isinstance(sel, (FuncSelector, FuncTransformSelector)):
         return "forward"
@@ -1317,12 +1418,14 @@ def _check_composition(a: SelectorLike, b: SelectorLike) -> None:
 
 __all__ = [
     "BaseSelector",
+    "BackwardPassSelector",
     "CompositeSelector",
     "ContainsSelector",
     "FuncSelector",
     "FuncTransformSelector",
     "FollowedBySelector",
     "FacetSelector",
+    "GradKindSelector",
     "GradFnLabelSelector",
     "GradFnSelector",
     "InModuleSelector",
@@ -1340,8 +1443,11 @@ __all__ = [
     "func_transform",
     "followed_by",
     "grad_fn",
+    "grad_input",
+    "grad_output",
     "label",
     "in_module",
+    "in_backward_pass",
     "intervening",
     "head",
     "label",

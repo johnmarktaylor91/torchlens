@@ -13,6 +13,7 @@ from typing import Any, Callable, Iterator, Literal, cast
 
 import torch
 
+from ..._deprecations import MISSING, MissingType
 from ..._io.streaming import BundleStreamWriter
 from ...quantities import Bytes, Duration
 from ..._state import pause_logging
@@ -1362,6 +1363,7 @@ def _run_backward_with_capture(
     trigger: str = "backward",
     outer_context: str | None = None,
     engine_flags: dict[str, object] | None = None,
+    save_grads: Any | MissingType = MISSING,
 ) -> Any:
     """Capture a backward graph, run backward, and record memory delta.
 
@@ -1388,6 +1390,14 @@ def _run_backward_with_capture(
     if getattr(trace, "_tl_active_backward_bracket", False):
         return backward_callable()
     _close_implicit_backward_pass_if_open(trace)
+    previous_save_grads_policy = getattr(trace, "_active_save_grads_policy", None)
+    previous_had_save_grads_policy = "_active_save_grads_policy" in trace.__dict__
+    active_save_grads_policy = (
+        getattr(trace, "save_grads", getattr(trace, "gradients_to_save", None))
+        if save_grads is MISSING
+        else save_grads
+    )
+    trace._active_save_grads_policy = active_save_grads_policy
     _state._active_trace = trace
     _state._active_intervention_spec = getattr(trace, "_intervention_spec", None)
     _state._active_hook_plan = [
@@ -1416,7 +1426,7 @@ def _run_backward_with_capture(
             inputs_subset=(),
             order=None,
             origin_backward_pass=None,
-            save_grads_policy_repr=repr(getattr(trace, "gradients_to_save", None)),
+            save_grads_policy_repr=repr(active_save_grads_policy),
             engine_flags=engine_flags,
             timestamp=time.time(),
         )
@@ -1461,6 +1471,10 @@ def _run_backward_with_capture(
             )
         )
         trace.__dict__.pop("_active_backward_pass_index", None)
+        if previous_had_save_grads_policy:
+            trace._active_save_grads_policy = previous_save_grads_policy
+        else:
+            trace.__dict__.pop("_active_save_grads_policy", None)
         _materialize_backward_projections(trace)
     return result
 
@@ -1695,6 +1709,7 @@ def log_backward(
     self: Any,
     loss: torch.Tensor,
     *,
+    save_grads: Any | MissingType = MISSING,
     save_grads_to: str | None = None,
     keep_grads_in_memory: bool | None = None,
     **backward_kwargs: Any,
@@ -1705,6 +1720,10 @@ def log_backward(
     ----------
     loss:
         Loss tensor whose ``grad_fn_handle`` roots the backward graph.
+    save_grads:
+        Optional per-call gradient retention override. ``True`` captures all
+        observed op gradients, ``False``/``None`` disables retention for this
+        call, and selectors/callables are evaluated at hook fire time.
     **backward_kwargs:
         Keyword arguments forwarded to ``torch.Tensor.backward``.
 
@@ -1730,6 +1749,7 @@ def log_backward(
         run,
         trigger="backward",
         engine_flags=dict(backward_kwargs),
+        save_grads=save_grads,
     )
     _finalize_grad_streaming(self)
     return self
@@ -1742,10 +1762,12 @@ class RecordingBackward:
         self,
         trace: Any,
         *,
+        save_grads: Any | MissingType = MISSING,
         save_grads_to: str | None = None,
         keep_grads_in_memory: bool | None = None,
     ) -> None:
         self.trace = trace
+        self.save_grads = save_grads
         self.save_grads_to = save_grads_to
         self.keep_grads_in_memory = keep_grads_in_memory
         self._original_backward: Callable[..., Any] | None = None
@@ -1775,6 +1797,7 @@ class RecordingBackward:
                 run,
                 trigger="recording_backward",
                 engine_flags=dict(kwargs),
+                save_grads=self.save_grads,
             )
 
         torch.Tensor.backward = wrapped_backward  # type: ignore[assignment, method-assign]
@@ -1791,6 +1814,7 @@ class RecordingBackward:
 def recording_backward(
     self: Any,
     *,
+    save_grads: Any | MissingType = MISSING,
     save_grads_to: str | None = None,
     keep_grads_in_memory: bool | None = None,
 ) -> RecordingBackward:
@@ -1803,6 +1827,7 @@ def recording_backward(
     """
     return RecordingBackward(
         self,
+        save_grads=save_grads,
         save_grads_to=save_grads_to,
         keep_grads_in_memory=keep_grads_in_memory,
     )

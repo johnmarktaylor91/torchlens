@@ -41,6 +41,7 @@ from ._tl import get_param_meta, get_tensor_label, increment_param_call_index, s
 from ...ir.events import BackwardPassStart, OpGradObserved
 from ...data_classes.op import Op
 from ..._state import pause_logging
+from ...intervention.selectors import BaseSelector
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 
 if TYPE_CHECKING:
@@ -134,7 +135,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
             inputs_subset=(),
             order=None,
             origin_backward_pass=None,
-            save_grads_policy_repr=repr(getattr(trace, "gradients_to_save", None)),
+            save_grads_policy_repr=repr(_active_save_grads_policy(trace)),
             engine_flags=None,
             timestamp=time.time(),
         )
@@ -170,16 +171,73 @@ def _emit_tensor_grad_event(trace: "Trace", grad: torch.Tensor, tensor_label: st
 def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
     """Return whether a tensor-hook gradient should retain its payload."""
 
-    if not getattr(trace, "save_gradients", False):
-        return False
     if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
         return False
+    policy = _active_save_grads_policy(trace)
+    if policy in [None, False, "none", []]:
+        return False
+    if policy is True or policy == "all":
+        return True
+    op = trace[layer_label]
+    if isinstance(policy, BaseSelector):
+        return bool(policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace))))
+    if callable(policy):
+        return bool(policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace))))
     selection = getattr(trace, "_grad_layer_nums_to_save", "all")
     if selection in [None, "none", []]:
         return False
     if selection == "all":
         return True
-    return trace[layer_label].raw_index in selection
+    return op.raw_index in selection
+
+
+class _GradPayloadContext:
+    """Minimal predicate context for trace-side op gradient retention."""
+
+    def __init__(self, *, op: Op, pass_index: int | None) -> None:
+        """Initialize a trace gradient predicate context.
+
+        Parameters
+        ----------
+        op:
+            Operation whose output gradient was observed.
+        pass_index:
+            One-based backward pass number, when known.
+        """
+
+        self.label = op.label
+        self.layer_label = op.layer_label
+        self.op_label = op.label
+        self.raw_label = getattr(op, "raw_tensor_label", None)
+        self.func_name = op.func_name
+        self.layer_type = op.layer_type
+        self.type = op.layer_type
+        self.module_stack = tuple(getattr(op, "module_stack", ()) or ())
+        self.modules = tuple(getattr(op, "modules", ()) or ())
+        self.output_of_module_calls = tuple(getattr(op, "output_of_module_calls", ()) or ())
+        self.has_forward_op = True
+        self.has_op = True
+        self.grad_kind = "grad_output"
+        self.pass_index = pass_index
+        self.backward_pass_index = pass_index
+        self.shape = op.shape
+        self.dtype = op.dtype
+        self.tensor_device = getattr(op, "output_device", None)
+
+
+def _current_backward_pass(trace: "Trace") -> int | None:
+    """Return the currently active backward pass index, if any."""
+
+    pass_index = getattr(trace, "_active_backward_pass_index", None)
+    return None if pass_index is None else int(pass_index)
+
+
+def _active_save_grads_policy(trace: "Trace") -> Any:
+    """Return the current gradient retention policy for tensor hooks."""
+
+    if hasattr(trace, "_active_save_grads_policy"):
+        return getattr(trace, "_active_save_grads_policy")
+    return getattr(trace, "save_grads", getattr(trace, "gradients_to_save", None))
 
 
 def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None:

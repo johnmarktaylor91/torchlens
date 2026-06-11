@@ -195,6 +195,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "recording_kept": True,
     "facet_registry_snapshot": None,
     "_out_hash_cache": {},
+    "save_grads": None,
     "is_appended": False,
     "relationship_evidence": {},
     "total_gradient_memory": 0,
@@ -1062,6 +1063,7 @@ class Trace(CapturedRun):
         "facet_registry_snapshot": FieldPolicy.DROP,
         "_out_hash_cache": FieldPolicy.DROP,
         "save_arg_values": FieldPolicy.KEEP,
+        "save_grads": FieldPolicy.DROP,
         "save_gradients": FieldPolicy.KEEP,
         "gradients_to_save": FieldPolicy.KEEP,
         "_grad_layer_nums_to_save": FieldPolicy.KEEP,
@@ -1372,6 +1374,9 @@ class Trace(CapturedRun):
         self.recording_kept: bool = True
         self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
         self.save_arg_values = save_arg_values
+        self.save_grads = (
+            "all" if save_gradients and gradients_to_save is True else gradients_to_save
+        )
         self.save_gradients = save_gradients
         self.gradients_to_save = gradients_to_save
         self.save_code_context = save_code_context
@@ -2897,6 +2902,7 @@ class Trace(CapturedRun):
                 "grad_transform": None,
                 "grad_transform_repr": None,
                 "save_raw_gradients": True,
+                "save_grads": state.get("gradients_to_save", None),
                 "gradients_to_save": "all",
                 "_grad_layer_nums_to_save": [],
                 "has_backward_pass": False,

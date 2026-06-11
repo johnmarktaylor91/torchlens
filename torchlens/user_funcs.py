@@ -1932,6 +1932,7 @@ def trace(
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
         )
+        trace.save_grads = save_grads_policy
     else:
         # --- TWO-PASS path ---
         # Pass 1 (exhaustive): Run with layers_to_save=None so the full graph is
@@ -2001,6 +2002,7 @@ def trace(
         # layers and replay the model, saving only the matching outs.
         next(capture_progress, None)
         _vprint(trace, "Two-pass mode: Pass 2 (fast, saving requested layers)")
+        trace.save_grads = save_grads_policy
         trace.save_gradients = save_gradients
         trace.gradients_to_save = grads_to_save_resolved
         trace.save_new_outs(
