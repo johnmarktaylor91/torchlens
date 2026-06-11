@@ -936,8 +936,8 @@ def _run_model_and_save_specified_outs(
     recurrence_detection: bool = True,
     save_outs_to: str | Path | None = None,
     keep_outs_in_memory: bool = True,
-    save_grads_to: str | Path | None = None,
-    keep_grads_in_memory: bool = True,
+    grad_storage_path: str | Path | None = None,
+    retain_grads_in_memory: bool = True,
     out_sink: Callable[[str, torch.Tensor], None] | None = None,
     intervention_ready: bool = False,
     hooks: Any | None = None,
@@ -1006,8 +1006,8 @@ def _run_model_and_save_specified_outs(
         save_outs_to: Optional portable bundle directory for streaming out save.
         keep_outs_in_memory: Whether streamed outs should remain in memory
             after finalization.
-        save_grads_to: Optional portable bundle directory for streaming grad save.
-        keep_grads_in_memory: Whether streamed grads should remain in memory after
+        grad_storage_path: Optional portable bundle directory for streaming grad save.
+        retain_grads_in_memory: Whether streamed grads should remain in memory after
             backward finalization.
         out_sink: Optional callback invoked with ``(label, tensor)`` for each
             saved out.
@@ -1132,8 +1132,8 @@ def _run_model_and_save_specified_outs(
     trace._source_model_ref = make_weak_model_ref(model)
     trace._out_sink = out_sink
     trace._keep_outs_in_memory = keep_outs_in_memory
-    trace._grad_stream_retain_in_memory = keep_grads_in_memory
-    trace._defer_streaming_bundle_finalization = save_grads_to is not None
+    trace._grad_stream_retain_in_memory = retain_grads_in_memory
+    trace._defer_streaming_bundle_finalization = grad_storage_path is not None
     trace._in_exhaustive_pass = True
     trace.raise_on_nan = raise_on_nan
     if save_predicate is not None or intervene_predicate is not None:
@@ -1156,7 +1156,7 @@ def _run_model_and_save_specified_outs(
         trace._predicate_history_size = predicate_history_size
         trace._predicate_lookback = lookback
         trace._predicate_lookback_payload_policy = lookback_payload_policy
-    bundle_path = save_grads_to if save_grads_to is not None else save_outs_to
+    bundle_path = grad_storage_path if grad_storage_path is not None else save_outs_to
     if bundle_path is not None:
         trace._out_writer = BundleStreamWriter(bundle_path)
     try:
@@ -1751,7 +1751,7 @@ def trace(
     if capture_options.stop_after is not None:
         raise NotImplementedError("stop_after is only supported by torchlens.peek.")
     save_grads_policy = capture_options.save_grads
-    save_gradients = save_grads_policy not in (None, False)
+    should_save_grads = save_grads_policy not in (None, False)
     if save_grads_policy is True:
         grads_to_save_resolved: str | list[Any] | None = "all"
     elif save_grads_policy in (None, False):
@@ -1760,8 +1760,8 @@ def trace(
         grads_to_save_resolved = "all"
     else:
         grads_to_save_resolved = cast("str | list[Any] | None", save_grads_policy)
-    save_grads_to_value = streaming_options.bundle_path if save_gradients else None
-    keep_grads_in_memory_value = streaming_options.retain_in_memory
+    grad_storage_path_value = streaming_options.bundle_path if should_save_grads else None
+    retain_grads_in_memory_value = streaming_options.retain_in_memory
 
     if output_device not in ["same", "cpu", "cuda"]:
         raise ValueError("output_device must be either 'same', 'cpu', or 'cuda'.")
@@ -1771,12 +1771,12 @@ def trace(
     train_mode_value = capture_options.backward_ready
     backward_opted_in = (
         capture_options.is_field_explicit("save_grads")
-        and save_gradients
+        and should_save_grads
         and save_grads_policy is not True
     )
-    grad_streaming_requested = save_grads_to_value is not None
+    grad_streaming_requested = grad_storage_path_value is not None
     if grad_streaming_requested:
-        save_gradients = True
+        should_save_grads = True
     if backward_opted_in:
         if train_mode_explicit and train_mode_value is False:
             raise ValueError(
@@ -1784,8 +1784,8 @@ def trace(
                 "Omit backward_ready or set backward_ready=True."
             )
         train_mode_value = True
-        save_gradients = True
-    if train_mode_value and save_grads_to_value is not None:
+        should_save_grads = True
+    if train_mode_value and grad_storage_path_value is not None:
         raise TrainingModeConfigError(
             "backward_ready=True is not compatible with disk-backed gradient storage"
         )
@@ -1870,7 +1870,7 @@ def trace(
             'capture with layers_to_save="all" and filter post-hoc with '
             "torchlens.save(..., include_outs=True)."
         )
-    if save_grads_to_value is not None and uses_two_pass:
+    if grad_storage_path_value is not None and uses_two_pass:
         raise TorchLensIOError(
             "storage=to_disk(...) gradient streaming is only supported with save_grads=True "
             "release. Capture all grads and filter post-hoc with torchlens.save(...)."
@@ -1893,7 +1893,7 @@ def trace(
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,
-            save_grads=save_gradients,
+            save_grads=should_save_grads,
             grads_to_save=grads_to_save_resolved,
             random_seed=random_seed,
             num_context_lines=source_context_lines,
@@ -1903,8 +1903,8 @@ def trace(
             recurrence_detection=recurrence_detection,
             save_outs_to=streaming_options.bundle_path,
             keep_outs_in_memory=streaming_options.retain_in_memory,
-            save_grads_to=save_grads_to_value,
-            keep_grads_in_memory=keep_grads_in_memory_value,
+            grad_storage_path=grad_storage_path_value,
+            retain_grads_in_memory=retain_grads_in_memory_value,
             out_sink=streaming_options.out_callback,
             intervention_ready=intervention_ready,
             hooks=hooks,
@@ -1969,8 +1969,8 @@ def trace(
             recurrence_detection=recurrence_detection,
             save_outs_to=streaming_options.bundle_path,
             keep_outs_in_memory=streaming_options.retain_in_memory,
-            save_grads_to=save_grads_to_value,
-            keep_grads_in_memory=keep_grads_in_memory_value,
+            grad_storage_path=grad_storage_path_value,
+            retain_grads_in_memory=retain_grads_in_memory_value,
             out_sink=streaming_options.out_callback,
             intervention_ready=intervention_ready,
             hooks=hooks,
@@ -2002,13 +2002,13 @@ def trace(
         next(capture_progress, None)
         _vprint(trace, "Two-pass mode: Pass 2 (fast, saving requested layers)")
         trace.save_grads = save_grads_policy
-        trace.save_grads = grads_to_save_resolved if save_gradients else None
+        trace.save_grads = grads_to_save_resolved if should_save_grads else None
         trace.save_new_outs(
             model=model,
             input_args=cast(torch.Tensor | list[Any], input_args),
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,  # type: ignore[arg-type]
-            gradients_to_save=grads_to_save_resolved,
+            grad_layers_to_save=grads_to_save_resolved,
             random_seed=random_seed,
             backward_ready=train_mode_value,
         )

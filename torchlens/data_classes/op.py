@@ -689,7 +689,7 @@ class Op:
         "out_versions_by_child": FieldPolicy.BLOB_RECURSIVE,
         "grad": FieldPolicy.BLOB,
         "transformed_grad": FieldPolicy.BLOB,
-        "save_gradients": FieldPolicy.KEEP,
+        "save_grads": FieldPolicy.KEEP,
         "has_grad": FieldPolicy.KEEP,
         "grad_shape": FieldPolicy.KEEP,
         "transformed_grad_shape": FieldPolicy.KEEP,
@@ -949,6 +949,8 @@ class Op:
             fields_dict["ordinal_index"] = -1
         if "grad_fn" not in fields_dict:
             fields_dict["grad_fn"] = None
+        if "save_gradients" in fields_dict and "save_grads" not in fields_dict:
+            fields_dict["save_grads"] = fields_dict.pop("save_gradients")
         for derived_field in (
             "input_ops",
             "input_activations",
@@ -1031,7 +1033,7 @@ class Op:
         # via log_tensor_grad().  grad is populated by a backward hook.
         self.grad = fields_dict["grad"]
         self.transformed_grad = fields_dict["transformed_grad"]
-        self.save_gradients = fields_dict["save_gradients"]
+        self.save_grads = fields_dict["save_grads"]
         self.has_grad = fields_dict["has_grad"]
         self.grad_shape = fields_dict["grad_shape"]
         self.transformed_grad_shape = fields_dict["transformed_grad_shape"]

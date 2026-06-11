@@ -489,7 +489,7 @@ def _op_event_from_log(
             save_args=fields_dict["has_saved_args"],
             save_code=bool(fields_dict["code_context"]),
             save_rng=bool(fields_dict["func_rng_states"]),
-            save_grad=fields_dict["save_gradients"],
+            save_grad=fields_dict["save_grads"],
             stream=False,
         ),
         predicate_matched=True,
@@ -1946,7 +1946,7 @@ def _build_shared_fields_dict(
     # Grad info
     fields_dict["grad"] = None
     fields_dict["transformed_grad"] = None
-    fields_dict["save_gradients"] = getattr(self, "save_grads", None) not in (None, False)
+    fields_dict["save_grads"] = getattr(self, "save_grads", None) not in (None, False)
     fields_dict["has_grad"] = False
     fields_dict["grad_shape"] = None
     fields_dict["transformed_grad_shape"] = None

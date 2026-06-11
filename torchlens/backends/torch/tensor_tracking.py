@@ -232,7 +232,7 @@ def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
         return bool(policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace))))
     if callable(policy):
         return bool(policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace))))
-    selection = getattr(trace, "_grad_layer_nums_to_save", "all")
+    selection = getattr(trace, "_grad_op_nums_to_save", "all")
     if selection in [None, "none", []]:
         return False
     if selection == "all":
@@ -315,12 +315,12 @@ def _log_tensor_grad(self: "Trace", grad: torch.Tensor, _label_raw: str) -> None
 
     for layer_label in layers_to_update:
         layer = self[layer_label]
-        selection = getattr(self, "_grad_layer_nums_to_save", "all")
+        selection = getattr(self, "_grad_op_nums_to_save", "all")
         if selection != "all":
             if selection in [None, "none", []] or layer.raw_index not in selection:
                 continue
-        if layer_label not in self._saved_grads_set:
-            self._saved_grads_set.add(layer_label)
+        if layer_label not in self._saved_grad_labels:
+            self._saved_grad_labels.add(layer_label)
         layer.log_tensor_grad(grad)
         self.saved_gradient_memory += layer.gradient_memory
         self.total_gradient_memory += layer.gradient_memory

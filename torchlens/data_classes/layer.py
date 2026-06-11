@@ -202,7 +202,7 @@ class Layer:
         "annotations": FieldPolicy.KEEP,
         "intervention_replaced": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
-        "save_gradients": FieldPolicy.KEEP,
+        "save_grads": FieldPolicy.KEEP,
         "transformed_grad": FieldPolicy.BLOB,
         "transformed_grad_shape": FieldPolicy.KEEP,
         "transformed_grad_dtype": FieldPolicy.KEEP,
@@ -314,7 +314,7 @@ class Layer:
         self.annotations: Dict[str, Any] = {}
         self.intervention_replaced = first_pass.intervention_replaced
         self.detach_saved_activations = first_pass.detach_saved_activations
-        self.save_gradients = first_pass.save_gradients
+        self.save_grads = first_pass.save_grads
         self.transformed_grad_shape = first_pass.transformed_grad_shape
         self.transformed_grad_dtype = first_pass.transformed_grad_dtype
         self.transformed_gradient_memory: Bytes | None = as_bytes(

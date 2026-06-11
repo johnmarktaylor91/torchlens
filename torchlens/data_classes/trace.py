@@ -1087,7 +1087,7 @@ class Trace(CapturedRun):
         "_out_hash_cache": FieldPolicy.DROP,
         "save_arg_values": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
-        "_grad_layer_nums_to_save": FieldPolicy.KEEP,
+        "_grad_op_nums_to_save": FieldPolicy.KEEP,
         "grad_transform": FieldPolicy.DROP,
         "grad_transform_repr": FieldPolicy.KEEP,
         "save_raw_gradients": FieldPolicy.KEEP,
@@ -1160,7 +1160,7 @@ class Trace(CapturedRun):
         "_orphan_labels": FieldPolicy.KEEP,
         "_orphan_logs": FieldPolicy.KEEP,
         "orphan_records": FieldPolicy.BLOB_RECURSIVE,
-        "_saved_grads_set": FieldPolicy.DROP,
+        "_saved_grad_labels": FieldPolicy.DROP,
         "layers_with_params": FieldPolicy.KEEP,
         "ops_with_params": FieldPolicy.KEEP,
         "op_equivalence_classes": FieldPolicy.KEEP,
@@ -1441,7 +1441,7 @@ class Trace(CapturedRun):
         self.layer_num_calls: Dict[str, int] = OrderedDict()  # no-pass label -> pass count
         self.by_pass: dict[int, list[int]] = {}
         self._layer_nums_to_save: List[int] = []  # ordinal positions of layers to save
-        self._grad_layer_nums_to_save: List[int] | str = []
+        self._grad_op_nums_to_save: List[int] | str = []
         self.num_ops: int = 0  # total operations after postprocessing
 
         # Mapping between raw barcodes and final human-readable labels
@@ -1473,7 +1473,7 @@ class Trace(CapturedRun):
         self._orphan_labels: List[str] = []
         self._orphan_logs: tuple[Op, ...] = ()
         self.orphan_records: list[dict[str, Any]] = []
-        self._saved_grads_set: set[str] = set()
+        self._saved_grad_labels: set[str] = set()
         self.layers_with_params: Dict[str, List[Any]] = defaultdict(list)
         # Maps equivalence_class -> set of layer labels that share
         # that equivalence type (populated by loop_detection.py).
@@ -2919,7 +2919,7 @@ class Trace(CapturedRun):
                 "grad_transform_repr": None,
                 "save_raw_gradients": True,
                 "save_grads": _legacy_save_grads_from_state(state),
-                "_grad_layer_nums_to_save": [],
+                "_grad_op_nums_to_save": [],
                 "has_backward_pass": False,
                 "grad_fn_logs": OrderedDict(),
                 "grad_fn_order": [],
@@ -2975,6 +2975,10 @@ class Trace(CapturedRun):
                 "forward_peak_memory": 0,
             },
         )
+        if "_grad_layer_nums_to_save" in state and "_grad_op_nums_to_save" not in state:
+            state["_grad_op_nums_to_save"] = state.pop("_grad_layer_nums_to_save")
+        if "_saved_grads_set" in state and "_saved_grad_labels" not in state:
+            state["_saved_grad_labels"] = state.pop("_saved_grads_set")
         state.pop("save_gradients", None)
         state.pop("gradients_to_save", None)
         state.pop("_keep_grads_in_memory", None)
@@ -4962,7 +4966,7 @@ class Trace(CapturedRun):
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: str | List[str] = "all",
-        gradients_to_save: str | List[str] | None = "all",
+        grad_layers_to_save: str | List[str] | None = "all",
         random_seed: Optional[int] = None,
         backward_ready: bool | None = None,
     ) -> None:
@@ -4970,7 +4974,7 @@ class Trace(CapturedRun):
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed, backward_ready:
+        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, random_seed, backward_ready:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.save_new_outs`.
         """
@@ -4985,7 +4989,7 @@ class Trace(CapturedRun):
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
-            gradients_to_save=gradients_to_save,
+            grad_layers_to_save=grad_layers_to_save,
             random_seed=random_seed,
             backward_ready=backward_ready,
         )
@@ -5295,7 +5299,7 @@ class Trace(CapturedRun):
         input_args: torch.Tensor | List[Any],
         input_kwargs: Optional[Dict[Any, Any]] = None,
         layers_to_save: Optional[str | List[str | int]] = "all",
-        gradients_to_save: Optional[str | List[str | int]] = "all",
+        grad_layers_to_save: Optional[str | List[str | int]] = "all",
         random_seed: Optional[int] = None,
         postprocess: bool = True,
     ) -> Any:
@@ -5303,7 +5307,7 @@ class Trace(CapturedRun):
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed:
+        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, random_seed:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.run_and_log_inputs_through_model`.
         """
@@ -5315,7 +5319,7 @@ class Trace(CapturedRun):
             input_args=input_args,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
-            gradients_to_save=gradients_to_save,
+            grad_layers_to_save=grad_layers_to_save,
             random_seed=random_seed,
             postprocess=postprocess,
         )

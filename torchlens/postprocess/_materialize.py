@@ -377,7 +377,7 @@ def _fields_from_event(
             },
             "grad": None,
             "transformed_grad": None,
-            "save_gradients": event.policy.save_grad,
+            "save_grads": event.policy.save_grad,
             "has_grad": False,
             "grad_shape": None,
             "transformed_grad_shape": None,

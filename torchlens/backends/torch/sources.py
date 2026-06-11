@@ -326,7 +326,7 @@ def log_source_tensor_exhaustive(
         # Grad info:
         "grad": None,
         "transformed_grad": None,
-        "save_gradients": getattr(self, "save_grads", None) not in (None, False),
+        "save_grads": getattr(self, "save_grads", None) not in (None, False),
         "has_grad": False,
         "grad_shape": None,
         "transformed_grad_shape": None,

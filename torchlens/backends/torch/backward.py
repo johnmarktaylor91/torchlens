@@ -384,11 +384,11 @@ def _selected_for_grad_save(trace: Any, layer_label: str | None) -> bool:
     Returns
     -------
     bool
-        True if this layer is selected by ``gradients_to_save``.
+        True if this layer is selected by the trace's gradient-retention policy.
     """
     if layer_label is None:
         return False
-    selection = getattr(trace, "_grad_layer_nums_to_save", "all")
+    selection = getattr(trace, "_grad_op_nums_to_save", "all")
     if selection == "all":
         return True
     if selection in [None, "none", []]:
@@ -683,7 +683,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
                 unique_payload_ids.add(payload_id)
                 total_backward_memory += payload_memory
         total_gradient_memory += int(event.memory or 0)
-    trace._saved_grads_set = saved_grad_labels
+    trace._saved_grad_labels = saved_grad_labels
     trace.saved_gradient_memory = Bytes(total_gradient_memory)
     trace.total_gradient_memory = Bytes(total_gradient_memory)
     trace.total_backward_memory = Bytes(total_backward_memory)
@@ -1681,8 +1681,8 @@ def _ensure_layer_grad_hooks(trace: Any) -> None:
     trace:
         Trace whose saved outs should receive grad hooks.
     """
-    if getattr(trace, "_grad_layer_nums_to_save", None) in [None, [], "none"]:
-        trace._grad_layer_nums_to_save = "all"
+    if getattr(trace, "_grad_op_nums_to_save", None) in [None, [], "none"]:
+        trace._grad_op_nums_to_save = "all"
 
 
 def _finalize_grad_streaming(trace: Any) -> None:

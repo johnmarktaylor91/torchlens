@@ -63,7 +63,7 @@ def save_new_outs(
     input_args: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[Any] = "all",
-    gradients_to_save: str | list[Any] | None = "all",
+    grad_layers_to_save: str | list[Any] | None = "all",
     random_seed: int | None = None,
     backward_ready: bool | None = None,
 ) -> None:
@@ -84,7 +84,7 @@ def save_new_outs(
         input_args: Either a single tensor input to the model, or list of input arguments.
         input_kwargs: Dict of keyword arguments to the model.
         layers_to_save: List of layers to save, using any valid lookup keys.
-        gradients_to_save: List of layers whose grads should be saved.
+        grad_layers_to_save: List of layers whose grads should be saved.
         random_seed: Which random seed to use for deterministic reproduction.
         backward_ready: Optional replay override. ``None`` inherits the existing
             model log settings; explicit values temporarily override saved
@@ -111,7 +111,7 @@ def save_new_outs(
                 input_args=input_args,
                 input_kwargs=input_kwargs,
                 layers_to_save=layers_to_save,
-                gradients_to_save=gradients_to_save,
+                grad_layers_to_save=grad_layers_to_save,
                 random_seed=random_seed,
                 backward_ready=None,
             )
@@ -148,7 +148,7 @@ def save_new_outs(
 
     # Reset per-pass bookkeeping fields.  Graph-level totals (total_activation_memory,
     # num_tensors) are NOT reset — they describe the static graph structure.
-    self._saved_grads_set = set()
+    self._saved_grad_labels = set()
     self.has_gradients = False
     self.num_saved_ops = 0
     self.saved_activation_memory = Bytes(0)
@@ -170,7 +170,7 @@ def save_new_outs(
     # Now run and log the new inputs.
     _vprint(self, "Running fast pass (saving requested outs)")
     self._run_and_log_inputs_through_model(
-        model, input_args, input_kwargs, layers_to_save, gradients_to_save, random_seed
+        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, random_seed
     )
 
 
@@ -486,7 +486,7 @@ def run_and_log_inputs_through_model(
     input_args: torch.Tensor | list[Any],
     input_kwargs: dict[Any, Any] | None = None,
     layers_to_save: str | list[str | int] | None = "all",
-    gradients_to_save: str | list[str | int] | None = "all",
+    grad_layers_to_save: str | list[str | int] | None = "all",
     random_seed: int | None = None,
     postprocess: bool = True,
 ) -> Any:
@@ -516,10 +516,10 @@ def run_and_log_inputs_through_model(
 
     if self.capture_mode == "predicate":
         self._layer_nums_to_save = []
-        self._grad_layer_nums_to_save = []
+        self._grad_op_nums_to_save = []
     else:
         self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
-        self._grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, gradients_to_save)
+        self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
 
     # In fast mode, output layers' out are derived from their parents
     # (see postprocess_fast).  If the user requested a subset of layers, we must

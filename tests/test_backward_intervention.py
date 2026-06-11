@@ -42,7 +42,7 @@ class _TraceStub:
     """Weakref-able trace stub for direct hook-factory tests."""
 
     grad_fn_logs: dict[int, GradFn]
-    _grad_layer_nums_to_save: str = "all"
+    _grad_op_nums_to_save: str = "all"
     last_run: dict[str, Any] | None = None
 
 

@@ -358,7 +358,7 @@ class Recorder:
                     input_args,
                     input_kwargs,
                     layers_to_save=[],
-                    gradients_to_save=[],
+                    grad_layers_to_save=[],
                     random_seed=self.options.random_seed,
                     postprocess=False,
                 )

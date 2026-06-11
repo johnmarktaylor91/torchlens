@@ -64,7 +64,7 @@ def cleanup(self: "Trace") -> None:
     for attr in [
         "_raw_layer_dict",
         "_raw_layer_labels_list",
-        "_saved_grads_set",
+        "_saved_grad_labels",
         "_module_logs",
         "_buffer_accessor",
         "_module_metadata",

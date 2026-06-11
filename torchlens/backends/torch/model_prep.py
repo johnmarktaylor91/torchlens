@@ -1115,7 +1115,7 @@ def _ensure_module_output_tensor_logged(
             "out_versions_by_child": {},
             "grad": None,
             "transformed_grad": None,
-            "save_gradients": getattr(trace, "save_grads", None) not in (None, False),
+            "save_grads": getattr(trace, "save_grads", None) not in (None, False),
             "has_grad": False,
             "grad_shape": None,
             "transformed_grad_shape": None,
