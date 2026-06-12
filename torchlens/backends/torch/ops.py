@@ -78,9 +78,11 @@ from ...data_classes.op import (
     Op,
     _dtype_or_none,
     _dedup_saved_activation_out,
+    _effective_activation_save_mode,
     _memory_or_none,
     _recursive_safe_copy,
     _shape_or_none,
+    _stamp_reference_out,
     apply_transform,
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
@@ -519,6 +521,7 @@ def _op_event_from_log(
             save_rng=bool(fields_dict["func_rng_states"]),
             save_grad=fields_dict["save_grads"],
             stream=False,
+            save_mode=getattr(trace, "save_mode", "copy"),
         ),
         predicate_matched=True,
         pass_index=fields_dict["pass_index"],
@@ -528,7 +531,10 @@ def _op_event_from_log(
         is_transform=bool(fields_dict.get("is_transform", False)),
         transform_kind=fields_dict.get("transform_kind"),
         transform_chain=tuple(fields_dict.get("transform_chain") or ()),
-        transform_config=dict(fields_dict.get("transform_config") or {}),
+        transform_config={
+            **dict(fields_dict.get("transform_config") or {}),
+            "_tl_annotations": dict(fields_dict.get("annotations") or {}),
+        },
         transform_fn_name=fields_dict.get("transform_fn_name"),
         transform_fn_qualname=fields_dict.get("transform_fn_qualname"),
         transform_fn_source=fields_dict.get("transform_fn_source"),
@@ -2950,9 +2956,19 @@ def _save_activation_fields(
 
     writer = getattr(trace, "_out_writer", None)
     try:
-        raw_out = safe_copy(t, fields_dict["detach_saved_activations"])
+        save_mode = _effective_activation_save_mode(
+            trace,
+            func_name=fields_dict.get("func_name"),
+            is_inplace=bool(fields_dict.get("is_inplace", False)),
+        )
+        raw_out = safe_copy(
+            t,
+            fields_dict["detach_saved_activations"],
+            save_mode=save_mode,
+        )
         if fields_dict["output_device"] not in [str(raw_out.device), "same"]:
             raw_out = safe_to(raw_out, fields_dict["output_device"])
+        _stamp_reference_out(fields_dict["annotations"], raw_out, save_mode)
 
         fields_dict["shape"] = tuple(raw_out.shape)
         fields_dict["dtype"] = raw_out.dtype

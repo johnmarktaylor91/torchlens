@@ -372,6 +372,7 @@ def _spec_to_json(spec: CaptureSpec) -> dict[str, Any]:
         "keep_grad": spec.keep_grad,
         "device": None if spec.device is None else str(spec.device),
         "dtype": _dtype_to_name(spec.dtype),
+        "save_mode": spec.save_mode,
     }
 
 
@@ -384,6 +385,7 @@ def _spec_from_json(data: dict[str, Any]) -> CaptureSpec:
         keep_grad=bool(data.get("keep_grad", False)),
         device=data.get("device"),
         dtype=_dtype_from_name(data.get("dtype")),
+        save_mode=data.get("save_mode", "copy"),
     )
 
 

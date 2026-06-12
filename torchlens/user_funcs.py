@@ -77,6 +77,7 @@ from .utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_
 from .utils.display import _vprint, warn_parallel
 from .utils.introspection import _get_code_context, get_vars_of_type_from_obj
 from .utils.rng import set_random_seed
+from .utils.tensor_utils import SaveMode
 from .visualization.code_panel import (
     CodePanelOption,
     capture_model_source_code,
@@ -957,6 +958,7 @@ def _run_model_and_save_specified_outs(
     grad_transform: GradientPostfunc | None = None,
     save_raw_activations: bool = True,
     save_raw_gradients: bool = True,
+    save_mode: SaveMode = "copy",
     mark_layer_depths: bool = False,
     detach_saved_activations: bool = False,
     save_arg_values: bool = False,
@@ -1022,6 +1024,7 @@ def _run_model_and_save_specified_outs(
             is set. Metadata always describes the raw out.
         save_raw_gradients: Whether raw grads are retained when ``grad_transform`` is set.
             Metadata always describes the raw grad.
+        save_mode: Tensor retention mode for saved activation and gradient payloads.
         mark_layer_depths: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
         detach_saved_activations: If True, saved tensors are detached from the autograd graph.
@@ -1120,6 +1123,7 @@ def _run_model_and_save_specified_outs(
         grad_transform=grad_transform,
         save_raw_activations=save_raw_activations,
         save_raw_gradients=save_raw_gradients,
+        save_mode=save_mode,
         keep_orphans=keep_orphans,
         save_arg_values=save_arg_values,
         save_grads=grads_to_save if save_grads else None,
@@ -1347,6 +1351,7 @@ def trace(
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_raw_activations: bool | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
+    save_mode: SaveMode | MissingType = MISSING,
     mark_layer_depths: bool | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
     save_arg_values: bool | MissingType = MISSING,
@@ -1449,6 +1454,7 @@ def trace(
             raw out tensors in memory; raw out metadata is still populated.
         save_raw_gradients: When ``False`` and ``grad_transform`` is set, do not retain raw
             grad tensors in memory; raw grad metadata is still populated.
+        save_mode: Tensor retention mode for saved activation and gradient payloads.
         mark_layer_depths: Deprecated alias for
             ``compute_input_output_distances``.
         detach_saved_activations: If True, detach saved tensors from the autograd graph.
@@ -1558,6 +1564,7 @@ def trace(
             "grad_transform": grad_transform,
             "save_raw_activations": save_raw_activations,
             "save_raw_gradients": save_raw_gradients,
+            "save_mode": save_mode,
             "mark_layer_depths": mark_layer_depths,
             "detach_saved_activations": detach_saved_activations,
             "save_arg_values": save_arg_values,
@@ -1767,6 +1774,9 @@ def trace(
     grad_transform = save_options.grad_transform
     save_raw_activations = save_options.save_raw_activations
     save_raw_gradients = save_options.save_raw_gradients
+    save_mode_value = "copy" if save_mode is MISSING else save_mode
+    if save_mode_value not in {"copy", "reference", "view", "cpu_async"}:
+        raise ValueError("save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'")
     save_arg_values = capture_options.save_arg_values
     save_code_context = capture_options.save_code_context
     save_rng_states = capture_options.save_rng_states
@@ -1881,6 +1891,7 @@ def trace(
             "source_context_lines": source_context_lines,
             "compute_input_output_distances": compute_input_output_distances,
             "detach_saved_activations": detach_saved_activations,
+            "save_mode": save_mode_value,
             "recurrence_detection": recurrence_detection,
             "backward_ready": train_mode_value,
             "output_transform": repr(output_transform_value),
@@ -1929,6 +1940,7 @@ def trace(
             grad_transform=grad_transform,
             save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
+            save_mode=cast(SaveMode, save_mode_value),
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,
@@ -1996,6 +2008,7 @@ def trace(
             grad_transform=grad_transform,
             save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
+            save_mode=cast(SaveMode, save_mode_value),
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,

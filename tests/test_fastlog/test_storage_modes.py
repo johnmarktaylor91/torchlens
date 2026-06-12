@@ -65,6 +65,40 @@ def test_ram_only_keep_grad_true_records_attached_tensor_and_backpropagates() ->
     assert model.linear.weight.grad is not None
 
 
+def test_view_save_mode_promotes_keep_grad() -> None:
+    """CaptureSpec save_mode='view' records an attached payload honestly."""
+
+    recording = tl.fastlog.record(
+        StorageModel(),
+        torch.ones(1, 3),
+        default_op=CaptureSpec(save_mode="view"),
+    )
+    record = _first_payload_record(recording)
+
+    assert record.spec.keep_grad is True
+    assert record.ram_payload is not None
+    assert record.ram_payload.requires_grad is True
+    assert record.ram_payload.grad_fn is not None
+
+
+def test_reference_save_mode_to_trace_checks_version() -> None:
+    """Reference-mode payloads projected to Trace retain the mutation tripwire."""
+
+    recording = tl.fastlog.record(
+        StorageModel(),
+        torch.ones(1, 3),
+        default_op=CaptureSpec(save_mode="reference"),
+    )
+    trace = recording.to_trace()
+    op = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    saved_out = op.__dict__["out"]
+
+    saved_out.add_(1)
+
+    with pytest.raises(tl.MutatedReferenceError, match="mutated after capture"):
+        _ = op.out
+
+
 def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
     tmp_path: Path,
 ) -> None:

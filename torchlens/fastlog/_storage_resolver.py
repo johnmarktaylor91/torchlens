@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 import torch
@@ -10,6 +11,7 @@ from .._errors import TorchLensPostfuncError
 from .._state import pause_logging
 from .._training_validation import TrainingModeConfigError
 from ..utils.tensor_utils import safe_copy
+from ..utils.tensor_utils import SaveMode
 from .exceptions import InvalidStorageError, PredicateError
 from .types import CaptureSpec, RecordContext, StorageIntent
 
@@ -24,6 +26,7 @@ _INTEGER_DTYPES = {
     torch.uint8,
     torch.bool,
 }
+_WARNED_REFERENCE_SAVE_MODE = False
 
 
 def _apply_payload_transforms(tensor: torch.Tensor, spec: CaptureSpec) -> torch.Tensor:
@@ -36,6 +39,29 @@ def _apply_payload_transforms(tensor: torch.Tensor, spec: CaptureSpec) -> torch.
         if spec.device is not None:
             payload = payload.to(device=spec.device)
     return payload
+
+
+def _warn_reference_save_mode_once() -> None:
+    """Emit the reference-mode mutation warning once per process."""
+
+    global _WARNED_REFERENCE_SAVE_MODE
+    if _WARNED_REFERENCE_SAVE_MODE:
+        return
+    warnings.warn(
+        "save_mode='reference' stores source tensors by reference; reading a mutated "
+        "saved tensor raises MutatedReferenceError.",
+        UserWarning,
+        stacklevel=3,
+    )
+    _WARNED_REFERENCE_SAVE_MODE = True
+
+
+def _save_mode_for_payload(spec: CaptureSpec, *, target: Literal["ram", "disk"]) -> SaveMode:
+    """Return the effective save mode for a storage target."""
+
+    if target == "disk" and spec.save_mode in {"reference", "view"}:
+        return "copy"
+    return spec.save_mode
 
 
 def _resolve_storage(
@@ -96,6 +122,19 @@ def _resolve_storage(
         raise PredicateError(message)
     if spec.keep_grad and (tensor.dtype in _INTEGER_DTYPES or spec.dtype in _INTEGER_DTYPES):
         raise PredicateError("keep_grad=True is not valid for integer or bool tensors")
+    if spec.save_mode not in {"copy", "reference", "view", "cpu_async"}:
+        raise PredicateError("save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'")
+    if spec.save_mode == "reference":
+        _warn_reference_save_mode_once()
+    if spec.save_mode == "view" and not spec.keep_grad:
+        spec = CaptureSpec(
+            save_out=spec.save_out,
+            save_metadata=spec.save_metadata,
+            keep_grad=True,
+            device=spec.device,
+            dtype=spec.dtype,
+            save_mode=spec.save_mode,
+        )
 
     ram_payload: torch.Tensor | None = None
     disk_payload: torch.Tensor | None = None
@@ -105,7 +144,11 @@ def _resolve_storage(
     keep_raw = save_raw_activations or transform is None
 
     if intent.in_ram:
-        raw_ram = safe_copy(tensor, detach_tensor=not spec.keep_grad)
+        raw_ram = safe_copy(
+            tensor,
+            detach_tensor=not spec.keep_grad,
+            save_mode=_save_mode_for_payload(spec, target="ram"),
+        )
         raw_ram = _apply_payload_transforms(raw_ram, spec)
         if transform is not None:
             transformed_ram = _invoke_transform(
@@ -126,7 +169,11 @@ def _resolve_storage(
         if keep_raw:
             ram_payload = raw_ram
     if intent.on_disk:
-        raw_disk = safe_copy(tensor, detach_tensor=True)
+        raw_disk = safe_copy(
+            tensor,
+            detach_tensor=True,
+            save_mode=_save_mode_for_payload(spec, target="disk"),
+        )
         raw_disk = _apply_payload_transforms(raw_disk, spec)
         if transform is not None:
             transformed_disk = _invoke_transform(

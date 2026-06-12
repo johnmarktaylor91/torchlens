@@ -12,6 +12,7 @@ import torch
 
 from ..captured_run import CapturedRun
 from ..ir.predicate import EventKind, ModuleStackFrame, RecordContext
+from ..utils.tensor_utils import SaveMode
 
 if TYPE_CHECKING:
     from ..capture.projections import RecordingState
@@ -42,6 +43,8 @@ class CaptureSpec:
         Optional target device for retained payloads.
     dtype:
         Optional target dtype for retained payloads.
+    save_mode:
+        Tensor retention mode for saved payloads.
     """
 
     save_out: bool = True
@@ -49,6 +52,15 @@ class CaptureSpec:
     keep_grad: bool = False
     device: torch.device | str | None = None
     dtype: torch.dtype | None = None
+    save_mode: SaveMode = "copy"
+
+    def __post_init__(self) -> None:
+        """Normalize and validate capture save-mode settings."""
+
+        if self.save_mode not in {"copy", "reference", "view", "cpu_async"}:
+            raise ValueError("save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'")
+        if self.save_mode == "view" and not self.keep_grad:
+            object.__setattr__(self, "keep_grad", True)
 
 
 CaptureDecision = bool | CaptureSpec | None

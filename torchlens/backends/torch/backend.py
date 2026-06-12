@@ -260,7 +260,7 @@ class TorchBackend:
 
     def safe_copy(self, session: object, value: object, policy: CapturePolicy) -> object:
         """Copy a torch value with logging paused."""
-        return safe_copy(value, detach_tensor=not policy.save_grad)
+        return safe_copy(value, detach_tensor=not policy.save_grad, save_mode=policy.save_mode)
 
     def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
         """Copy TorchLens replacement metadata between tensors."""

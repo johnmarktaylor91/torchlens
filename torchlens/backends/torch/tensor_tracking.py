@@ -33,7 +33,7 @@ import itertools as it
 import time
 import warnings
 import weakref
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -44,6 +44,7 @@ from ..._state import pause_logging
 from ...intervention.selectors import BaseSelector
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ...utils.tensor_utils import safe_copy
+from ...utils.tensor_utils import SaveMode
 from ...fastlog.types import CaptureSpec
 
 if TYPE_CHECKING:
@@ -231,7 +232,12 @@ def _build_grad_payloads(
     op = trace[layer_label]
     grad_transform = getattr(trace, "grad_transform", None)
     save_raw_gradients = getattr(trace, "save_raw_gradients", True)
-    raw_payload = _copy_grad_payload(grad) if save_raw_gradients or grad_transform is None else None
+    save_mode = _trace_grad_save_mode(trace)
+    raw_payload = (
+        _copy_grad_payload(grad, save_mode=save_mode)
+        if save_raw_gradients or grad_transform is None
+        else None
+    )
     if grad_transform is None:
         return raw_payload, None
     writer = getattr(trace, "_out_writer", None)
@@ -295,7 +301,12 @@ def _build_fastlog_grad_payloads(
 
     grad_transform = getattr(trace, "grad_transform", None)
     save_raw_gradients = getattr(trace, "save_raw_gradients", True)
-    raw_payload = _copy_grad_payload(grad) if save_raw_gradients or grad_transform is None else None
+    save_mode = _trace_grad_save_mode(trace)
+    raw_payload = (
+        _copy_grad_payload(grad, save_mode=save_mode)
+        if save_raw_gradients or grad_transform is None
+        else None
+    )
     if grad_transform is None:
         return raw_payload, None
     transformed_payload = grad_transform(grad)
@@ -304,7 +315,16 @@ def _build_fastlog_grad_payloads(
     return raw_payload, transformed_payload
 
 
-def _copy_grad_payload(grad: torch.Tensor) -> torch.Tensor:
+def _trace_grad_save_mode(trace: "Trace") -> SaveMode:
+    """Return the active save mode for trace-side gradient payloads."""
+
+    policy = _active_save_grads_policy(trace)
+    if isinstance(policy, CaptureSpec):
+        return policy.save_mode
+    return cast(SaveMode, getattr(trace, "save_mode", "copy"))
+
+
+def _copy_grad_payload(grad: torch.Tensor, *, save_mode: SaveMode = "copy") -> torch.Tensor:
     """Return a detached gradient payload snapshot through the copy chokepoint.
 
     Parameters
@@ -318,7 +338,7 @@ def _copy_grad_payload(grad: torch.Tensor) -> torch.Tensor:
         Detached tensor copy suitable for storage in gradient records.
     """
 
-    copied = safe_copy(grad, detach_tensor=True)
+    copied = safe_copy(grad, detach_tensor=True, save_mode=save_mode)
     if not isinstance(copied, torch.Tensor):
         raise TypeError("safe_copy returned a non-tensor gradient payload")
     return copied

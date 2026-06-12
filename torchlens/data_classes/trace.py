@@ -106,6 +106,7 @@ from ..intervention.types import (
     TargetSpec,
 )
 from ..types import ActivationPostfunc, GradientPostfunc
+from ..utils.tensor_utils import SaveMode
 from ..quantities import Bytes, Duration, Flops, Macs, as_duration
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
@@ -1053,6 +1054,7 @@ class Trace(CapturedRun):
         "activation_transform": FieldPolicy.DROP,
         "_activation_transform_repr": FieldPolicy.KEEP,
         "save_raw_activations": FieldPolicy.KEEP,
+        "save_mode": FieldPolicy.KEEP,
         "input_annotations": FieldPolicy.KEEP,
         "_source_code_blob": FieldPolicy.KEEP,
         "_source_model_ref": FieldPolicy.DROP,
@@ -1130,6 +1132,7 @@ class Trace(CapturedRun):
         "_predicate_contexts_by_label": FieldPolicy.DROP,
         "_predicate_current_contexts": FieldPolicy.DROP,
         "_predicate_lookback_candidates": FieldPolicy.DROP,
+        "_postprocessing_active": FieldPolicy.DROP,
         "state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
@@ -1261,6 +1264,7 @@ class Trace(CapturedRun):
         grad_transform: Optional[GradientPostfunc] = None,
         save_raw_activations: bool = True,
         save_raw_gradients: bool = True,
+        save_mode: SaveMode = "copy",
         keep_orphans: bool = False,
         save_arg_values: bool = False,
         save_grads: Any = None,
@@ -1295,6 +1299,7 @@ class Trace(CapturedRun):
             grad_transform: Optional function applied to each grad before saving.
             save_raw_activations: Whether raw outs are retained when a transform is set.
             save_raw_gradients: Whether raw grads are retained when a transform is set.
+            save_mode: Tensor retention mode for saved activation and gradient payloads.
             keep_orphans: If True, orphan island ops remain in raw metadata and
                 are exposed via ``trace.orphans``.
             save_arg_values: Whether to deep-copy each operation's input arguments.
@@ -1370,6 +1375,7 @@ class Trace(CapturedRun):
         self.grad_transform = grad_transform
         self.grad_transform_repr = repr(grad_transform) if grad_transform is not None else None
         self.save_raw_gradients = save_raw_gradients
+        self.save_mode = save_mode
         self._source_code_blob: dict[str, str] = {}
         self._source_model_ref: weakref.ReferenceType[nn.Module] | None = None
         self.parent_run: weakref.ReferenceType["Trace"] | None = None
@@ -2932,6 +2938,7 @@ class Trace(CapturedRun):
                 "tlspec_version": TLSPEC_VERSION,
                 "_activation_transform_repr": None,
                 "save_raw_activations": True,
+                "save_mode": "copy",
                 "raw_output": None,
                 "_output_transform": None,
                 "save_raw_output": "small",
@@ -3000,6 +3007,7 @@ class Trace(CapturedRun):
                 "saved_gradient_memory": 0,
                 "total_param_gradient_memory": 0,
                 "forward_peak_memory": 0,
+                "_postprocessing_active": False,
             },
         )
         if "_grad_layer_nums_to_save" in state and "_grad_op_nums_to_save" not in state:
@@ -5329,11 +5337,15 @@ class Trace(CapturedRun):
         """
         from ..postprocess import postprocess as _impl
 
-        return _impl(
-            self,
-            output_tensors=output_tensors,
-            output_tensor_addresses=output_tensor_addresses,
-        )
+        self._postprocessing_active = True
+        try:
+            return _impl(
+                self,
+                output_tensors=output_tensors,
+                output_tensor_addresses=output_tensor_addresses,
+            )
+        finally:
+            self._postprocessing_active = False
 
     def _run_and_log_inputs_through_model(
         self,

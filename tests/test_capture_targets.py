@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 
 import torchlens as tl
@@ -140,6 +141,51 @@ def test_op_save_activation_identity_dedup_reuses_same_source() -> None:
 
     assert first_op.out is second_op.out
     assert second_op.annotations["dedup_reference_label"] == first_op._layer_label_raw
+
+
+def test_trace_reference_save_mode_raises_if_saved_out_mutates() -> None:
+    """Reference-mode saved outputs fail loudly after mutation."""
+
+    log = tl.trace(torch.nn.ReLU(), torch.ones(1, 2), save_mode="reference")
+    op = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    saved_out = op.__dict__["out"]
+
+    saved_out.add_(1)
+
+    with pytest.raises(tl.MutatedReferenceError, match="mutated after capture"):
+        _ = op.out
+
+
+def test_trace_reference_save_mode_copies_known_inplace_ops() -> None:
+    """Known in-place outputs fall back to copy under reference save mode."""
+
+    class InplaceRelu(torch.nn.Module):
+        """Tiny module with a named in-place op."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run an in-place relu on a non-leaf tensor."""
+
+            return x.clone().relu_()
+
+    log = tl.trace(InplaceRelu(), torch.ones(1, 2), save_mode="reference")
+    op = next(layer for layer in log.layer_list if layer.func_name == "relu_")
+    saved_out = op.__dict__["out"]
+
+    saved_out.add_(1)
+
+    assert "save_mode" not in op.annotations
+    assert torch.equal(op.out, torch.full((1, 2), 2.0))
+
+
+def test_trace_view_save_mode_keeps_saved_out_grad_connected() -> None:
+    """View mode keeps saved activation payloads on the autograd graph."""
+
+    model = torch.nn.Linear(2, 2)
+    log = tl.trace(model, torch.ones(1, 2, requires_grad=True), save_mode="view")
+    op = next(layer for layer in log.layer_list if layer.func_name == "linear")
+
+    assert op.out.requires_grad is True
+    assert op.out.grad_fn is not None
 
 
 def test_tied_parameter_notation_smoke() -> None:

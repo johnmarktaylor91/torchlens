@@ -16,12 +16,14 @@ to wrapped versions.
 
 import copy
 from math import prod
-from typing import Any, Optional, cast
+from typing import Any, Literal, Optional, cast
 
 import numpy as np
 import torch
 
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
+
+SaveMode = Literal["copy", "reference", "view", "cpu_async"]
 
 # Maximum absolute tolerance for floating-point comparison in tensor_nanequal.
 # Used by validation replay to allow tiny numerical differences caused by
@@ -360,7 +362,69 @@ def _safe_get_memory_format(t: torch.Tensor) -> torch.memory_format:
     return torch.preserve_format
 
 
-def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
+def _copy_tensor_payload(
+    x: torch.Tensor | torch.nn.Parameter,
+    *,
+    detach_tensor: bool,
+    save_mode: SaveMode,
+) -> torch.Tensor:
+    """Return a tensor payload according to the requested save mode.
+
+    Parameters
+    ----------
+    x:
+        Tensor or parameter to materialize.
+    detach_tensor:
+        Whether the saved payload should be detached from autograd.
+    save_mode:
+        Payload retention mode. ``"copy"`` clones, ``"reference"`` stores the
+        original detached tensor, ``"view"`` stores the original graph-connected
+        tensor, and ``"cpu_async"`` clones to CPU with ``non_blocking=True``.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor payload for storage.
+    """
+
+    if save_mode == "reference":
+        return x.detach() if detach_tensor else x
+    if save_mode == "view":
+        return x
+    if save_mode == "cpu_async":
+        payload = x.detach() if detach_tensor else x
+        try:
+            if payload.device.type != "cpu":
+                cpu_payload = torch.empty_like(
+                    payload,
+                    device="cpu",
+                    memory_format=_safe_get_memory_format(payload),
+                    pin_memory=True,
+                )
+                return cpu_payload.copy_(payload, non_blocking=True)
+        except (TypeError, RuntimeError):
+            pass
+        return payload.to(device="cpu", non_blocking=True, copy=True)
+
+    mem_fmt = _safe_get_memory_format(x)
+    if not detach_tensor:
+        try:
+            return x.clone(memory_format=mem_fmt)
+        except (TypeError, RuntimeError):
+            return x.clone()
+    try:
+        return x.detach().clone(memory_format=mem_fmt)
+    except (TypeError, RuntimeError):
+        try:
+            return x.detach().clone()
+        except Exception:
+            try:
+                return x.data.cpu().clone()
+            except Exception:
+                return torch.zeros(x.shape, dtype=torch.float32)
+
+
+def safe_copy(x: Any, detach_tensor: bool = False, save_mode: SaveMode = "copy") -> Any:
     """Copy a tensor (or parameter) without triggering torchlens logging.
 
     Uses ``pause_logging()`` so that ``.clone()``, ``.detach()``,
@@ -375,9 +439,13 @@ def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
 
     Args:
         x: Input value (tensor, parameter, or arbitrary object).
-        detach_tensor: If True, detach the clone from the autograd graph.
+        detach_tensor: If True, detach the saved payload from the autograd graph.
             This is used when saving outs to avoid retaining the
             full computational graph in memory.
+        save_mode: Tensor retention mode. ``"copy"`` preserves historical clone
+            behavior. ``"reference"`` stores the detached source tensor.
+            ``"view"`` stores the graph-connected source tensor.
+            ``"cpu_async"`` copies to CPU using ``non_blocking=True``.
 
     Returns:
         A copy with the same values and dtype but independent storage.
@@ -386,34 +454,18 @@ def safe_copy(x: Any, detach_tensor: bool = False) -> Any:
 
     if isinstance(x, (torch.Tensor, torch.nn.Parameter)):
         with pause_logging():
-            # Preserve memory_format (channels_last, channels_last_3d, etc.) so
-            # downstream layout-sensitive ops see the same layout they would
-            # see without TorchLens. Falls back to ``preserve_format`` which is
-            # ``clone()``'s default but spelled explicitly for clarity.
-            mem_fmt = _safe_get_memory_format(x)
-            if not detach_tensor:
-                try:
-                    return x.clone(memory_format=mem_fmt)
-                except (TypeError, RuntimeError):
-                    # Some tensor variants (sparse, some subclasses) reject the
-                    # memory_format kwarg; fall back to a plain clone.
-                    return x.clone()
-            # Detach path: use pure-torch ops — no numpy round-trip.
-            # This avoids crashes on sparse, quantized, complex32, meta, float8, etc.
-            try:
-                vals_tensor = x.detach().clone(memory_format=mem_fmt)
-            except (TypeError, RuntimeError):
-                try:
-                    vals_tensor = x.detach().clone()
-                except Exception:
-                    try:
-                        vals_tensor = x.data.cpu().clone()
-                    except Exception:
-                        # Last resort: return shape-preserving zero tensor
-                        vals_tensor = torch.zeros(x.shape, dtype=torch.float32)
+            if save_mode not in {"copy", "reference", "view", "cpu_async"}:
+                raise ValueError(
+                    "save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'"
+                )
+            vals_tensor = _copy_tensor_payload(
+                x,
+                detach_tensor=detach_tensor,
+                save_mode=save_mode,
+            )
             # Preserve the raw label so postprocessing can map this tensor
             # back to its Trace entry.
-            label = get_tensor_label(x)
+            label = None if isinstance(x, torch.nn.Parameter) else get_tensor_label(x)
             if label is not None:
                 set_tensor_label(vals_tensor, label)
             if isinstance(x, torch.nn.Parameter):

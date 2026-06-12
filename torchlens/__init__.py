@@ -123,6 +123,7 @@ _MOVED_OBJECTS = {
     "GradFnCall": ("torchlens.types", "GradFnCall"),
     "LayerAccessor": ("torchlens.accessors", "LayerAccessor"),
     "MetadataInvariantError": ("torchlens.errors", "MetadataInvariantError"),
+    "MutatedReferenceError": ("torchlens.errors", "MutatedReferenceError"),
     "ModuleAccessor": ("torchlens.accessors", "ModuleAccessor"),
     "Module": ("torchlens.types", "Module"),
     "ModuleCall": ("torchlens.types", "ModuleCall"),

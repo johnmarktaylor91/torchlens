@@ -63,7 +63,7 @@ from .._io import (
     default_fill_state,
     read_tlspec_version,
 )
-from .._errors import TorchLensPostfuncError
+from .._errors import MutatedReferenceError, TorchLensPostfuncError
 from .._trace_state import TraceState
 from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -73,6 +73,7 @@ from ..quantities import Bytes, Flops, Macs, as_bytes, as_duration, as_flops, as
 from .._state import pause_logging
 from ._accessor_base import Accessor
 from ..utils.tensor_utils import (
+    SaveMode,
     concatenate_batch_tensors,
     get_memory_amount,
     get_memory_amount_from_metadata,
@@ -93,6 +94,7 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
         "interventions",
     }
 )
+_WARNED_REFERENCE_SAVE_MODE = False
 _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_source_trace_ref": None,
     "out_ref": None,
@@ -579,6 +581,70 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     entry._internal_set("transformed_activation_memory", _memory_or_none(entry.transformed_out))
 
 
+def _warn_reference_save_mode_once() -> None:
+    """Emit the reference-mode mutation warning once per process."""
+
+    global _WARNED_REFERENCE_SAVE_MODE
+    if _WARNED_REFERENCE_SAVE_MODE:
+        return
+    warnings.warn(
+        "save_mode='reference' stores source tensors by reference; reading a mutated "
+        "saved tensor raises MutatedReferenceError.",
+        UserWarning,
+        stacklevel=3,
+    )
+    _WARNED_REFERENCE_SAVE_MODE = True
+
+
+def _effective_activation_save_mode(
+    trace: "Trace | None",
+    *,
+    func_name: str | None,
+    is_inplace: bool = False,
+) -> SaveMode:
+    """Return the effective saved-activation mode for one operation."""
+
+    save_mode = cast(SaveMode, getattr(trace, "save_mode", "copy"))
+    if save_mode not in {"copy", "reference", "view", "cpu_async"}:
+        raise ValueError("save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'")
+    if save_mode == "reference":
+        _warn_reference_save_mode_once()
+        if is_inplace or (func_name is not None and func_name.endswith("_")):
+            return "copy"
+    return save_mode
+
+
+def _stamp_reference_out(
+    annotations: dict[str, Any], raw_out: torch.Tensor, save_mode: SaveMode
+) -> None:
+    """Store reference-mode mutation metadata for a saved output."""
+
+    if save_mode != "reference":
+        return
+    annotations["save_mode"] = "reference"
+    annotations["saved_out_version"] = getattr(raw_out, "_version", None)
+
+
+def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
+    """Raise if a reference-mode saved output has changed since capture."""
+
+    annotations = state.get("annotations") or {}
+    if annotations.get("save_mode") != "reference":
+        return
+    out = state.get("out")
+    if not isinstance(out, torch.Tensor):
+        return
+    saved_version = annotations.get("saved_out_version")
+    current_version = getattr(out, "_version", None)
+    if saved_version is not None and current_version != saved_version:
+        label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
+        raise MutatedReferenceError(
+            f"saved reference out for op {label!r} was mutated after capture "
+            f"(saved _version={saved_version}, current _version={current_version}). "
+            "Use save_mode='copy' for isolated saved tensors."
+        )
+
+
 def _tensor_content_hash(value: torch.Tensor) -> str:
     """Return a CPU content hash for a tensor.
 
@@ -947,6 +1013,8 @@ class Op:
                     f"op {label} was not saved; no saved payload is available. "
                     "Re-run with save=... to retain this activation."
                 )
+            if not getattr(source_trace, "_postprocessing_active", False):
+                _validate_reference_out_not_mutated(state)
         return object.__getattribute__(self, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
@@ -2345,11 +2413,21 @@ class Op:
         trace = self.source_trace
         writer = getattr(trace, "_out_writer", None) if trace is not None else None
         try:
+            save_mode = _effective_activation_save_mode(
+                trace,
+                func_name=self.func_name,
+                is_inplace=bool(self.is_inplace),
+            )
             # Clone the tensor, optionally detaching from autograd graph.
-            raw_out = safe_copy(t, self.detach_saved_activations)
+            raw_out = safe_copy(
+                t,
+                self.detach_saved_activations,
+                save_mode=save_mode,
+            )
             # Move to the user-requested output device if needed.
             if self.output_device not in [str(raw_out.device), "same"]:
                 raw_out = safe_to(raw_out, self.output_device)
+            _stamp_reference_out(self.annotations, raw_out, save_mode)
 
             self.shape = tuple(raw_out.shape)
             self.dtype = raw_out.dtype
@@ -2487,7 +2565,11 @@ class Op:
 
         save_raw_gradients = getattr(trace, "save_raw_gradients", True)
         store_raw = save_raw_gradients or grad_transform is None
-        self._internal_set("grad", raw_grad.detach().clone() if store_raw else None)
+        save_mode = cast(SaveMode, getattr(trace, "save_mode", "copy"))
+        self._internal_set(
+            "grad",
+            safe_copy(raw_grad, detach_tensor=True, save_mode=save_mode) if store_raw else None,
+        )
         self.has_grad = True
         if writer is not None and getattr(trace, "_defer_streaming_bundle_finalization", False):
             self._stream_tensor_blob(

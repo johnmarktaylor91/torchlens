@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 import importlib
 from math import prod
 from typing import TYPE_CHECKING, Any, cast
@@ -83,6 +83,13 @@ def _pop_pending_blob_ids(fields_dict: dict[str, object]) -> dict[str, object]:
         for field_name in pending_fields
         if field_name in fields_dict
     }
+
+
+def _annotations_from_event(event: OpEvent) -> dict[str, object]:
+    """Return annotations preserved on a materialized event."""
+
+    raw_annotations = event.transform_config.get("_tl_annotations")
+    return dict(raw_annotations) if isinstance(raw_annotations, Mapping) else {}
 
 
 def register_materialized_event(
@@ -339,7 +346,7 @@ def _fields_from_event(
             "has_saved_activation": output.has_saved_activation,
             "output_device": output.output_device,
             "activation_transform": output.activation_transform,
-            "annotations": {},
+            "annotations": _annotations_from_event(event),
             "interventions": [
                 result.fire_record
                 for result in event.fire_results

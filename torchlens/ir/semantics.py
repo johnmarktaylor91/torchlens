@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
+
+SaveMode = Literal["copy", "reference", "view", "cpu_async"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,3 +47,4 @@ class CapturePolicy:
     save_rng: bool
     save_grad: bool
     stream: bool
+    save_mode: SaveMode = "copy"

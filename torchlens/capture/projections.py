@@ -626,6 +626,7 @@ def _event_from_record(
             save_rng=False,
             save_grad=spec.keep_grad,
             stream=False,
+            save_mode=spec.save_mode,
         ),
         predicate_matched=predicate_matched,
         pass_index=ctx.pass_index,
@@ -635,7 +636,7 @@ def _event_from_record(
         is_transform=False,
         transform_kind=None,
         transform_chain=(),
-        transform_config={},
+        transform_config={"_tl_annotations": _reference_annotations(spec.save_mode, ram_payload)},
         transform_fn_name=None,
         transform_fn_qualname=None,
         transform_fn_source=None,
@@ -755,6 +756,7 @@ def _event_live_field(trace: "Trace", event: OpEvent, name: str) -> Any:
         else output.transformed_tensor.payload,
         "has_saved_activation": output.has_saved_activation,
         "activation_transform": output.activation_transform,
+        "annotations": _event_annotations(event, output.tensor.payload),
         "output_device": output.output_device,
         "detach_saved_activations": output.detach_saved_activations,
         "has_saved_args": False if templates is None else templates.has_saved_args,
@@ -869,6 +871,26 @@ def _event_live_field(trace: "Trace", event: OpEvent, name: str) -> Any:
             "it is not available inside a forward-time callback."
         )
     raise AttributeError(f"LiveOpView has no attribute {name!r}.")
+
+
+def _event_annotations(event: OpEvent, payload: Any) -> dict[str, Any]:
+    """Return Op annotations projected from an operation event."""
+
+    raw_annotations = event.transform_config.get("_tl_annotations")
+    annotations = dict(raw_annotations) if isinstance(raw_annotations, Mapping) else {}
+    annotations.update(_reference_annotations(event.policy.save_mode, payload))
+    return annotations
+
+
+def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
+    """Return saved-payload annotations needed by reference-mode tripwires."""
+
+    if save_mode != "reference" or not isinstance(payload, torch.Tensor):
+        return {}
+    return {
+        "save_mode": "reference",
+        "saved_out_version": getattr(payload, "_version", None),
+    }
 
 
 class LiveOpView:
