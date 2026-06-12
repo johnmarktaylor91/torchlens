@@ -27,6 +27,7 @@ import pickle
 import random
 import re
 import tempfile
+import time
 import warnings
 from collections import OrderedDict
 from pathlib import Path
@@ -88,7 +89,7 @@ from .intervention.predicates import InterventionPredicate
 from .intervention.hooks import normalize_hook_plan
 from .intervention.selectors import BaseSelector
 from .intervention.resolver import resolve_sites
-from .fastlog.options import PredicateFn, RecordingOptions
+from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from ._trace_state import TraceState
 
 _can_resolve_hf_processor = _hf_bridge._can_resolve_hf_processor
@@ -999,6 +1000,7 @@ def _run_model_and_save_specified_outs(
     | None = None,
     save_predicate: PredicateFn | None = None,
     intervene_predicate: InterventionPredicate | None = None,
+    halt_predicate: HaltPredicateFn | None = None,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
 ) -> Trace:
@@ -1077,6 +1079,8 @@ def _run_model_and_save_specified_outs(
             payloads during the exhaustive pass.
         intervene_predicate: Optional in-flight predicate controlling current-op
             interventions during the exhaustive pass.
+        halt_predicate: Optional in-flight predicate that finalizes a partial trace
+            at the matching source, operation, or module boundary.
         lookback: Number of recent events available to predicate-window queries.
         lookback_payload_policy: Candidate payload retention policy for retroactive
             ``followed_by`` saves. Memory cost is bounded by ``lookback`` times
@@ -1174,12 +1178,14 @@ def _run_model_and_save_specified_outs(
     trace._defer_streaming_bundle_finalization = grad_storage_path is not None
     trace._in_exhaustive_pass = True
     trace.raise_on_nan = raise_on_nan
-    if save_predicate is not None or intervene_predicate is not None:
+    if save_predicate is not None or intervene_predicate is not None or halt_predicate is not None:
         predicate_history_size = lookback if lookback > 0 else 8
+        default_op = save_predicate is None and layers_to_save == "all"
         trace._predicate_save_options = RecordingOptions(
             keep_op=save_predicate,
             intervene=intervene_predicate,
-            default_op=False,
+            halt=halt_predicate,
+            default_op=default_op,
             streaming=StreamingOptions(
                 bundle_path=save_outs_to,
                 retain_in_memory=keep_outs_in_memory,
@@ -1191,6 +1197,9 @@ def _run_model_and_save_specified_outs(
             lookback_payload_policy=lookback_payload_policy,  # type: ignore[arg-type]
             on_predicate_error="fail-fast",
         )
+        if save_predicate is not None or intervene_predicate is not None:
+            trace.capture_mode = "predicate"
+        trace._halt_returns_partial_trace = halt_predicate is not None
         trace._predicate_history_size = predicate_history_size
         trace._predicate_lookback = lookback
         trace._predicate_lookback_payload_policy = lookback_payload_policy
@@ -1198,14 +1207,46 @@ def _run_model_and_save_specified_outs(
     if bundle_path is not None:
         trace._out_writer = BundleStreamWriter(bundle_path)
     try:
-        trace._run_and_log_inputs_through_model(
-            model,
-            cast(torch.Tensor | list[Any], input_args),
-            input_kwargs,
-            layers_to_save,
-            grads_to_save,
-            random_seed,
-        )
+        if trace.capture_mode == "predicate":
+            from .capture.projections import (
+                RecordingState,
+                _empty_recording,
+                active_recording_state,
+            )
+
+            options = trace._predicate_save_options
+            recording = _empty_recording(options)
+            recording_state = RecordingState(options=options, recording=recording)
+            recording_state.pass_index = 1
+            recording_state.runtime_trace = trace
+            trace._fastlog_recording = recording
+            recording.start_times.append(time.time())
+            try:
+                with active_recording_state(recording_state):
+                    trace._run_and_log_inputs_through_model(
+                        model,
+                        cast(torch.Tensor | list[Any], input_args),
+                        input_kwargs,
+                        layers_to_save,
+                        grads_to_save,
+                        random_seed,
+                    )
+            except Exception as exc:
+                recording_state.abort_storage(str(exc))
+                raise
+            finally:
+                recording.end_times.append(time.time())
+            recording_state.finalize_storage()
+            recording_state.raise_accumulated_predicate_error()
+        else:
+            trace._run_and_log_inputs_through_model(
+                model,
+                cast(torch.Tensor | list[Any], input_args),
+                input_kwargs,
+                layers_to_save,
+                grads_to_save,
+                random_seed,
+            )
     except (PredicateError, TorchLensIOError, TorchLensPostfuncError):
         raise
     except Exception as exc:
@@ -1375,6 +1416,7 @@ def trace(
     capture: CaptureOptions | None = None,
     save: SaveOptions | PredicateFn | BaseSelector | None = None,
     intervene: InterventionPredicate | None = None,
+    halt: HaltPredicateFn | None = None,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
     storage: StreamingOptions | None = None,
@@ -1507,6 +1549,8 @@ def trace(
         lookback: Number of recent capture events queryable by predicate-window helpers.
         intervene: Optional predicate returning an intervention decision for
             current-op live mutation.
+        halt: Optional predicate returning ``True`` to stop after the matching
+            source, operation, or module-boundary event and return the partial trace.
         lookback_payload_policy: Retention policy for retroactive ``followed_by`` saves.
             ``"metadata_only"`` keeps the default metadata-only window and cannot
             retroactively save payloads. Non-default policies retain up to ``lookback``
@@ -1588,6 +1632,7 @@ def trace(
             "capture": capture,
             "save": save,
             "intervene": intervene,
+            "halt": halt,
             "lookback": lookback,
             "lookback_payload_policy": lookback_payload_policy,
             "storage": storage,
@@ -1623,6 +1668,11 @@ def trace(
                 "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
                 "is_scalar_bool, and bool_value without per-op mx.eval; use the PyTorch backend "
                 "for predicate-time interventions."
+            )
+        if halt is not None:
+            raise NotImplementedError(
+                "MLX backend does not support trace(halt=predicate) capture. "
+                "Use the PyTorch backend for predicate-time halt."
             )
         if activation_transform is not MISSING:
             if activation_transform is not MISSING:
@@ -1731,6 +1781,8 @@ def trace(
     grouped_save_options, save_predicate = _split_save_options_and_predicate(save)
     if intervene is not None and not callable(intervene):
         raise TypeError("intervene must be a predicate callable or None")
+    if halt is not None and not callable(halt):
+        raise TypeError("halt must be a predicate callable or None")
     if not isinstance(lookback, int) or not 0 <= lookback <= 1024:
         raise ValueError("lookback must be an integer in [0, 1024]")
     if lookback_payload_policy not in {
@@ -1871,6 +1923,12 @@ def trace(
             "layers_to_save or save_grads. Use predicate save=... capture "
             "for single-pass selective saving."
         )
+    if halt is not None and uses_two_pass:
+        raise InterventionReadyConflictError(
+            "trace(halt=predicate) is not compatible with selective two-pass "
+            "layers_to_save or save_grads. Use predicate save=... capture "
+            "or set layers_to_save/save_grads to 'all', 'none', None, or []."
+        )
     if save_predicate is not None and uses_two_pass:
         raise ValueError(
             "trace(save=predicate) is single-pass selective save and cannot be combined with "
@@ -1898,6 +1956,7 @@ def trace(
             "facet_recipes": _facet_recipe_cache_key(facet_recipes),
             "save_predicate": repr(save_predicate),
             "intervene": repr(intervene),
+            "halt": repr(halt),
             "lookback": lookback,
             "lookback_payload_policy": lookback_payload_policy,
         }
@@ -1979,6 +2038,7 @@ def trace(
             recipes=facet_recipes,
             save_predicate=save_predicate,
             intervene_predicate=intervene,
+            halt_predicate=halt,
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
         )
@@ -2047,6 +2107,7 @@ def trace(
             recipes=facet_recipes,
             save_predicate=save_predicate,
             intervene_predicate=intervene,
+            halt_predicate=halt,
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
         )

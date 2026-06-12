@@ -473,6 +473,62 @@ def _extract_and_mark_outputs(
     return output_tensors, output_tensor_addresses
 
 
+def _finalize_halted_trace(
+    self: "Trace",
+    halt_exc: HaltSignal,
+    model: nn.Module,
+    input_tensors: list[torch.Tensor],
+    postprocess: bool,
+) -> Any | None:
+    """Finalize a predicate trace that stopped at a halt frontier.
+
+    Parameters
+    ----------
+    self:
+        Active trace.
+    halt_exc:
+        Halt signal raised by the predicate layer.
+    model:
+        Model whose session metadata should be cleaned up.
+    input_tensors:
+        Input tensors tagged for the current pass.
+    postprocess:
+        Whether to run the standard postprocess pipeline.
+
+    Returns
+    -------
+    Any | None
+        Halt-frontier output object when available.
+    """
+
+    _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
+    frontier_output = halt_exc.frontier_output
+    if frontier_output is None:
+        raw_layer_dict = getattr(self, "_raw_layer_dict", {})
+        for event in reversed(getattr(self.capture_events, "op_events", ())):
+            entry = raw_layer_dict.get(event.label_raw)
+            if entry is not None and getattr(entry, "out", None) is not None:
+                frontier_output = entry.out
+                break
+    if frontier_output is None:
+        raise RuntimeError(
+            "trace(halt=...) could not identify a tensor frontier for the halted partial graph."
+        ) from halt_exc
+
+    self.halted = True
+    self.halt_reason = halt_exc.reason
+    self.halt_frontier = halt_exc.reason
+    self.raw_output = None
+    if not postprocess:
+        self.capture_end_time = time.time()
+        return frontier_output
+
+    output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, frontier_output)
+    _vprint(self, f"Postprocessing halted graph at {self.halt_frontier!r}...")
+    self._postprocess(output_tensors, output_tensor_addresses)
+    return frontier_output
+
+
 def _container_path_to_address(path: tuple[Any, ...]) -> str:
     """Convert an output path tuple to TorchLens' display address string.
 
@@ -673,6 +729,7 @@ def run_and_log_inputs_through_model(
                     )
                 finally:
                     state.append_context(enter_ctx)
+                outputs = None
                 try:
                     with _timed_phase(self, "dispatch:forward_model"):
                         outputs = model(*input_args, **input_kwargs)
@@ -704,7 +761,7 @@ def run_and_log_inputs_through_model(
                             exit_spec,
                             predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                         )
-                        _evaluate_halt(exit_ctx, state.options)
+                        _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
                     except HaltSignal:
                         raise
                     except Exception as exc:
@@ -750,7 +807,14 @@ def run_and_log_inputs_through_model(
         self._postprocess(output_tensors, output_tensor_addresses)
         return outputs
 
-    except HaltSignal:
+    except HaltSignal as halt_exc:
+        options = getattr(self, "_predicate_save_options", None)
+        if (
+            options is not None
+            and getattr(options, "halt", None) is not None
+            and getattr(self, "_halt_returns_partial_trace", False)
+        ):
+            return _finalize_halted_trace(self, halt_exc, model, input_tensors, postprocess)
         _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
         raw_layer_dict = getattr(self, "_raw_layer_dict", {})
         for label in list(raw_layer_dict.keys()):

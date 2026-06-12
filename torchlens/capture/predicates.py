@@ -141,7 +141,11 @@ def _evaluate_intervene_op(
         ) from exc
 
 
-def _evaluate_halt(ctx: RecordContext, options: "RecordingOptions") -> None:
+def _evaluate_halt(
+    ctx: RecordContext,
+    options: "RecordingOptions",
+    frontier_output: Any | None = None,
+) -> None:
     """Evaluate the halt predicate slot and raise when it matches.
 
     Parameters
@@ -150,6 +154,9 @@ def _evaluate_halt(ctx: RecordContext, options: "RecordingOptions") -> None:
         Event context for the current source, operation, or module boundary.
     options:
         Unified predicate runtime options.
+    frontier_output:
+        Live tensor or output structure to use as the partial-trace frontier if
+        this halt predicate matches.
 
     Raises
     ------
@@ -165,7 +172,7 @@ def _evaluate_halt(ctx: RecordContext, options: "RecordingOptions") -> None:
     if not isinstance(result, bool):
         raise PredicateError("halt predicate must return bool", ctx=ctx, result=result)
     if result:
-        raise HaltSignal(ctx.label)
+        raise HaltSignal(ctx.label, frontier_output=frontier_output)
 
 
 def _evaluate_retroactive_followed_by(

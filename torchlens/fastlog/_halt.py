@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import NoReturn
+from typing import Any, NoReturn
 
 
 class HaltSignal(BaseException):
@@ -14,11 +14,21 @@ class HaltSignal(BaseException):
         Optional user-facing reason stored on the resulting recording.
     """
 
-    def __init__(self, reason: str = "") -> None:
-        """Initialize the halt signal."""
+    def __init__(self, reason: str = "", frontier_output: Any | None = None) -> None:
+        """Initialize the halt signal.
+
+        Parameters
+        ----------
+        reason:
+            User-facing halt reason.
+        frontier_output:
+            Optional live output object used by ``trace(halt=...)`` to finalize
+            a partial graph at the halt boundary.
+        """
 
         super().__init__(reason)
         self.reason = reason
+        self.frontier_output = frontier_output
 
 
 def halt(reason: str = "") -> NoReturn:

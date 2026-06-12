@@ -188,20 +188,24 @@ def validate_saved_outs(
     """
     _raise_if_portable_bundle_log(self)
 
-    # Phase 0: verify logged outputs match a fresh forward pass.
-    output_label_counts: dict[str, int] = defaultdict(int)
-    for i, output_layer_label in enumerate(self.output_layers):
-        output_layer = _resolve_output_entry_for_index(
-            self, output_layer_label, output_label_counts
-        )
-        if output_layer.out is None:
-            print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
-            return False
-        if not _ground_truth_output_matches_saved(output_layer.out, ground_truth_output_tensors[i]):
-            print(
-                f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor."
+    # Phase 0: verify logged outputs match a fresh forward pass. Halted traces
+    # deliberately stop at an internal frontier, so no full-model output exists.
+    if not getattr(self, "halted", False):
+        output_label_counts: dict[str, int] = defaultdict(int)
+        for i, output_layer_label in enumerate(self.output_layers):
+            output_layer = _resolve_output_entry_for_index(
+                self, output_layer_label, output_label_counts
             )
-            return False
+            if output_layer.out is None:
+                print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
+                return False
+            if not _ground_truth_output_matches_saved(
+                output_layer.out, ground_truth_output_tensors[i]
+            ):
+                print(
+                    f"The {i}th output layer, {output_layer_label}, does not match the ground truth output tensor."
+                )
+                return False
 
     # BFS backward from outputs + internally terminated layers.
     # Edge-counting approach: a parent is enqueued only after ALL its child

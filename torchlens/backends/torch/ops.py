@@ -1749,7 +1749,7 @@ def log_function_output_tensors_predicate(
                 predicate_matched=spec.save_out or spec.save_metadata,
                 backend_semantics=backend_semantics,
             )
-            _evaluate_halt(ctx, state.options)
+            _evaluate_halt(ctx, state.options, frontier_output=out)
         except HaltSignal:
             raise
         except (TorchLensPostfuncError, TrainingModeConfigError):
@@ -2291,6 +2291,10 @@ def log_function_output_tensors_exhaustive(
             arg_copies,
             kwarg_copies,
         )
+        options = getattr(self, "_predicate_save_options", None)
+        if options is not None and options.halt is not None:
+            halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out)
+            _evaluate_halt(halt_ctx, options, frontier_output=out)
 
 
 def _get_parent_contents(
@@ -3586,6 +3590,8 @@ def _evaluate_trace_save_predicate(
 
     options = getattr(trace, "_predicate_save_options", None)
     if options is None:
+        return None, None
+    if options.keep_op is None:
         return None, None
     ctx = _pop_trace_predicate_context(trace, fields_dict)
     if ctx is None:

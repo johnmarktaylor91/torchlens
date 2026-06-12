@@ -1565,8 +1565,10 @@ def module_forward_decorator(
                         predicate_matched=False,
                     )
                 state.append_context(enter_ctx)
+            out = None
             try:
-                return orig_forward(*args, **kwargs)
+                out = orig_forward(*args, **kwargs)
+                return out
             finally:
                 state.event_index += 1
                 exit_ctx = _build_record_context(
@@ -1599,7 +1601,7 @@ def module_forward_decorator(
                         exit_spec,
                         predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                     )
-                    _evaluate_halt(exit_ctx, state.options)
+                    _evaluate_halt(exit_ctx, state.options, frontier_output=out)
                 except HaltSignal:
                     raise
                 except Exception as exc:
@@ -1637,6 +1639,30 @@ def module_forward_decorator(
             _record_module_exit_metadata(
                 trace, module, out, input_tensor_labels, input_tensor_labels_at_entry
             )
+            options = getattr(trace, "_predicate_save_options", None)
+            if options is not None and options.halt is not None:
+                from ...capture.predicates import _evaluate_halt
+                from ...capture.projections import _build_record_context
+
+                exit_ctx = _build_record_context(
+                    kind="module_exit",
+                    op_log_or_op_data={
+                        "label": f"{frame.address}:exit:{frame.pass_index}",
+                        "address": frame.address,
+                        "module_type": _module_type(module),
+                        "module_pass_index": frame.pass_index,
+                    },
+                    module_stack=[],
+                    history=(),
+                    op_counts={},
+                    pass_index=1,
+                    event_index=trace._layer_counter,
+                    step_index=None,
+                    time_since_pass_start=0.0,
+                    include_source_events=False,
+                    sample_id=None,
+                )
+                _evaluate_halt(exit_ctx, options, frontier_output=out)
             return out
         finally:
             _mstack.pop_frame(trace._exhaustive_module_stack, frame)

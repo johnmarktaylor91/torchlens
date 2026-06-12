@@ -702,7 +702,7 @@ def _add_lookup_keys_for_layer_entry(
     - Addresses: address, input/output address.
 
     Also reformats output_of_module_calls/entered and modules
-    from (name, pass) tuples to "name:pass" strings (exhaustive mode only).
+    from (name, pass) tuples to "name:pass" strings (metadata-building modes only).
 
     Args:
         layer_entry: Op to build lookup keys for.
@@ -720,8 +720,8 @@ def _add_lookup_keys_for_layer_entry(
     ]
     layer_entry.ordinal_index = tensor_index
 
-    # Relabel the module ops if the first pass:
-    if self.capture_mode == "exhaustive":
+    # Relabel the module ops if this pass built module metadata:
+    if self.capture_mode in {"exhaustive", "predicate"}:
         layer_entry.output_of_module_calls = [
             f"{module_name}:{module_pass}"
             for module_name, module_pass in layer_entry.output_of_module_calls

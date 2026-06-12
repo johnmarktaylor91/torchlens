@@ -187,7 +187,7 @@ def log_source_tensor_predicate(
             transformed_ram_payload=transformed_ram_payload,
             predicate_matched=spec.save_out or spec.save_metadata,
         )
-        _evaluate_halt(ctx, state.options)
+        _evaluate_halt(ctx, state.options, frontier_output=t)
     except HaltSignal:
         raise
     except (TorchLensPostfuncError, TrainingModeConfigError):
@@ -471,6 +471,33 @@ def log_source_tensor_exhaustive(
 
     # Register backward hook for sidecar capture; payload retention is decided at fire time.
     _add_tensor_backward_hook(self, t, tensor_label)
+
+    options = getattr(self, "_predicate_save_options", None)
+    if options is not None and options.halt is not None:
+        halt_ctx = _build_record_context(
+            kind="input" if source == "input" else "buffer",
+            op_log_or_op_data={
+                "label": tensor_label,
+                "raw_label": tensor_label,
+                "_label_raw": tensor_label,
+                "raw_index": raw_index,
+                "type": source,
+                "type_index": type_index,
+                "func_name": None,
+                "input_output_address": extra_addr,
+                "tensor": t,
+            },
+            module_stack=[],
+            history=(),
+            op_counts=self._raw_layer_type_counter,
+            pass_index=1,
+            event_index=raw_index,
+            step_index=None,
+            time_since_pass_start=time.time() - self.capture_start_time,
+            include_source_events=True,
+            sample_id=None,
+        )
+        _evaluate_halt(halt_ctx, options, frontier_output=t)
 
 
 def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:

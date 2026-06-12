@@ -1035,6 +1035,9 @@ class Trace(CapturedRun):
         "tlspec_version": FieldPolicy.KEEP,
         "_tracing_finished": FieldPolicy.KEEP,
         "capture_mode": FieldPolicy.KEEP,
+        "halted": FieldPolicy.KEEP,
+        "halt_reason": FieldPolicy.KEEP,
+        "halt_frontier": FieldPolicy.KEEP,
         "_layers_logged": FieldPolicy.KEEP,
         "_layers_saved": FieldPolicy.KEEP,
         "keep_orphans": FieldPolicy.KEEP,
@@ -1128,6 +1131,7 @@ class Trace(CapturedRun):
         "_predicate_all_contexts": FieldPolicy.DROP,
         "_predicate_lookback": FieldPolicy.DROP,
         "_predicate_lookback_payload_policy": FieldPolicy.DROP,
+        "_halt_returns_partial_trace": FieldPolicy.DROP,
         "_predicate_save_decisions": FieldPolicy.DROP,
         "_predicate_contexts_by_label": FieldPolicy.DROP,
         "_predicate_current_contexts": FieldPolicy.DROP,
@@ -1350,6 +1354,9 @@ class Trace(CapturedRun):
         # "exhaustive" captures all metadata; "fast" reuses exhaustive-pass
         # structure, only re-capturing tensor contents.
         self.capture_mode: Literal["exhaustive", "fast", "predicate"] = "exhaustive"
+        self.halted = False
+        self.halt_reason: str | None = None
+        self.halt_frontier: str | None = None
         self._layers_logged = False
         self._layers_saved = False
         self.keep_orphans = keep_orphans
@@ -1415,6 +1422,7 @@ class Trace(CapturedRun):
         self._out_identity_cache: Dict[int, Tuple[torch.Tensor, str, torch.Tensor]] = {}
         self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
         self._code_context_cache: dict[Any, tuple[Any, ...]] = {}
+        self._halt_returns_partial_trace = False
         self.save_arg_values = save_arg_values
         self.save_grads = "all" if save_grads is True else save_grads
         self.save_code_context = save_code_context
