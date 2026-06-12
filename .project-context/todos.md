@@ -6,7 +6,7 @@ A glance at the OPEN work, grouped by theme (rough counts; see sections below fo
 
 - **Capture coverage gaps (~2):** comprehensive functorch/`torch.func` transform coverage (vmap/grad/jac/`functional_call`) — the big one; multi-GPU RNG capture. (Device-context/meta-tensor gap FIXED `f9daf5f`; kwarg symptom set FIXED `f9daf5f` — broader kwarg audit still open.)
 - **Backward-pass sprint (~7):** unified backward-pass untangling (recurrent grad_fn semantics, type_index schemes, name introspection), first-class `BackwardPass` records, higher-order gradients, auto-suppress grad_fn when `backward_ready=False`, backward call-site context, per-layer grad oracle redesign, fastlog gradient support.
-- **Perf north-star (~23):** halt-implies-sub-baseline benchmark rows, leaner `rerun`, zero-copy `save_mode="reference"`, lazy fastlog ctx; plus the low-level PERF-* backlog (model-prep PERF-36..39, 1M-scale PERF-29..35, and assorted O(n^2)/GC items).
+- **Perf north-star (~23):** halt-implies-sub-baseline benchmark rows, leaner `rerun`, zero-copy `save_mode="reference"`, lazy fastlog ctx; plus the low-level PERF-* backlog (model-prep PERF-38/39, 1M-scale PERF-29..35, and remaining O(n^2)/GC items).
 - **Pre-2.0 naming/API polish (~14):** holistic naming pass (selectors, comparison verbs, symmetric pairs, `peek`->`pluck`), 0-based accessor indexing, strict-type accessors, `__repr__`/`.locator` audit, capture_config namespace migration, residual save-selection renames (`module_filter`->`save_predicate`, fastlog naming), several deferred renames.
 - **Visualization (~9):** rip ELK out (promote pure-Python Kahn layout), more built-in themes + custom-visuals interface, DenseNet layout, combined fwd+bwd render, multi-output module rendering, bundle-diff color scale, large-graph rendering, direct-SVG path. (Code-panel long-line truncation FIXED `8fa0907`.)
 - **Docs (~10):** `docs/performance.md`, `docs/for-ai-agents.md`, promote glossary to exhaustive reference, elevator-pitch + substrate/metadata framing, comparison-page concessions, ELK setup guide, speed-default advertising, postfunc persistence story.
@@ -3316,51 +3316,53 @@ These need substantive design changes, not simple fixes (the 4 deferred bugs fro
 
 ### Garbage collection backlog
 
-Open GC items only (GC-6/7/13/14 were FIXED; dropped). Several pin model parameters or create
-circular refs that block GC.
+Open GC items plus fixed-ID history (GC-6/7/13/14 were FIXED; dropped). Several open items pin
+model parameters or create circular refs that block GC. Struck entries were verified fixed by the
+performance sprint and kept only to preserve ID history.
 
 - **GC-1**: `ParamLog._param_ref` pins ALL model parameters indefinitely. Fix: extract gradient
   info eagerly, then `_param_ref = None`.
-- **GC-2**: `source_model_log` circular ref on every LayerPassLog. Fix: `weakref.ref()`.
-- **GC-3**: `_source_model_log` circular ref on every ModuleLog. Fix: `weakref.ref()`.
-- **GC-4**: `source_model_log` circular ref on every LayerLog. Fix: `weakref.ref()`.
-- **GC-5**: `_raw_tensor_dict` never cleared after postprocessing. Fix: clear after postprocess.
-- **GC-8**: `_add_backward_hook` closure captures ModelLog. Fix: weakref.
+- ~~**GC-2**: `source_model_log` circular ref on every LayerPassLog. Fix: `weakref.ref()`.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**GC-3**: `_source_model_log` circular ref on every ModuleLog. Fix: `weakref.ref()`.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**GC-4**: `source_model_log` circular ref on every LayerLog. Fix: `weakref.ref()`.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**GC-5**: `_raw_tensor_dict` never cleared after postprocessing. Fix: clear after postprocess.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**GC-8**: `_add_backward_hook` closure captures ModelLog. Fix: weakref.~~ Fixed by performance sprint P5.4 tracker audit.
 - **GC-9**: `parent_param_logs` (via ParamLog._param_ref) pins params. Partially fixed.
 - **GC-10**: `func_applied` stores function object per LayerPassLog. Fix: store name only.
-- **GC-11**: `ModulePassLog.forward_args/forward_kwargs` may hold tensor refs.
-- **GC-12**: `cleanup()` incomplete — LayerPassLogs stripped but never removed from containers.
+- ~~**GC-11**: `ModulePassLog.forward_args/forward_kwargs` may hold tensor refs.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**GC-12**: `cleanup()` incomplete — LayerPassLogs stripped but never removed from containers.~~ Fixed by performance sprint P5.4 tracker audit.
 
 ### Performance backlog
 
-Open PERF items only (PERF-1/2/12/14/18-28 were FIXED; dropped). Class names below predate the
-`-Log` removal — verify against current record classes.
+Open PERF items plus fixed-ID history (PERF-1/2/12/14/18-28 were FIXED; dropped). Class names below
+predate the `-Log` removal — verify against current record classes. Struck entries were verified
+fixed by the performance sprint and kept only to preserve ID history.
 
 General / postprocess / loop-detection:
 
-- **PERF-3**: Quadratic gradient sorting — may still have an O(N^2) pattern in some paths.
-- **PERF-4**: O(n^2) cleanup pattern — batch cleanup needed.
-- **PERF-5**: `_build_module_logs` O(M^2) parent lookup. Fix: precompute reverse mapping.
-- **PERF-6**: O(modules x params) param filtering. Fix: precompute dict.
-- **PERF-7**: Loop detection deque re-sorted every iteration.
+- ~~**PERF-3**: Quadratic gradient sorting — may still have an O(N^2) pattern in some paths.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**PERF-4**: O(n^2) cleanup pattern — batch cleanup needed.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**PERF-5**: `_build_module_logs` O(M^2) parent lookup. Fix: precompute reverse mapping.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**PERF-6**: O(modules x params) param filtering. Fix: precompute dict.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**PERF-7**: Loop detection deque re-sorted every iteration.~~ Fixed by performance sprint P5.4 tracker audit.
 - **PERF-8**: `list.pop(0)` in `_pop_frontier_node` — O(n) shift.
-- **PERF-9**: Param types recomputed for every pair in loop detection.
+- ~~**PERF-9**: Param types recomputed for every pair in loop detection.~~ Fixed by performance sprint P5.4 tracker audit.
 - **PERF-10**: Per-tensor duplication of model-level settings.
-- **PERF-11**: Triple source-code storage in FuncCallLocation (code_context, _str, _labeled).
+- ~~**PERF-11**: Triple source-code storage in FuncCallLocation (code_context, _str, _labeled).~~ Fixed by performance sprint P5.4 tracker audit.
 - **PERF-13**: `copy.copy` on every field for multi-output tensors.
-- **PERF-15**: 17 separate module dicts on ModelLog — redundant with ModuleLog.
+- ~~**PERF-15**: 17 separate module dicts on ModelLog — redundant with ModuleLog.~~ Fixed by performance sprint P5.4 tracker audit.
 - **PERF-16**: LayerPassLog could use `__slots__` (~40% memory savings).
-- **PERF-17**: Full graph scan per buffer merge.
+- ~~**PERF-17**: Full graph scan per buffer merge.~~ Fixed by performance sprint P5.4 tracker audit.
 
 Model-prep bottlenecks (identified 2026-03-08; at 500K nodes `_prepare_model_session` takes
 minutes before the forward even starts):
 
-- **PERF-36**: `_create_session_param_logs` (model_prep.py:256) walks the module tree via
+- ~~**PERF-36**: `_create_session_param_logs` (model_prep.py:256) walks the module tree via
   string-split address for EVERY parameter — O(P x D). Fix: cache module lookups by address or
-  use parent back-references.
-- **PERF-37**: `_capture_module_metadata` (model_prep.py:419-420) calls `dir(module)` on every
+  use parent back-references.~~ Fixed by performance sprint P5.4 tracker audit.
+- ~~**PERF-37**: `_capture_module_metadata` (model_prep.py:419-420) calls `dir(module)` on every
   module AND recomputes `dir(nn.Module)` inside the loop. Fix: compute `nn_module_attrs` once
-  outside loop; skip `dir()` when metadata not needed.
+  outside loop; skip `dir()` when metadata not needed.~~ Fixed by performance sprint P5.4 tracker audit.
 - **PERF-38**: `_traverse_model_modules` (model_prep.py:93) does O(N x D) string concatenation
   for module addresses, called multiple times per session. Fix: pre-compute addresses in
   `_prepare_model_once` and reuse.
@@ -3386,12 +3388,12 @@ minutes before the forward even starts):
   (capture time, each postprocess step time, render time). Essential for identifying which phases
   dominate at scale.
 - **PERF-34**: Batch postprocessing with numpy/pandas.
-- **PERF-35**: Verbose mode for `log_forward_pass` — print progress during capture (every N ops),
+- ~~**PERF-35**: Verbose mode for `log_forward_pass` — print progress during capture (every N ops),
   postprocessing (per step), and rendering, for long-running 1M+ graphs that appear frozen. Many
   postprocess steps iterate all layers doing simple field reads/writes — could be vectorized
   (extract fields to columnar arrays, compute in batch, write back). Especially
   `_mark_input_output_distances` (BFS over 1M nodes), `_assign_final_labels` (1M string ops),
-  `_build_layer_logs` (1M merge ops).
+  `_build_layer_logs` (1M merge ops).~~ Fixed by performance sprint P5.4 tracker audit.
 
 ### Refactoring candidates
 
