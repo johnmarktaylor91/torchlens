@@ -80,6 +80,29 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return trace
 
 
+def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+    """Return a Trace with two captured backward passes.
+
+    Parameters
+    ----------
+    model:
+        Model to trace.
+    x:
+        Input tensor.
+
+    Returns
+    -------
+    tl.Trace
+        Trace with two backward passes.
+    """
+
+    trace = tl.trace(model, x, save_grads="all")
+    loss = trace[trace.output_layers[0]].out.sum()
+    trace.log_backward(loss, retain_graph=True)
+    trace.log_backward(loss)
+    return trace
+
+
 @pytest.mark.smoke
 def test_draw_backward_renders(tmp_path: Path) -> None:
     """draw_backward returns DOT source and writes a non-empty output file."""
@@ -155,6 +178,56 @@ def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
 
     assert "@linear_1_1" in dot
     assert "@relu_1_2" in dot
+
+
+def test_backward_graph_unrolled_clusters_by_backward_pass(tmp_path: Path) -> None:
+    """Unrolled backward rendering uses per-GradFnCall nodes in pass clusters."""
+    trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+
+    dot = trace.draw_backward(
+        vis_outpath=str(tmp_path / "unrolled"),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        vis_mode="unrolled",
+    )
+
+    assert "cluster_backward_pass_1" in dot
+    assert "cluster_backward_pass_2" in dot
+    assert "addmm_back" in dot
+    assert ":1" in dot
+    assert ":2" in dot
+
+
+def test_backward_graph_bwd_filter_limits_visible_passes(tmp_path: Path) -> None:
+    """The bwd filter restricts unrolled backward rendering to selected passes."""
+    trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+
+    dot = trace.draw_backward(
+        vis_outpath=str(tmp_path / "filtered"),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        vis_mode="unrolled",
+        bwd=2,
+    )
+
+    assert "cluster_backward_pass_2" in dot
+    assert "cluster_backward_pass_1" not in dot
+    assert "bwd 2" in dot
+
+
+def test_backward_graph_marks_order_and_accumulation_edges(tmp_path: Path) -> None:
+    """Backward DOT includes order labels and accumulation-edge styling."""
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+
+    dot = trace.draw_backward(
+        vis_outpath=str(tmp_path / "order_accum"),
+        vis_save_only=True,
+        vis_fileformat="svg",
+    )
+
+    assert "order 1" in dot
+    assert "label=accum" in dot
+    assert "style=dotted" in dot
 
 
 @pytest.mark.smoke

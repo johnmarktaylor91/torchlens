@@ -89,6 +89,29 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return trace
 
 
+def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+    """Return a Trace with two backward passes captured.
+
+    Parameters
+    ----------
+    model:
+        Model to trace.
+    x:
+        Input tensor.
+
+    Returns
+    -------
+    tl.Trace
+        Trace with two backward passes.
+    """
+
+    trace = tl.trace(model, x, save_grads="all")
+    loss = trace[trace.output_layers[0]].out.sum()
+    trace.log_backward(loss, retain_graph=True)
+    trace.log_backward(loss)
+    return trace
+
+
 @pytest.mark.smoke
 def test_draw_combined_tinymlp_smoke(tmp_path: Path) -> None:
     """draw_combined returns DOT with forward and backward nodes."""
@@ -236,3 +259,40 @@ def test_draw_combined_correspondence_edge_constraint_false(tmp_path: Path) -> N
     assert f'color="{GRADIENT_ARROW_COLOR}"' in dot
     assert "constraint=false" in dot
     assert "style=dashed" in dot
+
+
+def test_draw_combined_bwd_filter_keeps_selected_grad_fns(tmp_path: Path) -> None:
+    """Combined rendering accepts a one-based backward pass filter."""
+    trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+
+    dot = trace.draw_combined(
+        vis_outpath=str(tmp_path / "combined_filtered"),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        bwd=2,
+    )
+
+    assert "shown: 2" in dot
+    assert "bwd 2" in dot
+    assert "addmm_back" in dot
+
+
+def test_forward_rolled_grad_overlay_labels_partial_passes(tmp_path: Path) -> None:
+    """Rolled forward gradient arrows label pass ranges when not present on all passes."""
+    trace = tl.trace(
+        _LinearReluModel(),
+        torch.randn(2, 3, requires_grad=True),
+        save_grads=tl.in_backward_pass(2),
+    )
+    loss = trace[trace.output_layers[0]].out.sum()
+    trace.log_backward(loss, retain_graph=True)
+    trace.log_backward(loss)
+
+    dot = trace.draw(
+        vis_outpath=str(tmp_path / "forward_partial_bwd"),
+        vis_save_only=True,
+        vis_fileformat="svg",
+        vis_mode="rolled",
+    )
+
+    assert "bwd 2" in dot

@@ -228,6 +228,7 @@ CollapsedNodeSpecFn = Callable[["Module", NodeSpec], NodeSpec | None]
 CollapseFn = Callable[["Module"], bool]
 SkipFn = Callable[["Layer"], bool]
 InterveningClusterMode = Literal["upstream", "outside", "downstream", "own"]
+BackwardPassFilter = set[int] | None
 
 # -- Color palette for node types --
 INPUT_COLOR = "#98FB98"  # Light green
@@ -238,6 +239,8 @@ FROZEN_PARAMS_BG_COLOR = "#B0B0B0"  # Darker gray for frozen params
 GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
 BACKWARD_NODE_COLOR = "#F2F3FF"  # Very light blue/purple for backward grad_fn_handle nodes
 BACKWARD_NODE_BORDER_COLOR = GRADIENT_ARROW_COLOR
+BACKWARD_HIGHER_ORDER_COLOR = "#FFF4D6"
+BACKWARD_ACCUMULATION_EDGE_STYLE = "dotted"
 DEFAULT_BG_COLOR = "white"
 BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
 _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tracked"})
@@ -1149,6 +1152,8 @@ def render_backward_graph(
     vis_fileformat: str = "pdf",
     direction: VisDirectionLiteral = "topdown",
     code_panel: CodePanelOption = False,
+    vis_mode: VisModeLiteral = "rolled",
+    bwd: int | Iterable[int] | None = None,
 ) -> str:
     """Render the captured backward grad_fn_handle DAG as a Graphviz graph.
 
@@ -1181,6 +1186,11 @@ def render_backward_graph(
         Layout direction: ``'bottomup'``, ``'topdown'``, or ``'leftright'``.
     code_panel:
         Optional source-code panel mode.
+    vis_mode:
+        ``"rolled"`` renders one node per GradFn. ``"unrolled"`` renders one
+        node per GradFnCall, grouped into backward-pass clusters.
+    bwd:
+        Optional one-based backward pass number or numbers to render.
 
     Returns
     -------
@@ -1196,6 +1206,9 @@ def render_backward_graph(
     if not self.has_backward_pass or not self.grad_fn_logs:
         raise ValueError("No backward graph is available; call log_backward(loss) first.")
     _ = collapsed_node_spec_fn, vis_node_mode
+    if vis_mode not in {"rolled", "unrolled"}:
+        raise ValueError("vis_mode must be either 'rolled' or 'unrolled'")
+    pass_filter = _normalize_backward_pass_filter(bwd)
 
     rankdir = direction_to_rankdir(direction)
 
@@ -1216,7 +1229,9 @@ def render_backward_graph(
     graph_caption = (
         f"<<B>{self.model_class_name} backward graph</B><br align='left'/>"
         f"{self.num_grad_fns} grad_fn_handle nodes"
-        f"<br align='left'/>{self.num_backward_passes} backward pass(es)<br align='left'/>>"
+        f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
+        f"{_format_backward_filter_caption(pass_filter)}"
+        f"<br align='left'/>mode: {vis_mode}<br align='left'/>>"
     )
     dot = graphviz.Digraph(
         name=f"{self.model_class_name}_backward",
@@ -1248,17 +1263,36 @@ def render_backward_graph(
     dot.node_attr.update({"ordering": "out"})
     dot.edge_attr.update(edge_args)
 
-    for grad_fn_handle in self.grad_fns:
-        _add_backward_node_to_graphviz(grad_fn_handle, dot, node_spec_fn)
+    if vis_mode == "rolled":
+        visible_ids = {
+            grad_fn_handle.grad_fn_object_id
+            for grad_fn_handle in self.grad_fns
+            if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
+        }
+        for grad_fn_handle in self.grad_fns:
+            if grad_fn_handle.grad_fn_object_id in visible_ids:
+                _add_backward_node_to_graphviz(
+                    grad_fn_handle,
+                    dot,
+                    node_spec_fn,
+                    pass_filter=pass_filter,
+                )
 
-    visible_ids = set(self.grad_fn_logs)
-    for grad_fn_handle in self.grad_fns:
-        tail_name = _backward_dot_node_name(grad_fn_handle)
-        for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
-            if next_grad_fn_id not in visible_ids:
+        for grad_fn_handle in self.grad_fns:
+            if grad_fn_handle.grad_fn_object_id not in visible_ids:
                 continue
-            head_name = _backward_dot_node_name(self.grad_fn_logs[next_grad_fn_id])
-            dot.edge(tail_name, head_name)
+            tail_name = _backward_dot_node_name(grad_fn_handle)
+            for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
+                if next_grad_fn_id not in visible_ids:
+                    continue
+                head_name = _backward_dot_node_name(self.grad_fn_logs[next_grad_fn_id])
+                dot.edge(
+                    tail_name,
+                    head_name,
+                    **_backward_edge_attrs(grad_fn_handle, self.grad_fn_logs[next_grad_fn_id]),
+                )
+    else:
+        _add_unrolled_backward_pass_clusters(self, dot, node_spec_fn, pass_filter)
 
     source_text = resolve_code_panel_source(
         code_panel,
@@ -1337,6 +1371,7 @@ def render_combined_graph(
     vis_mode: VisModeLiteral = "unrolled",
     intervening_cluster: InterveningClusterMode = "upstream",
     show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+    bwd: int | Iterable[int] | None = None,
 ) -> str:
     """Render one Graphviz graph containing forward ops and backward grad_fns.
 
@@ -1366,6 +1401,8 @@ def render_combined_graph(
         Placement mode for grad_fns that have no corresponding forward op.
     show_buffer_layers:
         Buffer visibility mode for the forward side.
+    bwd:
+        Optional one-based backward pass number or numbers to render.
 
     Returns
     -------
@@ -1390,6 +1427,7 @@ def render_combined_graph(
         raise ValueError(
             "Must have all layers logged in order to render the graph; use show_model_graph."
         )
+    pass_filter = _normalize_backward_pass_filter(bwd)
 
     show_buffer_layers = _normalize_buffer_visibility(show_buffer_layers)
     vis_outpath = _strip_render_extension(vis_outpath)
@@ -1404,7 +1442,8 @@ def render_combined_graph(
     graph_caption = (
         f"<<B>{self.model_class_name} combined forward/backward graph</B><br align='left'/>"
         f"{self.num_tensors} forward nodes, {self.num_grad_fns} grad_fn_handle nodes"
-        f"<br align='left'/>{self.num_backward_passes} backward pass(es)<br align='left'/>>"
+        f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
+        f"{_format_backward_filter_caption(pass_filter)}<br align='left'/>>"
     )
     dot = graphviz.Digraph(
         name=f"{self.model_class_name}_combined",
@@ -1462,9 +1501,10 @@ def render_combined_graph(
         dot,
         backward_node_spec_fn,
         intervening_cluster,
+        pass_filter,
     )
-    _add_combined_backward_edges(self, dot)
-    _add_combined_correspondence_edges(self, dot, intervening_cluster)
+    _add_combined_backward_edges(self, dot, pass_filter)
+    _add_combined_correspondence_edges(self, dot, intervening_cluster, pass_filter)
     _setup_subgraphs(self, dot, "unrolled", module_cluster_dict, overrides)
     _setup_combined_special_clusters(dot, module_cluster_dict)
 
@@ -1507,10 +1547,123 @@ def _backward_dot_node_name(grad_fn_handle: "GradFn") -> str:
     return f"grad_fn_{grad_fn_handle.grad_fn_object_id}"
 
 
+def _backward_dot_call_node_name(grad_fn_handle: "GradFn", call: Any) -> str:
+    """Return a DOT-safe node name for one GradFnCall.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        GradFn owning the call.
+    call:
+        GradFnCall-like record.
+
+    Returns
+    -------
+    str
+        DOT-safe node identifier.
+    """
+
+    return (
+        f"grad_fn_{grad_fn_handle.grad_fn_object_id}_"
+        f"bwd{getattr(call, 'backward_pass_index', 0)}_call{getattr(call, 'call_index', 0)}"
+    )
+
+
+def _normalize_backward_pass_filter(bwd: int | Iterable[int] | None) -> BackwardPassFilter:
+    """Normalize a backward-pass render filter.
+
+    Parameters
+    ----------
+    bwd:
+        Optional one-based backward pass number or iterable of pass numbers.
+
+    Returns
+    -------
+    set[int] | None
+        Pass numbers to render, or ``None`` for all passes.
+    """
+
+    if bwd is None:
+        return None
+    if isinstance(bwd, int):
+        pass_indices = {bwd}
+    else:
+        pass_indices = {int(pass_index) for pass_index in bwd}
+    if any(pass_index < 1 for pass_index in pass_indices):
+        raise ValueError("bwd pass filters use one-based positive backward pass numbers.")
+    return pass_indices
+
+
+def _format_backward_filter_caption(pass_filter: BackwardPassFilter) -> str:
+    """Return a compact caption suffix for a backward-pass filter.
+
+    Parameters
+    ----------
+    pass_filter:
+        Normalized backward-pass filter.
+
+    Returns
+    -------
+    str
+        Human-readable caption suffix.
+    """
+
+    if pass_filter is None:
+        return ""
+    return f" shown: {int_list_to_compact_str(sorted(pass_filter))}"
+
+
+def _grad_fn_call_matches_backward_filter(call: Any, pass_filter: BackwardPassFilter) -> bool:
+    """Return whether a GradFnCall should be visible for a pass filter.
+
+    Parameters
+    ----------
+    call:
+        GradFnCall-like record.
+    pass_filter:
+        Normalized backward-pass filter.
+
+    Returns
+    -------
+    bool
+        ``True`` when the call participates in a requested pass.
+    """
+
+    if pass_filter is None:
+        return True
+    return getattr(call, "backward_pass_index", None) in pass_filter
+
+
+def _grad_fn_matches_backward_filter(
+    grad_fn_handle: "GradFn",
+    pass_filter: BackwardPassFilter,
+) -> bool:
+    """Return whether a GradFn has at least one visible call.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        GradFn to inspect.
+    pass_filter:
+        Normalized backward-pass filter.
+
+    Returns
+    -------
+    bool
+        ``True`` when any call participates in the selected passes.
+    """
+
+    return any(
+        _grad_fn_call_matches_backward_filter(call, pass_filter)
+        for call in grad_fn_handle.calls.values()
+    )
+
+
 def _add_backward_node_to_graphviz(
     grad_fn_handle: "GradFn",
     graphviz_graph: graphviz.Digraph,
     node_spec_fn: BackwardNodeSpecFn | None,
+    pass_filter: BackwardPassFilter = None,
 ) -> None:
     """Add one backward grad_fn_handle node to a Graphviz graph.
 
@@ -1522,15 +1675,23 @@ def _add_backward_node_to_graphviz(
         Graphviz Digraph object.
     node_spec_fn:
         Optional callback receiving ``(grad_fn_handle, default_spec)``.
+    pass_filter:
+        Normalized backward-pass filter.
     """
 
-    node_args = _backward_node_graphviz_args(grad_fn_handle, node_spec_fn)
+    node_args = _backward_node_graphviz_args(
+        grad_fn_handle,
+        node_spec_fn,
+        pass_filter=pass_filter,
+    )
     graphviz_graph.node(**node_args)
 
 
 def _backward_node_graphviz_args(
     grad_fn_handle: "GradFn",
     node_spec_fn: BackwardNodeSpecFn | None,
+    call: Any | None = None,
+    pass_filter: BackwardPassFilter = None,
 ) -> dict[str, Any]:
     """Build Graphviz node arguments for one backward grad_fn_handle.
 
@@ -1540,6 +1701,10 @@ def _backward_node_graphviz_args(
         GradFn to render.
     node_spec_fn:
         Optional callback receiving ``(grad_fn_handle, default_spec)``.
+    call:
+        Optional GradFnCall when rendering in unrolled mode.
+    pass_filter:
+        Normalized backward-pass filter.
 
     Returns
     -------
@@ -1548,9 +1713,13 @@ def _backward_node_graphviz_args(
     """
 
     default_spec = NodeSpec(
-        lines=_compute_backward_node_lines(grad_fn_handle),
+        lines=_compute_backward_node_lines(
+            grad_fn_handle,
+            call=call,
+            pass_filter=pass_filter,
+        ),
         shape="oval",
-        fillcolor=BACKWARD_NODE_COLOR,
+        fillcolor=_backward_node_fillcolor(grad_fn_handle),
         fontcolor="black",
         color=BACKWARD_NODE_BORDER_COLOR,
         style="filled,solid",
@@ -1563,8 +1732,136 @@ def _backward_node_graphviz_args(
     else:
         spec = default_spec
     node_args = _node_spec_to_graphviz_args(spec)
-    node_args["name"] = _backward_dot_node_name(grad_fn_handle)
+    node_args["name"] = (
+        _backward_dot_node_name(grad_fn_handle)
+        if call is None
+        else _backward_dot_call_node_name(grad_fn_handle, call)
+    )
     return node_args
+
+
+def _backward_node_fillcolor(grad_fn_handle: "GradFn") -> str:
+    """Return the fill color for a backward node.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        GradFn to style.
+
+    Returns
+    -------
+    str
+        Graphviz fill color.
+    """
+
+    order = getattr(grad_fn_handle, "order", None)
+    if order is not None and order > 1:
+        return BACKWARD_HIGHER_ORDER_COLOR
+    return BACKWARD_NODE_COLOR
+
+
+def _backward_edge_attrs(tail: "GradFn", head: "GradFn") -> dict[str, str]:
+    """Return Graphviz attributes for a backward GradFn edge.
+
+    Parameters
+    ----------
+    tail:
+        Edge tail GradFn.
+    head:
+        Edge head GradFn.
+
+    Returns
+    -------
+    dict[str, str]
+        Graphviz edge attributes.
+    """
+
+    edge_attrs = {"color": GRADIENT_ARROW_COLOR, "fontcolor": GRADIENT_ARROW_COLOR}
+    if tail.type == "accumulategrad" or head.type == "accumulategrad":
+        edge_attrs["style"] = BACKWARD_ACCUMULATION_EDGE_STYLE
+        edge_attrs["label"] = "accum"
+        edge_attrs["labelfontsize"] = "8"
+    return edge_attrs
+
+
+def _add_unrolled_backward_pass_clusters(
+    trace: "Trace",
+    graphviz_graph: graphviz.Digraph,
+    node_spec_fn: BackwardNodeSpecFn | None,
+    pass_filter: BackwardPassFilter,
+) -> None:
+    """Render GradFnCall nodes grouped by backward pass.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing backward projections.
+    graphviz_graph:
+        Graphviz graph being rendered.
+    node_spec_fn:
+        Optional callback receiving ``(grad_fn_handle, default_spec)``.
+    pass_filter:
+        Normalized backward-pass filter.
+    """
+
+    calls_by_pass = _visible_backward_calls_by_pass(trace, pass_filter)
+    for pass_index, grad_fn_calls in calls_by_pass.items():
+        with graphviz_graph.subgraph(name=f"cluster_backward_pass_{pass_index}") as subgraph:
+            subgraph.attr(
+                label=f"backward pass {pass_index}",
+                color=GRADIENT_ARROW_COLOR,
+                fontcolor="black",
+                style="rounded,dashed",
+            )
+            for grad_fn_handle, call in grad_fn_calls:
+                node_args = _backward_node_graphviz_args(grad_fn_handle, node_spec_fn, call=call)
+                subgraph.node(**node_args)
+
+    for pass_index, grad_fn_calls in calls_by_pass.items():
+        calls_for_grad_fn: dict[int, list[tuple["GradFn", Any]]] = defaultdict(list)
+        for grad_fn_handle, call in grad_fn_calls:
+            calls_for_grad_fn[grad_fn_handle.grad_fn_object_id].append((grad_fn_handle, call))
+        for grad_fn_handle, call in grad_fn_calls:
+            tail_name = _backward_dot_call_node_name(grad_fn_handle, call)
+            for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
+                for head_grad_fn, head_call in calls_for_grad_fn.get(next_grad_fn_id, []):
+                    head_name = _backward_dot_call_node_name(head_grad_fn, head_call)
+                    graphviz_graph.edge(
+                        tail_name,
+                        head_name,
+                        **_backward_edge_attrs(grad_fn_handle, head_grad_fn),
+                    )
+
+
+def _visible_backward_calls_by_pass(
+    trace: "Trace",
+    pass_filter: BackwardPassFilter,
+) -> dict[int, list[tuple["GradFn", Any]]]:
+    """Group visible GradFnCalls by backward pass.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing backward projections.
+    pass_filter:
+        Normalized backward-pass filter.
+
+    Returns
+    -------
+    dict[int, list[tuple[GradFn, Any]]]
+        Visible calls keyed by one-based backward pass number.
+    """
+
+    calls_by_pass: dict[int, list[tuple["GradFn", Any]]] = defaultdict(list)
+    for grad_fn_handle in trace.grad_fns:
+        for call in grad_fn_handle.calls.values():
+            if not _grad_fn_call_matches_backward_filter(call, pass_filter):
+                continue
+            pass_index = getattr(call, "backward_pass_index", None)
+            if pass_index is None:
+                continue
+            calls_by_pass[int(pass_index)].append((grad_fn_handle, call))
+    return dict(sorted(calls_by_pass.items()))
 
 
 def _add_combined_backward_nodes(
@@ -1573,6 +1870,7 @@ def _add_combined_backward_nodes(
     graphviz_graph: graphviz.Digraph,
     node_spec_fn: BackwardNodeSpecFn | None,
     intervening_cluster: InterveningClusterMode,
+    pass_filter: BackwardPassFilter,
 ) -> None:
     """Add backward nodes to the combined graph and module clusters.
 
@@ -1588,10 +1886,18 @@ def _add_combined_backward_nodes(
         Optional backward node callback.
     intervening_cluster:
         Placement mode for intervening grad_fns.
+    pass_filter:
+        Normalized backward-pass filter.
     """
 
     for grad_fn_handle in trace.grad_fns:
-        node_args = _backward_node_graphviz_args(grad_fn_handle, node_spec_fn)
+        if not _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter):
+            continue
+        node_args = _backward_node_graphviz_args(
+            grad_fn_handle,
+            node_spec_fn,
+            pass_filter=pass_filter,
+        )
         module_key = _module_key_for_grad_fn(trace, grad_fn_handle, intervening_cluster)
         if module_key is None:
             graphviz_graph.node(**node_args)
@@ -1600,7 +1906,11 @@ def _add_combined_backward_nodes(
         module_cluster_dict[module_key]["has_input_ancestor"] = True
 
 
-def _add_combined_backward_edges(trace: "Trace", graphviz_graph: graphviz.Digraph) -> None:
+def _add_combined_backward_edges(
+    trace: "Trace",
+    graphviz_graph: graphviz.Digraph,
+    pass_filter: BackwardPassFilter,
+) -> None:
     """Add backward grad_fn_handle edges to a combined graph.
 
     Parameters
@@ -1609,23 +1919,35 @@ def _add_combined_backward_edges(trace: "Trace", graphviz_graph: graphviz.Digrap
         Trace containing grad_fn_handle metadata.
     graphviz_graph:
         Graphviz graph being rendered.
+    pass_filter:
+        Normalized backward-pass filter.
     """
 
-    edge_args = {"color": GRADIENT_ARROW_COLOR, "fontcolor": GRADIENT_ARROW_COLOR}
-    visible_ids = set(trace.grad_fn_logs)
+    visible_ids = {
+        grad_fn_handle.grad_fn_object_id
+        for grad_fn_handle in trace.grad_fns
+        if _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter)
+    }
     for grad_fn_handle in trace.grad_fns:
+        if grad_fn_handle.grad_fn_object_id not in visible_ids:
+            continue
         tail_name = _backward_dot_node_name(grad_fn_handle)
         for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
             if next_grad_fn_id not in visible_ids:
                 continue
             head_name = _backward_dot_node_name(trace.grad_fn_logs[next_grad_fn_id])
-            graphviz_graph.edge(tail_name, head_name, **edge_args)
+            graphviz_graph.edge(
+                tail_name,
+                head_name,
+                **_backward_edge_attrs(grad_fn_handle, trace.grad_fn_logs[next_grad_fn_id]),
+            )
 
 
 def _add_combined_correspondence_edges(
     trace: "Trace",
     graphviz_graph: graphviz.Digraph,
     intervening_cluster: InterveningClusterMode,
+    pass_filter: BackwardPassFilter,
 ) -> None:
     """Add dashed forward-to-backward correspondence edges.
 
@@ -1637,10 +1959,14 @@ def _add_combined_correspondence_edges(
         Graphviz graph being rendered.
     intervening_cluster:
         Placement mode used to infer optional cluster boundary attributes.
+    pass_filter:
+        Normalized backward-pass filter.
     """
 
     for grad_fn_handle in trace.grad_fns:
         if not grad_fn_handle.has_op:
+            continue
+        if not _grad_fn_matches_backward_filter(grad_fn_handle, pass_filter):
             continue
         edge_attrs = {
             "color": GRADIENT_ARROW_COLOR,
@@ -1883,13 +2209,21 @@ def _infer_intervening_module_bfs(
     return None
 
 
-def _compute_backward_node_lines(grad_fn_handle: "GradFn") -> list[str]:
+def _compute_backward_node_lines(
+    grad_fn_handle: "GradFn",
+    call: Any | None = None,
+    pass_filter: BackwardPassFilter = None,
+) -> list[str]:
     """Build default label rows for a backward grad_fn_handle node.
 
     Parameters
     ----------
     grad_fn_handle:
         GradFn to render.
+    call:
+        Optional GradFnCall when rendering an unrolled backward graph.
+    pass_filter:
+        Normalized backward-pass filter.
 
     Returns
     -------
@@ -1898,12 +2232,37 @@ def _compute_backward_node_lines(grad_fn_handle: "GradFn") -> list[str]:
     """
 
     title = grad_fn_handle.label
+    if call is not None:
+        call_index = getattr(call, "call_index", getattr(call, "ordinal", 0))
+        title = getattr(call, "call_label", f"{grad_fn_handle.label}:{call_index}")
     if not grad_fn_handle.has_op:
         title = f"[i] {title}"
     if grad_fn_handle.is_custom:
         title = f"{title} [custom]"
 
     lines = [title]
+    order = getattr(grad_fn_handle, "order", None)
+    if order is not None:
+        lines.append(f"order {order}")
+    if call is None:
+        pass_indices = sorted(
+            {
+                int(pass_index)
+                for pass_index in (
+                    getattr(grad_fn_call, "backward_pass_index", None)
+                    for grad_fn_call in grad_fn_handle.calls.values()
+                )
+                if pass_index is not None
+            }
+        )
+        if pass_filter is not None:
+            pass_indices = [pass_index for pass_index in pass_indices if pass_index in pass_filter]
+        if pass_indices:
+            lines.append(f"bwd {int_list_to_compact_str(pass_indices)}")
+    else:
+        pass_index = getattr(call, "backward_pass_index", None)
+        if pass_index is not None:
+            lines.append(f"bwd {pass_index}")
     if grad_fn_handle.op is not None:
         lines.append(f"@{grad_fn_handle.op.layer_label}")
     lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
@@ -5691,6 +6050,7 @@ def _add_grad_edge(
         overrides: Graphviz attribute overrides for grad edges.
     """
     if _node_has_grad(parent_layer) and _node_has_grad(child_layer):
+        grad_passes = _shared_gradient_passes(parent_layer, child_layer)
         edge_dict = {
             "tail_name": _grad_node_name(child_layer),
             "head_name": _grad_node_name(parent_layer),
@@ -5700,6 +6060,12 @@ def _add_grad_edge(
             "arrowsize": ".7",
             "labelfontsize": "8",
         }
+        if (
+            grad_passes
+            and self.num_backward_passes > 1
+            and grad_passes != set(range(1, self.num_backward_passes + 1))
+        ):
+            edge_dict["label"] = f"bwd {int_list_to_compact_str(sorted(grad_passes))}"
         for arg_name, arg_val in overrides.grad_edge.items():  # type: ignore[union-attr]
             if callable(arg_val):
                 edge_dict[arg_name] = str(arg_val(self, parent_layer, child_layer))
@@ -5730,6 +6096,55 @@ def _node_has_grad(layer: Any) -> bool:
     if ops is not None and hasattr(ops, "values"):
         return any(bool(getattr(pass_log, "has_grad", False)) for pass_log in ops.values())
     return bool(getattr(layer, "has_grad", False))
+
+
+def _node_gradient_passes(layer: Any) -> set[int]:
+    """Return backward pass numbers with saved gradients for a rendered node.
+
+    Parameters
+    ----------
+    layer:
+        ``Op`` or rolled ``Layer``.
+
+    Returns
+    -------
+    set[int]
+        One-based backward pass numbers.
+    """
+
+    ops = getattr(layer, "ops", None)
+    if ops is not None and hasattr(ops, "values"):
+        pass_indices: set[int] = set()
+        for pass_log in ops.values():
+            pass_indices.update(_node_gradient_passes(pass_log))
+        return pass_indices
+    grads = getattr(layer, "grads", None)
+    if grads is None:
+        return set()
+    return {
+        int(record.backward_pass_index)
+        for record in grads
+        if getattr(record, "backward_pass_index", None) is not None and record.is_saved
+    }
+
+
+def _shared_gradient_passes(parent_layer: GraphNode, child_layer: GraphNode) -> set[int]:
+    """Return backward pass numbers shared by both gradient-edge endpoints.
+
+    Parameters
+    ----------
+    parent_layer:
+        Forward parent node.
+    child_layer:
+        Forward child node.
+
+    Returns
+    -------
+    set[int]
+        One-based backward pass numbers shared by both endpoints.
+    """
+
+    return _node_gradient_passes(parent_layer) & _node_gradient_passes(child_layer)
 
 
 def _grad_node_name(layer: Any) -> str:

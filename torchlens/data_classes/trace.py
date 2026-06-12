@@ -4565,6 +4565,8 @@ class Trace(CapturedRun):
         vis_fileformat: str = "pdf",
         vis_direction: VisDirectionLiteral = "topdown",
         code_panel: "CodePanelOption" = False,
+        vis_mode: VisModeLiteral = "rolled",
+        bwd: int | Iterable[int] | None = None,
     ) -> str:
         """Render the captured backward grad_fn_handle graph.
 
@@ -4572,7 +4574,7 @@ class Trace(CapturedRun):
         ----------
         vis_outpath, vis_graph_overrides, node_spec_fn, collapsed_node_spec_fn, \
         vis_node_mode, vis_edge_overrides, vis_save_only, vis_fileformat, \
-        vis_direction, code_panel:
+        vis_direction, code_panel, vis_mode, bwd:
             Forwarded unchanged to
             :func:`torchlens.visualization.rendering.render_backward_graph`.
             ``collapsed_node_spec_fn`` and ``vis_node_mode`` are accepted for
@@ -4598,6 +4600,8 @@ class Trace(CapturedRun):
             vis_fileformat=vis_fileformat,
             direction=vis_direction,
             code_panel=code_panel,
+            vis_mode=vis_mode,
+            bwd=bwd,
         )
 
     def draw_combined(
@@ -4613,6 +4617,7 @@ class Trace(CapturedRun):
         vis_mode: VisModeLiteral = "unrolled",
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
         show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+        bwd: int | Iterable[int] | None = None,
     ) -> str:
         """Render forward ops and backward grad_fns in one graph.
 
@@ -4620,7 +4625,7 @@ class Trace(CapturedRun):
         ----------
         vis_outpath, vis_graph_overrides, node_spec_fn, backward_node_spec_fn, \
         vis_edge_overrides, vis_save_only, vis_fileformat, vis_direction, \
-        vis_mode, intervening_cluster, show_buffer_layers:
+        vis_mode, intervening_cluster, show_buffer_layers, bwd:
             Forwarded unchanged to
             :func:`torchlens.visualization.rendering.render_combined_graph`.
 
@@ -4644,6 +4649,7 @@ class Trace(CapturedRun):
             vis_mode=vis_mode,
             intervening_cluster=intervening_cluster,
             show_buffer_layers=show_buffer_layers,
+            bwd=bwd,
         )
 
     def preview_fastlog(

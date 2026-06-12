@@ -30,7 +30,7 @@ import tempfile
 import warnings
 from collections import OrderedDict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, cast
 
 import torch
 from torch import nn
@@ -2297,6 +2297,8 @@ def draw_backward(
     node_style: VisNodeModeLiteral | MissingType = MISSING,
     vis_node_mode: VisNodeModeLiteral | MissingType = MISSING,
     code_panel: CodePanelOption = False,
+    vis_mode: VisModeLiteral = "rolled",
+    bwd: int | Iterable[int] | None = None,
     visualization: VisualizationOptions | None = None,
 ) -> str:
     """Render an existing Trace's captured backward grad_fn_handle graph.
@@ -2328,6 +2330,11 @@ def draw_backward(
         nodes.
     code_panel:
         Optional source-code panel mode.
+    vis_mode:
+        ``"rolled"`` renders one node per GradFn; ``"unrolled"`` renders one
+        node per GradFnCall grouped by backward pass.
+    bwd:
+        Optional one-based backward pass number or numbers to render.
     visualization:
         Grouped visualization options. Only output path, save behavior, file
         format, direction, graph overrides, and edge overrides are used.
@@ -2384,6 +2391,8 @@ def draw_backward(
         vis_fileformat=file_format,
         vis_direction=direction,
         code_panel=code_panel,
+        vis_mode=vis_mode,
+        bwd=bwd,
     )
 
 
@@ -2400,6 +2409,7 @@ def draw_combined(
     vis_mode: VisModeLiteral = "unrolled",
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
     show_buffer_layers: BufferVisibilityLiteral | bool = "meaningful",
+    bwd: int | Iterable[int] | None = None,
     visualization: VisualizationOptions | None = None,
 ) -> str:
     """Render an existing Trace's forward ops and backward grad_fns together.
@@ -2431,6 +2441,8 @@ def draw_combined(
         Placement mode for grad_fns without a corresponding forward op.
     show_buffer_layers:
         Buffer visibility mode for the forward side.
+    bwd:
+        Optional one-based backward pass number or numbers to render.
     visualization:
         Grouped visualization options. Only output path, save behavior, file
         format, direction, graph overrides, and edge overrides are used.
@@ -2481,6 +2493,7 @@ def draw_combined(
         vis_mode=vis_mode,
         intervening_cluster=intervening_cluster,
         show_buffer_layers=show_buffer_layers,
+        bwd=bwd,
     )
 
 
