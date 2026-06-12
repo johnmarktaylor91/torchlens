@@ -283,6 +283,16 @@ class _RetainedLookbackCandidate:
     marked: bool = False
 
 
+@dataclass(slots=True)
+class _OutputTensorEntry:
+    """One output entry prepared for exhaustive tensor logging."""
+
+    value: Any
+    container_path: tuple[OutputPathComponent, ...]
+    container_spec: ContainerSpec | None
+    autograd_stats: tuple[int | None, int | None]
+
+
 def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
     """Return the raw hook-stack module context.
 
@@ -2275,45 +2285,43 @@ def log_function_output_tensors_exhaustive(
             func_call_id,
         )
 
-    out_iter = list(_walk_output_tensors_with_paths(out_orig))
-    if out_iter:
-        autograd_saved_stats = _get_autograd_saved_stats_by_output_entries(out_iter)
-    else:
-        out_iter = [(out, (), None) for out in ensure_iterable(out_orig)]
-        autograd_saved_stats = _get_autograd_saved_stats_by_output(out_orig)
+    output_entries = _partition_output_entries_with_autograd_stats(out_orig)
+    expected_output_count = len(output_entries)
+    shared_func_event_input = FunctionEventInput(
+        func=func,
+        func_name=func_name,
+        func_qualname=getattr(func, "__qualname__", None),
+        args=args,
+        kwargs=kwargs,
+        raw_output=out_orig,
+        arg_copies=arg_copies,
+        kwarg_copies=kwarg_copies,
+        module_stack=tuple(_module_frames_from_fields(fields_dict)),
+        is_bottom_level_func=is_bottom_level_func,
+        func_call_id=func_call_id,
+        expected_output_count=expected_output_count,
+    )
 
-    for i, (out, container_path, container_spec) in enumerate(out_iter):
+    for i, output_entry in enumerate(output_entries):
+        out = output_entry.value
         if not _output_should_be_logged(out, is_bottom_level_func):
             continue
+        out_tensor = cast(torch.Tensor, out)
 
         fields_dict_onetensor = _copy_shared_fields_for_output(fields_dict)
-        fields_dict_onetensor["container_path"] = container_path
-        fields_dict_onetensor["container_spec"] = container_spec
-        if container_spec is not None:
+        fields_dict_onetensor["container_path"] = output_entry.container_path
+        fields_dict_onetensor["container_spec"] = output_entry.container_spec
+        if output_entry.container_spec is not None:
             fields_dict_onetensor["in_multi_output"] = True
         _log_output_tensor_info(
             self,
-            out,
+            out_tensor,
             i,
             args,
             kwargs,
             parent_param_ops,
             fields_dict_onetensor,
-            autograd_saved_stats.get(i, (None, None)),
-        )
-        func_event_input = FunctionEventInput(
-            func=func,
-            func_name=func_name,
-            func_qualname=getattr(func, "__qualname__", None),
-            args=args,
-            kwargs=kwargs,
-            raw_output=out_orig,
-            arg_copies=arg_copies,
-            kwarg_copies=kwarg_copies,
-            module_stack=tuple(_module_frames_from_fields(fields_dict_onetensor)),
-            is_bottom_level_func=is_bottom_level_func,
-            func_call_id=func_call_id,
-            expected_output_count=len(out_iter),
+            output_entry.autograd_stats,
         )
         detect_backend_semantics = (
             detect_torch_alias_contract
@@ -2321,7 +2329,7 @@ def log_function_output_tensors_exhaustive(
             else detect_torch_output_alias_contract
         )
         fields_dict_onetensor["backend_semantics"] = detect_backend_semantics(
-            func_event_input,
+            shared_func_event_input,
             backend_grad_handle=fields_dict_onetensor["grad_fn_handle"],
             grad_fn_class_name=fields_dict_onetensor["grad_fn_class_name"],
             autograd_memory=fields_dict_onetensor["autograd_memory"],
@@ -2329,7 +2337,7 @@ def log_function_output_tensors_exhaustive(
             bytes_delta_at_call=fields_dict_onetensor["bytes_delta_at_call"],
             bytes_peak_at_call=fields_dict_onetensor["bytes_peak_at_call"],
         )
-        fire_results = _pop_tensor_live_fire_results(out)
+        fire_results = _pop_tensor_live_fire_results(out_tensor)
         if fire_results:
             fields_dict_onetensor["fire_results"] = fire_results
             fields_dict_onetensor["interventions"] = [
@@ -2349,7 +2357,7 @@ def log_function_output_tensors_exhaustive(
             Op,
             _make_layer_log_entry(
                 self,
-                out,
+                out_tensor,
                 fields_dict=fields_dict_onetensor,
                 t_args=arg_copies,
                 t_kwargs=kwarg_copies,
@@ -2361,7 +2369,7 @@ def log_function_output_tensors_exhaustive(
         _classify_new_tensor_in_trace(self, fields_dict, new_tensor_label)
         _tag_tensor_and_track_variations(
             self,
-            out,
+            out_tensor,
             new_layer_entry,
             fields_dict_onetensor,
             arg_copies,
@@ -2369,8 +2377,8 @@ def log_function_output_tensors_exhaustive(
         )
         options = getattr(self, "_predicate_save_options", None)
         if options is not None and options.halt is not None:
-            halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out)
-            _evaluate_halt(halt_ctx, options, frontier_output=out)
+            halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out_tensor)
+            _evaluate_halt(halt_ctx, options, frontier_output=out_tensor)
 
 
 def _get_parent_contents(
@@ -2748,49 +2756,59 @@ def _get_autograd_saved_stats_by_output(
     return stats_by_index
 
 
-def _get_autograd_saved_stats_by_output_entries(
-    output_entries: list[
-        tuple[torch.Tensor, tuple[OutputPathComponent, ...], ContainerSpec | None]
-    ],
-) -> dict[int, tuple[int | None, int | None]]:
-    """Measure autograd-saved tensor bytes/counts for path-aware outputs.
+def _partition_output_entries_with_autograd_stats(output: Any) -> list[_OutputTensorEntry]:
+    """Collect output entries and autograd stats in one pass.
 
     Parameters
     ----------
-    output_entries
-        Path-aware output entries from ``_walk_output_tensors_with_paths``.
+    output
+        Raw function output from a decorated torch operation.
 
     Returns
     -------
-    dict[int, tuple[Optional[int], Optional[int]]]
-        Mapping from output entry index to autograd saved-byte/count stats.
+    list[_OutputTensorEntry]
+        Output entries in logging order, each paired with its autograd saved
+        tensor byte/count stats when available.
     """
 
-    stats_by_index: dict[int, tuple[int | None, int | None]] = {}
+    raw_entries: list[tuple[Any, tuple[OutputPathComponent, ...], ContainerSpec | None]] = list(
+        _walk_output_tensors_with_paths(output)
+    )
+    if not raw_entries:
+        raw_entries = [(out, (), None) for out in ensure_iterable(output)]
+
+    partitioned_entries: list[_OutputTensorEntry] = []
     seen_grad_fns: set[int] = set()
     seen_data_ptrs: set[int] = set()
+    for maybe_tensor, container_path, container_spec in raw_entries:
+        autograd_stats: tuple[int | None, int | None] = (None, None)
+        if isinstance(maybe_tensor, torch.Tensor) and maybe_tensor.grad_fn is not None:
+            grad_fn_handle = maybe_tensor.grad_fn
+            grad_fn_object_id = id(grad_fn_handle)
+            if grad_fn_object_id in seen_grad_fns:
+                autograd_stats = (0, 0)
+            else:
+                seen_grad_fns.add(grad_fn_object_id)
+                total_bytes = 0
+                tensor_count = 0
+                for saved_value in _iter_autograd_saved_candidates(grad_fn_handle):
+                    for saved_tensor in _collect_tensor_values(saved_value):
+                        bytes_added, count_added = _add_autograd_saved_tensor(
+                            saved_tensor, seen_data_ptrs
+                        )
+                        total_bytes += bytes_added
+                        tensor_count += count_added
+                autograd_stats = (total_bytes, tensor_count)
+        partitioned_entries.append(
+            _OutputTensorEntry(
+                value=maybe_tensor,
+                container_path=container_path,
+                container_spec=container_spec,
+                autograd_stats=autograd_stats,
+            )
+        )
 
-    for output_index, (maybe_tensor, _, _) in enumerate(output_entries):
-        if maybe_tensor.grad_fn is None:
-            continue
-
-        grad_fn_handle = maybe_tensor.grad_fn
-        grad_fn_object_id = id(grad_fn_handle)
-        if grad_fn_object_id in seen_grad_fns:
-            stats_by_index[output_index] = (0, 0)
-            continue
-        seen_grad_fns.add(grad_fn_object_id)
-
-        total_bytes = 0
-        tensor_count = 0
-        for saved_value in _iter_autograd_saved_candidates(grad_fn_handle):
-            for saved_tensor in _collect_tensor_values(saved_value):
-                bytes_added, count_added = _add_autograd_saved_tensor(saved_tensor, seen_data_ptrs)
-                total_bytes += bytes_added
-                tensor_count += count_added
-        stats_by_index[output_index] = (total_bytes, tensor_count)
-
-    return stats_by_index
+    return partitioned_entries
 
 
 def _get_autograd_saved_stats_for_tensor(
