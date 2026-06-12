@@ -161,6 +161,8 @@ def _position_was_mutated(
     copied = copied_inputs.get(position)
     if copied is None:
         return False
+    if copied is tensor:
+        return False
     if copied.is_meta or tensor.is_meta:
         # Meta tensors carry no data (e.g. factory outputs under a
         # ``torch.device("meta")`` context), so mutation cannot be detected
