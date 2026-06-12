@@ -164,3 +164,84 @@ def test_disable_col_offset_skips_col_offset_helper(monkeypatch: pytest.MonkeyPa
     assert col_offset_calls == []
     assert len(code_qualname_calls) == len(stack)
     assert all(loc.col_offset is None for loc in stack)
+
+
+def test_code_context_cache_reuses_filtered_frame_locations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify repeated stack identities reuse cached location metadata.
+
+    Args:
+        monkeypatch: Pytest fixture for replacing helper functions.
+    """
+
+    col_offset_calls = []
+
+    def fake_get_col_offset(frame: FrameType) -> Optional[int]:
+        """Record column-offset calls without walking bytecode.
+
+        Args:
+            frame: Stack frame passed by ``_get_code_context``.
+
+        Returns:
+            Dummy column offset.
+        """
+
+        col_offset_calls.append((frame.f_code.co_filename, frame.f_code.co_name))
+        return 0
+
+    class CachedContextModel(nn.Module):
+        """Recursive model variant that captures one stack twice from one call site."""
+
+        def __init__(self, depth: int) -> None:
+            """Initialize the cached-context model.
+
+            Args:
+                depth: Number of recursive calls to make below ``forward``.
+            """
+
+            super().__init__()
+            self.depth = depth
+
+        def forward(self, x: torch.Tensor) -> List[List[FuncCallLocation]]:
+            """Return two filtered stacks captured from one recursive call site.
+
+            Args:
+                x: Input tensor carried through recursion.
+
+            Returns:
+                Two filtered TorchLens function call stacks.
+            """
+
+            return self._recurse(x, self.depth)
+
+        def _recurse(
+            self,
+            x: torch.Tensor,
+            depth: int,
+        ) -> List[List[FuncCallLocation]]:
+            """Recurse until the stack is deep enough, then capture it twice.
+
+            Args:
+                x: Input tensor carried through recursion.
+                depth: Remaining recursive depth.
+
+            Returns:
+                Two filtered TorchLens function call stacks.
+            """
+
+            if depth <= 0:
+                cache: introspection._CodeContextCache = {}
+                stacks = []
+                for _ in range(2):
+                    stacks.append(introspection._get_code_context(context_cache=cache))
+                return stacks
+            return self._recurse(x, depth - 1)
+
+    monkeypatch.setattr(introspection, "_get_col_offset", fake_get_col_offset)
+
+    first_stack, second_stack = CachedContextModel(depth=4)(torch.ones(1))
+
+    assert len(first_stack) >= 5
+    assert len(second_stack) == len(first_stack)
+    assert len(col_offset_calls) == len(first_stack)

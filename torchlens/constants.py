@@ -85,6 +85,7 @@ MODEL_LOG_FIELD_ORDER = [
     "_out_dedup_mode",
     "_out_identity_cache",
     "_out_hash_cache",
+    "_code_context_cache",
     "save_arg_values",
     "num_context_lines",
     "save_grads",

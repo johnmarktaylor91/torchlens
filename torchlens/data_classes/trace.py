@@ -197,6 +197,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_out_dedup_mode": "identity",
     "_out_identity_cache": {},
     "_out_hash_cache": {},
+    "_code_context_cache": {},
     "save_grads": None,
     "is_appended": False,
     "relationship_evidence": {},
@@ -1092,6 +1093,7 @@ class Trace(CapturedRun):
         "_out_dedup_mode": FieldPolicy.DROP,
         "_out_identity_cache": FieldPolicy.DROP,
         "_out_hash_cache": FieldPolicy.DROP,
+        "_code_context_cache": FieldPolicy.DROP,
         "save_arg_values": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
         "_grad_op_nums_to_save": FieldPolicy.KEEP,
@@ -1406,6 +1408,7 @@ class Trace(CapturedRun):
         self._out_dedup_mode: Literal["identity", "content", "none"] = "identity"
         self._out_identity_cache: Dict[int, Tuple[torch.Tensor, str, torch.Tensor]] = {}
         self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
+        self._code_context_cache: dict[Any, tuple[Any, ...]] = {}
         self.save_arg_values = save_arg_values
         self.save_grads = "all" if save_grads is True else save_grads
         self.save_code_context = save_code_context
@@ -2907,6 +2910,7 @@ class Trace(CapturedRun):
         state["last_run"] = None
         state["_out_identity_cache"] = {}
         state["_out_hash_cache"] = {}
+        state["_code_context_cache"] = {}
         state.pop("_build_state", None)
         state["_backward_gradfn_refs"] = {}
         state["_tl_backward_hooked_tensor_keys"] = set()
@@ -2989,6 +2993,7 @@ class Trace(CapturedRun):
                 "_out_dedup_mode": "identity",
                 "_out_identity_cache": {},
                 "_out_hash_cache": {},
+                "_code_context_cache": {},
                 "_last_hook_handle_ids": (),
                 "conditionals": ConditionalAccessor(),
                 "total_gradient_memory": 0,

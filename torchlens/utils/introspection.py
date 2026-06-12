@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections.abc import Callable, Iterator
 from types import CodeType, FrameType
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypeAlias
 
 import numpy as np
 import torch
@@ -43,6 +43,13 @@ _COL_OFFSET_CACHE_SIZE_CAP = 100_000
 _col_offset_cache_warned = False
 _AddressPath = list[tuple[str, Any]]
 _SearchEntry = tuple[Any, Any, _AddressPath]
+_CodeContextCacheKey: TypeAlias = tuple[
+    int,
+    bool,
+    bool,
+    tuple[tuple[str, str, int, int, Optional[str], int], ...],
+]
+_CodeContextCache: TypeAlias = dict[_CodeContextCacheKey, tuple[Any, ...]]
 
 
 def _build_col_offset_map(code: CodeType) -> Dict[int, Optional[int]]:
@@ -497,6 +504,7 @@ def _get_code_context(
     num_context_lines: int = 7,
     source_loading_enabled: bool = True,
     disable_col_offset: bool = False,
+    context_cache: _CodeContextCache | None = None,
 ) -> list[Any]:
     """Build a list of FuncCallLocation objects for the current call stack.
 
@@ -516,6 +524,9 @@ def _get_code_context(
             lazily load source text and function metadata on demand.
         disable_col_offset: If True, skip bytecode inspection for column
             offsets and store None for ``col_offset``.
+        context_cache: Optional per-capture cache keyed by filtered frame
+            identity. When supplied, repeated operations at the same call
+            stack reuse the lightweight location objects.
 
     Returns:
         List[FuncCallLocation] ordered shallow-to-deep.
@@ -580,6 +591,20 @@ def _get_code_context(
     if pre_forward_frame_idx is not None and pre_forward_frame_idx not in filtered_indices:
         filtered_indices.append(pre_forward_frame_idx)
 
+    if context_cache is not None:
+        cache_key = _code_context_cache_key(
+            raw_frames,
+            filtered_indices,
+            num_context_lines,
+            source_loading_enabled,
+            disable_col_offset,
+        )
+        cached = context_cache.get(cache_key)
+        if cached is not None:
+            return list(cached)
+    else:
+        cache_key = None
+
     # Phase 2: Build FuncCallLocation objects only for surviving frames (~5-10).
     # Do expensive f_locals/f_globals lookups and bytecode walks only here.
     result = []
@@ -602,4 +627,54 @@ def _get_code_context(
         )
         result.append(loc)
 
+    if context_cache is not None and cache_key is not None:
+        context_cache[cache_key] = tuple(result)
     return result
+
+
+def _code_context_cache_key(
+    raw_frames: list[tuple[str, str, int, int, FrameType]],
+    filtered_indices: list[int],
+    num_context_lines: int,
+    source_loading_enabled: bool,
+    disable_col_offset: bool,
+) -> _CodeContextCacheKey:
+    """Return a stable key for one filtered code-context stack.
+
+    Parameters
+    ----------
+    raw_frames:
+        Lightweight frame tuples collected by ``_get_code_context``.
+    filtered_indices:
+        Indices of user-visible frames retained for the context.
+    num_context_lines:
+        Requested source context radius.
+    source_loading_enabled:
+        Whether source text should load lazily on returned locations.
+    disable_col_offset:
+        Whether bytecode column-offset inspection is disabled.
+
+    Returns
+    -------
+    tuple
+        Hashable cache key preserving line and bytecode-offset identity.
+    """
+
+    frame_key = tuple(
+        (
+            filename,
+            func_name,
+            lineno,
+            code_firstlineno,
+            _get_code_qualname(frame_ref),
+            frame_ref.f_lasti,
+        )
+        for idx in filtered_indices
+        for filename, func_name, lineno, code_firstlineno, frame_ref in (raw_frames[idx],)
+    )
+    return (
+        num_context_lines,
+        source_loading_enabled,
+        disable_col_offset,
+        frame_key,
+    )

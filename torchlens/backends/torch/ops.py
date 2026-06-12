@@ -1995,10 +1995,15 @@ def _build_shared_fields_dict(
     fields_dict["func_call_id"] = func_call_id
     fields_dict["func_name"] = func_name
     fields_dict["func_qualname"] = getattr(func, "__qualname__", None)
+    code_context_cache = getattr(self, "_code_context_cache", None)
+    if code_context_cache is None:
+        code_context_cache = {}
+        self._code_context_cache = code_context_cache
     fields_dict["code_context"] = _get_code_context(
         self.num_context_lines,
         source_loading_enabled=self.save_code_context,
         disable_col_offset=False,
+        context_cache=code_context_cache,
     )
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states

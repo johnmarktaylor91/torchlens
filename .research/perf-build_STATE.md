@@ -1,0 +1,78 @@
+---
+run: perf-build
+created: 2026-06-12T09:04:28-04:00
+state: RUNNING
+current_round: 6
+---
+
+# perf-build -- Autonomous Loop State
+
+This file is the canonical "where are we" record for this run.
+Every wake-up event (watcher fire, user ping, schedule trigger) must
+read this file FIRST and act on the case routing below given the
+current observable state. Do not act on intuition; act on the case.
+
+## Stop criteria (observable, quantitative)
+
+all 6 phases of perf-sprint-PLAN.md committed on capture-unification (P0 harness+profiling, P1 engine, P2 ctx+zero-copy, P3 halt+rerun, P4 memory, P5 cleanups, P6 gate+numbers) AND pytest tests/ -m "not slow" exits 0 AND benchmark gate green
+
+max_rounds: 30  # perf sprint is 6 phases + profile-first per-step verification; converges steadily. Anti-flail (3 rounds same issue) governs.
+
+## Wake-up case routing
+
+When a wake-up event fires, use this table BEFORE doing anything else:
+
+| Observable signal | State | Action |
+|---|---|---|
+| codex pid alive | RUNNING | ack the user, yield turn (do not poll); next event will fire |
+| codex exited cleanly + worktree advanced (HEAD changed) | ROUND_DONE | run post-round verification (tests / lint / project-specific) |
+| post-round verification PASS, stop criterion not met | NEXT_ROUND | dispatch round N+1 with refreshed prompt |
+| post-round verification PASS, stop criterion met | SHUTDOWN | run shutdown procedure below |
+| post-round verification FAIL | RECOVER | focused fixup spec (failing test/benchmark + file:line); ONE retry per failure class then RESIDUAL. NOTE: a perf REGRESSION (gate fail) is a real failure, not just test-red. |
+| codex hit quota (CODEX_FAILED with usage_limit reason) | QUOTA_BLOCKED | fall back per "Fallback chain" below |
+| same un-closeable issue 3 rounds in a row | RESIDUAL | accept as residual, log it, continue or shut down |
+
+Edit this table with run-specific cases. The defaults are minimums.
+
+## Fallback chain (resource limits)
+
+1. Primary: codex via /codex:rescue --background OR codex-bg.sh
+2. Quota blocked: pivot to Agent(subagent_type="general-purpose", model="opus")
+   with the spec adapted (drop XML scaffolding, keep contracts + file:line refs).
+3. Both blocked: write `state: BLOCKED` here, send iMessage to JMT
+   "blocked, will resume <reset-time>", schedule a wakeup, stop.
+
+NEVER silently stall. NEVER export OPENAI_API_KEY to "work around" quota.
+
+## Shutdown procedure (mechanical -- user is asleep)
+
+When stop criterion triggers, run these in order:
+
+1. Orchestrator personal inspection: profile-attributed before/after per phase (steady-state x toward 2-5x; halt rows measured; rerun 5-50x; dedup id-keyed correct; alias gate validation-green; param re-fetch). Fixup rounds for misses. PROFILE-FIRST: each win attributed to a phase-timing bucket.
+2. Write SUMMARY.md (.research/perf-build_SUMMARY.md): per-phase before/after numbers, the headline table, what landed vs deferred, glossary names (halt=/save_mode/recurrent_layers), claim-honesty gate status (which README numbers are MEASURED vs aspirational).
+3. iMessage JMT with the headline perf numbers + the honest halt story (measured, not aspirational).
+4. Update todos.md (strike the ~20 fixed PERF/GC; mark sprint items done) + autonomous_gate.json.
+4. Mark this file: `state: DONE`, append round N+1 = "shutdown" to log.
+5. Send a final iMessage: "Run perf-build done. <one-line result>. <count> artifacts shipped."
+
+No "figure out what to do at the end" -- spell it out concretely BEFORE
+round 1 dispatches.
+
+## Iteration log (append per round)
+
+| Round | Start | End | Commit | Score / Result | Notes |
+|---|---|---|---|---|---|
+
+## Iteration log
+| Round | Phase | Commit | Result | Remaining |
+|---|---|---|---|---|
+| 1 | P0 (partial) | 83623cd0 | Harness repaired + always-on profiling (verified buckets populate; PORTABLE_STATE_SPEC updated); smoke 241; no-save addendum CPU+CUDA pass. Surfaced+fixed a real bug (no-save invariant read unsaved op.out). | P0.3: rerun fresh CPU+CUDA baseline w/ fixed harness + commit per-SHA baseline JSON. THEN P1.1. Profile-first: each P1 step needs before/after phase-timing delta. |
+| 2 | P0.3 BLOCKED | (none) | Full baseline blocked: host at load avg ~20 (JMT's definitive_fidelity_analysis.py x8). Codex correctly refused to commit a misleading baseline; restored touched files, tree clean. | JUDGMENT-CALL DEVIATION (orchestrator): committed quiet-host baseline DEFERRED to a quiet window before P6; proceed with P1 on profile-first RELATIVE deltas (load-robust). Do NOT touch the fidelity workers. |
+| 3 | P1.1 | 86de2cd9 | Landed `_position_was_mutated` identity short-circuit. Profile delta on loaded host, TinyNet `tl.trace(profile=True)`: CPU dispatch median 1.1063s -> 0.4514s (-59.2%); CUDA dispatch median 0.03942s -> 0.03527s (-10.5%). Gates: ruff touched file pass; mypy touched file pass; focused perf+validation 77 pass; smoke 241 pass; benchmark smoke 26/26 cells ok. | Continue P1.2: gate `detect_torch_alias_contract` at both fastlog and exhaustive sites with `save_arg_values or intervention_active or backward_active or validation_active`; keep alias contract consumed-path tests green and measure dispatch bucket delta. |
+| 3 | P1.2 | d09498ec | Gated full mutation-position alias detection behind the consumed-path predicate and kept default-path cheap output alias semantics (`unknown_aliasing=False`). Added `test_save_arg_values_keeps_inplace_alias_contract_versions`. Profile delta on loaded host from P1.1 baseline: CPU dispatch median 0.4514s -> 0.4432s (-1.8%); CUDA dispatch median 0.03527s -> 0.03423s (-2.9%). P1.1 correctly owns the shared tensor-compare win. Gates: ruff touched files pass; mypy backend files pass; focused perf+validation 79 pass; smoke 241 pass; benchmark smoke 26/26 cells ok. | Continue P1.3: identity dedup keyed on `id(source_tensor)` with per-pass strong refs to SOURCE, fix live save path and `Op.save_activation`, add dedup/pinning tests, measure clone+save and peak-memory deltas. |
+| 3 | P1.1+P1.2 | 86de2cd9, d09498ec | Identity mutation short-circuit + alias-contract gate (the two big steady-state wins). 77/79 focused + 241 smoke + 26/26 bench-smoke green; validation intact (alias contract kept on where consumed, cheap output-alias preserved). | P1.3 next (id-dedup BOTH sites + source strong-ref pin + freed/realloc no-false-merge test). Benchmarking relaxed per JMT; quiet-host baseline still deferred. |
+| 4 | P1.3 | f79d29e5 | Default saved-activation dedup is now same-object identity keyed on `id(source_tensor)` with the cache value pinning the source tensor; full content hashing remains internal opt-in via `_out_dedup_mode="content"`. Fixed both `_save_activation_fields` and `Op.save_activation`; pass-end cleanup clears source pins. Tests cover same-source dedup, equal-content different-source miss, collision/no-false-merge guard, replay/slow path, and cache release. Gates: ruff check . --fix pass; mypy touched source pass; tests/test_capture_targets.py 9 pass; smoke 241 pass. Benchmark/profile numbers intentionally not collected under JMT 2026-06-12 relaxed benchmarking; expected bucket impact is clone_save by removing per-saved-output CPU/GPU content hashing from default saved-output paths. | Continue P1.4: PERF-29 avoid redundant memory calls while preserving `pause_logging`; quiet-host CPU+CUDA baseline and full benchmark gate remain deferred to end-of-sprint/P6. |
+| 4 | P1.3 | f79d29e5 | Identity dedup (source strong-ref pinned, both save sites, collision/replay/cache-release tests; full-content dedup private opt-in _out_dedup_mode). The 4-round-hardened correctness piece, shipped clean. smoke 241, capture-targets 9. | P1.4 (PERF-29 memory-call reduction, keep pause_logging) next, then P2 ctx+zero-copy. |
+| 5 | P1.4 | c2387a03 | Added metadata-based dense tensor memory accounting and used it in forward activation save/projection/source/rerun paths while preserving the `pause_logging()` fallback for sparse/meta/unusual tensors. Added dense and sparse helper tests. Gates: ruff check . --fix pass; mypy touched source pass; tests/test_internals.py::TestGetTensorMemory 4 pass; tests/test_capture_targets.py 9 pass; smoke 241 pass. Benchmark/profile numbers intentionally not collected under JMT 2026-06-12 relaxed benchmarking; expected bucket impact is dispatch/object-construction/clone_save by avoiding redundant decorated `nelement()`/`element_size()` calls in activation metadata paths. | Continue P2.1: defer Op-level code-context/module-address work where safe; quiet-host CPU+CUDA baseline and full benchmark gate remain deferred to end-of-sprint/P6. |
+| 5 | P1.4 (P1 COMPLETE) | c2387a03 | PERF-29 memory-call reuse (scoped to forward activation accounting; param/grad paths kept on get_memory_amount; pause_logging preserved). PHASE 1 DONE: all 4 steady-state engine wins in. test_internals 4, capture-targets 9, smoke 241. | P2.1 next (lazy ctx: defer Op code-context/module-address; keep recent_ops eager under followed_by). Then P2.2 save_mode, P2.3 arg leanness. |
+| 6 | P2.1 (partial) | 8e85b245 | Added per-trace code-context identity cache for Op construction: repeated identical filtered call-stack identities reuse lightweight `FuncCallLocation` objects while preserving `save_code_context=False` identity fields, column-offset distinctions, and portable I/O by dropping `_code_context_cache`. Added cache regression test. Gates: ruff check . --fix pass; mypy touched source/tests pass; focused introspection/metadata/conditional/backward-streaming 7 pass/1 skip; smoke 241 pass. Benchmark/profile numbers intentionally not collected under JMT 2026-06-12 relaxed benchmarking; expected bucket impact is object-construction/dispatch by avoiding repeated code-context location construction and bytecode column-offset work for identical hot call sites. | Continue P2.1: assess remaining module-address/context deferrals; if no safe scoped work remains, proceed to P2.2 save_mode enum. Quiet-host CPU+CUDA baseline and full benchmark gate remain deferred to end-of-sprint/P6. |
