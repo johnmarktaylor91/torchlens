@@ -51,6 +51,7 @@ from ..._state import pause_logging
 from ._tl import get_label_list, get_param_meta, get_tensor_label, get_tensor_meta, set_tensor_label
 from .aliasing import (
     detect_torch_alias_contract,
+    detect_torch_output_alias_contract,
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
 )
@@ -163,6 +164,32 @@ from ...capture.salient_args import extract_salient_args
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
+
+
+def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
+    """Return whether mutation-position alias contracts can be consumed.
+
+    Parameters
+    ----------
+    trace
+        Active trace object.
+
+    Returns
+    -------
+    bool
+        True when replay, intervention, backward, or validation paths may use
+        mutation-position metadata.
+    """
+
+    save_grads = getattr(trace, "save_grads", None)
+    return bool(
+        getattr(trace, "save_arg_values", False)
+        or getattr(trace, "intervention_ready", False)
+        or getattr(trace, "backward_ready", False)
+        or save_grads not in (None, False)
+        or getattr(trace, "_validation_active", False)
+    )
+
 
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
@@ -1672,21 +1699,27 @@ def log_function_output_tensors_predicate(
                 )
             ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
             grad_fn_handle = out.grad_fn if isinstance(out, torch.Tensor) else None
-            backend_semantics = detect_torch_alias_contract(
-                FunctionEventInput(
-                    func=func,
-                    func_name=func_name,
-                    func_qualname=getattr(func, "__qualname__", None),
-                    args=args,
-                    kwargs=kwargs,
-                    raw_output=out_orig,
-                    arg_copies=arg_copies,
-                    kwarg_copies=kwarg_copies,
-                    module_stack=(),
-                    is_bottom_level_func=is_bottom_level_func,
-                    func_call_id=func_call_id,
-                    expected_output_count=len(out_iter),
-                ),
+            func_event_input = FunctionEventInput(
+                func=func,
+                func_name=func_name,
+                func_qualname=getattr(func, "__qualname__", None),
+                args=args,
+                kwargs=kwargs,
+                raw_output=out_orig,
+                arg_copies=arg_copies,
+                kwarg_copies=kwarg_copies,
+                module_stack=(),
+                is_bottom_level_func=is_bottom_level_func,
+                func_call_id=func_call_id,
+                expected_output_count=len(out_iter),
+            )
+            detect_backend_semantics = (
+                detect_torch_alias_contract
+                if _should_keep_alias_mutation_contract(self)
+                else detect_torch_output_alias_contract
+            )
+            backend_semantics = detect_backend_semantics(
+                func_event_input,
                 backend_grad_handle=grad_fn_handle,
                 grad_fn_class_name=type(grad_fn_handle).__name__
                 if grad_fn_handle is not None
@@ -2175,21 +2208,27 @@ def log_function_output_tensors_exhaustive(
             fields_dict_onetensor,
             autograd_saved_stats.get(i, (None, None)),
         )
-        fields_dict_onetensor["backend_semantics"] = detect_torch_alias_contract(
-            FunctionEventInput(
-                func=func,
-                func_name=func_name,
-                func_qualname=getattr(func, "__qualname__", None),
-                args=args,
-                kwargs=kwargs,
-                raw_output=out_orig,
-                arg_copies=arg_copies,
-                kwarg_copies=kwarg_copies,
-                module_stack=tuple(_module_frames_from_fields(fields_dict_onetensor)),
-                is_bottom_level_func=is_bottom_level_func,
-                func_call_id=func_call_id,
-                expected_output_count=len(out_iter),
-            ),
+        func_event_input = FunctionEventInput(
+            func=func,
+            func_name=func_name,
+            func_qualname=getattr(func, "__qualname__", None),
+            args=args,
+            kwargs=kwargs,
+            raw_output=out_orig,
+            arg_copies=arg_copies,
+            kwarg_copies=kwarg_copies,
+            module_stack=tuple(_module_frames_from_fields(fields_dict_onetensor)),
+            is_bottom_level_func=is_bottom_level_func,
+            func_call_id=func_call_id,
+            expected_output_count=len(out_iter),
+        )
+        detect_backend_semantics = (
+            detect_torch_alias_contract
+            if _should_keep_alias_mutation_contract(self)
+            else detect_torch_output_alias_contract
+        )
+        fields_dict_onetensor["backend_semantics"] = detect_backend_semantics(
+            func_event_input,
             backend_grad_handle=fields_dict_onetensor["grad_fn_handle"],
             grad_fn_class_name=fields_dict_onetensor["grad_fn_class_name"],
             autograd_memory=fields_dict_onetensor["autograd_memory"],

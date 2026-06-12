@@ -76,6 +76,60 @@ def detect_torch_alias_contract(
     )
 
 
+def detect_torch_output_alias_contract(
+    func_event_input: FunctionEventInput,
+    *,
+    backend_grad_handle: object | None = None,
+    grad_fn_class_name: str | None = None,
+    autograd_memory: int | None = None,
+    num_autograd_tensors: int | None = None,
+    bytes_delta_at_call: int | None = 0,
+    bytes_peak_at_call: int | None = 0,
+) -> BackendSemantics:
+    """Detect cheap output-to-input aliasing without mutation comparisons.
+
+    Parameters
+    ----------
+    func_event_input
+        Function call bundle containing live inputs and raw output.
+    backend_grad_handle
+        Backend autograd handle for the output, when applicable.
+    grad_fn_class_name
+        Backend autograd class name for the output, when applicable.
+    autograd_memory
+        Bytes retained by autograd saved tensors, when known.
+    num_autograd_tensors
+        Number of autograd saved tensors, when known.
+    bytes_delta_at_call
+        Backend memory delta at call time, when known.
+    bytes_peak_at_call
+        Backend peak memory at call time, when known.
+
+    Returns
+    -------
+    BackendSemantics
+        Normalized semantics with mutation positions intentionally empty.
+    """
+
+    input_tensors = _flatten_input_tensors(func_event_input.args, func_event_input.kwargs)
+    aliased_positions = tuple(
+        position
+        for position, tensor in input_tensors
+        if _output_aliases_input(func_event_input.raw_output, tensor)
+    )
+    return BackendSemantics(
+        backend_grad_handle=backend_grad_handle,
+        grad_fn_class_name=grad_fn_class_name,
+        autograd_memory=autograd_memory,
+        num_autograd_tensors=num_autograd_tensors,
+        mutated_input_positions=(),
+        aliased_output_inputs=aliased_positions,
+        unknown_aliasing=False,
+        bytes_delta_at_call=bytes_delta_at_call,
+        bytes_peak_at_call=bytes_peak_at_call,
+    )
+
+
 def _flatten_input_tensors(
     args: tuple[Any, ...],
     kwargs: Mapping[str, Any],

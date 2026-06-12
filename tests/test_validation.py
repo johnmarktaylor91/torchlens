@@ -401,6 +401,25 @@ def test_validation_with_functional_masked_fill() -> None:
     assert validate_forward_pass(model, x)
 
 
+def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
+    """save_arg_values=True keeps alias-contract snapshots for in-place ops."""
+
+    class InplaceModel(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run an in-place mutation after producing an intermediate."""
+
+            y = x + 1
+            y.relu_()
+            return y * 2
+
+    trace = trace_fn(InplaceModel(), torch.tensor([-2.0, 3.0]), save_arg_values=True)
+
+    assert torch.equal(
+        trace["add_1_1"].out_versions_by_child["relu_1_2"],
+        torch.tensor([-1.0, 4.0]),
+    )
+
+
 def test_validation_with_zeros_like():
     model = _ZerosLikeModel()
     x = torch.randn(3, 3)
