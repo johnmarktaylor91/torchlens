@@ -41,7 +41,7 @@ post-benchmark round) + torch parity goldens once built.
 ## M0.1a artifact checklist
 - [x] 1. Invariant contract: `.research/backend-substrate/artifact-1-invariant-contract.md`
 - [x] 2. Public-surface + kwarg + backward-surface matrices: `.research/backend-substrate/artifact-2-public-surface-kwarg-backward-matrices.md`
-- [ ] 3. Serialization contract with three version axes
+- [x] 3. Serialization contract with three version axes: `.research/backend-substrate/artifact-3-serialization-contract.md`
 - [ ] 4. BackendSpec registry contract as executable migration map
 - [ ] 5. Docs/glossary change list
 
@@ -51,4 +51,5 @@ post-benchmark round) + torch parity goldens once built.
 | 1 | tinygrad | S0.G discovery | this commit | PASS: pinned `tinygrad==0.13.0`; added runnable probes for interception/realization, mutation identity, autograd lifecycle, TinyJit/GC, and initial payload non-interference. | Continue S0.G with deeper scheduler/JIT capture, grad-payload, stale-lineage, and device-copy probes. |
 | 1 | M0.1a | artifact 1 - invariant contract | this commit | Wrote docs-only backend invariant contract; no tests/ruff per benchmark constraint. | artifact 2 - public-surface + kwarg + backward-surface matrices |
 | 2 | M0.1a | artifact 2 - public-surface + kwarg + backward-surface matrices | this commit | Wrote docs-only public API, trace kwarg, and backward-surface executable matrices; no tests/ruff per benchmark constraint. | artifact 3 - serialization contract with three version axes |
+| 3 | M0.1a | artifact 3 - serialization contract with three version axes | this commit | Wrote docs-only serialization contract separating on-disk family, manifest schema, and pickled object-state axes; no tests/ruff per benchmark constraint. | artifact 4 - BackendSpec registry executable migration map |
 | 2 | tinygrad | S0.G discovery | this commit | PASS: added scheduler/JIT, explicit-realize, alias-mutation, explicit-gradient, and realized payload snapshot probes under `tinygrad==0.13.0`; spike ruff passed. | Continue S0.G with TinyJit captured-execution payload reads, safe device variation, and final source-of-truth/payload decisions. |
