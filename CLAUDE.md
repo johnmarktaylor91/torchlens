@@ -61,7 +61,7 @@ print(tl.compat.report(model, x).to_markdown())
 
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 40 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 60 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
@@ -69,6 +69,8 @@ print(tl.compat.report(model, x).to_markdown())
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers.
+- `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
+  the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,
   profiler, and related tools.
 - Appliance packages `viewer`, `paper`, `notebook`, `llm`, and `neuro` reserve extras

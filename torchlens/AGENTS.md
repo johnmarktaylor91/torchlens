@@ -24,7 +24,7 @@
 - `_raw_` prefix for pre-postprocessing state; `_final_` for post-processed state.
 
 ## Public Surface
-`torchlens.__all__` is intentionally small and currently has 40 names. New user-facing
+`torchlens.__all__` is intentionally small and currently has 60 names. New user-facing
 objects should usually live under submodules (`torchlens.io`, `torchlens.options`,
 `torchlens.bridge`, `torchlens.errors`, etc.) with moved-name shims only when compatibility
 requires them.
@@ -79,8 +79,8 @@ update the class definition, the appropriate FIELD_ORDER constant, metadata test
 - `compat/`: migration helpers and `compat.report(model, x)`.
 - `callbacks/`: Lightning callback integration.
 - `partial/`: partial log wrapper for failed captures.
-- `report/`, `stats/`, `viz/`, `experimental/`: explanation, aggregation, convenience visuals,
-  and unstable APIs.
+- `debug/`, `report/`, `stats/`, `viz/`, `experimental/`: diagnostics, explanation,
+  aggregation, convenience visuals, and unstable APIs.
 
 ## Conditional Branch Attribution
 - Step 5 builds AST file indexes, classifies terminal bools, materializes dense

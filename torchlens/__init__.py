@@ -24,6 +24,7 @@ __version__ = "2.18.0"
 from . import (
     bridge,
     compat,
+    debug,
     examples,
     experimental,
     export,
