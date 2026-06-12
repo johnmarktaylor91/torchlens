@@ -57,6 +57,26 @@ from ..utils.display import _timed_phase, _vprint, _vtimed
 _TORCH_BACKEND: CaptureBackend = TorchBackend()
 
 
+def _clear_saved_activation_dedup_caches(trace: "Trace") -> None:
+    """Release per-pass saved-activation dedup caches.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose per-pass cache state should be cleared.
+
+    Returns
+    -------
+    None
+        Mutates trace-owned cache dictionaries.
+    """
+
+    for cache_name in ("_out_identity_cache", "_out_hash_cache"):
+        cache = getattr(trace, cache_name, None)
+        if isinstance(cache, dict):
+            cache.clear()
+
+
 def save_new_outs(
     self: "Trace",
     model: nn.Module,
@@ -759,6 +779,7 @@ def run_and_log_inputs_through_model(
         raise e
 
     finally:
+        _clear_saved_activation_dedup_caches(self)
         # Release input tensor references so GC can reclaim CUDA memory.
         # Gated behind cached cuda.is_available() so CPU-only runs don't pay
         # the CUDA driver / NVML probe cost (per profiling audit 2026-04-27

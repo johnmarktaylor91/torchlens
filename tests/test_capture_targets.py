@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import torch
 
 import torchlens as tl
+from torchlens.backends.torch.ops import _save_activation_fields
 from torchlens.options import CaptureOptions
 
 
@@ -19,6 +21,20 @@ class _KpiModel(torch.nn.Module):
         y = torch.relu(x)
         tl.record_kpi_in_graph("loss", float(y.sum().detach()))
         return y
+
+
+def _minimal_activation_fields(label: str) -> dict[str, Any]:
+    """Return the field subset required by ``_save_activation_fields``."""
+
+    return {
+        "_label_raw": f"{label}_raw",
+        "_layer_label_raw": label,
+        "annotations": {},
+        "backward_ready": False,
+        "detach_saved_activations": False,
+        "func_name": "manual_test",
+        "output_device": "same",
+    }
 
 
 def test_capture_memory_fields_and_forward_source_line() -> None:
@@ -49,6 +65,81 @@ def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
     assert first.capture_cache_hit is False
     assert second.capture_cache_hit is True
     assert first.capture_cache_key == second.capture_cache_key
+
+
+def test_saved_activation_identity_dedup_reuses_same_source_live_fields() -> None:
+    """Live saved activations dedup only when the source tensor object is identical."""
+
+    trace = tl.trace(torch.nn.Identity(), torch.randn(1, 2))
+    source = torch.randn(2, 2)
+    first_fields = _minimal_activation_fields("manual_1")
+    second_fields = _minimal_activation_fields("manual_2")
+
+    _save_activation_fields(trace, first_fields, source, (), {}, None)
+    _save_activation_fields(trace, second_fields, source, (), {}, None)
+
+    assert first_fields["out"] is second_fields["out"]
+    assert first_fields["out"] is not source
+    assert second_fields["annotations"]["dedup_reference_label"] == "manual_1"
+    cached_source = trace._out_identity_cache[id(source)][0]
+    assert cached_source is source
+
+
+def test_trace_releases_identity_dedup_cache_after_pass() -> None:
+    """Public traces release source pins after the capture pass ends."""
+
+    trace = tl.trace(torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU()), torch.ones(1, 2))
+
+    assert trace._out_identity_cache == {}
+
+
+def test_saved_activation_identity_dedup_ignores_equal_different_sources() -> None:
+    """Equal tensor contents do not dedup by default when source objects differ."""
+
+    trace = tl.trace(torch.nn.Identity(), torch.randn(1, 2))
+    first_source = torch.ones(2, 2)
+    second_source = torch.ones(2, 2)
+    first_fields = _minimal_activation_fields("manual_1")
+    second_fields = _minimal_activation_fields("manual_2")
+
+    _save_activation_fields(trace, first_fields, first_source, (), {}, None)
+    _save_activation_fields(trace, second_fields, second_source, (), {}, None)
+
+    assert first_fields["out"] is not second_fields["out"]
+    assert "dedup_reference_label" not in second_fields["annotations"]
+
+
+def test_saved_activation_identity_dedup_rejects_key_collision() -> None:
+    """A mismatched source under an id key does not false-merge cached payloads."""
+
+    trace = tl.trace(torch.nn.Identity(), torch.randn(1, 2))
+    old_source = torch.zeros(2, 2)
+    new_source = torch.ones(2, 2)
+    stale_out = torch.full((2, 2), 9.0)
+    trace._out_identity_cache[id(new_source)] = (old_source, "old", stale_out)
+    fields = _minimal_activation_fields("manual_new")
+
+    _save_activation_fields(trace, fields, new_source, (), {}, None)
+
+    assert fields["out"] is not stale_out
+    assert "dedup_reference_label" not in fields["annotations"]
+    cached_source = trace._out_identity_cache[id(new_source)][0]
+    assert cached_source is new_source
+
+
+def test_op_save_activation_identity_dedup_reuses_same_source() -> None:
+    """Replay/slow ``Op.save_activation`` uses identity dedup for the same source."""
+
+    trace = tl.trace(torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU()), torch.ones(1, 2))
+    trace._out_identity_cache.clear()
+    source = torch.randn(1, 2)
+    first_op, second_op = trace.layer_list[:2]
+
+    first_op.save_activation(source, (), {}, save_arg_values=False)
+    second_op.save_activation(source, (), {}, save_arg_values=False)
+
+    assert first_op.out is second_op.out
+    assert second_op.annotations["dedup_reference_label"] == first_op._layer_label_raw
 
 
 def test_tied_parameter_notation_smoke() -> None:

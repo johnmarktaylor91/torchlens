@@ -77,10 +77,10 @@ from ...capture.projections import LiveOpView
 from ...data_classes.op import (
     Op,
     _dtype_or_none,
+    _dedup_saved_activation_out,
     _memory_or_none,
     _recursive_safe_copy,
     _shape_or_none,
-    _tensor_content_hash,
     apply_transform,
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
@@ -2944,21 +2944,15 @@ def _save_activation_fields(
 
         save_raw_activations = getattr(trace, "save_raw_activations", True)
         store_raw = save_raw_activations or activation_transform is None
-        # Meta tensors (e.g. factory outputs under a ``torch.device("meta")``
-        # context) carry no data, so content hashing/dedup is impossible —
-        # store them directly without deduplication.
-        if store_raw and not getattr(trace, "save_arg_values", False) and not raw_out.is_meta:
-            hash_cache = getattr(trace, "_out_hash_cache", None)
-            if hash_cache is None:
-                hash_cache = {}
-                setattr(trace, "_out_hash_cache", hash_cache)
-            out_hash = _tensor_content_hash(raw_out)
-            if out_hash in hash_cache:
-                fields_dict["annotations"]["dedup_out_hash"] = out_hash
-                fields_dict["annotations"]["dedup_reference_label"] = hash_cache[out_hash][0]
-                raw_out = hash_cache[out_hash][1]
-            else:
-                hash_cache[out_hash] = (fields_dict["_layer_label_raw"], raw_out)
+        if store_raw:
+            raw_out = _dedup_saved_activation_out(
+                trace,
+                t,
+                raw_out,
+                fields_dict["_layer_label_raw"],
+                fields_dict["annotations"],
+                getattr(trace, "save_arg_values", False),
+            )
         fields_dict["out"] = raw_out if store_raw else None
         fields_dict["transformed_out"] = None
         fields_dict["transformed_out_shape"] = None

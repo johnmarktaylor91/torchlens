@@ -43,12 +43,12 @@ from typing import (
     ClassVar,
     Dict,
     List,
-    Literal,
     Optional,
     TYPE_CHECKING,
     Tuple,
     Union,
     cast,
+    Literal,
 )
 
 import torch
@@ -597,6 +597,77 @@ def _tensor_content_hash(value: torch.Tensor) -> str:
     hasher.update(repr((tuple(tensor.shape), str(tensor.dtype))).encode("utf-8"))
     hasher.update(payload)
     return hasher.hexdigest()
+
+
+def _dedup_saved_activation_out(
+    trace: "Trace | None",
+    source_tensor: torch.Tensor,
+    raw_out: torch.Tensor,
+    label: str,
+    annotations: dict[str, Any],
+    save_arg_values: bool,
+) -> torch.Tensor:
+    """Return a deduplicated saved activation payload when configured.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the per-pass dedup caches.
+    source_tensor:
+        Live output tensor before ``safe_copy`` created ``raw_out``.
+    raw_out:
+        Copied activation payload.
+    label:
+        Raw layer label for the saved output.
+    annotations:
+        Mutable annotation dictionary for the saved output.
+    save_arg_values:
+        Whether argument values are being saved. Argument snapshots consume
+        independent payloads, so activation dedup is disabled in that mode.
+
+    Returns
+    -------
+    torch.Tensor
+        Either ``raw_out`` or a previously saved payload for the same live
+        source tensor.
+    """
+
+    if trace is None or save_arg_values or raw_out.is_meta:
+        return raw_out
+
+    mode = getattr(trace, "_out_dedup_mode", "identity")
+    if mode == "none":
+        return raw_out
+
+    if mode == "content":
+        hash_cache = getattr(trace, "_out_hash_cache", None)
+        if hash_cache is None:
+            hash_cache = {}
+            setattr(trace, "_out_hash_cache", hash_cache)
+        out_hash = _tensor_content_hash(raw_out)
+        if out_hash in hash_cache:
+            annotations["dedup_out_hash"] = out_hash
+            annotations["dedup_reference_label"] = hash_cache[out_hash][0]
+            return hash_cache[out_hash][1]
+        hash_cache[out_hash] = (label, raw_out)
+        return raw_out
+
+    identity_cache = getattr(trace, "_out_identity_cache", None)
+    if identity_cache is None:
+        identity_cache = {}
+        setattr(trace, "_out_identity_cache", identity_cache)
+
+    source_key = id(source_tensor)
+    cached = identity_cache.get(source_key)
+    if cached is not None:
+        cached_source, cached_label, cached_out = cached
+        if cached_source is source_tensor:
+            annotations["dedup_source_id"] = source_key
+            annotations["dedup_reference_label"] = cached_label
+            return cached_out
+
+    identity_cache[source_key] = (source_tensor, label, raw_out)
+    return raw_out
 
 
 if TYPE_CHECKING:
@@ -2278,18 +2349,15 @@ class Op:
 
             save_raw_activations = getattr(trace, "save_raw_activations", True)
             store_raw = save_raw_activations or activation_transform is None
-            if trace is not None and store_raw and not getattr(trace, "save_arg_values", False):
-                hash_cache = getattr(trace, "_out_hash_cache", None)
-                if hash_cache is None:
-                    hash_cache = {}
-                    setattr(trace, "_out_hash_cache", hash_cache)
-                out_hash = _tensor_content_hash(raw_out)
-                if out_hash in hash_cache:
-                    self.annotations["dedup_out_hash"] = out_hash
-                    self.annotations["dedup_reference_label"] = hash_cache[out_hash][0]
-                    raw_out = hash_cache[out_hash][1]
-                else:
-                    hash_cache[out_hash] = (self._layer_label_raw, raw_out)
+            if store_raw:
+                raw_out = _dedup_saved_activation_out(
+                    trace,
+                    t,
+                    raw_out,
+                    self._layer_label_raw,
+                    self.annotations,
+                    save_arg_values,
+                )
             self._internal_set("out", raw_out if store_raw else None)
 
             self._internal_set("transformed_out", None)
