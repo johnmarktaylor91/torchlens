@@ -198,6 +198,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "save_grads": None,
     "is_appended": False,
     "relationship_evidence": {},
+    "replay_frontier": {},
     "total_gradient_memory": 0,
     "total_backward_memory": 0,
     "saved_gradient_memory": 0,
@@ -1008,6 +1009,7 @@ class Trace(CapturedRun):
     model_object_id: int | None
     input_signature_hash: str | None
     state_history: list[Any]
+    replay_frontier: dict[str, torch.Tensor]
     backward_ready: bool
     save_arg_templates: bool
     op_equivalence_classes: Dict[str, set[str]]
@@ -1123,6 +1125,7 @@ class Trace(CapturedRun):
         "state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
+        "replay_frontier": FieldPolicy.DROP,
         "_output_container_specs_by_raw_label": FieldPolicy.DROP,
         "layer_list": FieldPolicy.KEEP,
         "layer_dict_main_keys": FieldPolicy.KEEP,
@@ -1423,6 +1426,7 @@ class Trace(CapturedRun):
             "input": Relationship.UNKNOWN,
             "graph": Relationship.UNKNOWN,
         }
+        self.replay_frontier: dict[str, torch.Tensor] = {}
         self._output_container_specs_by_raw_label: dict[str, Any] = {}
         self._out_writer: Optional["BundleStreamWriter"] = None
         self._keep_outs_in_memory: bool = True
@@ -5054,6 +5058,7 @@ class Trace(CapturedRun):
         self,
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
+        differentiable: bool | MissingType = MISSING,
         replay: ReplayOptions | None = None,
     ) -> "Trace":
         """Replay the saved DAG cone affected by hooks.
@@ -5064,6 +5069,9 @@ class Trace(CapturedRun):
             Whether replay divergence warnings should raise.
         hooks:
             Optional mapping from selector-like targets to hook callables.
+        differentiable:
+            If true, return a new Trace whose replayed tensors remain
+            differentiable from fresh replay-frontier leaves.
 
         Returns
         -------
@@ -5071,7 +5079,12 @@ class Trace(CapturedRun):
             This model log, mutated in place.
         """
 
-        replay_options = merge_replay_options(replay=replay, strict=strict, hooks=hooks)
+        replay_options = merge_replay_options(
+            replay=replay,
+            strict=strict,
+            hooks=hooks,
+            differentiable=differentiable,
+        )
 
         from ..intervention.replay import replay as _impl
 

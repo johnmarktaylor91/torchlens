@@ -5,15 +5,17 @@ from __future__ import annotations
 import dataclasses
 import time
 import warnings
-from collections import deque
+from collections import OrderedDict, deque
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
 from .._deprecations import MISSING, MissingType
+from ..ir import CaptureEvents
 from .._trace_state import TraceState
 from ..options import ReplayOptions, merge_replay_options
+from ..quantities import Bytes
 from ..utils.display import progress_bar
 from ..utils.rng import execute_with_restored_rng_autocast
 from .errors import (
@@ -82,6 +84,14 @@ def replay(
     origins = _origin_sites_for_hooks(log, hook_entries, strict=replay_options.strict)
     if not origins:
         raise ReplayPreconditionError("replay requires at least one hook target in Phase 6")
+    if replay_options.differentiable:
+        return _run_differentiable_replay(
+            log,
+            origins,
+            hook_entries=hook_entries,
+            strict=replay_options.strict,
+            preserve_origins=False,
+        )
     return _run_replay(
         log,
         origins,
@@ -125,6 +135,138 @@ def replay_from(
     return _run_replay(
         log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
     )
+
+
+def _run_differentiable_replay(
+    log: "Trace",
+    origins: Sequence["Op"],
+    *,
+    hook_entries: Sequence[NormalizedHookEntry],
+    strict: bool,
+    preserve_origins: bool,
+) -> "Trace":
+    """Execute replay on a fork whose outputs remain differentiable.
+
+    Parameters
+    ----------
+    log:
+        Source Trace that supplies saved replay templates.
+    origins:
+        Origin sites for the replay cone.
+    hook_entries:
+        Normalized hooks to compose at matching sites.
+    strict:
+        Whether to escalate divergence warnings.
+    preserve_origins:
+        Whether origin outs have already been externally mutated.
+
+    Returns
+    -------
+    Trace
+        New Trace containing the replayed outputs and fresh backward sidecar.
+    """
+
+    replay_log = log.fork(name=_differentiable_replay_name(log))
+    _reset_backward_projection(replay_log)
+    _run_replay(
+        replay_log,
+        [replay_log[origin.layer_label] for origin in origins],
+        hook_entries=hook_entries,
+        strict=strict,
+        preserve_origins=preserve_origins,
+        differentiable_frontier={},
+    )
+    replay_log.last_run = {
+        **(replay_log.last_run if isinstance(replay_log.last_run, dict) else {}),
+        "engine": "replay",
+        "differentiable": True,
+        "source_trace_label": getattr(log, "trace_label", None),
+        "frontier": tuple(replay_log.replay_frontier),
+    }
+    if replay_log.state_history and isinstance(replay_log.state_history[-1], dict):
+        replay_log.state_history[-1].update(
+            {
+                "differentiable": True,
+                "source_trace_label": getattr(log, "trace_label", None),
+                "frontier": tuple(replay_log.replay_frontier),
+            }
+        )
+    return replay_log
+
+
+def _differentiable_replay_name(log: "Trace") -> str:
+    """Return a deterministic label for a differentiable replay fork.
+
+    Parameters
+    ----------
+    log:
+        Source Trace being replayed.
+
+    Returns
+    -------
+    str
+        Trace label for the replay fork.
+    """
+
+    base_name = getattr(log, "trace_label", None) or "trace"
+    return f"{base_name}_replay"
+
+
+def _reset_backward_projection(log: "Trace") -> None:
+    """Clear inherited backward runtime and projection state from a replay fork.
+
+    Parameters
+    ----------
+    log:
+        Replay fork to reset.
+    """
+
+    from ..backends.torch.backward import _purge_trace_from_backward_registry
+
+    _purge_trace_from_backward_registry(log)
+    log._capture_events = CaptureEvents()
+    log.__dict__.pop("_tl_backward_hooked_tensor_keys", None)
+    log.__dict__.pop("_active_backward_pass_index", None)
+    log.__dict__.pop("_implicit_backward_pass_open", None)
+    log.__dict__.pop("_warned_implicit_backward_pass", None)
+    log.__dict__.pop("_tl_backward_triggers_disarmed", None)
+    log.__dict__.pop("_backward_gradfn_refs", None)
+    log.has_backward_pass = False
+    log.grad_fn_logs = OrderedDict()
+    log.grad_fn_order = []
+    log.backward_pass_logs = OrderedDict()
+    log.backward_root_grad_fn_object_ids = []
+    log.backward_durations = []
+    log.num_backward_passes = 0
+    log.backward_peak_memory = Bytes(0)
+    log.total_backward_memory = Bytes(0)
+    log.total_gradient_memory = Bytes(0)
+    log.saved_gradient_memory = Bytes(0)
+    log.backward_memory_backend = "unknown"
+    log.replay_frontier = {}
+    for op in getattr(log, "layer_list", ()):
+        _clear_op_gradient_projection(op)
+
+
+def _clear_op_gradient_projection(site: "Op") -> None:
+    """Clear inherited gradient fields from one replay-fork op.
+
+    Parameters
+    ----------
+    site:
+        Operation record copied onto the replay fork.
+    """
+
+    site.__dict__.setdefault("_grad_records", []).clear()
+    site._internal_set("grad", None)
+    site._internal_set("transformed_grad", None)
+    site.has_grad = False
+    site.grad_shape = None
+    site.grad_dtype = None
+    site.gradient_memory = Bytes(0)
+    site.transformed_grad_shape = None
+    site.transformed_grad_dtype = None
+    site.transformed_gradient_memory = Bytes(0)
 
 
 def cone_of_effect(trace: "Trace", origins: Iterable["Op"]) -> list["Op"]:
@@ -186,6 +328,7 @@ def _run_replay(
     hook_entries: Sequence[NormalizedHookEntry],
     strict: bool,
     preserve_origins: bool,
+    differentiable_frontier: dict[str, torch.Tensor] | None = None,
 ) -> "Trace":
     """Execute saved-DAG replay and mutate affected sites.
 
@@ -202,6 +345,9 @@ def _run_replay(
     preserve_origins:
         If true, origin outs are treated as already-mutated overrides
         and are not recomputed.
+    differentiable_frontier:
+        Optional mutable mapping populated with detached frontier leaves for
+        differentiable replay.
 
     Returns
     -------
@@ -246,6 +392,7 @@ def _run_replay(
             log,
             overlay,
             strict=strict,
+            differentiable_frontier=differentiable_frontier,
         )
         output = _execute_replay_func_strict(representative, args, kwargs)
         if output is None and _is_inplace_none_return(representative):
@@ -260,10 +407,14 @@ def _run_replay(
                 hook_entries=hook_targets.get(member.layer_label, ()),
                 run_ctx=_ensure_replay_run_ctx(log),
             )
+            if differentiable_frontier is not None and member.layer_label in hook_targets:
+                tensor = _frontier_leaf(differentiable_frontier, member.layer_label, tensor)
             overlay[member.layer_label] = tensor
             pending_updates[member.layer_label] = tensor
             if records:
                 pending_records.setdefault(member.layer_label, []).extend(records)
+            if differentiable_frontier is not None:
+                _install_replay_tensor_hook(log, member, tensor)
             _check_edge_expectations(member, strict=strict)
 
     _commit_replay_updates(log, pending_updates, pending_records)
@@ -290,6 +441,8 @@ def _run_replay(
         errors_non_fatal=errors_non_fatal,
     )
     log._has_direct_writes = False
+    if differentiable_frontier is not None:
+        log.replay_frontier = dict(differentiable_frontier)
     return log
 
 
@@ -322,6 +475,7 @@ def _reconstruct_args_from_template(
     overlay: dict[str, torch.Tensor],
     *,
     strict: bool = False,
+    differentiable_frontier: dict[str, torch.Tensor] | None = None,
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Reconstruct call arguments from a captured forward template.
 
@@ -337,6 +491,8 @@ def _reconstruct_args_from_template(
         Current replay outs keyed by site label.
     strict:
         Whether divergence warnings should raise.
+    differentiable_frontier:
+        Optional replay-frontier leaf cache.
 
     Returns
     -------
@@ -345,11 +501,25 @@ def _reconstruct_args_from_template(
     """
 
     args = tuple(
-        _resolve_arg_component(component, pass_log, trace, overlay, strict=strict)
+        _resolve_arg_component(
+            component,
+            pass_log,
+            trace,
+            overlay,
+            strict=strict,
+            differentiable_frontier=differentiable_frontier,
+        )
         for component in template.args
     )
     kwargs = {
-        key: _resolve_arg_component(component, pass_log, trace, overlay, strict=strict)
+        key: _resolve_arg_component(
+            component,
+            pass_log,
+            trace,
+            overlay,
+            strict=strict,
+            differentiable_frontier=differentiable_frontier,
+        )
         for key, component in template.kwargs
     }
     return args, kwargs
@@ -388,6 +558,7 @@ def _resolve_arg_component(
     overlay: dict[str, torch.Tensor],
     *,
     strict: bool,
+    differentiable_frontier: dict[str, torch.Tensor] | None = None,
 ) -> Any:
     """Resolve one captured argument component.
 
@@ -403,6 +574,8 @@ def _resolve_arg_component(
         Replay overlay of already-computed outs.
     strict:
         Whether divergence warnings should raise.
+    differentiable_frontier:
+        Optional replay-frontier leaf cache.
 
     Returns
     -------
@@ -423,8 +596,16 @@ def _resolve_arg_component(
         if pass_log.layer_label in (getattr(parent, "out_versions_by_child", {}) or {}):
             version = parent.out_versions_by_child[pass_log.layer_label]
             if isinstance(version, torch.Tensor):
+                if differentiable_frontier is not None:
+                    return _frontier_leaf(
+                        differentiable_frontier,
+                        f"{parent.layer_label}->{pass_log.layer_label}",
+                        version,
+                    )
                 return version
         if isinstance(parent.out, torch.Tensor):
+            if differentiable_frontier is not None:
+                return _frontier_leaf(differentiable_frontier, parent.layer_label, parent.out)
             return parent.out
         raise ReplayPreconditionError(
             f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
@@ -441,14 +622,77 @@ def _resolve_arg_component(
     if isinstance(component, tuple):
         if _looks_like_template_dict(component):
             return {
-                key: _resolve_arg_component(value, pass_log, trace, overlay, strict=strict)
+                key: _resolve_arg_component(
+                    value,
+                    pass_log,
+                    trace,
+                    overlay,
+                    strict=strict,
+                    differentiable_frontier=differentiable_frontier,
+                )
                 for key, value in component
             }
         return tuple(
-            _resolve_arg_component(value, pass_log, trace, overlay, strict=strict)
+            _resolve_arg_component(
+                value,
+                pass_log,
+                trace,
+                overlay,
+                strict=strict,
+                differentiable_frontier=differentiable_frontier,
+            )
             for value in component
         )
     return component
+
+
+def _frontier_leaf(
+    frontier: dict[str, torch.Tensor],
+    label: str,
+    tensor: torch.Tensor,
+) -> torch.Tensor:
+    """Return a fresh replay-frontier leaf for a saved tensor.
+
+    Parameters
+    ----------
+    frontier:
+        Mutable frontier cache keyed by source label.
+    label:
+        Source label for the boundary tensor.
+    tensor:
+        Saved tensor entering the replay cone.
+
+    Returns
+    -------
+    torch.Tensor
+        Detached cloned leaf requiring grad.
+    """
+
+    if label not in frontier:
+        frontier[label] = tensor.detach().clone().requires_grad_()
+    return frontier[label]
+
+
+def _install_replay_tensor_hook(log: "Trace", site: "Op", tensor: torch.Tensor) -> None:
+    """Install backward capture on one differentiable replay output tensor.
+
+    Parameters
+    ----------
+    log:
+        Replay Trace receiving backward events.
+    site:
+        Operation record whose output was recomputed.
+    tensor:
+        Recomputed output tensor.
+    """
+
+    from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
+
+    raw_label = getattr(site, "_label_raw", site.layer_label)
+    site.grad_fn_handle = tensor.grad_fn
+    if tensor.grad_fn is not None:
+        site.grad_fn_object_id = id(tensor.grad_fn)
+    _add_tensor_backward_hook(log, tensor, raw_label)
 
 
 def _execute_replay_func_strict(

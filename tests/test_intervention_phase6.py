@@ -125,6 +125,27 @@ class RecurrentRelu(torch.nn.Module):
         return x
 
 
+class ReplayPatchModel(torch.nn.Module):
+    """Tiny model for differentiable replay patching tests."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a relu cone with a scalar output.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar output depending on the relu activation.
+        """
+
+        hidden = torch.relu(x)
+        return (hidden * 3.0).sum()
+
+
 def _interventions(model: torch.nn.Module, x: torch.Tensor) -> Any:
     """Capture an intervention-ready model log.
 
@@ -178,6 +199,71 @@ def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
     assert log.state is TraceState.REPLAY_PROPAGATED
     assert log.last_run["engine"] == "replay"
     assert relu_site.interventions[-1].engine == "replay"
+
+
+def test_differentiable_replay_patching_captures_backward_grads() -> None:
+    """Differentiable replay patches one run into another and captures grads."""
+
+    clean_x = torch.tensor([-1.0, 0.5, 2.0], requires_grad=True)
+    corrupt_x = torch.tensor([2.0, -4.0, 1.0], requires_grad=True)
+    clean = tl.trace(
+        ReplayPatchModel(),
+        clean_x,
+        layers_to_save="all",
+        save_grads="all",
+        intervention_ready=True,
+        backward_ready=True,
+    )
+    corrupt = tl.trace(
+        ReplayPatchModel(),
+        corrupt_x,
+        layers_to_save="all",
+        save_grads="all",
+        intervention_ready=True,
+        backward_ready=True,
+    )
+    clean_relu = _first_func(clean, "relu")
+    patch = clean_relu.out
+
+    def patch_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        """Replace the replayed activation with a tensor from another run.
+
+        Parameters
+        ----------
+        out:
+            Replay-computed activation.
+        hook:
+            TorchLens hook context.
+
+        Returns
+        -------
+        torch.Tensor
+            Activation from the clean source run.
+        """
+
+        del out, hook
+        return patch
+
+    replayed = corrupt.replay(hooks={tl.func("relu"): patch_hook}, differentiable=True)
+    replay_relu = _first_func(replayed, "relu")
+    replay_output = replayed[replayed.output_layers[0]].out
+
+    reference_patch = patch.detach().clone().requires_grad_()
+    reference_output = (reference_patch * 3.0).sum()
+    reference_output.backward()
+    replay_output.backward()
+
+    assert replayed is not corrupt
+    assert corrupt.has_backward_pass is False
+    assert replay_relu.layer_label in replayed.replay_frontier
+    assert replayed.replay_frontier[replay_relu.layer_label].is_leaf
+    assert replayed.replay_frontier[replay_relu.layer_label].requires_grad
+    assert torch.equal(replay_output, reference_output.detach())
+    assert torch.equal(replay_relu.grad, reference_patch.grad)
+    assert torch.equal(replayed.replay_frontier[replay_relu.layer_label].grad, reference_patch.grad)
+    assert clean_x.grad is None
+    assert corrupt_x.grad is None
+    assert replayed.last_run["differentiable"] is True
 
 
 def test_replay_failure_rolls_back_partial_out_updates(

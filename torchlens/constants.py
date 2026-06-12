@@ -124,6 +124,7 @@ MODEL_LOG_FIELD_ORDER = [
     "state",
     "is_appended",
     "relationship_evidence",
+    "replay_frontier",
     # Model structure info (is_recurrent, max_layer_op_count,
     # is_branching, has_conditional_branching are computed @properties)
     # Layer tracking logs

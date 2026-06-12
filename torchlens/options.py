@@ -108,6 +108,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
     "strict",
     "hooks",
+    "differentiable",
     "append",
     "chunk_size",
     "is_appended",
@@ -216,6 +217,7 @@ _VISUALIZATION_DEPRECATED_FLAT: Final[set[str]] = {
 _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "strict": "strict",
     "hooks": "hooks",
+    "differentiable": "differentiable",
     "append": "append",
 }
 _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
@@ -1244,6 +1246,9 @@ class ReplayOptions:
         Whether divergence warnings should raise.
     hooks:
         Optional replay hook mapping.
+    differentiable:
+        Whether replay returns a new differentiable Trace over fresh frontier
+        leaves instead of mutating the existing Trace in place.
     append:
         Whether rerun appends a compatible batch chunk.
     chunk_size:
@@ -1262,6 +1267,7 @@ class ReplayOptions:
 
     strict: bool = False
     hooks: dict[Any, Any] | None = None
+    differentiable: bool = False
     append: bool = False
     chunk_size: int | None = None
     is_appended: bool | None = None
@@ -1272,6 +1278,7 @@ class ReplayOptions:
         self,
         strict: bool | MissingType = MISSING,
         hooks: dict[Any, Any] | None | MissingType = MISSING,
+        differentiable: bool | MissingType = MISSING,
         append: bool | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
         is_appended: bool | None | MissingType = MISSING,
@@ -1283,6 +1290,9 @@ class ReplayOptions:
         values: dict[str, Any] = {
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
             "hooks": _resolve_option_value("hooks", hooks, None, specified_fields),
+            "differentiable": _resolve_option_value(
+                "differentiable", differentiable, False, specified_fields
+            ),
             "append": _resolve_option_value("append", append, False, specified_fields),
             "chunk_size": _resolve_option_value("chunk_size", chunk_size, None, specified_fields),
             "is_appended": _resolve_option_value(
