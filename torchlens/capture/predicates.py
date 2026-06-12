@@ -175,6 +175,27 @@ def _evaluate_halt(
         raise HaltSignal(ctx.label, frontier_output=frontier_output)
 
 
+def _is_halt_only_capture(options: "RecordingOptions") -> bool:
+    """Return whether capture can evaluate only the halt predicate per event.
+
+    The fast path is deliberately narrow: no save predicate, no module predicate,
+    no default retention, no intervention, and no gradient capture. That preserves
+    the save-then-halt ordering for every configuration that can retain payloads
+    or metadata.
+    """
+
+    return (
+        options.halt is not None
+        and options.keep_op is None
+        and options.keep_module is None
+        and options.default_op is False
+        and options.default_module is False
+        and options.intervene is None
+        and options.save_grads in (None, False)
+        and options.default_grad is False
+    )
+
+
 def _evaluate_retroactive_followed_by(
     ctx: RecordContext,
     options: "RecordingOptions",

@@ -101,6 +101,24 @@ def test_record_halt_predicate_stops_after_save_decision() -> None:
     assert recording.predicate_failures == []
 
 
+def test_record_halt_only_skips_unsaved_projected_events() -> None:
+    """Halt-only recording evaluates halt without retaining skipped events."""
+
+    recording = _as_recording(
+        tl.record(
+            FiveOpModel(),
+            torch.tensor(1.0),
+            halt=lambda ctx: ctx.kind == "op" and ctx.step_index == 4,
+        )
+    )
+
+    assert recording.halted is True
+    assert recording.halt_reason == "sigmoid_1_5_raw"
+    assert recording.records == []
+    assert recording.recording_trace.events == ()
+    assert recording.predicate_failures == []
+
+
 def test_halt_reason_default_empty_string() -> None:
     """Calling halt without a reason stores an empty string reason."""
 

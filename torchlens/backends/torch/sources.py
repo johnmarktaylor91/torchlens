@@ -38,7 +38,7 @@ from ..._training_validation import TrainingModeConfigError
 from ...data_classes.buffer import Buffer
 from ...data_classes.op import Op
 from . import module_stack as _mstack
-from ...capture.predicates import _evaluate_halt, _evaluate_keep_op
+from ...capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
 from ...capture.projections import (
     _build_record_context,
     append_projected_event,
@@ -150,6 +150,10 @@ def log_source_tensor_predicate(
     ram_payload = None
     transformed_ram_payload = None
     try:
+        halt_only = _is_halt_only_capture(state.options)
+        if halt_only:
+            _evaluate_halt(ctx, state.options, frontier_output=t)
+            return
         if state.options.include_source_events:
             decision = _evaluate_keep_op(ctx, state.options)
             if isinstance(decision, RetroactiveCaptureDecision):
@@ -200,7 +204,7 @@ def log_source_tensor_predicate(
     except Exception as exc:
         state.handle_predicate_exception(ctx, exc)
     finally:
-        if not any(
+        if not halt_only and not any(
             event.raw_index == raw_index
             for event in getattr(getattr(self, "capture_events", None), "op_events", ())
         ):

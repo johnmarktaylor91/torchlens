@@ -672,7 +672,11 @@ def run_and_log_inputs_through_model(
 
             if self.capture_mode == "predicate":
                 from ..backends.torch import module_stack as _mstack
-                from ..capture.predicates import _evaluate_halt, _evaluate_keep_module
+                from ..capture.predicates import (
+                    _evaluate_halt,
+                    _evaluate_keep_module,
+                    _is_halt_only_capture,
+                )
                 from ..capture.projections import (
                     _build_record_context,
                     append_projected_event,
@@ -708,27 +712,33 @@ def run_and_log_inputs_through_model(
                     include_source_events=state.options.include_source_events,
                     sample_id=state.sample_id,
                 )
+                halt_only = _is_halt_only_capture(state.options)
                 try:
-                    enter_spec = _evaluate_keep_module(enter_ctx, state.options)
-                    append_projected_event(
-                        self,
-                        enter_ctx,
-                        enter_spec,
-                        predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
-                    )
-                    _evaluate_halt(enter_ctx, state.options)
+                    if halt_only:
+                        _evaluate_halt(enter_ctx, state.options)
+                    else:
+                        enter_spec = _evaluate_keep_module(enter_ctx, state.options)
+                        append_projected_event(
+                            self,
+                            enter_ctx,
+                            enter_spec,
+                            predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
+                        )
+                        _evaluate_halt(enter_ctx, state.options)
                 except HaltSignal:
                     raise
                 except Exception as exc:
                     state.handle_predicate_exception(enter_ctx, exc)
-                    append_projected_event(
-                        self,
-                        enter_ctx,
-                        skipped_spec,
-                        predicate_matched=False,
-                    )
+                    if not halt_only:
+                        append_projected_event(
+                            self,
+                            enter_ctx,
+                            skipped_spec,
+                            predicate_matched=False,
+                        )
                 finally:
-                    state.append_context(enter_ctx)
+                    if not halt_only:
+                        state.append_context(enter_ctx)
                 outputs = None
                 try:
                     with _timed_phase(self, "dispatch:forward_model"):
@@ -754,26 +764,31 @@ def run_and_log_inputs_through_model(
                         sample_id=state.sample_id,
                     )
                     try:
-                        exit_spec = _evaluate_keep_module(exit_ctx, state.options)
-                        append_projected_event(
-                            self,
-                            exit_ctx,
-                            exit_spec,
-                            predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
-                        )
-                        _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
+                        if halt_only:
+                            _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
+                        else:
+                            exit_spec = _evaluate_keep_module(exit_ctx, state.options)
+                            append_projected_event(
+                                self,
+                                exit_ctx,
+                                exit_spec,
+                                predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
+                            )
+                            _evaluate_halt(exit_ctx, state.options, frontier_output=outputs)
                     except HaltSignal:
                         raise
                     except Exception as exc:
                         state.handle_predicate_exception(exit_ctx, exc)
-                        append_projected_event(
-                            self,
-                            exit_ctx,
-                            skipped_spec,
-                            predicate_matched=False,
-                        )
+                        if not halt_only:
+                            append_projected_event(
+                                self,
+                                exit_ctx,
+                                skipped_spec,
+                                predicate_matched=False,
+                            )
                     finally:
-                        state.append_context(exit_ctx)
+                        if not halt_only:
+                            state.append_context(exit_ctx)
                         _mstack.pop_frame(state.module_stack, root_frame)
             else:
                 with _timed_phase(self, "dispatch:forward_model"):

@@ -154,6 +154,7 @@ from ...capture.predicates import (
     _evaluate_halt,
     _evaluate_intervene_op,
     _evaluate_keep_op,
+    _is_halt_only_capture,
     build_op_record_context,
 )
 from ...capture.projections import (
@@ -1702,6 +1703,10 @@ def log_function_output_tensors_predicate(
                 or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
             )
         try:
+            halt_only = _is_halt_only_capture(state.options)
+            if halt_only:
+                _evaluate_halt(ctx, state.options, frontier_output=out)
+                continue
             if out.grad_fn is not None:
                 state.grad_fn_to_context[out.grad_fn] = ctx
             spec = _evaluate_keep_op(ctx, state.options)
@@ -1762,18 +1767,19 @@ def log_function_output_tensors_predicate(
         except Exception as exc:
             state.handle_predicate_exception(ctx, exc)
         finally:
-            if not any(
-                event.raw_index == raw_index
-                for event in getattr(getattr(self, "capture_events", None), "op_events", ())
-            ):
-                append_projected_event(
-                    self,
-                    ctx,
-                    CaptureSpec(save_out=False, save_metadata=False),
-                    tensor=out,
-                    predicate_matched=False,
-                )
-            state.append_context(ctx)
+            if not halt_only:
+                if not any(
+                    event.raw_index == raw_index
+                    for event in getattr(getattr(self, "capture_events", None), "op_events", ())
+                ):
+                    append_projected_event(
+                        self,
+                        ctx,
+                        CaptureSpec(save_out=False, save_metadata=False),
+                        tensor=out,
+                        predicate_matched=False,
+                    )
+                state.append_context(ctx)
 
 
 def _build_graph_relationship_fields(
