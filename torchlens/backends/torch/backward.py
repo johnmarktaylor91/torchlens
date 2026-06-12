@@ -9,6 +9,7 @@ import time
 import weakref
 from collections import OrderedDict, deque
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any, Callable, Iterator, Literal, cast
 
 import torch
@@ -443,6 +444,193 @@ def _sync_grad_fn_graph_relations(trace: Any) -> None:
         grad_fn.co_parents = co_parent_labels
 
 
+def _param_module_address(trace: Any, param_ref: object | None) -> str | None:
+    """Return the owning module address for a parameter reference.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing parameter logs.
+    param_ref:
+        Parameter address recorded on an ``AccumulateGrad`` discovery event.
+
+    Returns
+    -------
+    str | None
+        Owning module address, or ``None`` when the parameter is unknown.
+    """
+
+    if not isinstance(param_ref, str):
+        return None
+    param_logs = getattr(trace, "param_logs", {})
+    if param_ref not in param_logs:
+        return None
+    param_log = param_logs[param_ref]
+    return None if param_log is None else getattr(param_log, "module_address", None)
+
+
+def _op_module_address(trace: Any, op_label: str | None) -> str | None:
+    """Return the containing module address for a paired forward op label.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing op logs.
+    op_label:
+        Forward op label paired to a grad-fn record.
+
+    Returns
+    -------
+    str | None
+        Module address for the paired op, if known.
+    """
+
+    if op_label is None or op_label not in getattr(trace, "layer_dict_all_keys", {}):
+        return None
+    op = trace[op_label]
+    module_address = getattr(op, "module_address", None)
+    if module_address is not None:
+        return cast(str, module_address)
+    atomic_module_address = getattr(op, "atomic_module_address", None)
+    if atomic_module_address is not None:
+        return cast(str, atomic_module_address)
+    output_module_calls = list(getattr(op, "output_of_module_calls", []) or [])
+    if output_module_calls:
+        return str(output_module_calls[-1]).rsplit(":", 1)[0]
+    module_calls = list(getattr(op, "modules", []) or [])
+    if not module_calls:
+        return None
+    return str(module_calls[-1]).rsplit(":", 1)[0]
+
+
+def _op_raw_index(trace: Any, grad_fn_record: GradFn) -> int | None:
+    """Return the forward raw index backing a grad-fn's module attribution.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing op logs.
+    grad_fn_record:
+        GradFn whose attributed op position should be inspected.
+
+    Returns
+    -------
+    int | None
+        Forward raw index, or ``None`` for parameter-only and unresolved records.
+    """
+
+    op_label = grad_fn_record.op_label
+    if op_label is None or op_label not in getattr(trace, "layer_dict_all_keys", {}):
+        return None
+    return int(getattr(trace[op_label], "raw_index"))
+
+
+def _post_forward_grad_fn_ids(grad_fn_logs: dict[int, GradFn]) -> set[int]:
+    """Return loss-construction grad-fn ids before the first op-anchored node.
+
+    Parameters
+    ----------
+    grad_fn_logs:
+        Projected GradFn records in backward discovery order.
+
+    Returns
+    -------
+    set[int]
+        Unpaired, non-creator-attributed ids that should not receive inferred
+        module containment.
+    """
+
+    op_steps = [
+        grad_fn_record.step_index
+        for grad_fn_record in grad_fn_logs.values()
+        if grad_fn_record.has_op
+    ]
+    if not op_steps:
+        return set()
+    first_op_step = min(op_steps)
+    return {
+        object_id
+        for object_id, grad_fn_record in grad_fn_logs.items()
+        if (
+            grad_fn_record.step_index < first_op_step
+            and not grad_fn_record.has_op
+            and grad_fn_record.creator_object_id is None
+        )
+    }
+
+
+def _candidate_module_sort_key(trace: Any, candidate: GradFn) -> tuple[int, int, str]:
+    """Return the deterministic P5 tie-break key for a containment candidate.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing forward op logs.
+    candidate:
+        Neighbor GradFn with resolved module containment.
+
+    Returns
+    -------
+    tuple[int, int, str]
+        Sort key where smaller values are preferred.
+    """
+
+    raw_index = _op_raw_index(trace, candidate)
+    consumer_rank = -(raw_index if raw_index is not None else -1)
+    return (consumer_rank, candidate.step_index, candidate.label)
+
+
+def _infer_grad_fn_module_membership(trace: Any) -> None:
+    """Populate inferred module containment for intervening backward nodes.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ``grad_fn_logs`` already have graph relations synchronized.
+
+    Returns
+    -------
+    None
+        GradFn ``modules``, ``module_address``, and ``module_membership_source``
+        fields are updated in place.
+    """
+
+    grad_fn_logs = getattr(trace, "grad_fn_logs", {})
+    label_to_id = {grad_fn.label: object_id for object_id, grad_fn in grad_fn_logs.items()}
+    carve_out_ids = _post_forward_grad_fn_ids(grad_fn_logs)
+    changed = True
+    while changed:
+        changed = False
+        for object_id, grad_fn_record in grad_fn_logs.items():
+            if (
+                object_id in carve_out_ids
+                or grad_fn_record.module_membership_source is not None
+                or grad_fn_record.creator_object_id is not None
+            ):
+                continue
+            neighbor_ids = [
+                label_to_id[label]
+                for label in [*grad_fn_record.parents, *grad_fn_record.children]
+                if label in label_to_id
+            ]
+            candidates = [
+                grad_fn_logs[neighbor_id]
+                for neighbor_id in neighbor_ids
+                if grad_fn_logs[neighbor_id].module_membership_source is not None
+            ]
+            if not candidates:
+                continue
+            winner = min(
+                candidates, key=lambda candidate: _candidate_module_sort_key(trace, candidate)
+            )
+            if winner.module_address is None:
+                continue
+            grad_fn_record.module_address = winner.module_address
+            grad_fn_record.modules = list(winner.modules) or [winner.module_address]
+            grad_fn_record.module_membership_source = "inferred"
+            changed = True
+
+
 def _resolved_order_for_creator(
     creator_object_id: int | None,
     grad_fn_logs: dict[int, GradFn],
@@ -627,6 +815,17 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
         elif isinstance(event, GradFnDiscovered):
             if event.object_id not in discovered:
                 discovered[event.object_id] = event
+            else:
+                existing = discovered[event.object_id]
+                if existing.op_label is None and event.op_label is not None:
+                    existing = replace(existing, op_label=event.op_label)
+                if existing.param_ref is None and event.param_ref is not None:
+                    existing = replace(existing, param_ref=event.param_ref)
+                if existing.created_in_pass is None and event.created_in_pass is not None:
+                    existing = replace(existing, created_in_pass=event.created_in_pass)
+                if existing.creator_object_id is None and event.creator_object_id is not None:
+                    existing = replace(existing, creator_object_id=event.creator_object_id)
+                discovered[event.object_id] = existing
             latest_topology[event.object_id] = event.topology
         elif isinstance(event, GradFnFired):
             fired_events.append(event)
@@ -651,14 +850,16 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
         modules: list[str] = []
         module_address = None
         module_membership_source = None
-        if event.op_label is not None and event.op_label in getattr(
-            trace, "layer_dict_all_keys", {}
-        ):
-            op = trace[event.op_label]
-            module_address = getattr(op, "module_address", None)
-            if module_address is not None:
-                modules = [module_address]
-                module_membership_source = "paired"
+        op_module_address = _op_module_address(trace, event.op_label)
+        param_module_address = _param_module_address(trace, event.param_ref)
+        if op_module_address is not None:
+            module_address = op_module_address
+            modules = [module_address]
+            module_membership_source = "paired"
+        elif param_module_address is not None:
+            module_address = param_module_address
+            modules = [module_address]
+            module_membership_source = "paired"
         grad_fn_record = GradFn(
             grad_fn_object_id=object_id,
             class_name=event.class_name,
@@ -718,6 +919,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
         pass_to_calls.setdefault(event.pass_index, []).append(call)
 
     _sync_grad_fn_graph_relations(trace)
+    _infer_grad_fn_module_membership(trace)
 
     unique_payload_ids: set[int] = set()
     total_gradient_memory = 0

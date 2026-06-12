@@ -251,6 +251,24 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                 name,
                 f"{grad_fn_handle.label} points to missing layer {grad_fn_handle.op_label!r}",
             )
+        membership_source = getattr(grad_fn_handle, "module_membership_source", None)
+        if membership_source not in {None, "paired", "inferred"}:
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_handle.label} has invalid module_membership_source "
+                f"{membership_source!r}",
+            )
+        if membership_source is None:
+            if grad_fn_handle.module_address is not None or grad_fn_handle.modules:
+                raise MetadataInvariantError(
+                    name,
+                    f"{grad_fn_handle.label} has module containment without a source",
+                )
+        elif grad_fn_handle.module_address is None or not grad_fn_handle.modules:
+            raise MetadataInvariantError(
+                name,
+                f"{grad_fn_handle.label} has incomplete {membership_source!r} module containment",
+            )
         op = grad_fn_handle.op
         if grad_fn_handle.has_op != (op is not None):
             raise MetadataInvariantError(
