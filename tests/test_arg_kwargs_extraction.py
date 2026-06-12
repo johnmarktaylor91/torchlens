@@ -7,12 +7,14 @@ dropped from parent/parameter extraction. Symptoms: ``torch.bmm(a, mat2=b)``
 recorded only ``a`` as a parent; ``torch.normal(mean=m, std=s)`` recorded no
 parents at all and was misclassified as an internal source.
 
-Scope (bounded fix, NOT the full table audit): linear, cat, stack, where,
-normal, conv1d/2d/3d, plus the matmul family (mm/bmm/mv) and the
-addmm-style ternary family (addmm/addbmm/baddbmm/addmv/addcmul/addcdiv/lerp).
+Scope: full static-table audit for tensor-bearing kwargs, including linear,
+cat/stack, where, normal, conv/norm/loss, scatter/gather/index, attention,
+factory-from-source, matmul/mm/bmm/mv, and addmm-style ternary functions.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import pytest
 import torch
@@ -66,10 +68,72 @@ _KWARG_CASES = [
     ("addcmul", (_A,), {"tensor1": _B, "tensor2": _B}),
     ("addcdiv", (_A,), {"tensor1": _B, "tensor2": _B.abs() + 1.0}),
     ("lerp", (_A,), {"end": _B, "weight": torch.tensor(0.5)}),
+    ("sum", (), {"input": _A}),
+    ("mseloss", (), {"input": _A, "target": _B}),
+    ("crossentropy", (), {"input": torch.randn(3, 5), "target": torch.tensor([1, 2, 3])}),
+    (
+        "batchnorm",
+        (),
+        {
+            "input": torch.randn(2, 3, 4),
+            "running_mean": torch.randn(3),
+            "running_var": torch.rand(3) + 1.0,
+            "weight": torch.randn(3),
+            "bias": torch.randn(3),
+        },
+    ),
+    ("layernorm", (), {"input": _A, "weight": torch.randn(3), "bias": torch.randn(3)}),
+    ("scatter", (_A, 1), {"index": torch.zeros(2, 3, dtype=torch.long), "src": _B}),
+    ("scatteradd", (_A, 1), {"index": torch.zeros(2, 3, dtype=torch.long), "src": _B}),
+    ("gather", (_A, 1), {"index": torch.zeros(2, 3, dtype=torch.long)}),
+    (
+        "indexput",
+        (_A,),
+        {"indices": (torch.tensor([0, 1]), torch.tensor([1, 2])), "values": torch.randn(2)},
+    ),
+    ("maskedscatter", (_A,), {"mask": _A > 0, "source": _B}),
+    ("searchsorted", (), {"sorted_sequence": torch.arange(5), "values": torch.tensor([2, 4])}),
+    ("bincount", (), {"input": torch.tensor([0, 1, 1]), "weights": torch.randn(3)}),
+    ("histogram", (), {"input": _A, "weight": torch.rand_like(_A)}),
+    ("stft", (_A.flatten(), 4), {"window": torch.hann_window(4)}),
+    ("einsum", ("ij,jk->ik",), {"operands": (torch.randn(2, 3), torch.randn(3, 4))}),
+    ("tensordot", (), {"a": torch.randn(2, 3), "b": torch.randn(3, 2)}),
+    (
+        "scaleddotproductattention",
+        (),
+        {
+            "query": torch.randn(1, 1, 2, 4),
+            "key": torch.randn(1, 1, 2, 4),
+            "value": torch.randn(1, 1, 2, 4),
+            "attn_mask": torch.ones(1, 1, 2, 2, dtype=torch.bool),
+        },
+    ),
+    (
+        "multiheadattentionforward",
+        (),
+        {
+            "query": torch.randn(2, 1, 4),
+            "key": torch.randn(2, 1, 4),
+            "value": torch.randn(2, 1, 4),
+            "in_proj_weight": torch.randn(12, 4),
+            "in_proj_bias": torch.randn(12),
+            "out_proj_weight": torch.randn(4, 4),
+            "out_proj_bias": torch.randn(4),
+            "key_padding_mask": torch.zeros(1, 2, dtype=torch.bool),
+            "attn_mask": torch.zeros(2, 2),
+        },
+    ),
+    ("zeroslike", (), {"input": _A}),
+    ("fulllike", (_A,), {"fill_value": torch.tensor(2.0)}),
+    ("newzeros", (_A,), {}),
+    ("newfull", (_A, (2, 3)), {"fill_value": torch.tensor(2.0)}),
+    ("newtensor", (_A,), {"data": _B}),
 ]
 
 
 def _count_tensors(value: object) -> int:
+    """Count tensors nested one level inside a test argument value."""
+
     if isinstance(value, torch.Tensor):
         return 1
     if isinstance(value, (list, tuple)):
@@ -80,7 +144,9 @@ def _count_tensors(value: object) -> int:
 @pytest.mark.parametrize(
     "func_name,args,kwargs", _KWARG_CASES, ids=[case[0] for case in _KWARG_CASES]
 )
-def test_static_table_extracts_kwarg_tensors(func_name, args, kwargs) -> None:
+def test_static_table_extracts_kwarg_tensors(
+    func_name: str, args: tuple[object, ...], kwargs: dict[str, object]
+) -> None:
     """Every tensor passed positionally OR by keyword must be extracted."""
     spec = FUNC_ARG_SPECS.get(_normalize_func_name(func_name))
     assert spec is not None, f"no static ArgSpec for {func_name!r}"
@@ -110,7 +176,9 @@ def test_kwarg_parameters_routed_to_params() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _layer_by_func(log, func_substring: str):
+def _layer_by_func(log: tl.Trace, func_substring: str) -> Any:
+    """Return the first traced layer whose label contains ``func_substring``."""
+
     labels = [name for name in log.layer_labels if func_substring in name]
     assert labels, f"no layer matching {func_substring!r} in {list(log.layer_labels)}"
     return log[labels[0]]
@@ -206,3 +274,39 @@ def test_traced_normal_mean_std_kwargs_recorded_as_parents() -> None:
     assert any("add_1" in p for p in parents), parents
     assert any("add_2" in p or "abs" in p for p in parents), parents
     assert not normal_layer.is_internal_source
+
+
+@pytest.mark.smoke
+def test_traced_zeros_like_source_recorded_as_parent() -> None:
+    """torch.zeros_like(y) records y as a shape/source parent."""
+
+    class M(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a zeros_like tensor derived from an intermediate."""
+
+            y = x + 1
+            return torch.zeros_like(y)
+
+    log = tl.trace(M(), torch.randn(2, 3))
+    zeros_like_layer = _layer_by_func(log, "zeroslike")
+    parents = set(zeros_like_layer.parents)
+    assert any("add" in p for p in parents), parents
+    assert not zeros_like_layer.is_internal_source
+
+
+@pytest.mark.smoke
+def test_traced_new_zeros_source_recorded_as_parent() -> None:
+    """x.new_zeros(...) records x as the source tensor parent."""
+
+    class M(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a new_zeros tensor derived from an intermediate source."""
+
+            y = x + 1
+            return y.new_zeros((2, 3))
+
+    log = tl.trace(M(), torch.randn(2, 3))
+    new_zeros_layer = _layer_by_func(log, "newzeros")
+    parents = set(new_zeros_layer.parents)
+    assert any("add" in p for p in parents), parents
+    assert not new_zeros_layer.is_internal_source

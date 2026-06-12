@@ -161,11 +161,40 @@ def _cache_dynamic_spec(
 # ============================================================================
 
 _P0 = ArgSpec(positions=(0,))
+_P0_INPUT = ArgSpec(positions=(0,), tensor_kwargs=("input", "self", "tensor"))
 _P01 = ArgSpec(positions=(0, 1))
-_P01_BINARY = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "other"))
+_P01_INPUT_TARGET = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "target"))
+_P01_BINARY = ArgSpec(
+    positions=(0, 1),
+    tensor_kwargs=(
+        "input",
+        "other",
+        "self",
+        "tensor",
+        "target",
+        "mat2",
+        "vec",
+        "vec1",
+        "vec2",
+        "batch1",
+        "batch2",
+        "tensor1",
+        "tensor2",
+        "end",
+        "weight",
+        "mask",
+        "index",
+        "indices",
+        "source",
+        "src",
+        "values",
+        "sorted_sequence",
+        "boundaries",
+    ),
+)
 _P012 = ArgSpec(positions=(0, 1, 2))
 _P0123 = ArgSpec(positions=(0, 1, 2, 3))
-_S0 = ArgSpec(sequence_positions=(0,))
+_S0 = ArgSpec(positions=tuple(range(10)), tensor_kwargs=("tensors",))
 _NONE = ArgSpec()
 
 # ============================================================================
@@ -635,7 +664,7 @@ _UNARY_FUNCS = [
 ]
 
 for _name in _UNARY_FUNCS:
-    FUNC_ARG_SPECS[_name] = _P0
+    FUNC_ARG_SPECS[_name] = _P0_INPUT
 
 # ---------------------------------------------------------------------------
 # Binary: positions 0 and 1 can both hold tensors
@@ -855,49 +884,78 @@ _FACTORY_FUNCS = [
     "vander",
     "trilindices",
     "triuindices",
-    "zeroslike",
-    "oneslike",
-    "randlike",
-    "randnlike",
-    "emptylike",
-    "fulllike",
-    "newtensor",
-    "newempty",
-    "newemptystrided",
-    "newzeros",
-    "newones",
-    "newfull",
     "load",
 ]
 
 for _name in _FACTORY_FUNCS:
     FUNC_ARG_SPECS[_name] = _NONE
 
+# Factory-from-source functions inherit shape/dtype/device from a tensor source.
+# Record that source as a topology parent, matching view/reshape-style dependencies
+# even when the output values are freshly allocated.
+_FACTORY_SOURCE_SPEC = ArgSpec(positions=(0,), tensor_kwargs=("input", "self"))
+for _name in [
+    "zeroslike",
+    "oneslike",
+    "randlike",
+    "randnlike",
+    "emptylike",
+    "newempty",
+    "newemptystrided",
+    "newzeros",
+    "newones",
+]:
+    FUNC_ARG_SPECS[_name] = _FACTORY_SOURCE_SPEC
+
+FUNC_ARG_SPECS["fulllike"] = ArgSpec(
+    positions=(0, 1), tensor_kwargs=("input", "self", "fill_value")
+)
+FUNC_ARG_SPECS["newfull"] = ArgSpec(positions=(0, 2), tensor_kwargs=("self", "fill_value"))
+FUNC_ARG_SPECS["newtensor"] = ArgSpec(positions=(0, 1), tensor_kwargs=("self", "data"))
+
 # ---------------------------------------------------------------------------
 # Special patterns (custom ArgSpec per function or group)
 # ---------------------------------------------------------------------------
 
 # __getitem__: self + index (can be tensor or tuple of tensors)
-FUNC_ARG_SPECS["getitem"] = ArgSpec(positions=(0, 1), sequence_positions=(1,))
+FUNC_ARG_SPECS["getitem"] = ArgSpec(
+    positions=(0, 1), sequence_positions=(1,), tensor_kwargs=("self", "index")
+)
 
 # __setitem__: self + index + value
-FUNC_ARG_SPECS["setitem"] = ArgSpec(positions=(0, 1, 2), sequence_positions=(1,))
+FUNC_ARG_SPECS["setitem"] = ArgSpec(
+    positions=(0, 1, 2), sequence_positions=(1,), tensor_kwargs=("self", "index", "value")
+)
 
 # __delitem__: just self
 FUNC_ARG_SPECS["delitem"] = _P0
 
 # scatter/index_copy/index_fill: (self, dim, index, src/value)
-_SCATTER_SPEC = ArgSpec(positions=(0, 2, 3))
-for _name in ["scatter", "indexcopy", "indexfill"]:
+_SCATTER_SPEC = ArgSpec(
+    positions=(0, 2, 3), tensor_kwargs=("input", "self", "index", "src", "source", "value")
+)
+for _name in [
+    "scatter",
+    "scatteradd",
+    "scatterreduce",
+    "indexadd",
+    "indexreduce",
+    "indexcopy",
+    "indexfill",
+]:
     FUNC_ARG_SPECS[_name] = _SCATTER_SPEC
 
 # gather/index_select: (self, dim, index)
-_GATHER_SPEC = ArgSpec(positions=(0, 2))
+_GATHER_SPEC = ArgSpec(positions=(0, 2), tensor_kwargs=("input", "self", "index"))
 for _name in ["gather", "indexselect"]:
     FUNC_ARG_SPECS[_name] = _GATHER_SPEC
 
 # index_put: (self, indices_tuple, values)
-FUNC_ARG_SPECS["indexput"] = ArgSpec(positions=(0, 2), sequence_positions=(1,))
+FUNC_ARG_SPECS["indexput"] = ArgSpec(
+    positions=(0, 2),
+    sequence_positions=(1,),
+    tensor_kwargs=("input", "self", "indices", "values"),
+)
 
 # linear: F.linear(input, weight, bias) — weight/bias can be keyword args
 FUNC_ARG_SPECS["linear"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "weight", "bias"))
@@ -949,7 +1007,7 @@ FUNC_ARG_SPECS["groupnorm"] = ArgSpec(
 
 # Loss functions: (input, target, weight=None, ...)
 # weight can be positional (pos 2) or kwarg
-_LOSS_WITH_WEIGHT = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("weight",))
+_LOSS_WITH_WEIGHT = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "target", "weight"))
 for _name in ["nllloss", "crossentropy", "nllloss2d"]:
     FUNC_ARG_SPECS[_name] = _LOSS_WITH_WEIGHT
 
@@ -975,7 +1033,7 @@ for _name in [
     "ctcloss",
     "tripletmarginloss",
 ]:
-    FUNC_ARG_SPECS[_name] = _P01
+    FUNC_ARG_SPECS[_name] = _P01_INPUT_TARGET
 
 # bilinear: (input1, input2, weight, bias) — bias can be positional
 FUNC_ARG_SPECS["bilinear"] = ArgSpec(
@@ -990,12 +1048,30 @@ FUNC_ARG_SPECS["scaleddotproductattention"] = ArgSpec(
 
 # multi_head_attention_forward: (query, key, value, ...)
 FUNC_ARG_SPECS["multiheadattentionforward"] = ArgSpec(
-    positions=(0, 1, 2), tensor_kwargs=("query", "key", "value")
+    positions=(0, 1, 2, 5, 6, 7, 8, 11, 12, 14, 16, 18, 19, 20, 21),
+    tensor_kwargs=(
+        "query",
+        "key",
+        "value",
+        "in_proj_weight",
+        "in_proj_bias",
+        "bias_k",
+        "bias_v",
+        "out_proj_weight",
+        "out_proj_bias",
+        "key_padding_mask",
+        "attn_mask",
+        "q_proj_weight",
+        "k_proj_weight",
+        "v_proj_weight",
+        "static_k",
+        "static_v",
+    ),
 )
 
 # grid_sample: (input, grid)
 FUNC_ARG_SPECS["gridsample"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "grid"))
-FUNC_ARG_SPECS["cudnngridsampler"] = _P01
+FUNC_ARG_SPECS["cudnngridsampler"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "grid"))
 FUNC_ARG_SPECS["cudnnaffinegridgenerator"] = _P0
 
 # affine_grid: (theta, size) — theta is a tensor
@@ -1011,6 +1087,29 @@ FUNC_ARG_SPECS["stack"] = ArgSpec(sequence_positions=(0,), tensor_kwargs=("tenso
 FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
 )
+
+# Vararg equation/operand forms and uncommon tensor-valued optional kwargs.
+FUNC_ARG_SPECS["einsum"] = ArgSpec(
+    positions=(1, 2, 3, 4, 5, 6, 7, 8, 9),
+    tensor_kwargs=("operands",),
+)
+FUNC_ARG_SPECS["tensordot"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "other", "a", "b"))
+FUNC_ARG_SPECS["searchsorted"] = ArgSpec(
+    positions=(0, 1), tensor_kwargs=("sorted_sequence", "input", "values")
+)
+FUNC_ARG_SPECS["bincount"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "weights"))
+FUNC_ARG_SPECS["histogram"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "weight"))
+FUNC_ARG_SPECS["histogramdd"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "weight"))
+FUNC_ARG_SPECS["stft"] = ArgSpec(positions=(0, 4), tensor_kwargs=("input", "window"))
+FUNC_ARG_SPECS["istft"] = ArgSpec(positions=(0, 4), tensor_kwargs=("input", "window"))
+FUNC_ARG_SPECS["maskedfill"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("input", "self", "mask", "value")
+)
+FUNC_ARG_SPECS["maskedscatter"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("input", "self", "mask", "source")
+)
+FUNC_ARG_SPECS["maskedselect"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "self", "mask"))
+FUNC_ARG_SPECS["multidot"] = _S0
 
 # Matrix-multiply family whose second operand kwarg is NOT named "other":
 # torch.mm(input, mat2), torch.bmm(input, mat2), torch.mv(input, vec).
