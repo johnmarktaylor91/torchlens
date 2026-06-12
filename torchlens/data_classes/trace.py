@@ -3162,6 +3162,179 @@ class Trace(CapturedRun):
         _TRACE_MODULE_CALL_ACCESSOR_CACHE.pop(self, None)
         self._rebind_fork_owner_refs()
 
+    def _refresh_matching_rerun_state_from(self, new_log: "Trace") -> bool:
+        """Refresh payload-bearing fields from a same-shape rerun.
+
+        Parameters
+        ----------
+        new_log:
+            Fully captured and postprocessed rerun candidate.
+
+        Returns
+        -------
+        bool
+            True when the existing graph containers were refreshed in place.
+            False means labels did not match closely enough and callers should
+            use ``replace_state_from``.
+        """
+
+        old_raw_labels = tuple(layer._layer_label_raw for layer in self.layer_list)
+        new_raw_labels = tuple(layer._layer_label_raw for layer in new_log.layer_list)
+        old_final_labels = tuple(layer.layer_label for layer in self.layer_list)
+        new_final_labels = tuple(layer.layer_label for layer in new_log.layer_list)
+        if old_raw_labels != new_raw_labels or old_final_labels != new_final_labels:
+            return False
+
+        new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
+        for layer in self.layer_list:
+            self._refresh_rerun_op_from(layer, new_by_raw[layer._layer_label_raw])
+        self._refresh_rerun_layer_logs_from(new_log)
+        self._refresh_rerun_trace_fields_from(new_log)
+        _TRACE_OP_ACCESSOR_CACHE.pop(self, None)
+        _TRACE_LAYER_ACCESSOR_CACHE.pop(self, None)
+        _TRACE_MODULE_CALL_ACCESSOR_CACHE.pop(self, None)
+        self._rebind_fork_owner_refs()
+        return True
+
+    def _refresh_rerun_op_from(self, layer: Any, new_layer: Any) -> None:
+        """Copy rerun fields into one existing ``Op``.
+
+        Parameters
+        ----------
+        layer:
+            Existing operation record retained by the fast path.
+        new_layer:
+            Fresh rerun operation record supplying current payloads and
+            per-call metadata.
+        """
+
+        preserved_fields = {
+            "source_trace",
+            "_source_trace_ref",
+            "input_ops",
+            "input_activations",
+            "input_shapes",
+            "input_dtypes",
+            "input_memory",
+            "num_inputs",
+            "is_in_conditional_body",
+        }
+        for field_name in LAYER_PASS_LOG_FIELD_ORDER:
+            if field_name in preserved_fields:
+                continue
+            layer._internal_set(
+                field_name,
+                self._copy_rerun_value(new_layer.__dict__.get(field_name)),
+            )
+        for field_name in (
+            "out_ref",
+            "grad_ref",
+            "_pending_blob_id",
+            "_pending_transformed_out_blob_id",
+            "_pending_grad_blob_id",
+            "_pending_transformed_grad_blob_id",
+            "annotations",
+            "interventions",
+            "container_spec",
+            "args_template",
+            "kwargs_template",
+            "_edge_uses",
+        ):
+            if hasattr(new_layer, field_name):
+                layer._internal_set(
+                    field_name,
+                    self._copy_rerun_value(new_layer.__dict__.get(field_name)),
+                )
+        layer.source_trace = self
+
+    def _refresh_rerun_layer_logs_from(self, new_log: "Trace") -> None:
+        """Refresh aggregate ``Layer`` records from a same-shape rerun.
+
+        Parameters
+        ----------
+        new_log:
+            Fresh rerun trace with layer aggregates already postprocessed.
+        """
+
+        new_layer_logs = getattr(new_log, "layer_logs", {}) or {}
+        for label, layer_log in self.layer_logs.items():
+            new_layer_log = new_layer_logs.get(label)
+            if new_layer_log is None:
+                continue
+            for field_name, value in new_layer_log.__dict__.items():
+                if field_name in {"_source_trace_ref", "ops"}:
+                    continue
+                setattr(layer_log, field_name, self._copy_rerun_value(value))
+            layer_log.source_trace = self
+
+    def _refresh_rerun_trace_fields_from(self, new_log: "Trace") -> None:
+        """Refresh trace-level run fields without replacing graph containers.
+
+        Parameters
+        ----------
+        new_log:
+            Fresh rerun trace supplying current run metadata.
+        """
+
+        field_names = (
+            "raw_output",
+            "save_raw_output",
+            "has_gradients",
+            "random_seed",
+            "input_object_id",
+            "input_signature_hash",
+            "graph_shape_hash",
+            "_raw_event_shape_hash",
+            "num_saved_ops",
+            "saved_activation_memory",
+            "total_activation_memory",
+            "saved_gradient_memory",
+            "total_gradient_memory",
+            "total_backward_memory",
+            "total_autograd_memory",
+            "forward_peak_memory",
+            "backward_peak_memory",
+            "output_layers",
+            "output_layers_by_pass",
+            "output_layers_by_module_call",
+            "_output_container_specs_by_raw_label",
+        )
+        for field_name in field_names:
+            if hasattr(new_log, field_name):
+                setattr(self, field_name, self._copy_rerun_value(getattr(new_log, field_name)))
+        self.facet_registry_snapshot = getattr(new_log, "facet_registry_snapshot", None)
+
+    def _copy_rerun_value(self, value: Any) -> Any:
+        """Copy rerun metadata while keeping tensor payload identities.
+
+        Parameters
+        ----------
+        value:
+            Value copied from the fresh rerun trace.
+
+        Returns
+        -------
+        Any
+            Copied metadata container, or the original tensor/object when
+            copying would be incorrect or unnecessary.
+        """
+
+        if isinstance(value, torch.Tensor):
+            return value
+        if isinstance(value, list):
+            return [self._copy_rerun_value(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._copy_rerun_value(item) for item in value)
+        if isinstance(value, dict):
+            return {
+                self._copy_rerun_value(key): self._copy_rerun_value(item)
+                for key, item in value.items()
+            }
+        try:
+            return copy.deepcopy(value)
+        except Exception:
+            return value
+
     def append_state_from(self, new_log: "Trace") -> None:
         """Merge compatible chunk outs from ``new_log`` into this log.
 

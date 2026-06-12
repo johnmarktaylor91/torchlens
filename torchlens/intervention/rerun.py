@@ -97,7 +97,11 @@ def rerun(
     new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
 
     divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
-    log.replace_state_from(new_log)
+    fast_refresh = False
+    if divergence_count == 0:
+        fast_refresh = log._refresh_matching_rerun_state_from(new_log)
+    if not fast_refresh:
+        log.replace_state_from(new_log)
     log.is_appended = False
     log._append_sequence_id = 0
     log.append_history = []
@@ -112,6 +116,7 @@ def rerun(
         hook_plan=hook_plan,
         strict=replay_options.strict,
         divergence_count=divergence_count,
+        fast_refresh=fast_refresh,
     )
     log.state = TraceState.RERUN_PROPAGATED
     log.last_run = {
@@ -124,6 +129,7 @@ def rerun(
         "append": False,
         "hooks": len(hook_plan),
         "divergence_count": divergence_count,
+        "fast_refresh": fast_refresh,
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": getattr(log, "graph_shape_hash", None),
         "old_raw_event_shape_hash": old_raw_hash,
@@ -838,6 +844,7 @@ def _build_ledger_record(
     hook_plan: list["NormalizedHookEntry"],
     strict: bool,
     divergence_count: int,
+    fast_refresh: bool,
 ) -> dict[str, Any]:
     """Create the append-only operation history record for a rerun.
 
@@ -861,6 +868,8 @@ def _build_ledger_record(
         Whether strict divergence handling was requested.
     divergence_count:
         Number of divergence events detected.
+    fast_refresh:
+        Whether the rerun refreshed existing graph containers in place.
 
     Returns
     -------
@@ -876,6 +885,7 @@ def _build_ledger_record(
         "append": False,
         "hook_count": len(hook_plan),
         "divergence_count": divergence_count,
+        "fast_refresh": fast_refresh,
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": new_hash,
         "old_raw_event_shape_hash": old_raw_hash,

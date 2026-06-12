@@ -80,6 +80,28 @@ class BranchModel(torch.nn.Module):
         return torch.sigmoid(x)
 
 
+class InplaceVersionModel(torch.nn.Module):
+    """Model with an in-place child that records child-version snapshots."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Mutate an intermediate in place.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Mutated downstream output.
+        """
+
+        y = x + 1
+        y.relu_()
+        return y * 2
+
+
 def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
     """Return a zeroed out.
 
@@ -263,6 +285,53 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
 
     assert log.num_saved_ops == 0
     assert log.last_run["engine"] == "rerun"
+
+
+def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None:
+    """Same-shape rerun updates existing Op payload fields in place."""
+
+    x = torch.tensor([[-1.0, 2.0, 3.0]])
+    new_x = torch.tensor([[4.0, 5.0, -6.0]])
+    log = tl.trace(ReluAdd(), x, intervention_ready=True, activation_transform=lambda t: t * 2)
+    relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    original_relu_site_id = id(relu_site)
+    original_out = relu_site.out.clone()
+
+    log.rerun(ReluAdd(), new_x)
+    refreshed_relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
+
+    assert id(refreshed_relu_site) == original_relu_site_id
+    assert log.last_run["fast_refresh"] is True
+    assert torch.equal(refreshed_relu_site.out, torch.tensor([[4.0, 5.0, 0.0]]))
+    assert not torch.equal(refreshed_relu_site.out, original_out)
+    assert refreshed_relu_site.shape == (1, 3)
+    assert refreshed_relu_site.dtype == torch.float32
+    assert int(refreshed_relu_site.activation_memory) == 12
+    assert torch.equal(refreshed_relu_site.transformed_out, refreshed_relu_site.out * 2)
+    assert refreshed_relu_site.transformed_out_shape == (1, 3)
+    assert refreshed_relu_site.transformed_out_dtype == torch.float32
+    assert int(refreshed_relu_site.transformed_activation_memory) == 12
+    assert torch.equal(log[log.output_layers[0]].out, torch.tensor([[5.0, 6.0, 1.0]]))
+
+
+def test_rerun_fast_refresh_repopulates_child_versions() -> None:
+    """Same-shape rerun refreshes save_arg_values child-version snapshots."""
+
+    x = torch.tensor([-2.0, 3.0])
+    new_x = torch.tensor([-5.0, 1.0])
+    log = tl.trace(InplaceVersionModel(), x, save_arg_values=True)
+    add_site = log["add_1_1"]
+    original_add_site_id = id(add_site)
+
+    log.rerun(InplaceVersionModel(), new_x)
+
+    refreshed_add_site = log["add_1_1"]
+    assert id(refreshed_add_site) == original_add_site_id
+    assert log.last_run["fast_refresh"] is True
+    assert torch.equal(
+        refreshed_add_site.out_versions_by_child["relu_1_2"],
+        torch.tensor([-4.0, 2.0]),
+    )
 
 
 def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
