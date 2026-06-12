@@ -38,7 +38,7 @@ import torch
 import warnings
 
 from ..utils.tensor_utils import _is_cuda_available, safe_copy
-from ..utils.hashing import compute_graph_shape_hash
+from ..utils.hashing import compute_graph_shape_hash, compute_raw_event_shape_hash
 
 from .control_flow import (
     _fix_buffer_layers,
@@ -214,6 +214,7 @@ def postprocess(
     # buffer source event so it materializes with everything else.
     output_parent_labels = _resolve_output_parent_labels(self, output_tensors)
     if capture_events is not None:
+        self._raw_event_shape_hash = compute_raw_event_shape_hash(capture_events)
         remember_event_stream(self, capture_events)
         self._capture_events = capture_events
         with _vtimed(self, "  Step 0: Materialize capture events"):

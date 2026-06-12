@@ -411,7 +411,7 @@ def _operation(
         trace = tl.trace(model, x, intervention_ready=True)
         state["rerun_policy"] = "steady_state"
         return lambda: trace.rerun(model, x)
-    if operation == "rerun_no_save":
+    if operation in {"rerun_metadata_only", "rerun_no_save"}:
         import torchlens as tl
 
         trace = tl.trace(model, x, save=lambda _ctx: False)

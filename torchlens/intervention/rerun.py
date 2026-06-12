@@ -83,6 +83,7 @@ def rerun(
     hook_plan = normalize_hooks_from_spec(spec)
     started_at = time.monotonic()
     old_hash = getattr(log, "graph_shape_hash", None)
+    old_raw_hash = getattr(log, "_raw_event_shape_hash", None)
 
     with active_intervention_context(intervention_spec=spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
@@ -106,6 +107,8 @@ def rerun(
         started_at=started_at,
         old_hash=old_hash,
         new_hash=getattr(new_log, "graph_shape_hash", None),
+        old_raw_hash=old_raw_hash,
+        new_raw_hash=getattr(new_log, "_raw_event_shape_hash", None),
         hook_plan=hook_plan,
         strict=replay_options.strict,
         divergence_count=divergence_count,
@@ -123,6 +126,8 @@ def rerun(
         "divergence_count": divergence_count,
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": getattr(log, "graph_shape_hash", None),
+        "old_raw_event_shape_hash": old_raw_hash,
+        "new_raw_event_shape_hash": getattr(log, "_raw_event_shape_hash", None),
     }
     log._record_operation(**history_record)
     log._has_direct_writes = False
@@ -717,16 +722,18 @@ def _capture_with_active_spec(
     check_model_and_input_variants(model, x, {})
     save_grads_policy = getattr(log, "save_grads", None)
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
+    layers_to_save, save_predicate, lookback, lookback_payload_policy = _rerun_save_scope(log)
     return _run_model_and_save_specified_outs(
         model=model,
         input_args=x,
         input_kwargs={},
-        layers_to_save="all",
+        layers_to_save=layers_to_save,
         output_device=getattr(log, "output_device", "same"),
         activation_transform=getattr(log, "activation_transform", None),
         grad_transform=getattr(log, "grad_transform", None),
         save_raw_activations=getattr(log, "save_raw_activations", True),
         save_raw_gradients=getattr(log, "save_raw_gradients", True),
+        save_mode=getattr(log, "save_mode", "copy"),
         mark_layer_depths=getattr(log, "mark_layer_depths", False),
         detach_saved_activations=getattr(log, "detach_saved_activations", False),
         save_arg_values=getattr(log, "save_arg_values", False),
@@ -745,6 +752,9 @@ def _capture_with_active_spec(
         backward_ready=getattr(log, "backward_ready", False),
         output_transform=output_transform,
         save_raw_output=getattr(log, "save_raw_output", "small"),
+        save_predicate=save_predicate,
+        lookback=lookback,
+        lookback_payload_policy=lookback_payload_policy,
     )
 
 
@@ -766,20 +776,55 @@ def _validate_rerun_result(new_log: "Trace", old_log: "Trace", *, strict: bool) 
         Number of graph-shape divergence events detected by the Phase 7 MVP.
     """
 
-    old_hash = getattr(old_log, "graph_shape_hash", None)
-    new_hash = getattr(new_log, "graph_shape_hash", None)
+    old_hash = getattr(old_log, "_raw_event_shape_hash", None) or getattr(
+        old_log, "graph_shape_hash", None
+    )
+    new_hash = getattr(new_log, "_raw_event_shape_hash", None) or getattr(
+        new_log, "graph_shape_hash", None
+    )
     if old_hash == new_hash:
         return 0
 
     message = (
-        "rerun graph_shape_hash diverged from the captured graph "
-        f"(old={old_hash!r}, new={new_hash!r}). Phase 7 uses graph-shape hash "
-        "comparison as the conservative control-flow divergence detector."
+        "rerun raw-event shape hash diverged from the captured graph "
+        f"(old={old_hash!r}, new={new_hash!r}). TorchLens uses ordered raw operation "
+        "events with normalized parent-edge indices as the conservative control-flow "
+        "divergence detector."
     )
     if strict:
         raise ControlFlowDivergenceError(message)
     warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
     return 1
+
+
+def _rerun_save_scope(log: "Trace") -> tuple[str | None, Any | None, int, str]:
+    """Return capture save settings that mirror the original trace scope.
+
+    Parameters
+    ----------
+    log:
+        Existing trace whose save policy should be honored during rerun.
+
+    Returns
+    -------
+    tuple[str | None, Any | None, int, str]
+        ``layers_to_save``, optional save predicate, predicate lookback, and
+        lookback payload policy for the fresh rerun capture.
+    """
+
+    options = getattr(log, "_predicate_save_options", None)
+    if options is not None and hasattr(options, "keep_op"):
+        keep_op = getattr(options, "keep_op", None)
+        if keep_op is not None:
+            return (
+                "all",
+                keep_op,
+                int(getattr(options, "lookback", 0)),
+                str(getattr(options, "lookback_payload_policy", "metadata_only")),
+            )
+    if getattr(log, "num_saved_ops", 0) == 0:
+        return None, None, 0, "metadata_only"
+    return "all", None, 0, "metadata_only"
 
 
 def _build_ledger_record(
@@ -788,6 +833,8 @@ def _build_ledger_record(
     started_at: float,
     old_hash: str | None,
     new_hash: str | None,
+    old_raw_hash: str | None,
+    new_raw_hash: str | None,
     hook_plan: list["NormalizedHookEntry"],
     strict: bool,
     divergence_count: int,
@@ -804,6 +851,10 @@ def _build_ledger_record(
         Graph-shape hash before rerun.
     new_hash:
         Candidate graph-shape hash from the fresh capture.
+    old_raw_hash:
+        Raw-event shape hash before rerun.
+    new_raw_hash:
+        Candidate raw-event shape hash from the fresh capture.
     hook_plan:
         Normalized hook entries active during rerun.
     strict:
@@ -827,6 +878,8 @@ def _build_ledger_record(
         "divergence_count": divergence_count,
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": new_hash,
+        "old_raw_event_shape_hash": old_raw_hash,
+        "new_raw_event_shape_hash": new_raw_hash,
     }
 
 

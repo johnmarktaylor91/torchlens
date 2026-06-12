@@ -194,3 +194,59 @@ def compute_graph_shape_hash(trace: Any) -> str:
         )
     payload = json.dumps(records, sort_keys=True, separators=(",", ":"), default=repr)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def compute_raw_event_shape_hash(capture_events: Any) -> str:
+    """Compute a deterministic topology hash from raw capture events.
+
+    Parameters
+    ----------
+    capture_events:
+        In-flight or remembered ``CaptureEvents`` buffer.
+
+    Returns
+    -------
+    str
+        SHA-256 hex digest over operation order, function names, output shapes,
+        normalized parent-edge order indices, and normalized module addresses.
+    """
+
+    order_by_raw_label = {
+        event.label_raw: index for index, event in enumerate(capture_events.op_events)
+    }
+    records = []
+    for index, event in enumerate(capture_events.op_events):
+        function = event.function
+        output = event.output
+        tensor = output.tensor
+        parent_indices = sorted(
+            order_by_raw_label[parent.parent_label_raw]
+            for parent in event.parents
+            if parent.parent_label_raw in order_by_raw_label
+        )
+        module_addresses = [
+            normalize_address_for_hash(address)
+            for address, _call_index in getattr(event, "modules", ()) or ()
+        ]
+        records.append(
+            {
+                "index": index,
+                "kind": event.kind,
+                "layer_type": event.layer_type,
+                "func_name": getattr(function, "func_name", None),
+                "func_qualname": getattr(function, "func_qualname", None),
+                "output_shape": getattr(tensor, "shape", None),
+                "output_dtype": getattr(tensor, "dtype", None),
+                "parent_indices": parent_indices,
+                "module_addresses": module_addresses,
+                "container_path": [
+                    _hashable_path_component(component)
+                    for component in (getattr(output, "container_path", None) or ())
+                ],
+                "container_cardinality": _container_cardinality(
+                    getattr(output, "container_spec", None)
+                ),
+            }
+        )
+    payload = json.dumps(records, sort_keys=True, separators=(",", ":"), default=repr)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()

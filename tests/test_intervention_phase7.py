@@ -126,6 +126,7 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
     original_hash = log.graph_shape_hash
+    original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
     original_history_len = len(log.state_history)
 
     result = log.rerun(ReluAdd(), x)
@@ -133,7 +134,10 @@ def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
     assert result is log
     assert log.state is TraceState.RERUN_PROPAGATED
     assert log.graph_shape_hash == original_hash
+    assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
     assert log.last_run["engine"] == "rerun"
+    assert log.last_run["old_raw_event_shape_hash"] == original_raw_hash
+    assert log.last_run["new_raw_event_shape_hash"] == original_raw_hash
     assert len(log.state_history) == original_history_len + 1
     assert log.state_history[-1]["engine"] == "rerun"
 
@@ -219,11 +223,13 @@ def test_rerun_strict_divergence_raises_before_swap() -> None:
     negative = -torch.ones(2, 3)
     log = _capture(BranchModel(), positive)
     original_hash = log.graph_shape_hash
+    original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
 
     with pytest.raises(ControlFlowDivergenceError):
         log.rerun(BranchModel(), negative, strict=True)
 
     assert log.graph_shape_hash == original_hash
+    assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
     assert log.state is TraceState.PRISTINE
 
 
@@ -234,13 +240,29 @@ def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
     negative = -torch.ones(2, 3)
     log = _capture(BranchModel(), positive)
     original_hash = log.graph_shape_hash
+    original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
 
     with pytest.warns(ControlFlowDivergenceWarning):
         log.rerun(BranchModel(), negative)
 
     assert log.graph_shape_hash != original_hash
+    assert log._raw_event_shape_hash != original_raw_hash  # noqa: SLF001
     assert log.state is TraceState.RERUN_PROPAGATED
     assert log.last_run["divergence_count"] == 1
+
+
+def test_rerun_honors_metadata_only_save_scope() -> None:
+    """Rerun of a metadata-only trace does not save every activation."""
+
+    x = torch.randn(2, 3)
+    log = tl.trace(ReluAdd(), x, save=lambda _ctx: False)
+
+    assert log.num_saved_ops == 0
+
+    log.rerun(ReluAdd(), x + 1)
+
+    assert log.num_saved_ops == 0
+    assert log.last_run["engine"] == "rerun"
 
 
 def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:

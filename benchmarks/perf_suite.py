@@ -44,7 +44,7 @@ CORE_OPS = [
 ]
 NO_SAVE_OPS = [
     "trace_no_save",
-    "rerun_no_save",
+    "rerun_metadata_only",
     "fastlog_zero",
 ]
 PEER_OPS = [
@@ -57,7 +57,7 @@ HOOKED_OPS = [
     "raw_forward",
     "tl_trace",
     "trace_no_save",
-    "rerun_no_save",
+    "rerun_metadata_only",
     "fastlog_zero",
     "peer_transformer_lens",
 ]
@@ -72,7 +72,7 @@ HEADLINE_MEMORY_OPS = {
     "tl_rerun",
     "fastlog_module",
     "trace_no_save",
-    "rerun_no_save",
+    "rerun_metadata_only",
     "fastlog_zero",
 }
 AUX_OPS = ["aux_validate", "aux_compat_report", "aux_save", "aux_load"]
@@ -89,7 +89,8 @@ OP_LABELS = {
     "trace_no_save": "TL Trace, metadata only (no saved outs)",
     "tl_trace_intervention_ready": "TL Trace, intervention_ready=True",
     "tl_rerun": "Trace.rerun(model, x)",
-    "rerun_no_save": "Trace.rerun(model, x), no saved outs",
+    "rerun_metadata_only": "Trace.rerun(model, x), metadata-only save scope",
+    "rerun_no_save": "Trace.rerun(model, x), metadata-only save scope (legacy alias)",
     "fastlog_module": "fastlog module-boundary metadata",
     "fastlog_zero": "fastlog zero-retention predicates",
     "fastlog_op_10": "fastlog 10% op selectivity",
@@ -600,7 +601,7 @@ def _wrapper_only_table(cell_rows: list[dict[str, Any]]) -> list[str]:
         "| Operation | median_ms | vs raw forward | no-save invariant | Status |",
         "|---|---:|---:|---|---|",
     ]
-    for operation in ["raw_forward", "trace_no_save", "rerun_no_save", "fastlog_zero"]:
+    for operation in ["raw_forward", "trace_no_save", "rerun_metadata_only", "fastlog_zero"]:
         row = by_op.get(operation)
         if row is None:
             lines.append(f"| {OP_LABELS[operation]} | N/A | N/A | N/A | missing |")
@@ -649,7 +650,7 @@ def _wrapper_only_narrative(rows: list[dict[str, Any]]) -> str:
         if raw_ms is None:
             continue
         trace_ratio = _ratio(_timing(by_op.get("trace_no_save", {}), "median_ms"), raw_ms)
-        rerun_ratio = _ratio(_timing(by_op.get("rerun_no_save", {}), "median_ms"), raw_ms)
+        rerun_ratio = _ratio(_timing(by_op.get("rerun_metadata_only", {}), "median_ms"), raw_ms)
         fastlog_ratio = _ratio(_timing(by_op.get("fastlog_zero", {}), "median_ms"), raw_ms)
         if trace_ratio is None and rerun_ratio is None and fastlog_ratio is None:
             continue

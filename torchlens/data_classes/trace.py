@@ -1137,6 +1137,7 @@ class Trace(CapturedRun):
         "_predicate_current_contexts": FieldPolicy.DROP,
         "_predicate_lookback_candidates": FieldPolicy.DROP,
         "_postprocessing_active": FieldPolicy.DROP,
+        "_raw_event_shape_hash": FieldPolicy.DROP,
         "state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
