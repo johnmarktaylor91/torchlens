@@ -52,6 +52,7 @@ class BackwardPassStart:
     origin_backward_pass: int | None
     save_grads_policy_repr: str | None
     engine_flags: dict[str, object] | None
+    forward_op_count_at_trigger: int | None
     timestamp: float
 
 

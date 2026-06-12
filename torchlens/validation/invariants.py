@@ -201,6 +201,16 @@ def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
 def _check_backward_graph_invariants(trace: "Trace") -> None:
     """Check T: backward grad-fn metadata consistency.
 
+    A forward layer with a recorded ``grad_fn_object_id`` must retain a
+    layer-to-GradFn backpointer unless it is structurally outside the backward
+    pass contract: its final ``step_index`` must be greater than every recorded
+    backward trigger's structural forward boundary. The boundary starts from the
+    trigger-time forward op count and is tightened by paired root GradFns and
+    observed op-gradient events when those identify the walked forward prefix.
+    This admits legitimate mid-forward ``autograd.grad`` cases where later
+    forward layers did not exist when backward graph walking ran, while still
+    failing pre-trigger layers whose backpointer was accidentally severed.
+
     Parameters
     ----------
     trace:
@@ -323,8 +333,16 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
 
     for layer in trace.layer_list:
         grad_fn_object_id = layer.grad_fn_object_id
-        if grad_fn_object_id is None or layer.grad_fn is None:
+        if grad_fn_object_id is None:
             continue
+        if layer.grad_fn is None:
+            if _layer_postdates_all_backward_triggers(trace, layer):
+                continue
+            raise MetadataInvariantError(
+                name,
+                f"Layer {layer.layer_label} with grad_fn_handle id {grad_fn_object_id!r} "
+                "is missing its GradFn backpointer",
+            )
         if grad_fn_object_id not in trace.grad_fn_logs:
             raise MetadataInvariantError(
                 name,
@@ -370,6 +388,138 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                     f"{call.call_label} references missing backward pass "
                     f"{call.backward_pass_index}",
                 )
+
+
+def _layer_postdates_all_backward_triggers(trace: "Trace", layer: "Layer | Op") -> bool:
+    """Return whether a layer was created after every recorded backward trigger.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing backward sidecar events.
+    layer:
+        Layer whose forward position is being checked.
+
+    Returns
+    -------
+    bool
+        True only when every recorded ``BackwardPassStart`` has a structural
+        forward-op boundary and ``layer.step_index`` is beyond all of them.
+    """
+
+    layer_step_index = getattr(layer, "step_index", None)
+    if not isinstance(layer_step_index, int):
+        return False
+    trigger_positions = _backward_trigger_forward_positions(trace)
+    return bool(trigger_positions) and layer_step_index > max(trigger_positions)
+
+
+def _backward_trigger_forward_positions(trace: "Trace") -> list[int]:
+    """Return strict forward boundaries for recorded backward triggers.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing backward sidecar events and projections.
+
+    Returns
+    -------
+    list[int]
+        One forward boundary per trigger with enough structural metadata. Root
+        GradFn pairings refine active mid-forward markers because the root's
+        forward op is the last layer guaranteed to exist when graph walking ran.
+    """
+
+    from ..ir.events import BackwardPassStart
+
+    event_positions = {
+        event.pass_index: event.forward_op_count_at_trigger
+        for event in getattr(getattr(trace, "_capture_events", None), "backward_events", ())
+        if isinstance(event, BackwardPassStart)
+        and isinstance(event.forward_op_count_at_trigger, int)
+    }
+    positions: list[int] = []
+    for pass_index, event_position in event_positions.items():
+        structural_positions = [
+            position
+            for position in (
+                _backward_pass_root_forward_position(trace, pass_index),
+                _backward_pass_observed_forward_position(trace, pass_index),
+            )
+            if position is not None
+        ]
+        if not structural_positions:
+            positions.append(event_position)
+        else:
+            positions.append(min(event_position, *structural_positions))
+    return positions
+
+
+def _backward_pass_root_forward_position(trace: "Trace", pass_index: int) -> int | None:
+    """Return the highest paired forward position among a backward pass's roots.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward projections.
+    pass_index:
+        One-based backward pass index.
+
+    Returns
+    -------
+    int | None
+        Highest root-paired forward ``step_index`` for the pass, when available.
+    """
+
+    backward_pass = getattr(trace, "backward_pass_logs", {}).get(pass_index)
+    if backward_pass is None:
+        return None
+    root_steps = [
+        step_index
+        for root_id in getattr(backward_pass, "root_grad_fn_ids", ())
+        if isinstance(
+            (
+                step_index := getattr(
+                    getattr(getattr(trace, "grad_fn_logs", {}).get(root_id), "op", None),
+                    "step_index",
+                    None,
+                )
+            ),
+            int,
+        )
+    ]
+    return max(root_steps) if root_steps else None
+
+
+def _backward_pass_observed_forward_position(trace: "Trace", pass_index: int) -> int | None:
+    """Return the highest forward position with an observed gradient in a pass.
+
+    Parameters
+    ----------
+    trace:
+        Trace with backward sidecar events.
+    pass_index:
+        One-based backward pass index.
+
+    Returns
+    -------
+    int | None
+        Highest observed forward ``step_index`` for the pass, when available.
+    """
+
+    from ..ir.events import OpGradObserved
+
+    layer_lookup = getattr(trace, "layer_dict_all_keys", {})
+    observed_steps = []
+    for event in getattr(getattr(trace, "_capture_events", None), "backward_events", ()):
+        if not isinstance(event, OpGradObserved) or event.pass_index != pass_index:
+            continue
+        final_label = _resolve_op_grad_event_label(trace, event.op_label)
+        layer = layer_lookup.get(final_label)
+        step_index = getattr(layer, "step_index", None)
+        if isinstance(step_index, int):
+            observed_steps.append(step_index)
+    return max(observed_steps) if observed_steps else None
 
 
 def _resolve_op_grad_event_label(trace: "Trace", op_label: str) -> str:

@@ -28,6 +28,7 @@ from ...ir.events import (
     GradFnFired,
     OpGradObserved,
 )
+from ._tl import get_tensor_label
 from .tensor_tracking import _ensure_backward_event_stream
 
 _BACKWARD_GRAD_FN_REGISTRY: dict[int, weakref.ReferenceType[Any]] = {}
@@ -51,6 +52,56 @@ def _strong_grad_fn_refs(trace: Any) -> list[Any]:
     """
 
     return trace.__dict__.setdefault("_backward_gradfn_refs", [])
+
+
+def _forward_op_count_at_backward_trigger(trace: Any) -> int | None:
+    """Return the number of forward ops created when a backward trigger starts.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backward-captured.
+
+    Returns
+    -------
+    int | None
+        Active forward op count when available, otherwise the highest finalized
+        layer ``step_index``. ``None`` means no structural count is available.
+    """
+
+    from ...capture import projections
+
+    active_state = getattr(projections, "_active_recording_state", None)
+    if active_state is not None and getattr(active_state, "runtime_trace", None) is trace:
+        return max(0, int(active_state.step_index) - 1)
+
+    step_indices = [
+        int(step_index)
+        for layer in getattr(trace, "layer_list", ())
+        if isinstance((step_index := getattr(layer, "step_index", None)), int) and step_index > 0
+    ]
+    if step_indices:
+        return max(step_indices)
+    raw_count = getattr(trace, "_layer_counter", None)
+    return raw_count if isinstance(raw_count, int) else None
+
+
+def _active_forward_op_count_at_trigger() -> int | None:
+    """Return active forward op count before autograd graph walking.
+
+    Returns
+    -------
+    int | None
+        Last forward ``step_index`` that exists before the active autograd
+        trigger's graph walk, or ``None`` when no forward capture is active.
+    """
+
+    from ...capture import projections
+
+    active_state = getattr(projections, "_active_recording_state", None)
+    if active_state is None:
+        return None
+    return max(0, int(active_state.step_index) - 1)
 
 
 def _register_forward_grad_fn(trace: Any, grad_fn_handle: Any, _raw_label: str | None) -> None:
@@ -249,6 +300,66 @@ def _first_root_tensor(roots: Any) -> torch.Tensor | None:
 
     tensors = _root_tensors(roots)
     return tensors[0] if tensors else None
+
+
+def _root_forward_op_count(trace: Any, roots: Any) -> int | None:
+    """Return the highest forward ``step_index`` among autograd root tensors.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the root tensors.
+    roots:
+        Tensor or nested tensor sequence passed to an autograd entry point.
+
+    Returns
+    -------
+    int | None
+        Highest resolved root forward position, or ``None`` when no root label
+        can be resolved.
+    """
+
+    root_steps = [
+        step_index
+        for root in _root_tensors(roots)
+        if (step_index := _root_tensor_step_index(trace, root)) is not None
+    ]
+    return max(root_steps) if root_steps else None
+
+
+def _root_tensor_step_index(trace: Any, root: torch.Tensor) -> int | None:
+    """Return a TorchLens ``step_index`` for an autograd root tensor.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the root tensor.
+    root:
+        Root tensor passed to an autograd entry point.
+
+    Returns
+    -------
+    int | None
+        Root layer ``step_index`` when resolvable.
+    """
+
+    label = get_tensor_label(root)
+    if label is None:
+        return None
+    lookup_labels = (getattr(trace, "_raw_to_final_layer_labels", {}).get(label, label), label)
+    layer_lookup = getattr(trace, "layer_dict_all_keys", {})
+    for lookup_label in lookup_labels:
+        layer = layer_lookup.get(lookup_label)
+        step_index = getattr(layer, "step_index", None)
+        if isinstance(step_index, int):
+            return step_index
+    raw_match = re.search(r"_(\d+)_raw$", label)
+    if raw_match is not None:
+        return int(raw_match.group(1))
+    final_match = re.search(r"_[1-9]\d*_(\d+)(?::[1-9]\d*)?$", label)
+    if final_match is not None:
+        return int(final_match.group(1))
+    return None
 
 
 def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
@@ -1148,6 +1259,14 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
             parent_layer = trace.layer_logs.get(grad_fn_record.op.layer_label)
             if parent_layer is not None:
                 parent_layer.grad_fn = grad_fn_record
+    for layer in getattr(trace, "layer_list", ()):
+        grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
+        if grad_fn_object_id in trace.grad_fn_logs:
+            layer.grad_fn = trace.grad_fn_logs[grad_fn_object_id]
+    for layer in getattr(trace, "layer_logs", {}).values():
+        grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
+        if grad_fn_object_id in trace.grad_fn_logs:
+            layer.grad_fn = trace.grad_fn_logs[grad_fn_object_id]
 
 
 def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:
@@ -1860,6 +1979,7 @@ def _run_backward_with_capture(
     outer_context: str | None = None,
     engine_flags: dict[str, object] | None = None,
     save_grads: Any | MissingType = MISSING,
+    forward_op_count_at_trigger: int | None = None,
 ) -> Any:
     """Capture a backward graph, run backward, and record memory delta.
 
@@ -1922,6 +2042,11 @@ def _run_backward_with_capture(
             origin_backward_pass=None,
             save_grads_policy_repr=repr(active_save_grads_policy),
             engine_flags=engine_flags,
+            forward_op_count_at_trigger=(
+                forward_op_count_at_trigger
+                if forward_op_count_at_trigger is not None
+                else _forward_op_count_at_backward_trigger(trace)
+            ),
             timestamp=time.time(),
         )
     )
@@ -1999,6 +2124,7 @@ def _capture_autograd_engine_call(
     *,
     trigger: Literal["autograd_backward", "autograd_grad"],
     engine_flags: dict[str, object] | None,
+    forward_op_count_at_trigger: int | None = None,
 ) -> Any:
     """Run a global autograd entry through TorchLens capture when roots match.
 
@@ -2028,12 +2154,19 @@ def _capture_autograd_engine_call(
     if loss is None or not matched_traces:
         return engine_callable()
     if len(matched_traces) == 1:
+        matched_trace = matched_traces[0]
+        root_forward_op_count = _root_forward_op_count(matched_trace, roots)
         return _run_backward_with_capture(
-            matched_traces[0],
+            matched_trace,
             loss,
             engine_callable,
             trigger=trigger,
             engine_flags=engine_flags,
+            forward_op_count_at_trigger=(
+                root_forward_op_count
+                if root_forward_op_count is not None
+                else forward_op_count_at_trigger
+            ),
         )
 
     # P1 supports multi-trace bracket opening by nesting setup and running the
@@ -2044,13 +2177,20 @@ def _capture_autograd_engine_call(
 
         if index == len(matched_traces):
             return engine_callable()
+        matched_trace = matched_traces[index]
+        root_forward_op_count = _root_forward_op_count(matched_trace, roots)
         return _run_backward_with_capture(
-            matched_traces[index],
+            matched_trace,
             loss,
             lambda: nested_call(index + 1),
             trigger=trigger,
             outer_context=None if index == 0 else f"{trigger}:multi_trace",
             engine_flags=engine_flags,
+            forward_op_count_at_trigger=(
+                root_forward_op_count
+                if root_forward_op_count is not None
+                else forward_op_count_at_trigger
+            ),
         )
 
     return nested_call(0)
@@ -2075,6 +2215,7 @@ def install_autograd_wrappers() -> None:
         """Route ``torch.autograd.backward`` through TorchLens when roots match."""
 
         original = cast(Callable[..., Any], _ORIGINAL_AUTOGRAD_BACKWARD)
+        forward_op_count_at_trigger = _active_forward_op_count_at_trigger()
         roots = _autograd_roots_from_call(args, kwargs, "tensors")
 
         def run() -> Any:
@@ -2087,12 +2228,14 @@ def install_autograd_wrappers() -> None:
             run,
             trigger="autograd_backward",
             engine_flags=dict(kwargs),
+            forward_op_count_at_trigger=forward_op_count_at_trigger,
         )
 
     def wrapped_grad(*args: Any, **kwargs: Any) -> Any:
         """Route ``torch.autograd.grad`` through TorchLens when roots match."""
 
         original = cast(Callable[..., Any], _ORIGINAL_AUTOGRAD_GRAD)
+        forward_op_count_at_trigger = _active_forward_op_count_at_trigger()
         roots = _autograd_roots_from_call(args, kwargs, "outputs")
 
         def run() -> Any:
@@ -2105,6 +2248,7 @@ def install_autograd_wrappers() -> None:
             run,
             trigger="autograd_grad",
             engine_flags=dict(kwargs),
+            forward_op_count_at_trigger=forward_op_count_at_trigger,
         )
 
     torch.autograd.backward = wrapped_backward

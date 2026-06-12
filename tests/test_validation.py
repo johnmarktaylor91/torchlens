@@ -373,6 +373,31 @@ class _SimpleFF(nn.Module):
         return self.fc(x)
 
 
+class _MidForwardGradModel(nn.Module):
+    """Model that triggers ``autograd.grad`` before all forward ops exist."""
+
+    def __init__(self) -> None:
+        """Initialize layers."""
+
+        super().__init__()
+        self.fc1 = nn.Linear(5, 4)
+        self.fc2 = nn.Linear(4, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a MAML-style forward with an inner differentiable grad."""
+
+        hidden = torch.relu(self.fc1(x))
+        inner_loss = hidden.square().mean()
+        (weight_grad,) = torch.autograd.grad(
+            inner_loss,
+            self.fc1.weight,
+            create_graph=True,
+            retain_graph=True,
+        )
+        adapted_bias = weight_grad.mean()
+        return self.fc2(hidden + adapted_bias)
+
+
 def _make_clean_log():
     """Return a Trace with all outs and metadata for a simple FF model."""
     from torchlens import trace as trace_fn
@@ -390,6 +415,15 @@ def _make_backward_log() -> Trace:
     log = trace_fn(model, x, save_grads="all", random_seed=42)
     log.log_backward(log[log.output_layers[0]].out.sum())
     return log
+
+
+def _make_mid_forward_backward_log() -> Trace:
+    """Return a Trace with a backward trigger that occurs mid-forward."""
+    from torchlens import trace as trace_fn
+
+    model = _MidForwardGradModel()
+    x = torch.randn(2, 5, requires_grad=True)
+    return trace_fn(model, x, save_grads="all", random_seed=42)
 
 
 def test_clean_log_ops_all_invariants():
@@ -421,6 +455,50 @@ def test_backward_invariants_with_intervening() -> None:
     assert any(not grad_fn_handle.has_op for grad_fn_handle in log.grad_fn_logs.values())
     assert check_metadata_invariants(log) is True
     log.cleanup()
+
+
+def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> None:
+    """Mid-forward backward triggers exempt only later-created forward layers."""
+
+    log = _make_mid_forward_backward_log()
+    try:
+        trigger_positions = [
+            event.forward_op_count_at_trigger
+            for event in log._capture_events.backward_events
+            if event.__class__.__name__ == "BackwardPassStart"
+        ]
+        assert trigger_positions
+        last_trigger_position = max(
+            position for position in trigger_positions if position is not None
+        )
+        assert any(
+            layer.grad_fn_object_id is not None
+            and layer.grad_fn is None
+            and layer.step_index > last_trigger_position
+            for layer in log.layer_list
+        )
+
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_bad_pre_trigger_layer_grad_fn_backpointer_raises() -> None:
+    """A paired pre-trigger layer with a severed GradFn backpointer raises."""
+
+    log = _make_backward_log()
+    try:
+        victim = next(
+            layer
+            for layer in log.layer_list
+            if layer.grad_fn_object_id is not None and layer.grad_fn is not None
+        )
+        victim.grad_fn = None
+
+        with pytest.raises(MetadataInvariantError, match="missing its GradFn backpointer"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
 
 
 def test_bad_grad_fn_order_raises() -> None:

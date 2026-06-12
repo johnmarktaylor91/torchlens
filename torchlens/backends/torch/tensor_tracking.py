@@ -106,6 +106,38 @@ def _ensure_backward_event_stream(trace: "Trace") -> Any:
     return events
 
 
+def _forward_op_count_at_backward_trigger(trace: "Trace") -> int | None:
+    """Return the number of forward ops created when a backward trigger starts.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backward-captured.
+
+    Returns
+    -------
+    int | None
+        Active forward op count when available, otherwise the highest finalized
+        layer ``step_index``. ``None`` means no structural count is available.
+    """
+
+    from ...capture import projections
+
+    active_state = getattr(projections, "_active_recording_state", None)
+    if active_state is not None and getattr(active_state, "runtime_trace", None) is trace:
+        return max(0, int(active_state.step_index) - 1)
+
+    step_indices = [
+        int(step_index)
+        for layer in getattr(trace, "layer_list", ())
+        if isinstance((step_index := getattr(layer, "step_index", None)), int) and step_index > 0
+    ]
+    if step_indices:
+        return max(step_indices)
+    raw_count = getattr(trace, "_layer_counter", None)
+    return raw_count if isinstance(raw_count, int) else None
+
+
 def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
     """Return an active backward pass index, opening an implicit pass if needed."""
 
@@ -139,6 +171,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
             origin_backward_pass=None,
             save_grads_policy_repr=repr(_active_save_grads_policy(trace)),
             engine_flags=None,
+            forward_op_count_at_trigger=_forward_op_count_at_backward_trigger(trace),
             timestamp=time.time(),
         )
     )
