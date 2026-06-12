@@ -456,6 +456,38 @@ def test_bad_layer_grad_fn_backpointer_raises() -> None:
     log.cleanup()
 
 
+def test_bad_higher_order_creator_chain_order_raises() -> None:
+    """A resolved higher-order creator chain with the wrong order raises."""
+
+    class HigherOrderModel(nn.Module):
+        """Tiny nonlinear model for higher-order backward metadata."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scalar nonlinear output."""
+
+            return (torch.tanh(x) ** 3).sum()
+
+    from torchlens import trace as trace_fn
+
+    x = torch.randn(3, requires_grad=True)
+    log = trace_fn(HigherOrderModel(), x, save_grads="all", random_seed=42)
+    try:
+        loss = log[log.output_layers[0]].out
+        first_grad = torch.autograd.grad(loss, x, create_graph=True, retain_graph=True)[0]
+        torch.autograd.grad(first_grad.sum(), x, retain_graph=True)
+        victim = next(
+            grad_fn
+            for grad_fn in log.grad_fns
+            if grad_fn.creator_object_id is not None and grad_fn.order is not None
+        )
+        victim.order = victim.order + 1
+
+        with pytest.raises(MetadataInvariantError, match="creator order"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
 def test_corruption_parent_child_link():
     """Breaking a parent→child link raises MetadataInvariantError."""
     log = _make_clean_log()

@@ -238,6 +238,7 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
             f"backward_root_grad_fn_object_ids {missing_root_ids!r} are not present in grad_fn_logs",
         )
 
+    valid_pass_indices = set(getattr(trace, "backward_pass_logs", {}).keys())
     layer_labels = set(trace.layer_labels)
     for grad_fn_object_id, grad_fn_handle in trace.grad_fn_logs.items():
         if not re.fullmatch(r"[a-z0-9_]+_back_[1-9]\d*_[1-9]\d*", grad_fn_handle.label):
@@ -261,6 +262,28 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                 name,
                 f"{grad_fn_handle.label} stored id {grad_fn_handle.grad_fn_object_id!r} under {grad_fn_object_id!r}",
             )
+        creator_object_id = getattr(grad_fn_handle, "creator_object_id", None)
+        if creator_object_id is not None:
+            creator = trace.grad_fn_logs.get(creator_object_id)
+            if creator is None:
+                raise MetadataInvariantError(
+                    name,
+                    f"{grad_fn_handle.label} points to missing creator id {creator_object_id!r}",
+                )
+            if grad_fn_handle.origin_backward_pass not in valid_pass_indices:
+                raise MetadataInvariantError(
+                    name,
+                    f"{grad_fn_handle.label} has invalid origin backward pass "
+                    f"{grad_fn_handle.origin_backward_pass!r}",
+                )
+            if creator.order is not None and grad_fn_handle.order is not None:
+                expected_order = creator.order + 1
+                if grad_fn_handle.order != expected_order:
+                    raise MetadataInvariantError(
+                        name,
+                        f"{grad_fn_handle.label} order {grad_fn_handle.order!r} does not "
+                        f"match creator order + 1 ({expected_order!r})",
+                    )
         call_ordinals = sorted(grad_fn_handle.calls.keys())
         if call_ordinals != list(range(1, len(call_ordinals) + 1)):
             raise MetadataInvariantError(

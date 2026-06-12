@@ -443,6 +443,85 @@ def _sync_grad_fn_graph_relations(trace: Any) -> None:
         grad_fn.co_parents = co_parent_labels
 
 
+def _resolved_order_for_creator(
+    creator_object_id: int | None,
+    grad_fn_logs: dict[int, GradFn],
+) -> int | None:
+    """Return the derived order for a creator-attributed grad-fn node."""
+
+    if creator_object_id is None:
+        return 1
+    creator = grad_fn_logs.get(creator_object_id)
+    creator_order = None if creator is None else creator.order
+    if creator_order is None:
+        return None
+    return creator_order + 1
+
+
+def _pass_order_from_roots(
+    root_grad_fn_ids: Sequence[int],
+    grad_fn_logs: dict[int, GradFn],
+) -> int | None:
+    """Derive a backward pass order from its root grad-fn nodes."""
+
+    root_orders = [
+        grad_fn_logs[root_id].order
+        for root_id in root_grad_fn_ids
+        if root_id in grad_fn_logs and grad_fn_logs[root_id].order is not None
+    ]
+    if not root_orders:
+        return None
+    if len(root_orders) != len(root_grad_fn_ids):
+        return None
+    unique_orders = set(root_orders)
+    if len(unique_orders) != 1:
+        return None
+    return root_orders[0]
+
+
+def _order_attribution_coverage(
+    calls: Sequence[GradFnCall],
+    grad_fn_logs: dict[int, GradFn],
+) -> float | None:
+    """Return the fraction of calls with resolved grad-fn order metadata."""
+
+    if not calls:
+        return None
+    labels_with_order = {
+        grad_fn.label for grad_fn in grad_fn_logs.values() if grad_fn.order is not None
+    }
+    covered = sum(1 for call in calls if call.label in labels_with_order)
+    return covered / len(calls)
+
+
+def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
+    """Populate resolved GradFn order values from creators and known topology."""
+
+    for grad_fn_record in grad_fn_logs.values():
+        grad_fn_record.order = _resolved_order_for_creator(
+            grad_fn_record.creator_object_id,
+            grad_fn_logs,
+        )
+
+    changed = True
+    while changed:
+        changed = False
+        for grad_fn_record in grad_fn_logs.values():
+            if grad_fn_record.creator_object_id is not None or grad_fn_record.has_op:
+                continue
+            child_orders: list[int] = []
+            for child_id in grad_fn_record.next_grad_fn_ids:
+                child = grad_fn_logs.get(child_id)
+                if child is not None and child.order is not None:
+                    child_orders.append(child.order)
+            if not child_orders:
+                continue
+            inferred_order = max(child_orders)
+            if inferred_order > 1 and grad_fn_record.order != inferred_order:
+                grad_fn_record.order = inferred_order
+                changed = True
+
+
 def _normalize_grad_fn_type(grad_fn_handle: Any) -> str:
     """Normalize an autograd grad_fn_handle class name for TorchLens labels.
 
@@ -592,7 +671,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
             is_custom=event.is_custom,
             has_op=event.op_label is not None,
             op_label=event.op_label,
-            order=1,
+            order=None,
             origin_backward_pass=event.created_in_pass,
             creator_object_id=event.creator_object_id,
             modules=modules,
@@ -604,6 +683,8 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
         grad_fn_record.source_trace = trace
         grad_fn_logs[object_id] = grad_fn_record
         object_to_label[object_id] = label
+
+    _assign_grad_fn_orders(grad_fn_logs)
 
     for object_id, grad_fn_record in grad_fn_logs.items():
         if grad_fn_record.creator_object_id is not None:
@@ -694,27 +775,37 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
     for pass_index in pass_indices:
         start = starts.get(pass_index)
         end = ends.get(pass_index)
+        root_grad_fn_ids = list(roots_by_pass.get(pass_index, ()))
+        pass_order = (
+            start.order
+            if start is not None and start.order is not None
+            else _pass_order_from_roots(root_grad_fn_ids, grad_fn_logs)
+        )
+        grad_fn_calls = pass_to_calls.get(pass_index, [])
+        order_attribution_coverage = (
+            end.order_attribution_coverage
+            if end is not None and end.order_attribution_coverage is not None
+            else _order_attribution_coverage(grad_fn_calls, grad_fn_logs)
+        )
         pass_record = BackwardPass(
             pass_index=pass_index,
             trigger=start.trigger if start is not None else "implicit",
             implicit=start.implicit if start is not None else True,
             outer_context=start.outer_context if start is not None else None,
             call_context=start.call_context_ref if start is not None else None,
-            root_grad_fn_ids=list(roots_by_pass.get(pass_index, ())),
+            root_grad_fn_ids=root_grad_fn_ids,
             root_meta=tuple(start.root_meta) if start is not None else (),
             root_grad_arguments=start.root_grad_arguments if start is not None else None,
             inputs_subset=tuple(start.inputs_subset) if start is not None else (),
-            order=start.order if start is not None else None,
+            order=pass_order,
             origin_backward_pass=start.origin_backward_pass if start is not None else None,
             engine_flags=start.engine_flags if start is not None else None,
             save_grads_policy=start.save_grads_policy_repr if start is not None else None,
             duration=None if end is None or end.duration is None else Duration(end.duration),
             peak_memory=end.peak_memory if end is not None else None,
             status=end.status if end is not None else "ok",
-            order_attribution_coverage=(
-                end.order_attribution_coverage if end is not None else None
-            ),
-            grad_fn_calls=pass_to_calls.get(pass_index, []),
+            order_attribution_coverage=order_attribution_coverage,
+            grad_fn_calls=grad_fn_calls,
         )
         pass_record.source_trace = trace
         backward_pass_logs[pass_index] = pass_record
@@ -808,10 +899,6 @@ def _make_grad_fn_hook(
         with pause_logging():
             grad_fn_handle._log_call(stored_grad_inputs, stored_grad_outputs, time.time())
         call_index = len(grad_fn_handle.calls)
-        refs = live_trace.__dict__.setdefault("_backward_gradfn_refs", [])
-        for grad_value in tuple(grad_inputs or ()):
-            if isinstance(grad_value, torch.Tensor) and grad_value.grad_fn is not None:
-                refs.append(grad_value.grad_fn)
         events = _ensure_backward_event_stream(live_trace)
         event_timestamp = time.time()
         pass_index = int(
@@ -821,6 +908,14 @@ def _make_grad_fn_hook(
                 getattr(live_trace, "num_backward_passes", 0) + 1,
             )
         )
+        for grad_value in tuple(grad_inputs or ()):
+            if isinstance(grad_value, torch.Tensor) and grad_value.grad_fn is not None:
+                _record_higher_order_terminal(
+                    live_trace,
+                    grad_value.grad_fn,
+                    creator_object_id=grad_fn_object_id,
+                    pass_index=pass_index,
+                )
         events.append_backward(
             GradFnFired(
                 object_id=grad_fn_object_id,
@@ -1101,6 +1196,138 @@ def _walk_and_hook_backward_graph(trace: Any, loss: torch.Tensor) -> list[Any]:
             continue
     _sync_grad_fn_graph_relations(trace)
     return handles
+
+
+def _record_higher_order_terminal(
+    trace: Any,
+    grad_fn_handle: Any,
+    *,
+    creator_object_id: int,
+    pass_index: int,
+) -> None:
+    """Queue a terminal grad-fn created by a differentiable backward op."""
+
+    _strong_grad_fn_refs(trace).append(grad_fn_handle)
+    terminals = trace.__dict__.setdefault("_higher_order_grad_fn_terminals", [])
+    terminals.append((grad_fn_handle, creator_object_id, pass_index))
+
+
+def _emit_discovered_grad_fn(
+    trace: Any,
+    grad_fn_handle: Any,
+    *,
+    created_in_pass: int | None,
+    creator_object_id: int | None,
+) -> None:
+    """Append a discovery event and runtime record for one grad-fn object."""
+
+    grad_fn_object_id = id(grad_fn_handle)
+    next_grad_fns = list(_iter_next_grad_fns(grad_fn_handle))
+    _strong_grad_fn_refs(trace).extend(next_grad_fns)
+    grad_fn_record = trace.grad_fn_logs.get(grad_fn_object_id)
+    if grad_fn_record is None:
+        grad_fn_type = _normalize_grad_fn_type(grad_fn_handle)
+        type_counter = trace.__dict__.setdefault("_backward_grad_fn_type_counter", {})
+        step_index = len(trace.grad_fn_order) + 1
+        type_index, step_index, label = _grad_fn_label_parts(
+            trace,
+            grad_fn_type,
+            None,
+            type_counter,
+            step_index,
+        )
+        grad_fn_cls = type(grad_fn_handle)
+        grad_fn_record = GradFn(
+            grad_fn_object_id=grad_fn_object_id,
+            class_name=grad_fn_cls.__name__,
+            class_qualname=f"{grad_fn_cls.__module__}.{grad_fn_cls.__qualname__}",
+            label=label,
+            type=grad_fn_type,
+            type_index=type_index,
+            ordinal_index=len(trace.grad_fn_order),
+            step_index=step_index,
+            is_custom=_grad_fn_is_custom(grad_fn_handle),
+            has_op=False,
+            op_label=None,
+            order=_resolved_order_for_creator(creator_object_id, trace.grad_fn_logs),
+            origin_backward_pass=created_in_pass,
+            creator_object_id=creator_object_id,
+            next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
+            **_grad_fn_source_metadata(grad_fn_cls),
+        )
+        grad_fn_record.source_trace = trace
+        trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
+        trace.grad_fn_order.append(grad_fn_object_id)
+    else:
+        grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
+        grad_fn_record.source_trace = trace
+
+    source_fields = {
+        key: getattr(grad_fn_record, key)
+        for key in (
+            "class_source_file",
+            "class_source_line",
+            "init_source_file",
+            "init_source_line",
+            "forward_source_file",
+            "forward_source_line",
+            "backward_source_file",
+            "backward_source_line",
+        )
+    }
+    _ensure_backward_event_stream(trace).append_backward(
+        GradFnDiscovered(
+            object_id=grad_fn_object_id,
+            class_name=grad_fn_record.class_name,
+            class_qualname=grad_fn_record.class_qualname,
+            is_custom=grad_fn_record.is_custom,
+            op_label=None,
+            param_ref=None,
+            created_in_pass=created_in_pass,
+            creator_object_id=creator_object_id,
+            source=source_fields,
+            topology=tuple(id(next_fn) for next_fn in next_grad_fns),
+        )
+    )
+
+
+def _rewalk_higher_order_grad_fns(trace: Any) -> None:
+    """Discover grad-fn nodes created by a differentiable backward pass."""
+
+    terminals = list(trace.__dict__.pop("_higher_order_grad_fn_terminals", ()))
+    if not terminals:
+        return
+    existing_ids = set(trace.grad_fn_logs)
+
+    def terminal_key(item: tuple[Any, int, int]) -> tuple[int, int, int]:
+        """Sort terminals by creator order, pass, then creator id."""
+
+        _terminal, creator_object_id, pass_index = item
+        creator = trace.grad_fn_logs.get(creator_object_id)
+        creator_order = getattr(creator, "order", None)
+        return (
+            10**9 if creator_order is None else int(creator_order),
+            pass_index,
+            creator_object_id,
+        )
+
+    discovered_ids: set[int] = set()
+    for terminal, creator_object_id, pass_index in sorted(terminals, key=terminal_key):
+        queue: deque[Any] = deque([terminal])
+        while queue:
+            grad_fn_handle = queue.popleft()
+            grad_fn_object_id = id(grad_fn_handle)
+            if grad_fn_object_id in existing_ids or grad_fn_object_id in discovered_ids:
+                continue
+            discovered_ids.add(grad_fn_object_id)
+            _emit_discovered_grad_fn(
+                trace,
+                grad_fn_handle,
+                created_in_pass=pass_index,
+                creator_object_id=creator_object_id,
+            )
+            queue.extend(_iter_next_grad_fns(grad_fn_handle))
+    _sync_grad_fn_graph_relations(trace)
 
 
 def _is_static_truthy_keep_grad(value: Any) -> bool:
@@ -1498,6 +1725,7 @@ def _run_backward_with_capture(
             sum(int(param_log.gradient_memory) for param_log in getattr(trace, "param_logs", []))
         )
         trace.num_backward_passes = max(int(getattr(trace, "num_backward_passes", 0)), pass_index)
+        _rewalk_higher_order_grad_fns(trace)
         events.append_backward(
             BackwardPassEnd(
                 pass_index=pass_index,

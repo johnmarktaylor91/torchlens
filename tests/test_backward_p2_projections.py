@@ -111,3 +111,39 @@ def test_backward_projection_structural_invariants_trip_on_corruption() -> None:
             check_metadata_invariants(trace)
     finally:
         trace.cleanup()
+
+
+def test_higher_order_autograd_grad_records_creator_order() -> None:
+    """create_graph autograd.grad records creator attribution and pass order."""
+
+    class HigherOrderModel(nn.Module):
+        """Tiny nonlinear model with differentiable first gradients."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scalar nonlinear output."""
+
+            return (torch.tanh(x) ** 3).sum()
+
+    torch.manual_seed(0)
+    x = torch.randn(3, requires_grad=True)
+    trace = tl.trace(HigherOrderModel(), x, save_grads="all")
+    try:
+        loss = trace[trace.output_layers[0]].out
+        first_grad = torch.autograd.grad(loss, x, create_graph=True, retain_graph=True)[0]
+        torch.autograd.grad(first_grad.sum(), x, retain_graph=True)
+
+        assert [backward_pass.order for backward_pass in trace.backward_passes] == [1, 2]
+        higher_order_grad_fns = [
+            grad_fn
+            for grad_fn in trace.grad_fns
+            if grad_fn.origin_backward_pass == 1 and grad_fn.creator_object_id is not None
+        ]
+        assert higher_order_grad_fns
+        assert {grad_fn.order for grad_fn in higher_order_grad_fns} == {2}
+        assert all(grad_fn.differentiates is not None for grad_fn in higher_order_grad_fns)
+        assert all(
+            backward_pass.order_attribution_coverage == 1.0
+            for backward_pass in trace.backward_passes
+        )
+    finally:
+        trace.cleanup()
