@@ -65,7 +65,7 @@ from ...utils.introspection import (
 )
 from ...utils.display import _timed_phase
 from ...utils.tensor_utils import (
-    get_memory_amount,
+    get_memory_amount_from_metadata,
     is_functorch_wrapped_tensor,
     safe_copy,
     safe_to,
@@ -2428,7 +2428,13 @@ def log_function_output_tensors_fast(
                                 child_output._internal_set("out", None)
                     child_output.has_saved_activation = True
                     if child_output.out is not None:
-                        child_output.activation_memory = Bytes(get_memory_amount(child_output.out))
+                        child_output.activation_memory = Bytes(
+                            get_memory_amount_from_metadata(
+                                child_output.out,
+                                tuple(child_output.out.shape),
+                                child_output.out.dtype,
+                            )
+                        )
 
         # Update lightweight metadata that may vary across inputs
         # (shape can differ for dynamic-shape models that still share graph structure).
@@ -2443,7 +2449,9 @@ def log_function_output_tensors_fast(
             )
         orig_layer_entry.shape = new_shape
         orig_layer_entry.dtype = out.dtype
-        orig_layer_entry.activation_memory = Bytes(get_memory_amount(out))
+        orig_layer_entry.activation_memory = Bytes(
+            get_memory_amount_from_metadata(out, new_shape, out.dtype)
+        )
         (
             orig_layer_entry.autograd_memory,
             orig_layer_entry.num_autograd_tensors,
@@ -2865,8 +2873,11 @@ def _log_output_tensor_info(
     fields_dict["transformed_out_shape"] = None
     fields_dict["dtype"] = t.dtype
     fields_dict["transformed_out_dtype"] = None
-    with pause_logging():
-        fields_dict["activation_memory"] = t.nelement() * t.element_size()
+    fields_dict["activation_memory"] = get_memory_amount_from_metadata(
+        t,
+        fields_dict["shape"],
+        fields_dict["dtype"],
+    )
     fields_dict["transformed_activation_memory"] = None
     fields_dict["visualizer_path"] = None
     fields_dict["bytes_delta_at_call"] = 0
@@ -2940,7 +2951,11 @@ def _save_activation_fields(
 
         fields_dict["shape"] = tuple(raw_out.shape)
         fields_dict["dtype"] = raw_out.dtype
-        fields_dict["activation_memory"] = get_memory_amount(raw_out)
+        fields_dict["activation_memory"] = get_memory_amount_from_metadata(
+            raw_out,
+            fields_dict["shape"],
+            fields_dict["dtype"],
+        )
 
         save_raw_activations = getattr(trace, "save_raw_activations", True)
         store_raw = save_raw_activations or activation_transform is None
@@ -3096,7 +3111,11 @@ def _save_predicate_activation_fields(
         metadata_tensor = tensor
     fields_dict["shape"] = tuple(metadata_tensor.shape)
     fields_dict["dtype"] = metadata_tensor.dtype
-    fields_dict["activation_memory"] = get_memory_amount(metadata_tensor)
+    fields_dict["activation_memory"] = get_memory_amount_from_metadata(
+        metadata_tensor,
+        fields_dict["shape"],
+        fields_dict["dtype"],
+    )
     fields_dict["out"] = ram_payload
     fields_dict["transformed_out"] = transformed_ram_payload
     transformed_metadata = transformed_ram_payload
@@ -3294,12 +3313,14 @@ def _copy_lookback_payload(
             label=fields_dict.get("_layer_label_raw"),
         )
     store_raw = policy != "transformed" or getattr(trace, "save_raw_activations", True)
+    raw_shape = tuple(raw_out.shape)
+    raw_dtype = raw_out.dtype
     return _RetainedLookbackPayload(
         raw_out=raw_out if store_raw else None,
         transformed_out=transformed_out,
-        shape=tuple(raw_out.shape),
-        dtype=raw_out.dtype,
-        activation_memory=get_memory_amount(raw_out),
+        shape=raw_shape,
+        dtype=raw_dtype,
+        activation_memory=get_memory_amount_from_metadata(raw_out, raw_shape, raw_dtype),
         transformed_shape=_shape_or_none(transformed_out),
         transformed_dtype=_dtype_or_none(transformed_out),
         transformed_memory=_memory_or_none(transformed_out),

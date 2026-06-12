@@ -16,6 +16,7 @@ from torchlens import trace as trace_fn
 from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
 from torchlens.utils.tensor_utils import (
     get_memory_amount,
+    get_memory_amount_from_metadata,
     print_override,
     safe_copy,
     safe_to,
@@ -302,6 +303,34 @@ class TestGetTensorMemory:
     def test_normal_tensor(self):
         t = torch.randn(10, 10)  # 100 float32 = 400 bytes
         assert get_memory_amount(t) == 400
+
+    def test_metadata_memory_uses_dense_shape_dtype(self) -> None:
+        """Dense metadata memory should match tensor-method accounting.
+
+        Returns
+        -------
+        None
+            Assertion-only regression test.
+        """
+
+        t = torch.randn(2, 3, 4, dtype=torch.float16)
+
+        assert get_memory_amount_from_metadata(t, tuple(t.shape), t.dtype) == 48
+
+    def test_metadata_memory_uses_sparse_fallback(self) -> None:
+        """Sparse metadata memory should preserve non-zero-value accounting.
+
+        Returns
+        -------
+        None
+            Assertion-only regression test.
+        """
+
+        indices = torch.tensor([[0, 1, 1], [2, 0, 2]])
+        values = torch.tensor([3.0, 4.0, 5.0])
+        sparse = torch.sparse_coo_tensor(indices, values, (2, 3))
+
+        assert get_memory_amount_from_metadata(sparse, tuple(sparse.shape), sparse.dtype) == 12
 
 
 # ---------------------------------------------------------------------------

@@ -75,6 +75,7 @@ from ._accessor_base import Accessor
 from ..utils.tensor_utils import (
     concatenate_batch_tensors,
     get_memory_amount,
+    get_memory_amount_from_metadata,
     is_functorch_wrapped_tensor,
     print_override,
     safe_copy,
@@ -159,7 +160,9 @@ def _dtype_or_none(value: Any) -> torch.dtype | None:
 def _memory_or_none(value: Any) -> Bytes | None:
     """Return tensor memory in bytes, or ``None`` for non-tensor values."""
 
-    return as_bytes(get_memory_amount(value)) if isinstance(value, torch.Tensor) else None
+    if not isinstance(value, torch.Tensor):
+        return None
+    return as_bytes(get_memory_amount_from_metadata(value, tuple(value.shape), value.dtype))
 
 
 def _summarize_value(value: Any) -> str:
@@ -562,9 +565,14 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
         Metadata fields are updated through internal setters.
     """
 
-    entry._internal_set("shape", tuple(tensor.shape))
-    entry._internal_set("dtype", tensor.dtype)
-    entry._internal_set("activation_memory", Bytes(get_memory_amount(tensor)))
+    shape = tuple(tensor.shape)
+    dtype = tensor.dtype
+    entry._internal_set("shape", shape)
+    entry._internal_set("dtype", dtype)
+    entry._internal_set(
+        "activation_memory",
+        Bytes(get_memory_amount_from_metadata(tensor, shape, dtype)),
+    )
     entry._internal_set("has_saved_activation", True)
     entry._internal_set("transformed_out_shape", _shape_or_none(entry.transformed_out))
     entry._internal_set("transformed_out_dtype", _dtype_or_none(entry.transformed_out))
@@ -2345,7 +2353,9 @@ class Op:
 
             self.shape = tuple(raw_out.shape)
             self.dtype = raw_out.dtype
-            self.activation_memory = Bytes(get_memory_amount(raw_out))
+            self.activation_memory = Bytes(
+                get_memory_amount_from_metadata(raw_out, self.shape, self.dtype)
+            )
 
             save_raw_activations = getattr(trace, "save_raw_activations", True)
             store_raw = save_raw_activations or activation_transform is None

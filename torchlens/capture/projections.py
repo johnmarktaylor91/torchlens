@@ -38,6 +38,7 @@ from ..ir.events import (
 from ..ir.refs import DeviceRef, DtypeRef, TensorRef
 from ..ir.predicate import EventKind, coerce_deferred_value
 from ..ir.semantics import BackendSemantics, CapturePolicy
+from ..utils.tensor_utils import get_memory_amount_from_metadata
 
 if TYPE_CHECKING:
     from ..fastlog.options import RecordingOptions
@@ -500,8 +501,11 @@ def _event_from_record(
     """Build a lightweight fastlog ``OpEvent`` without materializing an Op."""
 
     label_raw = ctx.raw_label or ctx.label
-    with pause_logging():
-        memory = int(tensor.nelement() * tensor.element_size()) if tensor is not None else 0
+    memory = (
+        get_memory_amount_from_metadata(tensor, ctx.shape or tuple(tensor.shape), tensor.dtype)
+        if tensor is not None
+        else 0
+    )
     tensor_requires_grad = cast(bool | None, coerce_deferred_value(ctx.tensor_requires_grad))
     is_scalar_bool = cast(bool | None, coerce_deferred_value(ctx.is_scalar_bool))
     bool_value = cast(bool | None, coerce_deferred_value(ctx.bool_value))
@@ -518,14 +522,17 @@ def _event_from_record(
     )
     transformed_ref = None
     if transformed_ram_payload is not None:
-        with pause_logging():
-            transformed_memory = int(
-                transformed_ram_payload.nelement() * transformed_ram_payload.element_size()
-            )
+        transformed_shape = tuple(transformed_ram_payload.shape)
+        transformed_dtype = transformed_ram_payload.dtype
+        transformed_memory = get_memory_amount_from_metadata(
+            transformed_ram_payload,
+            transformed_shape,
+            transformed_dtype,
+        )
         transformed_ref = TensorRef(
             label_raw=label_raw,
-            shape=tuple(transformed_ram_payload.shape),
-            dtype=str(transformed_ram_payload.dtype),
+            shape=transformed_shape,
+            dtype=str(transformed_dtype),
             device=str(transformed_ram_payload.device),
             requires_grad=transformed_ram_payload.requires_grad,
             memory=transformed_memory,

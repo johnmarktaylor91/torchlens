@@ -68,7 +68,11 @@ from ...ir import (
     ModulePrepEvent,
     replace_op_event,
 )
-from ...utils.tensor_utils import get_memory_amount, is_functorch_wrapped_tensor
+from ...utils.tensor_utils import (
+    get_memory_amount,
+    get_memory_amount_from_metadata,
+    is_functorch_wrapped_tensor,
+)
 from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
@@ -1104,7 +1108,11 @@ def _ensure_module_output_tensor_logged(
             "transformed_out_shape": None,
             "dtype": tensor.dtype,
             "transformed_out_dtype": None,
-            "activation_memory": get_memory_amount(tensor),
+            "activation_memory": get_memory_amount_from_metadata(
+                tensor,
+                tuple(tensor.shape),
+                tensor.dtype,
+            ),
             "transformed_activation_memory": None,
             "visualizer_path": None,
             "bytes_delta_at_call": 0,

@@ -15,6 +15,7 @@ to wrapped versions.
 """
 
 import copy
+from math import prod
 from typing import Any, Optional, cast
 
 import numpy as np
@@ -285,6 +286,39 @@ def get_memory_amount(t: torch.Tensor) -> int:
             return t.nelement() * t.element_size()
     except Exception:
         return 0
+
+
+def get_memory_amount_from_metadata(
+    t: torch.Tensor,
+    shape: tuple[int, ...] | torch.Size,
+    dtype: torch.dtype,
+) -> int:
+    """Return tensor memory bytes using already-captured dense metadata.
+
+    Parameters
+    ----------
+    t:
+        Tensor being measured.
+    shape:
+        Already-captured tensor shape.
+    dtype:
+        Already-captured tensor dtype.
+
+    Returns
+    -------
+    int
+        Size in bytes, or the guarded tensor-method fallback for layouts whose
+        storage size is not represented by ``shape * dtype.itemsize``.
+    """
+
+    try:
+        if t.device.type == "meta":
+            return 0
+        if t.is_sparse:
+            return get_memory_amount(t)
+        return int(prod(shape) * dtype.itemsize)
+    except Exception:
+        return get_memory_amount(t)
 
 
 def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:

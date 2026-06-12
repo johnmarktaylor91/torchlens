@@ -47,7 +47,7 @@ from ...capture.projections import (
 from ...fastlog.types import ActivationRecord, CaptureSpec
 from ...utils.introspection import _get_code_context
 from ...utils.rng import log_current_rng_states
-from ...utils.tensor_utils import get_memory_amount
+from ...utils.tensor_utils import get_memory_amount_from_metadata
 
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
 
@@ -273,7 +273,9 @@ def log_source_tensor_exhaustive(
     modules = _snapshot_exhaustive_module_stack(self)
     base_equivalence_class = equivalence_class
     equivalence_class = _append_module_suffix_to_equivalence_class(equivalence_class, modules)
-    memory = get_memory_amount(t)
+    shape = tuple(t.shape)
+    dtype = t.dtype
+    memory = get_memory_amount_from_metadata(t, shape, dtype)
 
     fields_dict: dict[str, Any] = {
         # General info:
@@ -309,9 +311,9 @@ def log_source_tensor_exhaustive(
         "saved_kwargs": None,
         "args_template": None,
         "kwargs_template": None,
-        "shape": tuple(t.shape),
+        "shape": shape,
         "transformed_out_shape": None,
-        "dtype": t.dtype,
+        "dtype": dtype,
         "transformed_out_dtype": None,
         "activation_memory": memory,
         "transformed_activation_memory": None,
@@ -515,5 +517,6 @@ def log_source_tensor_fast(self: "Trace", t: torch.Tensor, source: str) -> None:
         )
     orig_layer_entry.shape = new_shape
     orig_layer_entry.dtype = t.dtype
-    memory = get_memory_amount(t)
+    new_dtype = t.dtype
+    memory = get_memory_amount_from_metadata(t, new_shape, new_dtype)
     orig_layer_entry.activation_memory = Bytes(memory)
