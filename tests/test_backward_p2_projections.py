@@ -147,3 +147,101 @@ def test_higher_order_autograd_grad_records_creator_order() -> None:
         )
     finally:
         trace.cleanup()
+
+
+def test_higher_order_nodes_reach_third_order() -> None:
+    """Repeated differentiable grads attribute newly-created nodes past order two."""
+
+    class ThirdOrderModel(nn.Module):
+        """Tiny nonlinear model whose derivatives remain differentiable."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scalar nonlinear output."""
+
+            return (torch.sin(x) * torch.exp(x)).sum()
+
+    torch.manual_seed(0)
+    x = torch.randn(3, requires_grad=True)
+    trace = tl.trace(ThirdOrderModel(), x, save_grads="all")
+    try:
+        grad = trace[trace.output_layers[0]].out
+        for _order_index in range(2):
+            grad = torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)[0]
+
+        created_in_second_pass = [
+            grad_fn
+            for grad_fn in trace.grad_fns
+            if grad_fn.origin_backward_pass == 2 and grad_fn.creator_object_id is not None
+        ]
+        assert created_in_second_pass
+        assert 3 in {grad_fn.order for grad_fn in created_in_second_pass}
+        assert max(grad_fn.order for grad_fn in trace.grad_fns if grad_fn.order is not None) >= 3
+        assert all(
+            backward_pass.order_attribution_coverage == 1.0
+            for backward_pass in trace.backward_passes
+        )
+    finally:
+        trace.cleanup()
+
+
+def test_higher_order_induction_stress_reaches_expected_depth() -> None:
+    """Higher-order creator attribution grows inductively across repeated grads."""
+
+    class InductionModel(nn.Module):
+        """Tiny nonlinear model with nonzero repeated derivatives."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scalar nonlinear output."""
+
+            return (torch.sin(x) * torch.exp(x)).sum()
+
+    num_grad_passes = 4
+    torch.manual_seed(0)
+    x = torch.randn(2, requires_grad=True)
+    trace = tl.trace(InductionModel(), x, save_grads="all")
+    try:
+        grad = trace[trace.output_layers[0]].out
+        for _pass_index in range(num_grad_passes):
+            grad = torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)[0]
+
+        resolved_orders = {grad_fn.order for grad_fn in trace.grad_fns if grad_fn.order is not None}
+        assert set(range(1, num_grad_passes + 2)).issubset(resolved_orders)
+        assert max(resolved_orders) == num_grad_passes + 1
+        assert all(
+            grad_fn.order == trace.grad_fn_logs[grad_fn.creator_object_id].order + 1
+            for grad_fn in trace.grad_fns
+            if grad_fn.creator_object_id is not None and grad_fn.order is not None
+        )
+    finally:
+        trace.cleanup()
+
+
+def test_higher_order_mixed_order_pass_records_reused_and_created_nodes() -> None:
+    """A differentiable higher-order pass may fire reused and newly-created orders."""
+
+    class MixedOrderModel(nn.Module):
+        """Tiny nonlinear model that refires first-order nodes during higher-order grads."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scalar nonlinear output."""
+
+            return (torch.tanh(x) ** 4).sum()
+
+    torch.manual_seed(0)
+    x = torch.randn(3, requires_grad=True)
+    trace = tl.trace(MixedOrderModel(), x, save_grads="all")
+    try:
+        grad = trace[trace.output_layers[0]].out
+        grad = torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)[0]
+        torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)
+
+        label_to_order = {grad_fn.label: grad_fn.order for grad_fn in trace.grad_fns}
+        second_pass_orders = {
+            label_to_order[call.label] for call in trace.backward_passes.for_pass(2).grad_fn_calls
+        }
+        assert {1, 2}.issubset(second_pass_orders)
+        assert any(
+            grad_fn.origin_backward_pass == 2 and grad_fn.order == 3 for grad_fn in trace.grad_fns
+        )
+    finally:
+        trace.cleanup()

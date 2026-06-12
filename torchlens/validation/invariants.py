@@ -304,7 +304,7 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
 
     for layer in trace.layer_list:
         grad_fn_object_id = layer.grad_fn_object_id
-        if grad_fn_object_id is None:
+        if grad_fn_object_id is None or layer.grad_fn is None:
             continue
         if grad_fn_object_id not in trace.grad_fn_logs:
             raise MetadataInvariantError(

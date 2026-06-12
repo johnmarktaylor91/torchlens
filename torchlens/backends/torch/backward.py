@@ -1299,20 +1299,8 @@ def _rewalk_higher_order_grad_fns(trace: Any) -> None:
         return
     existing_ids = set(trace.grad_fn_logs)
 
-    def terminal_key(item: tuple[Any, int, int]) -> tuple[int, int, int]:
-        """Sort terminals by creator order, pass, then creator id."""
-
-        _terminal, creator_object_id, pass_index = item
-        creator = trace.grad_fn_logs.get(creator_object_id)
-        creator_order = getattr(creator, "order", None)
-        return (
-            10**9 if creator_order is None else int(creator_order),
-            pass_index,
-            creator_object_id,
-        )
-
     discovered_ids: set[int] = set()
-    for terminal, creator_object_id, pass_index in sorted(terminals, key=terminal_key):
+    for terminal, creator_object_id, pass_index in terminals:
         queue: deque[Any] = deque([terminal])
         while queue:
             grad_fn_handle = queue.popleft()
