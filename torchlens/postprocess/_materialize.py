@@ -1299,6 +1299,17 @@ def _buffer_write_fields(
             "buffer_source": producer_label_raw if producer_label_raw in op_event_labels else None,
             "buffer_source_func_name": getattr(event, "source_func_name", None),
         }
+        value = getattr(event, "value", None)
+        if isinstance(value, torch.Tensor):
+            fields.update(
+                {
+                    "out": value,
+                    "has_saved_activation": True,
+                    "shape": tuple(value.shape),
+                    "dtype": value.dtype,
+                    "activation_memory": value.nelement() * value.element_size(),
+                }
+            )
         if producer_label_raw in op_event_labels:
             fields["parents"] = [producer_label_raw]
             fields["parent_arg_positions"] = {"args": {0: producer_label_raw}, "kwargs": {}}

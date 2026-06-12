@@ -5548,16 +5548,27 @@ class Trace(CapturedRun):
         """
         return cleanup(self)
 
-    def release_param_refs(self) -> None:
+    def release_param_refs(self, *, allow_iter_rehydrate: bool = False) -> None:
         """Release live ``nn.Parameter`` references held by ParamLogs.
+
+        Parameters
+        ----------
+        allow_iter_rehydrate:
+            If ``True``, iterating ``param_logs`` may lazily restore live
+            references from the source model. Public explicit releases leave
+            this disabled.
 
         Returns
         -------
         None
             This method mutates ParamLogs in place.
         """
-        for param_log in self.param_logs:
+        if hasattr(self.param_logs, "_rehydrate_on_iter"):
+            self.param_logs._rehydrate_on_iter = False
+        for param_log in self.param_logs.values():
             param_log.release_param_ref()
+        if hasattr(self.param_logs, "_rehydrate_on_iter"):
+            self.param_logs._rehydrate_on_iter = allow_iter_rehydrate
 
     def _postprocess(
         self,

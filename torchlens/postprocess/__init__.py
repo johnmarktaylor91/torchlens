@@ -347,7 +347,7 @@ def postprocess(
             _evict_streamed_outs(self)
 
     with _vtimed(self, "  Step 20: Release param refs"):
-        self.release_param_refs()
+        self.release_param_refs(allow_iter_rehydrate=True)
 
     if getattr(self, "verbose", False):
         print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")

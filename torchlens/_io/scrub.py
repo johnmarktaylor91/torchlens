@@ -380,7 +380,10 @@ def _blobify_tensor_field(
     blob_id = _next_blob_id(blob_counter)
     kind = _blob_kind_for_field(owner, field_name)
     label = _blob_label_for_owner(owner)
-    blob_specs.append((blob_id, field_value, kind, label))
+    tensor_payload = (
+        field_value.detach() if isinstance(field_value, torch.nn.Parameter) else field_value
+    )
+    blob_specs.append((blob_id, tensor_payload, kind, label))
     return BlobRef(blob_id=blob_id, kind=kind)
 
 

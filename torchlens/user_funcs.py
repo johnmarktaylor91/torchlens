@@ -1197,8 +1197,6 @@ def _run_model_and_save_specified_outs(
             lookback_payload_policy=lookback_payload_policy,  # type: ignore[arg-type]
             on_predicate_error="fail-fast",
         )
-        if save_predicate is not None or intervene_predicate is not None:
-            trace.capture_mode = "predicate"
         trace._halt_returns_partial_trace = halt_predicate is not None
         trace._predicate_history_size = predicate_history_size
         trace._predicate_lookback = lookback

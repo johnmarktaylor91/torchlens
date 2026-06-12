@@ -584,10 +584,23 @@ class ParamAccessor(Accessor["Param"]):
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
+        "_rehydrate_on_iter": FieldPolicy.DROP,
     }
 
     def __init__(self, param_logs: Dict[str, "Param"]) -> None:
         super().__init__(param_logs)
+        self._rehydrate_on_iter = False
+
+    def __iter__(self) -> Iterator["Param"]:
+        """Iterate over params, restoring live refs when the source model is available."""
+
+        for param_log in self._list:
+            if self._rehydrate_on_iter:
+                try:
+                    param_log._resolve_live_param()
+                except PostTraceParamUnavailable:
+                    pass
+            yield param_log
 
     def _resolve_substring(self, key: str) -> "Param | None":
         """Resolve an unambiguous parameter short name."""
