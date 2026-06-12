@@ -42,7 +42,7 @@ post-benchmark round) + torch parity goldens once built.
 - [x] 1. Invariant contract: `.research/backend-substrate/artifact-1-invariant-contract.md`
 - [x] 2. Public-surface + kwarg + backward-surface matrices: `.research/backend-substrate/artifact-2-public-surface-kwarg-backward-matrices.md`
 - [x] 3. Serialization contract with three version axes: `.research/backend-substrate/artifact-3-serialization-contract.md`
-- [ ] 4. BackendSpec registry contract as executable migration map
+- [x] 4. BackendSpec registry contract as executable migration map: `.research/backend-substrate/artifact-4-backendspec-registry-migration-map.md`
 - [ ] 5. Docs/glossary change list
 
 ## Iteration log
@@ -53,4 +53,5 @@ post-benchmark round) + torch parity goldens once built.
 | 2 | M0.1a | artifact 2 - public-surface + kwarg + backward-surface matrices | this commit | Wrote docs-only public API, trace kwarg, and backward-surface executable matrices; no tests/ruff per benchmark constraint. | artifact 3 - serialization contract with three version axes |
 | 3 | M0.1a | artifact 3 - serialization contract with three version axes | this commit | Wrote docs-only serialization contract separating on-disk family, manifest schema, and pickled object-state axes; no tests/ruff per benchmark constraint. | artifact 4 - BackendSpec registry executable migration map |
 | 2 | tinygrad | S0.G discovery | this commit | PASS: added scheduler/JIT, explicit-realize, alias-mutation, explicit-gradient, and realized payload snapshot probes under `tinygrad==0.13.0`; spike ruff passed. | Continue S0.G with TinyJit captured-execution payload reads, safe device variation, and final source-of-truth/payload decisions. |
+| 4 | M0.1a | artifact 4 - BackendSpec registry executable migration map | this commit | Wrote docs-only BackendSpec registry contract and migration map for backend literals, MLX branches, validation dispatch, serialization, and public accessors; no tests/ruff per benchmark constraint. | artifact 5 - docs/glossary change list |
 | 3 | tinygrad | S0.G discovery | this commit | PASS: added captured TinyJit runner/payload probes under `tinygrad==0.13.0`; finalized UOp pre-realization source-of-truth lean and backend-conditional payload capability decision; spike ruff passed. | Optional final S0.G round only for safe non-default device coverage and import-time capability probe text. |
