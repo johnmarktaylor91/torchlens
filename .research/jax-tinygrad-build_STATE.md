@@ -1,0 +1,51 @@
+# jax-tinygrad-build — autonomous build loop state
+
+run_name: jax-tinygrad-build
+state: RUNNING
+started: 2026-06-12 ~20:20 (overnight autonomous mandate, JMT)
+plan: .research/jax-tinygrad-sprint_PLAN.md (v13 BUILD-READY; round-13 critic checklist = build checklist)
+branch: capture-unification
+max_rounds: 40 (backstop; anti-flail 3-same-issue governs)
+
+## AUTONOMOUS DECISION LOG (JMT reviews later — append EVERY gate call here)
+| # | When | Decision | Rationale |
+|---|---|---|---|
+| D1 | 20:20 | Backend sprint overlaps P6 measurement (benchmark ~10h; serializing blows the morning deadline). Overlapping rounds FORBID pytest runs; perf wrap-up waits for benchmark end. | JMT morning goal > measurement purity; measurement conditions already documented as loaded-host. |
+
+## Stop criterion
+Committed phases (M0.1a artifacts, S0.J-slim, S0.G) + gate-issued phases through
+M1 J4 green per the plan's round-13 checklist — OR honest defer decisions logged.
+At ~07:30 local: HARD CHECKPOINT — whatever is green: README edits (Fable), merge
+capture-unification -> main, VERSION GUARD (no major bump: grep BREAKING/! in
+commits), push, summary + iMessage JMT.
+
+## Wake-up case routing
+| Signal | Action |
+|---|---|
+| codex alive | yield |
+| CODEX_DONE | verify (git log, report tail, gates per round type), append round row, dispatch next per plan sequence |
+| CODEX_FAILED quota | fallback: Agent(general-purpose, opus) with adapted spec; if both blocked: state BLOCKED + iMessage + ScheduleWakeup |
+| verification FAIL | focused fixup spec, ONE retry per failure class, then RESIDUAL/defer |
+| same issue 3 rounds | RESIDUAL; log; continue or defer phase |
+| perf measurement (pid 1133032) done | verify gate JSON; dispatch perf WRAP-UP round (tests allowed then); on its completion mark perf-build_STATE DONE + iMessage headline numbers |
+| 07:30 checkpoint | execute stop-criterion endgame regardless of remaining rounds |
+
+## Phase sequence (from plan §5)
+M0.1a artifacts 1-5 (docs-only rounds) || S0.G discovery (parallel lane) ->
+S0.J-slim (2-3) -> IMPACT GATE (Fable decides under D-mandate, logs D#) ->
+M0.1b parity gates -> M0.2 substrate -> M0.3 -> M1 J1-J4 -> [M2 if S0.G go].
+Per-round gates: predicate suite + smoke (SUSPENDED during benchmark overlap —
+substituted with ruff/mypy + targeted-non-CPU checks; full gates re-run at first
+post-benchmark round) + torch parity goldens once built.
+
+## M0.1a artifact checklist
+- [x] 1. Invariant contract: `.research/backend-substrate/artifact-1-invariant-contract.md`
+- [ ] 2. Public-surface + kwarg + backward-surface matrices
+- [ ] 3. Serialization contract with three version axes
+- [ ] 4. BackendSpec registry contract as executable migration map
+- [ ] 5. Docs/glossary change list
+
+## Iteration log
+| Round | Lane | Phase | Commit | Result | Next |
+|---|---|---|---|---|---|
+| 1 | M0.1a | artifact 1 - invariant contract | this commit | Wrote docs-only backend invariant contract; no tests/ruff per benchmark constraint. | artifact 2 - public-surface + kwarg + backward-surface matrices |
