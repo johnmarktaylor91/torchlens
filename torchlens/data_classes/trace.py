@@ -970,7 +970,6 @@ class Trace(CapturedRun):
             "_in" + "_exhaustive_pass": "in_exhaustive_pass",
             "_module" + "_containment_engine": "module_containment_engine",
             "_exhaustive" + "_module_stack": "exhaustive_module_stack",
-            "_unsaved" + "_layers_lookup_keys": "unsaved_layers_lookup_keys",
             "_input" + "_tensor_addresses": "input_tensor_addresses",
         }
 

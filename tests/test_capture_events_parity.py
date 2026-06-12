@@ -104,6 +104,7 @@ def fixture_model_input(request: pytest.FixtureRequest) -> tuple[nn.Module, torc
 
     model_class_name = str(request.param)
     torch.manual_seed(12345)
+    model: nn.Module
     if model_class_name == "tiny_mlp":
         model = nn.Sequential(
             nn.Linear(8, 16),
@@ -319,7 +320,6 @@ def _drop_capture_scratch(trace: Any) -> None:
         "_raw_layer_labels_list",
         "_layer_counter",
         "_raw_layer_type_counter",
-        "_unsaved_layers_lookup_keys",
         "_current_func_barcode",
         "_mod_entered",
         "_mod_exited",

@@ -428,7 +428,6 @@ class TraceBuildState:
     in_exhaustive_pass: bool = True
     layer_counter: int = 0
     raw_layer_type_counter: dict[str, int] = field(default_factory=lambda: defaultdict(lambda: 0))
-    unsaved_layers_lookup_keys: set[str] = field(default_factory=set)
     output_container_specs_by_raw_label: dict[str, ContainerSpec] = field(default_factory=dict)
     output_container_specs: tuple[ContainerSpec, ...] = ()
     input_tensor_addresses: list[int] = field(default_factory=list)

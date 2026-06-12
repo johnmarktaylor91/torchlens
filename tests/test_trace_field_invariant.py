@@ -55,6 +55,11 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_tl_backward_hooked_tensor_keys",
         "_backward_gradfn_refs",
         "_backward_projection_event_count",
+        "_halt_returns_partial_trace",
+        "_phase_timings",
+        "_postprocessing_active",
+        "_raw_event_shape_hash",
+        "_replay_arg_version_data_complete",
     }
 
     actual = set(trace.__dict__.keys())
@@ -68,7 +73,6 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_raw_layer_labels_list",
         "_layer_counter",
         "_raw_layer_type_counter",
-        "_unsaved_layers_lookup_keys",
         "_current_func_barcode",
         "_mod_entered",
         "_mod_exited",
