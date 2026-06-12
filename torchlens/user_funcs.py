@@ -423,6 +423,40 @@ def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.
     return cloned_state
 
 
+_VALIDATION_DEEPCOPY_WARNING_TYPES: set[type[nn.Module]] = set()
+
+
+def _model_for_ground_truth_validation(model: nn.Module) -> nn.Module:
+    """Return an isolated model for the validation ground-truth run.
+
+    Parameters
+    ----------
+    model:
+        Original model that will later be traced by TorchLens.
+
+    Returns
+    -------
+    nn.Module
+        A deep copy when possible; otherwise the original model with the
+        historical state_dict restore fallback preserved.
+    """
+
+    try:
+        return copy.deepcopy(model)
+    except Exception:
+        model_type = type(model)
+        if model_type not in _VALIDATION_DEEPCOPY_WARNING_TYPES:
+            _VALIDATION_DEEPCOPY_WARNING_TYPES.add(model_type)
+            warnings.warn(
+                "TorchLens validate_forward_pass could not deepcopy the model for the "
+                "ground-truth run; falling back to state_dict snapshot/restore. "
+                "Non-registered mutable state may cause false negatives for this model.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+        return model
+
+
 def decide_recording_of_batch(trace: Trace, predicate: Callable[[Trace], bool]) -> bool:
     """Retroactively keep or discard a captured batch log.
 
@@ -2858,8 +2892,9 @@ def validate_forward_pass(
     trace: Trace | None = None
     outs_are_valid = False
     try:
+        ground_truth_model = _model_for_ground_truth_validation(model)
         ground_truth_output_all = get_vars_of_type_from_obj(
-            model(*input_args_copy, **input_kwargs_copy),
+            ground_truth_model(*input_args_copy, **input_kwargs_copy),
             torch.Tensor,
             search_depth=5,
             return_addresses=True,

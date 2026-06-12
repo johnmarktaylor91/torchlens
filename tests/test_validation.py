@@ -7,8 +7,9 @@ deep clone helpers, and integration tests through specific exemption paths.
 import pytest
 import torch
 import torch.nn as nn
+from typing import cast
 
-from torchlens import validate_forward_pass, validate_saved_outs, Trace
+from torchlens import validate_forward_pass, validate_saved_outs, Trace, trace as trace_fn
 from torchlens import check_metadata_invariants, MetadataInvariantError
 from torchlens.validation import validate_saved_outs as validate_from_subpkg
 from torchlens.validation.exemptions import (
@@ -60,8 +61,9 @@ def test_validate_forward_pass_output_aliasing_a_reassigned_buffer():
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             for _ in range(4):
-                self.h = torch.tanh(self.lin(x) + self.h)
-            return self.h  # output aliases the reassigned buffer
+                h = cast(torch.Tensor, self._buffers["h"])
+                self.h = torch.tanh(self.lin(x) + h)
+            return cast(torch.Tensor, self._buffers["h"])
 
     torch.manual_seed(0)
     assert validate_forward_pass(RecurrentStateBuffer(), torch.randn(3)) is True
@@ -72,10 +74,62 @@ def test_validate_forward_pass_output_aliasing_a_reassigned_buffer():
             self.register_buffer("b", torch.ones(3))
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            self.b = self.b + x  # reassignment -> new object, still the registered buffer
-            return self.b
+            self.b = cast(torch.Tensor, self._buffers["b"]) + x
+            return cast(torch.Tensor, self._buffers["b"])
 
     assert validate_forward_pass(ReassignReturn(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_plain_attribute_mutable_state_isolated() -> None:
+    """Plain attribute-held mutable tensors should not poison the traced run."""
+
+    class PlainMutableState(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.state = [torch.zeros(3)]
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            self.state[0].add_(1)
+            return x + self.state[0]
+
+    assert validate_forward_pass(PlainMutableState(), torch.randn(3)) is True
+
+
+def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() -> None:
+    """Un-deepcopyable models fall back to state_dict restore with warning."""
+
+    class UndeepcopyableRegisteredState(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.register_buffer("buf", torch.zeros(3))
+            self.handle = object()
+
+        def __getstate__(self) -> dict[str, object]:
+            """Make deepcopy fail like modules holding uncopyable resources."""
+
+            raise TypeError("cannot deepcopy handle")
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            buf = cast(torch.Tensor, self.buf)
+            buf.add_(1)
+            return x + buf
+
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert validate_forward_pass(UndeepcopyableRegisteredState(), torch.randn(3)) is True
+
+
+def test_validation_tripwire_still_fails_on_wrong_output() -> None:
+    """Trace validation still rejects genuinely wrong ground-truth outputs."""
+
+    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU()).eval()
+    x = torch.randn(2, 3)
+    trace = trace_fn(model, x)
+    wrong_output = [trace[trace.output_layers[0]].out + 1]
+
+    try:
+        assert trace.validate_forward_pass(wrong_output, validate_metadata=False) is False
+    finally:
+        trace.cleanup()
 
 
 def test_check_metadata_invariants_importable():
@@ -515,7 +569,7 @@ def test_bad_backward_root_grad_fn_id_raises() -> None:
     """An unknown backward root id raises an invariant error."""
 
     log = _make_backward_log()
-    log.backward_root_grad_fn_object_ids = -1
+    log.backward_root_grad_fn_object_ids = -1  # type: ignore[assignment]
     with pytest.raises(MetadataInvariantError, match="backward_graph_invariants"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -558,6 +612,7 @@ def test_bad_higher_order_creator_chain_order_raises() -> None:
             for grad_fn in log.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )
+        assert victim.order is not None
         victim.order = victim.order + 1
 
         with pytest.raises(MetadataInvariantError, match="creator order"):
