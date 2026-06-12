@@ -184,6 +184,37 @@ def test_higher_order_nodes_reach_third_order() -> None:
         trace.cleanup()
 
 
+def test_third_order_scalar_chain_records_root_based_pass_order() -> None:
+    """Third-order autograd.grad pass order follows the root creator pass."""
+
+    class ScalarPowerModel(nn.Module):
+        """Scalar parameter model with a nonzero third derivative."""
+
+        def __init__(self) -> None:
+            """Initialize the scalar parameter."""
+
+            super().__init__()
+            self.w = nn.Parameter(torch.tensor(2.0))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Return a scalar fourth-power output."""
+
+            return (self.w * x).pow(4)
+
+    model = ScalarPowerModel()
+    x = torch.tensor(3.0)
+    trace = tl.trace(model, x, save_grads="all", backward_ready=True)
+    try:
+        output = trace[trace.output_layers[0]].out
+        grad = torch.autograd.grad(output, model.w, create_graph=True, retain_graph=True)[0]
+        grad = torch.autograd.grad(grad, model.w, create_graph=True, retain_graph=True)[0]
+        torch.autograd.grad(grad, model.w, retain_graph=True)
+
+        assert [backward_pass.order for backward_pass in trace.backward_passes] == [1, 2, 3]
+    finally:
+        trace.cleanup()
+
+
 def test_higher_order_induction_stress_reaches_expected_depth() -> None:
     """Higher-order creator attribution grows inductively across repeated grads."""
 
@@ -204,6 +235,9 @@ def test_higher_order_induction_stress_reaches_expected_depth() -> None:
         for _pass_index in range(num_grad_passes):
             grad = torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)[0]
 
+        assert [backward_pass.order for backward_pass in trace.backward_passes] == list(
+            range(1, num_grad_passes + 1)
+        )
         resolved_orders = {grad_fn.order for grad_fn in trace.grad_fns if grad_fn.order is not None}
         assert set(range(1, num_grad_passes + 2)).issubset(resolved_orders)
         assert max(resolved_orders) == num_grad_passes + 1

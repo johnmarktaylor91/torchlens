@@ -657,6 +657,31 @@ def _infer_grad_fn_module_membership(trace: Any) -> None:
             changed = True
 
 
+def _prefer_direct_pairing_source_for_paired_ops(trace: Any) -> None:
+    """Mark direct op pairings as paired after containment inference.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ``grad_fn_logs`` should be normalized.
+
+    Returns
+    -------
+    None
+        Directly paired GradFn records keep any inferred module address but expose
+        ``module_membership_source="paired"``.
+    """
+
+    for grad_fn_record in getattr(trace, "grad_fn_logs", {}).values():
+        op = grad_fn_record.op
+        if (
+            op is not None
+            and (getattr(op, "is_compute_op", False) or getattr(op, "is_compute_layer", False))
+            and grad_fn_record.module_membership_source == "inferred"
+        ):
+            grad_fn_record.module_membership_source = "paired"
+
+
 def _resolved_order_for_creator(
     creator_object_id: int | None,
     grad_fn_logs: dict[int, GradFn],
@@ -675,22 +700,50 @@ def _resolved_order_for_creator(
 def _pass_order_from_roots(
     root_grad_fn_ids: Sequence[int],
     grad_fn_logs: dict[int, GradFn],
+    pass_orders: dict[int, int],
 ) -> int | None:
     """Derive a backward pass order from its root grad-fn nodes."""
 
     root_orders = [
-        grad_fn_logs[root_id].order
+        _root_based_order(grad_fn_logs[root_id], pass_orders)
         for root_id in root_grad_fn_ids
-        if root_id in grad_fn_logs and grad_fn_logs[root_id].order is not None
+        if root_id in grad_fn_logs
     ]
     if not root_orders:
+        return None
+    if any(root_order is None for root_order in root_orders):
         return None
     if len(root_orders) != len(root_grad_fn_ids):
         return None
     unique_orders = set(root_orders)
     if len(unique_orders) != 1:
         return None
-    return root_orders[0]
+    return cast(int, root_orders[0])
+
+
+def _root_based_order(root_grad_fn: GradFn, pass_orders: dict[int, int]) -> int | None:
+    """Return the ROOT-based pass order for one root grad-fn.
+
+    Parameters
+    ----------
+    root_grad_fn:
+        Root autograd node for the backward pass.
+    pass_orders:
+        Already materialized pass orders keyed by pass index.
+
+    Returns
+    -------
+    int | None
+        Root-based order, or ``None`` when the root cannot be attributed.
+    """
+
+    origin_backward_pass = root_grad_fn.origin_backward_pass
+    if origin_backward_pass is None:
+        return root_grad_fn.order
+    origin_order = pass_orders.get(origin_backward_pass)
+    if origin_order is None:
+        return root_grad_fn.order
+    return origin_order + 1
 
 
 def _order_attribution_coverage(
@@ -706,6 +759,35 @@ def _order_attribution_coverage(
     }
     covered = sum(1 for call in calls if call.label in labels_with_order)
     return covered / len(calls)
+
+
+def _max_call_order(
+    calls: Sequence[GradFnCall],
+    grad_fn_logs: dict[int, GradFn],
+) -> int | None:
+    """Return the maximum resolved GradFn order among calls in one pass.
+
+    Parameters
+    ----------
+    calls:
+        Materialized GradFn calls for a backward pass.
+    grad_fn_logs:
+        GradFn records keyed by object id.
+
+    Returns
+    -------
+    int | None
+        Highest order observed among the pass calls, or ``None`` when no call has
+        resolved order metadata.
+    """
+
+    label_to_order = {
+        grad_fn.label: grad_fn.order
+        for grad_fn in grad_fn_logs.values()
+        if grad_fn.order is not None
+    }
+    call_orders = [label_to_order[call.label] for call in calls if call.label in label_to_order]
+    return max(call_orders) if call_orders else None
 
 
 def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
@@ -946,6 +1028,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
 
     _sync_grad_fn_graph_relations(trace)
     _infer_grad_fn_module_membership(trace)
+    _prefer_direct_pairing_source_for_paired_ops(trace)
 
     unique_payload_ids: set[int] = set()
     total_gradient_memory = 0
@@ -1001,16 +1084,24 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
     roots_by_pass = getattr(trace, "_backward_roots_by_pass", {})
     backward_pass_logs: OrderedDict[int, BackwardPass] = OrderedDict()
     pass_indices = sorted(set(starts) | set(ends) | set(pass_to_calls) | op_grad_passes)
+    resolved_pass_orders: dict[int, int] = {}
     for pass_index in pass_indices:
         start = starts.get(pass_index)
         end = ends.get(pass_index)
         root_grad_fn_ids = list(roots_by_pass.get(pass_index, ()))
         pass_order = (
-            start.order
-            if start is not None and start.order is not None
-            else _pass_order_from_roots(root_grad_fn_ids, grad_fn_logs)
+            _pass_order_from_roots(root_grad_fn_ids, grad_fn_logs, resolved_pass_orders)
+            if root_grad_fn_ids
+            else start.order
+            if start is not None
+            else None
         )
+        if pass_order is None and start is not None:
+            pass_order = start.order
         grad_fn_calls = pass_to_calls.get(pass_index, [])
+        max_call_order = _max_call_order(grad_fn_calls, grad_fn_logs)
+        if max_call_order is not None and (pass_order is None or max_call_order > pass_order):
+            pass_order = max_call_order
         order_attribution_coverage = (
             end.order_attribution_coverage
             if end is not None and end.order_attribution_coverage is not None
@@ -1038,6 +1129,8 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
         )
         pass_record.source_trace = trace
         backward_pass_logs[pass_index] = pass_record
+        if pass_order is not None:
+            resolved_pass_orders[pass_index] = pass_order
 
     trace.backward_pass_logs = backward_pass_logs
     trace.backward_root_grad_fn_object_ids = [
@@ -1259,6 +1352,28 @@ def _reset_peak_memory(device: torch.device) -> tuple[str, int]:
     return _memory_snapshot(device)
 
 
+def _layer_grad_fn_pairing_rank(layer: Any) -> int:
+    """Return the preference rank for a forward op grad-fn pairing candidate.
+
+    Parameters
+    ----------
+    layer:
+        Forward Op/Layer candidate sharing a grad-fn object id.
+
+    Returns
+    -------
+    int
+        Lower rank is preferred; compute ops outrank boundary sentinels.
+    """
+
+    is_compute = getattr(layer, "is_compute_op", False) or getattr(
+        layer,
+        "is_compute_layer",
+        False,
+    )
+    return 0 if is_compute else 1
+
+
 def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     """Build a mapping from forward grad_fn_handle identity to final layer label.
 
@@ -1272,11 +1387,18 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     dict[int, str]
         Mapping from ``id(grad_fn_handle)`` to final layer label.
     """
-    mapping = {}
+    mapping: dict[int, str] = {}
+    ranks: dict[int, int] = {}
     for layer in trace.layer_list:
         grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
-        if grad_fn_object_id is not None:
-            mapping[grad_fn_object_id] = layer.layer_label
+        if grad_fn_object_id is None:
+            continue
+        candidate_rank = _layer_grad_fn_pairing_rank(layer)
+        current_rank = ranks.get(grad_fn_object_id)
+        if current_rank is not None and current_rank <= candidate_rank:
+            continue
+        mapping[grad_fn_object_id] = layer.layer_label
+        ranks[grad_fn_object_id] = candidate_rank
     return mapping
 
 
