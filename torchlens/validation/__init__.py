@@ -102,6 +102,7 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
     _validate_sites(manifest.get("sites"))
     _require_str_enum(manifest, "body_format", {"safetensors"})
     _validate_body_index(manifest.get("body_index"))
+    _validate_backward_summary(manifest.get("backward_summary"))
     _require_str_enum(manifest, "save_level", {"audit", "executable_with_callables", "portable"})
     _validate_optional_dependencies(manifest.get("optional_dependencies"))
 
@@ -213,6 +214,47 @@ def _validate_body_index(value: Any) -> None:
             raise ValueError(
                 f"Manifest body_index[{index}].num_elements must be a non-negative int."
             )
+
+
+def _validate_backward_summary(value: Any) -> None:
+    """Validate manifest backward summary metadata.
+
+    Parameters
+    ----------
+    value:
+        Raw backward summary object.
+
+    Raises
+    ------
+    ValueError
+        If the value is invalid.
+    """
+
+    if not isinstance(value, dict):
+        raise ValueError("Manifest backward_summary must be an object.")
+    if not isinstance(value.get("has_backward_pass"), bool):
+        raise ValueError("Manifest backward_summary.has_backward_pass must be a bool.")
+    for field_name in (
+        "num_backward_passes",
+        "num_grad_fns",
+        "num_grad_fn_calls",
+        "num_saved_grad_records",
+        "gradient_blob_count",
+    ):
+        field_value = value.get(field_name)
+        if not isinstance(field_value, int) or field_value < 0:
+            raise ValueError(f"Manifest backward_summary.{field_name} must be a non-negative int.")
+    gradient_blob_kinds = value.get("gradient_blob_kinds")
+    valid_kinds = {"grad", "grad_fn_grad", "transformed_grad"}
+    if not isinstance(gradient_blob_kinds, list):
+        raise ValueError("Manifest backward_summary.gradient_blob_kinds must be a list.")
+    if any(kind not in valid_kinds for kind in gradient_blob_kinds):
+        raise ValueError("Manifest backward_summary.gradient_blob_kinds contains an invalid kind.")
+    if len(gradient_blob_kinds) != len(set(gradient_blob_kinds)):
+        raise ValueError("Manifest backward_summary.gradient_blob_kinds entries must be unique.")
+    old_bundle_policy = value.get("old_bundle_policy")
+    if not isinstance(old_bundle_policy, str) or old_bundle_policy == "":
+        raise ValueError("Manifest backward_summary.old_bundle_policy must be a non-empty string.")
 
 
 def _validate_optional_dependencies(value: Any) -> None:

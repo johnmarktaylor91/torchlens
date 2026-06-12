@@ -178,3 +178,52 @@ def test_validate_tlspec_rejects_missing_unified_field(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="model_fingerprint"):
         validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
+    """Trace.save records backward fields and gradient blob kinds in the manifest."""
+
+    torch.manual_seed(2101)
+    model = UnifiedTinyModel().eval()
+    x = torch.randn(2, 3, requires_grad=True)
+    log = tl.trace(model, x, save_grads=True)
+    log.log_backward(log[log.output_layers[0]].out.sum())
+    path = tmp_path / "backward.tlspec"
+
+    log.save(path)
+    validate_tlspec(path)
+    loaded = tl.load(path)
+    manifest = _read_manifest(path)
+
+    assert loaded.has_backward_pass is True
+    assert loaded.backward_passes.for_pass(1).pass_index == 1
+    assert manifest["backward_summary"]["has_backward_pass"] is True
+    assert manifest["backward_summary"]["num_backward_passes"] == log.num_backward_passes
+    assert manifest["backward_summary"]["num_grad_fns"] == log.num_grad_fns
+    assert manifest["backward_summary"]["gradient_blob_count"] >= 1
+    assert "grad" in manifest["backward_summary"]["gradient_blob_kinds"]
+    assert any(entry["intended_use"] == "grad" for entry in manifest["body_index"])
+    assert (
+        "removed backward gradient configuration fields"
+        in (manifest["backward_summary"]["old_bundle_policy"])
+    )
+
+
+@pytest.mark.smoke
+def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
+    """Schema validation rejects malformed backward blob kinds."""
+
+    torch.manual_seed(2102)
+    model = UnifiedTinyModel().eval()
+    x = torch.randn(2, 3, requires_grad=True)
+    log = tl.trace(model, x, save_grads=True)
+    log.log_backward(log[log.output_layers[0]].out.sum())
+    path = tmp_path / "bad_backward_kind.tlspec"
+    log.save(path)
+    manifest = _read_manifest(path)
+    manifest["backward_summary"]["gradient_blob_kinds"] = ["grad", "legacy_grad"]
+    (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="gradient_blob_kinds"):
+        validate_tlspec(path)

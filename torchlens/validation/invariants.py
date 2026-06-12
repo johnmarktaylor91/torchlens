@@ -372,6 +372,31 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                 )
 
 
+def _resolve_op_grad_event_label(trace: "Trace", op_label: str) -> str:
+    """Return the final lookup label for an ``OpGradObserved`` label.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing postprocessed label maps.
+    op_label:
+        Raw or final label recorded by the tensor hook.
+
+    Returns
+    -------
+    str
+        Final lookup label when available, otherwise the original label.
+    """
+
+    raw_to_final_layer = getattr(trace, "_raw_to_final_layer_labels", {})
+    if isinstance(raw_to_final_layer, dict) and op_label in raw_to_final_layer:
+        return str(raw_to_final_layer[op_label])
+    raw_to_final_op = getattr(trace, "_raw_to_final_op_labels", {})
+    if isinstance(raw_to_final_op, dict) and op_label in raw_to_final_op:
+        return str(raw_to_final_op[op_label])
+    return op_label
+
+
 def _check_backward_event_flow_invariants(trace: "Trace", name: str) -> None:
     """Check runtime backward event stream consistency against projections.
 
@@ -444,12 +469,13 @@ def _check_backward_event_flow_invariants(trace: "Trace", name: str) -> None:
 
     event_grad_records: set[tuple[str, int]] = set()
     for op_grad_event in op_grad_events:
-        if op_grad_event.op_label not in layer_labels:
+        event_label = _resolve_op_grad_event_label(trace, op_grad_event.op_label)
+        if event_label not in layer_labels:
             raise MetadataInvariantError(
                 name,
                 f"OpGradObserved points to missing op label {op_grad_event.op_label!r}",
             )
-        event_op = trace[op_grad_event.op_label]
+        event_op = trace[event_label]
         event_grad_records.add((event_op.layer_label, op_grad_event.pass_index))
     if projected_grad_records != event_grad_records:
         raise MetadataInvariantError(

@@ -90,7 +90,7 @@ log = tl.trace(model, x)
 missing = log.modules["attn"].facets["q"].grad
 print(missing.reason)
 
-log = tl.trace(model, x, backward_ready=True, gradients_to_save="all")
+log = tl.trace(model, x, backward_ready=True, save_grads=True)
 log.log_backward(log[log.output_layers[0]].out.sum())
 q_grad = log.modules["attn"].facets["q"].grad
 ```
@@ -282,7 +282,7 @@ approx = tl.facets.patching.attribution_patch_attention_heads(
 ```
 
 Attribution patching requires gradient capture. By default the helper traces
-with `gradients_to_save="all"`. If gradients are not saved, it raises a clear
+with `save_grads=True`. If gradients are not saved, it raises a clear
 error that includes the `MissingGradient` recapture instruction.
 
 ## Reconstruction

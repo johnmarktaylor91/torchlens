@@ -79,10 +79,27 @@ def test_explain_returns_sensible_string_for_each_audience() -> None:
         assert "TorchLens report" in text
         assert "Model summary" in text
         assert "Capture summary" in text
+        assert "Backward summary" in text
         assert "Anomalies" in text
         assert "Interventions" in text
         assert "Notable patterns" in text
         assert "TinyReportModel" in text
+        assert "No backward passes are recorded" in text
+
+
+def test_explain_reports_backward_capture() -> None:
+    """Backward logs should include pass, GradFn, and saved-gradient counts."""
+
+    x = torch.tensor([[2.0, 3.0]], requires_grad=True)
+    log = tl.trace(TinyReportModel(), x, save_grads=True)
+    log.log_backward(log[log.output_layers[0]].out.sum())
+
+    text = tl.report.explain(log)
+
+    assert "Backward summary" in text
+    assert "Backward passes: 1." in text
+    assert "GradFn records:" in text
+    assert "Op gradient records saved:" in text
 
 
 def test_explain_reports_nonfinite_out() -> None:

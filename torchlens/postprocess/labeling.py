@@ -107,6 +107,7 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     self._raw_to_final_layer_labels = raw_to_final_layer_labels
     self._raw_to_final_parent_layer_labels = raw_to_final_parent_layer_labels
     self._raw_to_final_op_labels = raw_to_final_op_labels
+    self._backward_projection_event_count = None
     self._final_to_raw_layer_labels = final_to_raw_layer_labels
 
 

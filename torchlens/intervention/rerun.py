@@ -715,6 +715,8 @@ def _capture_with_active_spec(
     model = _unwrap_data_parallel(model)
     x = _coerce_input_args(model, x)
     check_model_and_input_variants(model, x, {})
+    save_grads_policy = getattr(log, "save_grads", None)
+    grads_to_save = "all" if save_grads_policy is True else save_grads_policy
     return _run_model_and_save_specified_outs(
         model=model,
         input_args=x,
@@ -728,8 +730,8 @@ def _capture_with_active_spec(
         mark_layer_depths=getattr(log, "mark_layer_depths", False),
         detach_saved_activations=getattr(log, "detach_saved_activations", False),
         save_arg_values=getattr(log, "save_arg_values", False),
-        save_grads=getattr(log, "save_grads", None) not in (None, False),
-        grads_to_save=getattr(log, "save_grads", "all"),
+        save_grads=save_grads_policy not in (None, False),
+        grads_to_save=grads_to_save,
         random_seed=getattr(log, "random_seed", None),
         num_context_lines=getattr(log, "num_context_lines", 7),
         optimizer=getattr(log, "_optimizer", None),

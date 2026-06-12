@@ -18,6 +18,7 @@
     "spec_compat_info",
     "body_format",
     "body_index",
+    "backward_summary",
     "save_level",
     "optional_dependencies",
     "intervention_compat_metadata"
@@ -147,8 +148,72 @@
           },
           "intended_use": {
             "type": "string",
-            "minLength": 1
+            "enum": [
+              "bundle_marker",
+              "captured_arg",
+              "child_version",
+              "func_config",
+              "grad",
+              "grad_fn_grad",
+              "module_arg",
+              "module_meta",
+              "out",
+              "rng_state",
+              "transformed_grad",
+              "transformed_out"
+            ]
           }
+        }
+      }
+    },
+    "backward_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "has_backward_pass",
+        "num_backward_passes",
+        "num_grad_fns",
+        "num_grad_fn_calls",
+        "num_saved_grad_records",
+        "gradient_blob_count",
+        "gradient_blob_kinds",
+        "old_bundle_policy"
+      ],
+      "properties": {
+        "has_backward_pass": {
+          "type": "boolean"
+        },
+        "num_backward_passes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "num_grad_fns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "num_grad_fn_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "num_saved_grad_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gradient_blob_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gradient_blob_kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["grad", "grad_fn_grad", "transformed_grad"]
+          },
+          "uniqueItems": true
+        },
+        "old_bundle_policy": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

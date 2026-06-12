@@ -503,6 +503,32 @@ def _op_module_address(trace: Any, op_label: str | None) -> str | None:
     return str(module_calls[-1]).rsplit(":", 1)[0]
 
 
+def _resolve_op_grad_event_label(trace: Any, op_label: str) -> str:
+    """Return the final lookup label for an ``OpGradObserved`` event.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the event.
+    op_label:
+        Raw or final op label stored on the event.
+
+    Returns
+    -------
+    str
+        Final lookup label when postprocess mappings know it; otherwise the
+        original label.
+    """
+
+    raw_to_final_layer = getattr(trace, "_raw_to_final_layer_labels", {})
+    if isinstance(raw_to_final_layer, dict) and op_label in raw_to_final_layer:
+        return str(raw_to_final_layer[op_label])
+    raw_to_final_op = getattr(trace, "_raw_to_final_op_labels", {})
+    if isinstance(raw_to_final_op, dict) and op_label in raw_to_final_op:
+        return str(raw_to_final_op[op_label])
+    return op_label
+
+
 def _op_raw_index(trace: Any, grad_fn_record: GradFn) -> int | None:
     """Return the forward raw index backing a grad-fn's module attribution.
 
@@ -930,9 +956,10 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
     for event in sorted(
         op_grad_events, key=lambda item: (item.pass_index, item.timestamp, item.seq)
     ):
-        if event.op_label not in getattr(trace, "layer_dict_all_keys", {}):
+        event_label = _resolve_op_grad_event_label(trace, event.op_label)
+        if event_label not in getattr(trace, "layer_dict_all_keys", {}):
             continue
-        op = trace[event.op_label]
+        op = trace[event_label]
         payload = event.payload_ref if isinstance(event.payload_ref, torch.Tensor) else None
         transformed_payload = event.transformed_payload_ref
         op._record_gradient(

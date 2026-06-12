@@ -54,6 +54,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_capture_events",
         "_tl_backward_hooked_tensor_keys",
         "_backward_gradfn_refs",
+        "_backward_projection_event_count",
     }
 
     actual = set(trace.__dict__.keys())

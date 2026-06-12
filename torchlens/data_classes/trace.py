@@ -2896,6 +2896,10 @@ class Trace(CapturedRun):
         state["last_run"] = None
         state["_out_hash_cache"] = {}
         state.pop("_build_state", None)
+        state["_backward_gradfn_refs"] = {}
+        state["_tl_backward_hooked_tensor_keys"] = set()
+        state["_pending_live_fire_records"] = []
+        state["_last_hook_handle_ids"] = ()
         state["_activation_transform_repr"] = (
             repr(self.activation_transform) if self.activation_transform is not None else None
         )

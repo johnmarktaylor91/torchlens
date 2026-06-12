@@ -43,6 +43,7 @@ from ...data_classes.op import Op
 from ..._state import pause_logging
 from ...intervention.selectors import BaseSelector
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
+from ...utils.tensor_utils import safe_copy
 from ...fastlog.types import CaptureSpec
 
 if TYPE_CHECKING:
@@ -197,7 +198,7 @@ def _build_grad_payloads(
     op = trace[layer_label]
     grad_transform = getattr(trace, "grad_transform", None)
     save_raw_gradients = getattr(trace, "save_raw_gradients", True)
-    raw_payload = grad.detach().clone() if save_raw_gradients or grad_transform is None else None
+    raw_payload = _copy_grad_payload(grad) if save_raw_gradients or grad_transform is None else None
     if grad_transform is None:
         return raw_payload, None
     writer = getattr(trace, "_out_writer", None)
@@ -261,13 +262,33 @@ def _build_fastlog_grad_payloads(
 
     grad_transform = getattr(trace, "grad_transform", None)
     save_raw_gradients = getattr(trace, "save_raw_gradients", True)
-    raw_payload = grad.detach().clone() if save_raw_gradients or grad_transform is None else None
+    raw_payload = _copy_grad_payload(grad) if save_raw_gradients or grad_transform is None else None
     if grad_transform is None:
         return raw_payload, None
     transformed_payload = grad_transform(grad)
     if not isinstance(transformed_payload, torch.Tensor):
         raise TypeError("grad_transform must return a torch.Tensor for fastlog gradients")
     return raw_payload, transformed_payload
+
+
+def _copy_grad_payload(grad: torch.Tensor) -> torch.Tensor:
+    """Return a detached gradient payload snapshot through the copy chokepoint.
+
+    Parameters
+    ----------
+    grad:
+        Gradient tensor observed by an autograd hook.
+
+    Returns
+    -------
+    torch.Tensor
+        Detached tensor copy suitable for storage in gradient records.
+    """
+
+    copied = safe_copy(grad, detach_tensor=True)
+    if not isinstance(copied, torch.Tensor):
+        raise TypeError("safe_copy returned a non-tensor gradient payload")
+    return copied
 
 
 def _grad_payload_decision_saves_out(decision: Any) -> bool:

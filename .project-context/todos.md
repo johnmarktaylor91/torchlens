@@ -114,6 +114,35 @@ Filed 2026-05-14 from JMT spotting the halt-implies-sub-baseline-perf insight du
 
 ## Active Tasks
 
+### Backward-pass sprint deferred follow-ups (filed 2026-06-11)
+
+**Status:** filed at P10 closeout for the backward-pass overhaul.
+
+These items were intentionally out of scope for the build and are documented in
+`docs/backward.md` so users see the current behavior clearly.
+
+1. **Backward-only replay from persisted traces.** Current live backward replay works
+   through normal autograd and differentiable replay creates a fresh trace, but a saved
+   backward projection does not contain PyTorch's live autograd graph or saved-tensor
+   closures. Building backward-only replay would mean implementing a TorchLens-side
+   autograd engine over projected records. Revisit only if reload-session backward
+   editing becomes a real user need.
+2. **MLX/JAX T0/T1 backward implementation sketch.** Backend-neutral events can support
+   T0 pass brackets + leaf gradients via `value_and_grad`, and T1 per-op cotangents via
+   `vjp` composition at recorded boundaries. T2 autograd-node records and live backward
+   intervention remain torch-only unless those frameworks expose hookable backward
+   graphs. Next sprint should prototype MLX T0 first and keep torch concepts out of core
+   event types.
+3. **Real per-fire GradFn timing via prehooks.** Current `GradFnCall` timing is based on
+   hook timestamps and is suitable for ordering, not true node duration. Add prehook
+   timing when PyTorch hook coverage is stable enough, then update `GradFnCall` duration
+   semantics and dataframe docs.
+4. **Implicit backward boundary detection.** If users bypass wrapped engine entry points,
+   tensor hooks open an implicit pass and close it at synchronization points. Consecutive
+   bypassed backward calls can merge because hook events alone do not reveal engine
+   boundaries. Explore additional engine instrumentation or explicit sync APIs before
+   tightening this.
+
 ### Capture + surface input preprocessing pipeline (filed 2026-05-28)
 
 [PARTIAL -- core shipped (`tl.trace` has live `transform=`/`save_raw_input`/`output_transform` kwargs; `Trace.raw_input`/`raw_output` instance fields exist + are KEEP in portable spec; `tl.autoroute.input`/`output` registries + HF `trace_text`/`trace_image`/`trace_multimodal` bridge tracers shipped; `_render_raw_input` + image=/imagescale in rendering.py). STILL OPEN: a structured `trace.input_preprocessing` record (tokenizer/processor descriptor for portable serialization) -- only the small raw-input thumbnail/repr is saved today, not a serialized transform descriptor.]

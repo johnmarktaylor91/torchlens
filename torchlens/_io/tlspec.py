@@ -30,6 +30,26 @@ TlspecSaveLevel = Literal["audit", "executable_with_callables", "portable"]
 _EMPTY_META_HASH = sha256(repr([]).encode("utf-8")).hexdigest()
 
 
+def _safe_len(value: Any) -> int:
+    """Return ``len(value)`` or zero when unavailable.
+
+    Parameters
+    ----------
+    value:
+        Object to measure.
+
+    Returns
+    -------
+    int
+        Length or zero.
+    """
+
+    try:
+        return len(value)
+    except TypeError:
+        return 0
+
+
 class _TlSpecWriter:
     """Write Phase 11 unified ``.tlspec`` manifests and bundle payloads."""
 
@@ -271,6 +291,7 @@ class _TlSpecWriter:
             "spec_compat_info": spec_compat_info,
             "body_format": "safetensors",
             "body_index": cls._body_index(tensor_entries),
+            "backward_summary": cls._backward_summary(source, tensor_entries),
             "save_level": level,
             "optional_dependencies": cls._optional_dependencies(source),
             "intervention_compat_metadata": intervention_compat_metadata,
@@ -477,6 +498,40 @@ class _TlSpecWriter:
                 }
             )
         return index
+
+    @staticmethod
+    def _backward_summary(source: Any, tensor_entries: list[TensorEntry]) -> dict[str, Any]:
+        """Build public backward metadata for a unified manifest.
+
+        Parameters
+        ----------
+        source:
+            Saved object whose backward projection may be present.
+        tensor_entries:
+            Persisted tensor entries.
+
+        Returns
+        -------
+        dict[str, Any]
+            JSON-serializable summary of backward records and gradient blobs.
+        """
+
+        grad_kinds = {"grad", "transformed_grad", "grad_fn_grad"}
+        return {
+            "has_backward_pass": bool(getattr(source, "has_backward_pass", False)),
+            "num_backward_passes": int(getattr(source, "num_backward_passes", 0) or 0),
+            "num_grad_fns": int(getattr(source, "num_grad_fns", 0) or 0),
+            "num_grad_fn_calls": int(getattr(source, "num_grad_fn_calls", 0) or 0),
+            "num_saved_grad_records": _safe_len(getattr(source, "saved_grad_ops", None)),
+            "gradient_blob_count": sum(1 for entry in tensor_entries if entry.kind in grad_kinds),
+            "gradient_blob_kinds": sorted(
+                {entry.kind for entry in tensor_entries if entry.kind in grad_kinds}
+            ),
+            "old_bundle_policy": (
+                "legacy class remaps are accepted at load; removed backward gradient "
+                "configuration fields are dropped during Trace state normalization"
+            ),
+        }
 
     @staticmethod
     def _optional_dependencies(source: Any) -> list[str]:

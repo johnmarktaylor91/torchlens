@@ -45,6 +45,9 @@ def explain(log: Any, audience: Audience = "auto") -> str:
         "Capture summary",
         *_capture_summary_lines(log),
         "",
+        "Backward summary",
+        *_backward_summary_lines(log),
+        "",
         "Anomalies",
         *_anomaly_lines(log),
         "",
@@ -117,6 +120,43 @@ def _capture_summary_lines(log: Any) -> list[str]:
         f"- Operations logged: {_format_count(operation_count)}.",
         f"- Tensors saved: {_format_count(tensor_saved)} of {_format_count(tensor_total)}.",
         f"- Maximum observed ops for one layer: {_format_count(max_ops)}.",
+    ]
+
+
+def _backward_summary_lines(log: Any) -> list[str]:
+    """Return backward-pass capture summary lines.
+
+    Parameters
+    ----------
+    log:
+        Model log to summarize.
+
+    Returns
+    -------
+    list[str]
+        Bullet lines for the backward section.
+    """
+
+    if not bool(getattr(log, "has_backward_pass", False)):
+        return ["- No backward passes are recorded on this log."]
+    pass_count = int(getattr(log, "num_backward_passes", 0) or 0)
+    grad_fn_count = int(getattr(log, "num_grad_fns", 0) or 0)
+    grad_fn_call_count = int(getattr(log, "num_grad_fn_calls", 0) or 0)
+    saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))
+    total_backward_memory = getattr(log, "total_backward_memory", None)
+    memory_line = (
+        f"- Unique backward payload memory: {total_backward_memory}."
+        if total_backward_memory is not None
+        else "- Unique backward payload memory: unavailable."
+    )
+    return [
+        f"- Backward passes: {_format_count(pass_count)}.",
+        (
+            f"- GradFn records: {_format_count(grad_fn_count)} nodes, "
+            f"{_format_count(grad_fn_call_count)} calls."
+        ),
+        f"- Op gradient records saved: {_format_count(saved_grad_count)}.",
+        memory_line,
     ]
 
 
