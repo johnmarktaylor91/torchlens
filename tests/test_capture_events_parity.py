@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import os
 from pathlib import Path
 import pickle
@@ -16,6 +17,7 @@ from torch import nn
 import numpy as np
 
 import torchlens as tl
+from torchlens import errors
 from torchlens.user_funcs import _detach_nested_for_cache
 
 from _pickle_compare import _canonical_pickle_diff, _tensor_equal
@@ -462,14 +464,52 @@ def test_tensor_equal_handles_bool_int_nan_dtypes() -> None:
     )
 
 
-def test_param_log_by_pid_populated_in_create_session_param_logs() -> None:
-    """Param pid lookup values point at real Param addresses."""
+def test_param_refs_release_but_pid_lookup_remains_for_backward() -> None:
+    """Finalized traces release Param refs while retaining backward attribution lookup."""
 
     model = nn.Linear(3, 2)
     x = torch.randn(1, 3)
     trace = tl.trace(model, x, random_seed=123)
+    param_log = trace.params["weight"]
+
+    assert param_log._param_ref is None
+    assert param_log.value is model.weight
     assert trace._param_log_by_pid
     assert set(trace._param_log_by_pid.values()) <= set(trace.param_logs.keys())
+
+
+def test_released_param_grad_refetches_after_manual_backward() -> None:
+    """Param grad metadata re-fetches the live model parameter after ref release."""
+
+    model = nn.Linear(3, 1)
+    x = torch.randn(2, 3, requires_grad=True)
+    trace = tl.trace(model, x, random_seed=123, backward_ready=True)
+    param_log = trace.params["weight"]
+
+    assert param_log._param_ref is None
+    assert param_log.has_grad is False
+    trace[trace.output_layers[0]].out.sum().backward()
+
+    assert param_log.grad is model.weight.grad
+    assert param_log.has_grad is True
+    assert param_log.grad_shape == tuple(model.weight.grad.shape)
+
+
+def test_released_param_dead_model_raises_clear_error() -> None:
+    """Released Param access fails loudly after the source model weakref dies."""
+
+    model = nn.Linear(3, 1)
+    model_ref = weakref.ref(model)
+    trace = tl.trace(model, torch.randn(2, 3), random_seed=123)
+    param_log = trace.params["weight"]
+
+    assert param_log._param_ref is None
+    del model
+    gc.collect()
+
+    assert model_ref() is None
+    with pytest.raises(errors.PostTraceParamUnavailable, match="source model"):
+        _ = param_log.value
 
 
 def test_walk_detects_accumulategrad_via_type_name() -> None:

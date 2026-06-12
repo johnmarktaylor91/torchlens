@@ -5558,7 +5558,6 @@ class Trace(CapturedRun):
         """
         for param_log in self.param_logs:
             param_log.release_param_ref()
-        self._param_log_by_pid = {}
 
     def _postprocess(
         self,

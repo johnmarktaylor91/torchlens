@@ -129,6 +129,7 @@ _MOVED_OBJECTS = {
     "ModuleCall": ("torchlens.types", "ModuleCall"),
     "NodeSpec": ("torchlens.experimental.dagua", "NodeSpec"),
     "Param": ("torchlens.types", "Param"),
+    "PostTraceParamUnavailable": ("torchlens.errors", "PostTraceParamUnavailable"),
     "TraceState": ("torchlens.io", "TraceState"),
     "SaveLevel": ("torchlens.types", "SaveLevel"),
     "SiteTable": ("torchlens.types", "SiteTable"),

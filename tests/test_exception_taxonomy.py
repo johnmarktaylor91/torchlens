@@ -21,6 +21,7 @@ BASE_CLASSES = (
 
 OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ("torchlens._errors", "TorchLensPostfuncError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "PostTraceParamUnavailable", errors.CaptureError, "subclass"),
     ("torchlens._io", "TorchLensIOError", errors.CompatibilityError, "subclass"),
     (
         "torchlens._robustness",

@@ -102,8 +102,8 @@ def _finalize_param_logs(self: "Trace") -> None:
     - Sets num_calls = max(1, len(used_by_ops)).
 
     Then clears actual Parameter tensor references (parent_params) from
-    Op entries to reduce memory, while preserving Param._param_ref
-    for potential backward() calls by the user.
+    Op entries to reduce memory. Param._param_ref is released after the
+    full finalization pipeline, once all finalization-time param reads finish.
     """
     # Build used_by_ops, used_by_layers, and co_parent_params from Op entries
     for layer_entry in self.layer_list:
@@ -127,12 +127,9 @@ def _finalize_param_logs(self: "Trace") -> None:
         pl.source_trace = self
 
     # Param grad metadata is populated lazily via backward hooks in _log_tensor_grad.
-    # Each Param holds a _param_ref to the actual nn.Parameter, and _update_grad_from_param()
-    # reads param.grad after backward is called.
-
-    # Note: _param_ref (GC-1) is NOT cleared here because the user may call backward()
-    # after postprocessing to populate grads. It's cleared in cleanup() instead.
-    # Same for _param_logs (GC-9) and func (GC-10) — needed by validation.
+    # Param._param_ref is intentionally released later, after module finalization has
+    # consumed param metadata; Param re-fetches from Trace._source_model_ref on demand.
+    # _param_logs (GC-9) and func (GC-10) are still needed by validation.
 
     # Clear actual Parameter tensor references from Op entries to save memory.
     for layer_entry in self.layer_list:

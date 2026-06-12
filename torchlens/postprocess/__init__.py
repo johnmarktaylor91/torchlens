@@ -346,6 +346,9 @@ def postprocess(
         with _vtimed(self, "  Step 19: Evict streamed outs"):
             _evict_streamed_outs(self)
 
+    with _vtimed(self, "  Step 20: Release param refs"):
+        self.release_param_refs()
+
     if getattr(self, "verbose", False):
         print(f"[torchlens] Postprocessing complete ({time.time() - _post_t0:.2f}s)")
     _drop_transient_capture_state(self)

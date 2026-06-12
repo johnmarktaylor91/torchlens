@@ -9,3 +9,7 @@ class TorchLensPostfuncError(CaptureError, RuntimeError):
 
 class MutatedReferenceError(CaptureError, RuntimeError):
     """Raised when a reference-mode saved tensor changed before it was read."""
+
+
+class PostTraceParamUnavailable(CaptureError, RuntimeError):
+    """Raised when a released Param cannot re-fetch its live model parameter."""

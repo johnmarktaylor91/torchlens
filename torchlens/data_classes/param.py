@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 import torch
 
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from .._errors import PostTraceParamUnavailable
 from ..constants import PARAM_LOG_FIELD_ORDER
 from ..quantities import Bytes
 from ._accessor_base import Accessor
@@ -73,6 +74,7 @@ class Param:
         "barcode": FieldPolicy.KEEP,
         "has_optimizer": FieldPolicy.KEEP,
         "_param_ref": FieldPolicy.DROP,
+        "_param_ref_released": FieldPolicy.DROP,
         "_source_trace_ref": FieldPolicy.DROP,
         "num_calls": FieldPolicy.KEEP,
         "used_by_ops": FieldPolicy.KEEP,
@@ -115,6 +117,7 @@ class Param:
         # Prevents GC of the parameter while this Param is alive (acceptable
         # because Trace lifetime <= model lifetime; cleanup() clears it).
         self._param_ref: Optional[torch.nn.Parameter] = None
+        self._param_ref_released: bool = False
         self._source_trace_ref: Any = None
 
         # Populated during postprocessing:
@@ -269,7 +272,21 @@ class Param:
             Live ``nn.Parameter.grad`` value, if available.
         """
 
-        return None if self._param_ref is None else self._param_ref.grad
+        param = self._resolve_live_param()
+        return None if param is None else param.grad
+
+    @property
+    def value(self) -> torch.nn.Parameter | None:
+        """Return the live model parameter when the source model is available.
+
+        Returns
+        -------
+        torch.nn.Parameter | None
+            Live parameter object, or ``None`` for deserialized traces that have
+            no source-model weakref.
+        """
+
+        return self._resolve_live_param()
 
     @property
     def grads(self) -> GradientRecordAccessor:
@@ -319,12 +336,64 @@ class Param:
         found, all grad metadata is cached and no further checks are made
         (``_has_grad`` acts as a one-shot flag).
         """
-        if not self._has_grad and self._param_ref is not None and self._param_ref.grad is not None:
-            grad = self._param_ref.grad
+        try:
+            param = self._resolve_live_param()
+        except PostTraceParamUnavailable:
+            return
+        if not self._has_grad and param is not None and param.grad is not None:
+            grad = param.grad
             self._has_grad = True
             self._grad_shape = tuple(grad.shape)
             self._grad_dtype = grad.dtype
             self._grad_memory = Bytes(grad.nelement() * grad.element_size())
+
+    def _resolve_live_param(self) -> torch.nn.Parameter | None:
+        """Resolve the live parameter after post-trace reference release.
+
+        Returns
+        -------
+        torch.nn.Parameter | None
+            Live parameter if available; ``None`` when no source trace/model
+            weakref exists, such as after portable deserialization.
+
+        Raises
+        ------
+        PostTraceParamUnavailable
+            If this Param released its direct reference and the source model
+            weakref is now dead, or the parameter address is no longer present.
+        """
+
+        if self._param_ref is not None:
+            return self._param_ref
+
+        trace = self.source_trace
+        source_ref = getattr(trace, "_source_model_ref", None) if trace is not None else None
+        if source_ref is None:
+            return None
+
+        model = source_ref()
+        if model is None:
+            if self._param_ref_released:
+                raise PostTraceParamUnavailable(
+                    f"Parameter '{self.address}' is unavailable because the source model "
+                    "has been garbage-collected after TorchLens released its direct "
+                    "parameter reference."
+                )
+            return None
+
+        try:
+            param = model.get_parameter(self.address)
+        except AttributeError as exc:
+            raise PostTraceParamUnavailable(
+                f"Source model for parameter '{self.address}' does not support get_parameter()."
+            ) from exc
+        except KeyError as exc:
+            raise PostTraceParamUnavailable(
+                f"Parameter '{self.address}' is no longer registered on the source model."
+            ) from exc
+
+        self._param_ref = param
+        return param
 
     @property
     def has_grad(self) -> bool:
@@ -442,8 +511,11 @@ class Param:
 
     def release_param_ref(self) -> None:
         """Cache grad info, then null _param_ref to allow param GC."""
+        if self._param_ref is None and self._param_ref_released:
+            return
         self._check_param_grad()
         self._param_ref = None
+        self._param_ref_released = True
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this Param as a one-row pandas DataFrame.
@@ -471,6 +543,7 @@ class Param:
         """Return pickle state with live parameter references stripped."""
         state = self.__dict__.copy()
         state["_param_ref"] = None
+        state["_param_ref_released"] = False
         state["_source_trace_ref"] = None
         state["tlspec_version"] = TLSPEC_VERSION
         return state
@@ -484,7 +557,14 @@ class Param:
             state["param_memory"] = state.pop("memory")
         if "is_trainable" not in state and "trainable" in state:
             state["is_trainable"] = state.pop("trainable")
-        default_fill_state(state, defaults={"_param_ref": None, "_source_trace_ref": None})
+        default_fill_state(
+            state,
+            defaults={
+                "_param_ref": None,
+                "_param_ref_released": False,
+                "_source_trace_ref": None,
+            },
+        )
         state["param_memory"] = Bytes(state.get("param_memory", 0) or 0)
         state["_grad_memory"] = Bytes(state.get("_grad_memory", 0) or 0)
         self.__dict__.update(state)
