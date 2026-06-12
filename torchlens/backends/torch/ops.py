@@ -175,6 +175,44 @@ if TYPE_CHECKING:
     from ...data_classes.trace import Trace
 
 
+_SHARED_FIELDS_TO_SHALLOW_COPY_PER_OUTPUT = (
+    "interventions",
+    "non_tensor_pos_args",
+    "non_tensor_kwargs",
+    "func_non_tensor_args",
+    "transform_config",
+    "parent_params",
+    "_param_barcodes",
+    "parent_param_ops",
+    "_param_logs",
+    "param_shapes",
+    "parents",
+    "_edge_uses",
+    "root_ancestors",
+    "children",
+    "input_ancestors",
+    "output_descendants",
+    "internal_source_parents",
+    "internal_source_ancestors",
+    "in_conditionals",
+    "terminal_bool_for",
+    "conditional_branch_stack",
+    "conditional_entry_children",
+    "conditional_then_children",
+    "conditional_elif_children",
+    "conditional_else_children",
+    "conditional_arm_children",
+    "modules",
+    "module_call_stack",
+    "module_entry_arg_keys",
+    "input_to_module_calls",
+    "output_of_modules",
+    "output_of_module_calls",
+    "func_config",
+)
+_SHARED_FIELDS_TO_DEEP_COPY_PER_OUTPUT = ("parent_arg_positions",)
+
+
 def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
     """Return whether mutation-position alias contracts can be consumed.
 
@@ -2066,6 +2104,29 @@ def _build_shared_fields_dict(
     return fields_dict, parent_layer_entries, arg_tensors, parent_param_ops
 
 
+def _copy_shared_fields_for_output(fields_dict: dict[str, Any]) -> dict[str, Any]:
+    """Return an isolated per-output copy of shared exhaustive fields.
+
+    Parameters
+    ----------
+    fields_dict
+        Shared field mapping for all tensor outputs of one wrapped function call.
+
+    Returns
+    -------
+    dict[str, Any]
+        Field mapping that can be mutated for one output tensor without changing
+        sibling output entries.
+    """
+
+    fields_dict_onetensor = fields_dict.copy()
+    for field in _SHARED_FIELDS_TO_SHALLOW_COPY_PER_OUTPUT:
+        fields_dict_onetensor[field] = copy.copy(fields_dict[field])
+    for field in _SHARED_FIELDS_TO_DEEP_COPY_PER_OUTPUT:
+        fields_dict_onetensor[field] = copy.deepcopy(fields_dict[field])
+    return fields_dict_onetensor
+
+
 def _classify_new_tensor_in_trace(
     self: "Trace",
     fields_dict: dict[str, Any],
@@ -2200,23 +2261,7 @@ def log_function_output_tensors_exhaustive(
         if not _output_should_be_logged(out, is_bottom_level_func):
             continue
 
-        # Each output tensor gets its own fields_dict to avoid shared-mutation bugs.
-        # Shallow-copy mutable containers (list, dict, set); immutable values
-        # (str, int, bool, None, tuple, torch.dtype) are safely shared.
-        fields_dict_onetensor: dict[str, Any] = {}
-        for key, value in fields_dict.items():
-            if isinstance(value, (list, dict, set)):
-                fields_dict_onetensor[key] = copy.copy(value)
-            else:
-                fields_dict_onetensor[key] = value
-        # These nested structures need deep copies because they contain mutable
-        # sub-containers that could be mutated independently per output tensor.
-        for field in (
-            "parent_arg_positions",
-            "modules",
-            "parent_param_ops",
-        ):
-            fields_dict_onetensor[field] = copy.deepcopy(fields_dict[field])
+        fields_dict_onetensor = _copy_shared_fields_for_output(fields_dict)
         fields_dict_onetensor["container_path"] = container_path
         fields_dict_onetensor["container_spec"] = container_spec
         if container_spec is not None:
