@@ -287,7 +287,7 @@ class Recording(CapturedRun):
     grad_by_pass: dict[int, list[int]] = field(default_factory=dict)
     grad_by_label: dict[str, list[int]] = field(default_factory=dict)
     grad_by_grad_fn_label: dict[str, list[int]] = field(default_factory=dict)
-    keep_grad_repr: str | None = None
+    save_grads_repr: str | None = None
     _grad_transform_repr: str | None = None
     _activation_transform_repr: str | None = None
     recovered: bool = False
@@ -435,7 +435,7 @@ class Recording(CapturedRun):
         self,
         loss: torch.Tensor,
         *,
-        keep_grad: Callable[[GradRecordContext], CaptureDecision]
+        save_grads: Callable[[GradRecordContext], CaptureDecision]
         | bool
         | CaptureSpec
         | None = None,
@@ -449,7 +449,7 @@ class Recording(CapturedRun):
         ----------
         loss:
             Loss tensor whose autograd graph should be walked.
-        keep_grad:
+        save_grads:
             Optional per-gradient predicate overriding the recording default.
         default_grad:
             Default capture decision when no predicate is configured.
@@ -476,7 +476,7 @@ class Recording(CapturedRun):
         return log_recording_backward(
             self,
             loss,
-            keep_grad=keep_grad,
+            save_grads=save_grads,
             default_grad=default_grad,
             retain_graph=retain_graph,
             create_graph=create_graph,

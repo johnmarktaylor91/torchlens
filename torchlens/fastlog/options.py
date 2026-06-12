@@ -41,7 +41,7 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "random_seed",
     "activation_transform",
     "save_raw_activations",
-    "keep_grad",
+    "save_grads",
     "default_grad",
     "grad_transform",
     "save_raw_gradients",
@@ -81,7 +81,7 @@ class RecordingOptions:
     random_seed: int | None = None
     activation_transform: ActivationPostfunc | None = None
     save_raw_activations: bool = True
-    keep_grad: GradPredicateFn | bool | CaptureSpec | None = None
+    save_grads: GradPredicateFn | bool | CaptureSpec | None = None
     default_grad: bool | CaptureSpec = False
     grad_transform: GradientPostfunc | None = None
     save_raw_gradients: bool = True
@@ -109,7 +109,7 @@ class RecordingOptions:
         random_seed: int | None | MissingType = MISSING,
         activation_transform: ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
-        keep_grad: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
+        save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
@@ -158,7 +158,9 @@ class RecordingOptions:
             "save_raw_activations": _resolve_recording_option(
                 "save_raw_activations", save_raw_activations, True, specified_fields
             ),
-            "keep_grad": _resolve_recording_option("keep_grad", keep_grad, None, specified_fields),
+            "save_grads": _resolve_recording_option(
+                "save_grads", save_grads, None, specified_fields
+            ),
             "default_grad": _resolve_recording_option(
                 "default_grad", default_grad, False, specified_fields
             ),
@@ -211,7 +213,7 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     on_predicate_error = values["on_predicate_error"]
     activation_transform = values["activation_transform"]
     save_raw_activations = values["save_raw_activations"]
-    keep_grad = values["keep_grad"]
+    save_grads = values["save_grads"]
     default_grad = values["default_grad"]
     grad_transform = values["grad_transform"]
     save_raw_gradients = values["save_raw_gradients"]
@@ -241,11 +243,11 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
     if not isinstance(save_raw_activations, bool):
         raise ValueError("save_raw_activations must be a bool")
     if (
-        keep_grad is not None
-        and not isinstance(keep_grad, (bool, CaptureSpec))
-        and not callable(keep_grad)
+        save_grads is not None
+        and not isinstance(save_grads, (bool, CaptureSpec))
+        and not callable(save_grads)
     ):
-        raise ValueError("keep_grad must be callable, bool, CaptureSpec, or None")
+        raise ValueError("save_grads must be callable, bool, CaptureSpec, or None")
     if not isinstance(default_grad, (bool, CaptureSpec)):
         raise ValueError("default_grad must be bool or CaptureSpec")
     if grad_transform is not None and not callable(grad_transform):
@@ -272,7 +274,7 @@ def merge_recording_options(
     random_seed: int | None | MissingType = MISSING,
     activation_transform: ActivationPostfunc | None | MissingType = MISSING,
     save_raw_activations: bool | MissingType = MISSING,
-    keep_grad: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
+    save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
     default_grad: bool | CaptureSpec | MissingType = MISSING,
     grad_transform: GradientPostfunc | None | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
@@ -299,7 +301,7 @@ def merge_recording_options(
         "random_seed": random_seed,
         "activation_transform": activation_transform,
         "save_raw_activations": save_raw_activations,
-        "keep_grad": keep_grad,
+        "save_grads": save_grads,
         "default_grad": default_grad,
         "grad_transform": grad_transform,
         "save_raw_gradients": save_raw_gradients,

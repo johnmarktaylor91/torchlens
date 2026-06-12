@@ -1528,54 +1528,6 @@ def _is_static_truthy_keep_grad(value: Any) -> bool:
     return value is True or (isinstance(value, CaptureSpec) and value.keep_grad)
 
 
-def _normalize_grad_capture_decision(value: Any) -> Any:
-    """Normalize a fastlog gradient capture decision."""
-
-    from ...fastlog.types import CaptureSpec
-
-    if value is None or value is False:
-        return CaptureSpec(save_out=False, save_metadata=False)
-    if value is True:
-        return CaptureSpec(save_out=True, save_metadata=True)
-    if isinstance(value, CaptureSpec):
-        return value
-    raise TypeError("keep_grad predicates must return bool, CaptureSpec, or None")
-
-
-def _recording_grad_fn_label(
-    grad_fn_handle: Any,
-    layer_label: str | None,
-    type_counter: dict[str, int],
-    total_num: int,
-) -> str:
-    """Build a fastlog grad_fn_handle label for one autograd node."""
-
-    grad_fn_type = _normalize_grad_fn_type(grad_fn_handle)
-    if layer_label is not None:
-        return f"{grad_fn_type}_back_{layer_label}"
-    type_counter[grad_fn_type] = type_counter.get(grad_fn_type, 0) + 1
-    return f"{grad_fn_type}_back_{type_counter[grad_fn_type]}_{total_num}"
-
-
-def _iter_backward_nodes(loss: torch.Tensor) -> list[Any]:
-    """Return reachable autograd nodes from a loss tensor in BFS order."""
-
-    if loss.grad_fn is None:
-        raise ValueError("log_backward requires a loss tensor with a grad_fn_handle.")
-    queue: deque[Any] = deque([loss.grad_fn])
-    seen: set[int] = set()
-    nodes: list[Any] = []
-    while queue:
-        grad_fn_handle = queue.popleft()
-        grad_fn_object_id = id(grad_fn_handle)
-        if grad_fn_object_id in seen:
-            continue
-        seen.add(grad_fn_object_id)
-        nodes.append(grad_fn_handle)
-        queue.extend(_iter_next_grad_fns(grad_fn_handle))
-    return nodes
-
-
 def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
     """Return labels for predicate-selected forward records."""
 
@@ -1611,25 +1563,6 @@ def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
     return labels
 
 
-def _effective_grad_spec(
-    ctx: Any,
-    *,
-    keep_grad: Any,
-    default_grad: Any,
-    selected_forward_labels: set[str],
-) -> Any:
-    """Resolve the capture spec for one gradient event."""
-
-    if callable(keep_grad):
-        return _normalize_grad_capture_decision(keep_grad(ctx))
-    if keep_grad is None:
-        return _normalize_grad_capture_decision(default_grad)
-    spec = _normalize_grad_capture_decision(keep_grad)
-    if keep_grad is True and ctx.layer_label not in selected_forward_labels:
-        return _normalize_grad_capture_decision(False)
-    return spec
-
-
 def _first_tensor_from_hook_args(
     hook_args: tuple[Any, ...],
 ) -> tuple[str, int | None, torch.Tensor] | None:
@@ -1648,76 +1581,11 @@ def _first_tensor_from_hook_args(
     return None
 
 
-def _make_recording_grad_hook(
-    recording_state: Any,
-    recording: Any,
-    grad_fn_handle: Any,
-    label: str,
-    *,
-    keep_grad: Any,
-    default_grad: Any,
-    selected_forward_labels: set[str],
-    backward_call_index: int,
-) -> Callable[..., None]:
-    """Build a fastlog hook that records a selected gradient payload."""
-
-    from ...fastlog.types import GradientRecord, build_grad_record_context
-
-    def hook(*hook_args: Any) -> None:
-        picked = _first_tensor_from_hook_args(hook_args)
-        if picked is None:
-            return None
-        grad_kind, grad_index, grad = picked
-        grad_kind_literal = cast(Literal["grad_input", "grad_output"], grad_kind)
-        ctx = build_grad_record_context(
-            recording_state,
-            grad_fn_handle,
-            grad,
-            label=label,
-            grad_kind=grad_kind_literal,
-            backward_call_index=backward_call_index,
-            grad_input_index=grad_index if grad_kind == "grad_input" else None,
-            grad_output_index=grad_index if grad_kind == "grad_output" else None,
-        )
-        spec = _effective_grad_spec(
-            ctx,
-            keep_grad=keep_grad,
-            default_grad=default_grad,
-            selected_forward_labels=selected_forward_labels,
-        )
-        if not spec.save_out and not spec.save_metadata:
-            return None
-        ram_payload = None
-        disk_payload = None
-        transformed_ram_payload = None
-        transformed_disk_payload = None
-        if spec.save_out:
-            (
-                ram_payload,
-                disk_payload,
-                transformed_ram_payload,
-                transformed_disk_payload,
-            ) = recording_state.resolve_storage(grad, spec, ctx=ctx, kind="grad")
-        recording.add_grad_record(
-            GradientRecord(
-                ctx=ctx,
-                spec=spec,
-                ram_payload=ram_payload,
-                disk_payload=disk_payload,
-                transformed_ram_payload=transformed_ram_payload,
-                transformed_disk_payload=transformed_disk_payload,
-            )
-        )
-        return None
-
-    return hook
-
-
 def log_recording_backward(
     recording: Any,
     loss: torch.Tensor,
     *,
-    keep_grad: Any = None,
+    save_grads: Any = None,
     default_grad: Any = None,
     retain_graph: bool | None = None,
     create_graph: bool = False,
@@ -1735,17 +1603,20 @@ def log_recording_backward(
         raise RecorderStateError(
             "Recording.log_backward() requires a live runtime trace from Recorder.log()."
         )
-    effective_keep_grad = keep_grad if keep_grad is not None else recording_state.options.keep_grad
+    effective_save_grads = (
+        save_grads if save_grads is not None else recording_state.options.save_grads
+    )
     effective_default_grad = (
         default_grad if default_grad is not None else recording_state.options.default_grad
     )
     if (
         recording_state.storage_intent.on_disk
         and not recording_state.storage_intent.in_ram
-        and _is_static_truthy_keep_grad(effective_keep_grad)
+        and _is_static_truthy_keep_grad(effective_save_grads)
     ):
         raise InvalidStorageError(
-            "keep_grad=True is incompatible with disk-only fastlog gradient storage"
+            "save_grads=True with CaptureSpec(keep_grad=True) is incompatible with "
+            "disk-only fastlog gradient storage"
         )
     selected_forward_labels = _selected_fastlog_forward_labels(recording)
 
@@ -1753,22 +1624,23 @@ def log_recording_backward(
         """Apply fastlog default and selected-forward-label semantics."""
 
         layer_label = getattr(ctx, "layer_label", None)
-        if callable(effective_keep_grad):
-            decision = effective_keep_grad(ctx)
+        if callable(effective_save_grads):
+            decision = effective_save_grads(ctx)
             if (
                 recording_state.storage_intent.on_disk
                 and not recording_state.storage_intent.in_ram
                 and _is_static_truthy_keep_grad(decision)
             ):
                 raise InvalidStorageError(
-                    "keep_grad=True is incompatible with disk-only fastlog gradient storage"
+                    "save_grads returned CaptureSpec(keep_grad=True), which is incompatible "
+                    "with disk-only fastlog gradient storage"
                 )
             return decision
-        if effective_keep_grad is True and layer_label not in selected_forward_labels:
+        if effective_save_grads is True and layer_label not in selected_forward_labels:
             return False
-        if effective_keep_grad is None:
+        if effective_save_grads is None:
             return effective_default_grad
-        return effective_keep_grad
+        return effective_save_grads
 
     backward_kwargs: dict[str, Any] = {"create_graph": create_graph}
     if retain_graph is not None:
@@ -1779,7 +1651,7 @@ def log_recording_backward(
 
         return loss.backward(**backward_kwargs)
 
-    recording_state.active_grad_record_policy = selected_save_grads
+    recording_state.active_save_grads_record_policy = selected_save_grads
     try:
         _run_backward_with_capture(
             trace,
@@ -1791,7 +1663,7 @@ def log_recording_backward(
         )
         sync_recording_grad_records_from_sidecar(recording_state)
     finally:
-        recording_state.active_grad_record_policy = None
+        recording_state.active_save_grads_record_policy = None
     return recording
 
 

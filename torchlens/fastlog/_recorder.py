@@ -174,11 +174,12 @@ class Recorder:
         intervene: InterventionPredicate | None | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
+        storage: StreamingOptions | None | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
         activation_transform: ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
-        keep_grad: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
+        save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
@@ -192,7 +193,7 @@ class Recorder:
             PyTorch module to record.
         save, keep_op, keep_module, default_op, default_module, history_size,
         lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
-        on_predicate_error, streaming, random_seed:
+        on_predicate_error, storage, streaming, random_seed:
             Fastlog recording options.
         activation_transform:
             Optional callable applied to each retained out copy after
@@ -208,6 +209,11 @@ class Recorder:
         """
 
         reject_compiled_model(model, api_name="torchlens.fastlog.Recorder")
+        storage_supplied = storage is not MISSING and storage is not None
+        streaming_supplied = streaming is not MISSING and streaming is not None
+        if storage_supplied and streaming_supplied:
+            raise TypeError("Do not pass both `storage` and `streaming`.")
+        resolved_streaming = storage if storage_supplied else streaming
         keep_op = _resolve_save_alias(save=save, keep_op=keep_op)
         if keep_module is not MISSING:
             warnings.warn(
@@ -215,7 +221,7 @@ class Recorder:
                 DeprecationWarning,
                 stacklevel=2,
             )
-        unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, streaming)
+        unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, resolved_streaming)
         default_op = _resolve_train_mode_default(
             field_name="default_op",
             value=default_op,
@@ -244,7 +250,7 @@ class Recorder:
             random_seed=random_seed,
             activation_transform=activation_transform,
             save_raw_activations=save_raw_activations,
-            keep_grad=keep_grad,
+            save_grads=save_grads,
             default_grad=default_grad,
             grad_transform=grad_transform,
             save_raw_gradients=save_raw_gradients,
@@ -415,7 +421,7 @@ class Recorder:
         self,
         loss: torch.Tensor,
         *,
-        keep_grad: (GradPredicateFn | bool | CaptureSpec | None) = None,
+        save_grads: (GradPredicateFn | bool | CaptureSpec | None) = None,
         default_grad: bool | CaptureSpec | None = None,
         retain_graph: bool | None = None,
         create_graph: bool = False,
@@ -426,7 +432,7 @@ class Recorder:
             raise RecorderStateError("Recorder.log_backward() requires an active with-block")
         self._state.recording.log_backward(
             loss,
-            keep_grad=keep_grad,
+            save_grads=save_grads,
             default_grad=default_grad,
             retain_graph=retain_graph,
             create_graph=create_graph,

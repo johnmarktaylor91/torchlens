@@ -59,13 +59,14 @@ def record(
     intervene: InterventionPredicate | None = None,
     max_predicate_failures: int = 32,
     on_predicate_error: PredicateErrorMode = "auto",
+    storage: StreamingOptions | None = None,
     streaming: StreamingOptions | None = None,
     return_output: bool = False,
     postprocess: str = "none",
     random_seed: int | None = None,
     activation_transform: ActivationPostfunc | None = None,
     save_raw_activations: bool = True,
-    keep_grad: GradPredicateFn | bool | CaptureSpec | None = None,
+    save_grads: GradPredicateFn | bool | CaptureSpec | None = None,
     default_grad: bool | CaptureSpec | MissingType = MISSING,
     grad_transform: GradientPostfunc | None = None,
     save_raw_gradients: bool = True,
@@ -89,7 +90,7 @@ def record(
         Optional keyword arguments for the model call.
     save, keep_op, keep_module, default_op, default_module, history_size,
     lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
-    on_predicate_error, streaming, random_seed:
+    on_predicate_error, storage, streaming, random_seed:
         Fastlog recording options.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
@@ -114,6 +115,8 @@ def record(
     """
 
     reject_compiled_model(model, api_name="torchlens.fastlog.record")
+    if storage is not None and streaming is not None:
+        raise TypeError("Do not pass both `storage` and `streaming`.")
     validate_postprocess(postprocess)
     resolved_keep_op = _resolve_save_alias(save=save, keep_op=keep_op)
     if keep_module is not MISSING:
@@ -137,11 +140,12 @@ def record(
         intervene=intervene,
         max_predicate_failures=max_predicate_failures,
         on_predicate_error=on_predicate_error,
+        storage=storage,
         streaming=streaming,
         random_seed=random_seed,
         activation_transform=activation_transform,
         save_raw_activations=save_raw_activations,
-        keep_grad=keep_grad,
+        save_grads=save_grads,
         default_grad=default_grad,
         grad_transform=grad_transform,
         save_raw_gradients=save_raw_gradients,

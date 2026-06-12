@@ -143,7 +143,7 @@ def _empty_recording(options: "RecordingOptions") -> Recording:
         keep_op_repr=repr(options.keep_op) if options.keep_op is not None else None,
         keep_module_repr=repr(options.keep_module) if options.keep_module is not None else None,
         history_size=options.history_size,
-        keep_grad_repr=repr(options.keep_grad) if options.keep_grad is not None else None,
+        save_grads_repr=repr(options.save_grads) if options.save_grads is not None else None,
         _activation_transform_repr=(
             repr(options.activation_transform) if options.activation_transform is not None else None
         ),
@@ -175,7 +175,7 @@ class RecordingState:
     storage_backend: _StorageBackend = field(init=False)
     grad_fn_to_context: _GradFnContextMap = field(default_factory=_GradFnContextMap)
     runtime_trace: "Trace | None" = None
-    active_grad_record_policy: Any | None = None
+    active_save_grads_record_policy: Any | None = None
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -1047,7 +1047,7 @@ def _maybe_add_grad_fn_metadata_record(state: RecordingState, trace: "Trace", ev
         order=getattr(pass_record, "order", None),
         event_index=event.seq,
     )
-    policy = state.active_grad_record_policy
+    policy = state.active_save_grads_record_policy
     decision = policy(ctx) if callable(policy) else policy
     if not isinstance(decision, CaptureSpec) or not decision.save_metadata:
         return

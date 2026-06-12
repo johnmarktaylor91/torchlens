@@ -11,7 +11,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.fastlog import CaptureSpec, GradRecordContext, InvalidStorageError
-from torchlens.options import StreamingOptions
 
 
 class TinyRelu(nn.Module):
@@ -42,7 +41,7 @@ def test_recording_log_backward_grad_fn_id_link() -> None:
         TinyRelu(),
         _input(),
         keep_op=lambda ctx: ctx.label == "relu_1",
-        keep_grad=True,
+        save_grads=True,
         return_output=True,
     )
     recording.log_backward(out.sum())
@@ -55,7 +54,7 @@ def test_recording_log_backward_grad_fn_id_link() -> None:
 
 
 def test_recording_log_backward_intervening_grad_fn() -> None:
-    """Callable keep_grad can capture an intervening grad_fn_handle as metadata."""
+    """Callable save_grads can capture an intervening grad_fn_handle as metadata."""
 
     out, recording = tl.fastlog.record(
         TinyRelu(),
@@ -69,40 +68,40 @@ def test_recording_log_backward_intervening_grad_fn() -> None:
 
         return CaptureSpec(save_out=False, save_metadata=True) if not ctx.has_op else False
 
-    recording.log_backward(out.sum(), keep_grad=keep_intervening)
+    recording.log_backward(out.sum(), save_grads=keep_intervening)
 
     assert any(not record.ctx.has_op for record in recording.grad_records)
 
 
-def test_recording_log_backward_disk_only_rejects_keep_grad(tmp_path: Path) -> None:
-    """Static keep_grad=True rejects disk-only storage before backward runs."""
+def test_recording_log_backward_disk_only_rejects_save_grads(tmp_path: Path) -> None:
+    """Static save_grads=True rejects disk-only storage before backward runs."""
 
     out, recording = tl.fastlog.record(
         TinyRelu(),
         _input(),
         keep_op=lambda ctx: ctx.label == "relu_1",
-        streaming=StreamingOptions(bundle_path=tmp_path / "grad.tlfast", retain_in_memory=False),
+        storage=tl.to_disk(tmp_path / "grad.tlfast"),
         return_output=True,
     )
 
     with pytest.raises(InvalidStorageError, match="disk-only"):
-        recording.log_backward(out.sum(), keep_grad=True)
+        recording.log_backward(out.sum(), save_grads=True)
     assert not recording.grad_records
 
 
-def test_recording_log_backward_disk_only_dynamic_keep_grad_resolves(tmp_path: Path) -> None:
-    """Dynamic keep_grad predicates hit the late storage resolver gate."""
+def test_recording_log_backward_disk_only_dynamic_save_grads_resolves(tmp_path: Path) -> None:
+    """Dynamic save_grads predicates hit the late storage resolver gate."""
 
     out, recording = tl.fastlog.record(
         TinyRelu(),
         _input(),
         keep_op=lambda ctx: ctx.label == "relu_1",
-        streaming=StreamingOptions(bundle_path=tmp_path / "grad.tlfast", retain_in_memory=False),
+        storage=tl.to_disk(tmp_path / "grad.tlfast"),
         return_output=True,
     )
 
     with pytest.raises(InvalidStorageError, match="disk-only"):
-        recording.log_backward(out.sum(), keep_grad=lambda _ctx: CaptureSpec(keep_grad=True))
+        recording.log_backward(out.sum(), save_grads=lambda _ctx: CaptureSpec(keep_grad=True))
 
 
 def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
@@ -112,7 +111,7 @@ def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
     with tl.fastlog.Recorder(
         model,
         keep_op=lambda ctx: ctx.label == "relu_1",
-        keep_grad=True,
+        save_grads=True,
     ) as recorder:
         out_1 = recorder.log(_input())
         recorder.log_backward(out_1.sum())
@@ -123,6 +122,28 @@ def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
         labels = [record.ctx.layer_label for record in recorder._state.recording.grad_records]
 
     assert labels == ["relu_1", "relu_1"]
+
+
+def test_fastlog_keep_grad_selector_is_removed() -> None:
+    """Fastlog backward capture uses save_grads, with no keep_grad alias."""
+
+    with pytest.raises(TypeError, match="keep_grad"):
+        tl.fastlog.record(
+            TinyRelu(),
+            _input(),
+            keep_op=lambda ctx: ctx.label == "relu_1",
+            keep_grad=True,
+            return_output=True,
+        )
+
+    out, recording = tl.fastlog.record(
+        TinyRelu(),
+        _input(),
+        keep_op=lambda ctx: ctx.label == "relu_1",
+        return_output=True,
+    )
+    with pytest.raises(TypeError, match="keep_grad"):
+        recording.log_backward(out.sum(), keep_grad=True)
 
 
 def test_gradient_transform_alias_silent() -> None:
