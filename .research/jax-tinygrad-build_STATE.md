@@ -48,4 +48,5 @@ post-benchmark round) + torch parity goldens once built.
 ## Iteration log
 | Round | Lane | Phase | Commit | Result | Next |
 |---|---|---|---|---|---|
+| 1 | tinygrad | S0.G discovery | this commit | PASS: pinned `tinygrad==0.13.0`; added runnable probes for interception/realization, mutation identity, autograd lifecycle, TinyJit/GC, and initial payload non-interference. | Continue S0.G with deeper scheduler/JIT capture, grad-payload, stale-lineage, and device-copy probes. |
 | 1 | M0.1a | artifact 1 - invariant contract | this commit | Wrote docs-only backend invariant contract; no tests/ruff per benchmark constraint. | artifact 2 - public-surface + kwarg + backward-surface matrices |
