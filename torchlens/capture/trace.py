@@ -616,7 +616,7 @@ def run_and_log_inputs_through_model(
 
             if self.capture_mode == "predicate":
                 from ..backends.torch import module_stack as _mstack
-                from ..capture.predicates import _evaluate_keep_module
+                from ..capture.predicates import _evaluate_halt, _evaluate_keep_module
                 from ..capture.projections import (
                     _build_record_context,
                     append_projected_event,
@@ -660,6 +660,7 @@ def run_and_log_inputs_through_model(
                         enter_spec,
                         predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
                     )
+                    _evaluate_halt(enter_ctx, state.options)
                 except HaltSignal:
                     raise
                 except Exception as exc:
@@ -703,6 +704,7 @@ def run_and_log_inputs_through_model(
                             exit_spec,
                             predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                         )
+                        _evaluate_halt(exit_ctx, state.options)
                     except HaltSignal:
                         raise
                     except Exception as exc:

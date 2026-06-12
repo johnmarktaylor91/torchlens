@@ -1505,7 +1505,7 @@ def module_forward_decorator(
             return out
 
         if trace.capture_mode == "predicate":
-            from ...capture.predicates import _evaluate_keep_module
+            from ...capture.predicates import _evaluate_halt, _evaluate_keep_module
             from ...capture.projections import (
                 _build_record_context,
                 append_projected_event,
@@ -1547,6 +1547,7 @@ def module_forward_decorator(
                     enter_spec,
                     predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
                 )
+                _evaluate_halt(enter_ctx, state.options)
             except HaltSignal:
                 _mstack.pop_frame(state.module_stack, frame)
                 raise
@@ -1598,6 +1599,7 @@ def module_forward_decorator(
                         exit_spec,
                         predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                     )
+                    _evaluate_halt(exit_ctx, state.options)
                 except HaltSignal:
                     raise
                 except Exception as exc:

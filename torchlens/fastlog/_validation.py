@@ -63,6 +63,7 @@ def _validate_non_empty_capture(options: RecordingOptions) -> None:
     if (
         options.keep_op is None
         and options.keep_module is None
+        and options.halt is None
         and options.default_op is False
         and options.default_module is False
     ):

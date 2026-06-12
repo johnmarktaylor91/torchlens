@@ -38,7 +38,7 @@ from ..._training_validation import TrainingModeConfigError
 from ...data_classes.buffer import Buffer
 from ...data_classes.op import Op
 from . import module_stack as _mstack
-from ...capture.predicates import _evaluate_keep_op
+from ...capture.predicates import _evaluate_halt, _evaluate_keep_op
 from ...capture.projections import (
     _build_record_context,
     append_projected_event,
@@ -187,6 +187,7 @@ def log_source_tensor_predicate(
             transformed_ram_payload=transformed_ram_payload,
             predicate_matched=spec.save_out or spec.save_metadata,
         )
+        _evaluate_halt(ctx, state.options)
     except HaltSignal:
         raise
     except (TorchLensPostfuncError, TrainingModeConfigError):

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ..fastlog._halt import HaltSignal
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import CaptureSpec, ModuleStackFrame, RecordContext
 from ..intervention.predicates import as_intervention_decision
@@ -138,6 +139,33 @@ def _evaluate_intervene_op(
             ctx=ctx,
             result=result,
         ) from exc
+
+
+def _evaluate_halt(ctx: RecordContext, options: "RecordingOptions") -> None:
+    """Evaluate the halt predicate slot and raise when it matches.
+
+    Parameters
+    ----------
+    ctx:
+        Event context for the current source, operation, or module boundary.
+    options:
+        Unified predicate runtime options.
+
+    Raises
+    ------
+    HaltSignal
+        If ``options.halt`` returns ``True`` for ``ctx``.
+    PredicateError
+        If ``options.halt`` returns a non-bool value.
+    """
+
+    if options.halt is None:
+        return
+    result = options.halt(ctx)
+    if not isinstance(result, bool):
+        raise PredicateError("halt predicate must return bool", ctx=ctx, result=result)
+    if result:
+        raise HaltSignal(ctx.label)
 
 
 def _evaluate_retroactive_followed_by(

@@ -29,6 +29,7 @@ from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
     GradPredicateFn,
+    HaltPredicateFn,
     LookbackPayloadPolicy,
     PredicateErrorMode,
     PredicateFn,
@@ -172,6 +173,7 @@ class Recorder:
         lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
         include_source_events: bool | MissingType = MISSING,
         intervene: InterventionPredicate | None | MissingType = MISSING,
+        halt: HaltPredicateFn | None | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         storage: StreamingOptions | None | MissingType = MISSING,
@@ -195,6 +197,9 @@ class Recorder:
         lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
         on_predicate_error, storage, streaming, random_seed:
             Fastlog recording options.
+        halt:
+            Optional predicate evaluated after each event's save decision. Returning
+            ``True`` stops the active forward pass and marks the recording halted.
         activation_transform:
             Optional callable applied to each retained out copy after
             dtype/device transforms. The callable runs under ``pause_logging``
@@ -244,6 +249,7 @@ class Recorder:
             lookback_payload_policy=lookback_payload_policy,
             include_source_events=include_source_events,
             intervene=intervene,
+            halt=halt,
             max_predicate_failures=max_predicate_failures,
             on_predicate_error=on_predicate_error,
             streaming=streaming,

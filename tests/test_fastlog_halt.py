@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -11,7 +12,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._state as torchlens_state
 import torchlens.capture.projections as fastlog_state
-from torchlens.fastlog import HaltSignal, RecordContext, RecorderStateError
+from torchlens.fastlog import HaltSignal, PredicateError, RecordContext, RecorderStateError
 
 
 class FiveOpModel(nn.Module):
@@ -57,16 +58,46 @@ def _op_compute_indexes(recording: tl.fastlog.Recording) -> list[int | None]:
     return [record.ctx.step_index for record in recording.records if record.ctx.kind == "op"]
 
 
+def _as_recording(
+    result: tl.fastlog.Recording | tuple[Any, tl.fastlog.Recording],
+) -> tl.fastlog.Recording:
+    """Narrow record() results when return_output=False is used."""
+
+    if isinstance(result, tuple):
+        return result[1]
+    return result
+
+
 @pytest.mark.smoke
 def test_halt_basic_halts_recording() -> None:
     """A predicate halt preserves records captured before the halt point."""
 
-    recording = tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+    recording = _as_recording(
+        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+    )
 
     assert recording.halted is True
     assert recording.halt_reason == "stop"
     assert recording.halts_by_pass == {1: "stop"}
     assert _op_compute_indexes(recording) == [1, 2, 3]
+    assert recording.predicate_failures == []
+
+
+def test_record_halt_predicate_stops_after_save_decision() -> None:
+    """record(halt=...) stops after retaining the matching event's save decision."""
+
+    recording = _as_recording(
+        tl.record(
+            FiveOpModel(),
+            torch.tensor(1.0),
+            save=lambda ctx: ctx.kind == "op",
+            halt=lambda ctx: ctx.kind == "op" and ctx.step_index == 4,
+        )
+    )
+
+    assert recording.halted is True
+    assert recording.halt_reason == "sigmoid_1_5_raw"
+    assert _op_compute_indexes(recording) == [1, 2, 3, 4]
     assert recording.predicate_failures == []
 
 
@@ -80,7 +111,7 @@ def test_halt_reason_default_empty_string() -> None:
             tl.fastlog.halt()
         return True
 
-    recording = tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=keep_op)
+    recording = _as_recording(tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=keep_op))
 
     assert recording.halted is True
     assert recording.halt_reason == ""
@@ -127,11 +158,13 @@ def test_halt_from_inside_module_enter_predicate() -> None:
             tl.fastlog.halt("module enter")
         return True
 
-    recording = tl.fastlog.record(
-        ChildModuleModel(),
-        torch.ones(1, 3),
-        keep_module=keep_module,
-        default_op=False,
+    recording = _as_recording(
+        tl.fastlog.record(
+            ChildModuleModel(),
+            torch.ones(1, 3),
+            keep_module=keep_module,
+            default_op=False,
+        )
     )
 
     assert recording.halted is True
@@ -149,11 +182,13 @@ def test_halt_from_inside_module_exit_predicate() -> None:
             tl.fastlog.halt("module exit")
         return True
 
-    recording = tl.fastlog.record(
-        ChildModuleModel(),
-        torch.ones(1, 3),
-        keep_module=keep_module,
-        default_op=False,
+    recording = _as_recording(
+        tl.fastlog.record(
+            ChildModuleModel(),
+            torch.ones(1, 3),
+            keep_module=keep_module,
+            default_op=False,
+        )
     )
 
     assert recording.halted is True
@@ -171,11 +206,13 @@ def test_halt_source_predicate() -> None:
             tl.fastlog.halt("input")
         return True
 
-    recording = tl.fastlog.record(
-        FiveOpModel(),
-        torch.tensor(1.0),
-        keep_op=keep_op,
-        include_source_events=True,
+    recording = _as_recording(
+        tl.fastlog.record(
+            FiveOpModel(),
+            torch.tensor(1.0),
+            keep_op=keep_op,
+            include_source_events=True,
+        )
     )
 
     assert recording.halted is True
@@ -183,10 +220,67 @@ def test_halt_source_predicate() -> None:
     assert recording.records == []
 
 
+def test_record_halt_predicate_can_stop_on_source_event() -> None:
+    """record(halt=...) evaluates source events when source contexts are enabled."""
+
+    recording = _as_recording(
+        tl.record(
+            FiveOpModel(),
+            torch.tensor(1.0),
+            halt=lambda ctx: ctx.kind == "input",
+            include_source_events=True,
+        )
+    )
+
+    assert recording.halted is True
+    assert recording.halt_reason == "input_1_raw"
+    assert recording.records == []
+
+
+def test_record_halt_predicate_module_exit_boundary() -> None:
+    """A module halt predicate can stop at module exit after child ops run."""
+
+    recording = _as_recording(
+        tl.record(
+            ChildModuleModel(),
+            torch.ones(1, 3),
+            save=lambda ctx: ctx.kind == "op",
+            halt=lambda ctx: ctx.kind == "module_exit" and ctx.address == "linear",
+        )
+    )
+
+    assert recording.halted is True
+    assert recording.halt_reason == "linear:exit:1"
+    assert [record.ctx.layer_type for record in recording.records] == ["linear"]
+
+
+def test_record_halt_predicate_rejects_non_bool_return() -> None:
+    """halt= must return a bool, not a capture decision."""
+
+    def invalid_halt(ctx: RecordContext) -> Any:
+        """Return an invalid halt predicate value for runtime validation."""
+
+        _ = ctx
+        return tl.fastlog.CaptureSpec(save_out=True)
+
+    with pytest.raises(PredicateError) as exc_info:
+        tl.record(
+            FiveOpModel(),
+            torch.tensor(1.0),
+            halt=invalid_halt,
+            on_predicate_error="accumulate",
+        )
+
+    assert len(exc_info.value.failures) == 8
+    assert "halt predicate must return bool" in exc_info.value.failures[0].traceback
+
+
 def test_halt_does_not_propagate_as_predicate_failure() -> None:
     """Halt is not aggregated through predicate exception handling."""
 
-    recording = tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+    recording = _as_recording(
+        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+    )
 
     assert recording.predicate_failures == []
     assert recording.predicate_failure_overflow_count == 0
@@ -218,7 +312,9 @@ def test_halt_multi_call_recorder_first_halt_wins() -> None:
 def test_recording_log_backward_on_halted_raises() -> None:
     """Backward logging is rejected on halted recordings."""
 
-    recording = tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+    recording = _as_recording(
+        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+    )
 
     with pytest.raises(RecorderStateError, match="Cannot call log_backward on halted Recording"):
         recording.log_backward(torch.ones((), requires_grad=True))
@@ -237,7 +333,7 @@ def test_halt_through_user_except_exception() -> None:
                 return False
         return True
 
-    recording = tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=keep_op)
+    recording = _as_recording(tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=keep_op))
 
     assert recording.halted is True
     assert recording.halt_reason == "base"
@@ -246,7 +342,9 @@ def test_halt_through_user_except_exception() -> None:
 def test_halted_recording_partial_events_present() -> None:
     """Recording trace keeps chronological contexts through the halt point."""
 
-    recording = tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+    recording = _as_recording(
+        tl.fastlog.record(FiveOpModel(), torch.tensor(1.0), keep_op=_keep_ops_until_fourth)
+    )
 
     assert [ctx.step_index for ctx in recording.recording_trace.events if ctx.kind == "op"] == [
         1,
@@ -260,11 +358,13 @@ def test_fastlog_halt_finalizes_disk_storage(tmp_path: Path) -> None:
     """Disk-backed halted recordings finalize with halt metadata."""
 
     bundle_path = tmp_path / "halt_bundle"
-    recording = tl.fastlog.record(
-        FiveOpModel(),
-        torch.tensor(1.0),
-        keep_op=_keep_ops_until_fourth,
-        streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+    recording = _as_recording(
+        tl.fastlog.record(
+            FiveOpModel(),
+            torch.tensor(1.0),
+            keep_op=_keep_ops_until_fourth,
+            streaming=tl.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        )
     )
     loaded = tl.fastlog.load(bundle_path)
     recovered = tl.fastlog.recover(bundle_path)

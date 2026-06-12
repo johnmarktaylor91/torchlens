@@ -150,7 +150,12 @@ from ..._io import BlobRef
 from ...fastlog._storage_resolver import _resolve_storage
 from ..._training_validation import TrainingModeConfigError
 from ...data_classes.internal_types import FuncExecutionContext
-from ...capture.predicates import _evaluate_intervene_op, _evaluate_keep_op, build_op_record_context
+from ...capture.predicates import (
+    _evaluate_halt,
+    _evaluate_intervene_op,
+    _evaluate_keep_op,
+    build_op_record_context,
+)
 from ...capture.projections import (
     append_projected_event,
     get_active_recording_state,
@@ -1744,6 +1749,7 @@ def log_function_output_tensors_predicate(
                 predicate_matched=spec.save_out or spec.save_metadata,
                 backend_semantics=backend_semantics,
             )
+            _evaluate_halt(ctx, state.options)
         except HaltSignal:
             raise
         except (TorchLensPostfuncError, TrainingModeConfigError):

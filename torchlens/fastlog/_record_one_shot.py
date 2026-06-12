@@ -15,7 +15,13 @@ from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from ._recorder import Recorder
 from ._validation import validate_postprocess
-from .options import GradPredicateFn, LookbackPayloadPolicy, PredicateErrorMode, PredicateFn
+from .options import (
+    GradPredicateFn,
+    HaltPredicateFn,
+    LookbackPayloadPolicy,
+    PredicateErrorMode,
+    PredicateFn,
+)
 from .types import CaptureSpec, Recording
 
 
@@ -57,6 +63,7 @@ def record(
     lookback_payload_policy: LookbackPayloadPolicy = "metadata_only",
     include_source_events: bool = False,
     intervene: InterventionPredicate | None = None,
+    halt: HaltPredicateFn | None = None,
     max_predicate_failures: int = 32,
     on_predicate_error: PredicateErrorMode = "auto",
     storage: StreamingOptions | None = None,
@@ -94,6 +101,9 @@ def record(
         Fastlog recording options.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
+    halt:
+        Optional predicate evaluated after each event's save decision. Returning
+        ``True`` stops the active forward pass and marks the recording halted.
     activation_transform:
         Optional callable applied to each retained out copy after
         dtype/device transforms. Errors propagate as
@@ -138,6 +148,7 @@ def record(
         lookback_payload_policy=lookback_payload_policy,
         include_source_events=include_source_events,
         intervene=intervene,
+        halt=halt,
         max_predicate_failures=max_predicate_failures,
         on_predicate_error=on_predicate_error,
         storage=storage,
