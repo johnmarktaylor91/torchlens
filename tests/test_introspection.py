@@ -245,3 +245,78 @@ def test_code_context_cache_reuses_filtered_frame_locations(
     assert len(first_stack) >= 5
     assert len(second_stack) == len(first_stack)
     assert len(col_offset_calls) == len(first_stack)
+
+
+def test_trace_module_code_context_uses_capture_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify repeated module entries share the per-trace code-context cache.
+
+    Args:
+        monkeypatch: Pytest fixture for replacing helper functions.
+    """
+
+    col_offset_calls = []
+
+    def fake_get_col_offset(frame: FrameType) -> Optional[int]:
+        """Record column-offset calls without walking bytecode.
+
+        Args:
+            frame: Stack frame passed by ``_get_code_context``.
+
+        Returns:
+            Dummy column offset.
+        """
+
+        col_offset_calls.append((frame.f_code.co_filename, frame.f_code.co_name))
+        return 0
+
+    class RepeatedModule(nn.Module):
+        """Leaf module called repeatedly from one parent call site."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Apply a simple tensor operation.
+
+            Args:
+                x: Input tensor.
+
+            Returns:
+                Incremented tensor.
+            """
+
+            return x + 1
+
+    class RepeatedCaller(nn.Module):
+        """Model that invokes one child module twice from the same line."""
+
+        def __init__(self) -> None:
+            """Initialize the repeated-caller model."""
+
+            super().__init__()
+            self.child = RepeatedModule()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Call the child module twice from a stable call site.
+
+            Args:
+                x: Input tensor.
+
+            Returns:
+                Tensor after two child calls.
+            """
+
+            for _ in range(2):
+                x = self.child(x)
+            return x
+
+    monkeypatch.setattr(introspection, "_get_col_offset", fake_get_col_offset)
+
+    trace = torchlens.trace(RepeatedCaller(), torch.ones(1), save_code_context=True)
+    child_contexts = [
+        module_call.code_context
+        for module_call in trace.module_calls
+        if module_call.address == "child"
+    ]
+
+    assert len(child_contexts) == 2
+    assert len(child_contexts[0]) >= 2
+    assert len(child_contexts[1]) == len(child_contexts[0])
+    assert all(first is second for first, second in zip(child_contexts[0], child_contexts[1]))

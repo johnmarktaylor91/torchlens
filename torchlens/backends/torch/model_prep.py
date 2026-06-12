@@ -853,9 +853,14 @@ def _record_module_entry_metadata(
     trace._module_build_data.setdefault("module_forward_start_times", {})[module_call_label_str] = (
         forward_start_time
     )
+    code_context_cache = getattr(trace, "_code_context_cache", None)
+    if code_context_cache is None:
+        code_context_cache = {}
+        trace._code_context_cache = code_context_cache
     code_context = _get_code_context(
         num_context_lines=trace.num_context_lines,
         source_loading_enabled=trace.save_code_context,
+        context_cache=code_context_cache,
     )
     trace._module_build_data.setdefault("module_code_contexts", {})[module_call_label_str] = (
         code_context
