@@ -35,6 +35,26 @@ class _TinyRelu(nn.Module):
         return torch.relu(self.linear(x))
 
 
+class _Identity(nn.Module):
+    """Identity module for input/output alias coverage."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the input tensor unchanged.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Unchanged input tensor.
+        """
+
+        return x
+
+
 def _trace_with_tap(tap: TapObserver) -> object:
     """Capture a trace with a tap and run backward.
 
@@ -63,6 +83,39 @@ def test_tap_backward_tensor_mount_forward_selector() -> None:
 
     tap = tl.tap(tl.label("output_1"), direction="backward")
     _trace_with_tap(tap)
+
+    assert len(tap.records) == 1
+    record = tap.records[0]
+    assert record.direction == "backward"
+    assert record.grad_kind == "grad_output"
+    assert record.backward_call_index == 1
+    assert torch.equal(record.value, torch.ones(2, 3))
+
+
+def test_tap_backward_tensor_mount_compute_op_still_matches() -> None:
+    """Backward taps mounted on the compute op still see the gradient stream."""
+
+    tap = tl.tap(tl.label("relu_1_2"), direction="backward")
+    _trace_with_tap(tap)
+
+    assert len(tap.records) == 1
+    record = tap.records[0]
+    assert record.direction == "backward"
+    assert record.grad_kind == "grad_output"
+    assert record.backward_call_index == 1
+    assert torch.equal(record.value, torch.ones(2, 3))
+
+
+def test_tap_backward_tensor_mount_input_alias_matches() -> None:
+    """Backward taps mounted on a non-leaf input alias see its gradient stream."""
+
+    torch.manual_seed(12)
+    base = torch.randn(2, 3, requires_grad=True)
+    x = base * 2
+    tap = tl.tap(tl.label("input_1"), direction="backward")
+    trace = tl.trace(_Identity(), x, intervention_ready=True, hooks=tap)
+    loss = trace[trace.output_layers[0]].out.sum()
+    trace.log_backward(loss)
 
     assert len(tap.records) == 1
     record = tap.records[0]

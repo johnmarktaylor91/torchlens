@@ -576,9 +576,7 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
 
     if isinstance(site, GradFn):
         if kind in DIRECTION_AGNOSTIC_KINDS:
-            if site.op is None:
-                return False
-            return _resolve_site_kind(site.op, kind, value)
+            return _resolve_grad_fn_forward_kind(site, kind, value)
         return _resolve_grad_fn_kind(site, kind, value)
 
     if kind == "label":
@@ -612,6 +610,64 @@ def _resolve_site_kind(site: Site, kind: str, value: Any) -> bool:
         predicate, _name_hint = _predicate_payload(value)
         return bool(predicate(site))
     return False
+
+
+def _resolve_grad_fn_forward_kind(site: "GradFn", kind: str, value: Any) -> bool:
+    """Return whether a GradFn matches a forward selector through its op aliases.
+
+    Parameters
+    ----------
+    site:
+        Candidate grad_fn_handle log.
+    kind:
+        Direction-agnostic selector kind.
+    value:
+        Selector payload.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches the paired op or a synthetic boundary alias
+        sharing the same autograd ``grad_fn`` identity.
+    """
+
+    if site.op is not None and _resolve_site_kind(site.op, kind, value):
+        return True
+    for alias in _grad_fn_boundary_aliases(site):
+        if _resolve_site_kind(alias, kind, value):
+            return True
+    return False
+
+
+def _grad_fn_boundary_aliases(site: "GradFn") -> tuple[Site, ...]:
+    """Return input/output alias ops sharing a GradFn identity with ``site``.
+
+    Parameters
+    ----------
+    site:
+        Candidate grad_fn_handle log.
+
+    Returns
+    -------
+    tuple[Site, ...]
+        Synthetic input/output ops whose ``grad_fn_object_id`` equals the
+        GradFn's object id, excluding the already-paired op.
+    """
+
+    trace = site.source_trace
+    if trace is None:
+        return ()
+    paired_label = site.op_label
+    aliases: list[Site] = []
+    for layer in getattr(trace, "layer_list", ()):
+        if getattr(layer, "layer_label", None) == paired_label:
+            continue
+        if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
+            continue
+        if not (getattr(layer, "is_input", False) or getattr(layer, "is_output", False)):
+            continue
+        aliases.append(layer)
+    return tuple(aliases)
 
 
 def _resolve_grad_fn_kind(site: "GradFn", kind: str, value: Any) -> bool:
