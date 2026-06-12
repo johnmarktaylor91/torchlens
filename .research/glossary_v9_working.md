@@ -561,6 +561,7 @@ Example: `trace.layers["conv2d_1_2"]` returns the Layer; `trace.ops["conv2d_1_2:
 
 - `is_branching`: True when any Layer has more than one child in the captured graph.
 - `is_recurrent`: True when any Layer has more than one Op.
+- `recurrent_layers`: Accessor for aggregate Layers whose `num_passes > 1`.
 - `max_layer_op_count`: Maximum number of Ops aggregated by any single Layer.
 - `is_dynamic_graph` (`@property`): True when execution path depends on tensor values. Derives from `has_conditionals` (and `has_data_dependent_loops` once iteration story lands).
 - `has_conditionals` (`@property`): True when `num_conditionals > 0`.

@@ -43,26 +43,45 @@ def test_general_info_fields(small_input):
 
 
 @pytest.mark.smoke
-def test_model_structure_non_recurrent(small_input):
+def test_model_structure_non_recurrent(small_input: torch.Tensor) -> None:
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
     assert mh.is_recurrent is False
     assert mh.is_branching is False
+    assert list(mh.recurrent_layers) == []
 
 
-def test_model_structure_branching(small_input):
+def test_model_structure_branching(small_input: torch.Tensor) -> None:
     model = example_models.SimpleBranching()
     mh = trace_fn(model, small_input)
     assert mh.is_branching is True
 
 
-def test_model_structure_recurrent(input_2d):
+def test_model_structure_recurrent(input_2d: torch.Tensor) -> None:
     model = example_models.RecurrentParamsSimple()
     mh = trace_fn(model, input_2d)
     assert mh.is_recurrent is True
+    assert len(mh.recurrent_layers) > 0
+    assert all(layer.num_passes > 1 for layer in mh.recurrent_layers)
+    assert [layer.layer_label for layer in mh.recurrent_layers] == [
+        layer.layer_label for layer in mh.layers if layer.num_passes > 1
+    ]
+    first_recurrent_layer = mh.recurrent_layers[0]
+    assert mh.recurrent_layers[first_recurrent_layer.layer_label] is first_recurrent_layer
+    assert mh.recurrent_layers[f"{first_recurrent_layer.layer_label}:1"] is first_recurrent_layer
 
 
-def test_model_structure_conditional():
+def test_recurrent_layers_accessor_rejects_non_recurrent_layer(input_2d: torch.Tensor) -> None:
+    """Recurrent-layer lookup should not fall through to all layer records."""
+
+    model = example_models.RecurrentParamsSimple()
+    mh = trace_fn(model, input_2d)
+    non_recurrent_layer = next(layer for layer in mh.layers if layer.num_passes == 1)
+    with pytest.raises(KeyError):
+        mh.recurrent_layers[non_recurrent_layer.layer_label]
+
+
+def test_model_structure_conditional() -> None:
     model = example_models.ConditionalBranching()
     model_input = -torch.ones(6, 3, 224, 224)
     mh = trace_fn(model, model_input)

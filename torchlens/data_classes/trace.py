@@ -3682,6 +3682,25 @@ class Trace(CapturedRun):
         return any(v > 1 for v in self.layer_num_calls.values())
 
     @property
+    def recurrent_layers(self) -> "LayerAccessor":
+        """Access Layers with more than one captured pass.
+
+        Returns
+        -------
+        LayerAccessor
+            Accessor containing aggregate Layer records whose ``num_passes`` is
+            greater than 1.
+        """
+        from .layer import LayerAccessor
+
+        return LayerAccessor(
+            OrderedDict(
+                (label, layer) for label, layer in self.layer_logs.items() if layer.num_passes > 1
+            ),
+            source_trace=self,
+        )
+
+    @property
     def max_layer_op_count(self) -> int:
         """Maximum number of ops for any layer."""
         return max(self.layer_num_calls.values(), default=1)
