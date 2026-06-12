@@ -216,6 +216,7 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
     sync_projection = getattr(trace, "_sync_backward_projection_if_needed", None)
     if callable(sync_projection):
         sync_projection()
+    _check_backward_event_flow_invariants(trace, name)
     if not trace.grad_fn_logs:
         return
 
@@ -369,6 +370,111 @@ def _check_backward_graph_invariants(trace: "Trace") -> None:
                     f"{call.call_label} references missing backward pass "
                     f"{call.backward_pass_index}",
                 )
+
+
+def _check_backward_event_flow_invariants(trace: "Trace", name: str) -> None:
+    """Check runtime backward event stream consistency against projections.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed model log to validate.
+    name:
+        Invariant check name to use in raised errors.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If runtime backward sidecar events are internally inconsistent or no
+        longer match projected records.
+    """
+
+    from ..ir.events import BackwardPassEnd, BackwardPassStart, GradFnFired, OpGradObserved
+
+    capture_events = getattr(trace, "_capture_events", None)
+    events = list(getattr(capture_events, "backward_events", ()) or ())
+    if not events:
+        return
+
+    starts = [event for event in events if isinstance(event, BackwardPassStart)]
+    ends = [event for event in events if isinstance(event, BackwardPassEnd)]
+    op_grad_events = [event for event in events if isinstance(event, OpGradObserved)]
+    fired_events = [event for event in events if isinstance(event, GradFnFired)]
+    start_indices = [event.pass_index for event in starts]
+    end_indices = [event.pass_index for event in ends]
+    if len(start_indices) != len(set(start_indices)):
+        raise MetadataInvariantError(name, "backward events contain duplicate pass starts")
+    if len(end_indices) != len(set(end_indices)):
+        raise MetadataInvariantError(name, "backward events contain duplicate pass ends")
+    bracket_indices = sorted(set(start_indices) | set(end_indices))
+    if bracket_indices != list(range(1, len(bracket_indices) + 1)):
+        raise MetadataInvariantError(
+            name,
+            f"backward event pass indices {bracket_indices!r} are not dense from 1",
+        )
+    if set(start_indices) != set(end_indices):
+        raise MetadataInvariantError(
+            name,
+            "backward events must contain exactly one start and end per pass",
+        )
+
+    valid_pass_indices = set(bracket_indices)
+    for op_grad_event in op_grad_events:
+        if op_grad_event.pass_index not in valid_pass_indices:
+            raise MetadataInvariantError(
+                name,
+                f"backward event references missing pass {op_grad_event.pass_index!r}",
+            )
+    for fired_event in fired_events:
+        if fired_event.pass_index not in valid_pass_indices:
+            raise MetadataInvariantError(
+                name,
+                f"backward event references missing pass {fired_event.pass_index!r}",
+            )
+
+    seq_values = [event.seq for event in events if isinstance(event, OpGradObserved | GradFnFired)]
+    if seq_values != sorted(seq_values) or len(seq_values) != len(set(seq_values)):
+        raise MetadataInvariantError(name, "backward event seq values must be unique and monotonic")
+
+    layer_labels = set(getattr(trace, "layer_dict_all_keys", {}))
+    projected_grad_records: set[tuple[str, int]] = set()
+    for layer in getattr(trace, "layer_list", []):
+        for record in getattr(layer, "_grad_records", ()):
+            projected_grad_records.add((layer.layer_label, record.backward_pass_index))
+
+    event_grad_records: set[tuple[str, int]] = set()
+    for op_grad_event in op_grad_events:
+        if op_grad_event.op_label not in layer_labels:
+            raise MetadataInvariantError(
+                name,
+                f"OpGradObserved points to missing op label {op_grad_event.op_label!r}",
+            )
+        event_op = trace[op_grad_event.op_label]
+        event_grad_records.add((event_op.layer_label, op_grad_event.pass_index))
+    if projected_grad_records != event_grad_records:
+        raise MetadataInvariantError(
+            name,
+            "projected op gradient records do not match OpGradObserved events",
+        )
+
+    projected_calls: dict[tuple[int, int], int] = defaultdict(int)
+    for grad_fn_handle in getattr(trace, "grad_fn_logs", {}).values():
+        for call in grad_fn_handle.calls.values():
+            projected_calls[(grad_fn_handle.grad_fn_object_id, call.backward_pass_index)] += 1
+    event_calls: dict[tuple[int, int], int] = defaultdict(int)
+    grad_fn_ids = set(getattr(trace, "grad_fn_logs", {}))
+    for fired_event in fired_events:
+        if fired_event.object_id not in grad_fn_ids:
+            raise MetadataInvariantError(
+                name,
+                f"GradFnFired points to missing grad_fn id {fired_event.object_id!r}",
+            )
+        event_calls[(fired_event.object_id, fired_event.pass_index)] += 1
+    if projected_calls != event_calls:
+        raise MetadataInvariantError(
+            name,
+            "projected grad_fn calls do not match GradFnFired events",
+        )
 
 
 def _is_func_call_id_exempt(layer: "Op") -> bool:

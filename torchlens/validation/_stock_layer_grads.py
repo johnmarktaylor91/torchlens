@@ -26,10 +26,10 @@ class _StockModuleGradCollector:
     def __init__(self) -> None:
         """Initialize empty hook, call-count, and gradient state."""
 
-        self._retained_outputs: dict[tuple[str, int], torch.Tensor] = {}
         self.stock_module_output_grads: dict[tuple[str, int], torch.Tensor] = {}
         self._call_counts: dict[str, int] = {}
         self._hook_handles: list[RemovableHandle] = []
+        self._tensor_hook_handles: list[RemovableHandle] = []
         self.identity_output_addresses: set[tuple[str, int]] = set()
 
     def install(self, model: nn.Module) -> None:
@@ -46,20 +46,17 @@ class _StockModuleGradCollector:
             self._hook_handles.append(handle)
 
     def collect_grads_after_backward(self) -> None:
-        """Collect detached gradients from retained module outputs."""
-
-        for key, retained in self._retained_outputs.items():
-            grad = getattr(retained, "grad", None)
-            if grad is not None:
-                self.stock_module_output_grads[key] = grad.detach().clone()
+        """Finalize gradients captured directly by tensor hooks."""
 
     def cleanup(self) -> None:
         """Remove installed hooks and drop retained output references."""
 
         for handle in self._hook_handles:
             handle.remove()
+        for handle in self._tensor_hook_handles:
+            handle.remove()
         self._hook_handles.clear()
-        self._retained_outputs.clear()
+        self._tensor_hook_handles.clear()
 
 
 def _make_post_hook(
@@ -104,10 +101,38 @@ def _make_post_hook(
             collector.identity_output_addresses.add(key)
             return
         if leaf_out.requires_grad or leaf_out.grad_fn is not None:
-            leaf_out.retain_grad()
-            collector._retained_outputs[key] = leaf_out
+            handle = leaf_out.register_hook(_make_tensor_grad_hook(collector, key))
+            collector._tensor_hook_handles.append(handle)
 
     return _post_hook
+
+
+def _make_tensor_grad_hook(
+    collector: _StockModuleGradCollector,
+    key: tuple[str, int],
+) -> Callable[[torch.Tensor], torch.Tensor]:
+    """Build a tensor hook that snapshots one module-output gradient.
+
+    Parameters
+    ----------
+    collector:
+        Collector receiving detached gradient clones.
+    key:
+        Module-address and call-index key for the hooked output.
+
+    Returns
+    -------
+    Callable[[torch.Tensor], torch.Tensor]
+        Tensor hook that records a clone and returns the incoming gradient unchanged.
+    """
+
+    def _tensor_grad_hook(grad: torch.Tensor) -> torch.Tensor:
+        """Snapshot a stock module-output gradient without retaining output grads."""
+
+        collector.stock_module_output_grads[key] = grad.detach().clone()
+        return grad
+
+    return _tensor_grad_hook
 
 
 def _first_leaf_tensor(obj: Any) -> torch.Tensor | None:

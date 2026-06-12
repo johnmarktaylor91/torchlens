@@ -217,6 +217,29 @@ def test_stock_module_grad_collector_captures_module_output_grad() -> None:
     assert ("l2", 1) in collector.stock_module_output_grads
 
 
+def test_stock_module_grad_collector_does_not_retain_grad(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stock oracle captures via tensor hooks rather than ``retain_grad``."""
+
+    def fail_retain_grad(tensor: torch.Tensor) -> None:
+        """Fail if the stock oracle tries to retain output grads."""
+
+        raise AssertionError("stock layer oracle must not call retain_grad")
+
+    monkeypatch.setattr(torch.Tensor, "retain_grad", fail_retain_grad)
+    model = TinyMLP()
+    collector = _StockModuleGradCollector()
+    collector.install(model)
+    try:
+        loss = model(torch.randn(2, 3)).sum()
+        loss.backward()
+        collector.collect_grads_after_backward()
+    finally:
+        collector.cleanup()
+    assert ("l1", 1) in collector.stock_module_output_grads
+
+
 def test_first_leaf_tensor_traverses_supported_containers() -> None:
     """First-leaf discovery handles lists, dicts, and dataclasses."""
 
