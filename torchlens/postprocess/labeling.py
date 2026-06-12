@@ -145,6 +145,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     }
 
     for t, layer_entry in enumerate(self):
+        _normalize_io_role_flags(layer_entry)
         if layer_entry.layer_type in ["input", "buffer"]:
             layer_entry.step_index = 0
         elif layer_entry.layer_type == "output":
@@ -190,6 +191,19 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     _compute_fx_qualpaths(self)
     _finalize_output_compute_indexs(self)
     _build_module_hierarchy_dicts(self)
+
+
+def _normalize_io_role_flags(layer_entry: Op) -> None:
+    """Synchronize input/output/buffer booleans with ``layer_type``.
+
+    Args:
+        layer_entry: Op whose role flags should be normalized.
+    """
+
+    layer_type = layer_entry.layer_type
+    layer_entry.is_input = layer_type == "input"
+    layer_entry.is_output = layer_type == "output"
+    layer_entry.is_buffer = layer_type == "buffer"
 
 
 def _module_address_for_fx(module_call_label: Any) -> str:
@@ -253,6 +267,8 @@ def _build_module_hierarchy_dicts(self: "Trace") -> None:
     mbd = self._module_build_data
     for module in mbd["top_level_module_ops"]:
         module_no_pass = module.split(":")[0]
+        if module_no_pass == "self":
+            continue
         if module_no_pass not in mbd["top_level_modules"]:
             mbd["top_level_modules"].append(module_no_pass)
 
@@ -260,6 +276,8 @@ def _build_module_hierarchy_dicts(self: "Trace") -> None:
         module_parent_nopass = module_parent.split(":")[0]
         for module_child in module_children:
             module_child_nopass = module_child.split(":")[0]
+            if module_child_nopass == module_parent_nopass:
+                continue
             if module_child_nopass not in mbd["module_children"][module_parent_nopass]:
                 mbd["module_children"][module_parent_nopass].append(module_child_nopass)
 
@@ -723,17 +741,15 @@ def _add_lookup_keys_for_layer_entry(
     # Relabel the module ops if this pass built module metadata:
     if self.capture_mode in {"exhaustive", "predicate"}:
         layer_entry.output_of_module_calls = [
-            f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.output_of_module_calls
+            _module_call_label(module_call) for module_call in layer_entry.output_of_module_calls
         ]
         layer_entry.input_to_module_calls = [
-            f"{module_name}:{module_pass}"
-            for module_name, module_pass in layer_entry.input_to_module_calls
+            _module_call_label(module_call) for module_call in layer_entry.input_to_module_calls
         ]
         if layer_entry.module is not None:
-            layer_entry.module = ":".join([str(i) for i in layer_entry.module])
+            layer_entry.module = _module_call_label(layer_entry.module)
         layer_entry.modules = [
-            f"{module_name}:{module_pass}" for module_name, module_pass in layer_entry.modules
+            _module_call_label(module_call) for module_call in layer_entry.modules
         ]
         if (layer_entry.module is None) and len(layer_entry.modules) > 0:
             layer_entry.module = layer_entry.modules[-1]
@@ -765,6 +781,22 @@ def _add_lookup_keys_for_layer_entry(
             self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
             self.layer_dict_all_keys[lookup_key] = layer_entry
         self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
+
+
+def _module_call_label(module_call: Any) -> str:
+    """Return ``module:pass`` text for tuple or already-string module calls.
+
+    Args:
+        module_call: Module call represented as ``(address, pass)`` or text.
+
+    Returns:
+        Canonical module-call label.
+    """
+
+    if isinstance(module_call, str):
+        return module_call
+    module_name, module_pass = module_call
+    return f"{module_name}:{module_pass}"
 
 
 def _trim_and_reorder_layer_entry_fields(layer_entry: Op) -> None:

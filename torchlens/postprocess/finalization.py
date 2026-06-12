@@ -181,10 +181,10 @@ def _build_root_module_log(
         # top_level_modules may include grandchildren called directly
         # (e.g., self.level21.level12(x)), which belong in call_children
         # but not in the static address hierarchy.
-        address_children=[m for m in mbd["top_level_modules"] if "." not in m],
+        address_children=[m for m in mbd["top_level_modules"] if m != "self" and "." not in m],
         address_depth=0,
         call_parent=None,
-        call_children=mbd["top_level_modules"][:],
+        call_children=[m for m in mbd["top_level_modules"] if m != "self"],
         call_depth=0,
         num_calls=1,
         ops={},
@@ -218,7 +218,7 @@ def _build_root_module_log(
         output_ops=list(self.output_layers),
         output_structure=_first_output_structure(self, list(self.output_layers)),
         call_parent=None,
-        call_children=mbd["top_level_module_ops"][:],
+        call_children=[m for m in mbd["top_level_module_ops"] if m != "self:1"],
         all_addresses=root_meta.get("all_addresses", ["self"]),
         cls=root_meta.get("cls"),
         class_name=root_meta.get("class_name", self.model_class_name),
@@ -739,6 +739,8 @@ def _build_module_logs(self: "Trace") -> None:
 
     # --- Build ModuleLogs for each submodule ---
     for address in mbd["addresses"]:
+        if address == "self":
+            continue
         meta = _metadata_by_alias.get(address, {})
         num_calls = mbd["module_num_calls"].get(address, 1)
 

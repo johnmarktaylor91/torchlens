@@ -1695,11 +1695,9 @@ def log_function_output_tensors_predicate(
     layer_type = func_name.lower().replace("_", "")
     arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     parent_labels = tuple(get_label_list(arg_tensors))
-    out_iter = ensure_iterable(out_orig)
+    out_iter = list(_iter_loggable_live_outputs(out_orig, is_bottom_level_func))
 
-    for output_index, out in enumerate(out_iter):
-        if not _output_should_be_logged(out, is_bottom_level_func):
-            continue
+    for output_index, (out, container_path, _container_spec) in enumerate(out_iter):
         self._layer_counter += 1
         self._raw_layer_type_counter[layer_type] += 1
         state.op_counts[layer_type] = state.op_counts.get(layer_type, 0) + 1
@@ -1721,7 +1719,7 @@ def log_function_output_tensors_predicate(
                 func_name=func_name,
                 parent_labels=parent_labels,
                 tensor=out,
-                output_index=output_index,
+                output_index=_live_output_index(container_path) or output_index,
                 is_bottom_level_func=is_bottom_level_func,
                 module_stack=state.module_stack,
                 history=tuple(state.history),
@@ -1782,6 +1780,31 @@ def log_function_output_tensors_predicate(
                 autograd_memory=None,
                 num_autograd_tensors=None,
             )
+            function_ref = FunctionCallRef(
+                func=func,
+                func_name=func_name,
+                func_qualname=getattr(func, "__qualname__", None),
+                func_call_id=func_call_id,
+                code_context=(),
+                func_duration=None,
+                flops_forward=None,
+                flops_backward=None,
+                func_rng_states=None,
+                func_autocast_state=None,
+                arg_names=(),
+                num_args_total=len(args) + len(kwargs),
+                num_pos_args=len(args),
+                num_kwargs=len(kwargs),
+                non_tensor_pos_args=(),
+                non_tensor_kwargs=tuple(
+                    (key, value)
+                    for key, value in kwargs.items()
+                    if not isinstance(value, torch.Tensor)
+                ),
+                func_non_tensor_args=(),
+                is_inplace=False,
+                func_config=(),
+            )
             append_projected_event(
                 self,
                 ctx,
@@ -1791,6 +1814,8 @@ def log_function_output_tensors_predicate(
                 transformed_ram_payload=transformed_ram_payload,
                 predicate_matched=spec.save_out or spec.save_metadata,
                 backend_semantics=backend_semantics,
+                function=function_ref,
+                container_path=container_path,
             )
             _evaluate_halt(ctx, state.options, frontier_output=out)
         except HaltSignal:

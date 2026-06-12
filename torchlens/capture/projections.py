@@ -447,7 +447,7 @@ def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame,
 
     return tuple(
         ModuleFrame(
-            address=frame.address,
+            address=_module_frame_address(frame),
             address_normalized=None,
             module_type=frame.module_type,
             call_index=frame.pass_index,
@@ -456,6 +456,23 @@ def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame,
         )
         for frame in ctx.module_stack
     )
+
+
+def _module_frame_address(frame: ModuleStackFrame) -> str:
+    """Return the Trace-facing address for a predicate module-stack frame.
+
+    Parameters
+    ----------
+    frame
+        Predicate module frame from a capture-time ``RecordContext``.
+
+    Returns
+    -------
+    str
+        Public module address used by postprocess.
+    """
+
+    return frame.address or "self"
 
 
 def _record_context_from_event(event: OpEvent) -> RecordContext:
@@ -497,6 +514,8 @@ def _event_from_record(
     transformed_ram_payload: torch.Tensor | None = None,
     predicate_matched: bool,
     backend_semantics: BackendSemantics | None = None,
+    function: FunctionCallRef | None = None,
+    container_path: tuple[Any, ...] = (),
 ) -> OpEvent:
     """Build a lightweight fastlog ``OpEvent`` without materializing an Op."""
 
@@ -552,7 +571,8 @@ def _event_from_record(
         source_trace_id=None,
         tracing_finished=False,
         construction_done=True,
-        function=FunctionCallRef(
+        function=function
+        or FunctionCallRef(
             func=None,
             func_name=ctx.func_name,
             func_qualname=None,
@@ -582,8 +602,8 @@ def _event_from_record(
             detach_saved_activations=not spec.keep_grad,
             visualizer_path=None,
             multi_output_index=ctx.output_index,
-            in_multi_output=False,
-            container_path=(),
+            in_multi_output=bool(container_path),
+            container_path=container_path,
             container_spec=None,
             child_versions=(),
         ),
@@ -603,7 +623,9 @@ def _event_from_record(
         params=(),
         parent_params=(),
         module_stack=_module_frames_from_record_context(ctx),
-        modules=tuple((frame.address, frame.pass_index) for frame in ctx.module_stack),
+        modules=tuple(
+            (_module_frame_address(frame), frame.pass_index) for frame in ctx.module_stack
+        ),
         backend_semantics=backend_semantics
         if backend_semantics is not None
         else BackendSemantics(
@@ -670,6 +692,8 @@ def append_projected_event(
     transformed_ram_payload: torch.Tensor | None = None,
     predicate_matched: bool,
     backend_semantics: BackendSemantics | None = None,
+    function: FunctionCallRef | None = None,
+    container_path: tuple[Any, ...] = (),
 ) -> None:
     """Append one lightweight predicate event to ``trace.capture_events``."""
 
@@ -694,6 +718,8 @@ def append_projected_event(
             transformed_ram_payload=transformed_ram_payload,
             predicate_matched=predicate_matched,
             backend_semantics=backend_semantics,
+            function=function,
+            container_path=container_path,
         )
     )
 
