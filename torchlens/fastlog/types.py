@@ -135,6 +135,7 @@ class GradRecordContext:
     has_forward_op: bool = False
     has_op: bool = False
     pass_index: int | None = None
+    order: int | None = None
     event_index: int | None = None
     shape: tuple[int, ...] | None = None
     dtype: torch.dtype | None = None

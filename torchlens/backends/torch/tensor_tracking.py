@@ -43,6 +43,7 @@ from ...data_classes.op import Op
 from ..._state import pause_logging
 from ...intervention.selectors import BaseSelector
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
+from ...fastlog.types import CaptureSpec
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
@@ -191,6 +192,8 @@ def _build_grad_payloads(
 
     if not _should_save_grad_payload(trace, layer_label):
         return None, None
+    if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
+        return _build_fastlog_grad_payloads(trace, grad)
     op = trace[layer_label]
     grad_transform = getattr(trace, "grad_transform", None)
     save_raw_gradients = getattr(trace, "save_raw_gradients", True)
@@ -220,24 +223,59 @@ def _build_grad_payloads(
 def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
     """Return whether a tensor-hook gradient should retain its payload."""
 
-    if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
-        return False
     policy = _active_save_grads_policy(trace)
     if policy in [None, False, "none", []]:
         return False
     if policy is True or policy == "all":
         return True
+    if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
+        ctx = getattr(trace, "_fastlog_grad_contexts", {}).get(layer_label)
+        if ctx is None:
+            return False
+        if callable(policy) or isinstance(policy, BaseSelector):
+            decision = policy(
+                _FastlogGradPayloadContext(ctx=ctx, pass_index=_current_backward_pass(trace))
+            )
+            return _grad_payload_decision_saves_out(decision)
+        return False
     op = trace[layer_label]
     if isinstance(policy, BaseSelector):
-        return bool(policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace))))
+        decision = policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace)))
+        return _grad_payload_decision_saves_out(decision)
     if callable(policy):
-        return bool(policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace))))
+        decision = policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace)))
+        return _grad_payload_decision_saves_out(decision)
     selection = getattr(trace, "_grad_op_nums_to_save", "all")
     if selection in [None, "none", []]:
         return False
     if selection == "all":
         return True
     return op.raw_index in selection
+
+
+def _build_fastlog_grad_payloads(
+    trace: "Trace",
+    grad: torch.Tensor,
+) -> tuple[torch.Tensor | None, Any | None]:
+    """Return gradient payloads for predicate-mode recording contexts."""
+
+    grad_transform = getattr(trace, "grad_transform", None)
+    save_raw_gradients = getattr(trace, "save_raw_gradients", True)
+    raw_payload = grad.detach().clone() if save_raw_gradients or grad_transform is None else None
+    if grad_transform is None:
+        return raw_payload, None
+    transformed_payload = grad_transform(grad)
+    if not isinstance(transformed_payload, torch.Tensor):
+        raise TypeError("grad_transform must return a torch.Tensor for fastlog gradients")
+    return raw_payload, transformed_payload
+
+
+def _grad_payload_decision_saves_out(decision: Any) -> bool:
+    """Return whether a gradient predicate decision retains tensor payload."""
+
+    if isinstance(decision, CaptureSpec):
+        return decision.save_out
+    return bool(decision)
 
 
 class _GradPayloadContext:
@@ -272,6 +310,40 @@ class _GradPayloadContext:
         self.shape = op.shape
         self.dtype = op.dtype
         self.tensor_device = getattr(op, "output_device", None)
+
+
+class _FastlogGradPayloadContext:
+    """Minimal predicate context for fastlog op gradient retention."""
+
+    def __init__(self, *, ctx: Any, pass_index: int | None) -> None:
+        """Initialize a fastlog gradient predicate context."""
+
+        self.label = ctx.label
+        self.layer_label = _public_fastlog_label(ctx)
+        self.op_label = self.layer_label
+        self.raw_label = ctx.raw_label
+        self.func_name = ctx.func_name
+        self.layer_type = ctx.layer_type
+        self.type = ctx.layer_type
+        self.module_stack = tuple(getattr(ctx, "module_stack", ()) or ())
+        self.modules = tuple(frame.address for frame in self.module_stack)
+        self.output_of_module_calls = self.modules
+        self.has_forward_op = True
+        self.has_op = True
+        self.grad_kind = "grad_output"
+        self.pass_index = pass_index
+        self.backward_pass_index = pass_index
+        self.shape = ctx.shape
+        self.dtype = ctx.dtype
+        self.tensor_device = ctx.tensor_device
+
+
+def _public_fastlog_label(ctx: Any) -> str:
+    """Return the compact fastlog op label for a record context."""
+
+    if ctx.kind == "op" and ctx.layer_type is not None and ctx.type_index is not None:
+        return f"{ctx.layer_type}_{ctx.type_index}"
+    return ctx.label
 
 
 def _current_backward_pass(trace: "Trace") -> int | None:

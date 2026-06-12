@@ -1725,10 +1725,16 @@ def log_recording_backward(
     """Run backward while capturing gradients for a fastlog ``Recording``."""
 
     from ...fastlog.exceptions import InvalidStorageError, RecorderStateError
+    from ...capture.projections import sync_recording_grad_records_from_sidecar
 
     recording_state = getattr(recording, "_recording_state", None)
     if recording_state is None:
         raise RecorderStateError("Recording.log_backward() requires a live recording state")
+    trace = getattr(recording_state, "runtime_trace", None)
+    if trace is None:
+        raise RecorderStateError(
+            "Recording.log_backward() requires a live runtime trace from Recorder.log()."
+        )
     effective_keep_grad = keep_grad if keep_grad is not None else recording_state.options.keep_grad
     effective_default_grad = (
         default_grad if default_grad is not None else recording_state.options.default_grad
@@ -1741,38 +1747,51 @@ def log_recording_backward(
         raise InvalidStorageError(
             "keep_grad=True is incompatible with disk-only fastlog gradient storage"
         )
-    nodes = _iter_backward_nodes(loss)
     selected_forward_labels = _selected_fastlog_forward_labels(recording)
-    handles: list[Any] = []
-    type_counter: dict[str, int] = {}
-    backward_call_index = len(recording.grad_records) + 1
-    try:
-        for index, grad_fn_handle in enumerate(nodes, start=1):
-            forward_ctx = recording_state.grad_fn_to_context.get(grad_fn_handle)
-            layer_label = forward_ctx.label if forward_ctx is not None else None
-            label = _recording_grad_fn_label(grad_fn_handle, layer_label, type_counter, index)
-            handles.append(
-                grad_fn_handle.register_hook(
-                    _make_recording_grad_hook(
-                        recording_state,
-                        recording,
-                        grad_fn_handle,
-                        label,
-                        keep_grad=effective_keep_grad,
-                        default_grad=effective_default_grad,
-                        selected_forward_labels=selected_forward_labels,
-                        backward_call_index=backward_call_index,
-                    )
+
+    def selected_save_grads(ctx: Any) -> Any:
+        """Apply fastlog default and selected-forward-label semantics."""
+
+        layer_label = getattr(ctx, "layer_label", None)
+        if callable(effective_keep_grad):
+            decision = effective_keep_grad(ctx)
+            if (
+                recording_state.storage_intent.on_disk
+                and not recording_state.storage_intent.in_ram
+                and _is_static_truthy_keep_grad(decision)
+            ):
+                raise InvalidStorageError(
+                    "keep_grad=True is incompatible with disk-only fastlog gradient storage"
                 )
-            )
-        backward_kwargs: dict[str, Any] = {"create_graph": create_graph}
-        if retain_graph is not None:
-            backward_kwargs["retain_graph"] = retain_graph
-        loss.backward(**backward_kwargs)
+            return decision
+        if effective_keep_grad is True and layer_label not in selected_forward_labels:
+            return False
+        if effective_keep_grad is None:
+            return effective_default_grad
+        return effective_keep_grad
+
+    backward_kwargs: dict[str, Any] = {"create_graph": create_graph}
+    if retain_graph is not None:
+        backward_kwargs["retain_graph"] = retain_graph
+
+    def run() -> Any:
+        """Run the requested recording backward call."""
+
+        return loss.backward(**backward_kwargs)
+
+    recording_state.active_grad_record_policy = selected_save_grads
+    try:
+        _run_backward_with_capture(
+            trace,
+            loss,
+            run,
+            trigger="recording_backward",
+            engine_flags=backward_kwargs,
+            save_grads=selected_save_grads,
+        )
+        sync_recording_grad_records_from_sidecar(recording_state)
     finally:
-        for handle in handles:
-            with contextlib.suppress(Exception):
-                handle.remove()
+        recording_state.active_grad_record_policy = None
     return recording
 
 

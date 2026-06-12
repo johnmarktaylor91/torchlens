@@ -174,6 +174,8 @@ class RecordingState:
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
     grad_fn_to_context: _GradFnContextMap = field(default_factory=_GradFnContextMap)
+    runtime_trace: "Trace | None" = None
+    active_grad_record_policy: Any | None = None
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -667,6 +669,14 @@ def append_projected_event(
         from ..ir import CaptureEvents
 
         trace.capture_events = CaptureEvents()
+    label_raw = ctx.raw_label or ctx.label
+    if tensor is not None and ctx.kind == "op":
+        from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
+
+        public_label = _public_record_context_label(ctx)
+        trace.__dict__.setdefault("_raw_to_final_layer_labels", {})[label_raw] = public_label
+        trace.__dict__.setdefault("_fastlog_grad_contexts", {})[public_label] = ctx
+        _add_tensor_backward_hook(trace, tensor, label_raw)
     trace.capture_events.append(
         _event_from_record(
             ctx,
@@ -958,6 +968,198 @@ def activation_record_from_event(event: OpEvent) -> ActivationRecord | None:
             transformed_ram_payload if isinstance(transformed_ram_payload, torch.Tensor) else None
         ),
     )
+
+
+def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
+    """Rebuild fastlog gradient records from the unified backward sidecar.
+
+    Parameters
+    ----------
+    state:
+        Active recording state whose runtime trace owns backward events.
+
+    Returns
+    -------
+    None
+        ``state.recording.grad_records`` and its lookup indexes are replaced.
+    """
+
+    from ..fastlog.types import GradientRecord
+    from ..ir.events import GradFnFired, OpGradObserved
+
+    trace = state.runtime_trace
+    if trace is None:
+        return
+    state.recording.grad_records.clear()
+    state.recording.grad_by_pass.clear()
+    state.recording.grad_by_label.clear()
+    state.recording.grad_by_grad_fn_label.clear()
+    backward_passes = getattr(trace, "backward_pass_logs", {})
+    for event in getattr(trace, "backward_events", ()):
+        if not isinstance(event, OpGradObserved):
+            if isinstance(event, GradFnFired):
+                _maybe_add_grad_fn_metadata_record(state, trace, event)
+            continue
+        if event.payload_ref is None and event.transformed_payload_ref is None:
+            continue
+        ctx = _grad_record_context_from_op_grad_event(trace, event, backward_passes)
+        spec = CaptureSpec(
+            save_out=event.payload_ref is not None or event.transformed_payload_ref is not None,
+            save_metadata=True,
+            keep_grad=False,
+        )
+        state.recording.add_grad_record(
+            GradientRecord(
+                ctx=ctx,
+                spec=spec,
+                ram_payload=event.payload_ref
+                if isinstance(event.payload_ref, torch.Tensor)
+                else None,
+                transformed_ram_payload=(
+                    event.transformed_payload_ref
+                    if isinstance(event.transformed_payload_ref, torch.Tensor)
+                    else None
+                ),
+                metadata={"timestamp": event.timestamp, "seq": event.seq},
+                recorded_at=event.timestamp,
+            )
+        )
+
+
+def _maybe_add_grad_fn_metadata_record(state: RecordingState, trace: "Trace", event: Any) -> None:
+    """Append a metadata-only grad-fn record when the active policy selects it."""
+
+    from ..fastlog.types import GradientRecord
+
+    grad_fn = getattr(trace, "grad_fn_logs", {}).get(event.object_id)
+    if grad_fn is None or getattr(grad_fn, "has_op", False):
+        return
+    pass_record = getattr(trace, "backward_pass_logs", {}).get(event.pass_index)
+    ctx = GradRecordContext(
+        label=grad_fn.label,
+        grad_fn_class_name=grad_fn.class_name,
+        type=grad_fn.type,
+        backward_call_index=event.pass_index,
+        grad_kind="grad_output",
+        has_forward_op=False,
+        has_op=False,
+        pass_index=event.pass_index,
+        order=getattr(pass_record, "order", None),
+        event_index=event.seq,
+    )
+    policy = state.active_grad_record_policy
+    decision = policy(ctx) if callable(policy) else policy
+    if not isinstance(decision, CaptureSpec) or not decision.save_metadata:
+        return
+    state.recording.add_grad_record(
+        GradientRecord(
+            ctx=ctx,
+            spec=CaptureSpec(save_out=False, save_metadata=True, keep_grad=False),
+            metadata={"timestamp": event.timestamp, "seq": event.seq},
+            recorded_at=event.timestamp,
+        )
+    )
+
+
+def _grad_record_context_from_op_grad_event(
+    trace: "Trace",
+    event: Any,
+    backward_passes: Mapping[int, Any],
+) -> GradRecordContext:
+    """Build a ``GradRecordContext`` from one op-gradient sidecar event."""
+
+    pass_record = backward_passes.get(event.pass_index)
+    if event.op_label not in getattr(trace, "layer_dict_all_keys", {}):
+        fastlog_ctx = getattr(trace, "_fastlog_grad_contexts", {}).get(event.op_label)
+        if fastlog_ctx is not None:
+            return GradRecordContext(
+                label=event.op_label,
+                grad_fn_class_name="",
+                type=fastlog_ctx.layer_type or "op",
+                backward_call_index=event.pass_index,
+                grad_kind="grad_output",
+                grad_output_index=0,
+                layer_label=event.op_label,
+                op_label=event.op_label,
+                module_stack=tuple(getattr(fastlog_ctx, "module_stack", ()) or ()),
+                has_forward_op=True,
+                has_op=True,
+                pass_index=event.pass_index,
+                order=getattr(pass_record, "order", None),
+                event_index=event.seq,
+                shape=event.shape,
+                dtype=_torch_dtype_from_string(event.dtype),
+                tensor_device=_torch_device_from_string(
+                    getattr(fastlog_ctx, "tensor_device", None)
+                ),
+            )
+        return GradRecordContext(
+            label=event.op_label,
+            grad_fn_class_name="",
+            type="op",
+            backward_call_index=event.pass_index,
+            grad_kind="grad_output",
+            has_forward_op=False,
+            has_op=False,
+            pass_index=event.pass_index,
+            order=getattr(pass_record, "order", None),
+            event_index=event.seq,
+            shape=event.shape,
+            dtype=_torch_dtype_from_string(event.dtype),
+            tensor_device=None,
+        )
+    op = trace[event.op_label]
+    return GradRecordContext(
+        label=event.op_label,
+        grad_fn_class_name=getattr(op, "grad_fn_class_name", None) or "",
+        type=getattr(op, "layer_type", None) or "op",
+        backward_call_index=event.pass_index,
+        grad_kind="grad_output",
+        grad_output_index=0,
+        layer_label=event.op_label,
+        op_label=event.op_label,
+        module_stack=tuple(getattr(op, "module_stack", ()) or ()),
+        has_forward_op=True,
+        has_op=True,
+        pass_index=event.pass_index,
+        order=getattr(pass_record, "order", None),
+        event_index=event.seq,
+        shape=event.shape,
+        dtype=_torch_dtype_from_string(event.dtype),
+        tensor_device=_torch_device_from_string(getattr(op, "output_device", None)),
+    )
+
+
+def _public_record_context_label(ctx: RecordContext) -> str:
+    """Return the compact public label for a predicate-mode op context."""
+
+    if ctx.kind == "op" and ctx.layer_type is not None and ctx.type_index is not None:
+        return f"{ctx.layer_type}_{ctx.type_index}"
+    return ctx.label
+
+
+def _torch_dtype_from_string(dtype_name: str | None) -> torch.dtype | None:
+    """Return a ``torch.dtype`` for canonical dtype strings when possible."""
+
+    if dtype_name is None:
+        return None
+    if dtype_name.startswith("torch."):
+        dtype_attr = dtype_name.removeprefix("torch.")
+        dtype = getattr(torch, dtype_attr, None)
+        if isinstance(dtype, torch.dtype):
+            return dtype
+    return None
+
+
+def _torch_device_from_string(device_name: Any) -> torch.device | None:
+    """Return a ``torch.device`` from a string-like field when possible."""
+
+    if device_name is None:
+        return None
+    try:
+        return torch.device(str(device_name))
+    except (TypeError, RuntimeError):
+        return None
 
 
 def recording_trace_from_events(events: Any) -> tuple[RecordContext, ...]:
