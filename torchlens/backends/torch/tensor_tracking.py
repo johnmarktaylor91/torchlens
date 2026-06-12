@@ -87,7 +87,9 @@ def _add_tensor_backward_hook(trace: "Trace", t: torch.Tensor, tensor_label: str
         from .backward import _register_forward_grad_fn
 
         _register_forward_grad_fn(trace, t.grad_fn, tensor_label)
-    if (t.grad_fn is not None) or t.requires_grad:
+    if getattr(trace, "capture_tensor_grad_hooks", True) and (
+        (t.grad_fn is not None) or t.requires_grad
+    ):
         t.register_hook(log_grad_to_model_history)  # type: ignore[no-untyped-call]
 
 

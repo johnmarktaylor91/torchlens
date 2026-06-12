@@ -740,6 +740,7 @@ def _capture_with_active_spec(
         save_raw_activations=getattr(log, "save_raw_activations", True),
         save_raw_gradients=getattr(log, "save_raw_gradients", True),
         save_mode=getattr(log, "save_mode", "copy"),
+        capture_tensor_grad_hooks=getattr(log, "capture_tensor_grad_hooks", True),
         mark_layer_depths=getattr(log, "mark_layer_depths", False),
         detach_saved_activations=getattr(log, "detach_saved_activations", False),
         save_arg_values=getattr(log, "save_arg_values", False),

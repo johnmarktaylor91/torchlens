@@ -92,6 +92,7 @@ MODEL_LOG_FIELD_ORDER = [
     "save_arg_values",
     "num_context_lines",
     "save_grads",
+    "capture_tensor_grad_hooks",
     "_grad_op_nums_to_save",
     "grad_transform",
     "grad_transform_repr",

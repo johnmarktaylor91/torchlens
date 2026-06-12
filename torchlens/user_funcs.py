@@ -169,6 +169,7 @@ def _trace_mlx_model(
     grad_transform: GradientPostfunc | None | MissingType,
     save_raw_activations: bool | MissingType,
     save_raw_gradients: bool | MissingType,
+    capture_tensor_grad_hooks: bool | MissingType,
     save_arg_values: bool | MissingType,
     save_grads: bool | str | list[Any] | PredicateFn | BaseSelector | None | MissingType,
     save_code_context: bool | MissingType,
@@ -215,6 +216,7 @@ def _trace_mlx_model(
         save_visualizations=save_visualizations,
         keep_orphans=keep_orphans,
         output_device=output_device,
+        capture_tensor_grad_hooks=capture_tensor_grad_hooks,
         save_arg_values=save_arg_values,
         save_grads=save_grads,
         save_code_context=save_code_context,
@@ -960,6 +962,7 @@ def _run_model_and_save_specified_outs(
     save_raw_activations: bool = True,
     save_raw_gradients: bool = True,
     save_mode: SaveMode = "copy",
+    capture_tensor_grad_hooks: bool = True,
     mark_layer_depths: bool = False,
     detach_saved_activations: bool = False,
     save_arg_values: bool = False,
@@ -1027,6 +1030,8 @@ def _run_model_and_save_specified_outs(
         save_raw_gradients: Whether raw grads are retained when ``grad_transform`` is set.
             Metadata always describes the raw grad.
         save_mode: Tensor retention mode for saved activation and gradient payloads.
+        capture_tensor_grad_hooks: Whether forward tensors receive tensor-level
+            backward hooks for implicit backward events and per-op gradient payloads.
         mark_layer_depths: Compute BFS distances from input/output layers.
             Expensive for large graphs - off by default.
         detach_saved_activations: If True, saved tensors are detached from the autograd graph.
@@ -1128,6 +1133,7 @@ def _run_model_and_save_specified_outs(
         save_raw_activations=save_raw_activations,
         save_raw_gradients=save_raw_gradients,
         save_mode=save_mode,
+        capture_tensor_grad_hooks=capture_tensor_grad_hooks,
         keep_orphans=keep_orphans,
         save_arg_values=save_arg_values,
         save_grads=grads_to_save if save_grads else None,
@@ -1391,6 +1397,7 @@ def trace(
     save_raw_activations: bool | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
+    capture_tensor_grad_hooks: bool | MissingType = MISSING,
     mark_layer_depths: bool | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
     save_arg_values: bool | MissingType = MISSING,
@@ -1495,6 +1502,8 @@ def trace(
         save_raw_gradients: When ``False`` and ``grad_transform`` is set, do not retain raw
             grad tensors in memory; raw grad metadata is still populated.
         save_mode: Tensor retention mode for saved activation and gradient payloads.
+        capture_tensor_grad_hooks: If False, skip tensor-level backward hooks on
+            forward tensors while preserving grad-fn registration for ``log_backward``.
         mark_layer_depths: Deprecated alias for
             ``compute_input_output_distances``.
         detach_saved_activations: If True, detach saved tensors from the autograd graph.
@@ -1607,6 +1616,7 @@ def trace(
             "save_raw_activations": save_raw_activations,
             "save_raw_gradients": save_raw_gradients,
             "save_mode": save_mode,
+            "capture_tensor_grad_hooks": capture_tensor_grad_hooks,
             "mark_layer_depths": mark_layer_depths,
             "detach_saved_activations": detach_saved_activations,
             "save_arg_values": save_arg_values,
@@ -1697,6 +1707,7 @@ def trace(
             grad_transform=grad_transform,
             save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
+            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
             save_arg_values=save_arg_values,
             save_grads=save_grads,
             save_code_context=save_code_context,
@@ -1738,6 +1749,7 @@ def trace(
         output_device=output_device,
         save_arg_values=save_arg_values,
         save_grads=save_grads,
+        capture_tensor_grad_hooks=capture_tensor_grad_hooks,
         save_code_context=save_code_context,
         save_rng_states=save_rng_states,
         random_seed=random_seed,
@@ -1828,6 +1840,7 @@ def trace(
     if save_mode_value not in {"copy", "reference", "view", "cpu_async"}:
         raise ValueError("save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'")
     save_arg_values = capture_options.save_arg_values
+    capture_tensor_grad_hooks = capture_options.capture_tensor_grad_hooks
     save_code_context = capture_options.save_code_context
     save_rng_states = capture_options.save_rng_states
     random_seed = capture_options.random_seed
@@ -1941,6 +1954,7 @@ def trace(
             "keep_orphans": keep_orphans,
             "output_device": output_device,
             "save_arg_values": save_arg_values,
+            "capture_tensor_grad_hooks": capture_tensor_grad_hooks,
             "save_grads": repr(save_grads_policy),
             "save_code_context": save_code_context,
             "save_rng_states": save_rng_states,
@@ -1998,6 +2012,7 @@ def trace(
             save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
             save_mode=cast(SaveMode, save_mode_value),
+            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,
@@ -2067,6 +2082,7 @@ def trace(
             save_raw_activations=save_raw_activations,
             save_raw_gradients=save_raw_gradients,
             save_mode=cast(SaveMode, save_mode_value),
+            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
             mark_layer_depths=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             save_arg_values=save_arg_values,

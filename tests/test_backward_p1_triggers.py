@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
 import torch
 from torch import nn
 
@@ -189,6 +192,52 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
     assert trace.num_backward_passes == 1
     assert any(event.op_label == trace["linear_2"].layer_label for event in _op_grad_events(trace))
     assert trace["linear_2"].grad is not None
+    trace.cleanup()
+
+
+def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tensor-hook opt-out leaves grad-fn registration and ``log_backward`` intact."""
+
+    register_hook_calls: list[str] = []
+    original_register_hook = torch.Tensor.register_hook
+
+    def forwarding_register_hook(tensor: torch.Tensor, hook: Any) -> Any:
+        """Forward to the original tensor hook registration after counting."""
+
+        register_hook_calls.append(getattr(hook, "__name__", type(hook).__name__))
+        return original_register_hook(tensor, hook)
+
+    monkeypatch.setattr(torch.Tensor, "register_hook", forwarding_register_hook)
+    torch.manual_seed(0)
+    model = _PlainBackwardModel()
+    x = torch.randn(3, 4, requires_grad=True)
+
+    trace = tl.trace(
+        model,
+        x,
+        layers_to_save="all",
+        save_grads=False,
+        capture_tensor_grad_hooks=False,
+    )
+    registered_ids = {
+        grad_fn_object_id
+        for grad_fn_object_id, trace_ref in _BACKWARD_GRAD_FN_REGISTRY.items()
+        if trace_ref() is trace
+    }
+    pinned_ids = {id(grad_fn_handle) for grad_fn_handle in trace._backward_gradfn_refs}
+
+    assert register_hook_calls == []
+    assert registered_ids
+    assert registered_ids <= pinned_ids
+
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+
+    assert register_hook_calls == []
+    assert trace.has_backward_pass
+    assert trace.grad_fn_logs
+    assert _op_grad_events(trace) == []
     trace.cleanup()
 
 

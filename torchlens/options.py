@@ -43,6 +43,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "output_device",
     "save_arg_values",
     "save_grads",
+    "capture_tensor_grad_hooks",
     "save_code_context",
     "save_rng_states",
     "random_seed",
@@ -142,6 +143,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "output_device": "output_device",
     "save_arg_values": "save_arg_values",
     "save_grads": "save_grads",
+    "capture_tensor_grad_hooks": "capture_tensor_grad_hooks",
     "save_code_context": "save_code_context",
     "save_rng_states": "save_rng_states",
     "random_seed": "random_seed",
@@ -647,6 +649,7 @@ class CaptureOptions:
     output_device: OutputDeviceLiteral = "same"
     save_arg_values: bool = False
     save_grads: bool | str | list[Any] | Callable[[Any], Any] | None = None
+    capture_tensor_grad_hooks: bool = True
     save_code_context: bool = False
     save_rng_states: bool = False
     random_seed: int | None = None
@@ -684,6 +687,7 @@ class CaptureOptions:
         output_device: OutputDeviceLiteral | MissingType = MISSING,
         save_arg_values: bool | MissingType = MISSING,
         save_grads: bool | str | list[Any] | Callable[[Any], Any] | None | MissingType = MISSING,
+        capture_tensor_grad_hooks: bool | MissingType = MISSING,
         save_code_context: bool | MissingType = MISSING,
         save_rng_states: bool | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
@@ -762,6 +766,12 @@ class CaptureOptions:
                 "save_arg_values", save_arg_values, False, specified_fields
             ),
             "save_grads": _resolve_option_value("save_grads", save_grads, None, specified_fields),
+            "capture_tensor_grad_hooks": _resolve_option_value(
+                "capture_tensor_grad_hooks",
+                capture_tensor_grad_hooks,
+                True,
+                specified_fields,
+            ),
             "save_code_context": _resolve_option_value(
                 "save_code_context", save_code_context, False, specified_fields
             ),

@@ -199,6 +199,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_out_identity_cache": {},
     "_out_hash_cache": {},
     "_code_context_cache": {},
+    "capture_tensor_grad_hooks": True,
     "save_grads": None,
     "is_appended": False,
     "relationship_evidence": {},
@@ -1101,6 +1102,7 @@ class Trace(CapturedRun):
         "_code_context_cache": FieldPolicy.DROP,
         "save_arg_values": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
+        "capture_tensor_grad_hooks": FieldPolicy.KEEP,
         "_grad_op_nums_to_save": FieldPolicy.KEEP,
         "grad_transform": FieldPolicy.DROP,
         "grad_transform_repr": FieldPolicy.KEEP,
@@ -1273,6 +1275,7 @@ class Trace(CapturedRun):
         keep_orphans: bool = False,
         save_arg_values: bool = False,
         save_grads: Any = None,
+        capture_tensor_grad_hooks: bool = True,
         detach_saved_activations: bool = False,
         mark_layer_depths: bool = True,
         num_context_lines: int = 7,
@@ -1311,6 +1314,9 @@ class Trace(CapturedRun):
             save_grads: Which backward gradients should be retained. ``True``
                 saves all gradients, ``False``/``None`` saves no payloads, and
                 selectors/predicates save matching gradient records.
+            capture_tensor_grad_hooks: Whether forward tensors receive
+                tensor-level backward hooks for implicit backward events and
+                per-op gradient payloads. Grad-fn registration remains enabled.
             detach_saved_activations: Whether to detach saved tensors from the autograd graph.
             mark_layer_depths: Whether to compute BFS distances from
                 inputs/outputs for each layer.
@@ -1426,6 +1432,7 @@ class Trace(CapturedRun):
         self._halt_returns_partial_trace = False
         self.save_arg_values = save_arg_values
         self.save_grads = "all" if save_grads is True else save_grads
+        self.capture_tensor_grad_hooks = capture_tensor_grad_hooks
         self.save_code_context = save_code_context
         self.save_rng_states = save_rng_states
         self.recurrence_detection = recurrence_detection
@@ -3016,6 +3023,7 @@ class Trace(CapturedRun):
                 "grad_transform_repr": None,
                 "save_raw_gradients": True,
                 "save_grads": _legacy_save_grads_from_state(state),
+                "capture_tensor_grad_hooks": True,
                 "_grad_op_nums_to_save": [],
                 "has_backward_pass": False,
                 "grad_fn_logs": OrderedDict(),
