@@ -1,17 +1,20 @@
 # Task & Bug Tracker
 
-## What's left — quick index (regenerated 2026-06-11)
+## What's left — quick index (regenerated 2026-06-12)
 
-A glance at the OPEN work, grouped by theme (rough counts; see sections below for detail):
+A glance at the OPEN work, grouped by theme (rough counts; see sections below for detail).
+Counts reflect what is GENUINELY open after the 2026-06-11 backward-pass sprint and the
+2026-06-12 perf sprint (P0-P5 + P6 harness) shipped on `capture-unification`. Items marked
+"pending P6 measurement" are blocked only on the benchmark-numbers pass, not implementation.
 
-- **Capture coverage gaps (~2):** comprehensive functorch/`torch.func` transform coverage (vmap/grad/jac/`functional_call`) — the big one; multi-GPU RNG capture. (Device-context/meta-tensor gap FIXED `f9daf5f`; kwarg symptom set FIXED `f9daf5f` — broader kwarg audit still open.)
-- **Backward-pass sprint (~7):** unified backward-pass untangling (recurrent grad_fn semantics, type_index schemes, name introspection), first-class `BackwardPass` records, higher-order gradients, auto-suppress grad_fn when `backward_ready=False`, backward call-site context, per-layer grad oracle redesign, fastlog gradient support.
-- **Perf north-star (~23):** halt-implies-sub-baseline benchmark rows, leaner `rerun`, zero-copy `save_mode="reference"`, lazy fastlog ctx; plus the low-level PERF-* backlog (model-prep PERF-38/39, 1M-scale PERF-29..35, and remaining O(n^2)/GC items).
-- **Pre-2.0 naming/API polish (~14):** holistic naming pass (selectors, comparison verbs, symmetric pairs, `peek`->`pluck`), 0-based accessor indexing, strict-type accessors, `__repr__`/`.locator` audit, capture_config namespace migration, residual save-selection renames (`module_filter`->`save_predicate`, fastlog naming), several deferred renames.
-- **Visualization (~9):** rip ELK out (promote pure-Python Kahn layout), more built-in themes + custom-visuals interface, DenseNet layout, combined fwd+bwd render, multi-output module rendering, bundle-diff color scale, large-graph rendering, direct-SVG path. (Code-panel long-line truncation FIXED `8fa0907`.)
-- **Docs (~10):** `docs/performance.md`, `docs/for-ai-agents.md`, promote glossary to exhaustive reference, elevator-pitch + substrate/metadata framing, comparison-page concessions, ELK setup guide, speed-default advertising, postfunc persistence story.
-- **Low-level bug/GC/perf backlog (migrated from memory todo.md):** ~5 correctness/capture bugs (ELK-IF-THEN, RNG-MULTI-GPU, ARG-KWARGS-MISSING audit residue, etc.), open GC-* refs, open PERF-* refs, deferred design decisions (#9/#55/#93/#102), refactoring candidates, investigate/revisit items. See the dedicated section near the end.
-- **Big/strategic features (~19):** JAX backend adapter (capture-path unification + MLX backend SHIPPED 2026-06-06), `to_dataframe` + the creative-metadata tooling tiers, attribution methods, tensor-slicing recipes + `op.outs`, input/output transform library, container handling, stacked multi-pass log, interactive Jupyter viewer, cross-model RSA alignment, circuit-tracer UI primitives.
+- **Capture coverage gaps (~2):** comprehensive functorch/`torch.func` transform INSIDE-coverage (vmap/grad/jac/`functional_call`) — boundary-node capture + `is_transform`/`tl.func_transform` shipped 2026-06-11, comprehensive coverage still the gap; multi-GPU RNG capture (BLOCKED on hardware). (Device-context/meta-tensor gap FIXED `f9daf5f`; kwarg symptom set FIXED `f9daf5f` — broader kwarg audit still open.)
+- **Backward-pass (~3 open + 4 deferred follow-ups):** STILL OPEN — auto-suppress grad_fn when `backward_ready=False`; backward call-site code context; per-layer grad oracle redesign (deferred via AD-32). Plus the 4 "deferred follow-ups (filed 2026-06-11)": backward-only replay from persisted traces, MLX/JAX T0/T1 backward sketch, real per-fire GradFn prehook timing, implicit backward boundary detection. SHIPPED by the sprint (struck below): first-class `BackwardPass` records, higher-order gradients (`create_graph` re-walk), recurrent grad_fn / labeling semantics (verify only the type_index-scheme residue), backward deep-dive Q answered, fastlog gradient support (`record(save_grads=...)`).
+- **Perf north-star (~remaining backlog + measurement):** SHIPPED (struck below) — `save_mode` copy/reference/view/cpu_async (zero-copy reference + MutatedReferenceError tripwire), leaner `Trace.rerun` topology-hash fast-refresh, halt fast path. PARTIAL — lazy fastlog ctx (caching landed; per-predicate-field laziness still open). PENDING P6 MEASUREMENT — halt-implies-sub-baseline benchmark rows, `rerun_no_save` anomaly re-measure, fastlog_zero acceptance numbers. STILL OPEN — low-level PERF-* backlog (model-prep PERF-38/39, 1M-scale PERF-29..35, PERF-8/10/13/16, and remaining GC-* items GC-10/etc.).
+- **Pre-2.0 naming/API polish (~14):** holistic naming pass (selectors, comparison verbs, symmetric pairs, `peek`->`pluck`), 0-based accessor indexing, strict-type accessors, `__repr__`/`.locator` audit, capture_config namespace migration, residual save-selection renames (`module_filter`->`save_predicate`, fastlog naming), several deferred renames. (Untouched by the recent sprints.)
+- **Visualization (~7):** more built-in themes + custom-visuals interface, DenseNet layout, combined fwd+bwd render, multi-output module rendering, bundle-diff color scale, large-graph rendering, direct-SVG path. (ELK retirement DONE `b2ec0331`; code-panel long-line truncation FIXED `8fa0907`.)
+- **Docs (~10):** `docs/performance.md`, `docs/for-ai-agents.md`, promote glossary to exhaustive reference, elevator-pitch + substrate/metadata framing, comparison-page concessions, speed-default advertising, postfunc persistence story. (`docs/backward.md` shipped with the backward sprint; ELK setup guide MOOT — ELK retired.)
+- **Low-level bug/GC/perf backlog (migrated from memory todo.md):** ~3 correctness/capture bugs (RNG-MULTI-GPU [hardware-blocked], ARG-KWARGS-MISSING audit residue, JIT/GPTBigCode, DOT-empty-PDF) — ELK-IF-THEN / ELK-EDGE-LABEL-DEDUP now MOOT (ELK retired); open GC-* refs (GC-1/9 fixed by perf sprint), open PERF-* refs, deferred design decisions (#9/#55/#93/#102), refactoring candidates, investigate/revisit items. See the dedicated section near the end.
+- **Big/strategic features (~19):** JAX backend adapter — sprint PLAN drafted + in adversarial review (`.research/jax-tinygrad-sprint_PLAN.md`), implementation NOT started (capture-path unification + MLX backend SHIPPED 2026-06-06); `to_dataframe` + the creative-metadata tooling tiers, attribution methods, tensor-slicing recipes + slice-intervention (`op.outs` retired — folded into anonymous facets), input/output transform library, container handling, stacked multi-pass log, interactive Jupyter viewer, cross-model RSA alignment, circuit-tracer UI primitives.
 
 ## Architectural endpoint (JMT 2026-05-15)
 
@@ -68,7 +71,9 @@ Current state (perf benchmark 2026-05-14, commit `3409c25`):
 - rerun (new inputs): currently ~same as full capture; target ~5-10x raw
 - **fastlog + halt at early layer: NOT YET BENCHMARKED.** Expected fractional-x raw on deep models. This is the strongest single perf story TL has.
 
-### Comprehensive functorch / `torch.func` transform coverage — vmap, grad, jac, functional_call (filed 2026-06-02) **[CAPTURE COVERAGE GAP]**
+### Comprehensive functorch / `torch.func` transform coverage — vmap, grad, jac, functional_call (filed 2026-06-02) **[STILL OPEN — boundary-node capture shipped 2026-06-11; comprehensive inside-coverage remains the gap]**
+
+**[Progress 2026-06-11 (commits 73933bde / 3978a4e6 / f1489835 / 2303a52e): the penciled single-op boundary direction is now PARTLY BUILT. `torch.func` transform calls are captured as boundary nodes with an `is_transform` role flag (`ir/events.py:363`, `op.is_transform`), a `trace.transform_ops` accessor (`trace.py:3918`), a `tl.func_transform` selector (exported in `__init__.py`), and transform metadata plumbing — so transform-region outputs are now first-class tagged nodes, not functionless placeholders, and the tripwire stays armed. STILL OPEN: comprehensive uniform coverage across `vmap`/`grad`/`jac*`/`vjp`/`jvp`/`functional_call`, the opt-in expand-inside view, replayable-`func` storage for honest validation, and the open design questions below. The "Follow-ups from torch.func transform boundary build (filed 2026-06-11)" sub-list near the end of this section is genuinely open.]**
 
 **The gap.** TorchLens captures by intercepting eager `torch.*` calls via its wrappers. Operations that run *inside* a functorch / `torch.func` transform — `torch.vmap`, `torch.func.grad` / `jacfwd` / `jacrev` / `vjp` / `jvp`, `functional_call` (and `torch.compile`/fx, separately) — execute under a **different dispatch path** (the functorch interpreter / `BatchedTensor` stack) that **bypasses the eager wrappers entirely**. So every op inside such a region is **invisible** to TorchLens, and the tensors they produce surface **untraced**. This is a whole class of operations, not one op.
 
@@ -102,7 +107,9 @@ Current state (perf benchmark 2026-05-14, commit `3409c25`):
 
 **Sizing.** Pre-2.0-launch: the narrow mask fix + armed tripwire (shipped) is sufficient. Comprehensive transform coverage is its own **post-launch sprint** (est. multi-day; touches `decoration/` + the dispatch layer; needs the semantics decision first). Best folded into the capture-path-unification / backend-adapter refactor since that already reworks the dispatch layer.
 
-### Follow-up benchmark: `fastlog_halt_early`
+### Follow-up benchmark: `fastlog_halt_early` **[OPEN — pending P6 measurement pass]**
+
+**[The `halt=` capability shipped (perf sprint P0-P1: `record(halt=...)` + `trace(halt=...)`, `halted`/`halt_reason`/`halt_frontier`, halt-only fast path — verified in code). What remains is the MEASUREMENT: committing the early-halt benchmark rows + the headline "sub-baseline at depth N" numbers. The P6 regression-gate harness landed (commit 7999d0a2: `benchmarks/perf_gate.py`, `generate_perf_numbers.py`) but published results are not yet committed — pending the P6 measurement pass.]**
 
 Add early-halt rows to the perf suite once the in-flight no-save addendum lands. For each model, benchmark fastlog capture + halt at three depths: ~25% / ~50% / ~75% through the model. Expected: 25%-depth halt should run in ~1/4 of raw forward time, demonstrating sub-baseline TL performance.
 
@@ -341,7 +348,7 @@ The `_live` convention (if adopted) would parallel `_handle` — `_live` for run
 
 Filed 2026-05-21 during glossary v3 rename pass. Post-launch design decision; not blocking rename sprint.
 
-### Auto-suppress grad_fn creation when backward_ready=False (part of backward-pass sprint)
+### Auto-suppress grad_fn creation when backward_ready=False (part of backward-pass sprint) **[STILL OPEN — verified 2026-06-12: no `suppress_autograd` kwarg, no auto `torch.no_grad()`/`inference_mode` wrap in capture]**
 
 JMT's "charm": only spawn grad_fns if wanted. Currently `backward_ready=False` means TL doesn't HOOK grad_fns, but PyTorch may still CREATE them (based on input `requires_grad` state). Wasteful for inference-only capture.
 
@@ -363,7 +370,9 @@ I'd lean implicit-with-override — match user intent in the common inference ca
 
 Filed 2026-05-21 during glossary v3 rename pass. Part of unified backward-pass sprint. Small implementation but design discussion needed on the flag interaction matrix.
 
-### Higher-order gradient support (part of backward-pass sprint)
+### Higher-order gradient support (part of backward-pass sprint) **[DONE 2026-06-12 — backward-pass sprint, commits 51cfa63e/446f296c; verified in code]**
+
+**[SHIPPED.** `create_graph=True` higher-order capture is implemented: at backward-bracket end TorchLens re-walks newly-created autograd nodes (`backward.py:_record_higher_order_terminal` / `_rewalk_higher_order_grad_fns`, hooked at `backward.py:2083`), attributes order (`order = creator.order + 1`; forward-created nodes are order 1), and reports `BackwardPass.order_attribution_coverage` when attribution is ambiguous. `torch.autograd.grad(..., create_graph=True)` paths plumbed via `backward.py:1859/1913`. Documented in `docs/backward.md` "Higher Order". The "What doesn't work" list below is now STALE — kept for history. Remaining genuinely-open edges: MLX/JAX higher-order (covered by the backward deferred-follow-up "MLX/JAX T0/T1 sketch"); per-fire prehook timing (separate deferred follow-up).]**
 
 TorchLens currently has PARTIAL support for higher-order gradients (Hessian-style, MAML, adversarial via backward-of-backward, etc.). The data structures can accommodate them; the capture machinery does NOT auto-instrument them.
 
@@ -398,7 +407,7 @@ Non-trivial — needs post-first-backward graph walking + hook installation. Plu
 
 Filed 2026-05-21 during glossary v3 rename pass.
 
-### Backward call-site code context (part of backward-pass sprint)
+### Backward call-site code context (part of backward-pass sprint) **[STILL OPEN — verified 2026-06-12: no `backward_call_context` field anywhere in the codebase]**
 
 For tracking "from where in user code was `loss.backward()` triggered?" — capture Python call stack at backward invocation as part of the per-event entry in `state_history` (one entry per `loss.backward()` call). Should NOT be a per-GradFnCall field (backward hooks fire from PyTorch's autograd engine; the stack at hook-fire time is uniformly uninformative).
 
@@ -406,7 +415,9 @@ Proposed: `state_history[N].backward_call_context` (Python call stack at the mom
 
 Filed 2026-05-21 during glossary v3 rename pass. Folds into the unified backward-pass-untangling sprint (below). Not blocking the rename sprint.
 
-### Backward labeling + recurrent-loop semantics (part of the backward-pass unified sprint)
+### Backward labeling + recurrent-loop semantics (part of the backward-pass unified sprint) **[LARGELY DONE 2026-06-12 — backward-pass sprint; verify residual design calls]**
+
+**[The backward-pass sprint reworked grad_fn labeling end to end (`backward.py:_grad_fn_label_parts`, `_normalize_grad_fn_type`/`_grad_fn_type_from_class_name` with `Backward\d*$` suffix normalization for version stability and `<lambda>`/custom-class robustness), records one record per retained autograd object (concern #3 + recurrent distinctness — see the `docs/backward.md` "Validation" invariant "one record per retained autograd object"), and projects multi-pass backward via `BackwardPass`. Concerns #1 (recurrent distinct grad_fn objects) and #3 (name introspection) are addressed in code. [verify: concern #2 — whether the two `type_index` construction schemes (has_op mirror vs per-type counter) were collapsed to one, or the has_op visual-correspondence path was deliberately kept — confirm against `_grad_fn_label_parts` before fully striking.] Original 2026-05-21 analysis below kept for history.]**
 
 **Filed 2026-05-21.** Surfaced during glossary v3 rename pass. Genuinely thorny; needs design work; coordinate with the broader backward-pass deep-dive (below).
 
@@ -453,7 +464,9 @@ Coordinate with:
 
 These three areas interact heavily. The backward subsystem deserves a dedicated sprint, not piecemeal fixes.
 
-### Backward pass handling deep-dive — does loss.backward() spawn GradFn logs?
+### Backward pass handling deep-dive — does loss.backward() spawn GradFn logs? **[DONE 2026-06-12 — answered by backward-pass sprint + `docs/backward.md`]**
+
+**[ANSWERED by the shipped backward subsystem. The runtime backward sidecar records each engine invocation, projected into `BackwardPass` / `GradFn` / `GradFnCall` records; multi-backward = one `BackwardPass` per engine invocation (`docs/backward.md` "Multiple Passes And Accumulation"); `has_op` pairing + orphan grad_fns handled in `backward.py`; lifecycle/triggers documented (`trace.disarm_triggers()`). The architectural questions this item raised are resolved by the sprint design — kept for history.]**
 
 Open architectural question: when a user calls `trace.backward(loss)`:
 - Are GradFn records created at that point (from the live autograd graph)?
@@ -590,7 +603,9 @@ Items to revisit later:
 
 Filed 2026-05-21 during glossary v3 rename pass. Park until after rename sprint + 2.0 launch.
 
-### Promote backward passes to first-class `BackwardPass` records (parallels ModuleCall / GradFnCall)
+### Promote backward passes to first-class `BackwardPass` records (parallels ModuleCall / GradFnCall) **[DONE 2026-06-12 — backward-pass sprint; verified in code]**
+
+**[SHIPPED.** `BackwardPass` record class exists (`data_classes/backward_pass.py`) with `root_grad_fn_ids`, `duration`, `status`, `engine_flags`, `save_grads_policy`, `order_attribution_coverage`, 0-based `ordinal_index`, plus `BackwardPassAccessor.for_pass(...)`. On Trace: `trace.backward_passes` accessor (`trace.py:4228`), `trace.last_backward_pass` (`trace.py:4235`), `trace.num_backward_passes`, and `trace.backward_passes.to_pandas()`. Documented in `docs/backward.md`. Original proposal kept below for history.]**
 
 Filed 2026-05-21 as Level 3 follow-up to the `backward_root_grad_fn_id` → `backward_root_grad_fn_ids` rename (locked the lightweight plural fix in v3; this is the heavier architectural improvement).
 
@@ -1107,7 +1122,9 @@ capture-unification sprint. **JMT flagged 2026-05-21 to REVIEW this surface holi
 later — important and stays.** Review should reconcile the legacy streaming knobs with the
 unified `storage=` axis.
 
-### Perf sprint: leaner `Trace.rerun` (purpose = capture on new inputs)
+### Perf sprint: leaner `Trace.rerun` (purpose = capture on new inputs) **[LARGELY DONE 2026-06-12 — perf sprint commits 5e619a89/2b58e1f9; verified in code]**
+
+**[Core shipped.** The topology-hash short-circuit (sub-point 1) and same-scope refresh landed: `intervention/rerun.py:85-133` computes `graph_shape_hash` + `_raw_event_shape_hash`, and `log._refresh_matching_rerun_state_from(new_log)` does the fast in-place refresh when topology matches, falling back to full rebuild on divergence (`fast_refresh` flag). Append-mode (sub-point 4) was already supported. STILL OPEN/verify: sub-point 2 (respect original `layers_to_save` subset scope on rerun) and the published speedup numbers — both fold into the P6 measurement pass and the `rerun_no_save` anomaly investigation below. Original sketch kept for history.]**
 
 **Correction 2026-05-14:** `Trace.rerun(model, x)` is for re-capturing on BRAND-NEW inputs `x`, not for re-applying interventions on the same input. The fast-replay-on-cached-input path is `Trace.replay()`. Earlier sketch confused the two.
 
@@ -1172,7 +1189,9 @@ The 2026-05-14 perf benchmarks (commits `3409c25` + `30dc452`) surface concrete 
 
 Filed 2026-05-14 from JMT pointing out that power-user perf guidance needs a concentrated docs surface.
 
-### Investigate: `rerun_no_save` slower than `rerun` (benchmark anomaly)
+### Investigate: `rerun_no_save` slower than `rerun` (benchmark anomaly) **[OPEN — re-measure under the P6 pass; the 2026-06-12 rerun fast-refresh work may have changed this]**
+
+**[Note 2026-06-12: the perf sprint's rerun fast-refresh / topology-hash short-circuit (see "leaner Trace.rerun" above) reworked the rerun setup path, so this anomaly should be RE-MEASURED on the new code before investigating — the old-path quirk it describes may already be gone. Carry into the P6 measurement pass.]**
 
 Perf benchmark addendum (commit `30dc452`) shows `Trace.rerun(model, x), no saved outs` runs slower than the with-save baseline across every cell:
 - GPT-2-HF CPU: rerun 2984ms vs rerun_no_save 5725ms (~1.9x worse)
@@ -1191,7 +1210,9 @@ Action: read `benchmarks/perf_runner.py` `rerun_no_save` impl; check whether the
 
 Filed 2026-05-14 from perf addendum results. Not urgent but interesting.
 
-### Perf sprint: zero-copy `save_mode="reference"` for activations
+### Perf sprint: zero-copy `save_mode="reference"` for activations **[DONE 2026-06-12 — perf sprint commit 9a6ff796; verified in code]**
+
+**[SHIPPED.** `save_mode` option implemented with all four modes (`utils/tensor_utils.py:380` / `fastlog/types.py:55`): `"copy"` (default, clones), `"reference"` (detach only, zero-copy), `"view"` (graph-connected, requires `keep_grad`), `"cpu_async"` (non-blocking CPU clone). Reference-mode mutation tripwire is wired via `MutatedReferenceError` (`_errors.py:10`, raised on mutated saved-reference access at `op.py:641`), satisfying the "loud warning / invalidate on mutate" contract. Threaded through `user_funcs.py` / `intervention/rerun.py` / backend save path. Acceptance benchmark row (reference vs copy speedup numbers) is pending the P6 measurement pass.]**
 
 Current Trace save path does `.detach().clone()` (or `.detach().cpu()`) per saved tensor. For models with large activations (GPT-2 hidden states), the clone is the dominant fraction of save cost.
 
@@ -1221,7 +1242,9 @@ Read-only interpretability workflows (saliency, SAE feature extraction, activati
 
 Filed 2026-05-14 from JMT spotting that the clone cost is independent of the wrapper-dispatch cost and is independently optimizable.
 
-### Perf sprint: lazy fastlog ctx (only compute what predicate needs)
+### Perf sprint: lazy fastlog ctx (only compute what predicate needs) **[PARTIAL 2026-06-12 — caching landed, per-predicate laziness still open]**
+
+**[The perf sprint added per-trace/per-call-site CACHING of the expensive ctx pieces — op + module code-context caches (`backends/torch/ops.py:_code_context_cache`, commits e1ecce20/34332fac), `_cache_trace_predicate_context` (ops.py:1487), and `_cache_dynamic_spec` single-pass arg-extraction fallback (commit 953757b2). This recovers most of the repeated-work cost. STILL OPEN: the original ask — making `source_location`/`module_address`/`args_summary` genuinely LAZY (`@cached_property`-style, skipped entirely when a predicate only reads `func_name`/`kind`). No `cached_property` in `fastlog/_record_one_shot.py` as of 2026-06-12; the caches compute-then-reuse rather than skip-on-no-demand. The remaining win + its `fastlog_zero` acceptance benchmark are P6-measurement-dependent.]**
 
 Current fastlog wrapper EAGERLY constructs the full ctx on every op:
 - func_name, kind (cheap, always eager)
@@ -1977,7 +2000,9 @@ Tier 2 (grad_fn-level) in v1. The following are explicitly deferred:
 
 ---
 
-### Retire ELK from visualization (raised 2026-04-28)
+### Retire ELK from visualization (raised 2026-04-28) **[DONE 2026-06-11 — commit b2ec0331; verified ELK gone]**
+
+**[SHIPPED.** `feat(viz): retire ELK/sfdp layout backends; promote pure-Python rank layout` (b2ec0331). `_elk_internal/` deleted (verified gone); `elk`/`sfdp` engine values removed outright (invalid values now raise `ValueError`, no deprecation). Engine selection is now `vis_node_placement = auto (default) | dot | rank`, where `auto` estimates layout cost (node count + long-range edge rank-spans) and switches to the zero-dependency pure-Python Kahn rank layout (`_rank_layout_internal/layout.py` + direct-SVG `render_rank_layout`) above ~20,000. Node.js/elkjs dependency eliminated. This also moots the ELK-IF-THEN / ELK-EDGE-LABEL-DEDUP correctness bugs and the "ELK spline cutoff tuning" item in the low-level backlog. Original analysis kept below for history.]**
 
 [PARTIAL -- the top-level `torchlens/visualization/elk_layout.py` file is GONE. But ELK is NOT fully retired: an `_elk_internal/layout.py` backend still exists and is wired into `rendering.py` as an escape-hatch engine (`vis_node_placement='elk'`, `render_elk_direct`, `render_with_sfdp` all import from `._elk_internal.layout`). The dedicated "delete all ELK" cleanup PR has NOT happened -- only the file was relocated/renamed.]
 
@@ -3249,12 +3274,10 @@ buffer write-capture / capture-unification+MLX), it is FLAGGED "VERIFY" rather t
 
 ### Correctness / capture bugs
 
-- **ELK-IF-THEN**: `render_elk_direct()` in elk_layout.py:954-1013 has ZERO conditional branch
+- ~~**ELK-IF-THEN**: `render_elk_direct()` in elk_layout.py:954-1013 has ZERO conditional branch
   code. rendering.py:970-982 correctly labels IF/THEN edges, but ELK path never checks
   `cond_branch_start_children` or `cond_branch_then_children`. Users see arg labels but NO
-  IF/THEN labels in ELK mode. (NOTE: ELK is slated for removal — see "Retire ELK from
-  visualization" above; this may become moot if ELK is ripped out. Decision 2026-06-11: skip
-  fixes while "Retire ELK" is the plan; fold into that work.)
+  IF/THEN labels in ELK mode.~~ MOOT — ELK fully retired 2026-06-11 (commit `b2ec0331`); `_elk_internal`/`render_elk_direct` deleted.
 - **ARG-KWARGS-MISSING** [PARTIAL FIX `f9daf5f`]: Named symptom functions FIXED in `f9daf5f`:
   normal (mean/std), mm/bmm (mat2), mv (vec), addmm (mat1/mat2), addbmm/baddbmm
   (batch1/batch2), addmv (mat/vec), addcmul/addcdiv (tensor1/tensor2), lerp (end/weight).
@@ -3264,10 +3287,9 @@ buffer write-capture / capture-unification+MLX), it is FLAGGED "VERIFY" rather t
   no-tensor-args spec and drop their positional source tensor as a parent. ~637 functions may
   still need audit. (Cross-ref: "Audit function-argument-name introspection" Active Task tracks
   the FUNC_ARG_SPECS coverage question broadly.)
-- **ELK-EDGE-LABEL-DEDUP**: Edge deduplication (elk_layout.py:990-992) keeps only the first edge
+- ~~**ELK-EDGE-LABEL-DEDUP**: Edge deduplication (elk_layout.py:990-992) keeps only the first edge
   between a pair, dropping later edges' arg labels. If the first edge lacks a label and the
-  second has it, the label is lost. (Decision 2026-06-11: skip fixes while "Retire ELK" is the
-  plan; fold into that work.)
+  second has it, the label is lost.~~ MOOT — ELK fully retired 2026-06-11 (commit `b2ec0331`).
 - **RNG-MULTI-GPU**: `rng.py:70` only captures RNG state for cuda device 0. Multi-GPU models get
   non-deterministic validation replays. (BLOCKED on hardware: dev box has 1 GPU — needs a
   multi-GPU machine to fix+verify; 2026-06-11.)
@@ -3320,14 +3342,14 @@ Open GC items plus fixed-ID history (GC-6/7/13/14 were FIXED; dropped). Several 
 model parameters or create circular refs that block GC. Struck entries were verified fixed by the
 performance sprint and kept only to preserve ID history.
 
-- **GC-1**: `ParamLog._param_ref` pins ALL model parameters indefinitely. Fix: extract gradient
-  info eagerly, then `_param_ref = None`.
+- ~~**GC-1**: `ParamLog._param_ref` pins ALL model parameters indefinitely. Fix: extract gradient
+  info eagerly, then `_param_ref = None`.~~ Fixed by perf sprint commit `89e412a2` — `release_param_refs(allow_iter_rehydrate=True)` runs in postprocess finalization (`postprocess/__init__.py:350`); params lazy-rehydrate via `Param.value` / `PostTraceParamUnavailable`.
 - ~~**GC-2**: `source_model_log` circular ref on every LayerPassLog. Fix: `weakref.ref()`.~~ Fixed by performance sprint P5.4 tracker audit.
 - ~~**GC-3**: `_source_model_log` circular ref on every ModuleLog. Fix: `weakref.ref()`.~~ Fixed by performance sprint P5.4 tracker audit.
 - ~~**GC-4**: `source_model_log` circular ref on every LayerLog. Fix: `weakref.ref()`.~~ Fixed by performance sprint P5.4 tracker audit.
 - ~~**GC-5**: `_raw_tensor_dict` never cleared after postprocessing. Fix: clear after postprocess.~~ Fixed by performance sprint P5.4 tracker audit.
 - ~~**GC-8**: `_add_backward_hook` closure captures ModelLog. Fix: weakref.~~ Fixed by performance sprint P5.4 tracker audit.
-- **GC-9**: `parent_param_logs` (via ParamLog._param_ref) pins params. Partially fixed.
+- ~~**GC-9**: `parent_param_logs` (via ParamLog._param_ref) pins params. Partially fixed.~~ Resolved by the same `release_param_refs` mechanism (perf sprint `89e412a2`).
 - **GC-10**: `func_applied` stores function object per LayerPassLog. Fix: store name only.
 - ~~**GC-11**: `ModulePassLog.forward_args/forward_kwargs` may hold tensor refs.~~ Fixed by performance sprint P5.4 tracker audit.
 - ~~**GC-12**: `cleanup()` incomplete — LayerPassLogs stripped but never removed from containers.~~ Fixed by performance sprint P5.4 tracker audit.
@@ -3498,9 +3520,9 @@ minutes before the forward even starts):
   `func_applied.__name__` / PyCapsule repr, or hook the `torch.ops` namespace to map operator
   names before they become PyCapsules. `_op` is blanket-exempted from perturbation (these C
   extensions segfault on invalid inputs).
-- **ELK spline cutoff tuning**: currently switches from curved splines (`splines=true`) to
+- ~~**ELK spline cutoff tuning**: currently switches from curved splines (`splines=true`) to
   straight lines (`splines=line`) at 1000 nodes (elk_layout.py:1048) — conservative; could bump to
-  3000-5000 for nicer curves on medium graphs. Benchmark the sweet spot. (Moot if ELK is removed.)
+  3000-5000 for nicer curves on medium graphs. Benchmark the sweet spot.~~ MOOT — ELK fully retired 2026-06-11 (commit `b2ec0331`).
 - **id-keyed tagging** — see "Move module/param tagging to id-keyed dict" above.
 
 ### Dagua feature ideas (may belong in the dagua repo's tracker, not torchlens)
