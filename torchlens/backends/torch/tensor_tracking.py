@@ -42,6 +42,7 @@ from ...ir.events import BackwardPassStart, OpGradObserved
 from ...data_classes.op import Op
 from ..._state import pause_logging
 from ...intervention.selectors import BaseSelector
+from ...utils.display import _record_phase_timing
 from ...utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ...utils.tensor_utils import safe_copy
 from ...utils.tensor_utils import SaveMode
@@ -186,12 +187,31 @@ def _emit_tensor_grad_event(trace: "Trace", grad: torch.Tensor, tensor_label: st
 
     if getattr(trace, "_tl_backward_triggers_disarmed", False):
         return
+    stream_start = time.perf_counter()
     events = _ensure_backward_event_stream(trace)
+    _record_phase_timing(
+        trace,
+        "backward_grad_event:ensure_stream",
+        time.perf_counter() - stream_start,
+    )
+    pass_start = time.perf_counter()
     pass_index = _ensure_backward_pass_for_tensor_hook(trace)
+    _record_phase_timing(
+        trace,
+        "backward_grad_event:ensure_pass",
+        time.perf_counter() - pass_start,
+    )
+    payload_start = time.perf_counter()
     final_label = getattr(trace, "_raw_to_final_layer_labels", {}).get(tensor_label, tensor_label)
     with pause_logging():
         memory = int(grad.nelement() * grad.element_size())
         payload, transformed_payload = _build_grad_payloads(trace, grad, final_label)
+    _record_phase_timing(
+        trace,
+        "backward_grad_event:payload",
+        time.perf_counter() - payload_start,
+    )
+    append_start = time.perf_counter()
     events.append_backward(
         OpGradObserved(
             op_label=final_label,
@@ -204,6 +224,11 @@ def _emit_tensor_grad_event(trace: "Trace", grad: torch.Tensor, tensor_label: st
             timestamp=time.time(),
             seq=events.next_backward_seq(),
         )
+    )
+    _record_phase_timing(
+        trace,
+        "backward_grad_event:append",
+        time.perf_counter() - append_start,
     )
 
 

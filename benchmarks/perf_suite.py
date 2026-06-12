@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import re
 import subprocess
@@ -20,6 +21,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from benchmarks.perf_models import available_devices  # noqa: E402
+from benchmarks.perf_gate import (  # noqa: E402
+    compare_gate_payloads,
+    load_gate_json,
+    normalize_gate_payload,
+    write_comparison,
+)
 
 RESULT_JSON = REPO_ROOT / "benchmarks" / "perf_results_2026-05-14.json"
 RESULT_MD = REPO_ROOT / "benchmarks" / "perf_results_2026-05-14.md"
@@ -46,6 +53,11 @@ NO_SAVE_OPS = [
     "trace_no_save",
     "rerun_metadata_only",
     "fastlog_zero",
+]
+HALT_OPS = [
+    "fastlog_halt_25",
+    "fastlog_halt_50",
+    "fastlog_halt_75",
 ]
 PEER_OPS = [
     "peer_manual_hooks",
@@ -93,6 +105,9 @@ OP_LABELS = {
     "rerun_no_save": "Trace.rerun(model, x), metadata-only save scope (legacy alias)",
     "fastlog_module": "fastlog module-boundary metadata",
     "fastlog_zero": "fastlog zero-retention predicates",
+    "fastlog_halt_25": "fastlog halt at 25% op depth",
+    "fastlog_halt_50": "fastlog halt at 50% op depth",
+    "fastlog_halt_75": "fastlog halt at 75% op depth",
     "fastlog_op_10": "fastlog 10% op selectivity",
     "fastlog_op_50": "fastlog 50% op selectivity",
     "fastlog_all": "fastlog all-op/all-module",
@@ -126,6 +141,21 @@ def _version(package: str) -> str | None:
     try:
         return metadata.version(package)
     except metadata.PackageNotFoundError:
+        return None
+
+
+def _git_sha() -> str | None:
+    """Return the current short git SHA.
+
+    Returns
+    -------
+    str | None
+        Short git SHA when available.
+    """
+
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short=7", "HEAD"], text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
         return None
 
 
@@ -225,12 +255,21 @@ def _matrix(smoke: bool, addendum_no_save: bool = False) -> list[tuple[str, str,
     else:
         models = _benchmark_models(include_hooked=False)
         ops = CORE_OPS + NO_SAVE_OPS + PEER_OPS
+        halt_models = [
+            (model, device)
+            for model, device in _benchmark_models(include_hooked=True)
+            if model in {"resnet18", "gpt2_hf", "gpt2_hooked"}
+        ]
     cells: list[tuple[str, str, str, str]] = []
     for model, device in models:
         for op in ops:
             cells.append((op, model, device, "timing"))
             if op in HEADLINE_MEMORY_OPS or smoke:
                 cells.append((op, model, device, "memory"))
+    if not smoke and not addendum_no_save:
+        for model, device in halt_models:
+            for op in HALT_OPS:
+                cells.append((op, model, device, "timing"))
     if not smoke and not addendum_no_save:
         aux_models = [("tinynet", "cpu"), ("resnet18", "cpu")]
         if "cuda" in available_devices():
@@ -515,7 +554,7 @@ def _ratio(value: float | None, baseline: float | None) -> float | None:
         Ratio or ``None`` when unavailable.
     """
 
-    if value is None or baseline in {None, 0}:
+    if value is None or baseline is None or baseline == 0:
         return None
     return value / baseline
 
@@ -805,20 +844,22 @@ def _merge_addendum_payload(
     existing["environment"] = payload["environment"]
     notes = list(existing.get("post_run_notes") or [])
     notes.append(
-        f"No-save wrapper-only addendum run appended on 2026-05-14; "
+        f"No-save wrapper-only addendum run appended on {dt.date.today().isoformat()}; "
         f"addendum wall clock {_fmt(addendum_wall_clock_s, 1)} s."
     )
     existing["post_run_notes"] = notes
     return existing
 
 
-def _write_report(payload: dict[str, Any]) -> None:
+def _write_report(payload: dict[str, Any], path: Path = RESULT_MD) -> None:
     """Write the Markdown benchmark report.
 
     Parameters
     ----------
     payload:
         Results JSON payload.
+    path:
+        Markdown output path.
     """
 
     rows = payload["rows"]
@@ -826,7 +867,7 @@ def _write_report(payload: dict[str, Any]) -> None:
     for row in rows:
         grouped[(row["model"], row["device"])].append(row)
     lines = [
-        "# TorchLens Performance Benchmark Results - 2026-05-14",
+        f"# TorchLens Performance Benchmark Results - {payload.get('date', 'unknown')}",
         "",
         f"Run status: **{payload['status']}**. Wall clock: {_fmt(payload['wall_clock_s'], 1)} s.",
         "",
@@ -927,7 +968,7 @@ def _write_report(payload: dict[str, Any]) -> None:
             "",
         ]
     )
-    RESULT_MD.write_text("\n".join(lines))
+    path.write_text("\n".join(lines))
 
 
 def _hooked_smoke(timeout: int) -> dict[str, Any]:
@@ -975,6 +1016,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--samples", type=int, default=50)
     parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--out-json", type=Path, default=RESULT_JSON)
+    parser.add_argument("--out-md", type=Path, default=RESULT_MD)
+    parser.add_argument("--compare", type=Path, help="Committed baseline JSON to compare against")
+    parser.add_argument("--compare-out", type=Path, help="Optional comparison JSON output path")
     return parser.parse_args()
 
 
@@ -1023,41 +1068,55 @@ def main() -> None:
         _hooked_smoke(args.timeout) if not args.smoke and not args.addendum_no_save else None
     )
     addendum_wall_clock_s = time.perf_counter() - start
-    payload = {
-        "schema_version": 1,
-        "date": "2026-05-14",
-        "status": "ok"
-        if all(cell.get("status") in {"ok", "skipped"} for cell in cells)
-        else "partial",
-        "smoke": args.smoke,
-        "wall_clock_s": addendum_wall_clock_s,
-        "environment": {
-            "torch": torch.__version__,
-            "cuda_available": torch.cuda.is_available(),
-            "cuda": torch.version.cuda,
-            "versions": {
-                "psutil": _version("psutil"),
-                "transformer_lens": _version("transformer_lens"),
-                "nnsight": _version("nnsight"),
-                "baukit": _version("baukit"),
-                "captum": _version("captum"),
+    source_sha = _git_sha()
+    payload = normalize_gate_payload(
+        {
+            "schema_version": 1,
+            "date": dt.date.today().isoformat(),
+            "status": "ok"
+            if all(cell.get("status") in {"ok", "skipped"} for cell in cells)
+            else "partial",
+            "smoke": args.smoke,
+            "wall_clock_s": addendum_wall_clock_s,
+            "environment": {
+                "torch": torch.__version__,
+                "cuda_available": torch.cuda.is_available(),
+                "cuda": torch.version.cuda,
+                "torchlens_git_sha": source_sha,
+                "versions": {
+                    "psutil": _version("psutil"),
+                    "transformer_lens": _version("transformer_lens"),
+                    "nnsight": _version("nnsight"),
+                    "baukit": _version("baukit"),
+                    "captum": _version("captum"),
+                },
+                "install_notes": {
+                    "baukit": "pip install baukit failed: no matching distribution found",
+                    "transformer_lens": "installed separately after baukit failed the combined install",
+                },
             },
-            "install_notes": {
-                "baukit": "pip install baukit failed: no matching distribution found",
-                "transformer_lens": "installed separately after baukit failed the combined install",
-            },
-        },
-        "cells": cells,
-        "rows": rows,
-        "hooked_transformer_smoke": hooked_smoke,
-        "rerun_tolerance": rerun_tolerance,
-    }
+            "cells": cells,
+            "rows": rows,
+            "hooked_transformer_smoke": hooked_smoke,
+            "rerun_tolerance": rerun_tolerance,
+            "source_sha": source_sha,
+        }
+    )
     if args.addendum_no_save:
         payload = _merge_addendum_payload(payload, addendum_wall_clock_s)
-    RESULT_JSON.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    _write_report(payload)
-    print(f"Wrote {RESULT_JSON}")
-    print(f"Wrote {RESULT_MD}")
+    args.out_json.parent.mkdir(parents=True, exist_ok=True)
+    args.out_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    args.out_md.parent.mkdir(parents=True, exist_ok=True)
+    _write_report(payload, args.out_md)
+    print(f"Wrote {args.out_json}")
+    print(f"Wrote {args.out_md}")
+    if args.compare is not None:
+        comparison = compare_gate_payloads(load_gate_json(args.compare), payload)
+        if args.compare_out is not None:
+            write_comparison(args.compare_out, comparison)
+        print(json.dumps(comparison, indent=2, sort_keys=True))
+        if not comparison["passed"]:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

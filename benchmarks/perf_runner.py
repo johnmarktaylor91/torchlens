@@ -286,6 +286,31 @@ def _select_fastlog_names(model: torch.nn.Module, x: Any, fraction: float) -> se
     return selected
 
 
+def _fastlog_op_halt_index(model: torch.nn.Module, x: Any, fraction: float) -> int:
+    """Return the raw op index where a halt fraction should stop capture.
+
+    Parameters
+    ----------
+    model:
+        Benchmark model.
+    x:
+        Forward input.
+    fraction:
+        Fraction of op events to execute before halting.
+
+    Returns
+    -------
+    int
+        One-based raw op index used by the halt predicate.
+    """
+
+    import torchlens as tl
+
+    trace = tl.fastlog.dry_run(model, x, keep_op=lambda _ctx: True)
+    op_count = sum(1 for ctx in trace.contexts if getattr(ctx, "kind", None) == "op")
+    return max(1, int(op_count * fraction))
+
+
 def _saved_activation_count(trace: Any) -> int:
     """Return the number of ops with retained activation tensors.
 
@@ -435,6 +460,22 @@ def _operation(
             keep_module=lambda ctx: False,
             default_op=False,
             default_module=False,
+        )
+    if operation.startswith("fastlog_halt_"):
+        import torchlens as tl
+
+        _prime_target_model(model, x, device)
+        fraction = float(operation.rsplit("_", 1)[1]) / 100.0
+        halt_index = _fastlog_op_halt_index(model, x, fraction)
+        state["fastlog_halt_fraction"] = fraction
+        state["fastlog_halt_raw_index"] = halt_index
+        return lambda: tl.record(
+            model,
+            x,
+            save=lambda _ctx: False,
+            halt=lambda ctx: ctx.kind == "op"
+            and isinstance(ctx.raw_index, int)
+            and ctx.raw_index >= halt_index,
         )
     if operation == "fastlog_op_10":
         import torchlens as tl
