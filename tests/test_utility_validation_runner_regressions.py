@@ -27,6 +27,7 @@ import subprocess
 import sys
 import weakref
 from pathlib import Path
+from typing import Any, Literal
 
 import pytest
 import torch
@@ -276,30 +277,52 @@ def test_short_barcode_length_and_alphabet() -> None:
 _INITIAL_BUFFER = torch.tensor([3.0, -1.5])
 
 
+ValidationFailureSite = Literal["ground_truth", "traced", "never"]
+
+
 class _BufferMutatingFailModel(nn.Module):
     """Model that mutates a registered buffer in-place, then raises.
 
-    ``fail_on_call`` selects which forward invocation raises:
-
-    * ``1`` — the ground-truth (untraced) call inside ``validate_forward_pass``.
-    * ``2`` — the traced call (``trace`` replay capture run).
+    ``fail_during`` selects whether the deep-copied ground-truth run or the
+    original traced run raises inside ``validate_forward_pass``.
     """
 
     running_total: torch.Tensor
 
-    def __init__(self, fail_on_call: int) -> None:
+    def __init__(self, fail_during: ValidationFailureSite) -> None:
         """Register the mutable buffer and configure the failing call.
 
         Parameters
         ----------
-        fail_on_call:
-            1-based forward invocation index that raises.
+        fail_during:
+            Validation run site that raises.
         """
 
         super().__init__()
         self.register_buffer("running_total", _INITIAL_BUFFER.clone())
-        self.fail_on_call = fail_on_call
+        self.fail_during = fail_during
         self.num_calls = 0
+        self._is_ground_truth_copy = False
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "_BufferMutatingFailModel":
+        """Return a validation copy marked as the ground-truth runner.
+
+        Parameters
+        ----------
+        memo:
+            Deep-copy memo table.
+
+        Returns
+        -------
+        _BufferMutatingFailModel
+            Copy with cloned registered state and a ground-truth marker.
+        """
+
+        clone = type(self)(fail_during=self.fail_during)
+        memo[id(self)] = clone
+        clone.load_state_dict(self.state_dict())
+        clone._is_ground_truth_copy = True
+        return clone
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Mutate the buffer in-place; raise on the configured invocation.
@@ -319,30 +342,37 @@ class _BufferMutatingFailModel(nn.Module):
         # In-place mutation BEFORE the raise: if the state snapshot held live
         # references instead of clones, this would corrupt the snapshot too.
         self.running_total.add_(x.sum())
-        if self.num_calls >= self.fail_on_call:
+        should_fail_ground_truth = self.fail_during == "ground_truth" and self._is_ground_truth_copy
+        should_fail_traced = self.fail_during == "traced" and not self._is_ground_truth_copy
+        if should_fail_ground_truth or should_fail_traced:
             raise RuntimeError("intentional mid-pass failure")
         return x * 2.0
 
 
-@pytest.mark.parametrize("fail_on_call", [1, 2])
+@pytest.mark.parametrize(
+    ("failure_site", "expected_original_calls"),
+    [("ground_truth", 0), ("traced", 1)],
+)
 def test_validate_forward_pass_restores_buffer_bit_exact_on_exception(
-    fail_on_call: int,
+    failure_site: ValidationFailureSite,
+    expected_original_calls: int,
 ) -> None:
     """Registered buffer state is restored bit-exact when forward raises.
 
-    Parametrized over the failing invocation: the ground-truth run (1) and
-    the traced run (2). Both must leave the model exactly as it was before
+    Parametrized over the failing validation site: the deep-copied
+    ground-truth run and the original traced run. Both must leave the original
+    model exactly as it was before
     ``validate_forward_pass`` was called, with the original exception
     propagating.
     """
 
-    model = _BufferMutatingFailModel(fail_on_call=fail_on_call)
+    model = _BufferMutatingFailModel(fail_during=failure_site)
     pre_call_state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
 
     with pytest.raises(RuntimeError, match="intentional mid-pass failure"):
         validate_forward_pass(model, torch.ones(2), random_seed=1)
 
-    assert model.num_calls == fail_on_call
+    assert model.num_calls == expected_original_calls
     post_call_state = model.state_dict()
     assert set(post_call_state) == set(pre_call_state)
     for name, expected in pre_call_state.items():
@@ -363,7 +393,7 @@ def test_validate_forward_pass_snapshot_is_isolated_from_inplace_mutation() -> N
 
     from torchlens.user_funcs import _clone_state_dict_with_metadata
 
-    model = _BufferMutatingFailModel(fail_on_call=10)
+    model = _BufferMutatingFailModel(fail_during="never")
     snapshot = _clone_state_dict_with_metadata(model)
 
     model.running_total.add_(100.0)

@@ -884,7 +884,7 @@
       "intervention_replaced": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
-      "is_internal_source": true,
+      "is_internal_source": false,
       "is_module_output": false,
       "is_orphan": false,
       "label": "zeroslike_1_6:1",
