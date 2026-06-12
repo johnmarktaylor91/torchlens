@@ -979,6 +979,17 @@ Filed 2026-05-21 during rename sprint planning. Replaces the earlier narrower "V
 
 This consolidates the harmonized accessor rules. Audit every Accessor class and ensure ALL of them follow the uniform behavior locked during the rename sprint.
 
+**[ADDED 2026-06-12 from facets-followup riff] Resolved-access vs label-storage decision (package-wide).**
+Records store LABELS not object references (settled — serialization + GC/cycles + single-source-of-truth;
+references would reintroduce the exact cycles the perf sprint's GC work removes). But navigating a
+label-field means a `trace[label]` round-trip. Question for this audit: should label-storing fields
+(`call_children`, `Op.parents`/`children`, module submodules, etc.) get PARALLEL resolved-access
+properties that hide the round-trip (cheap O(1) via the existing `_source_trace` weakref) — decided
+UNIFORMLY across the data model, with the address-child-vs-call-child distinction made explicit and the
+parent-symmetry question settled deliberately. Do NOT bolt one-off resolved accessors (e.g. a `Module.child()`)
+onto individual classes — that's how inconsistency creeps in. Surfaced when the facets-followup wanted easier
+submodule access in recipes (rejected as a facets patch; routed here). See `.research/facets-followup-DECISIONS.md`.
+
 **Universal accessor rules (locked):**
 
 1. **Type-strict.** Every accessor ALWAYS returns its own class type. No "for convenience" overlaps (e.g., `trace.layers[op_label]` returns Layer, not Op — strips `:N` to find parent).
