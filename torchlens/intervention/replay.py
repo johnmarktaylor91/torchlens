@@ -166,7 +166,18 @@ def _run_differentiable_replay(
         New Trace containing the replayed outputs and fresh backward sidecar.
     """
 
-    replay_log = log.fork(name=_differentiable_replay_name(log))
+    source_cone = cone_of_effect(log, origins)
+    source_cone_labels = {site.layer_label for site in source_cone}
+    replay_log = log._fork_trace(
+        name=_differentiable_replay_name(log),
+        deep_copy_layer_labels=source_cone_labels,
+    )
+    log._record_operation(
+        "fork",
+        source_id=id(log),
+        name=replay_log.trace_label,
+        deep_copy_layer_labels=tuple(site.layer_label for site in source_cone),
+    )
     _reset_backward_projection(replay_log)
     _run_replay(
         replay_log,

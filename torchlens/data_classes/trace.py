@@ -2508,13 +2508,22 @@ class Trace(CapturedRun):
                 "Supplied model weight fingerprint does not match captured model weights."
             )
 
-    def _fork_trace(self, *, name: str | None) -> "Trace":
+    def _fork_trace(
+        self,
+        *,
+        name: str | None,
+        deep_copy_layer_labels: Set[str] | None = None,
+    ) -> "Trace":
         """Build a forked Trace with policy-driven field handling.
 
         Parameters
         ----------
         name:
             Optional fork name.
+        deep_copy_layer_labels:
+            Optional layer labels that require full Op field copies. When
+            provided, other Op shells are still forked but their fields use a
+            shallow copy to avoid deep-copying untouched replay context.
 
         Returns
         -------
@@ -2539,7 +2548,10 @@ class Trace(CapturedRun):
         fork._warned_mutate_in_place = False
         fork._warned_direct_write = False
 
-        layer_map = fork._fork_layer_ops_from(self)
+        layer_map = fork._fork_layer_ops_from(
+            self,
+            deep_copy_layer_labels=deep_copy_layer_labels,
+        )
         fork._rebuild_fork_layer_collections(self, layer_map)
         fork._rebind_fork_owner_refs()
         _state._register_log(fork)
@@ -2579,13 +2591,21 @@ class Trace(CapturedRun):
             return None
         return self._copy_fork_value(value)
 
-    def _fork_layer_ops_from(self, parent: "Trace") -> dict[int, Op]:
+    def _fork_layer_ops_from(
+        self,
+        parent: "Trace",
+        *,
+        deep_copy_layer_labels: Set[str] | None = None,
+    ) -> dict[int, Op]:
         """Fork every Op and return an old-object-id map.
 
         Parameters
         ----------
         parent:
             Parent log whose layer ops are being forked.
+        deep_copy_layer_labels:
+            Optional layer labels that require normal fork policy copies. Ops
+            outside this set receive distinct shells with shallow-copied fields.
 
         Returns
         -------
@@ -2597,9 +2617,16 @@ class Trace(CapturedRun):
         fork_equivalent_ops = self.op_equivalence_classes
         for parent_pass in parent.layer_list:
             fork_pass = object.__new__(Op)
+            deep_copy_fields = (
+                deep_copy_layer_labels is None or parent_pass.layer_label in deep_copy_layer_labels
+            )
             fork_pass.__dict__.update(
                 {
-                    field_name: self._fork_layer_pass_field(field_name, value)
+                    field_name: self._fork_layer_pass_field(
+                        field_name,
+                        value,
+                        deep_copy=deep_copy_fields,
+                    )
                     for field_name, value in parent_pass.__dict__.items()
                 }
             )
@@ -2611,7 +2638,7 @@ class Trace(CapturedRun):
             layer_map[id(parent_pass)] = fork_pass
         return layer_map
 
-    def _fork_layer_pass_field(self, field_name: str, value: Any) -> Any:
+    def _fork_layer_pass_field(self, field_name: str, value: Any, *, deep_copy: bool = True) -> Any:
         """Apply the Op fork policy to a single field.
 
         Parameters
@@ -2620,6 +2647,10 @@ class Trace(CapturedRun):
             Op field being copied.
         value:
             Current field value.
+        deep_copy:
+            Whether to honor the normal copy policy. False shares field values
+            for untouched differentiable-replay ops while still creating a
+            distinct Op shell.
 
         Returns
         -------
@@ -2629,6 +2660,8 @@ class Trace(CapturedRun):
 
         if field_name == "_source_trace_ref":
             return None
+        if not deep_copy:
+            return self._copy_shallow_fork_value(value)
         policy = Op.FIELD_FORK_POLICY.get(field_name, self._default_fork_policy(value))
         if policy is ForkFieldPolicy.FORK_SHARE:
             return value
@@ -2724,6 +2757,30 @@ class Trace(CapturedRun):
             return copy.deepcopy(value)
         except Exception:
             return copy.copy(value)
+
+    @staticmethod
+    def _copy_shallow_fork_value(value: Any) -> Any:
+        """Shallow-copy a fork field while preserving tensor and callable identity.
+
+        Parameters
+        ----------
+        value:
+            Value to copy.
+
+        Returns
+        -------
+        Any
+            Lightweight fork-safe copy for replay-unaffected Op fields.
+        """
+
+        if isinstance(value, torch.Tensor) or callable(value):
+            return value
+        if isinstance(value, (str, bytes, int, float, bool, type(None), tuple)):
+            return value
+        try:
+            return copy.copy(value)
+        except Exception:
+            return value
 
     @staticmethod
     def _default_fork_policy(value: Any) -> ForkFieldPolicy:

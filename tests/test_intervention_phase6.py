@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import importlib
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import torch
@@ -259,11 +259,54 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
     assert replayed.replay_frontier[replay_relu.layer_label].is_leaf
     assert replayed.replay_frontier[replay_relu.layer_label].requires_grad
     assert torch.equal(replay_output, reference_output.detach())
-    assert torch.equal(replay_relu.grad, reference_patch.grad)
-    assert torch.equal(replayed.replay_frontier[replay_relu.layer_label].grad, reference_patch.grad)
+    assert reference_patch.grad is not None
+    assert replay_relu.grad is not None
+    frontier_grad = replayed.replay_frontier[replay_relu.layer_label].grad
+    assert frontier_grad is not None
+    replay_relu_grad = replay_relu.grad
+    reference_grad = reference_patch.grad
+    assert replay_relu_grad is not None
+    assert reference_grad is not None
+    assert torch.equal(replay_relu_grad, reference_grad)
+    assert torch.equal(frontier_grad, reference_grad)
     assert clean_x.grad is None
     assert corrupt_x.grad is None
-    assert replayed.last_run["differentiable"] is True
+    last_run = cast(dict[str, Any], replayed.last_run)
+    assert last_run["differentiable"] is True
+
+
+def test_differentiable_replay_deep_copies_only_replay_cone_ops() -> None:
+    """Differentiable replay uses a shallow untouched-op fork."""
+
+    x = torch.tensor([-1.0, 0.5, 2.0], requires_grad=True)
+    log = tl.trace(
+        ReplayPatchModel(),
+        x,
+        layers_to_save="all",
+        save_grads="all",
+        intervention_ready=True,
+        backward_ready=True,
+    )
+
+    replayed = log.replay(hooks={tl.func("relu"): _identity_hook}, differentiable=True)
+
+    fork_record = next(
+        record
+        for record in reversed(log.state_history)
+        if isinstance(record, dict) and record.get("op") == "fork"
+    )
+    fork_payload = cast(dict[str, Any], fork_record)
+    last_run = cast(dict[str, Any], replayed.last_run)
+    deep_copy_labels = set(fork_payload["deep_copy_layer_labels"])
+    replay_cone_labels = set(last_run["cone"])
+    all_labels = {site.layer_label for site in log.layer_list}
+    outside_cone_label = next(iter(all_labels - replay_cone_labels))
+
+    assert deep_copy_labels == replay_cone_labels
+    assert deep_copy_labels < all_labels
+    assert replayed[outside_cone_label] is not log[outside_cone_label]
+    assert replayed[outside_cone_label].source_trace is replayed
+    assert replayed[outside_cone_label].interventions is not log[outside_cone_label].interventions
 
 
 def test_replay_failure_rolls_back_partial_out_updates(
