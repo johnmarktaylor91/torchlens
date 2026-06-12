@@ -61,6 +61,7 @@ from ...fastlog._halt import HaltSignal
 from ...quantities import Bytes
 from ...utils.introspection import (
     _get_code_context,
+    _get_tensors_and_params_from_obj,
     get_vars_of_type_from_obj,
 )
 from ...utils.display import _timed_phase
@@ -1862,10 +1863,9 @@ def _extract_arg_tensors_and_params(
     if spec is not None:
         return extract_tensors_and_params(spec, args, kwargs)  # type: ignore[arg-type]
 
-    # Tier 3 fallback: BFS crawl once, then cache for subsequent calls
+    # Tier 3 fallback: BFS crawl once, then cache for subsequent calls.
     all_args = list(args) + list(kwargs.values())
-    arg_tensors = get_vars_of_type_from_obj(all_args, torch.Tensor, [torch.nn.Parameter])
-    arg_parameters = get_vars_of_type_from_obj(all_args, torch.nn.parameter.Parameter)
+    arg_tensors, arg_parameters = _get_tensors_and_params_from_obj(all_args)
     _cache_dynamic_spec(normalized_name, args, kwargs, arg_tensors, arg_parameters)
     return arg_tensors, arg_parameters
 

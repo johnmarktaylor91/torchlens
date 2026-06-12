@@ -22,6 +22,8 @@ import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
+from torchlens import _state
+from torchlens.backends.torch.ops import _extract_arg_tensors_and_params
 from torchlens.capture.arg_positions import (
     FUNC_ARG_SPECS,
     _normalize_func_name,
@@ -169,6 +171,27 @@ def test_kwarg_parameters_routed_to_params() -> None:
     tensors, params = extract_tensors_and_params(spec, (torch.randn(2, 3),), {"weight": weight})
     assert len(tensors) == 1
     assert params == [weight]
+
+
+def test_unknown_arg_fallback_partitions_tensors_and_parameters() -> None:
+    """Unknown function fallback finds tensors and parameters in one partition."""
+
+    normalized_name = "torchlenslocalunknownfallback"
+    _state._dynamic_arg_specs.pop(normalized_name, None)
+    x = torch.randn(2, 3)
+    y = torch.randn(2, 3)
+    weight = nn.Parameter(torch.randn(2, 3))
+
+    tensors, params = _extract_arg_tensors_and_params(
+        normalized_name,
+        ({"left": [x, weight], "duplicate": x},),
+        {"right": y, "weight": weight},
+    )
+
+    assert tensors == [y, x]
+    assert params == [weight]
+    assert normalized_name in _state._dynamic_arg_specs
+    _state._dynamic_arg_specs.pop(normalized_name, None)
 
 
 # ---------------------------------------------------------------------------

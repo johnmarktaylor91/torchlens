@@ -211,6 +211,97 @@ def get_vars_of_type_from_obj(
         return found_items
 
 
+def _get_tensors_and_params_from_obj(
+    obj: Any,
+    search_depth: int = 3,
+    allow_repeats: bool = False,
+) -> tuple[list[torch.Tensor], list[torch.nn.Parameter]]:
+    """Find tensors and parameters in one breadth-first traversal.
+
+    Parameters
+    ----------
+    obj:
+        Root object to search.
+    search_depth:
+        Maximum nesting levels to explore before stopping.
+    allow_repeats:
+        If False, deduplicate by ``id()`` so each tensor object is returned at
+        most once.
+
+    Returns
+    -------
+    tuple[list[torch.Tensor], list[torch.nn.Parameter]]
+        Tensors excluding ``nn.Parameter`` instances, and parameters in a
+        separate list.
+    """
+
+    this_stack: list[_SearchEntry] = [(obj, "", [])]
+    tensors: list[torch.Tensor] = []
+    params: list[torch.nn.Parameter] = []
+    found_ids: set[int] = set()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for _ in range(search_depth):
+            this_stack = _search_stack_for_tensors_and_params(
+                this_stack,
+                tensors,
+                params,
+                found_ids,
+                allow_repeats,
+            )
+    return tensors, params
+
+
+def _search_stack_for_tensors_and_params(
+    current_stack: list[_SearchEntry],
+    tensors: list[torch.Tensor],
+    params: list[torch.nn.Parameter],
+    found_ids: set[int],
+    allow_repeats: bool,
+) -> list[_SearchEntry]:
+    """Process one BFS level while partitioning tensors from parameters.
+
+    Parameters
+    ----------
+    current_stack:
+        Items at the current depth level.
+    tensors:
+        Accumulator for tensor matches excluding ``nn.Parameter``.
+    params:
+        Accumulator for parameter matches.
+    found_ids:
+        Set of object IDs already collected.
+    allow_repeats:
+        If True, skip ``id()``-based deduplication.
+
+    Returns
+    -------
+    list[_SearchEntry]
+        Items to process in the next BFS depth level.
+    """
+
+    next_stack: list[_SearchEntry] = []
+    if len(current_stack) == 0:
+        return current_stack
+    while len(current_stack) > 0:
+        item, address, address_full = current_stack.pop(0)
+        item_class = type(item)
+        if (id(item) in found_ids) and not allow_repeats:
+            continue
+        if issubclass(item_class, torch.nn.Parameter):
+            params.append(item)
+            found_ids.add(id(item))
+            continue
+        if issubclass(item_class, torch.Tensor):
+            tensors.append(item)
+            found_ids.add(id(item))
+            continue
+        if item_class in [str, int, float, bool, np.ndarray]:
+            continue
+        _extend_search_stack_from_item(item, address, address_full, next_stack)
+    return next_stack
+
+
 def _search_stack_for_vars_of_type(
     current_stack: list[_SearchEntry],
     which_type: type[Any],
