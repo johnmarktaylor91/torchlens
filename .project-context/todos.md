@@ -235,13 +235,34 @@ Original 2026-05-27 status (historical): facets v8 shipped `3ada85d`+`9406863`; 
 
 6. **Notebook gotcha worth documenting:** [VERIFIED LIVE 2026-06-11 — `facets.py:902-914` `recipe_source` property returns `tuple[str, ...]` when multiple recipes match; type annotation confirms `str | tuple[str, ...] | None`.] Users registering recipes for module classes that already have a built-in recipe (e.g., adding extra facets to `DistilBertSdpaAttention`) will see `recipe_source` become a tuple. That's correct multi-recipe-merge behavior, but worth showing in the docs.
 
-7. **[DESIGN, raised 2026-06-02] Integrated treatment of slices / facets / outs / multi-output.** JMT takeaway: these are currently three+ disjoint concepts that overlap at the edges and should be presented as ONE coherent addressing model rather than bolted-on siblings. Verified state as of 2026-06-02:
+7. **[ANSWERED 2026-06-12 — see `.research/facets-followup-DECISIONS.md` "Item 7"]** Resolution: a raw
+   positional slice is NOT a distinct concept — it's an **anonymous facet** (FacetSpec with
+   `recipe_id=None`; the getitem/select/reshape primitives + capability fail-close + patching all
+   already shipped, so slice-level intervention write-back EXISTS via the facet machinery — the
+   "facets are read-only" claim below is stale). Net-new work is just a CONSTRUCTOR: an
+   indexing-syntax minting accessor (`op.sub[...]`-style, name decided in the naming pass; avoid
+   `.at`) + selector acceptance; folded into the naming/accessor pass, day-scale. `op.outs` as a
+   fourth concept is DEAD. The one genuinely distinct piece — capture-time partial saves ("save
+   only this slice", a storage policy with replay-validation teeth) — is filed separately below as
+   "Partial-payload save policy". Original 2026-06-02 analysis kept for history:
    - `facets` (v8, SHIPPED) already covers **semantic, recipe-driven** named views, and the built-in attention recipes ALREADY slice fused QKV internally (`recipes/attention.py:134` GPT-2: `c_attn_out.split(...)` -> `q`/`k`/`v` reshaped into heads; GQA handled). So `module.facets.q/k/v` is the 80% mech-interp read case and it's DONE.
    - `multi_output_*` / `container_path` (SHIPPED) covers ops returning a **container of separate tensors** (split, max->values+indices, RNN out+hidden). Structural.
    - The proposed `op.outs` (2.1, NOT BUILT) was partly justified by "named QKV read access" -- **that justification is now redundant with facets.** What `op.outs` genuinely adds beyond facets: (a) recipe-free **raw/positional tensor-slice addressing** (`op.outs[:, :, 768:1536]`) that works with no registered recipe, and (b) **slice-level INTERVENTION write-back** -- patch a sub-region of a fused tensor and have it flow forward. Facets are a read-only derived view and structurally cannot do (b).
    - **Action:** before building 2.1, design a UNIFIED slice/facet/outs/multi-output addressing surface (one mental model: "how do I name and access a sub-piece of what an op/module produced, for both read AND intervention"), rather than shipping `op.outs` as a fourth parallel concept. Re-scope 2.1 down to the genuinely net-new parts (raw-slice addressing + slice intervention).
 
 **Recommendation:** items 1 and 2 are worth resolving before 2.0 launch since they affect contract semantics. Items 3-6 are documentation / polish that can ride a later cleanup. Estimated scope: 1 day for 1+2 (small surface, clear options), half day for 3-6 (mostly docs + a few small ergonomic additions).
+**[2026-06-12 status: items 1, 2, and 7 now have LOCKED/ANSWERED resolutions in `.research/facets-followup-DECISIONS.md` (A1 three-way keys() contract; A2 docs-only; item 7 anonymous facets). That file is authoritative; the option lists above are historical.]**
+
+### Partial-payload save policy — capture only a slice of an activation (filed 2026-06-12, spun out of facets item 7)
+
+The one piece of "raw slice" that is NOT just an anonymous facet: saving only `out[:, 0]`-style
+sub-regions at CAPTURE time so the whole tensor never enters the payload (memory win for big
+activations, e.g. one head's slab of fused QKV, CLS-token-only saves). This is a storage policy,
+not a view. Real design teeth: (1) partial saves cannot feed forward-replay validation — needs a
+narrow, correct-by-design carve-out, NOT a tripwire weakening; (2) recipe facets whose home was
+partially captured must hit the A1 `MissingFacet` "recapture saving X" path; (3) interacts with
+lookback payload policies and `save_mode`. Build only on real demand; spec it standalone — do not
+bolt onto the facets-followup task.
 
 ### Harmonize scoped accessors to 0-based integer indexing + short/long label form support
 
