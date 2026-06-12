@@ -40,7 +40,7 @@ post-benchmark round) + torch parity goldens once built.
 
 ## M0.1a artifact checklist
 - [x] 1. Invariant contract: `.research/backend-substrate/artifact-1-invariant-contract.md`
-- [ ] 2. Public-surface + kwarg + backward-surface matrices
+- [x] 2. Public-surface + kwarg + backward-surface matrices: `.research/backend-substrate/artifact-2-public-surface-kwarg-backward-matrices.md`
 - [ ] 3. Serialization contract with three version axes
 - [ ] 4. BackendSpec registry contract as executable migration map
 - [ ] 5. Docs/glossary change list
@@ -50,3 +50,4 @@ post-benchmark round) + torch parity goldens once built.
 |---|---|---|---|---|---|
 | 1 | tinygrad | S0.G discovery | this commit | PASS: pinned `tinygrad==0.13.0`; added runnable probes for interception/realization, mutation identity, autograd lifecycle, TinyJit/GC, and initial payload non-interference. | Continue S0.G with deeper scheduler/JIT capture, grad-payload, stale-lineage, and device-copy probes. |
 | 1 | M0.1a | artifact 1 - invariant contract | this commit | Wrote docs-only backend invariant contract; no tests/ruff per benchmark constraint. | artifact 2 - public-surface + kwarg + backward-surface matrices |
+| 2 | M0.1a | artifact 2 - public-surface + kwarg + backward-surface matrices | this commit | Wrote docs-only public API, trace kwarg, and backward-surface executable matrices; no tests/ruff per benchmark constraint. | artifact 3 - serialization contract with three version axes |
