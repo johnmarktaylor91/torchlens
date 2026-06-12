@@ -43,7 +43,7 @@ post-benchmark round) + torch parity goldens once built.
 - [x] 2. Public-surface + kwarg + backward-surface matrices: `.research/backend-substrate/artifact-2-public-surface-kwarg-backward-matrices.md`
 - [x] 3. Serialization contract with three version axes: `.research/backend-substrate/artifact-3-serialization-contract.md`
 - [x] 4. BackendSpec registry contract as executable migration map: `.research/backend-substrate/artifact-4-backendspec-registry-migration-map.md`
-- [ ] 5. Docs/glossary change list
+- [x] 5. Docs/glossary change list: `.research/backend-substrate/artifact-5-docs-glossary-change-list.md`
 
 ## Iteration log
 | Round | Lane | Phase | Commit | Result | Next |
@@ -55,3 +55,4 @@ post-benchmark round) + torch parity goldens once built.
 | 2 | tinygrad | S0.G discovery | this commit | PASS: added scheduler/JIT, explicit-realize, alias-mutation, explicit-gradient, and realized payload snapshot probes under `tinygrad==0.13.0`; spike ruff passed. | Continue S0.G with TinyJit captured-execution payload reads, safe device variation, and final source-of-truth/payload decisions. |
 | 4 | M0.1a | artifact 4 - BackendSpec registry executable migration map | this commit | Wrote docs-only BackendSpec registry contract and migration map for backend literals, MLX branches, validation dispatch, serialization, and public accessors; no tests/ruff per benchmark constraint. | artifact 5 - docs/glossary change list |
 | 3 | tinygrad | S0.G discovery | this commit | PASS: added captured TinyJit runner/payload probes under `tinygrad==0.13.0`; finalized UOp pre-realization source-of-truth lean and backend-conditional payload capability decision; spike ruff passed. | Optional final S0.G round only for safe non-default device coverage and import-time capability probe text. |
+| 5 | M0.1a | artifact 5 - docs/glossary change list | this commit | Wrote docs-only glossary/docs/notebook merge-gate checklist for backend public surfaces; no tests/ruff per benchmark constraint. | all 5 done; next per plan is S0.J-slim / impact-gate preparation |
