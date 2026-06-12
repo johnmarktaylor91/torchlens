@@ -1,7 +1,9 @@
 # Migrating from Captum
 
 Functional migration pattern: Captum layer-activation collection maps to a TorchLens capture and
-module/label lookup. Keep Captum for attribution algorithms such as Integrated Gradients.
+module/label lookup. Keep Captum when you need its mature attribution algorithms, tuned defaults,
+and paper-validated implementation details. TorchLens exposes the activation and gradient substrate
+those methods need, but it does not yet package Captum's attribution-method catalog.
 
 | Captum construct | TorchLens equivalent |
 | --- | --- |

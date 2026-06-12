@@ -12,3 +12,11 @@
 | Compare several variants | `tl.bundle({...})` | Equivalent comparison container. |
 | Intervene on fused kernel internals | Manual unfused PyTorch code | Opaque fused internals are hidden. |
 | Pure JAX workflows | No equivalent | TorchLens is PyTorch-only. |
+
+## Honest concession
+
+Penzai is the better fit for functional JAX model surgery, named axes, and workflows that want the
+model tree itself to be the edited artifact. TorchLens deliberately stays with PyTorch eager
+execution: it captures the run, stores op-level provenance, and applies interventions to traces or
+live PyTorch values. That makes it broad across PyTorch architectures, but it is not a JAX tree
+rewriting system.

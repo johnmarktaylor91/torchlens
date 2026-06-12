@@ -13,3 +13,11 @@
 | Attention-head Q/K/V internals | Use a manual attention implementation with visible PyTorch ops | Fused SDPA/FlashAttention internals are not visible. |
 | Accumulate many prompt variants | `tl.bundle({...})` plus `metric`, `joint_metric`, `node` | Equivalent comparison container; v1.x TorchLens had TraceBundle, v2 uses Bundle. |
 | Built-in transformer component naming | No exact equivalent | Deferred to v2.x naming polish; use discovery and exact labels today. |
+
+## Honest concession
+
+TransformerLens remains more ergonomic when your workflow already thinks in names such as
+`blocks.5.attn.hook_pattern`. TorchLens can discover and target Q/K/V-like PyTorch sites, and exact
+labels are reproducible after discovery, but it does not ship TransformerLens's transformer-native
+component vocabulary. Choose TorchLens when you need the broader PyTorch op DAG or architecture-
+agnostic capture; choose TransformerLens when its model family and hook vocabulary are the point.

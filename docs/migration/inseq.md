@@ -12,3 +12,10 @@
 | Visual attribution reports | TorchLens graph visualization, not token attribution reports | Different output. |
 | Fused attention internals | Manual unfused implementation | Hidden internals are not visible. |
 | HuggingFace convenience wrappers | No direct public wrapper | Deferred to v2.x. |
+
+## Honest concession
+
+Inseq is the better fit when the deliverable is token-level attribution for generation with built-in
+methods and reporting. TorchLens can capture visible PyTorch generation loops, compare clean and
+corrupted runs, and expose gradients and activations for custom analysis, but it does not provide
+Inseq's attribution UI or method catalog.

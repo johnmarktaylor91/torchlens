@@ -49,6 +49,21 @@ If you hit a case we haven't listed, please
 
 ## Details
 
+## Where other tools are the better fit
+
+TorchLens is a capture and provenance substrate, not a replacement for every specialized
+interpretability package:
+
+- Use TransformerLens when the model is already one of its supported transformer families and the
+  workflow depends on its familiar hook names and transformer-specific conveniences.
+- Use Captum or Inseq when the main requirement is a mature, paper-validated attribution method
+  with tuned defaults. TorchLens exposes activations, gradients, modules, and intervention hooks,
+  but it does not package the full attribution-method catalog.
+- Use Penzai for functional JAX model surgery or named-axis workflows. TorchLens stays in PyTorch
+  eager mode and mutates captured traces or live values, not JAX model trees.
+- Use `torch.profiler` for kernel-level performance work. TorchLens records operation provenance,
+  graph topology, activations, gradients, memory, and approximate FLOPs; it is not a profiler UI.
+
 ### `torch.compile` — not supported (raises)
 
 ``torch.compile(model)`` returns a ``torch._dynamo.eval_frame.OptimizedModule``
