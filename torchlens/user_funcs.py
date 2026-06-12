@@ -1381,6 +1381,7 @@ def trace(
     module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
     stop_after: Any | None | MissingType = MISSING,
     raise_on_nan: bool | MissingType = MISSING,
+    profile: bool | MissingType = MISSING,
     recipes: (
         list[Callable[[Any], dict[str, Any]]]
         | tuple[Callable[[Any], dict[str, Any]], ...]
@@ -1520,6 +1521,8 @@ def trace(
         module_filter: Optional predicate receiving each op log. Returning ``False`` keeps
             metadata but skips out saving for that op.
         stop_after: Experimental stop-early site. Unsupported for ``trace``.
+        profile: If True, explicitly marks the returned trace as profiled. Phase timings are
+            always populated on ``trace._phase_timings``.
         recipes: Per-trace additive facet recipes captured into the immutable
             registry snapshot for the returned trace.
 
@@ -1589,6 +1592,7 @@ def trace(
             "module_filter": module_filter,
             "stop_after": stop_after,
             "raise_on_nan": raise_on_nan,
+            "profile": profile,
             "recipes": recipes,
         }
         for detector in autoroute.input.iter_by_priority():
@@ -1701,6 +1705,7 @@ def trace(
         stop_after=stop_after,
         raise_on_nan=raise_on_nan,
     )
+    profile_enabled = False if isinstance(profile, MissingType) else bool(profile)
     raw_input = None
     input_transform = capture_options.transform
     if input_transform is not None:
@@ -1965,6 +1970,7 @@ def trace(
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
         )
+        trace.profile_enabled = profile_enabled
         trace.save_grads = save_grads_policy
     else:
         # --- TWO-PASS path ---
@@ -2031,6 +2037,7 @@ def trace(
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
         )
+        trace.profile_enabled = profile_enabled
         # Pass 2 (fast): Now that layer labels exist, resolve the user's requested
         # layers and replay the model, saving only the matching outs.
         next(capture_progress, None)

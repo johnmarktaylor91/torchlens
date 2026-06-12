@@ -52,7 +52,7 @@ from ..utils.tensor_utils import _is_cuda_available
 from ..backends.torch.sources import log_source_tensor
 from ..backends.torch.ops import _walk_output_tensors_with_paths
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
-from ..utils.display import _vprint, _vtimed
+from ..utils.display import _timed_phase, _vprint, _vtimed
 
 _TORCH_BACKEND: CaptureBackend = TorchBackend()
 
@@ -566,11 +566,12 @@ def run_and_log_inputs_through_model(
 
         self.capture_events = CaptureEvents()
 
-        # One-time model preparation + incremental sys.modules crawl
-        backend.prepare_model_once(model)
+        with _timed_phase(self, "ctx_build:model_prepare"):
+            # One-time model preparation + incremental sys.modules crawl
+            backend.prepare_model_once(model)
 
-        # Per-session model preparation
-        backend.prepare_model_session(self, model)
+            # Per-session model preparation
+            backend.prepare_model_session(self, model)
         self.setup_duration = Duration(time.time() - self.capture_start_time)
         _vprint(self, f"Model prepared ({self.setup_duration:.2f s})")
 
@@ -652,7 +653,8 @@ def run_and_log_inputs_through_model(
                 finally:
                     state.append_context(enter_ctx)
                 try:
-                    outputs = model(*input_args, **input_kwargs)
+                    with _timed_phase(self, "dispatch:forward_model"):
+                        outputs = model(*input_args, **input_kwargs)
                 finally:
                     state.event_index += 1
                     exit_ctx = _build_record_context(
@@ -695,7 +697,8 @@ def run_and_log_inputs_through_model(
                         state.append_context(exit_ctx)
                         _mstack.pop_frame(state.module_stack, root_frame)
             else:
-                outputs = model(*input_args, **input_kwargs)
+                with _timed_phase(self, "dispatch:forward_model"):
+                    outputs = model(*input_args, **input_kwargs)
 
         from ..backends.torch.buffer_writes import reconcile_buffer_writes
 

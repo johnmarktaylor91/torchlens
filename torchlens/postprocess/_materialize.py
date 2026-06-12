@@ -28,6 +28,7 @@ from ..data_classes._module_role_hints import (
 )
 from ..data_classes.trace import _init_module_hierarchy_data
 from ..utils import get_vars_of_type_from_obj, safe_copy
+from ..utils.display import _timed_phase
 
 if TYPE_CHECKING:
     from torchlens.data_classes.trace import Trace
@@ -184,7 +185,8 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
             input_io_roles.get(event.label_raw),
             output_versions.get(event.label_raw, {}),
         )
-        op_log = materialize_log_from_fields(fields_dict)
+        with _timed_phase(trace, "object_construction:op"):
+            op_log = materialize_log_from_fields(fields_dict)
         _register_raw_log(trace, event, op_log)
     _drop_missing_buffer_sources(trace)
 

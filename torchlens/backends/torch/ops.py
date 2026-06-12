@@ -62,6 +62,7 @@ from ...utils.introspection import (
     _get_code_context,
     get_vars_of_type_from_obj,
 )
+from ...utils.display import _timed_phase
 from ...utils.tensor_utils import (
     get_memory_amount,
     is_functorch_wrapped_tensor,
@@ -1631,35 +1632,36 @@ def log_function_output_tensors_predicate(
         _label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
         set_tensor_label(out, _label_raw)
         module_frame = state.module_stack[-1] if state.module_stack else None
-        ctx = build_op_record_context(
-            kind="op",
-            label=_label_raw,
-            raw_label=_label_raw,
-            raw_index=raw_index,
-            layer_type=layer_type,
-            type_index=type_index,
-            func_name=func_name,
-            parent_labels=parent_labels,
-            tensor=out,
-            output_index=output_index,
-            is_bottom_level_func=is_bottom_level_func,
-            module_stack=state.module_stack,
-            history=tuple(state.history),
-            op_counts=state.op_counts,
-            pass_index=state.pass_index,
-            event_index=state.event_index,
-            step_index=state.step_index,
-            capture_start_time=self.capture_start_time,
-            include_source_events=state.options.include_source_events,
-            sample_id=state.sample_id,
-            address=module_frame.address if module_frame else None,
-            module_type=module_frame.module_type if module_frame else None,
-            module_pass_index=module_frame.pass_index if module_frame else None,
-            is_transform=bool(getattr(func, "__tl_is_transform_boundary__", False))
-            or func_name in TRANSFORM_FUNC_NAMES,
-            transform_kind=getattr(func, "__tl_transform_kind__", None)
-            or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
-        )
+        with _timed_phase(self, "ctx_build:record_context"):
+            ctx = build_op_record_context(
+                kind="op",
+                label=_label_raw,
+                raw_label=_label_raw,
+                raw_index=raw_index,
+                layer_type=layer_type,
+                type_index=type_index,
+                func_name=func_name,
+                parent_labels=parent_labels,
+                tensor=out,
+                output_index=output_index,
+                is_bottom_level_func=is_bottom_level_func,
+                module_stack=state.module_stack,
+                history=tuple(state.history),
+                op_counts=state.op_counts,
+                pass_index=state.pass_index,
+                event_index=state.event_index,
+                step_index=state.step_index,
+                capture_start_time=self.capture_start_time,
+                include_source_events=state.options.include_source_events,
+                sample_id=state.sample_id,
+                address=module_frame.address if module_frame else None,
+                module_type=module_frame.module_type if module_frame else None,
+                module_pass_index=module_frame.pass_index if module_frame else None,
+                is_transform=bool(getattr(func, "__tl_is_transform_boundary__", False))
+                or func_name in TRANSFORM_FUNC_NAMES,
+                transform_kind=getattr(func, "__tl_transform_kind__", None)
+                or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
+            )
         try:
             if out.grad_fn is not None:
                 state.grad_fn_to_context[out.grad_fn] = ctx
@@ -2114,16 +2116,22 @@ def log_function_output_tensors_exhaustive(
         is_bottom_level_func: True if this function was not called by another
             decorated function (i.e., it's a leaf in the decoration nesting).
     """
-    fields_dict, parent_layer_entries, arg_tensors, parent_param_ops = _build_shared_fields_dict(
-        self,
-        func,
-        func_name,
-        args,
-        kwargs,
-        out_orig,
-        exec_ctx,
-        func_call_id,
-    )
+    with _timed_phase(self, "ctx_build:shared_fields"):
+        (
+            fields_dict,
+            parent_layer_entries,
+            arg_tensors,
+            parent_param_ops,
+        ) = _build_shared_fields_dict(
+            self,
+            func,
+            func_name,
+            args,
+            kwargs,
+            out_orig,
+            exec_ctx,
+            func_call_id,
+        )
 
     out_iter = list(_walk_output_tensors_with_paths(out_orig))
     if out_iter:
@@ -3567,16 +3575,25 @@ def _make_layer_log_entry(
         save_this_activation = predicate_spec.save_out
     if keep_by_predicate and save_this_activation:
         if predicate_spec is None or predicate_ctx is None:
-            _save_activation_fields(self, fields_dict, t, t_args, t_kwargs, activation_transform)
+            with _timed_phase(self, "clone_save:activation_fields"):
+                _save_activation_fields(
+                    self,
+                    fields_dict,
+                    t,
+                    t_args,
+                    t_kwargs,
+                    activation_transform,
+                )
         else:
-            _save_predicate_activation_fields(
-                self,
-                fields_dict,
-                t,
-                predicate_spec,
-                predicate_ctx,
-                activation_transform,
-            )
+            with _timed_phase(self, "clone_save:activation_fields"):
+                _save_predicate_activation_fields(
+                    self,
+                    fields_dict,
+                    t,
+                    predicate_spec,
+                    predicate_ctx,
+                    activation_transform,
+                )
     op_event = _op_event_from_log(self, fields_dict, t, fire_results)
     self.capture_events.append(op_event)
     if op_event.grad_fn_handle is not None:

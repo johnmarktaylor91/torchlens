@@ -19,6 +19,49 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 
 
+def _record_phase_timing(trace: "Trace", bucket: str, elapsed_s: float) -> None:
+    """Accumulate one phase-timing sample on a trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace receiving timing data.
+    bucket:
+        Stable timing bucket name.
+    elapsed_s:
+        Elapsed wall-clock seconds.
+    """
+
+    timings = trace.__dict__.setdefault("_phase_timings", {})
+    bucket_stats = timings.setdefault(bucket, {"total_s": 0.0, "count": 0})
+    bucket_stats["total_s"] += elapsed_s
+    bucket_stats["count"] += 1
+
+
+@contextmanager
+def _timed_phase(trace: "Trace", bucket: str) -> Iterator[None]:
+    """Record elapsed time for a capture or postprocess phase.
+
+    Parameters
+    ----------
+    trace:
+        Trace receiving timing data.
+    bucket:
+        Stable timing bucket name.
+
+    Yields
+    ------
+    None
+        Context body.
+    """
+
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        _record_phase_timing(trace, bucket, time.perf_counter() - start)
+
+
 def identity(x: Any) -> Any:
     """Return the input unchanged.
 
@@ -326,15 +369,18 @@ def _vtimed(trace: "Trace", description: str) -> Iterator[None]:
     Prints ``[torchlens] description...`` on entry, then appends `` done (X.XXs)``
     on exit.
     """
+    bucket = f"postprocess:{description.strip()}"
     if not getattr(trace, "verbose", False):
-        yield
+        with _timed_phase(trace, bucket):
+            yield
         return
     print(f"[torchlens] {description}...", end="", flush=True)
-    start = time.time()
+    start = time.perf_counter()
     try:
         yield
     finally:
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
+        _record_phase_timing(trace, bucket, elapsed)
         print(f" done ({elapsed:.2f}s)")
 
 

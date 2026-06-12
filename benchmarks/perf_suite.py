@@ -34,6 +34,7 @@ CORE_OPS = [
     "global_wrap_dummy",
     "first_capture_target",
     "tl_trace",
+    "tl_trace_profile",
     "tl_trace_intervention_ready",
     "tl_rerun",
     "fastlog_module",
@@ -84,6 +85,7 @@ OP_LABELS = {
     "global_wrap_dummy": "global-wrap-on-dummy startup",
     "first_capture_target": "first-capture-of-target-model startup",
     "tl_trace": "TL Trace, every-op capture",
+    "tl_trace_profile": "TL Trace, phase profile",
     "trace_no_save": "TL Trace, metadata only (no saved outs)",
     "tl_trace_intervention_ready": "TL Trace, intervention_ready=True",
     "tl_rerun": "Trace.rerun(model, x)",
@@ -213,6 +215,7 @@ def _matrix(smoke: bool, addendum_no_save: bool = False) -> list[tuple[str, str,
             "global_wrap_dummy",
             "first_capture_target",
             "tl_trace",
+            "tl_trace_profile",
             "tl_rerun",
             "fastlog_module",
             "aux_save",
@@ -336,6 +339,63 @@ def _run_cell(
     payload["stderr_tail"] = _redact_subprocess_tail(completed.stderr[-4000:])
     payload["elapsed_s"] = time.perf_counter() - start
     return payload
+
+
+def _is_torchlens_operation(operation: str) -> bool:
+    """Return whether an operation exercises TorchLens code.
+
+    Parameters
+    ----------
+    operation:
+        Benchmark operation identifier.
+
+    Returns
+    -------
+    bool
+        True for TorchLens-owned rows.
+    """
+
+    return operation.startswith(
+        (
+            "aux_",
+            "fastlog_",
+            "first_capture",
+            "global_wrap",
+            "raw_global",
+            "raw_target",
+            "raw_tl",
+            "rerun_",
+            "tl_",
+            "trace_",
+        )
+    )
+
+
+def _assert_torchlens_cells_ok(cells: list[dict[str, Any]]) -> None:
+    """Raise if any TorchLens benchmark cell failed or skipped.
+
+    Parameters
+    ----------
+    cells:
+        Raw benchmark cell payloads.
+    """
+
+    bad_cells = [
+        cell
+        for cell in cells
+        if _is_torchlens_operation(cell.get("operation", "")) and cell.get("status") != "ok"
+    ]
+    if not bad_cells:
+        return
+    details = [
+        (
+            f"{cell.get('model')}/{cell.get('device')}/"
+            f"{cell.get('operation')}/{cell.get('pass_type')}: "
+            f"{cell.get('status')} {cell.get('error') or cell.get('skip_reason') or ''}"
+        )
+        for cell in bad_cells[:10]
+    ]
+    raise RuntimeError("TorchLens benchmark cells failed:\n" + "\n".join(details))
 
 
 def _merge_passes(cells: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -938,6 +998,7 @@ def main() -> None:
                 tag="run1",
             )
         )
+    _assert_torchlens_cells_ok(cells)
     rows = _merge_passes(cells)
     rerun_tolerance: dict[str, Any] | None = None
     if args.rerun:

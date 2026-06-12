@@ -172,7 +172,7 @@ def _prime_global_wrappers(device: str) -> None:
     import torchlens as tl
 
     dummy, dummy_x = build_tiny_dummy(device)
-    tl.log_forward_pass(dummy, dummy_x, vis_opt="none")
+    tl.trace(dummy, dummy_x)
     _sync(device)
 
 
@@ -191,7 +191,7 @@ def _prime_target_model(model: torch.nn.Module, x: Any, device: str) -> None:
 
     import torchlens as tl
 
-    tl.log_forward_pass(model, x, vis_opt="none")
+    tl.trace(model, x)
     _sync(device)
 
 
@@ -300,7 +300,9 @@ def _saved_activation_count(trace: Any) -> int:
         Number of operation logs whose activation tensor is still present.
     """
 
-    return sum(1 for label in trace.op_labels if getattr(trace[label], "out", None) is not None)
+    return sum(
+        1 for label in trace.op_labels if getattr(trace[label], "has_saved_activation", False)
+    )
 
 
 def _record_no_save_invariant(trace: Any, state: dict[str, Any]) -> None:
@@ -371,34 +373,48 @@ def _operation(
     if operation == "first_capture_target":
         import torchlens as tl
 
-        return lambda: tl.log_forward_pass(model, x, vis_opt="none")
+        return lambda: tl.trace(model, x)
     if operation == "tl_trace":
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.log_forward_pass(model, x, vis_opt="none")
+        return lambda: tl.trace(model, x)
+    if operation == "tl_trace_profile":
+        import torchlens as tl
+
+        _prime_target_model(model, x, device)
+
+        def trace_profile() -> Any:
+            """Run profiled trace and expose phase timings in benchmark metadata."""
+
+            trace = tl.trace(model, x, profile=True)
+            state["phase_timings"] = getattr(trace, "_phase_timings", {})
+            state["profile_enabled"] = getattr(trace, "profile_enabled", False)
+            return trace
+
+        return trace_profile
     if operation == "trace_no_save":
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        trace = tl.log_forward_pass(model, x, vis_opt="none", layers_to_save=[])
+        trace = tl.trace(model, x, save=lambda _ctx: False)
         _record_no_save_invariant(trace, state)
-        return lambda: tl.log_forward_pass(model, x, vis_opt="none", layers_to_save=[])
+        return lambda: tl.trace(model, x, save=lambda _ctx: False)
     if operation == "tl_trace_intervention_ready":
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+        return lambda: tl.trace(model, x, intervention_ready=True)
     if operation == "tl_rerun":
         import torchlens as tl
 
-        trace = tl.log_forward_pass(model, x, vis_opt="none", intervention_ready=True)
+        trace = tl.trace(model, x, intervention_ready=True)
         state["rerun_policy"] = "steady_state"
         return lambda: trace.rerun(model, x)
     if operation == "rerun_no_save":
         import torchlens as tl
 
-        trace = tl.log_forward_pass(model, x, vis_opt="none", layers_to_save=[])
+        trace = tl.trace(model, x, save=lambda _ctx: False)
         _record_no_save_invariant(trace, state)
         state["rerun_policy"] = "steady_state_new_inputs_not_interventions"
         return lambda: trace.rerun(model, x)
@@ -463,7 +479,7 @@ def _operation(
     if operation == "aux_save":
         import torchlens as tl
 
-        trace = tl.log_forward_pass(model, x, vis_opt="none")
+        trace = tl.trace(model, x)
         parent = tempfile.TemporaryDirectory()
         state["_tempdir"] = parent
         counter = {"i": 0}
@@ -478,7 +494,7 @@ def _operation(
     if operation == "aux_load":
         import torchlens as tl
 
-        trace = tl.log_forward_pass(model, x, vis_opt="none")
+        trace = tl.trace(model, x)
         parent = tempfile.TemporaryDirectory()
         state["_tempdir"] = parent
         path = Path(parent.name) / "trace_fixture.tlspec"

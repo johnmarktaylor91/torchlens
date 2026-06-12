@@ -1011,6 +1011,7 @@ class Trace(CapturedRun):
     state_history: list[Any]
     replay_frontier: dict[str, torch.Tensor]
     backward_ready: bool
+    profile_enabled: bool
     save_arg_templates: bool
     op_equivalence_classes: Dict[str, set[str]]
     last_run: Any | None
@@ -1097,6 +1098,7 @@ class Trace(CapturedRun):
         "save_rng_states": FieldPolicy.KEEP,
         "recurrence_detection": FieldPolicy.KEEP,
         "verbose": FieldPolicy.KEEP,
+        "profile_enabled": FieldPolicy.KEEP,
         "has_gradients": FieldPolicy.KEEP,
         "mark_layer_depths": FieldPolicy.KEEP,
         "graph_shape_hash": FieldPolicy.KEEP,
@@ -1225,6 +1227,7 @@ class Trace(CapturedRun):
         "_tl_backward_triggers_disarmed": FieldPolicy.DROP,
         "capture_start_time": FieldPolicy.KEEP,
         "capture_end_time": FieldPolicy.KEEP,
+        "_phase_timings": FieldPolicy.KEEP,
         "setup_duration": FieldPolicy.KEEP,
         "forward_duration": FieldPolicy.KEEP,
         "cleanup_duration": FieldPolicy.KEEP,
@@ -1403,6 +1406,7 @@ class Trace(CapturedRun):
         self.save_rng_states = save_rng_states
         self.recurrence_detection = recurrence_detection
         self.verbose = verbose
+        self.profile_enabled = False
         self.has_gradients = False
         self.mark_layer_depths = mark_layer_depths
         self.graph_shape_hash: str | None = None
@@ -1513,6 +1517,7 @@ class Trace(CapturedRun):
         # Time elapsed:
         self.capture_start_time: float = 0
         self.capture_end_time: float = 0
+        self._phase_timings: dict[str, dict[str, float | int]] = {}
         self.setup_duration: Duration = Duration(0)
         self.forward_duration: Duration = Duration(0)
         self.cleanup_duration: Duration = Duration(0)
