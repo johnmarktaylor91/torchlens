@@ -194,3 +194,109 @@ like the right semantic source of truth, and sanctioned payload copies look
 viable for toy CPU/PYTHON tensors. The remaining blockers are TinyJit captured
 execution visibility, device coverage, and a precise mutation-generation
 identity invariant for aliases.
+
+## Round 3 - 2026-06-12
+
+Exact pin remains `tinygrad==0.13.0`; `pip index versions tinygrad` reported
+`LATEST: 0.13.0`, and `pip install 'tinygrad==0.13.0'` was already satisfied in
+`/tmp/jaxtg/tinygrad-venv`. Probe execution still uses `DEV=PYTHON`; no
+non-default device backend was exercised this round because the host is under
+benchmark load and the pin's default CPU path requires a compiler not present on
+this host.
+
+### Deliverable 1 - Interception Inventory
+
+Round 3 resolves the TinyJit hook gap from round 2:
+
+- Ordinary realization remains visible through `tinygrad.tensor.run_linear`.
+- Captured TinyJit execution is visible through `tinygrad.engine.jit.run_linear`,
+  which is a distinct imported symbol used by `CapturedJit.__call__`.
+- The new probe wraps both symbols and asserts that the second and third JIT
+  calls emit `("LINEAR", 1, True)` through the JIT runner, while ordinary tensor
+  realization events have `jit=False`.
+
+Source-of-truth decision: semantic capture should use pre-realization UOp graph
+snapshots. Tensor API hooks are useful event hints, ordinary realization hooks
+mark non-JIT execution boundaries, and `tinygrad.engine.jit.run_linear` marks
+captured JIT execution boundaries. Scheduler/JIT hooks are not sufficient as the
+semantic source of truth because explicit realization can rebase tensors to
+`BUFFER` roots before a capture adapter inspects their original expression.
+
+### Deliverable 2 - Realization Policy Evidence
+
+The new JIT probe asserts that payload reads from a captured JIT return tensor do
+not mutate either the captured `LINEAR` UOp signature or the returned tensor's
+buffer-backed UOp signature. The same captured return object is reused after JIT
+capture and its buffer values update for new inputs.
+
+Policy implication: tracing may observe realization/JIT execution boundaries,
+but semantic graph capture must snapshot lineage before realization. Payload
+reads are still non-interfering for toy `DEV=PYTHON` tensors, including captured
+JIT outputs.
+
+### Deliverable 3 - Identity Invariant + Mutation Probes
+
+Round 3 adds a captured-JIT identity case:
+
+- First TinyJit call returns a warmup tensor.
+- Second call captures and returns a different tensor object.
+- Third and later calls reuse the captured return tensor object while updating
+  its payload for new inputs.
+
+This strengthens the identity invariant from earlier rounds: Python object
+identity is neither stable semantic identity nor sufficient payload identity.
+For tinygrad, a future adapter needs UOp/buffer identity plus mutation and JIT
+execution generations.
+
+### Deliverable 4 - Autograd Lifecycle Probes
+
+No new autograd lifecycle behavior was added in this round. Round 1 and 2
+coverage remains the current evidence: `gradient(...)` returns gradients without
+mutating `.grad`; `backward(...)` populates and accumulates `.grad`; explicit
+gradients work for scalar backward and non-scalar gradient; realized gradient
+payload snapshots stay isolated after primal mutation.
+
+### Deliverable 5 - Payload Capability Evidence
+
+Round 3 adds positive TinyJit payload evidence:
+
+- Captured JIT output payload reads through `tolist()` return updated values for
+  new inputs without changing captured UOp signatures.
+- `CapturedJit.free_intermediates()` does not invalidate later captured
+  execution or mutate the captured `LINEAR` signature in the toy case.
+
+Payload capability decision: sanctioned realized-buffer copies look viable for
+a tinygrad v1 on `DEV=PYTHON` toy tensors, including lazy expressions,
+gradients, and captured JIT outputs. The honest product decision should still be
+backend-conditional: allow full-save only where import-time probes prove the
+runtime/device has non-interfering realized payload reads; otherwise fall back to
+metadata/audit-only with validation and grad-payload reads raising.
+
+### Probe Results
+
+| Probe | Command | Result | Evidence |
+|---|---|---|---|
+| PyPI pin check | `nice -n 19 ionice -c3 /tmp/jaxtg/tinygrad-venv/bin/python -m pip index versions tinygrad` | PASS | `LATEST: 0.13.0`; installed `0.13.0`. |
+| exact pin install | `nice -n 19 ionice -c3 /tmp/jaxtg/tinygrad-venv/bin/python -m pip install 'tinygrad==0.13.0'` | PASS | Requirement already satisfied in `/tmp/jaxtg/tinygrad-venv`. |
+| interception + realization | `DEV=PYTHON nice -n 19 ionice -c3 /tmp/jaxtg/tinygrad-venv/bin/python .research/spikes/tinygrad/probe_interception_realization.py` | PASS | Existing Tensor API, UOp lineage, and ordinary `run_linear` hook assertions still pass. |
+| identity + autograd + payload | `DEV=PYTHON nice -n 19 ionice -c3 /tmp/jaxtg/tinygrad-venv/bin/python .research/spikes/tinygrad/probe_identity_autograd_payload.py` | PASS | Existing mutation, repeated backward, TinyJit, GC, gradient lifecycle, and payload assertions still pass. |
+| scheduler + autograd + payload round 2 | `DEV=PYTHON nice -n 19 ionice -c3 /tmp/jaxtg/tinygrad-venv/bin/python .research/spikes/tinygrad/probe_scheduler_autograd_payload_round2.py` | PASS | Explicit realization, JIT warmup/capture shape, aliasing, explicit gradients, and realized snapshots still pass. |
+| TinyJit payload round 3 | `DEV=PYTHON nice -n 19 ionice -c3 /tmp/jaxtg/tinygrad-venv/bin/python .research/spikes/tinygrad/probe_tinyjit_payload_round3.py` | PASS | Captured JIT runner hook, captured return reuse, payload read non-interference, and `free_intermediates()` behavior asserted. |
+| ruff spike lint | `nice -n 19 ionice -c3 ruff check .research/spikes/tinygrad --fix` | PASS | `All checks passed!` |
+
+### Remaining For Later S0.G Rounds
+
+- If another S0.G round is available, probe a non-default device/runtime only if
+  it can be done without compilation or benchmark interference.
+- Convert the identity invariant into M2 acceptance text: UOp/buffer identity
+  plus mutation/JIT execution generations, never Python object identity alone.
+- Define import-time capability probes for full-save enablement and the
+  audit-only fallback behavior.
+
+### M2 Lean
+
+Go, with a backend-conditional payload gate. The semantic source of truth is now
+clear enough: pre-realization UOp snapshots for graph semantics, with tensor API
+and realization/JIT hooks as boundary evidence. Tinygrad should not promise
+unconditional full-save across all runtimes, but `DEV=PYTHON` evidence supports
+sanctioned realized-buffer copies when capability probes pass.
