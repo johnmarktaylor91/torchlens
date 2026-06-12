@@ -70,7 +70,7 @@ class SavedOrphan(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Create an orphan tensor and return an unrelated output."""
 
-        _unused = torch.randn_like(x)
+        _unused = torch.randn(x.shape)
         return x + 1
 
 
@@ -150,16 +150,16 @@ def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
     """Saved orphan payloads are exposed regardless of graph pruning mode."""
 
     x = torch.ones(2, 2)
-    pruned = tl.trace(SavedOrphan(), x, save=tl.func("randn_like"), random_seed=1)
+    pruned = tl.trace(SavedOrphan(), x, save=tl.func("randn"), random_seed=1)
     assert pruned.orphan_records
-    assert pruned.orphan_records[0]["raw_label"].startswith("randnlike")
+    assert pruned.orphan_records[0]["raw_label"].startswith("randn")
     assert isinstance(pruned.orphan_records[0]["payload_ref"], torch.Tensor)
-    assert not any(label.startswith("randnlike") for label in pruned.op_labels)
+    assert not any(label.startswith("randn") for label in pruned.op_labels)
 
     retained = tl.trace(
         SavedOrphan(),
         x,
-        save=tl.func("randn_like"),
+        save=tl.func("randn"),
         random_seed=1,
         keep_orphans=True,
     )
