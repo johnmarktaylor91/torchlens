@@ -1140,6 +1140,7 @@ class Trace(CapturedRun):
         "_predicate_lookback_candidates": FieldPolicy.DROP,
         "_postprocessing_active": FieldPolicy.DROP,
         "_raw_event_shape_hash": FieldPolicy.DROP,
+        "_replay_arg_version_data_complete": FieldPolicy.KEEP,
         "state": FieldPolicy.KEEP,
         "is_appended": FieldPolicy.KEEP,
         "relationship_evidence": FieldPolicy.KEEP,
@@ -1430,6 +1431,7 @@ class Trace(CapturedRun):
         self._out_hash_cache: Dict[str, Tuple[str, torch.Tensor]] = {}
         self._code_context_cache: dict[Any, tuple[Any, ...]] = {}
         self._halt_returns_partial_trace = False
+        self._replay_arg_version_data_complete = True
         self.save_arg_values = save_arg_values
         self.save_grads = "all" if save_grads is True else save_grads
         self.capture_tensor_grad_hooks = capture_tensor_grad_hooks

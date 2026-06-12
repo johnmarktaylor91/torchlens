@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.fastlog import RecordContext, Recording
 
 
 class LinearRelu(nn.Module):
@@ -48,6 +50,18 @@ class Layer4Predecessor(nn.Module):
         return torch.relu(hidden)
 
 
+class RecordingAliasMutation(nn.Module):
+    """Model whose sparse recording lacks parent-version replay data."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Mutate a view of an unsaved parent before a saved downstream child."""
+
+        parent = x + 1
+        view = parent.view_as(parent)
+        view.add_(2)
+        return parent * 3
+
+
 def _linear_op(log: tl.Trace) -> tl.Op:
     """Return the first linear op in a trace."""
 
@@ -58,6 +72,12 @@ def _relu_op(log: tl.Trace) -> tl.Op:
     """Return the first relu op in a trace."""
 
     return next(op for op in log.layer_list if op.layer_type == "relu")
+
+
+def _save_only_mul(ctx: RecordContext) -> bool:
+    """Select only the downstream multiplication op."""
+
+    return ctx.func_name in {"__mul__", "mul"}
 
 
 def test_intervene_save_captures_post_hook_tensor_and_is_deterministic() -> None:
@@ -120,6 +140,7 @@ def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
     )
     output = log.raw_output
 
+    assert isinstance(output, torch.Tensor)
     assert torch.equal(output, torch.zeros_like(output))
     assert not _linear_op(log).has_saved_activation
     assert _linear_op(log).intervention_replaced
@@ -143,21 +164,39 @@ def test_conditional_intervention_uses_live_index_lookback() -> None:
     assert not linear.intervention_replaced
 
 
+def test_recording_to_trace_refuses_missing_child_version_replay_data() -> None:
+    """Sparse ``to_trace`` validation loudly refuses absent arg-version data."""
+
+    model = RecordingAliasMutation()
+    x = torch.ones(2, 4)
+    recording = cast(Recording, tl.record(model, x, save=_save_only_mul))
+    trace = recording.to_trace()
+
+    assert not trace._replay_arg_version_data_complete
+    assert all(not op.out_versions_by_child for op in trace.layer_list)
+    with pytest.raises(ValueError, match="child-version snapshots"):
+        trace.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
+
+
 def test_fastlog_record_intervene_save_captures_post_hook_payload() -> None:
     """``fastlog.record`` composes intervention and save in one predicate pass."""
 
-    output, recording = tl.fastlog.record(
-        LinearRelu(),
-        torch.ones(1, 4),
-        keep_op=tl.func("linear"),
-        intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-        return_output=True,
+    output, recording = cast(
+        tuple[torch.Tensor, Recording],
+        tl.fastlog.record(
+            LinearRelu(),
+            torch.ones(1, 4),
+            keep_op=tl.func("linear"),
+            intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
+            return_output=True,
+        ),
     )
 
     assert torch.equal(output, torch.zeros_like(output))
     assert len(recording.records) == 1
-    assert recording.records[0].ram_payload is not None
+    payload = recording.records[0].ram_payload
+    assert isinstance(payload, torch.Tensor)
     assert torch.equal(
-        recording.records[0].ram_payload,
-        torch.zeros_like(recording.records[0].ram_payload),
+        payload,
+        torch.zeros_like(payload),
     )

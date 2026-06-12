@@ -597,6 +597,7 @@ class Recording(CapturedRun):
         trace = Trace(model_class_name="RecordedModel")
         trace.capture_mode = "exhaustive"
         trace._predicate_save_options = object()
+        trace._replay_arg_version_data_complete = False
         trace.capture_events = self._capture_events
         trace.output_layers = [
             event.label_raw

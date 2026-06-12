@@ -509,6 +509,7 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
         for arg_type in ["args", "kwargs"]:
             parents_in_args.update(list(target_layer.parent_arg_positions[arg_type].values()))
         if parents_in_args != set(target_layer.parents):
+            _raise_if_replay_arg_version_data_incomplete(self, target_layer)
             return False
 
         argtype_dict = {
@@ -538,6 +539,35 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
                     if not validation_correct_for_arg_and_layer:
                         return False
     return True
+
+
+def _raise_if_replay_arg_version_data_incomplete(self: "Trace", target_layer: Op) -> None:
+    """Reject replay validation when sparse capture omitted arg-version data.
+
+    Parameters
+    ----------
+    self:
+        Trace being replay-validated.
+    target_layer:
+        Operation whose saved parents would need argument and child-version
+        snapshots for validation.
+
+    Raises
+    ------
+    ValueError
+        If the trace is known to lack complete replay argument/version data.
+    """
+
+    if getattr(self, "_replay_arg_version_data_complete", True):
+        return
+    if not target_layer.parents:
+        return
+    raise ValueError(
+        "Cannot validate saved layer "
+        f"{target_layer.label}: this trace was materialized from a sparse Recording "
+        "without saved argument values or child-version snapshots. "
+        "Use tl.trace(..., save_arg_values=True) for replay validation."
+    )
 
 
 def _validate_layer_against_arg(
@@ -919,6 +949,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         layers_to_perturb = []
 
     layer = self[layer_to_validate_parents_for_label]
+    _raise_if_replay_arg_version_data_incomplete(self, layer)
 
     # Early exits for layers that cannot or should not be replayed.
 
