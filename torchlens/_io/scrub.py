@@ -155,6 +155,8 @@ def _scrub_value(
     memo[obj_id] = scrubbed_obj
     scrubbed_state: dict[str, Any] = {}
     for field_name, field_value in vars(value).items():
+        if isinstance(value, Trace) and _is_runtime_only_trace_field(field_name):
+            continue
         if field_name not in spec:
             raise TorchLensIOError(
                 f"{type(value).__name__}.{field_name} is missing from PORTABLE_STATE_SPEC."
@@ -179,6 +181,29 @@ def _scrub_value(
 
     scrubbed_obj.__dict__.update(scrubbed_state)
     return scrubbed_obj
+
+
+def _is_runtime_only_trace_field(field_name: str) -> bool:
+    """Return whether a Trace field is intentionally omitted from portable state.
+
+    Parameters
+    ----------
+    field_name
+        Trace ``__dict__`` key under scrub consideration.
+
+    Returns
+    -------
+    bool
+        True when the field stores runtime-only interpreter or visualization state.
+    """
+
+    return field_name in {
+        "_last_sibling_ordering_decision",
+        "jax_closed_jaxpr",
+        "jax_equation_captures",
+        "jax_inlined_call_primitives",
+        "jax_static_argnums",
+    }
 
 
 def _effective_policy(

@@ -20,12 +20,14 @@ catalog](https://github.com/johnmarktaylor91/torchlens/pull/143) for the
 original analysis.
 
 Backend note: `backend=None` preserves current PyTorch eager capture and MLX
-module auto-routing. Explicit `backend="torch"` is supported; unknown,
-ambiguous, or mismatched backend selections fail before capture with typed
-backend registry errors. MLX remains a technical preview with limited
-capabilities; fastlog and true backward capture are PyTorch-only in the current
-registry. JAX and tinygrad are not shipped public capture backends in this
-checkout.
+module auto-routing. Explicit `backend="torch"` and `backend="jax"` are
+supported; unknown, ambiguous, or mismatched backend selections fail before
+capture with typed backend registry errors. MLX remains a technical preview with
+limited capabilities. JAX is a jaxpr-first functional preview with full-save
+forward capture, replay validation, function-root modules, pytree-derived
+params, audit-only `.tlspec` payloads, and derived gradients only. Fastlog,
+intervention, and true backward capture are PyTorch-only in the current
+registry.
 
 If you hit a case we haven't listed, please
 [open an issue](https://github.com/johnmarktaylor91/torchlens/issues/new).
@@ -67,10 +69,9 @@ interpretability package:
 - Use Captum or Inseq when the main requirement is a mature, paper-validated attribution method
   with tuned defaults. TorchLens exposes activations, gradients, modules, and intervention hooks,
   but it does not package the full attribution-method catalog.
-- Use Penzai for functional JAX model surgery or named-axis workflows. This checkout does not ship
-  a public JAX capture backend; TorchLens' shipped capture surface is PyTorch eager plus the MLX
-  technical preview. The backend substrate reserves JAX for a future jaxpr-first functional
-  preview, not wrapper-based capture.
+- Use Penzai for functional JAX model surgery or named-axis workflows. TorchLens' JAX preview
+  captures declared functional calls as jaxpr-derived traces, but it is not a JAX tree rewriting
+  or model-surgery system.
 - Use `torch.profiler` for kernel-level performance work. TorchLens records operation provenance,
   graph topology, activations, gradients, memory, and approximate FLOPs; it is not a profiler UI.
 

@@ -10,6 +10,7 @@ from torch import nn
 from .._deprecations import MISSING, MissingType
 from .._input_coerce import _coerce_input_args
 from .._training_validation import reject_compiled_model
+from ..backends import BackendName, BackendUnsupportedError
 from ..intervention.predicates import InterventionPredicate
 from ..options import StreamingOptions
 from ..types import ActivationPostfunc, GradientPostfunc
@@ -78,6 +79,7 @@ def record(
     grad_transform: GradientPostfunc | None = None,
     save_raw_gradients: bool = True,
     backward_ready: bool = False,
+    backend: BackendName | None = None,
 ) -> Recording | tuple[Any, Recording]:
     """Record one model forward pass with capture predicates.
 
@@ -113,6 +115,9 @@ def record(
         payloads are retained. Defaults to ``True`` to mirror the slow path.
     backward_ready:
         If True, omitted defaults are promoted to keep-grad capture specs.
+    backend:
+        Optional backend selector. ``tl.record`` is torch-only in backend v1;
+        non-torch backends raise a canonical unsupported error.
     return_output:
         Whether to return ``(model_output, recording)``.
     postprocess:
@@ -124,6 +129,11 @@ def record(
         Fastlog recording, optionally with the model output.
     """
 
+    if backend not in (None, "torch"):
+        raise BackendUnsupportedError(
+            "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
+            "for the JAX full-save preview."
+        )
     reject_compiled_model(model, api_name="torchlens.fastlog.record")
     if storage is not None and streaming is not None:
         raise TypeError("Do not pass both `storage` and `streaming`.")

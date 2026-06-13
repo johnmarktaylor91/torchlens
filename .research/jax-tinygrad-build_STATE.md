@@ -57,6 +57,12 @@ post-benchmark round) + torch parity goldens once built.
 M0 COMPLETE: M0.1a artifacts, M0.1b parity gates, M0.2 substrate items, and M0.3
 docs/glossary/notebook lockstep are complete.
 
+## JAX M1 status
+JAX M1 COMPLETE: J1 jaxpr-first capture, J2 validation tripwire, J3 derived
+gradients, and J4 hardening/docs/spec amendment are complete. JAX remains a
+functional preview with true backward capture and T1 per-op gradients reserved for
+research.
+
 ## Iteration log
 | Round | Lane | Phase | Commit | Result | Next |
 |---|---|---|---|---|---|
@@ -90,6 +96,7 @@ docs/glossary/notebook lockstep are complete.
 | 4 | jax | M1 J1 S0.J corpus hardening | this commit | PASS: ported representative S0.J corpus fixtures into public JAX backend tests: attention, operator/method spellings, reductions, broadcasting, slicing, einsum, dtype cast, conv/ReLU, explicit-key random, layer norm, and one-hot with explicit index leaves. Gates: ruff, mypy, touched-test mypy, canonical pinned-JAX test command, backend_parity, predicate suite, smoke. | J1 coverage slice complete; proceed to J2 validation hardening unless another J1 breadth item is requested. |
 | 1 | jax | M1 J2 validation tripwire | this commit | PASS: JAX trace validation now runs backend-neutral invariants plus materialized-op primitive replay and parent perturbation; public `tl.validate(..., backend="jax")` returns real bools; negative controls prove corrupted equation output, wrong parent wiring, and dropped payloads fail. Gates: ruff, touched mypy, canonical pinned-JAX test command, backend_parity, predicate suite, smoke. | J2 complete; proceed to J3 derived gradients. |
 | 1 | jax | M1 J3 derived gradients | this commit | PASS: added `tl.backends.jax.GradOptions`, `trace.derived_grads`, leaf-level param/input derived gradients from a second pure `jax.value_and_grad` run, strengthened fingerprint/aux-output refusal gates, param-record grad mirroring, and JAX non-backward rejection surfaces. Gates: ruff, touched mypy, pinned-JAX focused tests, backend_parity, predicate suite, smoke. | J3 complete; proceed to J4 hardening + docs + spec amendment. |
+| 1 | jax | M1 J4 hardening + docs + spec amendment | this commit | PASS: added JAX rejection-error suite, executable public-surface matrix, capability flag audit, audit-only save/load coverage, docs/backends JAX section, glossary/limitations updates, and backward-spec amendment to derived-gradient preview with T1 research. Gates: ruff, touched mypy, canonical pinned-JAX tests, backend_parity, predicate suite, smoke. | JAX M1 COMPLETE. |
 
 ## M0 SUBSTRATE — independent Opus review (orchestrator, post-M0-complete)
 VERDICT: PASS. Reviewed the two highest-risk surfaces directly:

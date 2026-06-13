@@ -617,12 +617,16 @@ class _TlSpecWriter:
         """
 
         grad_kinds = {"grad", "transformed_grad", "grad_fn_grad"}
+        backend_name = str(getattr(source, "backend", "torch"))
+        saved_grad_records = 0
+        if backend_name == "torch":
+            saved_grad_records = _safe_len(getattr(source, "saved_grad_ops", None))
         return {
             "has_backward_pass": bool(getattr(source, "has_backward_pass", False)),
             "num_backward_passes": int(getattr(source, "num_backward_passes", 0) or 0),
             "num_grad_fns": int(getattr(source, "num_grad_fns", 0) or 0),
             "num_grad_fn_calls": int(getattr(source, "num_grad_fn_calls", 0) or 0),
-            "num_saved_grad_records": _safe_len(getattr(source, "saved_grad_ops", None)),
+            "num_saved_grad_records": saved_grad_records,
             "gradient_blob_count": sum(1 for entry in tensor_entries if entry.kind in grad_kinds),
             "gradient_blob_kinds": sorted(
                 {entry.kind for entry in tensor_entries if entry.kind in grad_kinds}

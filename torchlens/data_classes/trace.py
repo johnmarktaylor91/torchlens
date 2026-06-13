@@ -1031,6 +1031,11 @@ class Trace(CapturedRun):
     backward_root_grad_fn_object_ids: list[int]
     backward_pass_logs: Dict[int, BackwardPass]
     code_context: list["FuncCallLocation"]
+    jax_closed_jaxpr: Any
+    jax_equation_captures: tuple[Any, ...]
+    jax_inlined_call_primitives: tuple[str, ...]
+    jax_static_argnums: tuple[int, ...]
+    _last_sibling_ordering_decision: Any
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "trace_label": FieldPolicy.KEEP,

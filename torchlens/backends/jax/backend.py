@@ -210,8 +210,8 @@ class JAXBackend:
             Captured JAX trace.
         """
 
-        del random_seed
         self._reject_extra_kwargs(kwargs)
+        _reject_transformed_callable(model)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
@@ -237,6 +237,12 @@ class JAXBackend:
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
         grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
+        _reject_tracer_inputs(args)
+        if not _is_missing(random_seed) and random_seed is not None:
+            raise BackendUnsupportedError(
+                "JAX backend preview requires explicit PRNG keys as params/input leaves; "
+                "random_seed and torch-style RNG replay are unsupported."
+            )
         static_argnums = _normalize_static_argnums(jax_static_argnums, len(args))
         self._reject_unsupported_options(
             layers_to_save=layers_to_save,
@@ -1272,10 +1278,18 @@ class JAXBackend:
         """
 
         if options["input_kwargs"]:
-            raise BackendUnsupportedError("JAX backend preview supports positional args only.")
+            raise BackendUnsupportedError(
+                "JAX backend preview supports positional args only. Pass keyword values as "
+                "explicit params/input leaves or declared static positional args."
+            )
         if options["layers_to_save"] not in ("all", None):
             raise BackendUnsupportedError(
                 "JAX backend preview is full-save only; save shaping is unsupported."
+            )
+        if options["save_rng_states"]:
+            raise BackendUnsupportedError(
+                "JAX backend preview requires explicit PRNG keys as params/input leaves; "
+                "save_rng_states and torch-style RNG replay are unsupported."
             )
         rejected_true = (
             "activation_transform",
@@ -1283,7 +1297,6 @@ class JAXBackend:
             "save_grads",
             "save_arg_values",
             "save_code_context",
-            "save_rng_states",
             "backward_ready",
             "module_filter",
             "transform",
@@ -1292,8 +1305,12 @@ class JAXBackend:
         )
         for name in rejected_true:
             if options[name]:
+                guidance = " Use tl.backends.jax.GradOptions for derived gradients."
+                if name not in {"save_grads", "backward_ready"}:
+                    guidance = " Use full-save JAX trace capture or the PyTorch backend."
                 raise BackendUnsupportedError(
-                    f"JAX backend preview does not support {name}; full-save forward capture only."
+                    f"JAX backend preview does not support {name}; full-save forward capture "
+                    f"only.{guidance}"
                 )
         if options["output_device"] != "same":
             raise BackendUnsupportedError("JAX backend preview only supports output_device='same'.")
@@ -1327,7 +1344,26 @@ class JAXBackend:
         }
         if rejected:
             names = ", ".join(sorted(rejected))
-            raise BackendUnsupportedError(f"JAX backend preview does not support: {names}.")
+            save_shaping = {
+                "halt",
+                "intervene",
+                "recipes",
+                "save",
+                "stop_after",
+                "storage",
+                "streaming",
+            }
+            if save_shaping & set(rejected):
+                raise BackendUnsupportedError(
+                    "JAX backend preview is full-save only and does not support "
+                    f"save-shaping or runtime-mutation options: {names}. "
+                    "Use an unfiltered tl.trace(..., backend='jax') call, or the PyTorch "
+                    "backend for predicate capture, intervention, halt, and streaming."
+                )
+            raise BackendUnsupportedError(
+                f"JAX backend preview does not support: {names}. "
+                "Use full-save JAX trace capture or the PyTorch backend for this surface."
+            )
 
 
 def _is_missing(value: object) -> bool:
@@ -1407,6 +1443,74 @@ def _normalize_static_argnums(value: object, num_args: int) -> tuple[int, ...]:
             f"jax_static_argnums indexes out of range for {num_args} positional args: {invalid}."
         )
     return normalized
+
+
+def _reject_transformed_callable(model: Callable[..., Any]) -> None:
+    """Reject root JAX transformed callables before jaxpr capture.
+
+    Parameters
+    ----------
+    model
+        User-supplied callable passed to ``tl.trace``.
+
+    Returns
+    -------
+    None
+        Returns when the callable looks like a raw function.
+    """
+
+    cls_name = type(model).__name__
+    cls_module = type(model).__module__
+    if cls_name in {"PjitFunction", "PmapFunction"} or cls_module.startswith("jaxlib"):
+        raise BackendUnsupportedError(
+            "JAX backend preview does not accept a transformed callable as the root model "
+            "(for example jax.jit). Pass the raw function to tl.trace(..., backend='jax') "
+            "and let TorchLens derive its own closed jaxpr."
+        )
+    try:
+        closure = inspect.getclosurevars(model)
+    except TypeError:
+        return
+    wrapped = closure.nonlocals.get("fun")
+    wrapped_module = getattr(wrapped, "__module__", "")
+    wrapped_qualname = getattr(wrapped, "__qualname__", "")
+    if wrapped_module == "jax._src.api" and wrapped_qualname.startswith(
+        ("grad.", "vmap.", "jacfwd.", "jacrev.")
+    ):
+        transform_name = wrapped_qualname.split(".", maxsplit=1)[0]
+        raise BackendUnsupportedError(
+            "JAX backend preview does not accept a transformed callable as the root model "
+            f"(detected jax.{transform_name}). Pass the raw function to "
+            "tl.trace(..., backend='jax'); nested transform support is a follow-up."
+        )
+
+
+def _reject_tracer_inputs(args: Sequence[Any]) -> None:
+    """Reject root capture calls executed inside JAX transforms.
+
+    Parameters
+    ----------
+    args
+        Normalized public positional arguments.
+
+    Returns
+    -------
+    None
+        Returns when no argument leaf is a JAX tracer.
+    """
+
+    import jax
+
+    leaves, _treedef = jax.tree.flatten(tuple(args))
+    tracer_type = getattr(jax.core, "Tracer", None)
+    if tracer_type is None:
+        return
+    if any(isinstance(leaf, tracer_type) for leaf in leaves):
+        raise BackendUnsupportedError(
+            "JAX backend preview cannot run tl.trace from inside jax.jit, jax.vmap, "
+            "or jax.grad. Call tl.trace(..., backend='jax') outside the transform on "
+            "concrete params/input leaves."
+        )
 
 
 def _normalize_input_grad_argnums(value: Sequence[int], num_inputs: int) -> tuple[int, ...]:
