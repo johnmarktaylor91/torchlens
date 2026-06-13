@@ -2,6 +2,11 @@
 
 This folder contains the complete user-facing audit series for checking the major TorchLens 2.0 features against the current implementation. The notebooks are runnable end-to-end on CPU with tiny local PyTorch models, with guarded optional Hugging Face sections.
 
+Backend status: this audit series is torch-first unless a row says otherwise. Existing save/load
+examples demonstrate materialized torch payloads; non-torch preview `.tlspec` bundles may be
+audit-only or metadata-only. Fastlog/`tl.record()` and true backward capture are torch-only in the
+backend-v1 registry.
+
 | Notebook | Runnable | Complete | Known gaps | Focus |
 |---|---|---|---|---|
 | 00_setup_and_first_capture | Yes | Partial | `module_filter` no-op on the tiny fixture; see API Status. | Install/import sanity, `tl.trace`, the `Trace` object, `summary()`, and a first successful capture. |

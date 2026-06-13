@@ -3,6 +3,9 @@
 TorchLens defaults favor complete metadata and debuggability. For high-throughput capture, use the
 smallest capture surface that answers your question.
 
+Backend note: these defaults describe torch capture. `tl.record()`/fastlog is torch-only in
+backend v1, and non-torch preview `.tlspec` payloads may be audit-only or metadata-only.
+
 ## Recommended Capture Settings
 
 ```python
@@ -30,7 +33,7 @@ Use these defaults when speed matters:
 
 ## Predicate Capture
 
-Use `tl.trace(..., save=...)` when you need a full `Trace` with graph metadata, and use
+Use `tl.trace(..., save=...)` when you need a full `Trace` with graph metadata, and use torch
 `tl.record(..., save=...)` when you only need selected records during tight loops.
 `Recording.to_trace()` materializes the full graph structure later, but reading an unsaved payload
 raises a clear error.
@@ -52,7 +55,7 @@ windowed = tl.trace(
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 ```
 
-`tl.fastlog.record(...)` remains available as a compatibility path. `keep_op=` and
+`tl.fastlog.record(...)` remains available as a torch compatibility path. `keep_op=` and
 `keep_module=` are deprecated aliases; use `record(save=...)` for new code. Keep predicate
 functions small and deterministic because they run in the logging hot path.
 

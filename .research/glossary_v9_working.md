@@ -410,23 +410,28 @@ Use `Trace.compute_ops` / `Op.is_compute_op` to filter to compute Ops (includes 
 
 ## Top-level vocabulary
 
-- `tl.trace(model, x)`: Run a real PyTorch forward pass and return a `Trace`. Capture-only — visualization is `trace.draw()`.
+- `tl.trace(model, x, *, backend=None)`: Resolve a registered backend, run capture, and return
+  a `Trace`. `backend=None` preserves torch eager default plus MLX module auto-routing; explicit
+  backend names fail early on unknown, ambiguous, or mismatched selections. Capture-only —
+  visualization is `trace.draw()`.
 - `Trace`: Top-level object for one captured model execution, including graph, tensors, modules, params, buffers, gradients, and metadata.
 - `Trace.backward(loss)`: Add backward-pass data to an existing Trace by backpropagating an explicit loss.
 - `Layer`: A stable graph position such as `conv2d_1_2`; it aggregates the Ops for that position.
 - `Op`: One tensor operation invocation such as `conv2d_1_2:1`; includes torch function calls, graph I/O sentinels, internal source/sink sentinels, and buffer source entries. This is where saved `out`, `grad`, args, timing, and function data live.
-- `Module`: Aggregate record for one `nn.Module` address in the model.
-- `ModuleCall`: One actual call of an `nn.Module.forward`.
-- `Param`: Record for one `nn.Parameter` tensor.
+- `Module`: Aggregate record for one module-like address; `Trace.module_identity_mode` states
+  whether records came from torch modules, future pytree modules, or a function root.
+- `ModuleCall`: One actual call of a module-like forward/root call.
+- `Param`: Record for one parameter leaf; `Trace.param_source` states whether records came from a
+  native module, future pytree derivation, or no parameter source.
 - `Buffer`: Persistent record for one PyTorch registered-buffer address, with version nodes, initial/final values, and update metadata.
-- `GradFn`: Record for one autograd `grad_fn` node in the backward graph.
+- `GradFn`: Record for one true-backward autograd `grad_fn` node in the backward graph.
 - `GradFnCall`: One hook firing or backward call event for a `GradFn`.
 - `Bundle`: Coordinated container for comparing multiple Traces.
 - `TraceAccessor`: Dict-like Bundle accessor for named Traces.
 - `SuperOp`, `SuperLayer`, `SuperModule`, `SuperModuleCall`, `SuperParam`, `SuperBuffer`, `SuperGradFn`, `SuperGradFnCall`: Cross-trace views aligning the same label across Bundle members.
 - `SuperOpAccessor`, `SuperLayerAccessor`, etc.: Bundle accessors returning the corresponding Super* objects.
 
-## Trace (per `tl.trace(model, x)`)
+## Trace (per `tl.trace(model, x, *, backend=None)`)
 
 ### Identity
 
@@ -440,7 +445,16 @@ Use `Trace.compute_ops` / `Op.is_compute_op` to filter to compute Ops (includes 
 - `root_trace`: Runtime-only object reference to the root Trace of a fork tree; `None` on the root itself. Same portability caveat as `parent_trace`.
 - `state`: Enum-like `TraceState` value describing whether the Trace is `PRISTINE`, `SPEC_STALE`, `REPLAY_PROPAGATED`, `RERUN_PROPAGATED`, `LIVE_CAPTURED`, `DIRECT_WRITE_DIRTY`, or `APPENDED`.
 - `tlspec_version`: Portable `.tlspec` format version used for save/load compatibility.
-- `backend`: `Literal["torch", "mlx"]` identifying the capture backend. Survives portable save/load. Defaults to `"torch"`.
+- `backend`: `BackendName` identifying the registered capture backend. Survives portable
+  save/load. Shipped user-facing specs are `"torch"` and technical-preview `"mlx"`; `"jax"`
+  and `"tinygrad"` are reserved preview/future names until their build phases land.
+- `module_identity_mode`: `Literal["torch_module", "pytree_module", "function_root"]`
+  describing the source of module-like records. Current torch/MLX captures use
+  `"torch_module"`; `"function_root"` and `"pytree_module"` are for non-torch functional and
+  pytree adapters.
+- `param_source`: `Literal["native-module", "pytree-derived", "none"]` describing the source of
+  `Trace.params`. Torch/MLX use `"native-module"` when parameters exist; metadata-only fake or
+  function-root traces can use `"none"`.
 - `FIELD_DEFAULTS`: Class-level defaults applied at initialization and cleanup.
 - `FIELD_FORK_POLICY`: Class-level per-field policy for `fork()`.
 - `FIELD_SAVE_POLICY`: Class-level per-field policy for portable save/load.
@@ -571,6 +585,9 @@ Example: `trace.layers["conv2d_1_2"]` returns the Layer; `trace.ops["conv2d_1_2:
 ### Backward and GradFn Anchors
 
 - `backward_memory_backend`: Backend used to measure backward memory, such as `cuda`, `cpu`, `mps`, or `unknown`.
+- `derived_grads`: Preview-only backend-derived leaf gradients, populated by future JAX
+  derived-gradient capture from a second JAX AD execution. Not a true backward graph and must not
+  populate `GradFn` / `GradFnCall` accessors.
 - `backward_root_grad_fn_object_ids`: List of runtime Python `id()` values, one per backward pass, in execution order. Each entry is the root grad-fn `object_id` from that pass's loss tensor. Empty list if no backward pass has been logged. Renamed from `backward_root_grad_fn_ids` for consistency.
 - `last_backward_root_grad_fn_object_id` (`@property`): Convenience accessor for the most recent backward pass's root grad-fn object_id; `None` if no backward pass has been logged.
 - `backward_durations`: List of float seconds, one per backward pass, in execution order. Empty list if no backward pass has been logged.
@@ -797,7 +814,13 @@ Relationship to `op.args` / `op.kwargs`: call-signature view (with scalars, nest
 - `out`: Saved forward tensor output of this Op when TorchLens saved it.
 - `shape`: Shape of `out`.
 - `dtype`: Dtype of `out`.
+- `dtype_ref`: Backend-neutral dtype reference for the Op output, stored as a `DtypeRef`.
 - `activation_memory`: Bytes used by `out`.
+- `device_ref`: Backend-neutral device reference for the Op output, stored as a `DeviceRef` when
+  available.
+- `backend_address`: Backend-native address or path for resolving this Op, when available.
+- `resolver_status`: Resolution status for backend-native metadata, currently `"resolved"`,
+  `"metadata_only"`, or `"unresolved"`.
 - `grad`: Saved gradient of the Op output after backward, when available.
 - `grad_shape`: Shape of `grad`.
 - `grad_dtype`: Dtype of `grad`.
@@ -1016,6 +1039,12 @@ one-Op Layers and raise `ValueError` for multi-Op Layers (use `layer.ops[n]`).
 - `out`: Saved forward output for a single-Op Layer; raises for multi-Op Layers.
 - `shape`: Output shape when stable or single-Op.
 - `dtype`: Output dtype when stable or single-Op.
+- `dtype_ref`: Backend-neutral dtype reference for the Layer output, delegated from its first Op.
+- `device_ref`: Backend-neutral device reference for the Layer output, delegated from its first Op
+  when available.
+- `backend_address`: Backend-native address or path for resolving this Layer, when available.
+- `resolver_status`: Resolution status for backend-native metadata, currently `"resolved"`,
+  `"metadata_only"`, or `"unresolved"`.
 - `activation_memory`: Output memory in bytes (per-pass form).
 - `total_activation_memory`: Sum of activation memory across all Ops in this Layer.
 - `grad`: Saved gradient for a single-Op Layer.
@@ -1491,6 +1520,12 @@ memory cluster (see Module Memory) for module-scope memory.
 
 - `shape`: Shape of the parameter tensor.
 - `dtype`: Dtype of the parameter tensor.
+- `dtype_ref`: Backend-neutral dtype reference for the parameter leaf.
+- `device_ref`: Backend-neutral device reference for the parameter leaf when available.
+- `backend_address`: Backend-native parameter address or path, usually the torch dotted address for
+  native-module parameters.
+- `resolver_status`: Resolution status for backend-native metadata, currently `"resolved"`,
+  `"metadata_only"`, or `"unresolved"`.
 - `num_params`: Number of scalar parameters in this tensor (equivalent to `numel()`).
 - `memory`: Bytes used by the parameter tensor.
 
@@ -1847,11 +1882,11 @@ names follow the locked post-rename naming.
 
 ### Top-level capture
 
-- `tl.trace(model, input_args, input_kwargs=None, *, layers_to_save="all", transform=None, output_transform=None, save_raw_input="small", save_raw_output="small", keep_orphans=False, output_device="cpu", out_transform=None, grad_transform=None, save_raw_activations=True, save_raw_gradients=True, mark_layer_depths=False, detach_saved_activations=True, save_arg_values=True, save_arg_templates=False, save_gradients=False, gradients_to_save=None, save_code_context=True, save_rng_states=False, save_outs_to=None, keep_outs_in_memory=True, save_grads_to=None, keep_grads_in_memory=True, intervention_ready=False, backward_ready=False, hooks=None, unwrap_when_done=False, verbose=False, source_context_lines=2, compute_input_output_distances=True, recurrence_detection=True, capture=None, save=None, streaming=None, trace_label=None, cache=False, cache_dir=None, module_filter=None, stop_after=None, raise_on_nan=False, ...)`: Run a forward pass with capture and return a Trace. **Visualization params (`vis_*`) have been REMOVED from `tl.trace()`** — use `trace.draw(...)` for visualization.
+- `tl.trace(model, input_args, input_kwargs=None, *, backend: BackendName | None = None, layers_to_save="all", transform=None, output_transform=None, save_raw_input="small", save_raw_output="small", keep_orphans=False, output_device="cpu", out_transform=None, grad_transform=None, save_raw_activations=True, save_raw_gradients=True, mark_layer_depths=False, detach_saved_activations=True, save_arg_values=True, save_arg_templates=False, save_gradients=False, gradients_to_save=None, save_code_context=True, save_rng_states=False, save_outs_to=None, keep_outs_in_memory=True, save_grads_to=None, keep_grads_in_memory=True, intervention_ready=False, backward_ready=False, hooks=None, unwrap_when_done=False, verbose=False, source_context_lines=2, compute_input_output_distances=True, recurrence_detection=True, capture=None, save=None, streaming=None, trace_label=None, cache=False, cache_dir=None, module_filter=None, stop_after=None, raise_on_nan=False, ...)`: Resolve the backend, run a forward pass with capture, and return a Trace. `backend=None` preserves torch eager default and MLX module auto-routing. **Visualization params (`vis_*`) have been REMOVED from `tl.trace()`** — use `trace.draw(...)` for visualization.
 - `tl.peek(model, x, layer, stop_after=None)`: Return the saved out for one layer. Convenience over `trace()`.
 - `tl.extract(model, x, layers)`: Return saved outs for many layers. `layers` is an iterable of lookups or a `{user_label: lookup}` mapping.
 - `tl.batched_extract(model, stimuli, layers, batch_size=32, device=None, output_dir=None, postfunc=None, progress=True)`: Extract outs from a batched stimulus set.
-- `tl.fastlog.record(model, input_args, input_kwargs=None, *, keep_op=None, keep_module=None, default_op=MISSING, default_module=MISSING, history_size=8, include_source_events=False, max_predicate_failures=32, on_predicate_error="auto", streaming=None, return_output=False, postprocess="none", random_seed=None, out_transform=None, save_raw_activations=True, backward_ready=False)`: Predicate-driven sparse capture, returns a `Recording`.
+- `tl.fastlog.record(model, input_args, input_kwargs=None, *, keep_op=None, keep_module=None, default_op=MISSING, default_module=MISSING, history_size=8, include_source_events=False, max_predicate_failures=32, on_predicate_error="auto", streaming=None, return_output=False, postprocess="none", random_seed=None, out_transform=None, save_raw_activations=True, backward_ready=False)`: Torch-only predicate-driven sparse capture, returns a `Recording`.
 - `tl.fastlog.halt(reason="")`: Raise `HaltSignal` to halt the active fastlog recording. Returns `NoReturn`.
 - `tl.fastlog.HaltSignal(BaseException)`: Signal class raised by `halt`.
 - `tl.fastlog.Recorder.__enter__() -> Recorder`: Begin a fastlog rollout context.
@@ -1861,7 +1896,7 @@ names follow the locked post-rename naming.
 
 - `tl.save(trace, path, *, level="portable", include_outs=True, include_grads=True, include_saved_args=False, include_rng_states=False, strict=True, overwrite=False)`: Persist a Trace to a `.tlspec` directory.
 - `tl.load(path, **kwargs)`: Load a `.tlspec` Trace or Bundle. (Canonical entry point — `Trace.load` classmethod has been REMOVED to avoid the classmethod-on-instance footgun.)
-- `tl.validate(model, input_args, input_kwargs=None, *, scope, random_seed=None, verbose=False, validate_metadata=True, loss_fn=None, perturb_saved_grads=False, atol=1e-5, rtol=1e-4, validate_layer_grads=False, layer_grad_atol=None, layer_grad_rtol=None)`: Run validation. `scope` is `"forward"`, `"backward"`, `"saved"`, or `"intervention"`.
+- `tl.validate(model, input_args, input_kwargs=None, *, scope, random_seed=None, verbose=False, validate_metadata=True, loss_fn=None, perturb_saved_grads=False, atol=1e-5, rtol=1e-4, validate_layer_grads=False, layer_grad_atol=None, layer_grad_rtol=None, backend: BackendName | None = None)`: Resolve the backend and run backend-dispatched validation. `scope` is `"forward"`, `"backward"`, `"saved"`, or `"intervention"`; the public contract remains a real bool for supported backend/scope pairs and a typed unsupported error otherwise.
 - `tl.aggregate(model, dataloader, metrics, *, target="out", loss_fn=None)`: Stream outs (or grads) through metric accumulators.
 - `tl.bundle(*args, **kwargs)`: Construct a Bundle.
 
@@ -2026,13 +2061,40 @@ All visualization lives on `Trace.draw()` (and friends), not on `tl.trace()`.
 
 ## Backend integration
 
-- `Trace.backend`: `Literal["torch", "mlx"]`. Survives portable save/load. Default `"torch"`.
-- MLX hard-rejection contract: `MLXBackend.capture_trace(..., save_gradients=True)` raises `NotImplementedError`; `intervention_ready=True` raises `NotImplementedError`; pre-attached `hooks` raises `NotImplementedError`; `output_device != "same"` raises `ValueError`; non-default visualization modes raise `ValueError`.
-- MLX wrapped surface: Conv2d, normalization layers, Embedding, Dropout, MultiHeadAttention, reductions, shape ops, activations. Pinned to `mlx>=0.26,<0.27`.
+- `BackendName`: Literal/string backend identifier accepted by `backend=` and persisted as
+  `Trace.backend`; shipped user-facing names are `"torch"` and technical-preview `"mlx"`.
+- `BackendSpec`: Public registry object owning backend detection, capture dispatch, validation
+  dispatch, replay hooks, serialization policy, capabilities, and canonical errors.
+- `register_backend_spec(spec, *, replace=False)`: Register a process-local `BackendSpec`.
+- `unregister_backend_spec(name)`: Remove a process-local backend spec by name or alias.
+- `get_backend_spec(name)`: Return a registered `BackendSpec` or raise a typed unknown-backend
+  error.
+- `registered_backend_specs()`: Return the unique registered backend specs.
+- `resolve_backend_spec(backend, model, input_args, input_kwargs)`: Resolve the public backend
+  selection; explicit names win, `backend=None` falls back to detector priority, and ambiguity or
+  mismatch raises before capture.
+- `BackendUnsupportedError`: Raised when a registered backend lacks the requested capability.
+- `BackendMismatchError`: Raised when an explicit backend cannot handle the supplied model/input.
+- `BackendAmbiguityError`: Raised when `backend=None` has multiple equal-priority matches.
+- `BackendPayloadUnsupportedError`: Raised when audit-only or metadata-only backend payloads are
+  requested after load.
+- `BackendRuntimeCompatibilityError`: Raised when serialized backend runtime metadata is
+  incompatible with the current backend runtime.
+- MLX wrapped surface: Conv2d, normalization layers, Embedding, Dropout, MultiHeadAttention,
+  reductions, shape ops, and activations. Unsupported MLX capture surfaces now raise canonical
+  backend capability errors.
 
 ## Portable save scrub
 
 - `_io.scrub.scrub_for_save(trace, *, include_outs=True, include_grads=True, include_saved_args=False, include_rng_states=False) -> tuple[dict, list[BlobSpec], list[dict]]`: Scrub a Trace into portable metadata, tensor blob specs, and an unsupported-tensor audit list.
+- `backend_runtime`: Manifest schema-v2 runtime fingerprint for the backend that wrote a bundle.
+- `payload_policy`: Manifest schema-v2 payload materialization policy, currently `full`,
+  `audit_only`, or `metadata_only`.
+- TLSPEC version axes: the on-disk family detector (`kind` + `tlspec_version`), the manifest
+  schema version, and the pickled object-state `_io.TLSPEC_VERSION` are independent.
+- Manifest schema v2: backend-aware manifest shape adding `backend`, `backend_runtime`, nullable
+  torch-specific fields, and `payload_policy`; non-torch preview payloads are audit-only or
+  metadata-only until a backend codec can materialize them.
 
 ## Removed (relative to the v1 glossary)
 
@@ -2059,7 +2121,6 @@ These items have been removed entirely as part of the rename sprint:
 - `Layer.buffer_address`: renamed to `address`.
 - `Layer.unsupported_op`, `Trace.unsupported_ops`: REMOVED as vestigial (always empty in current code).
 - `Trace.run_state`: renamed to `state`. `RunState` enum renamed to `TraceState`.
-- `Trace._backend_name`: promoted to public `Trace.backend` with `Literal` typing.
 - `Trace.train_mode`: renamed to `backward_ready`.
 - `Module.is_train_mode`: renamed to `training` (PyTorch idiom match).
 - `Trace.ledger`, `Trace.operation_history`: renamed to `state_history`.

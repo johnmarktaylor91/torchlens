@@ -2,7 +2,7 @@
 
 | Inseq operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
-| Attribute generation outputs | Capture generation-style Python loop and compute metrics over `ModelLog`/`Bundle` | Partial; Inseq attribution methods are not reimplemented. |
+| Attribute generation outputs | Capture generation-style Python loop and compute metrics over `Trace`/`Bundle` | Partial; Inseq attribution methods are not reimplemented. |
 | Step-wise hidden-state access | `log.find_sites(...)` over repeated loop sites | Equivalent when generation loop is visible. |
 | Contrastive inputs | Capture clean/corrupted logs and compare with `Bundle` | Equivalent comparison pattern. |
 | Attribution method selection | No direct equivalent | Deferred to v2.x; use Inseq for built-in attribution algorithms. |

@@ -1,8 +1,13 @@
 # TorchLens for AI coding agents
 
 This page is a compact map for agents writing or reviewing TorchLens code. Prefer the current
-v2 spelling: `tl.trace(...)`, predicate `save=...`, `intervene=...`, `storage=...`, and
-`save_grads=...`.
+v2 spelling: `tl.trace(..., backend=None)`, predicate `save=...`, `intervene=...`,
+`storage=...`, and `save_grads=...`.
+
+Backend note: `backend=None` preserves torch eager default plus MLX module auto-routing.
+`tl.record()`/fastlog and true backward capture are torch-only in backend v1. Backend-neutral
+metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_source`,
+`dtype_ref`, `device_ref`, `backend_address`, and `resolver_status`.
 
 ## Public surface map
 
@@ -11,7 +16,7 @@ v2 spelling: `tl.trace(...)`, predicate `save=...`, `intervene=...`, `storage=..
 | Job | Names |
 | --- | --- |
 | Capture and sparse recording | `trace`, `fastlog`, `record_span`, `tap` |
-| Persistence and bundles | `load`, `save`, `bundle`, `Bundle` |
+| Persistence and bundles | `load`, `save`, `bundle`, `Bundle`; schema-v2 manifests add `backend`, `backend_runtime`, and `payload_policy` |
 | Replay and edits | `do`, `replay`, `replay_from`, `rerun` |
 | Data objects | `Trace`, `Layer`, `Op`, `Quantity`, `Bytes`, `Duration`, `Flops`, `Macs` |
 | Site discovery | `sites`, `label`, `func`, `func_transform`, `module`, `contains`, `where`, `in_module`, `head`, `output`, `grad_fn`, `facet` |
@@ -148,4 +153,5 @@ assert graph is not None
 - Do not use deprecated `layers_to_save`, `vis_mode`, `hooks`, or `keep_op` spellings in new code
   unless you are intentionally testing compatibility.
 - Do not assume unsaved payloads can be read later. Re-trace with a wider `save=` predicate or use
-  `tl.record(...).to_trace()` with the records you need.
+  torch `tl.record(...).to_trace()` with the records you need. Non-torch preview `.tlspec`
+  payloads may be audit-only or metadata-only.

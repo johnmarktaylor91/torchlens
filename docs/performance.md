@@ -5,12 +5,16 @@ TorchLens is fastest when it captures only the payloads you plan to inspect. A f
 sites; `tl.record(model, x, save=...)` is the lighter path for tight loops where you only need
 selected records and can materialize a `Trace` later.
 
+Backend note: these timings and sparse-recording examples are torch-oriented. `tl.record()` /
+fastlog is torch-only in the backend-v1 registry. Non-torch preview backends may have different
+capture costs and, when saved to `.tlspec`, may write audit-only or metadata-only payloads.
+
 ## Decision tree
 
 | Need | Use | Notes |
 | --- | --- | --- |
 | Complete graph metadata and a few activations | `tl.trace(model, x, save=predicate)` | Best default for debugging and one-off analysis. |
-| Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Lower overhead; call `Recording.to_trace()` only when you need graph structure. |
+| Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Torch-only lower-overhead path; call `Recording.to_trace()` only when you need graph structure. |
 | A local window around a later op | `tl.trace(..., save=tl.followed_by(...), lookback=K)` | Retains bounded recent metadata, and optionally bounded recent payloads. |
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
@@ -62,7 +66,7 @@ gelu_site = trace.find_sites(tl.func("gelu")).first()
 assert gelu_site.out.shape == (2, 4)
 ```
 
-`tl.record(save=...)` is the canonical spelling. `record(keep_op=...)` and
+`tl.record(save=...)` is the canonical torch sparse-capture spelling. `record(keep_op=...)` and
 `record(keep_module=...)` remain deprecated aliases for older code.
 
 ## Speed knobs
@@ -105,8 +109,10 @@ assert trace.find_sites(tl.func("conv2d")).first().out.shape == (1, 2, 3, 3)
 ```
 
 Use disk-backed storage for selected payloads that are too large or numerous to keep in memory.
-Portable `.tlspec/` bundles store manifest data plus tensor sidecars; executable Python callables
-are not portable.
+Portable `.tlspec/` bundles store manifest data plus tensor sidecars when the backend supports
+materialized payloads; executable Python callables are not portable. Backend-aware manifest schema
+v2 adds `backend`, `backend_runtime`, nullable torch-specific fields, and `payload_policy`.
+Non-torch preview bundles can be audit-only or metadata-only and fail loudly on payload reads.
 
 ## Intervention cost
 

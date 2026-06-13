@@ -11,12 +11,11 @@
 | Save a modified computation | `.tlspec/` saves intervention recipes | TorchLens saves recipes, not rewritten model trees. |
 | Compare several variants | `tl.bundle({...})` | Equivalent comparison container. |
 | Intervene on fused kernel internals | Manual unfused PyTorch code | Opaque fused internals are hidden. |
-| Pure JAX workflows | No equivalent | TorchLens is PyTorch-only. |
+| Pure JAX workflows | Future explicit `backend="jax"` functional preview | Not shipped in this checkout; Penzai remains better for JAX model surgery. |
 
 ## Honest concession
 
 Penzai is the better fit for functional JAX model surgery, named axes, and workflows that want the
-model tree itself to be the edited artifact. TorchLens deliberately stays with PyTorch eager
-execution: it captures the run, stores op-level provenance, and applies interventions to traces or
-live PyTorch values. That makes it broad across PyTorch architectures, but it is not a JAX tree
-rewriting system.
+model tree itself to be the edited artifact. TorchLens' shipped capture surface is PyTorch eager
+plus a technical-preview MLX backend; the planned JAX preview captures declared functional calls
+as jaxpr-derived traces. That still does not make TorchLens a JAX tree rewriting system.

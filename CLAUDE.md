@@ -1,10 +1,10 @@
 # TorchLens Agent Guide
 
-TorchLens logs PyTorch eager execution: run a normal forward pass, record operation
-metadata and activations, then inspect the resulting `Trace`. Torch function
-wrapping is lazy in 2.x: `import torchlens` keeps torch clean, and the first capture
-calls `wrap_torch()` through model preparation. The wrappers then stay installed until
-an explicit `torchlens.decoration.unwrap_torch()`.
+TorchLens logs backend-resolved execution into a `Trace`. The stable default is PyTorch
+eager capture: run a normal forward pass, record operation metadata and activations, then
+inspect the result. Torch function wrapping is lazy in 2.x: `import torchlens` keeps torch
+clean, and the first torch capture calls `wrap_torch()` through model preparation. The
+wrappers then stay installed until an explicit `torchlens.decoration.unwrap_torch()`.
 
 ## Install
 
@@ -53,6 +53,13 @@ recording = tl.record(model, x, save=tl.func("relu"))
 full_structure = recording.to_trace()
 ```
 
+Use `backend=` only when the backend is intentionally part of the test or example:
+
+```python
+torch_trace = tl.trace(model, x, backend="torch")
+assert torch_trace.backend == "torch"
+```
+
 Before debugging wrapper-specific failures, run:
 
 ```python
@@ -65,10 +72,17 @@ print(tl.compat.report(model, x).to_markdown())
   selectors, helper transforms, observers, validation, and the three main log classes.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
-  payload reads rejected explicitly. `keep_op=` and `keep_module=` are deprecated aliases.
+  payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
+  registry. `keep_op=` and `keep_module=` are deprecated aliases.
+- `tl.trace(..., backend=None)` routes through `BackendSpec`; explicit backend mismatches,
+  unknown names, unsupported capabilities, and audit-only payload reads raise typed backend
+  errors. Public backend-neutral metadata lives on `Trace.backend`, `Trace.module_identity_mode`,
+  `Trace.param_source`, and record fields such as `dtype_ref`, `device_ref`,
+  `backend_address`, and `resolver_status`.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
-- `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers.
+- `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest
+  schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
   the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
 - `torchlens.bridge` contains optional adapters for Captum, HF, SHAP, SAE Lens, LIT,

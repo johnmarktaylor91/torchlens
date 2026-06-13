@@ -51,7 +51,11 @@ post-benchmark round) + torch parity goldens once built.
 - [x] 3. Neutral data/accessor fields: `dtype_ref`, `device_ref`, `backend_address`, resolver status, `Trace.param_source`, and object-state/default-fill decisions.
 - [x] 4. Serialization schema v2: backend/runtime manifest fields, nullable torch fields, v1 fixture compatibility, audit-only non-torch payload policy.
 - [x] 5. Fake backend end-to-end acceptance: trace object, save/load round-trip, accessors, invariant registry split with non-torch corruption fixtures.
-- [ ] 6. Docs/glossary/notebook lockstep for each newly reachable public surface beyond the registry/API slice.
+- [x] 6. Docs/glossary/notebook lockstep for each newly reachable public surface beyond the registry/API slice.
+
+## M0 status
+M0 COMPLETE: M0.1a artifacts, M0.1b parity gates, M0.2 substrate items, and M0.3
+docs/glossary/notebook lockstep are complete.
 
 ## Iteration log
 | Round | Lane | Phase | Commit | Result | Next |
@@ -79,3 +83,4 @@ post-benchmark round) + torch parity goldens once built.
 | 4 | backend | M0.2 additive backend-neutral substrate | this commit | PASS: added neutral `dtype_ref`, `device_ref`, `backend_address`, and `resolver_status` fields to Op/Layer/Param; added `Trace.module_identity_mode` and `Trace.param_source`; bumped pickled object-state `_io.TLSPEC_VERSION` to 5 with legacy default-fill; updated parity goldens and tracked backend-neutral docs. Gates: ruff, mypy, backend_parity, predicate suite, smoke, focused neutral-field tests. | Continue M0.2 item 4 schema v2 serialization, then fake backend save/load/invariant acceptance and remaining docs/glossary lockstep. |
 | 5 | backend | M0.2 additive backend-neutral substrate | this commit | PASS: added manifest schema v2 validation/preflight with backend/runtime fields, nullable torch fields, backend payload policy metadata, v1 intended-use compatibility, and audit-only non-torch load refusal before torch manifest parsing. Gates: ruff, mypy, backend registry audit, backend_parity, predicate suite, smoke, focused tlspec schema tests. | Continue M0.2 item 5 fake backend save/load/invariant acceptance, then remaining docs/glossary/notebook lockstep. |
 | 6 | backend | M0.2 additive backend-neutral substrate | this commit | PASS: fake backend now returns a real Trace through public `tl.trace(..., backend="fake")`, dispatches trace validation, saves/loads metadata-only schema v2 bundles, exposes neutral accessors after load, and exercises non-torch invariant gates with corruption fixtures. Gates: ruff, mypy, backend_parity, predicate suite, smoke, focused backend/tlspec tests. | Continue M0.2 item 6 docs/glossary/notebook lockstep for remaining backend substrate public surfaces. |
+| 7 | backend | M0.3 docs/glossary lockstep | this commit | PASS: updated canonical working glossary, root agent guides, backend/capture/serialization docs, migration pages, audit/example indexes, and notebook markdown for public `backend=`, `BackendSpec`/`BackendName`, neutral accessors, validation dispatch, TLSPEC schema v2, audit-only payloads, and invariant split. Gates: ruff, mypy, backend_parity, predicate suite, smoke. | M0 COMPLETE; proceed to next phase per plan. |

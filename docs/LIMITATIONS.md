@@ -69,7 +69,8 @@ interpretability package:
   but it does not package the full attribution-method catalog.
 - Use Penzai for functional JAX model surgery or named-axis workflows. This checkout does not ship
   a public JAX capture backend; TorchLens' shipped capture surface is PyTorch eager plus the MLX
-  technical preview.
+  technical preview. The backend substrate reserves JAX for a future jaxpr-first functional
+  preview, not wrapper-based capture.
 - Use `torch.profiler` for kernel-level performance work. TorchLens records operation provenance,
   graph topology, activations, gradients, memory, and approximate FLOPs; it is not a profiler UI.
 
@@ -208,4 +209,4 @@ If you hit a crash or wrong result in a context that isn't listed above:
 3. File an issue with: the torch / python version, the compatibility report, the full traceback,
    and (if possible) a small reproducer.
 4. If it's a silent-wrong-result, include the layer count in the resulting
-   ``ModelLog`` vs. what you expected.
+   ``Trace`` vs. what you expected.

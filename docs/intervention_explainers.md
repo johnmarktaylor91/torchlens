@@ -13,7 +13,7 @@ randomness, or any operation that replay cannot faithfully reconstruct.
 
 ## Mutate In Place and Fork First
 
-`set`, `attach_hooks`, and `do` mutate the `ModelLog` they are called on. A root
+`set`, `attach_hooks`, and `do` mutate the `Trace` they are called on. A root
 log warns once before this kind of mutation. For branched experiments, fork
 first:
 

@@ -6,6 +6,11 @@ to a runtime-only sidecar diary, then projected into `BackwardPass`, `GradFn`, `
 per-op gradient records. Saved `.tlspec` files persist the projections and tensor blobs, not the
 live diary.
 
+Backend status: torch is the only true-backward capture backend in this checkout. MLX declares
+backward capture unsupported. Future JAX work is a derived-gradient preview: leaf gradients from
+a second JAX AD execution over declared leaves, not `GradFn`/`GradFnCall` records or live
+backward hooks. A real JAX backward graph remains research.
+
 ## Capturing Gradients
 
 Use `save_grads=` to choose which operation gradients are retained:
@@ -136,10 +141,10 @@ Live traces register their known autograd roots so wrapped engine calls can find
 If you keep a trace only for analysis while continuing training, call `trace.disarm_triggers()` to
 detach it from engine interception and tensor-hook emission.
 
-MLX currently declares backward capture unsupported and raises tiered errors. The planned T0/T1
-path is `value_and_grad` for pass brackets and leaf gradients, then `vjp` composition for per-op
-cotangents. Torch-only T2 features such as autograd node records and live backward intervention
-remain out of reach unless those backends expose hookable backward graphs.
+MLX currently declares backward capture unsupported and raises tiered backend errors. Torch-only
+features such as autograd node records and live backward intervention remain out of reach unless
+another backend exposes hookable backward graphs. JAX M1 is limited to derived leaf gradients;
+JAX T1/per-op cotangents are research, not a committed roadmap item.
 
 Future follow-ups are filed for real per-fire timing via prehooks and better implicit-boundary
 detection. Current `GradFnCall` timing is a single hook timestamp, and implicit passes are closed

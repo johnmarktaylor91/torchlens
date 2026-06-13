@@ -7,7 +7,7 @@ Read these in this order if you are new to TorchLens:
 3. [`visualize.ipynb`](visualize.ipynb) - Render a model graph and learn the layer labels.
 4. [`extract_outs.ipynb`](extract_outs.ipynb) - Extract several layers into a dict of tensors.
 5. [`intervention.ipynb`](intervention.ipynb) - Zero-ablate one layer and replay downstream computation.
-6. [`save_load.ipynb`](save_load.ipynb) - Round-trip a saved TorchLens `.tlspec` bundle.
+6. [`save_load.ipynb`](save_load.ipynb) - Round-trip a torch materialized-payload `.tlspec` bundle.
 7. [`cog_neuro_rdm.ipynb`](cog_neuro_rdm.ipynb) - Build a compact model RDM for cognitive neuroscience workflows.
 
 Each notebook is deterministic, CPU-friendly, and designed to run end-to-end with papermill in under 30 seconds.

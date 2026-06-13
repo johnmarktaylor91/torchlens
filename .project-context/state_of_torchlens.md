@@ -1,36 +1,37 @@
 # State of TorchLens 2.x
 
 ## What TorchLens Is
-TorchLens records PyTorch eager execution as a graph of tensor operations, modules,
-parameters, buffers, activations, gradients, and source/context metadata. It lazily wraps
-PyTorch functions on first capture with persistent wrappers gated by `_state._logging_enabled`.
-The main output is a `ModelLog`, whose layers are represented as aggregate `LayerLog` objects
-over per-pass `LayerPassLog` records. TorchLens 2.x also includes portable `.tlspec` save/load,
-intervention bundles, sparse fastlog recording, visualization helpers, optional bridges, and
-stub appliance namespaces.
+TorchLens records backend-resolved execution as a graph of tensor operations, modules,
+parameters, buffers, activations, gradients, and source/context metadata. The stable default is
+PyTorch eager capture, which lazily wraps PyTorch functions on first capture with persistent
+wrappers gated by `_state._logging_enabled`. The main output is a `Trace`, whose layers are
+represented as aggregate `Layer` objects over per-pass `Op` records. TorchLens 2.x also includes
+portable `.tlspec` save/load, intervention bundles, torch-only sparse fastlog recording,
+visualization helpers, optional bridges, and stub appliance namespaces.
 
 ## Public API Surface
 
-`torchlens.__all__` currently contains 40 names.
+`torchlens.__all__` contains the public capture, save/load, intervention, selector, observer,
+validation, and core data-class names for the current 2.x surface.
 
 ### Capture and Extraction
-- `log_forward_pass` - full eager forward capture returning `ModelLog`; `torchlens.user_funcs.log_forward_pass`.
-- `fastlog` - sparse predicate-recording namespace; `torchlens.fastlog`.
+- `trace` - backend-resolved capture returning `Trace`; `torchlens.user_funcs.trace`.
+- `fastlog` - torch-only sparse predicate-recording namespace; `torchlens.fastlog`.
 - `peek` - capture one layer activation by label/query; `torchlens.__init__.peek`.
 - `extract` - extract one or more layer activations; `torchlens.__init__.extract`.
 - `batched_extract` - batched extraction helper over an iterable; `torchlens.__init__.batched_extract`.
 
 ### Save and Load
-- `save` - save `ModelLog`, `Bundle`, or related object to portable format; `torchlens._io.bundle.save`.
+- `save` - save `Trace`, `Bundle`, or related object to portable format; `torchlens._io.bundle.save`.
 - `load` - load portable TorchLens artifact; `torchlens._io.bundle.load`.
 
 ### Validation
 - `validate` - consolidated validator with `scope=`; `torchlens.validation.consolidated.validate`.
 
 ### Data Classes
-- `ModelLog` - top-level capture container; `torchlens.data_classes.model_log.ModelLog`.
-- `LayerLog` - aggregate layer across one or more passes; `torchlens.data_classes.layer_log.LayerLog`.
-- `LayerPassLog` - one per-pass tensor operation record; `torchlens.data_classes.layer_pass_log.LayerPassLog`.
+- `Trace` - top-level capture container; `torchlens.data_classes.trace.Trace`.
+- `Layer` - aggregate layer across one or more Op passes; `torchlens.data_classes.layer.Layer`.
+- `Op` - one per-pass tensor operation record; `torchlens.data_classes.op.Op`.
 
 ### Intervention Containers and Execution
 - `Bundle` - named collection of logs/specs with multi-trace helpers; `torchlens.intervention.bundle.Bundle`.
@@ -81,10 +82,10 @@ stub appliance namespaces.
 | `torchlens/observers.py` | `tap`, `record_span`, active span storage | User instrumentation during capture |
 | `torchlens/_io/` | Portable bundle internals, manifests, lazy refs, streaming writer | `.tlspec` and save/load implementation |
 | `torchlens/io/` | Public I/O/admin helpers | `inspect_tlspec`, `detect_tlspec_format`, moved admin APIs |
-| `torchlens/capture/` | Forward/backward runtime logging | Wrapper handoff, raw `LayerPassLog` construction |
+| `torchlens/capture/` | Forward/backward runtime logging | Wrapper handoff and raw `Op` construction |
 | `torchlens/decoration/` | Lazy wrapping and model preparation | Torch namespace lifecycle, module wrappers |
 | `torchlens/postprocess/` | 20-step graph cleanup/finalization | Labels, loops, conditionals, modules, streaming finalization |
-| `torchlens/data_classes/` | `ModelLog`, `LayerLog`, `LayerPassLog`, module/param/buffer/grad logs | User-visible capture data structures |
+| `torchlens/data_classes/` | `Trace`, `Layer`, `Op`, module/param/buffer/grad records | User-visible capture data structures |
 | `torchlens/validation/` | Forward/backward replay, invariants, `.tlspec` schema | Correctness checks |
 | `torchlens/visualization/` | Graphviz, ELK, NodeSpec, overlays, bundle diff, fastlog preview | Rendering and visual customization |
 | `torchlens/intervention/` | Bundle, sites, selectors, hooks, helpers, replay/rerun/save | Intervention API |
@@ -111,15 +112,15 @@ Torch wrapping is lazy. `decoration/model_prep.py:_ensure_model_prepared()` call
 enables capture for one forward pass, and `pause_logging()` protects TorchLens internal tensor
 ops from recursive logging.
 
-### ModelLog, LayerLog, LayerPassLog
-`LayerPassLog` is the per-operation/per-pass record built during capture. `LayerLog` is the
-postprocessed aggregate for one final layer label and may contain multiple passes. `ModelLog`
-is the top-level graph and owns lookup, summaries, rendering, save/load, validation, and
+### Trace, Layer, Op
+`Op` is the per-operation/per-pass record built during capture. `Layer` is the postprocessed
+aggregate for one final layer label and may contain multiple passes. `Trace` is the top-level
+graph and owns lookup, summaries, rendering, save/load, validation, and
 intervention convenience methods.
 
 ### Intervention Model
 Intervention-ready captures retain enough metadata for site selection and replay. Selectors
-resolve through `ModelLog.find_sites()` / `resolve_sites()` and `intervention/resolver.py`.
+resolve through `Trace.find_sites()` / `resolve_sites()` and `intervention/resolver.py`.
 Hooks are normalized in `intervention/hooks.py`, executed through capture/live-hook paths, and
 validated in `intervention/runtime.py`. `Bundle` collects named logs/specs and uses
 `multi_trace/` for node views, topology comparisons, and diff metrics. Save levels live in
@@ -146,9 +147,9 @@ is 5; manifest schema v2 support is manifest-only and does not bump the pickled 
 version again.
 
 ### Fastlog vs Full Capture
-Full capture returns a faithful `ModelLog` and runs postprocess. Fastlog returns a sparse
-`Recording` of predicate-selected operation/module events. It can store to RAM, disk, or both,
-but does not promise full graph invariants.
+Full capture returns a faithful `Trace` and runs postprocess. Fastlog returns a sparse
+`Recording` of predicate-selected torch operation/module events. It can store to RAM, disk, or
+both, but does not promise full graph invariants.
 
 ### Two-Pass Strategy
 When `layers_to_save` is selective, TorchLens runs an exhaustive metadata pass and then a fast
@@ -188,7 +189,7 @@ Extras in `pyproject.toml` also cover `viz`, `tabular`, `captum`, `sae`, `profil
 | `examples/recipes/` | Five recipe notebooks plus README |
 | `examples/intervention/` | Sixteen numbered Python intervention examples plus README |
 | `examples/demos/` | Bundle-diff hero demo notebook and SVG artifact |
-| `notebooks/total_audit/` | Twenty-four audit notebooks, shared helpers, coverage manifest, coverage matrix |
+| `notebooks/audit/` | User-facing 2.x audit notebooks |
 | `notebooks/` | Backward, fastlog, and training tutorials |
 
 The total-audit notebooks are CI-gated through `scripts/generate_audit_coverage_manifest.py`
@@ -214,9 +215,9 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 | Where are labels assigned? | `torchlens/postprocess/labeling.py` |
 | Where is loop detection? | `torchlens/postprocess/loop_detection.py` |
 | Where is conditional branch attribution? | `torchlens/postprocess/control_flow.py`, `torchlens/postprocess/ast_branches.py` |
-| Where are LayerLogs and ModuleLogs built? | `torchlens/postprocess/finalization.py` |
+| Where are Layers and Modules built? | `torchlens/postprocess/finalization.py` |
 | Where are field orders defined? | `torchlens/constants.py` |
-| Where is `ModelLog.__getitem__` behavior? | `torchlens/data_classes/interface.py` and `model_log.py` |
+| Where is `Trace.__getitem__` behavior? | `torchlens/data_classes/interface.py` and `trace.py` |
 | Where is portable save/load? | `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py` |
 | Where is manifest schema validation? | `torchlens/validation/__init__.py`, `torchlens/schemas/tlspec_manifest_v1.json`, `torchlens/schemas/tlspec_manifest_v2.json` |
 | Where is Graphviz rendering? | `torchlens/visualization/rendering.py` |

@@ -1,10 +1,10 @@
 # TorchLens - Codex Agent Briefing
 
 ## Project Overview
-TorchLens extracts activations and computational graph metadata from PyTorch eager
-models. It lazily wraps PyTorch functions with toggle-gated wrappers on first capture,
-runs forward passes with the logging toggle enabled, and logs operations into
-`Trace`, `Layer`, and `Op` objects.
+TorchLens extracts activations and computational graph metadata from backend-resolved
+captures into `Trace`, `Layer`, and `Op` objects. The stable default is PyTorch eager
+capture: it lazily wraps PyTorch functions with toggle-gated wrappers on first torch
+capture, runs forward passes with the logging toggle enabled, and records operations.
 
 ## Architecture
 See `.project-context/architecture.md` for the older full map and
@@ -14,8 +14,11 @@ See `.project-context/architecture.md` for the older full map and
 Key entry points:
 - Main capture: `torchlens/user_funcs.py` - `trace()`, `show_model_graph()`,
   `draw_backward()`, `validate_forward_pass()`
-- Sparse capture: `tl.record(model, x, save=...)` returns `Recording`; `Recording.to_trace()`
-  materializes full graph structure with explicit errors for unsaved payload reads.
+- Backend registry: `torchlens/backends/registry.py` - `BackendSpec`, `BackendName`,
+  backend resolution, validation dispatch, and canonical backend errors.
+- Sparse capture: `tl.record(model, x, save=...)` is torch-only in backend v1; it returns
+  `Recording`, and `Recording.to_trace()` materializes full graph structure with explicit
+  errors for unsaved payload reads.
 - Lazy decoration: `torchlens/decoration/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and `patch_detached_references()`
 - Forward-pass orchestration: `torchlens/capture/trace.py`
@@ -28,6 +31,7 @@ Key entry points:
 Common unified capture patterns:
 
 ```python
+torch_trace = tl.trace(model, x, backend="torch")
 relu_trace = tl.trace(model, x, save=tl.func("relu"))
 windowed = tl.trace(
     model,
@@ -95,6 +99,9 @@ pytest tests/ -m "not slow" -x --tb=short
     `record(keep_module=...)` are deprecated aliases.
 13. `torch.func` / functorch transforms are captured as boundary ops; do not expect their
     per-element internal eager operations to appear unless a future expand-inside mode exists.
+14. Public backend-neutral state (`Trace.backend`, `module_identity_mode`, `param_source`,
+    `dtype_ref`, `device_ref`, `backend_address`, `resolver_status`) must stay in docs,
+    glossary, FIELD_ORDER, and serialization compatibility gates together.
 
 ## Known Gotchas
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
