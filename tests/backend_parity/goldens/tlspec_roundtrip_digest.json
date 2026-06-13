@@ -1,0 +1,486 @@
+{
+  "projection": {
+    "loaded": {
+      "backend": "torch",
+      "has_backward_pass": false,
+      "lookup_keys": {
+        "grad_fns": [],
+        "layers": [
+          "input_1",
+          "linear_1_1",
+          "relu_1_2",
+          "linear_2_3",
+          "output_1"
+        ],
+        "modules": [
+          "self",
+          "fc1",
+          "fc2"
+        ],
+        "ops": [
+          "input_1:1",
+          "linear_1_1:1",
+          "relu_1_2:1",
+          "linear_2_3:1",
+          "output_1:1"
+        ],
+        "params": [
+          "fc1.weight",
+          "fc1.bias",
+          "fc2.weight",
+          "fc2.bias"
+        ],
+        "saved_ops": [
+          "input_1:1",
+          "linear_1_1:1",
+          "relu_1_2:1",
+          "linear_2_3:1",
+          "output_1:1"
+        ]
+      },
+      "num_backward_passes": 0,
+      "num_ops": 3,
+      "num_saved_ops": 5,
+      "ops": [
+        {
+          "children": [
+            "linear_1_1"
+          ],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "none",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "input_1:1",
+          "layer_label": "input_1",
+          "lookup_keys": [
+            -5,
+            0,
+            "input.x",
+            "input_1",
+            "input_1",
+            "input_1:1",
+            "input_1:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {},
+            "kwargs": {}
+          },
+          "parents": [],
+          "shape": [
+            2,
+            3
+          ]
+        },
+        {
+          "children": [
+            "relu_1_2"
+          ],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "linear",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "linear_1_1:1",
+          "layer_label": "linear_1_1",
+          "lookup_keys": [
+            -4,
+            1,
+            "fc1",
+            "fc1:1",
+            "fc1_linear_0",
+            "linear_1",
+            "linear_1:1",
+            "linear_1_1",
+            "linear_1_1:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {
+              "0": "input_1"
+            },
+            "kwargs": {}
+          },
+          "parents": [
+            "input_1"
+          ],
+          "shape": [
+            2,
+            4
+          ]
+        },
+        {
+          "children": [
+            "linear_2_3"
+          ],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "relu",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "relu_1_2:1",
+          "layer_label": "relu_1_2",
+          "lookup_keys": [
+            -3,
+            2,
+            "relu_1",
+            "relu_1:1",
+            "relu_1_2",
+            "relu_1_2:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {
+              "0": "linear_1_1"
+            },
+            "kwargs": {}
+          },
+          "parents": [
+            "linear_1_1"
+          ],
+          "shape": [
+            2,
+            4
+          ]
+        },
+        {
+          "children": [
+            "output_1"
+          ],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "linear",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "linear_2_3:1",
+          "layer_label": "linear_2_3",
+          "lookup_keys": [
+            -2,
+            3,
+            "fc2",
+            "fc2:1",
+            "fc2_linear_0",
+            "linear_2",
+            "linear_2:1",
+            "linear_2_3",
+            "linear_2_3:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {
+              "0": "relu_1_2"
+            },
+            "kwargs": {}
+          },
+          "parents": [
+            "relu_1_2"
+          ],
+          "shape": [
+            2,
+            2
+          ]
+        },
+        {
+          "children": [],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "none",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "output_1:1",
+          "layer_label": "output_1",
+          "lookup_keys": [
+            -1,
+            4,
+            "fc2",
+            "fc2:1",
+            "output",
+            "output_1",
+            "output_1",
+            "output_1:1",
+            "output_1:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {
+              "0": "linear_2_3"
+            },
+            "kwargs": {}
+          },
+          "parents": [
+            "linear_2_3"
+          ],
+          "shape": [
+            2,
+            2
+          ]
+        }
+      ],
+      "output_layers": [
+        "output_1"
+      ]
+    },
+    "source": {
+      "backend": "torch",
+      "has_backward_pass": false,
+      "lookup_keys": {
+        "grad_fns": [],
+        "layers": [
+          "input_1",
+          "linear_1_1",
+          "relu_1_2",
+          "linear_2_3",
+          "output_1"
+        ],
+        "modules": [
+          "self",
+          "fc1",
+          "fc2"
+        ],
+        "ops": [
+          "input_1:1",
+          "linear_1_1:1",
+          "relu_1_2:1",
+          "linear_2_3:1",
+          "output_1:1"
+        ],
+        "params": [
+          "fc1.weight",
+          "fc1.bias",
+          "fc2.weight",
+          "fc2.bias"
+        ],
+        "saved_ops": [
+          "input_1:1",
+          "linear_1_1:1",
+          "relu_1_2:1",
+          "linear_2_3:1",
+          "output_1:1"
+        ]
+      },
+      "num_backward_passes": 0,
+      "num_ops": 3,
+      "num_saved_ops": 5,
+      "ops": [
+        {
+          "children": [
+            "linear_1_1"
+          ],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "none",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "input_1:1",
+          "layer_label": "input_1",
+          "lookup_keys": [
+            -5,
+            0,
+            "input.x",
+            "input_1",
+            "input_1",
+            "input_1:1",
+            "input_1:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {},
+            "kwargs": {}
+          },
+          "parents": [],
+          "shape": [
+            2,
+            3
+          ]
+        },
+        {
+          "children": [
+            "relu_1_2"
+          ],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "linear",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "linear_1_1:1",
+          "layer_label": "linear_1_1",
+          "lookup_keys": [
+            -4,
+            1,
+            "fc1",
+            "fc1:1",
+            "fc1_linear_0",
+            "linear_1",
+            "linear_1:1",
+            "linear_1_1",
+            "linear_1_1:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {
+              "0": "input_1"
+            },
+            "kwargs": {}
+          },
+          "parents": [
+            "input_1"
+          ],
+          "shape": [
+            2,
+            4
+          ]
+        },
+        {
+          "children": [
+            "linear_2_3"
+          ],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "relu",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "relu_1_2:1",
+          "layer_label": "relu_1_2",
+          "lookup_keys": [
+            -3,
+            2,
+            "relu_1",
+            "relu_1:1",
+            "relu_1_2",
+            "relu_1_2:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {
+              "0": "linear_1_1"
+            },
+            "kwargs": {}
+          },
+          "parents": [
+            "linear_1_1"
+          ],
+          "shape": [
+            2,
+            4
+          ]
+        },
+        {
+          "children": [
+            "output_1"
+          ],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "linear",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "linear_2_3:1",
+          "layer_label": "linear_2_3",
+          "lookup_keys": [
+            -2,
+            3,
+            "fc2",
+            "fc2:1",
+            "fc2_linear_0",
+            "linear_2",
+            "linear_2:1",
+            "linear_2_3",
+            "linear_2_3:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {
+              "0": "relu_1_2"
+            },
+            "kwargs": {}
+          },
+          "parents": [
+            "relu_1_2"
+          ],
+          "shape": [
+            2,
+            2
+          ]
+        },
+        {
+          "children": [],
+          "containing_modules": null,
+          "dtype": "float32",
+          "func_name": "none",
+          "has_grad": false,
+          "has_saved_activation": true,
+          "has_saved_args": true,
+          "label": "output_1:1",
+          "layer_label": "output_1",
+          "lookup_keys": [
+            -1,
+            4,
+            "fc2",
+            "fc2:1",
+            "output",
+            "output_1",
+            "output_1",
+            "output_1:1",
+            "output_1:1"
+          ],
+          "module_address": null,
+          "module_pass": null,
+          "num_saved_grads": 0,
+          "parent_arg_positions": {
+            "args": {
+              "0": "linear_2_3"
+            },
+            "kwargs": {}
+          },
+          "parents": [
+            "linear_2_3"
+          ],
+          "shape": [
+            2,
+            2
+          ]
+        }
+      ],
+      "output_layers": [
+        "output_1"
+      ]
+    }
+  },
+  "sha256_chunks": [
+    "445a56ad",
+    "7c8deffa",
+    "f4e1845c",
+    "1d22207c",
+    "5fcf0077",
+    "a7114959",
+    "3cae41cf",
+    "57eedd87"
+  ]
+}

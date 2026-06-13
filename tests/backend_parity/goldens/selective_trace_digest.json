@@ -1,0 +1,286 @@
+{
+  "projection": {
+    "backend": "torch",
+    "has_backward_pass": false,
+    "lookup_keys": {
+      "grad_fns": [],
+      "layers": [
+        "input_1",
+        "linear_1_1",
+        "tanh_1_2",
+        "add_1_3",
+        "linear_2_4",
+        "output_1"
+      ],
+      "modules": [
+        "self",
+        "proj",
+        "out"
+      ],
+      "ops": [
+        "input_1:1",
+        "linear_1_1:1",
+        "tanh_1_2:1",
+        "add_1_3:1",
+        "linear_2_4:1",
+        "output_1:1"
+      ],
+      "params": [
+        "proj.weight",
+        "proj.bias",
+        "out.weight",
+        "out.bias"
+      ],
+      "saved_ops": [
+        "tanh_1_2:1"
+      ]
+    },
+    "num_backward_passes": 0,
+    "num_ops": 4,
+    "num_saved_ops": 1,
+    "ops": [
+      {
+        "children": [
+          "linear_1_1",
+          "add_1_3"
+        ],
+        "containing_modules": null,
+        "dtype": "float32",
+        "func_name": "none",
+        "has_grad": false,
+        "has_saved_activation": false,
+        "has_saved_args": false,
+        "label": "input_1:1",
+        "layer_label": "input_1",
+        "lookup_keys": [
+          -6,
+          0,
+          "input.x",
+          "input_1",
+          "input_1",
+          "input_1:1",
+          "input_1:1"
+        ],
+        "module_address": null,
+        "module_pass": null,
+        "num_saved_grads": 0,
+        "parent_arg_positions": {
+          "args": {},
+          "kwargs": {}
+        },
+        "parents": [],
+        "shape": [
+          2,
+          3
+        ]
+      },
+      {
+        "children": [
+          "tanh_1_2"
+        ],
+        "containing_modules": null,
+        "dtype": "float32",
+        "func_name": "linear",
+        "has_grad": false,
+        "has_saved_activation": false,
+        "has_saved_args": false,
+        "label": "linear_1_1:1",
+        "layer_label": "linear_1_1",
+        "lookup_keys": [
+          -5,
+          1,
+          "linear_1",
+          "linear_1:1",
+          "linear_1_1",
+          "linear_1_1:1",
+          "proj",
+          "proj:1",
+          "proj_linear_0"
+        ],
+        "module_address": null,
+        "module_pass": null,
+        "num_saved_grads": 0,
+        "parent_arg_positions": {
+          "args": {
+            "0": "input_1"
+          },
+          "kwargs": {}
+        },
+        "parents": [
+          "input_1"
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      },
+      {
+        "children": [
+          "add_1_3"
+        ],
+        "containing_modules": null,
+        "dtype": "float32",
+        "func_name": "tanh",
+        "has_grad": false,
+        "has_saved_activation": true,
+        "has_saved_args": false,
+        "label": "tanh_1_2:1",
+        "layer_label": "tanh_1_2",
+        "lookup_keys": [
+          -4,
+          2,
+          "tanh_1",
+          "tanh_1:1",
+          "tanh_1_2",
+          "tanh_1_2:1"
+        ],
+        "module_address": null,
+        "module_pass": null,
+        "num_saved_grads": 0,
+        "parent_arg_positions": {
+          "args": {
+            "0": "linear_1_1"
+          },
+          "kwargs": {}
+        },
+        "parents": [
+          "linear_1_1"
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      },
+      {
+        "children": [
+          "linear_2_4"
+        ],
+        "containing_modules": null,
+        "dtype": "float32",
+        "func_name": "__add__",
+        "has_grad": false,
+        "has_saved_activation": false,
+        "has_saved_args": false,
+        "label": "add_1_3:1",
+        "layer_label": "add_1_3",
+        "lookup_keys": [
+          -3,
+          3,
+          "add_1",
+          "add_1:1",
+          "add_1_3",
+          "add_1_3:1"
+        ],
+        "module_address": null,
+        "module_pass": null,
+        "num_saved_grads": 0,
+        "parent_arg_positions": {
+          "args": {
+            "0": "tanh_1_2",
+            "1": "input_1"
+          },
+          "kwargs": {}
+        },
+        "parents": [
+          "tanh_1_2",
+          "input_1"
+        ],
+        "shape": [
+          2,
+          3
+        ]
+      },
+      {
+        "children": [
+          "output_1"
+        ],
+        "containing_modules": null,
+        "dtype": "float32",
+        "func_name": "linear",
+        "has_grad": false,
+        "has_saved_activation": false,
+        "has_saved_args": false,
+        "label": "linear_2_4:1",
+        "layer_label": "linear_2_4",
+        "lookup_keys": [
+          -2,
+          4,
+          "linear_2",
+          "linear_2:1",
+          "linear_2_4",
+          "linear_2_4:1",
+          "out",
+          "out:1",
+          "out_linear_0"
+        ],
+        "module_address": null,
+        "module_pass": null,
+        "num_saved_grads": 0,
+        "parent_arg_positions": {
+          "args": {
+            "0": "add_1_3"
+          },
+          "kwargs": {}
+        },
+        "parents": [
+          "add_1_3"
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      },
+      {
+        "children": [],
+        "containing_modules": null,
+        "dtype": "float32",
+        "func_name": "none",
+        "has_grad": false,
+        "has_saved_activation": false,
+        "has_saved_args": false,
+        "label": "output_1:1",
+        "layer_label": "output_1",
+        "lookup_keys": [
+          -1,
+          5,
+          "out",
+          "out:1",
+          "output",
+          "output_1",
+          "output_1",
+          "output_1:1",
+          "output_1:1"
+        ],
+        "module_address": null,
+        "module_pass": null,
+        "num_saved_grads": 0,
+        "parent_arg_positions": {
+          "args": {
+            "0": "linear_2_4"
+          },
+          "kwargs": {}
+        },
+        "parents": [
+          "linear_2_4"
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    ],
+    "output_layers": [
+      "output_1"
+    ]
+  },
+  "sha256_chunks": [
+    "b11aa789",
+    "449b16a4",
+    "96ce18b4",
+    "c75a542f",
+    "2ee9576c",
+    "430d6870",
+    "1077d32c",
+    "4dd8943a"
+  ]
+}

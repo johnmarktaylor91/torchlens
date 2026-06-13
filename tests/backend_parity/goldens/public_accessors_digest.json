@@ -1,0 +1,96 @@
+{
+  "projection": {
+    "grad_adjacent": {
+      "grad_for_bwd1_shape": [
+        2,
+        4
+      ],
+      "grad_is_none": false,
+      "has_grad": true,
+      "num_saved_grads": 1,
+      "op_label": "linear_1_1:1"
+    },
+    "layers": {
+      "first_key_label": "input_1",
+      "first_label": "input_1",
+      "keys": [
+        "input_1",
+        "linear_1_1",
+        "relu_1_2",
+        "linear_2_3",
+        "output_1"
+      ]
+    },
+    "modules": {
+      "fc1": {
+        "num_calls": 1,
+        "num_params": 16
+      },
+      "fc2": {
+        "num_calls": 1,
+        "num_params": 10
+      },
+      "self": {
+        "num_calls": 1,
+        "num_params": 26
+      }
+    },
+    "ops": {
+      "first_key_label": "input_1:1",
+      "first_label": "input_1:1",
+      "keys": [
+        "input_1:1",
+        "linear_1_1:1",
+        "relu_1_2:1",
+        "linear_2_3:1",
+        "output_1:1"
+      ]
+    },
+    "params": {
+      "fc1.bias": {
+        "dtype": "float32",
+        "has_grad": true,
+        "module_address": "fc1",
+        "shape": [
+          4
+        ]
+      },
+      "fc1.weight": {
+        "dtype": "float32",
+        "has_grad": true,
+        "module_address": "fc1",
+        "shape": [
+          4,
+          3
+        ]
+      },
+      "fc2.bias": {
+        "dtype": "float32",
+        "has_grad": true,
+        "module_address": "fc2",
+        "shape": [
+          2
+        ]
+      },
+      "fc2.weight": {
+        "dtype": "float32",
+        "has_grad": true,
+        "module_address": "fc2",
+        "shape": [
+          2,
+          4
+        ]
+      }
+    }
+  },
+  "sha256_chunks": [
+    "ee334c15",
+    "3a648c4b",
+    "63db7593",
+    "bf883b61",
+    "6e288402",
+    "af762d71",
+    "40ad43c8",
+    "c01b4cf1"
+  ]
+}

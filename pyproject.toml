@@ -108,6 +108,7 @@ markers = [
     "smoke: marks tests as smoke tests for quick critical-path validation (select with '-m smoke')",
     "rare: marks tests that are always excluded unless explicitly requested (select with '-m rare')",
     "optional: marks tests that require optional dependencies",
+    "backend_parity: marks active backend substrate parity gates",
 ]
 addopts = "-m 'not rare'"
 filterwarnings = [

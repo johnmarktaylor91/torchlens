@@ -1,0 +1,68 @@
+{
+  "projection": {
+    "body_format": "safetensors",
+    "kind": "trace",
+    "save_level": "portable",
+    "schema_version": 1,
+    "tensor_count": 5,
+    "tensors": [
+      {
+        "dtype": "float32",
+        "intended_use": "out",
+        "shape": [
+          2,
+          3
+        ],
+        "storage_backend": null
+      },
+      {
+        "dtype": "float32",
+        "intended_use": "out",
+        "shape": [
+          2,
+          4
+        ],
+        "storage_backend": null
+      },
+      {
+        "dtype": "float32",
+        "intended_use": "out",
+        "shape": [
+          2,
+          4
+        ],
+        "storage_backend": null
+      },
+      {
+        "dtype": "float32",
+        "intended_use": "out",
+        "shape": [
+          2,
+          2
+        ],
+        "storage_backend": null
+      },
+      {
+        "dtype": "float32",
+        "intended_use": "out",
+        "shape": [
+          2,
+          2
+        ],
+        "storage_backend": null
+      }
+    ],
+    "tlspec_version": 1,
+    "torch_version_present": true
+  },
+  "sha256_chunks": [
+    "a9356137",
+    "87df9619",
+    "f7e9ffd0",
+    "d5910c69",
+    "5fa48423",
+    "02272b05",
+    "a6d8d481",
+    "5c7eaca0"
+  ]
+}
