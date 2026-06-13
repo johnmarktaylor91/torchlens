@@ -38,6 +38,8 @@ class TinygradUOpCapture:
         UOp operation name.
     parent_labels
         Raw parent labels captured from UOp source edges.
+    parent_arg_positions
+        UOp source positions for each raw parent label.
     payload_snapshot
         Realized tinygrad tensor copy saved during capture.
     """
@@ -46,6 +48,7 @@ class TinygradUOpCapture:
     uop: Any
     op_name: str
     parent_labels: tuple[str, ...]
+    parent_arg_positions: tuple[tuple[int, str], ...]
     payload_snapshot: Any
 
 
@@ -224,8 +227,15 @@ class TinygradBackend:
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
         observed_ops: dict[int, list[str]] = {}
-        with _observe_tensor_ops(observed_ops):
+        input_identities = self._input_identities(args)
+        with _observe_tensor_ops(observed_ops), _reject_mid_capture_execution():
             output = model(*args)
+        if self._input_identities(args) != input_identities:
+            raise BackendUnsupportedError(
+                "tinygrad backend preview cannot capture Tensor.assign(), Tensor.replace(), "
+                "or setitem input mutation inside the traced callable yet; return a pure lazy "
+                "tinygrad expression instead."
+            )
         outputs = tuple(self._tensor_leaves(output))
         if not outputs:
             raise BackendUnsupportedError(
@@ -275,6 +285,8 @@ class TinygradBackend:
 
                 check_metadata_invariants(trace)
             return self._validate_uops(trace)
+        except BackendUnsupportedError:
+            raise
         except Exception:
             return False
 
@@ -506,6 +518,9 @@ class TinygradBackend:
                     uop=uop,
                     op_name=op_name,
                     parent_labels=tuple(edge.parent_label_raw for edge in parents),
+                    parent_arg_positions=tuple(
+                        (cast(int, edge.arg_position), edge.parent_label_raw) for edge in parents
+                    ),
                     payload_snapshot=payload,
                 )
             )
@@ -914,17 +929,100 @@ class TinygradBackend:
             True when every captured UOp replays to its saved payload.
         """
 
-        for capture in getattr(trace, "tinygrad_uop_captures", ()):
-            replayed = self._realized_copy(self._tensor_from_uop(capture.uop))
-            if _payload_list(replayed) != _payload_list(capture.payload_snapshot):
-                return False
-            op = trace.layer_dict_main_keys.get(capture.label_raw)
+        captures = tuple(getattr(trace, "tinygrad_uop_captures", ()))
+        if not captures:
+            raise BackendUnsupportedError(
+                "tinygrad validation requires live DEV=PYTHON realized-copy payloads; "
+                "audit-only traces cannot be replay validated."
+            )
+        ops_by_raw_label = {
+            getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", ())
+        }
+        for capture in captures:
+            op = ops_by_raw_label.get(capture.label_raw)
             if op is None:
                 return False
-            actual_parents = tuple(getattr(op, "parents", ()))
-            if tuple(capture.parent_labels) != actual_parents:
+            saved_output = _saved_single_output(op)
+            replayed = self._replay_uop_from_trace_graph(capture, op, ops_by_raw_label)
+            if not _payloads_close(replayed, saved_output):
+                return False
+            if not _parent_perturbations_change_output(
+                backend=self,
+                capture=capture,
+                op=op,
+                ops_by_raw_label=ops_by_raw_label,
+                saved_output=saved_output,
+            ):
                 return False
         return True
+
+    def _replay_uop_from_trace_graph(
+        self,
+        capture: TinygradUOpCapture,
+        op: Any,
+        ops_by_raw_label: Mapping[str, Any],
+        replacements: Mapping[int, Any] | None = None,
+    ) -> Any:
+        """Replay one captured UOp with inputs from materialized trace parents.
+
+        Parameters
+        ----------
+        capture
+            Captured UOp metadata.
+        op
+            Materialized TorchLens op corresponding to ``capture``.
+        ops_by_raw_label
+            Materialized operations keyed by raw label.
+        replacements
+            Optional UOp source-position replacements used by perturbation.
+
+        Returns
+        -------
+        Any
+            Realized tinygrad tensor replay output.
+        """
+
+        src = list(getattr(capture.uop, "src", ()) or ())
+        graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
+        parent_labels = tuple(getattr(op, "parents", ()))
+        positioned_labels = {label for label in graph_positions.values() if isinstance(label, str)}
+        if positioned_labels != set(parent_labels):
+            raise ValueError("tinygrad trace parent labels and parent_arg_positions disagree.")
+        if tuple(sorted(graph_positions.items())) != tuple(sorted(capture.parent_arg_positions)):
+            raise ValueError("tinygrad trace parent_arg_positions changed after capture.")
+        for position, parent_label in graph_positions.items():
+            if not isinstance(position, int) or position < 0 or position >= len(src):
+                raise ValueError(f"tinygrad trace parent arg position {position!r} is invalid.")
+            parent_op = ops_by_raw_label[parent_label]
+            parent_value = _saved_single_output(parent_op)
+            if _source_matches_payload(src[position], parent_value):
+                src[position] = parent_value.uop
+        for position, replacement in (replacements or {}).items():
+            if position < 0 or position >= len(src):
+                raise ValueError(f"tinygrad perturbation position {position!r} is invalid.")
+            src[position] = replacement.uop
+        replay_uop = capture.uop.replace(src=tuple(src))
+        return self._realized_copy(self._tensor_from_uop(replay_uop))
+
+    def _input_identities(self, args: Sequence[Any]) -> tuple[str, ...]:
+        """Return tinygrad identities for positional tensor inputs.
+
+        Parameters
+        ----------
+        args
+            Normalized positional arguments.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Versioned tinygrad identities for tensor leaves.
+        """
+
+        return tuple(
+            _identity(leaf)
+            for _path, leaf in _tree_leaves_with_paths(tuple(args))
+            if self.is_tensor(leaf)
+        )
 
     def _normalize_input_args(self, input_args: object) -> list[Any]:
         """Normalize public input args to a positional list.
@@ -1176,6 +1274,69 @@ class _observe_tensor_ops:
         Tensor._apply_uop = self.original
 
 
+class _reject_mid_capture_execution:
+    """Context manager rejecting tinygrad execution that truncates lazy UOp lineage."""
+
+    def __init__(self) -> None:
+        """Initialize the execution guard."""
+
+        self.original_tensor_run_linear: Any = None
+        self.original_jit_run_linear: Any = None
+
+    def __enter__(self) -> "_reject_mid_capture_execution":
+        """Install guarded tinygrad realization hooks.
+
+        Returns
+        -------
+        _reject_mid_capture_execution
+            This context manager.
+        """
+
+        import tinygrad.engine.jit as jit_module
+        import tinygrad.tensor as tensor_module
+
+        self.original_tensor_run_linear = tensor_module.run_linear
+        self.original_jit_run_linear = jit_module.run_linear
+
+        def rejected_run_linear(*args: Any, **kwargs: Any) -> Any:
+            """Reject tinygrad realization or JIT execution during capture."""
+
+            del args, kwargs
+            raise BackendUnsupportedError(
+                "tinygrad backend preview cannot capture Tensor.realize(), Tensor.assign(), "
+                "or TinyJit execution inside the traced callable yet; return a lazy tinygrad "
+                "expression instead."
+            )
+
+        tensor_module.run_linear = rejected_run_linear
+        jit_module.run_linear = rejected_run_linear
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        """Restore tinygrad realization hooks.
+
+        Parameters
+        ----------
+        exc_type
+            Exception type, if any.
+        exc
+            Exception value, if any.
+        tb
+            Traceback, if any.
+
+        Returns
+        -------
+        None
+            The monkeypatches are removed.
+        """
+
+        import tinygrad.engine.jit as jit_module
+        import tinygrad.tensor as tensor_module
+
+        tensor_module.run_linear = self.original_tensor_run_linear
+        jit_module.run_linear = self.original_jit_run_linear
+
+
 def _is_missing(value: object) -> bool:
     """Return whether ``value`` is the public missing sentinel.
 
@@ -1396,3 +1557,247 @@ def _payload_list(tensor: Any) -> Any:
     """
 
     return tensor.tolist()
+
+
+def _saved_single_output(op: Any) -> Any:
+    """Return one operation's saved payload, failing when it was dropped.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+
+    Returns
+    -------
+    Any
+        Saved tinygrad tensor payload.
+    """
+
+    if not getattr(op, "has_saved_activation", False):
+        raise ValueError("tinygrad validation requires every replay payload to be saved.")
+    output = op.out
+    if output is None:
+        raise ValueError("tinygrad validation found a missing saved payload.")
+    return output
+
+
+def _parent_perturbations_change_output(
+    *,
+    backend: TinygradBackend,
+    capture: TinygradUOpCapture,
+    op: Any,
+    ops_by_raw_label: Mapping[str, Any],
+    saved_output: Any,
+) -> bool:
+    """Return whether at least one recorded parent perturbation changes child output.
+
+    Parameters
+    ----------
+    backend
+        tinygrad backend instance used for replay helpers.
+    capture
+        Captured UOp metadata.
+    op
+        Materialized TorchLens operation for the UOp.
+    ops_by_raw_label
+        Materialized operations keyed by raw label.
+    saved_output
+        Saved child output payload.
+
+    Returns
+    -------
+    bool
+        True when a value parent perturbation affects replayed child output.
+    """
+
+    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
+    if not graph_positions:
+        return True
+    positions_by_parent: dict[str, list[int]] = {}
+    for position, parent_label in graph_positions.items():
+        positions_by_parent.setdefault(parent_label, []).append(position)
+    attempted = False
+    for parent_label, positions in positions_by_parent.items():
+        parent_op = ops_by_raw_label[parent_label]
+        parent_value = _saved_single_output(parent_op)
+        value_positions = tuple(
+            position
+            for position in positions
+            if _source_matches_payload(capture.uop.src[position], parent_value)
+        )
+        if not value_positions:
+            continue
+        for candidate in _perturb_candidates(parent_value):
+            attempted = True
+            replacements = {position: candidate for position in value_positions}
+            try:
+                perturbed_output = backend._replay_uop_from_trace_graph(
+                    capture,
+                    op,
+                    ops_by_raw_label,
+                    replacements=replacements,
+                )
+            except Exception:
+                continue
+            if not _payloads_close(perturbed_output, saved_output):
+                return True
+    return not attempted
+
+
+def _perturb_candidates(value: Any) -> tuple[Any, ...]:
+    """Return deterministic perturbation candidates for a tinygrad tensor.
+
+    Parameters
+    ----------
+    value
+        Parent tinygrad payload to perturb.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Perturbed realized tinygrad tensors with the same dtype and device.
+    """
+
+    from tinygrad import Tensor
+
+    payload = _payload_list(value)
+    dtype_name = str(getattr(value, "dtype", ""))
+    candidates: tuple[Any, ...]
+    if "bool" in dtype_name:
+        candidates = (_map_payload(payload, lambda item: not bool(item)),)
+    elif "int" in dtype_name:
+        candidates = (
+            _map_payload(payload, lambda item: int(item) + 1),
+            _map_payload(payload, lambda item: 0),
+        )
+    else:
+        magnitude = _payload_max_abs(payload) + 1.0
+        candidates = (
+            _map_payload(payload, lambda item: float(item) + magnitude),
+            _map_payload(payload, lambda item: float(item) - magnitude),
+            _map_payload(payload, lambda item: 0.0),
+        )
+    return tuple(
+        Tensor(candidate, dtype=value.dtype, device=value.device).realize()
+        for candidate in candidates
+    )
+
+
+def _source_matches_payload(source_uop: Any, value: Any) -> bool:
+    """Return whether a UOp source can be replaced by a saved tensor payload.
+
+    Parameters
+    ----------
+    source_uop
+        Original UOp source.
+    value
+        Saved tinygrad tensor payload.
+
+    Returns
+    -------
+    bool
+        True when dtype and shape match the saved payload.
+    """
+
+    try:
+        from tinygrad import Tensor
+
+        if _uop_name(source_uop) in {"CONST", "STACK"}:
+            return False
+        source_tensor = Tensor(source_uop)
+    except Exception:
+        return False
+    return tuple(source_tensor.shape) == tuple(value.shape) and str(source_tensor.dtype) == str(
+        value.dtype
+    )
+
+
+def _map_payload(value: Any, fn: Callable[[Any], Any]) -> Any:
+    """Map a scalar function over a nested payload.
+
+    Parameters
+    ----------
+    value
+        Scalar or nested list payload.
+    fn
+        Scalar mapper.
+
+    Returns
+    -------
+    Any
+        Payload with ``fn`` applied to every scalar leaf.
+    """
+
+    if isinstance(value, list):
+        return [_map_payload(item, fn) for item in value]
+    return fn(value)
+
+
+def _payload_max_abs(value: Any) -> float:
+    """Return the maximum absolute scalar magnitude in a nested payload.
+
+    Parameters
+    ----------
+    value
+        Scalar or nested list payload.
+
+    Returns
+    -------
+    float
+        Maximum absolute value, or zero for empty lists.
+    """
+
+    if isinstance(value, list):
+        return max((_payload_max_abs(item) for item in value), default=0.0)
+    return abs(float(value))
+
+
+def _payloads_close(left: Any, right: Any) -> bool:
+    """Return whether two tinygrad tensor payloads match within dtype-aware tolerance.
+
+    Parameters
+    ----------
+    left
+        Left tinygrad tensor.
+    right
+        Right tinygrad tensor.
+
+    Returns
+    -------
+    bool
+        True when shape, dtype, and payload values match.
+    """
+
+    if tuple(left.shape) != tuple(right.shape) or str(left.dtype) != str(right.dtype):
+        return False
+    return _payload_values_close(_payload_list(left), _payload_list(right), str(left.dtype))
+
+
+def _payload_values_close(left: Any, right: Any, dtype_name: str) -> bool:
+    """Return whether nested payload values are close for a dtype family.
+
+    Parameters
+    ----------
+    left
+        Left scalar or list payload.
+    right
+        Right scalar or list payload.
+    dtype_name
+        tinygrad dtype string.
+
+    Returns
+    -------
+    bool
+        True when values match under the dtype family's comparison rule.
+    """
+
+    if isinstance(left, list) or isinstance(right, list):
+        if not isinstance(left, list) or not isinstance(right, list) or len(left) != len(right):
+            return False
+        return all(
+            _payload_values_close(left_item, right_item, dtype_name)
+            for left_item, right_item in zip(left, right)
+        )
+    if "bool" in dtype_name or "int" in dtype_name:
+        return left == right
+    return abs(float(left) - float(right)) <= 1e-6 + 1e-5 * abs(float(right))
