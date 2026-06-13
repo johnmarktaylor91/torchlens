@@ -20,14 +20,13 @@ Step 11 (_remove_unwanted_entries_and_log_remaining): Builds lookup key mappings
     module path, buffer/input/output address), and logs remaining layer metadata.
 """
 
-import weakref
 from collections import defaultdict
 from dataclasses import fields, is_dataclass, replace
 from typing import Any, Dict, List, TYPE_CHECKING
 
-from ..constants import MODEL_LOG_FIELD_ORDER, LAYER_PASS_LOG_FIELD_ORDER
-from ..intervention.types import ParentRef
+from ..constants import MODEL_LOG_FIELD_ORDER
 from ..data_classes.op import Op
+from ..intervention.types import ParentRef
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -356,10 +355,8 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
     mapping = self._raw_to_final_layer_labels
     layer_mapping = self._raw_to_final_parent_layer_labels
     op_mapping = self._raw_to_final_op_labels
-    d = layer_entry.__dict__
-
     for field in _LIST_FIELDS_TO_RENAME:
-        orig = d.get(field)
+        orig = getattr(layer_entry, field, None)
         if not orig:
             continue
         if field.startswith("conditional_"):
@@ -369,12 +366,12 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
         else:
             field_mapping = mapping
         if isinstance(orig, list):
-            d[field] = [field_mapping[raw] for raw in orig]
+            layer_entry._internal_set(field, [field_mapping[raw] for raw in orig])
         else:  # set
-            d[field] = type(orig)(field_mapping[raw] for raw in orig)
+            layer_entry._internal_set(field, type(orig)(field_mapping[raw] for raw in orig))
 
     # Fix the arg locations field:
-    arg_locs = d.get("parent_arg_positions")
+    arg_locs = getattr(layer_entry, "parent_arg_positions", None)
     if arg_locs:
         for arg_type in ("args", "kwargs"):
             sub = arg_locs[arg_type]
@@ -382,31 +379,47 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
                 sub[key] = mapping[value]
 
     # Fix the field names for different children tensor versions:
-    ctv = d.get("out_versions_by_child")
+    ctv = getattr(layer_entry, "out_versions_by_child", None)
     if ctv:
-        d["out_versions_by_child"] = {
-            mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()
-        }
+        layer_entry._internal_set(
+            "out_versions_by_child",
+            {mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()},
+        )
 
-    elif_children = d.get("conditional_elif_children")
+    elif_children = getattr(layer_entry, "conditional_elif_children", None)
     if elif_children:
-        d["conditional_elif_children"] = _rename_elif_children(elif_children, layer_mapping)
+        layer_entry._internal_set(
+            "conditional_elif_children", _rename_elif_children(elif_children, layer_mapping)
+        )
 
-    children_by_cond = d.get("conditional_arm_children")
+    children_by_cond = getattr(layer_entry, "conditional_arm_children", None)
     if children_by_cond:
-        d["conditional_arm_children"] = _rename_children_by_cond(children_by_cond, layer_mapping)
+        layer_entry._internal_set(
+            "conditional_arm_children", _rename_children_by_cond(children_by_cond, layer_mapping)
+        )
 
-    if d.get("_edge_uses"):
-        d["_edge_uses"] = [_rename_label_dataclass(record, mapping) for record in d["_edge_uses"]]
+    edge_uses = getattr(layer_entry, "_edge_uses", None)
+    if edge_uses:
+        layer_entry._internal_set(
+            "_edge_uses", [_rename_label_dataclass(record, mapping) for record in edge_uses]
+        )
 
-    if d.get("args_template") is not None:
-        d["args_template"] = _rename_template_parent_refs(d["args_template"], mapping)
-    if d.get("kwargs_template") is not None:
-        d["kwargs_template"] = _rename_template_parent_refs(d["kwargs_template"], mapping)
-    if d.get("interventions"):
-        d["interventions"] = [
-            _rename_label_dataclass(record, mapping) for record in d["interventions"]
-        ]
+    args_template = getattr(layer_entry, "args_template", None)
+    if args_template is not None:
+        layer_entry._internal_set(
+            "args_template", _rename_template_parent_refs(args_template, mapping)
+        )
+    kwargs_template = getattr(layer_entry, "kwargs_template", None)
+    if kwargs_template is not None:
+        layer_entry._internal_set(
+            "kwargs_template", _rename_template_parent_refs(kwargs_template, mapping)
+        )
+    interventions = getattr(layer_entry, "interventions", None)
+    if interventions:
+        layer_entry._internal_set(
+            "interventions",
+            [_rename_label_dataclass(record, mapping) for record in interventions],
+        )
 
 
 def _rename_template_parent_refs(value: Any, mapping: Dict[str, str]) -> Any:
@@ -800,26 +813,16 @@ def _module_call_label(module_call: Any) -> str:
 
 
 def _trim_and_reorder_layer_entry_fields(layer_entry: Op) -> None:
-    """Reorder Op fields into canonical display order.
+    """Keep the historical field-reorder hook as an intentional no-op.
 
-    PRESERVES all fields — this function only reorders, it does NOT strip
-    any data. Fields listed in LAYER_PASS_LOG_FIELD_ORDER come first (in that
-    order), followed by any remaining non-callable fields not in the order list.
-    Callable attributes (custom_methods) are excluded from the reordered dict.
+    Display and serialization order are derived from ``LAYER_PASS_LOG_FIELD_ORDER``
+    at export time, so mutating ``Op.__dict__`` insertion order here is unnecessary
+    and incompatible with future slot-backed ``Op`` instances.
+
+    Args:
+        layer_entry: Op whose fields were historically reordered.
     """
-    old_dict = layer_entry.__dict__
-    new_dir_dict = {}
-    # First: fields in canonical order.
-    for field in LAYER_PASS_LOG_FIELD_ORDER:
-        if field in old_dict:
-            new_dir_dict[field] = old_dict[field]
-    # Second: any remaining fields not in the order list (preserves all data).
-    # The callable check skips bound custom_methods, but must not skip weakref.ref
-    # objects (which are callable but are data, not custom_methods).
-    for field, value in old_dict.items():
-        if field not in new_dir_dict and (not callable(value) or isinstance(value, weakref.ref)):
-            new_dir_dict[field] = value
-    layer_entry.__dict__ = new_dir_dict
+    del layer_entry
 
 
 def _rename_model_history_layer_names(self: "Trace") -> None:
