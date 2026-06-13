@@ -1,11 +1,12 @@
 # Task & Bug Tracker
 
-## What's left — quick index (regenerated 2026-06-12)
+## What's left — quick index (regenerated 2026-06-13)
 
 A glance at the OPEN work, grouped by theme (rough counts; see sections below for detail).
-Counts reflect what is GENUINELY open after the 2026-06-11 backward-pass sprint and the
-2026-06-12 perf sprint (P0-P5 + P6 harness) shipped on `capture-unification`. Items marked
-"pending P6 measurement" are blocked only on the benchmark-numbers pass, not implementation.
+Counts reflect what is GENUINELY open after the 2026-06-11 backward-pass sprint, the
+2026-06-12 perf sprint (P0-P5 + P6 harness), and the 2026-06-13 JAX + tinygrad backend
+sprint — all shipped on `capture-unification`, merged to main, RELEASED as **v2.19.0**.
+Items marked "pending P6 measurement" are blocked only on the benchmark-numbers pass.
 
 - **Capture coverage gaps (~2):** comprehensive functorch/`torch.func` transform INSIDE-coverage (vmap/grad/jac/`functional_call`) — boundary-node capture + `is_transform`/`tl.func_transform` shipped 2026-06-11, comprehensive coverage still the gap; multi-GPU RNG capture (BLOCKED on hardware). (Device-context/meta-tensor gap FIXED `f9daf5f`; kwarg symptom set FIXED `f9daf5f` — broader kwarg audit still open.)
 - **Backward-pass (~3 open + 4 deferred follow-ups):** STILL OPEN — auto-suppress grad_fn when `backward_ready=False`; backward call-site code context; per-layer grad oracle redesign (deferred via AD-32). Plus the 4 "deferred follow-ups (filed 2026-06-11)": backward-only replay from persisted traces, MLX/JAX T0/T1 backward sketch, real per-fire GradFn prehook timing, implicit backward boundary detection. SHIPPED by the sprint (struck below): first-class `BackwardPass` records, higher-order gradients (`create_graph` re-walk), recurrent grad_fn / labeling semantics (verify only the type_index-scheme residue), backward deep-dive Q answered, fastlog gradient support (`record(save_grads=...)`).
@@ -14,7 +15,7 @@ Counts reflect what is GENUINELY open after the 2026-06-11 backward-pass sprint 
 - **Visualization (~7):** more built-in themes + custom-visuals interface, DenseNet layout, combined fwd+bwd render, multi-output module rendering, bundle-diff color scale, large-graph rendering, direct-SVG path. (ELK retirement DONE `b2ec0331`; code-panel long-line truncation FIXED `8fa0907`.)
 - **Docs (~10):** `docs/performance.md`, `docs/for-ai-agents.md`, promote glossary to exhaustive reference, elevator-pitch + substrate/metadata framing, comparison-page concessions, speed-default advertising, postfunc persistence story. (`docs/backward.md` shipped with the backward sprint; ELK setup guide MOOT — ELK retired.)
 - **Low-level bug/GC/perf backlog (migrated from memory todo.md):** ~3 correctness/capture bugs (RNG-MULTI-GPU [hardware-blocked], ARG-KWARGS-MISSING audit residue, JIT/GPTBigCode, DOT-empty-PDF) — ELK-IF-THEN / ELK-EDGE-LABEL-DEDUP now MOOT (ELK retired); open GC-* refs (GC-1/9 fixed by perf sprint), open PERF-* refs, deferred design decisions (#9/#55/#93/#102), refactoring candidates, investigate/revisit items. See the dedicated section near the end.
-- **Big/strategic features (~19):** JAX backend adapter — sprint PLAN BUILD-READY (v13, jaxpr-first; 13-round adversarial review SATISFIED 2026-06-12; `.research/jax-tinygrad-sprint_PLAN.md` + vault copy), implementation NOT started (capture-path unification + MLX backend SHIPPED 2026-06-06); `to_dataframe` + the creative-metadata tooling tiers, attribution methods, tensor-slicing recipes + slice-intervention (`op.outs` retired — folded into anonymous facets), input/output transform library, container handling, stacked multi-pass log, interactive Jupyter viewer, cross-model RSA alignment, circuit-tracer UI primitives.
+- **Big/strategic features (~17):** JAX + tinygrad backend adapters — **SHIPPED 2026-06-13 as technical PREVIEWS** (v2.19.0): backend registry + neutral substrate (M0), JAX jaxpr-first capture + real validation tripwire + derived-grad preview (M1), tinygrad UOp capture + validation + bracketed grads (M2); MLX shipped 2026-06-06. PREVIEW FOLLOW-UPS (now the open backend work): JAX module adapters (Equinox first; Flax NNX separate spike), JAX T1 per-op grads (research — needs cost-model spike), tinygrad T1, jaxpr importer (uncovered/operator/control-flow/stochastic functions), non-torch payload serialization codec, predicate capture on non-torch backends, TransformProxy boundary nodes, `capture/trace.py` general backend-injection refactor. Other strategic: `to_dataframe` + creative-metadata tiers, attribution methods, tensor-slicing recipes + slice-intervention (`op.outs` retired — folded into anonymous facets), input/output transform library, container handling, stacked multi-pass log, interactive Jupyter viewer, cross-model RSA alignment, circuit-tracer UI primitives.
 
 ## Architectural endpoint (JMT 2026-05-15)
 
