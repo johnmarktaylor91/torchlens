@@ -211,13 +211,6 @@ def save(
         include_rng_states = True
     backend_name = str(getattr(trace, "backend", "torch"))
     backend_spec = get_backend_spec(backend_name)
-    if not backend_spec.capabilities.payload_materialization and (
-        include_outs or include_grads or include_saved_args
-    ):
-        raise BackendPayloadUnsupportedError(
-            f"Backend {backend_name!r} .tlspec payloads are audit-only in this runtime. "
-            "Save with level='audit' to persist metadata without materialized payloads."
-        )
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
@@ -260,6 +253,14 @@ def save(
             include_outs=include_outs,
             include_grads=include_grads,
         )
+        if not backend_spec.capabilities.payload_materialization and (
+            blob_specs or fast_copy_specs
+        ):
+            raise BackendPayloadUnsupportedError(
+                f"Backend {backend_name!r} .tlspec payloads are audit-only in this runtime. "
+                "The scrubbed trace still contains materialized tensor blobs, so it cannot "
+                "be saved without a backend payload codec."
+            )
 
         tensor_entries: list[TensorEntry] = []
         unsupported_tensors: list[dict[str, str]] = list(scrub_unsupported_tensors)

@@ -79,6 +79,9 @@ class BackendCapabilities:
         Supported module identity modes.
     save_levels:
         Supported portable save levels.
+    trace_options:
+        Backend-specific public ``trace`` keyword options accepted by this
+        backend in addition to the backend-neutral options.
     """
 
     backward_capture: bool
@@ -90,6 +93,7 @@ class BackendCapabilities:
     streaming: bool
     module_identity_modes: tuple[str, ...] = ("torch_module",)
     save_levels: tuple[str, ...] = ("audit", "executable_with_callables", "portable")
+    trace_options: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -1665,20 +1665,27 @@ def trace(
     """
     public_trace_kwargs = locals().copy()
     public_trace_kwargs.pop("backend")
-    if backend not in {"jax", "tinygrad"}:
+    explicit_backend_spec = (
+        None if backend is None else resolve_backend_spec(backend, model, input_args, input_kwargs)
+    )
+    supported_trace_options = (
+        () if explicit_backend_spec is None else explicit_backend_spec.capabilities.trace_options
+    )
+    if "grad_options" not in supported_trace_options:
+        public_trace_kwargs.pop("grad_options")
+    if "jax_static_argnums" not in supported_trace_options:
+        public_trace_kwargs.pop("jax_static_argnums")
+    if (
+        "grad_options" not in supported_trace_options
+        and "jax_static_argnums" not in supported_trace_options
+    ):
         if jax_static_argnums is not MISSING or grad_options is not MISSING:
             raise BackendUnsupportedError(
                 "jax_static_argnums is only supported with backend='jax'; grad_options is "
                 "only supported with backend='jax' or backend='tinygrad'."
             )
-        public_trace_kwargs.pop("jax_static_argnums")
-        public_trace_kwargs.pop("grad_options")
-    elif backend == "tinygrad":
-        if jax_static_argnums is not MISSING:
-            raise BackendUnsupportedError(
-                "jax_static_argnums is only supported with backend='jax'."
-            )
-        public_trace_kwargs.pop("jax_static_argnums")
+    elif "jax_static_argnums" not in supported_trace_options and jax_static_argnums is not MISSING:
+        raise BackendUnsupportedError("jax_static_argnums is only supported with backend='jax'.")
     if (
         backend is None
         and transform is MISSING
@@ -1745,7 +1752,9 @@ def trace(
                 return cast("Trace", result)
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
-    resolved_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    resolved_spec = explicit_backend_spec or resolve_backend_spec(
+        backend, model, input_args, input_kwargs
+    )
     return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
 
 

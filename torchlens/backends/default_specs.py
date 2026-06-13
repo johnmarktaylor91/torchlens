@@ -465,6 +465,7 @@ def register_default_backend_specs() -> None:
                 payload_materialization=False,
                 streaming=False,
                 module_identity_modes=("function_root",),
+                trace_options=("jax_static_argnums", "grad_options"),
             ),
             serialization_policy=SerializationPolicy(
                 payload_policy="audit_only",
@@ -492,6 +493,7 @@ def register_default_backend_specs() -> None:
                 payload_materialization=False,
                 streaming=False,
                 module_identity_modes=("function_root",),
+                trace_options=("grad_options",),
             ),
             serialization_policy=SerializationPolicy(
                 payload_policy="audit_only",

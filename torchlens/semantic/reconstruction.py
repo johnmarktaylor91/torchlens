@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 import torch
 
+from .._errors import PostTraceParamUnavailable
 from .facets import FacetCapabilityFlags, FacetSpec, MissingFacet
 
 ReconstructionFacet = Literal["scores", "pattern", "z", "result"]
@@ -592,7 +593,12 @@ def _parameter_tensor(module: Any, name: str) -> torch.Tensor | None:
         for param in iterable:
             if getattr(param, "name", None) != name:
                 continue
-            value = getattr(param, "_param_ref", None)
+            try:
+                value = getattr(param, "value", None)
+            except PostTraceParamUnavailable:
+                value = getattr(param, "_param_ref", None)
+            if value is None:
+                value = getattr(param, "_param_ref", None)
             if isinstance(value, torch.Tensor):
                 return value
     except TypeError:

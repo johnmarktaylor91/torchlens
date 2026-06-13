@@ -50,6 +50,7 @@ _CodeContextCacheKey: TypeAlias = tuple[
     tuple[tuple[str, str, int, int, Optional[str], int], ...],
 ]
 _CodeContextCache: TypeAlias = dict[_CodeContextCacheKey, tuple[Any, ...]]
+_CodeContextQualnames: TypeAlias = dict[int, Optional[str]]
 
 
 def _build_col_offset_map(code: CodeType) -> Dict[int, Optional[int]]:
@@ -683,7 +684,7 @@ def _get_code_context(
         filtered_indices.append(pre_forward_frame_idx)
 
     if context_cache is not None:
-        cache_key = _code_context_cache_key(
+        cache_key, qualnames_by_index = _code_context_cache_key_and_qualnames(
             raw_frames,
             filtered_indices,
             num_context_lines,
@@ -695,6 +696,7 @@ def _get_code_context(
             return list(cached)
     else:
         cache_key = None
+        qualnames_by_index = {}
 
     # Phase 2: Build FuncCallLocation objects only for surviving frames (~5-10).
     # Do expensive f_locals/f_globals lookups and bytecode walks only here.
@@ -712,7 +714,11 @@ def _get_code_context(
                 else None
             ),
             code_firstlineno=code_firstlineno,
-            func_qualname=_get_code_qualname(frame_ref),
+            func_qualname=(
+                qualnames_by_index[idx]
+                if idx in qualnames_by_index
+                else _get_code_qualname(frame_ref)
+            ),
             col_offset=None if disable_col_offset else _get_col_offset(frame_ref),
             source_loading_enabled=source_loading_enabled,
         )
@@ -721,6 +727,62 @@ def _get_code_context(
     if context_cache is not None and cache_key is not None:
         context_cache[cache_key] = tuple(result)
     return result
+
+
+def _code_context_cache_key_and_qualnames(
+    raw_frames: list[tuple[str, str, int, int, FrameType]],
+    filtered_indices: list[int],
+    num_context_lines: int,
+    source_loading_enabled: bool,
+    disable_col_offset: bool,
+) -> tuple[_CodeContextCacheKey, _CodeContextQualnames]:
+    """Return a code-context cache key and per-frame qualnames used to build it.
+
+    Parameters
+    ----------
+    raw_frames:
+        Lightweight frame tuples collected by ``_get_code_context``.
+    filtered_indices:
+        Indices of user-visible frames retained for the context.
+    num_context_lines:
+        Requested source context radius.
+    source_loading_enabled:
+        Whether source text should load lazily on returned locations.
+    disable_col_offset:
+        Whether bytecode column-offset inspection is disabled.
+
+    Returns
+    -------
+    tuple
+        Cache key plus a mapping from filtered frame index to the qualname
+        computed for that frame.
+    """
+
+    qualnames_by_index: _CodeContextQualnames = {}
+    frame_parts = []
+    for idx in filtered_indices:
+        filename, func_name, lineno, code_firstlineno, frame_ref = raw_frames[idx]
+        func_qualname = _get_code_qualname(frame_ref)
+        qualnames_by_index[idx] = func_qualname
+        frame_parts.append(
+            (
+                filename,
+                func_name,
+                lineno,
+                code_firstlineno,
+                func_qualname,
+                frame_ref.f_lasti,
+            )
+        )
+    return (
+        (
+            num_context_lines,
+            source_loading_enabled,
+            disable_col_offset,
+            tuple(frame_parts),
+        ),
+        qualnames_by_index,
+    )
 
 
 def _code_context_cache_key(
@@ -751,21 +813,11 @@ def _code_context_cache_key(
         Hashable cache key preserving line and bytecode-offset identity.
     """
 
-    frame_key = tuple(
-        (
-            filename,
-            func_name,
-            lineno,
-            code_firstlineno,
-            _get_code_qualname(frame_ref),
-            frame_ref.f_lasti,
-        )
-        for idx in filtered_indices
-        for filename, func_name, lineno, code_firstlineno, frame_ref in (raw_frames[idx],)
-    )
-    return (
+    cache_key, _qualnames_by_index = _code_context_cache_key_and_qualnames(
+        raw_frames,
+        filtered_indices,
         num_context_lines,
         source_loading_enabled,
         disable_col_offset,
-        frame_key,
     )
+    return cache_key
