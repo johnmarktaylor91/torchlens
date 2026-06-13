@@ -473,9 +473,9 @@ def _operation(
             model,
             x,
             save=lambda _ctx: False,
-            halt=lambda ctx: ctx.kind == "op"
-            and isinstance(ctx.raw_index, int)
-            and ctx.raw_index >= halt_index,
+            halt=lambda ctx: (
+                ctx.kind == "op" and isinstance(ctx.raw_index, int) and ctx.raw_index >= halt_index
+            ),
         )
     if operation == "fastlog_op_10":
         import torchlens as tl
