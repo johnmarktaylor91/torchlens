@@ -1503,6 +1503,13 @@ class Op:
     def grads(self) -> GradientRecordAccessor:
         """Per-pass gradient records saved for this Op."""
 
+        trace = self.source_trace
+        if getattr(trace, "backend", "torch") == "jax":
+            raise ValueError(
+                "JAX traces do not expose op.grads or saved_grad_ops because they do "
+                "not capture true backward graphs. Use trace.derived_grads for "
+                "leaf-level derived gradients."
+            )
         return GradientRecordAccessor(self.__dict__.setdefault("_grad_records", []))
 
     def grad_for(self, *, bwd: int) -> torch.Tensor:

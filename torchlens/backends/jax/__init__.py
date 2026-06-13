@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from .backend import JAXBackend
+from .backend import GradOptions, JAXBackend
 
-__all__ = ["JAXBackend"]
+__all__ = ["GradOptions", "JAXBackend"]

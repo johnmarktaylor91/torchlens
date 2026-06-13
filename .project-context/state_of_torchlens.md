@@ -146,6 +146,12 @@ populate backend-native metadata. This is a pickled object-state change, so `_io
 is 5; manifest schema v2 support is manifest-only and does not bump the pickled object-state
 version again.
 
+JAX M1 exposes leaf-level derived gradients through `trace.derived_grads` when capture receives
+`tl.backends.jax.GradOptions`. These records come from a second pure `jax.value_and_grad` run and
+are not backward capture; JAX traces keep `backward_capture=False`, and `trace.log_backward(...)`,
+`trace.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise with guidance to
+`trace.derived_grads`.
+
 ### Fastlog vs Full Capture
 Full capture returns a faithful `Trace` and runs postprocess. Fastlog returns a sparse
 `Recording` of predicate-selected torch operation/module events. It can store to RAM, disk, or

@@ -1494,6 +1494,7 @@ def trace(
         | MissingType
     ) = MISSING,
     jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
+    grad_options: Any | None | MissingType = MISSING,
     backend: BackendName | None = None,
 ) -> Trace:
     """Run a forward pass through *model*, log every operation, and return a Trace.
@@ -1641,6 +1642,9 @@ def trace(
             ``jax.make_jaxpr(..., static_argnums=...)`` when
             ``backend="jax"``. Non-default values require the explicit JAX
             backend.
+        grad_options: JAX-only ``tl.backends.jax.GradOptions`` for the
+            leaf-level derived-gradient preview. Non-default values require
+            the explicit JAX backend.
         backend: Explicit backend name. ``None`` preserves legacy auto-resolution.
 
     Postfunc behavior:
@@ -1662,11 +1666,12 @@ def trace(
     public_trace_kwargs = locals().copy()
     public_trace_kwargs.pop("backend")
     if backend != "jax":
-        if jax_static_argnums is not MISSING:
+        if jax_static_argnums is not MISSING or grad_options is not MISSING:
             raise BackendUnsupportedError(
-                "jax_static_argnums is only supported with backend='jax'."
+                "jax_static_argnums and grad_options are only supported with backend='jax'."
             )
         public_trace_kwargs.pop("jax_static_argnums")
+        public_trace_kwargs.pop("grad_options")
     if (
         backend is None
         and transform is MISSING

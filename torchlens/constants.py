@@ -40,6 +40,7 @@ MODEL_LOG_FIELD_ORDER = [
     "backend",
     "module_identity_mode",
     "param_source",
+    "derived_grads",
     "capture_mode",
     "halted",
     "halt_reason",

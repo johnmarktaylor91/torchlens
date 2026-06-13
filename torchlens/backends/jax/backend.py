@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import inspect
+import json
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from functools import reduce
 from operator import mul
 from typing import Any, cast
@@ -12,6 +15,7 @@ from typing import Any, cast
 from ..._deprecations import MISSING, MissingType
 from ...backends import BackendName, BackendUnsupportedError
 from ...data_classes.layer import Layer
+from ...data_classes.derived_grad import DerivedGradAccessor, DerivedGradRecord
 from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import Param, ParamAccessor
 from ...data_classes.trace import Trace
@@ -35,6 +39,52 @@ from .jaxpr import (
     reject_undeclared_consts,
     replay_equation,
 )
+
+
+@dataclass(frozen=True)
+class GradOptions:
+    """JAX derived-gradient preview options.
+
+    Parameters
+    ----------
+    params
+        Parameter pytree passed as positional argument 0 to ``fn(params, *inputs)``.
+    loss_fn
+        Optional callable mapping raw function output to a scalar loss. Required
+        unless the raw traced output is already scalar.
+    input_grad_argnums
+        Input-relative positional argument indexes to differentiate in addition
+        to params. ``0`` refers to the first item after params, and translates to
+        JAX argnum ``1``.
+    """
+
+    params: Any
+    loss_fn: Callable[[Any], Any] | None = None
+    input_grad_argnums: tuple[int, ...] = ()
+
+    def __init__(
+        self,
+        *,
+        params: Any,
+        loss_fn: Callable[[Any], Any] | None = None,
+        input_grad_argnums: Sequence[int] = (),
+    ) -> None:
+        """Initialize JAX derived-gradient options.
+
+        Parameters
+        ----------
+        params
+            Parameter pytree passed as positional argument 0.
+        loss_fn
+            Callable mapping raw output to scalar loss, or ``None`` for scalar
+            raw outputs.
+        input_grad_argnums
+            Input-relative argnums to differentiate.
+        """
+
+        object.__setattr__(self, "params", params)
+        object.__setattr__(self, "loss_fn", loss_fn)
+        object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
 
 
 class JAXBackend:
@@ -76,6 +126,7 @@ class JAXBackend:
         lookback: int = 0,
         lookback_payload_policy: str = "metadata_only",
         jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
+        grad_options: GradOptions | None | MissingType = MISSING,
         **kwargs: Any,
     ) -> Trace:
         """Capture a JAX raw-function forward pass into a TorchLens ``Trace``.
@@ -146,6 +197,10 @@ class JAXBackend:
             Positional callable argument indexes to declare static for
             ``jax.make_jaxpr``. Static values are not interpreted as dynamic
             jaxpr leaves.
+        grad_options
+            Optional JAX derived-gradient configuration. This runs a second
+            pure functional ``jax.value_and_grad`` pass and populates
+            ``trace.derived_grads``.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -180,6 +235,7 @@ class JAXBackend:
         transform = None if _is_missing(transform) else transform
         output_transform = None if _is_missing(output_transform) else output_transform
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
+        grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
         static_argnums = _normalize_static_argnums(jax_static_argnums, len(args))
         self._reject_unsupported_options(
@@ -230,6 +286,16 @@ class JAXBackend:
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
         self._attach_params(trace, args[0] if args else None)
+        if grad_options is not None:
+            self._attach_derived_grads(
+                trace=trace,
+                model=model,
+                args=args,
+                static_argnums=static_argnums,
+                closed_jaxpr=closed_jaxpr,
+                captured_output=output,
+                grad_options=cast(GradOptions, grad_options),
+            )
         self._finish_trace(trace)
         trace.jax_closed_jaxpr = closed_jaxpr
         trace.jax_equation_captures = result.equations
@@ -869,6 +935,170 @@ class JAXBackend:
         trace.num_layers_with_params = 0
         trace.param_source = "pytree-derived" if param_logs else "none"
 
+    def _attach_derived_grads(
+        self,
+        *,
+        trace: Trace,
+        model: Callable[..., Any],
+        args: Sequence[Any],
+        static_argnums: Sequence[int],
+        closed_jaxpr: Any,
+        captured_output: Any,
+        grad_options: GradOptions,
+    ) -> None:
+        """Compute and attach JAX leaf-level derived gradients.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving derived gradient records.
+        model
+            Pure JAX callable captured by the trace.
+        args
+            Normalized positional call arguments.
+        static_argnums
+            Declared static positional argument indexes.
+        closed_jaxpr
+            Captured forward closed jaxpr.
+        captured_output
+            Raw output from the captured forward function.
+        grad_options
+            Derived-gradient options.
+
+        Returns
+        -------
+        None
+            ``trace.derived_grads`` and unambiguous param gradient slots are populated.
+        """
+
+        import jax
+
+        if not args:
+            raise ValueError("JAX derived gradients require params as positional argument 0.")
+        if 0 in set(static_argnums):
+            raise ValueError("JAX derived gradients require params arg 0 to be dynamic.")
+        _reject_closed_over_host_state(model)
+        _assert_same_treedef(grad_options.params, args[0], label="grad_options.params")
+        input_grad_argnums = _normalize_input_grad_argnums(
+            grad_options.input_grad_argnums, len(args) - 1
+        )
+        differentiated_argnums = (0, *(index + 1 for index in input_grad_argnums))
+        if set(differentiated_argnums) & set(static_argnums):
+            raise ValueError("JAX derived gradients cannot differentiate declared static args.")
+        differentiated_paths = _differentiated_leaf_paths(args, differentiated_argnums)
+        fingerprint = _gradient_fingerprint(
+            closed_jaxpr=closed_jaxpr,
+            args=args,
+            static_argnums=static_argnums,
+            differentiated_paths=differentiated_paths,
+            loss_fn=grad_options.loss_fn,
+        )
+        repeat_closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+        reject_undeclared_consts(repeat_closed_jaxpr)
+        repeat_fingerprint = _gradient_fingerprint(
+            closed_jaxpr=repeat_closed_jaxpr,
+            args=args,
+            static_argnums=static_argnums,
+            differentiated_paths=differentiated_paths,
+            loss_fn=grad_options.loss_fn,
+        )
+        if repeat_fingerprint != fingerprint:
+            raise ValueError("JAX derived gradient preflight fingerprint diverged before AD run.")
+
+        def value_fn(*value_args: Any) -> tuple[Any, Any]:
+            """Return scalar loss plus raw output aux for ``jax.value_and_grad``.
+
+            Parameters
+            ----------
+            *value_args
+                Positional values passed by JAX AD.
+
+            Returns
+            -------
+            tuple[Any, Any]
+                Scalar loss and raw model output.
+            """
+
+            raw_output = model(*value_args)
+            if grad_options.loss_fn is None:
+                loss = raw_output
+            else:
+                loss = grad_options.loss_fn(raw_output)
+            if not _is_scalar_jax_value(loss):
+                raise ValueError(
+                    "JAX derived gradients require loss_fn(raw_output) to be scalar unless "
+                    "the traced output is already scalar."
+                )
+            return loss, raw_output
+
+        grad_fn = jax.value_and_grad(value_fn, argnums=differentiated_argnums, has_aux=True)
+        (_loss, aux_output), grads = grad_fn(*args)
+        aux_output = _block_until_ready_tree(aux_output)
+        captured_output = _block_until_ready_tree(captured_output)
+        if not jax.tree.all(jax.tree.map(_values_close, aux_output, captured_output)):
+            raise ValueError(
+                "JAX derived gradient run raw output diverged from captured raw output; "
+                "refusing to expose trace.derived_grads."
+            )
+        final_closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+        reject_undeclared_consts(final_closed_jaxpr)
+        final_fingerprint = _gradient_fingerprint(
+            closed_jaxpr=final_closed_jaxpr,
+            args=args,
+            static_argnums=static_argnums,
+            differentiated_paths=differentiated_paths,
+            loss_fn=grad_options.loss_fn,
+        )
+        if final_fingerprint != fingerprint:
+            raise ValueError("JAX derived gradient fingerprint diverged after AD run.")
+
+        grad_trees = grads
+        records: dict[str, DerivedGradRecord] = {}
+        for argnum, grad_tree in zip(differentiated_argnums, grad_trees):
+            records.update(
+                _records_for_grad_tree(
+                    grad_tree=grad_tree,
+                    argnum=argnum,
+                    provenance={
+                        "backend": "jax",
+                        "kind": "derived_gradient",
+                        "fingerprint": fingerprint,
+                        "loss_fn": _callable_identity(grad_options.loss_fn),
+                    },
+                )
+            )
+        trace.derived_grads = DerivedGradAccessor(records)
+        self._mirror_param_derived_grads(trace, records)
+
+    def _mirror_param_derived_grads(
+        self, trace: Trace, records: Mapping[str, DerivedGradRecord]
+    ) -> None:
+        """Mirror unambiguous param derived gradients onto param records.
+
+        Parameters
+        ----------
+        trace
+            Trace containing pytree-derived params.
+        records
+            Derived gradient records keyed by leaf path.
+
+        Returns
+        -------
+        None
+            Matching ``trace.params`` entries receive the same gradient payload.
+        """
+
+        for address, param in trace.params.items():
+            record = records.get(f"params.{address}")
+            if record is None:
+                continue
+            param._derived_grad_payload = record.grad
+            param._derived_grad_record_path = record.path
+            param.has_grad = True
+            param.grad_shape = tuple(getattr(record.grad, "shape", ()))
+            param.grad_dtype = cast(Any, str(getattr(record.grad, "dtype", "")))
+            param.gradient_memory = _nbytes(record.grad) or 0
+
     def _finish_trace(self, trace: Trace) -> None:
         """Finalize materialized JAX raw logs into public accessors.
 
@@ -1177,6 +1407,324 @@ def _normalize_static_argnums(value: object, num_args: int) -> tuple[int, ...]:
             f"jax_static_argnums indexes out of range for {num_args} positional args: {invalid}."
         )
     return normalized
+
+
+def _normalize_input_grad_argnums(value: Sequence[int], num_inputs: int) -> tuple[int, ...]:
+    """Normalize input-relative JAX gradient argnums.
+
+    Parameters
+    ----------
+    value
+        Input-relative gradient argnums.
+    num_inputs
+        Number of positional inputs after params.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Unique non-negative input-relative indexes.
+    """
+
+    normalized = tuple(sorted({index if index >= 0 else num_inputs + index for index in value}))
+    invalid = [index for index in normalized if index < 0 or index >= num_inputs]
+    if invalid:
+        raise ValueError(
+            f"input_grad_argnums indexes out of range for {num_inputs} inputs: {invalid}."
+        )
+    return normalized
+
+
+def _assert_same_treedef(left: Any, right: Any, *, label: str) -> None:
+    """Raise if two pytrees do not have the same structure.
+
+    Parameters
+    ----------
+    left
+        First pytree.
+    right
+        Second pytree.
+    label
+        User-facing label for the first pytree.
+
+    Returns
+    -------
+    None
+        Returns when tree structures match.
+    """
+
+    import jax
+
+    if jax.tree.structure(left) != jax.tree.structure(right):
+        raise ValueError(f"{label} must have the same pytree structure as positional arg 0.")
+
+
+def _reject_closed_over_host_state(fn: Callable[..., Any]) -> None:
+    """Reject obvious closed-over host scalar or array state for derived grads.
+
+    Parameters
+    ----------
+    fn
+        Callable being differentiated.
+
+    Returns
+    -------
+    None
+        Returns when no referenced host scalar/array globals are found.
+    """
+
+    import numpy as np
+    import jax
+
+    closure = inspect.getclosurevars(fn)
+    candidates = {**closure.nonlocals, **closure.globals}
+    for name, value in candidates.items():
+        module = inspect.getmodule(value)
+        module_name = "" if module is None else module.__name__
+        if module_name.startswith(("jax", "jaxlib", "numpy")):
+            continue
+        if inspect.ismodule(value) or inspect.isfunction(value) or inspect.isclass(value):
+            continue
+        if isinstance(value, (int, float, complex, bool, str, np.ndarray, jax.Array)):
+            raise ValueError(
+                "JAX derived gradients reject closed-over host-state values. "
+                f"Pass {name!r} as an explicit params/input/static argument."
+            )
+
+
+def _differentiated_leaf_paths(
+    args: Sequence[Any], differentiated_argnums: Sequence[int]
+) -> tuple[str, ...]:
+    """Return stable differentiated leaf paths.
+
+    Parameters
+    ----------
+    args
+        Positional callable arguments.
+    differentiated_argnums
+        Backend positional argnums passed to JAX AD.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Stable leaf paths included in the gradient fingerprint.
+    """
+
+    import jax
+
+    paths: list[str] = []
+    for argnum in differentiated_argnums:
+        leaves, _treedef = jax.tree_util.tree_flatten_with_path(args[argnum])
+        for path, _value in leaves:
+            paths.append(_grad_path_for_argnum(argnum, _path_to_string(path)))
+    return tuple(paths)
+
+
+def _gradient_fingerprint(
+    *,
+    closed_jaxpr: Any,
+    args: Sequence[Any],
+    static_argnums: Sequence[int],
+    differentiated_paths: Sequence[str],
+    loss_fn: Callable[[Any], Any] | None,
+) -> str:
+    """Build a fail-closed fingerprint for JAX derived-gradient validation.
+
+    Parameters
+    ----------
+    closed_jaxpr
+        Closed jaxpr for the declared forward call.
+    args
+        Positional callable arguments.
+    static_argnums
+        Declared static positional argument indexes.
+    differentiated_paths
+        Stable differentiated leaf paths.
+    loss_fn
+        Optional loss function.
+
+    Returns
+    -------
+    str
+        SHA-256 digest of structural gradient-run metadata.
+    """
+
+    import jax
+
+    static_values = {str(index): repr(args[index]) for index in static_argnums if index < len(args)}
+    dynamic_args = tuple(arg for index, arg in enumerate(args) if index not in set(static_argnums))
+    payload = {
+        "closed_jaxpr": repr(closed_jaxpr),
+        "consts": tuple(repr(value) for value in getattr(closed_jaxpr, "consts", ())),
+        "statics": static_values,
+        "treedef": repr(jax.tree.structure(dynamic_args)),
+        "config": _jax_config_fingerprint(),
+        "differentiated_paths": tuple(differentiated_paths),
+        "loss_fn": _callable_identity(loss_fn),
+    }
+    encoded = json.dumps(payload, sort_keys=True, default=repr).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _jax_config_fingerprint() -> dict[str, str]:
+    """Return JAX configuration fields relevant to derived gradients.
+
+    Returns
+    -------
+    dict[str, str]
+        JSON-ready JAX config snapshot.
+    """
+
+    import jax
+
+    names = (
+        "jax_enable_x64",
+        "jax_numpy_dtype_promotion",
+        "jax_default_matmul_precision",
+        "jax_default_prng_impl",
+    )
+    return {name: repr(getattr(jax.config, name, None)) for name in names}
+
+
+def _callable_identity(fn: Callable[[Any], Any] | None) -> str | None:
+    """Return a stable best-effort callable identity.
+
+    Parameters
+    ----------
+    fn
+        Callable or ``None``.
+
+    Returns
+    -------
+    str | None
+        Identity string used in provenance and fingerprints.
+    """
+
+    if fn is None:
+        return None
+    return f"{getattr(fn, '__module__', '')}.{getattr(fn, '__qualname__', repr(fn))}:{id(fn)}"
+
+
+def _is_scalar_jax_value(value: Any) -> bool:
+    """Return whether ``value`` is scalar-shaped.
+
+    Parameters
+    ----------
+    value
+        Candidate JAX value.
+
+    Returns
+    -------
+    bool
+        True when the value has shape ``()``.
+    """
+
+    import jax.numpy as jnp
+
+    return tuple(jnp.asarray(value).shape) == ()
+
+
+def _block_until_ready_tree(tree: Any) -> Any:
+    """Block on all JAX array leaves and return ``tree``.
+
+    Parameters
+    ----------
+    tree
+        Pytree possibly containing JAX arrays.
+
+    Returns
+    -------
+    Any
+        The same tree after async work is complete.
+    """
+
+    import jax
+
+    def block(value: Any) -> Any:
+        """Block one JAX value when supported.
+
+        Parameters
+        ----------
+        value
+            Candidate JAX value.
+
+        Returns
+        -------
+        Any
+            Ready value, or the original value when no async barrier exists.
+        """
+
+        block_until_ready = getattr(value, "block_until_ready", None)
+        if callable(block_until_ready):
+            return block_until_ready()
+        return value
+
+    return jax.tree.map(block, tree)
+
+
+def _records_for_grad_tree(
+    *,
+    grad_tree: Any,
+    argnum: int,
+    provenance: Mapping[str, Any],
+) -> dict[str, DerivedGradRecord]:
+    """Build derived-gradient records for one differentiated arg tree.
+
+    Parameters
+    ----------
+    grad_tree
+        Gradient pytree returned by JAX AD.
+    argnum
+        Backend positional argnum for this gradient tree.
+    provenance
+        Shared provenance metadata.
+
+    Returns
+    -------
+    dict[str, DerivedGradRecord]
+        Records keyed by stable leaf path.
+    """
+
+    import jax
+
+    records: dict[str, DerivedGradRecord] = {}
+    leaves, _treedef = jax.tree_util.tree_flatten_with_path(grad_tree)
+    for path, grad in leaves:
+        local_path = _path_to_string(path)
+        full_path = _grad_path_for_argnum(argnum, local_path)
+        source = "params" if argnum == 0 else "inputs"
+        records[full_path] = DerivedGradRecord(
+            path=full_path,
+            source=source,
+            argnum=argnum,
+            input_argnum=None if argnum == 0 else argnum - 1,
+            aval=f"ShapedArray({tuple(getattr(grad, 'shape', ()))}, {getattr(grad, 'dtype', None)})",
+            dtype_ref=DtypeRef.from_value(getattr(grad, "dtype", None)),
+            grad=grad,
+            provenance=provenance,
+        )
+    return records
+
+
+def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
+    """Return a public derived-gradient path for one leaf.
+
+    Parameters
+    ----------
+    argnum
+        Backend positional argnum.
+    local_path
+        Dotted pytree path within that argument.
+
+    Returns
+    -------
+    str
+        Public stable path.
+    """
+
+    suffix = "" if local_path == "root" else f".{local_path}"
+    if argnum == 0:
+        return f"params{suffix}"
+    return f"inputs.{argnum - 1}{suffix}"
 
 
 def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:

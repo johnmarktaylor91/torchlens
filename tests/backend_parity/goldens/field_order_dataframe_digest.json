@@ -158,6 +158,7 @@
       "backend",
       "module_identity_mode",
       "param_source",
+      "derived_grads",
       "capture_mode",
       "halted",
       "halt_reason",
@@ -928,6 +929,7 @@
       "conditional_edge_call_indices",
       "conditional_records",
       "conditionals",
+      "derived_grads",
       "detach_saved_activations",
       "emit_nvtx",
       "facet_registry_snapshot",
@@ -1043,13 +1045,13 @@
     ]
   },
   "sha256_chunks": [
-    "a414449e",
-    "ce45a5cc",
-    "28af5210",
-    "c055b658",
-    "5e7cb531",
-    "47faa421",
-    "6e3ecc95",
-    "c09291e8"
+    "50ac2aa3",
+    "0a506859",
+    "b68e00fe",
+    "c67d65be",
+    "86f04c67",
+    "4f4c2280",
+    "2159ab28",
+    "0ae382cf"
   ]
 }

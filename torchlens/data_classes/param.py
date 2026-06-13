@@ -90,6 +90,8 @@ class Param:
         "_grad_dtype": FieldPolicy.KEEP,
         "_grad_memory": FieldPolicy.KEEP,
         "_grad_records": FieldPolicy.DROP,
+        "_derived_grad_payload": FieldPolicy.KEEP,
+        "_derived_grad_record_path": FieldPolicy.KEEP,
     }
 
     def __init__(
@@ -139,6 +141,8 @@ class Param:
         self._grad_dtype: Optional[torch.dtype] = None
         self._grad_memory: Bytes = Bytes(0)
         self._grad_records: list[GradientRecord] = []
+        self._derived_grad_payload: Any | None = None
+        self._derived_grad_record_path: str | None = None
 
     @property
     def is_quantized(self) -> bool:
@@ -272,15 +276,18 @@ class Param:
         return "" if module is None else str(getattr(module, "class_name", ""))
 
     @property
-    def grad(self) -> torch.Tensor | None:
+    def grad(self) -> Any | None:
         """Return the live gradient tensor for this parameter.
 
         Returns
         -------
-        torch.Tensor | None
-            Live ``nn.Parameter.grad`` value, if available.
+        Any | None
+            Live ``nn.Parameter.grad`` value, or a backend-derived gradient
+            payload for non-torch pytree parameters when available.
         """
 
+        if self._derived_grad_payload is not None:
+            return self._derived_grad_payload
         param = self._resolve_live_param()
         return None if param is None else param.grad
 
@@ -345,6 +352,9 @@ class Param:
         found, all grad metadata is cached and no further checks are made
         (``_has_grad`` acts as a one-shot flag).
         """
+        if self._derived_grad_payload is not None:
+            self._has_grad = True
+            return
         try:
             param = self._resolve_live_param()
         except PostTraceParamUnavailable:
@@ -576,6 +586,8 @@ class Param:
                 "device_ref": None,
                 "backend_address": state.get("address"),
                 "resolver_status": "resolved",
+                "_derived_grad_payload": None,
+                "_derived_grad_record_path": None,
             },
         )
         if state.get("dtype_ref") is None:
