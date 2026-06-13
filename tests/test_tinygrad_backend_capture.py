@@ -8,6 +8,7 @@ import pytest
 
 import torchlens as tl
 from torchlens.backends import BackendUnsupportedError, get_backend_spec
+from torchlens.backends.tinygrad import GradOptions, TinygradBackend
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
@@ -31,6 +32,57 @@ def _tiny_block(x: Any) -> Any:
     """
 
     return ((x + 1.0).relu() * 2.0).sum()
+
+
+def _tiny_square_loss(x: Any) -> Any:
+    """Return a scalar tinygrad square loss.
+
+    Parameters
+    ----------
+    x
+        tinygrad Tensor input.
+
+    Returns
+    -------
+    Any
+        Scalar tinygrad Tensor output.
+    """
+
+    return (x * x).sum()
+
+
+def _tiny_vector_output(x: Any) -> Any:
+    """Return a non-scalar tinygrad output.
+
+    Parameters
+    ----------
+    x
+        tinygrad Tensor input.
+
+    Returns
+    -------
+    Any
+        Vector tinygrad Tensor output.
+    """
+
+    return x * x
+
+
+def _tiny_vector_loss(output: Any) -> Any:
+    """Return a scalar loss for a tinygrad vector output.
+
+    Parameters
+    ----------
+    output
+        tinygrad vector output.
+
+    Returns
+    -------
+    Any
+        Scalar tinygrad Tensor loss.
+    """
+
+    return output.sum()
 
 
 def _multi_output(x: Any) -> tuple[Any, Any]:
@@ -218,3 +270,127 @@ def test_tinygrad_backward_ready_rejected() -> None:
     x = Tensor([1.0, 2.0])
     with pytest.raises(BackendUnsupportedError, match="backward_ready"):
         tl.trace(_tiny_block, x, backend="tinygrad", backward_ready=True)
+
+
+def test_tinygrad_derived_grads_match_backward_oracle() -> None:
+    """Derived input gradients should match direct tinygrad backward and .grad."""
+
+    x = Tensor([1.0, -2.0, 3.0])
+    trace = tl.trace(
+        _tiny_square_loss,
+        x,
+        backend="tinygrad",
+        grad_options=GradOptions(input_grad_argnums=(0,)),
+    )
+    oracle_x = Tensor([1.0, -2.0, 3.0])
+    _tiny_square_loss(oracle_x).backward()
+
+    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx(oracle_x.grad.tolist())
+    assert x.grad is None
+
+
+def test_tinygrad_derived_grads_use_loss_fn_for_vector_output() -> None:
+    """Derived gradients can use an explicit scalar loss function."""
+
+    x = Tensor([1.0, -2.0, 3.0])
+    trace = tl.trace(
+        _tiny_vector_output,
+        x,
+        backend="tinygrad",
+        grad_options=GradOptions(loss_fn=_tiny_vector_loss, input_grad_argnums=(0,)),
+    )
+
+    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert x.grad is None
+
+
+def test_tinygrad_derived_grads_reject_non_scalar_without_loss_fn() -> None:
+    """Non-scalar raw outputs require a loss function for derived gradients."""
+
+    with pytest.raises(ValueError, match="loss_fn"):
+        tl.trace(
+            _tiny_vector_output,
+            Tensor([1.0, -2.0, 3.0]),
+            backend="tinygrad",
+            grad_options=GradOptions(input_grad_argnums=(0,)),
+        )
+
+
+def test_tinygrad_derived_grads_restore_preexisting_user_grad() -> None:
+    """Bracketed backward should preserve pre-existing user grads and return increments."""
+
+    x = Tensor([1.0, -2.0, 3.0])
+    x.grad = Tensor([10.0, 20.0, 30.0]).realize()
+    original_grad = x.grad
+
+    trace = tl.trace(
+        _tiny_square_loss,
+        x,
+        backend="tinygrad",
+        grad_options=GradOptions(input_grad_argnums=(0,)),
+    )
+
+    assert x.grad is original_grad
+    assert x.grad.tolist() == pytest.approx([10.0, 20.0, 30.0])
+    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+
+
+def test_tinygrad_derived_grads_repeat_without_accumulating_user_grad() -> None:
+    """Repeated bracketed gradient runs should not leave accumulated .grad state."""
+
+    x = Tensor([1.0, -2.0, 3.0])
+    first = tl.trace(
+        _tiny_square_loss,
+        x,
+        backend="tinygrad",
+        grad_options=GradOptions(input_grad_argnums=(0,)),
+    )
+    second = tl.trace(
+        _tiny_square_loss,
+        x,
+        backend="tinygrad",
+        grad_options=GradOptions(input_grad_argnums=(0,)),
+    )
+
+    assert first.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert second.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert x.grad is None
+
+
+def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
+    """tinygrad traces should reject true backward surfaces with derived-grad guidance."""
+
+    trace = tl.trace(
+        _tiny_square_loss,
+        Tensor([1.0, -2.0, 3.0]),
+        backend="tinygrad",
+        grad_options=GradOptions(input_grad_argnums=(0,)),
+    )
+
+    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+        trace.log_backward(trace[trace.output_layers[0]].out)
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace.backward_passes
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace.saved_grad_ops
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace[0].grads
+
+
+def test_tinygrad_derived_grads_reject_audit_only_payload_envelope() -> None:
+    """Refuse derived grads when the tinygrad payload envelope is audit-only."""
+
+    backend = TinygradBackend()
+    x = Tensor([1.0, -2.0, 3.0])
+    trace = tl.trace(_tiny_square_loss, x, backend="tinygrad")
+    trace.tinygrad_payload_policy = "audit_only"
+
+    with pytest.raises(BackendUnsupportedError, match="audit-only|derived_grads"):
+        backend._attach_derived_grads(
+            trace=trace,
+            model=_tiny_square_loss,
+            args=[x],
+            captured_output=_tiny_square_loss(x),
+            grad_options=GradOptions(input_grad_argnums=(0,)),
+        )

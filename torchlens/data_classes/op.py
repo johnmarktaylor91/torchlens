@@ -1504,11 +1504,11 @@ class Op:
         """Per-pass gradient records saved for this Op."""
 
         trace = self.source_trace
-        if getattr(trace, "backend", "torch") == "jax":
+        if getattr(trace, "backend", "torch") in {"jax", "tinygrad"}:
             raise ValueError(
-                "JAX traces do not expose op.grads or saved_grad_ops because they do "
-                "not capture true backward graphs. Use trace.derived_grads for "
-                "leaf-level derived gradients."
+                f"{getattr(trace, 'backend', 'backend')} traces do not expose op.grads or "
+                "saved_grad_ops because they do not capture true backward graphs. Use "
+                "trace.derived_grads for leaf-level derived gradients."
             )
         return GradientRecordAccessor(self.__dict__.setdefault("_grad_records", []))
 

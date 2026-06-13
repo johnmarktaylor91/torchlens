@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from .backend import TinygradBackend
+from .backend import GradOptions, TinygradBackend
 
-__all__ = ["TinygradBackend"]
+__all__ = ["GradOptions", "TinygradBackend"]

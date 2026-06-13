@@ -4250,10 +4250,11 @@ class Trace(CapturedRun):
     def backward_passes(self) -> BackwardPassAccessor:
         """Access backward pass records by 0-based position or named pass number."""
 
-        if getattr(self, "backend", "torch") == "jax":
+        if getattr(self, "backend", "torch") in {"jax", "tinygrad"}:
             raise ValueError(
-                "JAX traces do not support true backward capture. Use trace.derived_grads "
-                "for leaf-level derived gradients computed by the JAX preview."
+                f"{getattr(self, 'backend', 'backend')} traces do not support true backward "
+                "capture. Use trace.derived_grads for leaf-level derived gradients computed "
+                "by the backend preview."
             )
         self._sync_backward_projection_if_needed()
         return BackwardPassAccessor(self.backward_pass_logs)
@@ -4301,10 +4302,11 @@ class Trace(CapturedRun):
     def saved_grad_ops(self) -> Accessor[Op]:
         """Access Ops with saved gradients."""
 
-        if getattr(self, "backend", "torch") == "jax":
+        if getattr(self, "backend", "torch") in {"jax", "tinygrad"}:
             raise ValueError(
-                "JAX traces do not expose op-level saved gradients. Use trace.derived_grads "
-                "for leaf-level derived gradients computed by the JAX preview."
+                f"{getattr(self, 'backend', 'backend')} traces do not expose op-level saved "
+                "gradients. Use trace.derived_grads for leaf-level derived gradients computed "
+                "by the backend preview."
             )
         return TraceOpAccessor(
             [op for op in self.layer_list if op.has_grad],
@@ -5709,7 +5711,7 @@ class Trace(CapturedRun):
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
-                "For JAX preview traces, use trace.derived_grads for leaf-level "
+                "Use trace.derived_grads when this backend exposes leaf-level "
                 "derived gradients."
             )
         from ..backends.torch.backward import log_backward as _impl
@@ -5747,7 +5749,9 @@ class Trace(CapturedRun):
         spec = get_backend_spec(getattr(self, "backend", "torch"))
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
-                f"Backend {spec.name!r} does not support backward capture."
+                f"Backend {spec.name!r} does not support backward capture. "
+                "Use trace.derived_grads when this backend exposes leaf-level "
+                "derived gradients."
             )
         from ..backends.torch.backward import recording_backward as _impl
 

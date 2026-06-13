@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from ..._deprecations import MISSING, MissingType
 from ...backends import BackendName, BackendUnsupportedError
+from ...data_classes.derived_grad import DerivedGradAccessor, DerivedGradRecord
 from ...data_classes.layer import Layer
 from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import ParamAccessor
@@ -52,6 +53,46 @@ class TinygradUOpCapture:
     payload_snapshot: Any
 
 
+@dataclass(frozen=True)
+class GradOptions:
+    """tinygrad derived-gradient preview options.
+
+    Parameters
+    ----------
+    loss_fn
+        Optional callable mapping raw function output to a scalar tinygrad loss.
+        Required unless the raw traced output is already scalar.
+    input_grad_argnums
+        Positional input argument indexes to differentiate. ``None`` means all
+        positional tinygrad tensor input leaves.
+    """
+
+    loss_fn: Callable[[Any], Any] | None = None
+    input_grad_argnums: tuple[int, ...] | None = None
+
+    def __init__(
+        self,
+        *,
+        loss_fn: Callable[[Any], Any] | None = None,
+        input_grad_argnums: Sequence[int] | None = None,
+    ) -> None:
+        """Initialize tinygrad derived-gradient options.
+
+        Parameters
+        ----------
+        loss_fn
+            Callable mapping raw output to scalar loss, or ``None`` for scalar
+            raw outputs.
+        input_grad_argnums
+            Positional input argnums to differentiate. ``None`` differentiates
+            all positional tinygrad tensor input leaves.
+        """
+
+        object.__setattr__(self, "loss_fn", loss_fn)
+        normalized = None if input_grad_argnums is None else tuple(input_grad_argnums)
+        object.__setattr__(self, "input_grad_argnums", normalized)
+
+
 class TinygradBackend:
     """tinygrad adapter that captures forward graphs from pre-realization UOps."""
 
@@ -90,6 +131,7 @@ class TinygradBackend:
         save_visualizations: bool | MissingType = MISSING,
         lookback: int = 0,
         lookback_payload_policy: str = "metadata_only",
+        grad_options: GradOptions | None | MissingType = MISSING,
         **kwargs: Any,
     ) -> Trace:
         """Capture a tinygrad raw-function forward pass into a TorchLens trace.
@@ -156,6 +198,8 @@ class TinygradBackend:
             Predicate lookback window. Only the default ``0`` is supported.
         lookback_payload_policy
             Predicate lookback payload policy. Only the default is supported.
+        grad_options
+            tinygrad ``GradOptions`` for bracketed leaf-level derived gradients.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -189,6 +233,7 @@ class TinygradBackend:
         transform = None if _is_missing(transform) else transform
         output_transform = None if _is_missing(output_transform) else output_transform
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
+        grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
         self._reject_unsupported_options(
             layers_to_save=layers_to_save,
@@ -258,6 +303,14 @@ class TinygradBackend:
         self._finish_trace(trace)
         trace.tinygrad_uop_captures = captures
         trace.tinygrad_payload_policy = "dev_python_realized_copy"
+        if grad_options is not None:
+            self._attach_derived_grads(
+                trace=trace,
+                model=model,
+                args=args,
+                captured_output=output,
+                grad_options=cast(GradOptions, grad_options),
+            )
         return trace
 
     def validate_trace(self, trace: Trace, *_args: Any, **kwargs: Any) -> bool:
@@ -885,6 +938,108 @@ class TinygradBackend:
         trace.module_identity_mode = "function_root"
         self._attach_function_root_module(trace)
         trace._tracing_finished = True
+
+    def _attach_derived_grads(
+        self,
+        *,
+        trace: Trace,
+        model: Callable[..., Any],
+        args: Sequence[Any],
+        captured_output: Any,
+        grad_options: GradOptions,
+    ) -> None:
+        """Compute and attach bracketed tinygrad leaf-level derived gradients.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving derived gradient records.
+        model
+            Captured tinygrad callable.
+        args
+            Positional call arguments used for capture.
+        captured_output
+            Raw output from the captured forward call.
+        grad_options
+            Derived-gradient options.
+
+        Returns
+        -------
+        None
+            ``trace.derived_grads`` is populated with input leaf gradient records.
+        """
+
+        if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":
+            raise BackendUnsupportedError(
+                "tinygrad derived gradients require live DEV=PYTHON realized-copy payloads; "
+                "audit-only traces cannot expose trace.derived_grads."
+            )
+        input_argnums = _normalize_tinygrad_input_grad_argnums(
+            grad_options.input_grad_argnums,
+            len(args),
+        )
+        leaves = _differentiated_input_leaves(self, args, input_argnums)
+        if not leaves:
+            raise ValueError("tinygrad derived gradients require at least one tensor input leaf.")
+        snapshots = _snapshot_tinygrad_grads(self, leaves)
+        try:
+            derived_output = model(*args)
+            loss = grad_options.loss_fn(derived_output) if grad_options.loss_fn else derived_output
+            if not self.is_tensor(loss) or not _is_scalar_tinygrad_value(loss):
+                raise ValueError(
+                    "tinygrad derived gradients require loss_fn(raw_output) to be scalar unless "
+                    "the traced output is already scalar."
+                )
+            if not _tinygrad_outputs_close(self, derived_output, captured_output):
+                raise ValueError(
+                    "tinygrad derived gradient run raw output diverged from captured raw output; "
+                    "refusing to expose trace.derived_grads."
+                )
+            cast(Any, loss).backward()
+            records = _records_for_tinygrad_leaf_grads(
+                backend=self,
+                leaves=leaves,
+                snapshots=snapshots,
+                provenance={
+                    "backend": "tinygrad",
+                    "kind": "derived_gradient",
+                    "bracketing": "snapshot_backward_increment_restore",
+                    "loss_fn": _callable_identity(grad_options.loss_fn),
+                },
+            )
+        finally:
+            _restore_tinygrad_grads(snapshots)
+        trace.derived_grads = DerivedGradAccessor(records)
+        self._mirror_param_derived_grads(trace, records)
+
+    def _mirror_param_derived_grads(
+        self, trace: Trace, records: Mapping[str, DerivedGradRecord]
+    ) -> None:
+        """Mirror unambiguous tinygrad param derived gradients onto param records.
+
+        Parameters
+        ----------
+        trace
+            Trace containing optional parameter metadata.
+        records
+            Derived gradient records keyed by leaf path.
+
+        Returns
+        -------
+        None
+            Matching ``trace.params`` entries receive the same gradient payload.
+        """
+
+        for address, param in trace.params.items():
+            record = records.get(f"params.{address}")
+            if record is None:
+                continue
+            param._derived_grad_payload = record.grad
+            param._derived_grad_record_path = record.path
+            param.has_grad = True
+            param.grad_shape = tuple(getattr(record.grad, "shape", ()))
+            param.grad_dtype = cast(Any, str(getattr(record.grad, "dtype", "")))
+            param.gradient_memory = _nbytes(record.grad) or 0
 
     def _attach_function_root_module(self, trace: Trace) -> None:
         """Attach a function-root module accessor to ``trace``.
@@ -1771,6 +1926,232 @@ def _payloads_close(left: Any, right: Any) -> bool:
     if tuple(left.shape) != tuple(right.shape) or str(left.dtype) != str(right.dtype):
         return False
     return _payload_values_close(_payload_list(left), _payload_list(right), str(left.dtype))
+
+
+def _normalize_tinygrad_input_grad_argnums(
+    value: Sequence[int] | None, num_inputs: int
+) -> tuple[int, ...]:
+    """Normalize tinygrad input gradient argnums.
+
+    Parameters
+    ----------
+    value
+        User-supplied positional input argnums, or ``None`` for all inputs.
+    num_inputs
+        Number of positional inputs passed to the tinygrad callable.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Unique non-negative positional input indexes.
+    """
+
+    if value is None:
+        return tuple(range(num_inputs))
+    normalized = tuple(sorted({index if index >= 0 else num_inputs + index for index in value}))
+    invalid = [index for index in normalized if index < 0 or index >= num_inputs]
+    if invalid:
+        raise ValueError(
+            f"input_grad_argnums indexes out of range for {num_inputs} inputs: {invalid}."
+        )
+    return normalized
+
+
+def _differentiated_input_leaves(
+    backend: TinygradBackend,
+    args: Sequence[Any],
+    input_argnums: Sequence[int],
+) -> tuple[tuple[str, int, Any], ...]:
+    """Return differentiated tinygrad input tensor leaves.
+
+    Parameters
+    ----------
+    backend
+        tinygrad backend instance used for tensor checks.
+    args
+        Positional callable arguments.
+    input_argnums
+        Positional input indexes to differentiate.
+
+    Returns
+    -------
+    tuple[tuple[str, int, Any], ...]
+        ``(path, argnum, tensor)`` records for tensor leaves.
+    """
+
+    leaves: list[tuple[str, int, Any]] = []
+    for argnum in input_argnums:
+        for local_path, leaf in _tree_leaves_with_paths(args[argnum]):
+            if not backend.is_tensor(leaf):
+                continue
+            suffix = f".{local_path}" if local_path else ""
+            leaves.append((f"inputs.{argnum}{suffix}", argnum, leaf))
+    return tuple(leaves)
+
+
+def _snapshot_tinygrad_grads(
+    backend: TinygradBackend,
+    leaves: Sequence[tuple[str, int, Any]],
+) -> dict[str, tuple[Any, Any | None, Any | None]]:
+    """Snapshot pre-existing tinygrad leaf grads before backward.
+
+    Parameters
+    ----------
+    backend
+        tinygrad backend instance used for realized copies.
+    leaves
+        Differentiated input leaves.
+
+    Returns
+    -------
+    dict[str, tuple[Any, Any | None, Any | None]]
+        Mapping from derived-grad path to ``(leaf, original_grad_object, value_snapshot)``.
+    """
+
+    snapshots: dict[str, tuple[Any, Any | None, Any | None]] = {}
+    for path, _argnum, tensor in leaves:
+        original_grad = getattr(tensor, "grad", None)
+        grad_snapshot = None if original_grad is None else backend._realized_copy(original_grad)
+        snapshots[path] = (tensor, original_grad, grad_snapshot)
+    return snapshots
+
+
+def _records_for_tinygrad_leaf_grads(
+    *,
+    backend: TinygradBackend,
+    leaves: Sequence[tuple[str, int, Any]],
+    snapshots: Mapping[str, tuple[Any, Any | None, Any | None]],
+    provenance: Mapping[str, Any],
+) -> dict[str, DerivedGradRecord]:
+    """Build derived-gradient records from bracketed tinygrad leaf grads.
+
+    Parameters
+    ----------
+    backend
+        tinygrad backend instance used for realized copies.
+    leaves
+        Differentiated input leaves.
+    snapshots
+        Pre-backward gradient snapshots.
+    provenance
+        Shared provenance metadata.
+
+    Returns
+    -------
+    dict[str, DerivedGradRecord]
+        Records keyed by stable input leaf path.
+    """
+
+    records: dict[str, DerivedGradRecord] = {}
+    for path, argnum, tensor in leaves:
+        post_grad = getattr(tensor, "grad", None)
+        if post_grad is None:
+            raise ValueError(f"tinygrad backward did not populate .grad for leaf {path!r}.")
+        _tensor, _original_grad, grad_snapshot = snapshots[path]
+        increment = post_grad if grad_snapshot is None else post_grad - grad_snapshot
+        grad = backend._realized_copy(increment)
+        records[path] = DerivedGradRecord(
+            path=path,
+            source="inputs",
+            argnum=argnum,
+            input_argnum=argnum,
+            aval=f"Tensor(shape={tuple(getattr(grad, 'shape', ()))}, dtype={getattr(grad, 'dtype', None)})",
+            dtype_ref=DtypeRef(backend="tinygrad", name=str(getattr(grad, "dtype", ""))),
+            grad=grad,
+            provenance=provenance,
+        )
+    return records
+
+
+def _restore_tinygrad_grads(snapshots: Mapping[str, tuple[Any, Any | None, Any | None]]) -> None:
+    """Restore pre-existing tinygrad leaf grad state after bracketed backward.
+
+    Parameters
+    ----------
+    snapshots
+        Mapping from derived-grad path to ``(leaf, original_grad_object, value_snapshot)``.
+
+    Returns
+    -------
+    None
+        Leaf ``.grad`` values are restored in place where possible.
+    """
+
+    for path, (tensor, original_grad, grad_snapshot) in snapshots.items():
+        del path
+        if original_grad is None:
+            tensor.grad = None
+            continue
+        original_grad.assign(grad_snapshot)
+        tensor.grad = original_grad
+
+
+def _tinygrad_outputs_close(backend: TinygradBackend, left: Any, right: Any) -> bool:
+    """Return whether two tinygrad output trees have matching tensor payloads.
+
+    Parameters
+    ----------
+    backend
+        tinygrad backend instance used for tensor checks.
+    left
+        First output tree.
+    right
+        Second output tree.
+
+    Returns
+    -------
+    bool
+        True when tensor leaves have matching paths and payloads.
+    """
+
+    left_leaves = [
+        (path, leaf) for path, leaf in _tree_leaves_with_paths(left) if backend.is_tensor(leaf)
+    ]
+    right_leaves = [
+        (path, leaf) for path, leaf in _tree_leaves_with_paths(right) if backend.is_tensor(leaf)
+    ]
+    if [path for path, _leaf in left_leaves] != [path for path, _leaf in right_leaves]:
+        return False
+    return all(
+        _payloads_close(backend._realized_copy(left_leaf), backend._realized_copy(right_leaf))
+        for (_left_path, left_leaf), (_right_path, right_leaf) in zip(left_leaves, right_leaves)
+    )
+
+
+def _is_scalar_tinygrad_value(value: Any) -> bool:
+    """Return whether a tinygrad value is scalar-shaped.
+
+    Parameters
+    ----------
+    value
+        Candidate tinygrad tensor.
+
+    Returns
+    -------
+    bool
+        True when ``value`` has shape ``()``.
+    """
+
+    return tuple(getattr(value, "shape", ())) == ()
+
+
+def _callable_identity(fn: Callable[[Any], Any] | None) -> str | None:
+    """Return a stable best-effort callable identity.
+
+    Parameters
+    ----------
+    fn
+        Callable or ``None``.
+
+    Returns
+    -------
+    str | None
+        Identity string used in derived-gradient provenance.
+    """
+
+    if fn is None:
+        return None
+    return f"{getattr(fn, '__module__', '')}.{getattr(fn, '__qualname__', repr(fn))}:{id(fn)}"
 
 
 def _payload_values_close(left: Any, right: Any, dtype_name: str) -> bool:
