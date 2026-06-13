@@ -38,6 +38,7 @@ from ..data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
 )
+from ..data_classes._state_adapter import state_items
 from ..data_classes._summary import format_call_arg
 from ..data_classes.module import Module, ModuleCall
 from ..utils.introspection import get_vars_of_type_from_obj
@@ -1260,7 +1261,7 @@ def _reuse_streamed_blob_ids(
             ("grad", "_pending_grad_blob_id"),
             ("transformed_grad", "_pending_transformed_grad_blob_id"),
         ):
-            tensor_blob = getattr(scrubbed_layer, "__dict__", {}).get(tensor_field)
+            tensor_blob = dict(state_items(scrubbed_layer)).get(tensor_field)
             pending_blob_id = getattr(live_layer, pending_field, None)
             if pending_blob_id is None:
                 continue
@@ -1318,7 +1319,7 @@ def _reuse_streamed_grad_record_blob_ids(
     if record_field is None:
         return
     for grad_record in getattr(scrubbed_layer, "_grad_records", ()):
-        record_blob = getattr(grad_record, "__dict__", {}).get(record_field)
+        record_blob = dict(state_items(grad_record)).get(record_field)
         if not isinstance(record_blob, BlobRef):
             continue
         skipped_blob_ids.add(record_blob.blob_id)

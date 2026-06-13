@@ -456,6 +456,10 @@ def test_invariant_11_transient_bool_key_is_removed() -> None:
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
         bool_layer = _get_only_terminal_bool(trace)
+        if "_bool_conditional_key" not in getattr(type(bool_layer), "__slots__", ()):
+            with pytest.raises(AttributeError):
+                bool_layer._bool_conditional_key = ("fake.py", 1, 2, 3)
+            return
         bool_layer._bool_conditional_key = ("fake.py", 1, 2, 3)
         _assert_invariant_error(trace, ("Invariant 11", "_bool_conditional_key"))
     finally:

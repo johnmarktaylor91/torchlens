@@ -104,10 +104,10 @@ def test_lazy_load_grad_from_bundle(tmp_path: Path) -> None:
     label = next(iter(expected))
     layer = lazy_log[label]
 
-    assert layer.__dict__["grad"] is None
+    assert layer._slot("grad") is None
     assert layer.grad_ref is not None
     assert torch.equal(layer.grad, expected[label])
-    assert isinstance(layer.__dict__["grad"], torch.Tensor)
+    assert isinstance(layer._slot("grad"), torch.Tensor)
 
 
 @pytest.mark.smoke
@@ -163,6 +163,6 @@ def test_retain_in_memory_false_for_grad_streaming(tmp_path: Path) -> None:
     )
     layer = trace[list(trace.saved_grad_ops.keys())[0]]
 
-    assert layer.__dict__["grad"] is None
+    assert layer._slot("grad") is None
     assert layer.grad_ref is not None
     assert isinstance(layer.grad, torch.Tensor)

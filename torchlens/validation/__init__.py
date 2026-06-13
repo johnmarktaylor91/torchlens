@@ -320,6 +320,7 @@ def _validate_body_index(value: Any, *, schema_version: int) -> None:
         raise ValueError("Manifest body_index must be a list.")
     v1_intended_uses = {
         "bundle_marker",
+        "buffer_initial_value",
         "captured_arg",
         "child_version",
         "func_config",

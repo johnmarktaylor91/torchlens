@@ -28,6 +28,7 @@ from ..constants import MODEL_LOG_FIELD_ORDER
 from ..intervention.types import ParentRef, Unsupported
 from ..utils.collections import remove_entry_from_list
 from ..utils.tensor_utils import _is_cuda_available
+from ._state_adapter import state_items
 from .op import Op
 
 if TYPE_CHECKING:
@@ -78,6 +79,7 @@ def cleanup(self: "Trace") -> None:
         "_loaded_from_bundle",
         "_source_bundle_manifest_sha256",
         "_source_bundle_path",
+        "_source_bundle_created_at",
     ]:
         if hasattr(self, attr):
             delattr(self, attr)
@@ -89,11 +91,7 @@ def cleanup(self: "Trace") -> None:
 
 def _clear_entry_attributes(log_entry: Op) -> None:
     """Clear all instance attributes from a Op entry."""
-    if hasattr(log_entry, "out_ref"):
-        log_entry.out_ref = None
-    if hasattr(log_entry, "grad_ref"):
-        log_entry.grad_ref = None
-    for attr in list(log_entry.__dict__):
+    for attr, _ in list(state_items(log_entry)):
         delattr(log_entry, attr)
 
 

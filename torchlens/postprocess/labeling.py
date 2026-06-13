@@ -355,6 +355,16 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
     mapping = self._raw_to_final_layer_labels
     layer_mapping = self._raw_to_final_parent_layer_labels
     op_mapping = self._raw_to_final_op_labels
+
+    def set_entry_field(field_name: str, value: Any) -> None:
+        """Set a renamed entry field on real Ops or lightweight test doubles."""
+
+        internal_set = getattr(layer_entry, "_internal_set", None)
+        if internal_set is not None:
+            internal_set(field_name, value)
+            return
+        setattr(layer_entry, field_name, value)
+
     for field in _LIST_FIELDS_TO_RENAME:
         orig = getattr(layer_entry, field, None)
         if not orig:
@@ -366,9 +376,9 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
         else:
             field_mapping = mapping
         if isinstance(orig, list):
-            layer_entry._internal_set(field, [field_mapping[raw] for raw in orig])
+            set_entry_field(field, [field_mapping[raw] for raw in orig])
         else:  # set
-            layer_entry._internal_set(field, type(orig)(field_mapping[raw] for raw in orig))
+            set_entry_field(field, type(orig)(field_mapping[raw] for raw in orig))
 
     # Fix the arg locations field:
     arg_locs = getattr(layer_entry, "parent_arg_positions", None)
@@ -381,42 +391,38 @@ def _replace_layer_names_for_layer_entry(self: "Trace", layer_entry: Op) -> None
     # Fix the field names for different children tensor versions:
     ctv = getattr(layer_entry, "out_versions_by_child", None)
     if ctv:
-        layer_entry._internal_set(
+        set_entry_field(
             "out_versions_by_child",
             {mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()},
         )
 
     elif_children = getattr(layer_entry, "conditional_elif_children", None)
     if elif_children:
-        layer_entry._internal_set(
+        set_entry_field(
             "conditional_elif_children", _rename_elif_children(elif_children, layer_mapping)
         )
 
     children_by_cond = getattr(layer_entry, "conditional_arm_children", None)
     if children_by_cond:
-        layer_entry._internal_set(
+        set_entry_field(
             "conditional_arm_children", _rename_children_by_cond(children_by_cond, layer_mapping)
         )
 
     edge_uses = getattr(layer_entry, "_edge_uses", None)
     if edge_uses:
-        layer_entry._internal_set(
+        set_entry_field(
             "_edge_uses", [_rename_label_dataclass(record, mapping) for record in edge_uses]
         )
 
     args_template = getattr(layer_entry, "args_template", None)
     if args_template is not None:
-        layer_entry._internal_set(
-            "args_template", _rename_template_parent_refs(args_template, mapping)
-        )
+        set_entry_field("args_template", _rename_template_parent_refs(args_template, mapping))
     kwargs_template = getattr(layer_entry, "kwargs_template", None)
     if kwargs_template is not None:
-        layer_entry._internal_set(
-            "kwargs_template", _rename_template_parent_refs(kwargs_template, mapping)
-        )
+        set_entry_field("kwargs_template", _rename_template_parent_refs(kwargs_template, mapping))
     interventions = getattr(layer_entry, "interventions", None)
     if interventions:
-        layer_entry._internal_set(
+        set_entry_field(
             "interventions",
             [_rename_label_dataclass(record, mapping) for record in interventions],
         )

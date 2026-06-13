@@ -268,7 +268,7 @@ def _clear_op_gradient_projection(site: "Op") -> None:
         Operation record copied onto the replay fork.
     """
 
-    site.__dict__.setdefault("_grad_records", []).clear()
+    site._clear_gradient_records()
     site._internal_set("grad", None)
     site._internal_set("transformed_grad", None)
     site.has_grad = False

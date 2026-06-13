@@ -77,7 +77,7 @@ def test_legacy_pickle_load_drops_thread_fields() -> None:
         "_module_boundary_threads_inputs",
         "module_entry_exit_threads_inputs",
     ):
-        assert attr not in op.__dict__, f"{attr} should be dropped on legacy-pickle load"
+        assert not hasattr(op, attr), f"{attr} should be dropped on legacy-pickle load"
 
 
 def test_legacy_pickle_load_emits_one_deprecation_warning() -> None:

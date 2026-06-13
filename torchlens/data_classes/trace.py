@@ -2758,7 +2758,7 @@ class Trace(CapturedRun):
 
         for layer_pass in self.layer_list:
             layer_pass.source_trace = self
-            layer_pass.__dict__.pop("_facets_cache", None)
+            del layer_pass.facets
         for layer_log in self.layer_logs.values():
             layer_log.source_trace = self
         for module_log in self.modules:

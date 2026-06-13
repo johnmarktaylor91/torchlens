@@ -227,6 +227,27 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
     assert any(entry["intended_use"] == "orphan_payload" for entry in manifest["body_index"])
 
 
+def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) -> None:
+    """Full default ResNet18 traces with buffers write schema-valid bundles."""
+
+    torchvision_models = pytest.importorskip("torchvision.models")
+    torch.manual_seed(2101)
+    model = torchvision_models.resnet18(weights=None).eval()
+    x = torch.randn(1, 3, 64, 64)
+    log = tl.trace(model, x, capture=CaptureOptions(random_seed=2101))
+    path = tmp_path / "resnet18_full_default.tlspec"
+
+    log.save(path, level="portable")
+    validate_tlspec(path)
+    loaded = tl.load(path)
+    manifest = _read_manifest(path)
+
+    assert isinstance(loaded, tl.Trace)
+    assert loaded.num_ops == log.num_ops
+    assert [layer.label for layer in loaded.layer_list] == [layer.label for layer in log.layer_list]
+    assert any(entry["intended_use"] == "buffer_initial_value" for entry in manifest["body_index"])
+
+
 @pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -> None:

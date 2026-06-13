@@ -1146,7 +1146,7 @@ def _materialize_backward_projections_impl(trace: Any, events: list[Any]) -> Non
     total_backward_memory = 0
     saved_grad_labels: set[str] = set()
     for op in getattr(trace, "layer_list", []):
-        op.__dict__.setdefault("_grad_records", []).clear()
+        op._clear_gradient_records()
     for event in sorted(
         op_grad_events, key=lambda item: (item.pass_index, item.timestamp, item.seq)
     ):

@@ -62,7 +62,7 @@ def test_trace_predicate_save_to_disk_loads_layer_out(tmp_path: Path) -> None:
     saved = _saved_linear(log)
 
     assert saved.ops[0].out_ref is not None
-    assert saved.ops[0].__dict__["out"] is None
+    assert saved.ops[0]._slot("out") is None
     assert torch.equal(saved.out, expected)
     assert torch.equal(saved.ops[0].out, expected)
 

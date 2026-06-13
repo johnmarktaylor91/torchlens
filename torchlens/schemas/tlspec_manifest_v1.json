@@ -150,6 +150,7 @@
             "type": "string",
             "enum": [
               "bundle_marker",
+              "buffer_initial_value",
               "captured_arg",
               "child_version",
               "func_config",

@@ -549,6 +549,7 @@ def _load_trace_payload(
     setattr(trace, "_loaded_from_bundle", True)
     setattr(trace, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
     setattr(trace, "_source_bundle_path", bundle_path)
+    setattr(trace, "_source_bundle_created_at", manifest.created_at)
     return trace
 
 
@@ -904,6 +905,7 @@ def _scrub_trace_for_bundle(
         "_loaded_from_bundle",
         "_source_bundle_manifest_sha256",
         "_source_bundle_path",
+        "_source_bundle_created_at",
     ):
         if hasattr(trace, attr_name):
             transient_attrs[attr_name] = getattr(trace, attr_name)

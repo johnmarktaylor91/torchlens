@@ -72,6 +72,17 @@ def test_state_new_restore_round_trips_dict_backed_state() -> None:
     assert restored is not obj
 
 
+def test_state_new_restore_round_trips_slotted_state() -> None:
+    """Uninitialized slotted objects can be restored slot by slot."""
+
+    obj = _SlottedState()
+    restored = state_restore(state_new(type(obj)), dict(state_items(obj)))
+
+    assert type(restored) is type(obj)
+    assert list(state_items(restored)) == list(state_items(obj))
+    assert restored is not obj
+
+
 def test_scrub_completeness_tripwire_uses_adapter_enumeration() -> None:
     """Scrub still raises when adapter-enumerated state lacks a field policy."""
 

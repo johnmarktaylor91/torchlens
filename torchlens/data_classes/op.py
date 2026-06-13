@@ -140,6 +140,50 @@ _LAYER_PASS_LOG_DEFAULT_FILL = {
     **{field_name: None for field_name in LAYER_PASS_LOG_FIELD_ORDER},
     **_LAYER_PASS_LOG_DEFAULT_FILL,
 }
+_OP_PROPERTY_BACKED_FIELD_NAMES = frozenset(
+    {
+        "source_trace",
+        "input_ops",
+        "input_activations",
+        "input_shapes",
+        "input_dtypes",
+        "input_memory",
+        "num_inputs",
+        "is_in_conditional_body",
+    }
+)
+_OP_DYNAMIC_SLOT_NAMES = (
+    "_source_trace_ref",
+    "out_ref",
+    "grad_ref",
+    "_pending_blob_id",
+    "_pending_transformed_out_blob_id",
+    "_pending_grad_blob_id",
+    "_pending_transformed_grad_blob_id",
+    "_grad_records",
+    "_facets_cache",
+    "_is_in_conditional_body",
+    "_construction_done",
+)
+_OP_SLOT_NAMES = tuple(
+    dict.fromkeys(
+        [
+            *(
+                field_name
+                for field_name in LAYER_PASS_LOG_FIELD_ORDER
+                if field_name not in _OP_PROPERTY_BACKED_FIELD_NAMES
+            ),
+            *_OP_DYNAMIC_SLOT_NAMES,
+        ]
+    )
+)
+
+
+def _clear_property_backed_state_fields(state: dict[str, Any]) -> None:
+    """Remove state keys that are represented by computed Op properties."""
+
+    for field_name in _OP_PROPERTY_BACKED_FIELD_NAMES - {"is_in_conditional_body"}:
+        state.pop(field_name, None)
 
 
 def _recursive_safe_copy(val: Any) -> Any:
@@ -803,6 +847,8 @@ class Op:
       FX-style name form is needed.
     """
 
+    __slots__ = _OP_SLOT_NAMES
+
     PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_label_raw": FieldPolicy.KEEP,
         "_layer_label_raw": FieldPolicy.KEEP,
@@ -992,56 +1038,70 @@ class Op:
     }
     FIELD_FORK_POLICY = LAYER_PASS_LOG_FIELD_FORK_POLICY
     DEFAULT_FILL_STATE = _LAYER_PASS_LOG_DEFAULT_FILL
-    _construction_done: bool = False
+
+    def _slot(self, name: str, default: Any = None) -> Any:
+        """Return one physical slot value, or ``default`` when it is unset."""
+
+        try:
+            return object.__getattribute__(self, name)
+        except AttributeError:
+            return default
 
     def __getattribute__(self, name: str) -> Any:
         """Materialize lazy grads and reject finalized unsaved predicate outs."""
 
         if name == "grad":
-            state = object.__getattribute__(self, "__dict__")
-            records = state.get("_grad_records")
+            slot = object.__getattribute__(self, "_slot")
+            records = slot("_grad_records")
             if records:
                 saved = [record for record in records if record.grad is not None]
                 if len(saved) == 1:
                     grad = saved[0].grad
-                    if isinstance(grad, torch.Tensor) and state.get("grad") is None:
+                    if isinstance(grad, torch.Tensor) and slot("grad") is None:
                         object.__getattribute__(self, "_internal_set")("grad", grad)
                     return grad
                 if len(saved) > 1:
-                    label = (
-                        state.get("label") or state.get("layer_label") or state.get("_label_raw")
-                    )
+                    label = slot("label") or slot("layer_label") or slot("_label_raw")
                     passes = [record.backward_pass_index for record in saved]
                     raise ValueError(
                         f"op {label} has gradients saved from multiple backward passes {passes}; "
                         "use op.grads[...] / op.grad_for(bwd=k)."
                     )
-            grad = state.get("grad")
-            if grad is None and state.get("grad_ref") is not None:
+            grad = slot("grad")
+            if grad is None and slot("grad_ref") is not None:
                 return object.__getattribute__(self, "materialize_grad")()
             return grad
         if name == "out":
-            state = object.__getattribute__(self, "__dict__")
-            out = state.get("out")
-            source_ref = state.get("_source_trace_ref")
+            slot = object.__getattribute__(self, "_slot")
+            out = slot("out")
+            source_ref = slot("_source_trace_ref")
             source_trace = None if source_ref is None else source_ref()
             if (
                 out is None
-                and state.get("out_ref") is not None
+                and slot("out_ref") is not None
                 and getattr(source_trace, "_predicate_save_options", None) is not None
             ):
                 return object.__getattribute__(self, "materialize_out")()
             if (
-                state.get("_tracing_finished")
-                and not state.get("has_saved_activation", False)
+                slot("_tracing_finished")
+                and not slot("has_saved_activation", False)
                 and getattr(source_trace, "_predicate_save_options", None) is not None
             ):
-                label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
+                label = slot("label") or slot("layer_label") or slot("_label_raw")
                 raise ValueError(
                     f"op {label} was not saved; no saved payload is available. "
                     "Re-run with save=... to retain this activation."
                 )
             if not getattr(source_trace, "_postprocessing_active", False):
+                state = {
+                    "out": out,
+                    "annotations": slot("annotations"),
+                    "has_saved_activation": slot("has_saved_activation", False),
+                    "detach_saved_activations": slot("detach_saved_activations"),
+                    "label": slot("label"),
+                    "layer_label": slot("layer_label"),
+                    "_label_raw": slot("_label_raw"),
+                }
                 _validate_reference_out_not_mutated(state)
         return object.__getattribute__(self, name)
 
@@ -1056,9 +1116,9 @@ class Op:
             New attribute value.
         """
 
-        construction_done = self.__dict__.get("_construction_done", False)
+        construction_done = self._slot("_construction_done", False)
         if construction_done and name in _DIRECT_WRITE_GUARDED_FIELDS:
-            owner = self.__dict__.get("_source_trace_ref")
+            owner = self._slot("_source_trace_ref")
             trace = owner() if owner is not None else None
             if trace is not None:
                 object.__setattr__(trace, "_has_direct_writes", True)
@@ -1111,7 +1171,8 @@ class Op:
                 raise ``ValueError``.
         """
         # Attributes are set explicitly (not via loop) for IDE autocompletion.
-        object.__setattr__(self, "_construction_done", False)
+        set_ = object.__setattr__
+        set_(self, "_construction_done", False)
 
         # Validate that fields_dict has exactly the expected keys:
         if "_address_normalized" not in fields_dict:
@@ -1371,7 +1432,7 @@ class Op:
         self._pending_grad_blob_id: Optional[str] = None
         self._pending_transformed_grad_blob_id: Optional[str] = None
         self._grad_records: list[GradientRecord] = []
-        object.__setattr__(self, "_construction_done", True)
+        set_(self, "_construction_done", True)
 
     @property
     def layer_type(self) -> str:
@@ -1511,7 +1572,11 @@ class Op:
                 "saved_grad_ops because they do not capture true backward graphs. Use "
                 "trace.derived_grads for leaf-level derived gradients."
             )
-        return GradientRecordAccessor(self.__dict__.setdefault("_grad_records", []))
+        records = self._slot("_grad_records")
+        if records is None:
+            records = []
+            self._internal_set("_grad_records", records)
+        return GradientRecordAccessor(records)
 
     def grad_for(self, *, bwd: int) -> torch.Tensor:
         """Return the saved gradient tensor for one backward pass.
@@ -1570,7 +1635,10 @@ class Op:
             Appended record.
         """
 
-        records = self.__dict__.setdefault("_grad_records", [])
+        records = self._slot("_grad_records")
+        if records is None:
+            records = []
+            self._internal_set("_grad_records", records)
         records[:] = [
             record for record in records if record.backward_pass_index != backward_pass_index
         ]
@@ -1587,6 +1655,15 @@ class Op:
         )
         records.append(record)
         return record
+
+    def _clear_gradient_records(self) -> None:
+        """Clear projected per-pass gradient records in place."""
+
+        records = self._slot("_grad_records")
+        if records is None:
+            self._internal_set("_grad_records", [])
+            return
+        records.clear()
 
     @property
     def grad_fn_label(self) -> str | None:
@@ -1790,7 +1867,7 @@ class Op:
 
         if self.has_output_descendant and not self.conditional_entry_children:
             return False
-        return bool(self.__dict__.get("_is_in_conditional_body", False)) or any(
+        return bool(self._slot("_is_in_conditional_body", False)) or any(
             role.role == "body" for role in self.in_conditionals or []
         )
 
@@ -1798,13 +1875,16 @@ class Op:
     def is_in_conditional_body(self, value: bool) -> None:
         """Set the cached conditional-body predicate used during postprocessing."""
 
-        self.__dict__["_is_in_conditional_body"] = value
+        object.__setattr__(self, "_is_in_conditional_body", value)
 
     @is_in_conditional_body.deleter
     def is_in_conditional_body(self) -> None:
         """Delete the cached conditional-body predicate during cleanup."""
 
-        self.__dict__.pop("_is_in_conditional_body", None)
+        try:
+            object.__delattr__(self, "_is_in_conditional_body")
+        except AttributeError:
+            pass
 
     @property
     def conditional_depth(self) -> int:
@@ -2034,7 +2114,7 @@ class Op:
     @property
     def source_trace(self) -> "Trace":
         """Back-reference to the owning Trace (stored as weakref)."""
-        ref = self.__dict__.get("_source_trace_ref")
+        ref = self._slot("_source_trace_ref")
         if ref is None:
             return None  # type: ignore[return-value]
         obj = ref()
@@ -2065,7 +2145,7 @@ class Op:
             If this operation log is detached from its source Trace.
         """
 
-        ref = self.__dict__.get("_source_trace_ref")
+        ref = self._slot("_source_trace_ref")
         source = ref() if ref is not None else None
         if source is None or getattr(source, "_loaded_from_bundle", False):
             raise AttributeError(
@@ -2222,7 +2302,7 @@ class Op:
         torch.Size([2, 3])
         """
 
-        current_out = self.__dict__.get("out")
+        current_out = self._slot("out")
         if isinstance(current_out, torch.Tensor):
             return current_out
         if self.out_ref is None:
@@ -2261,7 +2341,7 @@ class Op:
         torch.Size([2, 3])
         """
 
-        grad = self.__dict__.get("grad")
+        grad = self._slot("grad")
         if isinstance(grad, torch.Tensor):
             return grad
         if self.grad_ref is None:
@@ -2341,6 +2421,7 @@ class Op:
             state,
             defaults=self.DEFAULT_FILL_STATE,
         )
+        _clear_property_backed_state_fields(state)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = _dtype_ref_or_none(state.get("dtype"))
         if state.get("device_ref") is None:
@@ -2369,7 +2450,6 @@ class Op:
             if state.get(field_name) is not None:
                 state[field_name] = Flops(state[field_name])
         object.__setattr__(self, "_construction_done", False)
-        state.pop("source_trace", None)
         state_restore(self, state)
         object.__setattr__(self, "_construction_done", bool(state.get("_construction_done", True)))
 
@@ -2381,19 +2461,22 @@ class Op:
     def facets(self) -> Any:
         """Return the lazy semantic facet view for this Op."""
 
-        cache = self.__dict__.get("_facets_cache")
+        cache = self._slot("_facets_cache")
         if cache is None:
             from ..semantic import FacetView
 
             cache = FacetView(self)
-            self.__dict__["_facets_cache"] = cache
+            object.__setattr__(self, "_facets_cache", cache)
         return cache
 
     @facets.deleter
     def facets(self) -> None:
         """Drop the cached semantic facet view for this Op."""
 
-        self.__dict__.pop("_facets_cache", None)
+        try:
+            object.__delattr__(self, "_facets_cache")
+        except AttributeError:
+            pass
 
     # ********************************************
     # ************* Logging Functions ************

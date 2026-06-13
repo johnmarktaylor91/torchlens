@@ -148,7 +148,7 @@ def test_trace_reference_save_mode_raises_if_saved_out_mutates() -> None:
 
     log = tl.trace(torch.nn.ReLU(), torch.ones(1, 2), save_mode="reference")
     op = next(layer for layer in log.layer_list if layer.func_name == "relu")
-    saved_out = op.__dict__["out"]
+    saved_out = op._slot("out")
 
     saved_out.add_(1)
 
@@ -169,7 +169,7 @@ def test_trace_reference_save_mode_copies_known_inplace_ops() -> None:
 
     log = tl.trace(InplaceRelu(), torch.ones(1, 2), save_mode="reference")
     op = next(layer for layer in log.layer_list if layer.func_name == "relu_")
-    saved_out = op.__dict__["out"]
+    saved_out = op._slot("out")
 
     saved_out.add_(1)
 

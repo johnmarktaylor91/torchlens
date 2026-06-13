@@ -300,7 +300,7 @@ class _TlSpecWriter:
         return {
             "tlspec_version": TLSPEC_VERSION,
             "kind": kind,
-            "created_at": _utc_timestamp(),
+            "created_at": getattr(source, "_source_bundle_created_at", None) or _utc_timestamp(),
             "torchlens_version": TORCHLENS_VERSION,
             "python_version": _python_version(),
             "torch_version": torch.__version__,

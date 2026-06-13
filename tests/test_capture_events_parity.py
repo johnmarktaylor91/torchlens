@@ -18,6 +18,7 @@ import numpy as np
 
 import torchlens as tl
 from torchlens import errors
+from torchlens.data_classes._state_adapter import state_items
 from torchlens.user_funcs import _detach_nested_for_cache
 
 from _pickle_compare import _canonical_pickle_diff, _tensor_equal
@@ -191,6 +192,18 @@ def _first_state_difference(
     if type(left) is not type(right):
         return f"{path}: type {type(left)!r} != {type(right)!r}"
     if isinstance(left, weakref.ReferenceType):
+        return None
+    if getattr(type(left), "PORTABLE_STATE_SPEC", None) is not None:
+        left_state = dict(state_items(left))
+        right_state = dict(state_items(right))
+        left_keys = set(left_state)
+        right_keys = set(right_state)
+        if left_keys != right_keys:
+            return f"{path}: keys {sorted(left_keys ^ right_keys)!r}"
+        for key in sorted(left_keys):
+            diff = _first_state_difference(left_state[key], right_state[key], f"{path}.{key}", seen)
+            if diff is not None:
+                return diff
         return None
     if hasattr(left, "__dict__") and hasattr(right, "__dict__"):
         left_keys = set(left.__dict__)

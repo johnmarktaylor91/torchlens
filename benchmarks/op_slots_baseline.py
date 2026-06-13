@@ -179,7 +179,7 @@ def _build_small_resnetish() -> tuple[nn.Module, torch.Tensor]:
 
 
 def _op_object_bytes(trace: Any) -> int:
-    """Return shallow Op object plus ``__dict__`` bytes for a trace.
+    """Return shallow Op object plus instance-dict bytes for a trace.
 
     Parameters
     ----------
@@ -189,10 +189,17 @@ def _op_object_bytes(trace: Any) -> int:
     Returns
     -------
     int
-        Sum of shallow object and dict sizes.
+        Sum of shallow object and instance-dict sizes. Slotted Ops without
+        ``__dict__`` contribute zero dict bytes.
     """
 
-    return sum(sys.getsizeof(op) + sys.getsizeof(op.__dict__) for op in trace.layer_list)
+    total = 0
+    for op in trace.layer_list:
+        instance_dict = getattr(op, "__dict__", None)
+        total += sys.getsizeof(op)
+        if instance_dict is not None:
+            total += sys.getsizeof(instance_dict)
+    return total
 
 
 def _construction_stats(trace: Any) -> tuple[float, int]:
@@ -259,8 +266,12 @@ def _seed_fields_for_synthetic_ops() -> dict[str, Any]:
     with torch.no_grad():
         trace = tl.trace(model, x, profile=True, save=lambda _ctx: False)
     seed_op = next(op for op in trace.layer_list if op.func_name not in {None, "none"})
+    physical_fields = set(getattr(type(seed_op), "__slots__", ()))
     return {
-        field_name: seed_op.__dict__.get(field_name) for field_name in LAYER_PASS_LOG_FIELD_ORDER
+        field_name: seed_op._slot(field_name)
+        if field_name in physical_fields
+        else getattr(seed_op, field_name, None)
+        for field_name in LAYER_PASS_LOG_FIELD_ORDER
     }
 
 
