@@ -613,6 +613,7 @@ _UNARY_FUNCS = [
     "assubclass",
     # nn.init functions (in-place on tensor)
     "calculategain",
+    "nograduniform",  # torch.nn.init._no_grad_uniform_ (unary in-place init helper)
     "kaiminguniform",
     "kaimingnormal",
     "xavieruniform",
