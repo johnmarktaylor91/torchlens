@@ -145,11 +145,11 @@ MLX currently declares backward capture unsupported and raises tiered backend er
 features such as autograd node records and live backward intervention remain out of reach unless
 another backend exposes hookable backward graphs. JAX M1 exposes only `trace.derived_grads`,
 populated by `tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
-`fn(params, *inputs)`. tinygrad exposes only `trace.derived_grads`, populated by
-`tl.backends.tinygrad.GradOptions` through a bracketed `DEV=PYTHON` leaf-gradient run. These are
-not backward capture: `trace.log_backward(...)`, `trace.backward_passes`,
-`trace.saved_grad_ops`, and `op.grads` raise on JAX and tinygrad traces. Non-torch T1/per-op
-cotangents are research, not a committed roadmap item.
+`fn(params, *inputs)`. tinygrad exposes `trace.derived_grads`, populated by
+`tl.backends.tinygrad.GradOptions` through a bracketed `DEV=PYTHON` leaf-gradient run, and can
+optionally expose exact unambiguous per-op records through `trace.intermediate_derived_grads` plus
+read-only `op.derived_grad`. These are not backward capture: `trace.log_backward(...)`,
+`trace.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise on JAX and tinygrad traces.
 
 Future follow-ups are filed for real per-fire timing via prehooks and better implicit-boundary
 detection. Current `GradFnCall` timing is a single hook timestamp, and implicit passes are closed

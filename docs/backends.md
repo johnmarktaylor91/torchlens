@@ -11,7 +11,7 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Technical preview | Unsupported | Audit-only | `torch_module` compatibility mode | Unsupported |
 | `jax` | Preview jaxpr-first functional capture | Per-equation replay and parent perturbation | Audit-only `.tlspec` save/load | `function_root`, Equinox `pytree_module` | `trace.derived_grads` only |
-| `tinygrad` | Preview UOp-snapshot functional capture | UOp replay and parent perturbation on live `DEV=PYTHON` payloads | Audit-only `.tlspec` save/load | `function_root`, object `object_module` | `trace.derived_grads` only |
+| `tinygrad` | Preview UOp-snapshot functional capture | UOp replay and parent perturbation on live `DEV=PYTHON` payloads | Audit-only `.tlspec` save/load | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 
 ## Public Option Spine
 
@@ -140,6 +140,12 @@ grad_options = tl.backends.tinygrad.GradOptions(input_grad_argnums=(0,))
 trace = tl.trace(fn, Tensor([1.0, -2.0, 3.0]), backend="tinygrad", grad_options=grad_options)
 trace.derived_grads["inputs.0"]
 ```
+
+Set `GradOptions(intermediate_grads=True)` to run tinygrad's separate no-realize
+intermediate-gradient pass. It calls `loss.backward()` before realizing any copied outputs, then
+attaches exact unambiguous records to `trace.intermediate_derived_grads`; each owning `Op` exposes
+the payload through read-only `op.derived_grad`. Ambiguous signature matches are skipped instead of
+attached, and `op.grads` / `trace.saved_grad_ops` remain true-backward-only.
 
 The tinygrad backend rejects mid-capture `Tensor.realize()`, `Tensor.assign()`,
 `Tensor.replace()`, setitem input mutation, TinyJit execution, selective save predicates,

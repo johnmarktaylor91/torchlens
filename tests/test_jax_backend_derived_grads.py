@@ -9,6 +9,7 @@ import pytest
 import torchlens as tl
 from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.jax import GradOptions
+from torchlens.backends.jax.backend import _experimental_per_op_boundary_vjp_oracle
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -216,4 +217,52 @@ def test_jax_derived_grads_reject_aux_output_divergence() -> None:
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
             grad_options=GradOptions(params=_params(), loss_fn=_loss),
+        )
+
+
+def test_jax_private_boundary_vjp_oracle_is_capped_and_not_public() -> None:
+    """Private JAX T1 oracle computes capped boundary VJPs without trace surface."""
+
+    x = jnp.asarray([1.0, -2.0, 0.5], dtype=jnp.float32)
+    hidden = jnp.tanh(x * 2.0)
+
+    def suffix(replacement: Any) -> Any:
+        """Return output reconstructed from a replacement boundary.
+
+        Parameters
+        ----------
+        replacement
+            Replacement hidden activation.
+
+        Returns
+        -------
+        Any
+            Model suffix output.
+        """
+
+        return replacement * replacement
+
+    result = _experimental_per_op_boundary_vjp_oracle(
+        boundaries={"hidden": (hidden, suffix)},
+        loss_fn=lambda output: jnp.sum(output),
+        max_save_set=1,
+    )
+    _loss_value, expected_grad = jax.value_and_grad(
+        lambda replacement: jnp.sum(suffix(replacement))
+    )(hidden)
+    trace = tl.trace(
+        cast(Any, lambda params, value: suffix(jnp.tanh(value * 2.0))), ({}, x), backend="jax"
+    )
+
+    assert result.skipped == {}
+    assert set(result.records.keys()) == {"hidden"}
+    assert jnp.allclose(result.records["hidden"].grad, expected_grad)
+    assert not hasattr(trace, "jax_intermediate_derived_grads")
+    assert len(trace.intermediate_derived_grads) == 0
+
+    with pytest.raises(ValueError, match="capped"):
+        _experimental_per_op_boundary_vjp_oracle(
+            boundaries={"a": (hidden, suffix), "b": (hidden, suffix)},
+            loss_fn=lambda output: jnp.sum(output),
+            max_save_set=1,
         )

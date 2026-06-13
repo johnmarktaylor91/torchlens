@@ -129,7 +129,7 @@ from .interface import (
     _str_during_pass,
 )
 from .backward_pass import BackwardPass, BackwardPassAccessor
-from .derived_grad import DerivedGradAccessor
+from .derived_grad import DerivedGradAccessor, IntermediateDerivedGradAccessor
 from .grad_fn import GradFnAccessor, GradFn
 from .layer import Layer, OpAccessor
 from .op import Op, TensorLog
@@ -4178,6 +4178,34 @@ class Trace(CapturedRun):
         """Number of Ops with saved gradients."""
 
         return len(self.saved_grad_ops)
+
+    @property
+    def intermediate_derived_grads(self) -> IntermediateDerivedGradAccessor:
+        """Access exact op-level derived gradient records, when a backend provides them.
+
+        Returns
+        -------
+        IntermediateDerivedGradAccessor
+            Records keyed by pass-qualified op label. Backends that did not run
+            an intermediate-derived-gradient pass return an empty accessor.
+        """
+
+        records = self.__dict__.get("_intermediate_derived_grads")
+        if isinstance(records, IntermediateDerivedGradAccessor):
+            return records
+        return IntermediateDerivedGradAccessor()
+
+    @intermediate_derived_grads.setter
+    def intermediate_derived_grads(self, value: IntermediateDerivedGradAccessor) -> None:
+        """Store exact op-level derived gradient records.
+
+        Parameters
+        ----------
+        value
+            Accessor to expose through ``trace.intermediate_derived_grads``.
+        """
+
+        self.__dict__["_intermediate_derived_grads"] = value
 
     @property
     def num_saved_grad_layers(self) -> int:

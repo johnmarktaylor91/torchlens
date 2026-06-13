@@ -12,7 +12,12 @@ from typing import Any, cast
 
 from ..._deprecations import MISSING, MissingType
 from ...backends import BackendName, BackendUnsupportedError
-from ...data_classes.derived_grad import DerivedGradAccessor, DerivedGradRecord
+from ...data_classes.derived_grad import (
+    DerivedGradAccessor,
+    DerivedGradRecord,
+    IntermediateDerivedGradAccessor,
+    IntermediateDerivedGradRecord,
+)
 from ...data_classes.layer import Layer
 from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import Param, ParamAccessor
@@ -68,6 +73,28 @@ class TinygradUOpCapture:
 
 
 @dataclass(frozen=True)
+class TinygradIntermediateCandidate:
+    """Live retained tinygrad tensor candidate for one op-level gradient.
+
+    Parameters
+    ----------
+    signature
+        Conservative structural signature used for trace-op matching.
+    tensor
+        Live tinygrad Tensor retained from the no-realize forward pass.
+    aval
+        Human-readable abstract-value description.
+    dtype_ref
+        Backend-neutral dtype reference for the tensor.
+    """
+
+    signature: tuple[Any, ...]
+    tensor: Any
+    aval: str
+    dtype_ref: DtypeRef | None
+
+
+@dataclass(frozen=True)
 class GradOptions:
     """tinygrad derived-gradient preview options.
 
@@ -79,16 +106,21 @@ class GradOptions:
     input_grad_argnums
         Positional input argument indexes to differentiate. ``None`` means all
         positional tinygrad tensor input leaves.
+    intermediate_grads
+        Whether to run the opt-in no-realize pass for op-level intermediate
+        derived gradients.
     """
 
     loss_fn: Callable[[Any], Any] | None = None
     input_grad_argnums: tuple[int, ...] | None = None
+    intermediate_grads: bool = False
 
     def __init__(
         self,
         *,
         loss_fn: Callable[[Any], Any] | None = None,
         input_grad_argnums: Sequence[int] | None = None,
+        intermediate_grads: bool = False,
     ) -> None:
         """Initialize tinygrad derived-gradient options.
 
@@ -100,11 +132,15 @@ class GradOptions:
         input_grad_argnums
             Positional input argnums to differentiate. ``None`` differentiates
             all positional tinygrad tensor input leaves.
+        intermediate_grads
+            Whether to retain saved op outputs during a separate no-realize
+            backward pass and expose ``trace.intermediate_derived_grads``.
         """
 
         object.__setattr__(self, "loss_fn", loss_fn)
         normalized = None if input_grad_argnums is None else tuple(input_grad_argnums)
         object.__setattr__(self, "input_grad_argnums", normalized)
+        object.__setattr__(self, "intermediate_grads", bool(intermediate_grads))
 
 
 @dataclass(frozen=True)
@@ -1261,10 +1297,21 @@ class TinygradBackend:
             len(args),
         )
         leaves = _differentiated_input_leaves(self, args, input_argnums)
-        if not leaves:
+        if not leaves and not grad_options.intermediate_grads:
             raise ValueError("tinygrad derived gradients require at least one tensor input leaf.")
         snapshots = _snapshot_tinygrad_grads(self, leaves)
         try:
+            if grad_options.intermediate_grads:
+                trace.intermediate_derived_grads = self._derive_intermediate_grads_no_realize(
+                    trace=trace,
+                    model=model,
+                    args=args,
+                    captured_output=captured_output,
+                    grad_options=grad_options,
+                    snapshots=snapshots,
+                )
+                _restore_tinygrad_grads(snapshots)
+                snapshots = _snapshot_tinygrad_grads(self, leaves)
             derived_output = model(*args)
             loss = grad_options.loss_fn(derived_output) if grad_options.loss_fn else derived_output
             if not self.is_tensor(loss) or not _is_scalar_tinygrad_value(loss):
@@ -1293,6 +1340,88 @@ class TinygradBackend:
             _restore_tinygrad_grads(snapshots)
         trace.derived_grads = DerivedGradAccessor(records)
         self._mirror_param_derived_grads(trace, records)
+
+    def _derive_intermediate_grads_no_realize(
+        self,
+        *,
+        trace: Trace,
+        model: Callable[..., Any],
+        args: Sequence[Any],
+        captured_output: Any,
+        grad_options: GradOptions,
+        snapshots: Mapping[str, tuple[Any, Any | None, Any | None]],
+    ) -> IntermediateDerivedGradAccessor:
+        """Compute tinygrad op-level grads using a no-realize backward pass.
+
+        Parameters
+        ----------
+        trace
+            Trace whose saved ops define the bounded attachment set.
+        model
+            Captured tinygrad callable.
+        args
+            Positional call arguments used for capture.
+        captured_output
+            Raw output from the captured forward call.
+        grad_options
+            Derived-gradient options.
+        snapshots
+            User input grad snapshots restored by the caller.
+
+        Returns
+        -------
+        IntermediateDerivedGradAccessor
+            Exact, unambiguous op-level intermediate gradient records.
+        """
+
+        observed_ops: dict[int, list[str]] = {}
+        observed_tensors: dict[int, list[Any]] = {}
+        with _observe_tensor_ops(observed_ops, observed_tensors=observed_tensors):
+            derived_output = model(*args)
+        outputs = tuple(self._tensor_leaves(derived_output))
+        loss = grad_options.loss_fn(derived_output) if grad_options.loss_fn else derived_output
+        if not self.is_tensor(loss) or not _is_scalar_tinygrad_value(loss):
+            raise ValueError(
+                "tinygrad intermediate derived gradients require loss_fn(raw_output) to be "
+                "scalar unless the traced output is already scalar."
+            )
+        selected_ops = tuple(
+            op
+            for op in trace.layer_list
+            if op.has_saved_activation
+            and not op.is_input
+            and op.annotations.get("tinygrad_observed_tensor_ops")
+        )
+        trace_signatures = _tinygrad_trace_op_signatures(
+            selected_ops,
+            getattr(trace, "tinygrad_uop_captures", ()),
+        )
+        live_candidates = _tinygrad_live_intermediate_candidates(
+            backend=self,
+            outputs=outputs,
+            observed_tensors=observed_tensors,
+        )
+        cast(Any, loss).backward()
+        if not _tinygrad_outputs_close(self, derived_output, captured_output):
+            raise ValueError(
+                "tinygrad intermediate derived gradient run raw output diverged from captured "
+                "raw output; refusing to expose trace.intermediate_derived_grads."
+            )
+        records = _records_for_tinygrad_intermediate_grads(
+            backend=self,
+            trace_signatures=trace_signatures,
+            live_candidates=live_candidates,
+            snapshots=snapshots,
+            provenance={
+                "backend": "tinygrad",
+                "kind": "intermediate_derived_gradient",
+                "mechanism": "tinygrad_retained_tensor_backward_no_realize",
+                "loss_id": _callable_identity(grad_options.loss_fn),
+                "save_predicate_id": "trace.saved_ops",
+                "status": "exact",
+            },
+        )
+        return IntermediateDerivedGradAccessor(records)
 
     def _mirror_param_derived_grads(
         self, trace: Trace, records: Mapping[str, DerivedGradRecord]
@@ -2374,6 +2503,7 @@ class _observe_tensor_ops:
         self,
         observed_ops: dict[int, list[str]],
         observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] | None = None,
+        observed_tensors: dict[int, list[Any]] | None = None,
     ) -> None:
         """Initialize the observation context.
 
@@ -2384,10 +2514,14 @@ class _observe_tensor_ops:
         observed_module_stacks
             Optional mutable mapping receiving first-observed module stacks by
             returned UOp id.
+        observed_tensors
+            Optional mutable mapping receiving live result tensors by returned
+            UOp id.
         """
 
         self.observed_ops = observed_ops
         self.observed_module_stacks = observed_module_stacks
+        self.observed_tensors = observed_tensors
         self.original: Any = None
 
     def __enter__(self) -> "_observe_tensor_ops":
@@ -2413,6 +2547,8 @@ class _observe_tensor_ops:
                 self.observed_module_stacks.setdefault(
                     id(result.uop), tuple(_ACTIVE_TINYGRAD_MODULE_STACK)
                 )
+            if self.observed_tensors is not None:
+                self.observed_tensors.setdefault(id(result.uop), []).append(result)
             return result
 
         Tensor._apply_uop = wrapped
@@ -2660,6 +2796,128 @@ def _uop_signature(uop: Any) -> str:
     src = getattr(uop, "src", ()) or ()
     children = ",".join(_uop_signature(child) for child in src)
     return f"{_uop_name(uop)}:{getattr(uop, 'dtype', None)}:{getattr(uop, 'arg', None)}[{children}]"
+
+
+def _tinygrad_signature_key(
+    *,
+    uop_signature: str,
+    ordinal: int,
+    parent_signatures: tuple[str, ...],
+    shape: tuple[int, ...],
+    dtype: str,
+) -> tuple[Any, ...]:
+    """Return the conservative key used for tinygrad T1 matching.
+
+    Parameters
+    ----------
+    uop_signature
+        Recursive structural UOp signature.
+    ordinal
+        Topological ordinal among retained non-input op candidates.
+    parent_signatures
+        Direct parent structural signatures.
+    shape
+        Tensor shape.
+    dtype
+        Tensor dtype string.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Hashable conservative match key.
+    """
+
+    return (uop_signature, ordinal, parent_signatures, shape, dtype)
+
+
+def _tinygrad_trace_op_signatures(
+    ops: Sequence[Any],
+    captures: Sequence[TinygradUOpCapture],
+) -> dict[tuple[Any, ...], list[Any]]:
+    """Group saved trace ops by conservative tinygrad T1 signature.
+
+    Parameters
+    ----------
+    ops
+        Saved non-input trace ops eligible for intermediate-derived gradients.
+    captures
+        Live UOp captures from the original forward pass.
+
+    Returns
+    -------
+    dict[tuple[Any, ...], list[Any]]
+        Trace ops grouped by signature. Duplicate groups are intentionally kept
+        so attachment can reject ambiguous mappings.
+    """
+
+    uop_by_label = {capture.label_raw: capture.uop for capture in captures}
+    grouped: dict[tuple[Any, ...], list[Any]] = defaultdict(list)
+    for ordinal, op in enumerate(ops):
+        uop = uop_by_label.get(op._label_raw)
+        if uop is None:
+            continue
+        key = _tinygrad_signature_key(
+            uop_signature=_uop_signature(uop),
+            ordinal=ordinal,
+            parent_signatures=tuple(_uop_signature(src) for src in getattr(uop, "src", ())),
+            shape=tuple(getattr(op, "shape", ()) or ()),
+            dtype=str(getattr(op, "dtype", "")),
+        )
+        grouped[key].append(op)
+    return grouped
+
+
+def _tinygrad_live_intermediate_candidates(
+    *,
+    backend: TinygradBackend,
+    outputs: Sequence[Any],
+    observed_tensors: Mapping[int, list[Any]],
+) -> dict[tuple[Any, ...], list[TinygradIntermediateCandidate]]:
+    """Group no-realize live tensors by conservative tinygrad T1 signature.
+
+    Parameters
+    ----------
+    backend
+        tinygrad backend instance used for tensor checks.
+    outputs
+        Tensor outputs from the no-realize derived pass.
+    observed_tensors
+        Live tensors retained by the Tensor API observer, keyed by UOp id.
+
+    Returns
+    -------
+    dict[tuple[Any, ...], list[TinygradIntermediateCandidate]]
+        Live candidates grouped by signature. Duplicate groups remain ambiguous
+        and are skipped by the attachment step.
+    """
+
+    grouped: dict[tuple[Any, ...], list[TinygradIntermediateCandidate]] = defaultdict(list)
+    ordinal = 0
+    for uop in _unique_uops(outputs):
+        tensors = observed_tensors.get(id(uop), ())
+        for tensor in tensors:
+            if not backend.is_tensor(tensor):
+                continue
+            shape = tuple(getattr(tensor, "shape", ()) or ())
+            dtype = str(getattr(tensor, "dtype", ""))
+            key = _tinygrad_signature_key(
+                uop_signature=_uop_signature(uop),
+                ordinal=ordinal,
+                parent_signatures=tuple(_uop_signature(src) for src in getattr(uop, "src", ())),
+                shape=shape,
+                dtype=dtype,
+            )
+            grouped[key].append(
+                TinygradIntermediateCandidate(
+                    signature=key,
+                    tensor=tensor,
+                    aval=f"Tensor(shape={shape}, dtype={dtype})",
+                    dtype_ref=DtypeRef(backend="tinygrad", name=dtype),
+                )
+            )
+        if tensors:
+            ordinal += 1
+    return grouped
 
 
 def _identity(tensor: Any) -> str:
@@ -3071,6 +3329,62 @@ def _records_for_tinygrad_leaf_grads(
             dtype_ref=DtypeRef(backend="tinygrad", name=str(getattr(grad, "dtype", ""))),
             grad=grad,
             provenance=provenance,
+        )
+    return records
+
+
+def _records_for_tinygrad_intermediate_grads(
+    *,
+    backend: TinygradBackend,
+    trace_signatures: Mapping[tuple[Any, ...], list[Any]],
+    live_candidates: Mapping[tuple[Any, ...], list[TinygradIntermediateCandidate]],
+    snapshots: Mapping[str, tuple[Any, Any | None, Any | None]],
+    provenance: Mapping[str, Any],
+) -> dict[str, IntermediateDerivedGradRecord]:
+    """Build exact tinygrad intermediate-derived gradient records.
+
+    Parameters
+    ----------
+    backend
+        tinygrad backend instance used for realized grad copies.
+    trace_signatures
+        Saved trace ops grouped by conservative signature.
+    live_candidates
+        Live no-realize tensors grouped by conservative signature.
+    snapshots
+        User input grad snapshots used only to avoid attaching records for the
+        differentiated input leaves themselves.
+    provenance
+        Shared provenance metadata for exact attached records.
+
+    Returns
+    -------
+    dict[str, IntermediateDerivedGradRecord]
+        Records keyed by pass-qualified op label. Ambiguous or missing matches
+        are skipped.
+    """
+
+    records: dict[str, IntermediateDerivedGradRecord] = {}
+    skipped_input_ids = {id(tensor) for tensor, _original, _snapshot in snapshots.values()}
+    for signature, ops in trace_signatures.items():
+        candidates = live_candidates.get(signature, ())
+        if len(ops) != 1 or len(candidates) != 1:
+            continue
+        op = ops[0]
+        candidate = candidates[0]
+        if id(candidate.tensor) in skipped_input_ids:
+            continue
+        grad = getattr(candidate.tensor, "grad", None)
+        if grad is None:
+            continue
+        copied_grad = backend._realized_copy(grad)
+        records[op.label] = IntermediateDerivedGradRecord(
+            op_label=op.label,
+            layer_label=op.layer_label,
+            aval=candidate.aval,
+            dtype_ref=candidate.dtype_ref,
+            grad=copied_grad,
+            provenance=dict(provenance),
         )
     return records
 

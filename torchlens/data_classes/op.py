@@ -1570,13 +1570,34 @@ class Op:
             raise ValueError(
                 f"{getattr(trace, 'backend', 'backend')} traces do not expose op.grads or "
                 "saved_grad_ops because they do not capture true backward graphs. Use "
-                "trace.derived_grads for leaf-level derived gradients."
+                "trace.derived_grads for leaf-level derived gradients and "
+                "op.derived_grad for exact op-level derived gradients when available."
             )
         records = self._slot("_grad_records")
         if records is None:
             records = []
             self._internal_set("_grad_records", records)
         return GradientRecordAccessor(records)
+
+    @property
+    def derived_grad(self) -> Any | None:
+        """Return this op's derived intermediate gradient payload, if available.
+
+        Returns
+        -------
+        Any | None
+            Backend-owned gradient payload from ``trace.intermediate_derived_grads``,
+            or ``None`` when this op has no exact intermediate-derived record.
+        """
+
+        trace = self.source_trace
+        records = getattr(trace, "intermediate_derived_grads", None)
+        if records is None:
+            return None
+        if self.label not in records:
+            return None
+        record = records[self.label]
+        return record.grad
 
     def grad_for(self, *, bwd: int) -> torch.Tensor:
         """Return the saved gradient tensor for one backward pass.

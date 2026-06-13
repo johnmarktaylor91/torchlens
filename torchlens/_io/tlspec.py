@@ -103,7 +103,7 @@ class _TlSpecWriter:
                     ),
                     "body_format": spec.serialization_policy.body_format,
                     "backward_summary": None,
-                    "derived_gradient_summary": None,
+                    "derived_gradient_summary": cls._derived_gradient_summary(trace),
                     "payload_policy": cls._payload_policy(trace, backend_name=backend_name),
                 }
             )
@@ -382,6 +382,42 @@ class _TlSpecWriter:
             "policy": spec.serialization_policy.payload_policy,
             "materialization_supported": spec.capabilities.payload_materialization,
             "payload_kinds": [],
+        }
+
+    @staticmethod
+    def _derived_gradient_summary(source: Any) -> dict[str, Any] | None:
+        """Build schema-v2 derived-gradient summary metadata.
+
+        Parameters
+        ----------
+        source:
+            Trace being serialized.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            JSON-ready derived-gradient summary, or ``None`` when absent.
+        """
+
+        leaf_records = getattr(source, "derived_grads", {})
+        intermediate_records = getattr(source, "intermediate_derived_grads", {})
+        leaf_count = _safe_len(leaf_records)
+        intermediate_count = _safe_len(intermediate_records)
+        if leaf_count == 0 and intermediate_count == 0:
+            return None
+        provenance_kinds = sorted(
+            {
+                str(record.provenance.get("kind"))
+                for accessor in (leaf_records, intermediate_records)
+                for record in getattr(accessor, "values", lambda: ())()
+                if getattr(record, "provenance", None) is not None
+                and record.provenance.get("kind") is not None
+            }
+        )
+        return {
+            "num_leaf_records": leaf_count,
+            "num_intermediate_records": intermediate_count,
+            "provenance_kinds": provenance_kinds,
         }
 
     @classmethod

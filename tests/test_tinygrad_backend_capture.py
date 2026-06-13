@@ -90,6 +90,26 @@ def _tiny_vector_loss(output: Any) -> Any:
     return output.sum()
 
 
+def _tiny_intermediate_loss(x: Any) -> Any:
+    """Return a scalar tinygrad loss with retained intermediates.
+
+    Parameters
+    ----------
+    x
+        tinygrad Tensor input.
+
+    Returns
+    -------
+    Any
+        Scalar tinygrad Tensor loss.
+    """
+
+    hidden = x * x
+    activated = (hidden + 1.0).relu()
+    scaled = activated * 3.0
+    return scaled.sum()
+
+
 def _multi_output(x: Any) -> tuple[Any, Any]:
     """Return two tinygrad outputs.
 
@@ -474,6 +494,41 @@ def test_tinygrad_derived_grads_repeat_without_accumulating_user_grad() -> None:
     assert first.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
     assert second.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
     assert x.grad is None
+
+
+def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() -> None:
+    """Opt-in intermediate derived grads should match retained tinygrad tensors."""
+
+    x = Tensor([1.0, -2.0, 3.0])
+    trace = tl.trace(
+        _tiny_intermediate_loss,
+        x,
+        backend="tinygrad",
+        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+    )
+    oracle_x = Tensor([1.0, -2.0, 3.0])
+    oracle_hidden = oracle_x * oracle_x
+    oracle_activated = (oracle_hidden + 1.0).relu()
+    oracle_scaled = oracle_activated * 3.0
+    oracle_loss = oracle_scaled.sum()
+    oracle_loss.backward()
+
+    hidden_op = next(op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,))
+    scaled_op = [op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,)][-1]
+
+    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert x.grad is None
+    assert len(trace.intermediate_derived_grads) > 0
+    assert hidden_op.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
+    assert scaled_op.derived_grad.tolist() == pytest.approx(oracle_scaled.grad.tolist())
+    assert hidden_op.label in trace.intermediate_derived_grads
+    assert trace.intermediate_derived_grads[hidden_op.label].provenance["mechanism"] == (
+        "tinygrad_retained_tensor_backward_no_realize"
+    )
+    assert trace.intermediate_derived_grads[hidden_op.label].provenance["status"] == "exact"
+    assert trace.intermediate_derived_grads[hidden_op.label].provenance["save_predicate_id"] == (
+        "trace.saved_ops"
+    )
 
 
 def test_tinygrad_derived_grads_are_not_backward_capture() -> None:

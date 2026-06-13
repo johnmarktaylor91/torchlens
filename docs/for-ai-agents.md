@@ -7,11 +7,15 @@ v2 spelling: `tl.trace(..., backend=None)`, predicate `save=...`, `intervene=...
 Backend note: `backend=None` preserves torch eager default plus MLX module auto-routing.
 `tl.record()`/fastlog and true backward capture are torch-only in backend v1. Backend-neutral
 metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_source`,
-`Trace.derived_grads`, `dtype_ref`, `device_ref`, `backend_address`, and `resolver_status`.
+`Trace.derived_grads`, `Trace.intermediate_derived_grads`, `dtype_ref`, `device_ref`,
+`backend_address`, and `resolver_status`.
 JAX leaf gradients are requested with `tl.backends.jax.GradOptions`; they are derived by a
 second functional AD run and never populate backward-pass or op-gradient surfaces.
 tinygrad leaf gradients use `tl.backends.tinygrad.GradOptions`; they are bracketed
-`DEV=PYTHON` leaf-gradient runs and likewise never populate true backward surfaces.
+`DEV=PYTHON` leaf-gradient runs. tinygrad op-level intermediate derived gradients are requested
+with `GradOptions(intermediate_grads=True)` and are exposed only through
+`Trace.intermediate_derived_grads` and `Op.derived_grad`; they never populate true backward
+surfaces.
 
 ## Public surface map
 

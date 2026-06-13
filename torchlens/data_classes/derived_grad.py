@@ -57,3 +57,46 @@ class DerivedGradAccessor(Accessor[DerivedGradRecord]):
         """
 
         super().__init__({} if records is None else records)
+
+
+@dataclass(frozen=True)
+class IntermediateDerivedGradRecord:
+    """Op-level gradient derived from a backend-owned auxiliary AD run.
+
+    Parameters
+    ----------
+    op_label
+        Stable pass-qualified TorchLens op label.
+    layer_label
+        Stable layer label for the owning op.
+    aval
+        Backend abstract-value description for the gradient payload.
+    dtype_ref
+        Backend-neutral dtype reference for the gradient payload.
+    grad
+        Gradient payload for the op output.
+    provenance
+        Backend-owned mechanism, loss, save predicate, and status metadata.
+    """
+
+    op_label: str
+    layer_label: str
+    aval: str
+    dtype_ref: DtypeRef | None
+    grad: Any
+    provenance: Mapping[str, Any]
+
+
+class IntermediateDerivedGradAccessor(Accessor[IntermediateDerivedGradRecord]):
+    """Dict-like accessor for op-level derived gradient records."""
+
+    def __init__(self, records: Mapping[str, IntermediateDerivedGradRecord] | None = None) -> None:
+        """Initialize an intermediate-derived-gradient accessor.
+
+        Parameters
+        ----------
+        records
+            Mapping from stable op labels to gradient records.
+        """
+
+        super().__init__({} if records is None else records)

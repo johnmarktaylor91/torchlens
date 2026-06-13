@@ -113,6 +113,41 @@ class GradOptions:
         object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
 
 
+@dataclass(frozen=True)
+class _ExperimentalBoundaryVJPRecord:
+    """Private JAX per-boundary VJP oracle record for tests.
+
+    Parameters
+    ----------
+    label
+        Caller-owned boundary label.
+    grad
+        Cotangent of the scalar loss with respect to the boundary value.
+    provenance
+        Private helper metadata.
+    """
+
+    label: str
+    grad: Any
+    provenance: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class _ExperimentalBoundaryVJPResult:
+    """Private JAX per-boundary VJP oracle result for tests.
+
+    Parameters
+    ----------
+    records
+        Exact boundary cotangents keyed by caller-owned label.
+    skipped
+        Skip reasons keyed by caller-owned label.
+    """
+
+    records: Mapping[str, _ExperimentalBoundaryVJPRecord]
+    skipped: Mapping[str, str]
+
+
 class JAXBackend:
     """JAX adapter that captures forward graphs from closed jaxprs."""
 
@@ -2488,6 +2523,85 @@ def _records_for_grad_tree(
             provenance=provenance,
         )
     return records
+
+
+def _experimental_per_op_boundary_vjp_oracle(
+    *,
+    boundaries: Mapping[str, tuple[Any, Callable[[Any], Any]]],
+    loss_fn: Callable[[Any], Any] | None,
+    max_save_set: int = 8,
+) -> _ExperimentalBoundaryVJPResult:
+    """Run a capped private per-boundary JAX VJP oracle for tests.
+
+    Parameters
+    ----------
+    boundaries
+        Mapping from caller-owned labels to ``(boundary_value, suffix_fn)``
+        pairs. ``suffix_fn`` must rebuild the model output from a replacement
+        boundary value.
+    loss_fn
+        Optional scalar loss function applied to each suffix output.
+    max_save_set
+        Hard upper bound on the number of boundaries to process.
+
+    Returns
+    -------
+    _ExperimentalBoundaryVJPResult
+        Exact records plus skip reasons. This helper is private and does not
+        populate any public TorchLens trace surface.
+    """
+
+    import jax
+    import jax.numpy as jnp
+
+    if max_save_set < 1:
+        raise ValueError("max_save_set must be >= 1")
+    if len(boundaries) > max_save_set:
+        raise ValueError(
+            f"JAX private boundary VJP oracle is capped at {max_save_set} save sites; "
+            f"got {len(boundaries)}."
+        )
+    records: dict[str, _ExperimentalBoundaryVJPRecord] = {}
+    skipped: dict[str, str] = {}
+    for label, (boundary_value, suffix_fn) in boundaries.items():
+        try:
+
+            def scalar_loss(replacement: Any) -> Any:
+                """Return scalar loss for one replacement boundary value.
+
+                Parameters
+                ----------
+                replacement
+                    Replacement boundary value.
+
+                Returns
+                -------
+                Any
+                    Scalar loss candidate.
+                """
+
+                output = suffix_fn(replacement)
+                return output if loss_fn is None else loss_fn(output)
+
+            loss, pullback = jax.vjp(scalar_loss, boundary_value)
+            if not _is_scalar_jax_value(loss):
+                skipped[label] = "non_scalar_loss"
+                continue
+            (grad,) = pullback(jnp.ones_like(loss))
+            records[label] = _ExperimentalBoundaryVJPRecord(
+                label=label,
+                grad=grad,
+                provenance={
+                    "backend": "jax",
+                    "kind": "private_boundary_vjp_oracle",
+                    "mechanism": "per_op_boundary_vjp",
+                    "status": "exact",
+                    "max_save_set": max_save_set,
+                },
+            )
+        except Exception as exc:  # pragma: no cover - exercised through skip assertions.
+            skipped[label] = f"error:{type(exc).__name__}"
+    return _ExperimentalBoundaryVJPResult(records=records, skipped=skipped)
 
 
 def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
