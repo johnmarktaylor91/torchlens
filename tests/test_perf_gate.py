@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict, deque
+
 import torch
 from torch import nn
 
 import torchlens as tl
 from benchmarks.generate_perf_numbers import render_numbers_markdown
 from benchmarks.perf_gate import compare_gate_payloads, normalize_gate_payload
+from torchlens.backends.torch.model_prep import _traverse_model_modules
+from torchlens.postprocess.loop_detection import FrontierNodes, _pop_frontier_node
 
 
 def _row(
@@ -158,3 +162,55 @@ def test_emit_tensor_grad_event_populates_profile_buckets() -> None:
     assert timings["backward_grad_event:ensure_pass"]["count"] >= 1
     assert timings["backward_grad_event:payload"]["count"] >= 1
     assert timings["backward_grad_event:append"]["count"] >= 1
+
+
+def test_loop_frontier_uses_deque_fifo_order() -> None:
+    """Frontier popping preserves FIFO behavior with deque-backed candidates."""
+
+    frontier_nodes: FrontierNodes = OrderedDict(
+        [
+            ("sg1", {"children": deque(["c1", "c2"]), "parents": deque(["p1"])}),
+            ("sg2", {"children": deque(["c3"]), "parents": deque(["p2"])}),
+        ]
+    )
+
+    assert isinstance(frontier_nodes["sg1"]["children"], deque)
+    assert _pop_frontier_node(frontier_nodes) == ("c1", "children", "sg1")
+    assert _pop_frontier_node(frontier_nodes) == ("c2", "children", "sg1")
+    assert _pop_frontier_node(frontier_nodes) == ("p1", "parents", "sg1")
+    assert _pop_frontier_node(frontier_nodes) == ("c3", "children", "sg2")
+    assert _pop_frontier_node(frontier_nodes) == ("p2", "parents", "sg2")
+    assert _pop_frontier_node(frontier_nodes) == (None, None, None)
+
+
+def test_model_module_traversal_child_addresses_match_named_modules() -> None:
+    """Incremental traversal addresses match PyTorch's dotted module names."""
+
+    model = nn.Sequential(
+        OrderedDict(
+            [
+                ("stem", nn.Linear(2, 2)),
+                ("block", nn.Sequential(OrderedDict([("act", nn.ReLU())]))),
+            ]
+        )
+    )
+    visited_addresses: list[str] = []
+    child_addresses: list[str] = []
+
+    def _visitor(
+        module: nn.Module,
+        address: str,
+        child_entries: list[tuple[str, nn.Module, str]],
+        is_root: bool,
+    ) -> None:
+        """Collect traversal addresses for comparison with ``named_modules``."""
+
+        del module, is_root
+        visited_addresses.append(address)
+        child_addresses.extend(child_address for _, _, child_address in child_entries)
+
+    _traverse_model_modules(model, _visitor)
+
+    expected_addresses = [name for name, _ in model.named_modules()]
+    assert visited_addresses == expected_addresses
+    assert child_addresses == expected_addresses[1:]

@@ -161,31 +161,31 @@ def _module_type(module: nn.Module) -> str:
 
 def _traverse_model_modules(
     model: nn.Module,
-    visitor_fn: Callable[[nn.Module, str, list[tuple[str, nn.Module]], bool], None],
+    visitor_fn: Callable[[nn.Module, str, list[tuple[str, nn.Module, str]], bool], None],
 ) -> None:
     """DFS over all modules in a model, calling ``visitor_fn`` for each.
 
     Visits parent before children (pre-order). The visitor receives the module,
-    its dotted address, its named children list, and whether it is the root.
+    its dotted address, its child entries, and whether it is the root.
 
     Args:
         model: Root module.
-        visitor_fn: Called as ``visitor_fn(module, address, named_children, is_root)``
-            for every module. ``named_children`` is ``list(module.named_children())``.
+        visitor_fn: Called as ``visitor_fn(module, address, child_entries, is_root)``
+            for every module. Each child entry is ``(name, module, address)``.
     """
     traversal_queue: deque[tuple[nn.Module, str]] = deque([(model, "")])
     while traversal_queue:
         module, address = traversal_queue.popleft()
         named_children = list(module.named_children())
-        child_entries = []
+        child_entries: list[tuple[str, nn.Module, str]] = []
         for child_name, child_module in named_children:
             child_address = f"{address}.{child_name}" if address else child_name
-            child_entries.append((child_module, child_address))
+            child_entries.append((child_name, child_module, child_address))
         # Prepend children to front of deque for DFS pre-order traversal.
         # extendleft reverses, so we reverse child_entries first to maintain order.
-        for entry in reversed(child_entries):
-            traversal_queue.appendleft(entry)
-        visitor_fn(module, address, named_children, module is model)
+        for _, child_module, child_address in reversed(child_entries):
+            traversal_queue.appendleft((child_module, child_address))
+        visitor_fn(module, address, child_entries, module is model)
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ def _prepare_model_once(model: nn.Module) -> None:
     def _visit_once(
         module: nn.Module,
         address: str,
-        named_children: list[tuple[str, nn.Module]],
+        child_entries: list[tuple[str, nn.Module, str]],
         is_root: bool,
     ) -> None:
         # Replace any original torch functions stored as instance attributes
@@ -237,8 +237,7 @@ def _prepare_model_once(model: nn.Module) -> None:
                 module.__dict__[func_name] = _state._orig_to_decorated[id(func)]
 
         # Annotate children with their full dotted address path.
-        for child_name, child_module in named_children:
-            child_address = f"{address}.{child_name}" if address else child_name
+        for _, child_module, child_address in child_entries:
             set_module_meta(
                 child_module,
                 address=child_address,

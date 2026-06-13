@@ -504,6 +504,34 @@ class TestDetachedImports:
         relu_layers = [label for label in result.layer_labels if "relu" in label.lower()]
         assert len(relu_layers) > 0, "relu from self.act not logged in graph"
 
+    def test_patch_model_instance_patches_callable_attrs_only(self) -> None:
+        """Instance patching replaces stale callables and preserves non-callable attrs."""
+
+        original_relu = _state._decorated_to_orig[id(torch.relu)]
+
+        class FuncAttrModel(nn.Module):
+            """Model with one stale callable and one non-callable payload."""
+
+            def __init__(self) -> None:
+                """Initialize direct instance attributes used by the patcher."""
+
+                super().__init__()
+                self.act = original_relu
+                self.payload = list(range(1000))
+
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                """Run the stored callable attribute."""
+
+                return self.act(x)
+
+        model = FuncAttrModel()
+        payload = model.payload
+
+        patch_model_instance(model)
+
+        assert model.payload is payload
+        assert model.act is _state._orig_to_decorated[id(original_relu)]
+
     def test_model_with_func_in_list(self):
         """A model storing functions in a list should still have them logged."""
 

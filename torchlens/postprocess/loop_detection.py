@@ -71,6 +71,8 @@ from ..data_classes.op import Op
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
 
+FrontierNodes = OrderedDict[str, dict[str, deque[str]]]
+
 
 @dataclass
 class SubgraphInfo:
@@ -471,7 +473,7 @@ def _collect_frontier_and_detect_adjacency(
     current_iso_nodes: List[str],
     state: IsomorphicExpansionState,
     is_first_node: bool,
-) -> Dict[str, Dict[str, List[str]]]:
+) -> FrontierNodes:
     """Collect frontier nodes and detect inter-subgraph adjacency.
 
     For each iso node, examines its children (and parents, unless is_first_node)
@@ -492,12 +494,15 @@ def _collect_frontier_and_detect_adjacency(
     else:
         node_types_to_use = ["children", "parents"]
 
-    frontier_nodes: OrderedDict[str, dict[str, list[str]]] = OrderedDict()
+    frontier_nodes: FrontierNodes = OrderedDict()
     for node_label in current_iso_nodes:
         node = self[node_label]
         node_subgraph = state.node_to_subgraph[node_label]
         node_subgraph_label = node_subgraph.starting_node
-        subgraph_successor_nodes: Dict[str, List[str]] = {"children": [], "parents": []}
+        subgraph_successor_nodes: dict[str, deque[str]] = {
+            "children": deque(),
+            "parents": deque(),
+        }
         added_neighbors: set[str] = set()  # #148: prevent shared neighbor double-add
         for node_type in node_types_to_use:
             node_type_field = node_type_fields[node_type]
@@ -566,7 +571,7 @@ def _record_subgraph_adjacency(
 
 
 def _pop_frontier_node(
-    frontier_nodes: Dict[str, Dict[str, List[str]]],
+    frontier_nodes: FrontierNodes,
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Pop the next candidate node from the frontier for isomorphic matching.
 
@@ -580,7 +585,7 @@ def _pop_frontier_node(
     for subgraph_label, neighbor_type in it.product(frontier_nodes, ["children", "parents"]):
         subgraph_neighbors = frontier_nodes[subgraph_label][neighbor_type]
         if len(subgraph_neighbors) > 0:
-            candidate_node_label = subgraph_neighbors.pop(0)
+            candidate_node_label = subgraph_neighbors.popleft()
             candidate_node_neighbor_type = neighbor_type
             candidate_node_subgraph = subgraph_label
             return (
@@ -596,7 +601,7 @@ def _find_isomorphic_matches(
     candidate_node_label: str,
     candidate_node_neighbor_type: str,
     candidate_node_subgraph: str,
-    frontier_nodes: Dict[str, Dict[str, List[str]]],
+    frontier_nodes: FrontierNodes,
 ) -> List[Tuple[str, str]]:
     """Find nodes isomorphic to a candidate across other subgraphs' frontiers.
 
@@ -605,9 +610,9 @@ def _find_isomorphic_matches(
     match per subgraph is taken, ensuring one-to-one correspondence.
 
     SAFETY NOTE on pop-during-iteration: The inner loop calls
-    ``other_subgraph_nodes.pop(comparison_index)`` which modifies the list
+    ``del other_subgraph_nodes[comparison_index]`` which modifies the deque
     during iteration. This is safe ONLY because ``break`` follows immediately
-    after the pop. Removing the break would cause list corruption.
+    after the removal. Removing the break would cause deque corruption.
 
     After collecting matches, removes collisions where two subgraphs matched
     the same physical node (can happen with shared nodes in diamond topologies).
@@ -631,11 +636,10 @@ def _find_isomorphic_matches(
         for comparison_index, comparison_node_label in enumerate(other_subgraph_nodes):
             comparison_node = self[comparison_node_label]
             if comparison_node.equivalence_class == candidate_node_equivalence_class:
-                # Pop removes this node from the frontier so it won't be matched again.
-                # MUST break immediately after pop — see safety note above.
-                new_equivalent_nodes.append(
-                    (other_subgraph_nodes.pop(comparison_index), subgraph_label)
-                )
+                # Removal keeps this node from being matched again.
+                # MUST break immediately after removal — see safety note above.
+                del other_subgraph_nodes[comparison_index]
+                new_equivalent_nodes.append((comparison_node_label, subgraph_label))
                 break  # One match per subgraph only.
     new_equivalent_nodes = sorted(new_equivalent_nodes, key=lambda x: x[0])
 

@@ -1632,10 +1632,11 @@ def patch_model_instance(model: Any) -> None:
         except TypeError:
             continue
         for attr_name, attr_val in list(mod_dict.items()):
-            if attr_name.startswith("__"):
+            if attr_name.startswith("__") or not callable(attr_val):
                 continue
-            if id(attr_val) in mapping:
+            decorated_func = mapping.get(id(attr_val))
+            if decorated_func is not None:
                 try:
-                    mod_dict[attr_name] = mapping[id(attr_val)]
+                    mod_dict[attr_name] = decorated_func
                 except (TypeError, KeyError):
                     pass
