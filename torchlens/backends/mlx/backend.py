@@ -9,7 +9,7 @@ from dataclasses import replace
 from typing import Any, Callable, Literal, cast
 
 from ... import _state
-from ...backends import BackendName
+from ...backends import BackendName, BackendUnsupportedError
 from ...data_classes.layer import Layer
 from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
@@ -384,7 +384,7 @@ class MLXBackend:
         """Capture an MLX forward pass into a smoke-compatible Trace."""
 
         if save_grads:
-            raise NotImplementedError("backward capture is not supported on the mlx backend")
+            raise BackendUnsupportedError("backward capture is not supported on the mlx backend")
         if output_device != "same":
             raise ValueError("MLX backend only supports output_device='same' in technical preview.")
         trace = Trace(

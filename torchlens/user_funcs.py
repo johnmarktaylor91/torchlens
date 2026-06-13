@@ -52,7 +52,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from .backends import BackendName, resolve_backend_spec
+from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
 from .fastlog.exceptions import PredicateError
@@ -128,27 +128,6 @@ def reset_naming_counter(class_name: str | None = None) -> None:
     """
 
     _state.reset_naming_counter(class_name)
-
-
-def _is_mlx_module_instance(model: object) -> bool:
-    """Return whether ``model`` is an MLX module without requiring MLX otherwise.
-
-    Parameters
-    ----------
-    model:
-        Candidate model object.
-
-    Returns
-    -------
-    bool
-        ``True`` if MLX is installed and ``model`` is an ``mlx.nn.Module``.
-    """
-
-    try:
-        import mlx.nn as mlx_nn
-    except ImportError:
-        return False
-    return isinstance(model, mlx_nn.Module)
 
 
 def _trace_mlx_model(
@@ -249,20 +228,20 @@ def _trace_mlx_model(
         save_raw_gradients=save_raw_gradients,
     )
     if capture_options.intervention_ready:
-        raise NotImplementedError(
+        raise BackendUnsupportedError(
             "MLX backend does not support intervention_ready=True. "
             "Intervention requires PyTorch autograd integration not present in MLX. "
             "Omit intervention_ready or set False."
         )
     if capture_options.hooks:
-        raise NotImplementedError(
+        raise BackendUnsupportedError(
             "MLX backend does not support pre-attached hooks. "
             "Omit hooks or use the PyTorch backend."
         )
     if visualization is not None and visualization.mode not in ["none", "rolled", "unrolled"]:
         raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
     if capture_options.save_grads:
-        raise NotImplementedError("backward capture is not supported on the mlx backend")
+        raise BackendUnsupportedError("backward capture is not supported on the mlx backend")
     raw_input = None
     model_input_args = input_args
     model_input_kwargs = input_kwargs
@@ -329,21 +308,21 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
 
     save_options, save_predicate = _split_save_options_and_predicate(kwargs["save"])
     if save_predicate is not None:
-        raise NotImplementedError(
+        raise BackendUnsupportedError(
             "MLX backend does not support value-dependent trace(save=predicate) capture. "
             "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
             "is_scalar_bool, and bool_value without per-op mx.eval; use static save options "
             "or the PyTorch backend for value-dependent predicates."
         )
     if kwargs["intervene"] is not None:
-        raise NotImplementedError(
+        raise BackendUnsupportedError(
             "MLX backend does not support value-dependent trace(intervene=predicate) capture. "
             "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
             "is_scalar_bool, and bool_value without per-op mx.eval; use the PyTorch backend "
             "for predicate-time interventions."
         )
     if kwargs["halt"] is not None:
-        raise NotImplementedError(
+        raise BackendUnsupportedError(
             "MLX backend does not support trace(halt=predicate) capture. "
             "Use the PyTorch backend for predicate-time halt."
         )

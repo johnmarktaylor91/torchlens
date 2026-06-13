@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import inspect
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -179,6 +181,39 @@ def test_public_trace_dispatches_through_backend_spec() -> None:
     source = inspect.getsource(tl.trace)
     assert "capture_trace(**public_trace_kwargs)" in source
     assert "resolved_spec.name" not in source
+
+
+def test_public_backend_literal_branches_stay_in_registry_or_backends() -> None:
+    """Public code has no new hard-coded backend literal branches."""
+
+    project_root = Path(__file__).resolve().parents[1]
+    allowed_dirs = {
+        project_root / "torchlens" / "backends",
+    }
+    backend_literals = {"torch", "mlx", "jax", "tinygrad", "fake"}
+    offenders: list[str] = []
+
+    for source_path in sorted((project_root / "torchlens").rglob("*.py")):
+        if any(source_path.is_relative_to(allowed_dir) for allowed_dir in allowed_dirs):
+            continue
+        tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+        source = source_path.read_text(encoding="utf-8")
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Compare):
+                continue
+            expression = ast.get_source_segment(source, node) or ""
+            if "backend" not in expression:
+                continue
+            compared_literals = {
+                item.value
+                for item in [node.left, *node.comparators]
+                if isinstance(item, ast.Constant) and isinstance(item.value, str)
+            }
+            if compared_literals & backend_literals:
+                relpath = source_path.relative_to(project_root)
+                offenders.append(f"{relpath}:{node.lineno}: {expression}")
+
+    assert offenders == []
 
 
 def test_explicit_backend_mismatch_is_deterministic() -> None:

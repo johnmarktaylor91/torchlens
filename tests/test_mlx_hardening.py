@@ -12,6 +12,7 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from torchlens.backends import BackendUnsupportedError  # noqa: E402
 
 
 class TinyMLP(nn.Module):
@@ -97,7 +98,7 @@ def _assert_captured(trace: tl.Trace, expected_fragment: str) -> None:
 def test_mlx_intervention_ready_raises() -> None:
     """MLX capture rejects intervention metadata requests explicitly."""
 
-    with pytest.raises(NotImplementedError, match="intervention_ready"):
+    with pytest.raises(BackendUnsupportedError, match="intervention_ready"):
         tl.trace(TinyMLP(), _tiny_mlp_input(), intervention_ready=True)
 
 
@@ -105,7 +106,7 @@ def test_mlx_intervention_ready_raises() -> None:
 def test_mlx_save_grads_raises() -> None:
     """MLX capture rejects backward-gradient capture explicitly."""
 
-    with pytest.raises(NotImplementedError, match="backward capture"):
+    with pytest.raises(BackendUnsupportedError, match="backward capture"):
         tl.trace(TinyMLP(), _tiny_mlp_input(), save_grads=True)
 
 
@@ -114,7 +115,7 @@ def test_mlx_hooks_raise() -> None:
     """MLX capture rejects pre-attached live hook plans explicitly."""
 
     hooks: list[dict[str, Any]] = [{"target": "linear_1_1", "action": lambda x: x}]
-    with pytest.raises(NotImplementedError, match="hooks"):
+    with pytest.raises(BackendUnsupportedError, match="hooks"):
         tl.trace(TinyMLP(), _tiny_mlp_input(), hooks=hooks)
 
 
