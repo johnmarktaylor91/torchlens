@@ -53,8 +53,8 @@ Deferred items are listed at the end instead of promoted as final API.
 - `io_format_version`: Portable file format version used for save/load compatibility.
 - `backend`: Public `BackendName` tag identifying the capture backend, e.g. `"torch"`, `"mlx"`, or `"jax"`. Survives portable save/load.
 - `module_identity_mode`: Module-record interpretation for the trace: `"torch_module"`, `"pytree_module"`, or `"function_root"`.
-- `jax_control_flow`: Declared public `trace()` option for future JAX control-flow handling; current non-torch preview backends reject explicit use.
-- `jax_max_control_flow_unroll`: Declared public `trace()` option for the future JAX control-flow unroll safety limit; current non-torch preview backends reject explicit use.
+- `jax_control_flow`: Public `trace()` option for JAX control-flow handling; `lax.scan`/`cond`/`while` can be unrolled for raw JAX function-root captures.
+- `jax_max_control_flow_unroll`: Public `trace()` option for the JAX control-flow unroll safety limit.
 - `payload_policy`: Declared public `trace()` option for future backend payload codec/materialization policy; current non-torch preview backends reject explicit use.
 - `save_preview`: Declared public `trace()` option for future non-torch `save=` preview semantics; current non-torch preview backends reject explicit use.
 - `param_source`: Parameter-record source for the trace: `"native-module"`, `"pytree-derived"`, or `"none"`.
@@ -1122,7 +1122,7 @@ These helpers operate during a backward pass. Mount-shape metadata: `bwd_hook`/`
 - Backend canonical errors: `UnknownBackendError`, `BackendMismatchError`, `BackendAmbiguityError`, `BackendUnsupportedError`, `BackendPayloadUnsupportedError`, and `BackendRuntimeCompatibilityError`.
 - Public option capability epochs: ordered patches that update `trace()` signature, `CaptureOptions`, backend registry specs, per-backend capability mirrors, cache-key inclusion, docs, and tests together whenever a declared backend option changes capability status.
 - MLX capability contract: the MLX `BackendSpec` reports no backward capture, fastlog, intervention, RNG replay, payload materialization, or streaming support. Unsupported public surfaces raise canonical backend errors where the registry owns dispatch; backend-private defensive checks may still raise existing concrete errors during the cutover.
-- JAX capability contract: the JAX `BackendSpec` reports `validation_replay=True`, `backward_capture=False`, `fastlog=False`, `interventions=False`, `payload_materialization=False`, and `module_identity_modes=("function_root",)`. `tl.backends.jax.GradOptions` populates `trace.derived_grads`; true backward surfaces raise with guidance to that accessor.
+- JAX capability contract: the JAX `BackendSpec` reports `validation_replay=True`, `backward_capture=False`, `fastlog=False`, `interventions=False`, `payload_materialization=False`, and `module_identity_modes=("function_root", "pytree_module")`. Raw callables use `function_root`; Equinox roots use `pytree_module` with strict rejection of inner JAX transforms/control flow. `tl.backends.jax.GradOptions` populates `trace.derived_grads`; true backward surfaces raise with guidance to that accessor.
 - MLX wrapped surface (since post-backward megasprint): Conv2d, normalization layers, Embedding, Dropout, MultiHeadAttention, reductions, shape ops, activations. Pinned to `mlx>=0.26,<0.27`.
 
 ## Portable save scrub

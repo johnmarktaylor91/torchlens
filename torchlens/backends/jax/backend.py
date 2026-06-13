@@ -6,7 +6,7 @@ import hashlib
 import inspect
 import json
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import reduce
@@ -20,9 +20,17 @@ from ...data_classes.derived_grad import DerivedGradAccessor, DerivedGradRecord
 from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import Param, ParamAccessor
 from ...data_classes.trace import Trace
+from ...data_classes.trace import _init_module_hierarchy_data
 from ...fastlog.types import CaptureSpec
 from ...ir.buffer import CaptureEvents
-from ...ir.events import ArgTemplateRef, FunctionCallRef, OpEvent, OutputRef, ParentEdge
+from ...ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    ModuleFrame,
+    OpEvent,
+    OutputRef,
+    ParentEdge,
+)
 from ...ir.events import is_control_edge_use
 from ...ir.intervention import FunctionEventInput
 from ...ir.predicate import RecordContext
@@ -31,6 +39,7 @@ from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...intervention.types import DictKey, TupleIndex
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_root_module_log
+from ...postprocess.finalization import _build_module_logs
 from ...postprocess.loop_grouping_adapter import (
     RecurrenceAssignment,
     RecurrenceGroupingGraph,
@@ -47,7 +56,14 @@ from .jaxpr import (
     interpret_closed_jaxpr_with_inlining,
     jax_equivalence_key,
     reject_undeclared_consts,
+    reject_attributed_module_strict_control_flow,
     replay_equation,
+)
+from .modules import (
+    EquinoxModuleTree,
+    discover_equinox_module_tree,
+    equinox_param_logs,
+    scoped_equinox_module_calls,
 )
 
 
@@ -138,6 +154,7 @@ class JAXBackend:
         jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
         jax_control_flow: str | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
+        module_identity_mode: str | None | MissingType = MISSING,
         grad_options: GradOptions | None | MissingType = MISSING,
         **kwargs: Any,
     ) -> Trace:
@@ -216,6 +233,9 @@ class JAXBackend:
         jax_max_control_flow_unroll
             Maximum allowed static unroll length for one JAX control-flow
             primitive.
+        module_identity_mode
+            Optional JAX module mode. Raw callables use ``"function_root"``;
+            Equinox module roots default to ``"pytree_module"``.
         grad_options
             Optional JAX derived-gradient configuration. This runs a second
             pure functional ``jax.value_and_grad`` pass and populates
@@ -256,6 +276,7 @@ class JAXBackend:
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
         jax_control_flow = _default_if_missing(jax_control_flow, "unroll")
         jax_max_control_flow_unroll = _default_if_missing(jax_max_control_flow_unroll, 64)
+        module_identity_mode = _default_if_missing(module_identity_mode, None)
         grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
         _reject_tracer_inputs(args)
@@ -263,6 +284,16 @@ class JAXBackend:
             raise ValueError("jax_control_flow must be 'reject' or 'unroll'")
         if not isinstance(jax_max_control_flow_unroll, int) or jax_max_control_flow_unroll < 1:
             raise ValueError("jax_max_control_flow_unroll must be an integer >= 1")
+        eqx_tree = discover_equinox_module_tree(model)
+        use_pytree_module = _resolve_jax_module_identity_mode(
+            module_identity_mode,
+            eqx_tree,
+        )
+        if use_pytree_module and grad_options is not None:
+            raise BackendUnsupportedError(
+                "JAX pytree_module capture does not yet support grad_options. "
+                "Use a raw fn(params, *inputs) function_root capture for derived gradients."
+            )
         if not _is_missing(random_seed) and random_seed is not None:
             raise BackendUnsupportedError(
                 "JAX backend preview requires explicit PRNG keys as params/input leaves; "
@@ -303,8 +334,15 @@ class JAXBackend:
         )
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
-        closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
-        reject_undeclared_consts(closed_jaxpr)
+        if use_pytree_module:
+            if eqx_tree is None:
+                raise AssertionError("pytree_module mode requires Equinox module metadata.")
+            with scoped_equinox_module_calls(eqx_tree):
+                closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+            reject_attributed_module_strict_control_flow(closed_jaxpr)
+        else:
+            closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+            reject_undeclared_consts(closed_jaxpr)
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(
             closed_jaxpr,
@@ -321,7 +359,12 @@ class JAXBackend:
         self._mark_output_events(trace, result.outputs, output_leaf_paths)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
-        self._attach_params(trace, args[0] if args else None)
+        if use_pytree_module:
+            if eqx_tree is None:
+                raise AssertionError("pytree_module mode requires Equinox module metadata.")
+            self._attach_equinox_params(trace, eqx_tree)
+        else:
+            self._attach_params(trace, args[0] if args else None)
         if grad_options is not None:
             self._attach_derived_grads(
                 trace=trace,
@@ -332,7 +375,11 @@ class JAXBackend:
                 captured_output=output,
                 grad_options=cast(GradOptions, grad_options),
             )
-        self._finish_trace(trace)
+        self._finish_trace(
+            trace,
+            eqx_tree if use_pytree_module else None,
+            result.equations,
+        )
         trace.jax_closed_jaxpr = closed_jaxpr
         trace.jax_equation_captures = result.equations
         trace.jax_inlined_call_primitives = result.inlined_call_primitives
@@ -622,6 +669,7 @@ class JAXBackend:
                 parent_arg_positions=parent_positions,
                 container_path=(),
                 equivalence_class=jax_equivalence_key(equation),
+                module_stack=equation.module_stack,
                 annotations={
                     "jax_params": repr(dict(equation.params)),
                     "jax_capture_kind": equation.kind,
@@ -631,6 +679,7 @@ class JAXBackend:
                     "jax_input_avals": equation.input_avals,
                     "jax_output_avals": equation.output_avals,
                     "jax_inlined": equation.inlined,
+                    "jax_module_stack": equation.module_stack,
                 },
             )
             label_by_capture_index[equation.index] = event.label_raw
@@ -650,6 +699,7 @@ class JAXBackend:
         container_path: tuple[str, ...],
         annotations: Mapping[str, object],
         equivalence_class: str | None = None,
+        module_stack: Sequence[str] = (),
     ) -> OpEvent:
         """Append one JAX event to the trace event stream.
 
@@ -674,6 +724,8 @@ class JAXBackend:
         equivalence_class
             Optional structural equivalence key. Source events receive a
             unique fallback key.
+        module_stack
+            Decoded module scopes for operation events.
         annotations
             Extra annotations.
 
@@ -697,6 +749,8 @@ class JAXBackend:
             stream=False,
         )
         tensor_ref = self._tensor_ref(output, reserved.label_raw)
+        module_addresses = _jax_event_module_stack(module_stack)
+        module_frames = tuple(_jax_module_frame(address) for address in module_addresses)
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
@@ -761,8 +815,8 @@ class JAXBackend:
             ),
             params=(),
             parent_params=(),
-            module_stack=(),
-            modules=(),
+            module_stack=module_frames,
+            modules=tuple((address, 1) for address in module_addresses),
             backend_semantics=BackendSemantics(
                 backend_grad_handle=None,
                 grad_fn_class_name=None,
@@ -997,6 +1051,33 @@ class JAXBackend:
         trace.num_layers_with_params = 0
         trace.param_source = "pytree-derived" if param_logs else "none"
 
+    def _attach_equinox_params(self, trace: Trace, tree: EquinoxModuleTree) -> None:
+        """Populate ``trace.params`` from an Equinox module pytree.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving parameter metadata.
+        tree
+            Discovered Equinox module tree.
+
+        Returns
+        -------
+        None
+            Trace parameter accessors and counters are updated.
+        """
+
+        param_logs = equinox_param_logs(tree, trace)
+        trace.param_logs = ParamAccessor(param_logs)
+        trace.num_param_tensors = len(param_logs)
+        trace.num_params = sum(param.num_params for param in param_logs.values())
+        trace.num_params_trainable = sum(
+            param.num_params for param in param_logs.values() if param.is_trainable
+        )
+        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        trace.num_layers_with_params = 0
+        trace.param_source = "pytree-derived" if param_logs else "none"
+
     def _attach_derived_grads(
         self,
         *,
@@ -1161,13 +1242,22 @@ class JAXBackend:
             param.grad_dtype = cast(Any, str(getattr(record.grad, "dtype", "")))
             param.gradient_memory = _nbytes(record.grad) or 0
 
-    def _finish_trace(self, trace: Trace) -> None:
+    def _finish_trace(
+        self,
+        trace: Trace,
+        eqx_tree: EquinoxModuleTree | None = None,
+        captures: Sequence[JaxEquationCapture] = (),
+    ) -> None:
         """Finalize materialized JAX raw logs into public accessors.
 
         Parameters
         ----------
         trace
             Trace to finalize.
+        eqx_tree
+            Optional Equinox module tree for pytree-module finalization.
+        captures
+            Interpreted JAX equation captures in event order.
 
         Returns
         -------
@@ -1258,6 +1348,9 @@ class JAXBackend:
             layer_log.backend_address = op_log.backend_address
             layer_log.resolver_status = op_log.resolver_status
 
+        if eqx_tree is not None:
+            self._attach_equinox_op_params(trace, eqx_tree, captures)
+
         trace.op_equivalence_classes.clear()
         trace.op_equivalence_classes.update(equivalent_labels_by_key)
         trace.num_ops = sum(
@@ -1285,9 +1378,173 @@ class JAXBackend:
         trace.has_backward_pass = False
         trace.capture_end_time = time.time()
         trace.backend = cast(BackendName, self.name)
-        trace.module_identity_mode = "function_root"
-        self._attach_function_root_module(trace)
+        if eqx_tree is None:
+            trace.module_identity_mode = "function_root"
+            self._attach_function_root_module(trace)
+        else:
+            trace.module_identity_mode = "pytree_module"
+            self._attach_pytree_module_logs(trace, eqx_tree)
         trace._tracing_finished = True
+
+    def _attach_equinox_op_params(
+        self,
+        trace: Trace,
+        tree: EquinoxModuleTree,
+        captures: Sequence[JaxEquationCapture],
+    ) -> None:
+        """Attach Equinox pytree parameters to primitive ops that consume them.
+
+        Parameters
+        ----------
+        trace
+            Trace with finalized JAX op labels.
+        tree
+            Discovered Equinox module tree.
+        captures
+            Interpreted JAX equation captures in event order.
+
+        Returns
+        -------
+        None
+            Op parameter fields and reverse parameter usage lists are updated.
+        """
+
+        equation_labels = [
+            label
+            for label in trace._raw_layer_labels_list
+            if not trace._raw_layer_dict[label].is_input
+        ]
+        for label, capture in zip(equation_labels, captures, strict=False):
+            op_log = trace._raw_layer_dict[label]
+            param_addresses: list[str] = []
+            for value in capture.input_values:
+                address = tree.param_address_by_value_id.get(id(value))
+                if address is not None and address not in param_addresses:
+                    param_addresses.append(address)
+            if not param_addresses:
+                continue
+            params = [trace.param_logs[address] for address in param_addresses]
+            op_log._param_barcodes = [param.barcode for param in params]
+            op_log._param_logs = params
+            op_log.param_shapes = [param.shape for param in params]
+            op_log.num_params = sum(param.num_params for param in params)
+            op_log.num_params_trainable = sum(
+                param.num_params for param in params if param.is_trainable
+            )
+            op_log.num_params_frozen = op_log.num_params - op_log.num_params_trainable
+            op_log.param_memory = sum(int(param.param_memory) for param in params)
+            for param in params:
+                if op_log.label not in param.used_by_ops:
+                    param.used_by_ops.append(op_log.label)
+                if op_log.layer_label not in param.used_by_layers:
+                    param.used_by_layers.append(op_log.layer_label)
+                if op_log.layer_label not in trace.layers_with_params[param.barcode]:
+                    trace.layers_with_params[param.barcode].append(op_log.layer_label)
+        trace.num_layers_with_params = len(
+            {op.layer_label for op in trace.layer_list if op.uses_params}
+        )
+
+    def _attach_pytree_module_logs(self, trace: Trace, tree: EquinoxModuleTree) -> None:
+        """Build public module logs for an Equinox pytree-module trace.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving module accessors.
+        tree
+            Discovered Equinox module tree.
+
+        Returns
+        -------
+        None
+            ``trace.modules`` is populated by the shared module-log builder.
+        """
+
+        trace._module_build_data = _init_module_hierarchy_data()
+        trace._module_forward_args = {}
+        trace._module_metadata = tree.metadata
+        mbd = trace._module_build_data
+        for address, metadata in tree.metadata.items():
+            if address not in mbd["addresses"]:
+                mbd["addresses"].append(address)
+            mbd["module_types"][address] = str(metadata.get("class_name", ""))
+            mbd["module_training_modes"][address] = False
+            for child_address in metadata.get("address_children", []):
+                if child_address not in mbd["module_children"][address]:
+                    mbd["module_children"][address].append(child_address)
+            if address != "self" and "." not in address:
+                mbd["top_level_modules"].append(address)
+
+        for param in trace.param_logs:
+            owner = param.module_address
+            mbd["module_nparams"][owner] += param.num_params
+            if param.is_trainable:
+                mbd["module_nparams_trainable"][owner] += param.num_params
+            else:
+                mbd["module_nparams_frozen"][owner] += param.num_params
+
+        self._populate_pytree_module_build_data(trace)
+        _build_module_logs(trace)
+
+    def _populate_pytree_module_build_data(self, trace: Trace) -> None:
+        """Populate module hierarchy side channels from attributed JAX ops.
+
+        Parameters
+        ----------
+        trace
+            Trace whose finalized ops carry module tuples.
+
+        Returns
+        -------
+        None
+            ``trace._module_build_data`` is updated in place.
+        """
+
+        mbd = trace._module_build_data
+        seen_layers: dict[str, set[str]] = defaultdict(set)
+        seen_pass_layers: dict[str, set[str]] = defaultdict(set)
+        seen_module_ops: set[str] = set()
+        seen_top_level_ops: set[str] = set()
+        seen_pass_children: dict[str, set[str]] = defaultdict(set)
+        seen_addresses = set(mbd["addresses"])
+
+        for op_log in trace.layer_list:
+            normalized_modules = _jax_event_module_stack(
+                tuple(
+                    entry[0] if not isinstance(entry, str) else entry.split(":", 1)[0]
+                    for entry in op_log.modules
+                )
+            )
+            op_log.modules = [f"{address}:1" for address in normalized_modules]
+            op_log.module = op_log.modules[-1] if op_log.modules else None
+            parent_call_label: str | None = None
+            for module_index, address in enumerate(normalized_modules):
+                call_label = f"{address}:1"
+                mbd["module_num_tensors"][address] += 1
+                mbd["module_call_index_tensors"][call_label] += 1
+                if op_log.layer_label not in seen_layers[address]:
+                    seen_layers[address].add(op_log.layer_label)
+                    mbd["module_layers"][address].append(op_log.layer_label)
+                if op_log.label not in seen_pass_layers[call_label]:
+                    seen_pass_layers[call_label].add(op_log.label)
+                    mbd["module_pass_layers"][call_label].append(op_log.label)
+                if address not in seen_addresses:
+                    seen_addresses.add(address)
+                    mbd["addresses"].append(address)
+                if call_label not in seen_module_ops:
+                    seen_module_ops.add(call_label)
+                    mbd["module_ops"].append(call_label)
+                if module_index == 0:
+                    if call_label not in seen_top_level_ops:
+                        seen_top_level_ops.add(call_label)
+                        mbd["top_level_module_ops"].append(call_label)
+                    if address != "self" and address not in mbd["top_level_modules"]:
+                        mbd["top_level_modules"].append(address)
+                elif parent_call_label is not None:
+                    if call_label not in seen_pass_children[parent_call_label]:
+                        seen_pass_children[parent_call_label].add(call_label)
+                        mbd["module_pass_children"][parent_call_label].append(call_label)
+                parent_call_label = call_label
 
     def _jax_recurrence_assignments(self, trace: Trace) -> dict[str, RecurrenceAssignment]:
         """Return recurrence assignments for a materialized JAX raw trace.
@@ -1702,6 +1959,94 @@ def _normalize_static_argnums(value: object, num_args: int) -> tuple[int, ...]:
             f"jax_static_argnums indexes out of range for {num_args} positional args: {invalid}."
         )
     return normalized
+
+
+def _resolve_jax_module_identity_mode(
+    value: object,
+    eqx_tree: EquinoxModuleTree | None,
+) -> bool:
+    """Return whether this JAX capture should use pytree-module attribution.
+
+    Parameters
+    ----------
+    value
+        Public ``module_identity_mode`` value after missing normalization.
+    eqx_tree
+        Discovered Equinox module tree, if the root callable is Equinox.
+
+    Returns
+    -------
+    bool
+        True for ``pytree_module`` captures.
+
+    Raises
+    ------
+    BackendUnsupportedError
+        If ``pytree_module`` is requested for a non-Equinox root.
+    ValueError
+        If an unknown mode is requested.
+    """
+
+    if value not in {None, "function_root", "pytree_module"}:
+        raise ValueError(
+            "JAX module_identity_mode must be None, 'function_root', or 'pytree_module'."
+        )
+    if value == "pytree_module" and eqx_tree is None:
+        raise BackendUnsupportedError(
+            "JAX module_identity_mode='pytree_module' requires an Equinox eqx.Module "
+            "root. Raw JAX callables use module_identity_mode='function_root'."
+        )
+    if value == "function_root":
+        return False
+    return eqx_tree is not None
+
+
+def _jax_event_module_stack(module_stack: Sequence[str]) -> tuple[str, ...]:
+    """Normalize decoded JAX module scopes for TorchLens Op containment.
+
+    Root-only equations are attributed to ``self`` so non-function-root
+    invariants have an owning module. Nested equations omit ``self`` because
+    Torch module stacks historically contain only submodule calls.
+
+    Parameters
+    ----------
+    module_stack
+        Decoded module scopes in outer-to-inner order.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Module stack to store on JAX operation events.
+    """
+
+    stack = tuple(module_stack)
+    if len(stack) > 1 and stack[0] == "self":
+        return stack[1:]
+    return stack
+
+
+def _jax_module_frame(address: str) -> ModuleFrame:
+    """Return an event-layer module frame for one JAX module address.
+
+    Parameters
+    ----------
+    address
+        TorchLens module address.
+
+    Returns
+    -------
+    ModuleFrame
+        Single-call module frame.
+    """
+
+    return ModuleFrame(
+        address=address,
+        address_normalized=address,
+        module_type="pytree_module",
+        call_index=1,
+        fx_qualpath=None,
+        entry_argnames=(),
+    )
 
 
 def _reject_transformed_callable(model: Callable[..., Any]) -> None:
@@ -2574,9 +2919,12 @@ def _path_to_string(path: Sequence[Any]) -> str:
         return "root"
     parts: list[str] = []
     for entry in path:
+        name = getattr(entry, "name", None)
         key = getattr(entry, "key", None)
         idx = getattr(entry, "idx", None)
-        if key is not None:
+        if name is not None:
+            parts.append(str(name))
+        elif key is not None:
             parts.append(str(key))
         elif idx is not None:
             parts.append(str(idx))
@@ -2601,9 +2949,12 @@ def _path_to_components(path: Sequence[Any]) -> tuple[object, ...]:
 
     components: list[object] = []
     for entry in path:
+        name = getattr(entry, "name", None)
         key = getattr(entry, "key", None)
         idx = getattr(entry, "idx", None)
-        if key is not None:
+        if name is not None:
+            components.append(str(name))
+        elif key is not None:
             components.append(DictKey(key))
         elif idx is not None:
             components.append(TupleIndex(int(idx)))

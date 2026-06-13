@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, cast
 
 from ...ir.events import JaxEquationKind
+from .modules import decode_module_scope
 
 SAFE_JIT_NAMES = frozenset(
     {
@@ -74,6 +75,8 @@ class JaxEquationCapture:
         Whether this equation came from an accepted nested pure call.
     control_capture_indices
         Capture indexes whose synthetic decision nodes control this equation.
+    module_stack
+        TorchLens module-address stack decoded from JAX source ``name_stack``.
     """
 
     index: int
@@ -90,6 +93,7 @@ class JaxEquationCapture:
     output_avals: tuple[str | None, ...]
     inlined: bool
     control_capture_indices: tuple[int, ...] = ()
+    module_stack: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -222,6 +226,7 @@ def interpret_closed_jaxpr_with_inlining(
         path: tuple[str, ...],
         inlined_depth: int,
         control_capture_indices: tuple[int, ...] = (),
+        inherited_module_stack: tuple[str, ...] = (),
     ) -> tuple[Any, ...]:
         """Interpret one closed jaxpr frame.
 
@@ -237,6 +242,8 @@ def interpret_closed_jaxpr_with_inlining(
             Non-zero when interpreting an accepted call primitive.
         control_capture_indices
             Synthetic decision capture indexes that control this frame.
+        inherited_module_stack
+            Module stack inherited from an accepted parent call primitive.
 
         Returns
         -------
@@ -324,6 +331,7 @@ def interpret_closed_jaxpr_with_inlining(
                     eqn_path,
                     inlined_depth + 1,
                     control_capture_indices,
+                    module_stack_from_eqn(eqn) or inherited_module_stack,
                 )
                 for var, value in zip(eqn.outvars, outputs):
                     _write_env(env, var, value, core)
@@ -334,6 +342,7 @@ def interpret_closed_jaxpr_with_inlining(
             outputs = tuple(result if eqn.primitive.multiple_results else (result,))
             for var, value in zip(eqn.outvars, outputs):
                 _write_env(env, var, value, core)
+            equation_module_stack = module_stack_from_eqn(eqn) or inherited_module_stack
             captures.append(
                 JaxEquationCapture(
                     index=len(captures),
@@ -350,6 +359,7 @@ def interpret_closed_jaxpr_with_inlining(
                     output_avals=tuple(_aval_repr(var) for var in eqn.outvars),
                     inlined=inlined_depth > 0,
                     control_capture_indices=control_capture_indices,
+                    module_stack=equation_module_stack,
                 )
             )
         return tuple(_read_env(env, var, core) for var in inner.jaxpr.outvars)
@@ -735,6 +745,156 @@ def replay_equation(
     return handler(capture, inputs)
 
 
+def reject_attributed_module_strict_control_flow(closed_jaxpr: Any) -> None:
+    """Reject unsupported nested transforms/control flow inside attributed modules.
+
+    Parameters
+    ----------
+    closed_jaxpr
+        Closed jaxpr derived under Equinox named-scope attribution.
+
+    Returns
+    -------
+    None
+        Returns when no attributed strict-mode boundary is present.
+
+    Raises
+    ------
+    ValueError
+        If an attributed module contains JAX control-flow, user transforms, or
+        effects outside the B2a strict-mode surface.
+    """
+
+    from jax._src import core
+
+    def visit(inner: Any) -> None:
+        """Visit one closed-jaxpr frame."""
+
+        for eqn in inner.jaxpr.eqns:
+            module_stack = module_stack_from_eqn(eqn)
+            primitive_name = eqn.primitive.name
+            if module_stack and eqn.effects:
+                _raise_attributed_strict_error(
+                    primitive_name,
+                    module_stack[-1],
+                    suffix=f"effects={eqn.effects}",
+                )
+            if module_stack and _is_strict_rejected_attributed_primitive(eqn):
+                _raise_attributed_strict_error(primitive_name, module_stack[-1])
+            nested = _closed_jaxpr_param(eqn, core)
+            if nested is not None:
+                visit(nested)
+                continue
+            for nested_jaxpr in _nested_jaxpr_params(eqn, core):
+                visit(nested_jaxpr)
+
+    visit(closed_jaxpr)
+
+
+def module_stack_from_eqn(eqn: Any) -> tuple[str, ...]:
+    """Return the TorchLens module stack encoded on one JAX equation.
+
+    Parameters
+    ----------
+    eqn
+        JAX equation whose source metadata may carry a name stack.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Decoded module addresses in outer-to-inner order.
+    """
+
+    source_info = getattr(eqn, "source_info", None)
+    return module_stack_from_name_stack(getattr(source_info, "name_stack", None))
+
+
+def module_stack_from_name_stack(name_stack: Any) -> tuple[str, ...]:
+    """Decode TorchLens module markers from a JAX ``NameStack``.
+
+    Parameters
+    ----------
+    name_stack
+        JAX source-info name stack, or ``None``.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Module addresses in outer-to-inner order.
+    """
+
+    stack = getattr(name_stack, "stack", ())
+    decoded: list[str] = []
+    for component in stack:
+        name = getattr(component, "name", str(component))
+        address = decode_module_scope(str(name))
+        if address is not None and (not decoded or decoded[-1] != address):
+            decoded.append(address)
+    return tuple(decoded)
+
+
+def _is_strict_rejected_attributed_primitive(eqn: Any) -> bool:
+    """Return whether an attributed equation is rejected by B2a strict mode.
+
+    Parameters
+    ----------
+    eqn
+        JAX equation to inspect.
+
+    Returns
+    -------
+    bool
+        True when the primitive is outside the strict attributed-module surface.
+    """
+
+    primitive_name = eqn.primitive.name
+    if primitive_name == "jit" and eqn.params.get("name") in SAFE_JIT_NAMES:
+        return False
+    return primitive_name in {
+        "cond",
+        "custom_vjp_call",
+        "jit",
+        "pjit",
+        "remat2",
+        "scan",
+        "shard_map",
+        "while",
+        "while_loop",
+    }
+
+
+def _raise_attributed_strict_error(
+    primitive_name: str,
+    module_address: str,
+    *,
+    suffix: str | None = None,
+) -> None:
+    """Raise the B2a strict-mode module-attribution error.
+
+    Parameters
+    ----------
+    primitive_name
+        JAX primitive that crossed the strict surface.
+    module_address
+        Deepest owning TorchLens module address.
+    suffix
+        Optional extra diagnostic text.
+
+    Raises
+    ------
+    ValueError
+        Always raised with actionable module guidance.
+    """
+
+    detail = f" ({suffix})" if suffix else ""
+    raise ValueError(
+        "JAX pytree_module strict mode does not support "
+        f"{primitive_name!r} inside attributed module {module_address!r}{detail}. "
+        "Move the transform/control-flow outside the Equinox module, capture the raw "
+        "function_root callable, or wait for widened attribution support."
+    )
+
+
 def jax_equivalence_key(capture: JaxEquationCapture) -> str:
     """Return the backend-neutral structural key for a JAX equation.
 
@@ -757,6 +917,31 @@ def jax_equivalence_key(capture: JaxEquationCapture) -> str:
         "source_path": normalize_jax_source_path(capture.source_path),
     }
     return "jax:" + json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _nested_jaxpr_params(eqn: Any, core: Any) -> tuple[Any, ...]:
+    """Return nested closed-jaxpr parameters on an equation.
+
+    Parameters
+    ----------
+    eqn
+        JAX equation to inspect.
+    core
+        Imported JAX core module.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Nested closed-jaxpr-like parameters.
+    """
+
+    nested: list[Any] = []
+    for value in eqn.params.values():
+        if isinstance(value, core.ClosedJaxpr):
+            nested.append(value)
+        elif isinstance(value, (tuple, list)):
+            nested.extend(item for item in value if isinstance(item, core.ClosedJaxpr))
+    return tuple(nested)
 
 
 def normalize_jax_source_path(source_path: Sequence[str]) -> tuple[str, ...]:

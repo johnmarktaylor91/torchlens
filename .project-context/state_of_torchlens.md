@@ -138,8 +138,8 @@ torch-shaped manifest parsing.
 
 ### Backend-Neutral Substrate
 `Trace.backend` is the public backend tag resolved by `BackendSpec`. Trace identity also records
-`module_identity_mode` (`torch_module`, future `pytree_module`, or `function_root`) and
-`param_source` (`native-module`, future `pytree-derived`, or `none`). Op, Layer, and Param records
+`module_identity_mode` (`torch_module`, Equinox/JAX `pytree_module`, or `function_root`) and
+`param_source` (`native-module`, `pytree-derived`, or `none`). Op, Layer, and Param records
 carry neutral `dtype_ref`, `device_ref`, `backend_address`, and `resolver_status` mirror fields
 beside existing torch-shaped fields so torch accessors stay stable while non-torch builders can
 populate backend-native metadata. This is a pickled object-state change, so `_io.TLSPEC_VERSION`

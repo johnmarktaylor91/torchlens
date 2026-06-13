@@ -279,7 +279,6 @@ def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"module_identity_mode": "pytree_module"}, "module_identity_mode selection"),
         ({"payload_policy": "full"}, "payload_policy.*not implemented"),
         ({"save_preview": True}, "save_preview.*not implemented"),
     ),
@@ -288,7 +287,7 @@ def test_jax_rejects_declared_future_public_options(
     kwargs: dict[str, Any],
     pattern: str,
 ) -> None:
-    """Declared public-option spine knobs should reject until JAX phases implement them."""
+    """Declared unimplemented public-option spine knobs should reject."""
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         _trace(**kwargs)
@@ -376,18 +375,19 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is False
-    assert spec.capabilities.module_identity_modes == ("function_root",)
+    assert spec.capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert spec.serialization_policy.payload_policy == "audit_only"
     assert capabilities.supports_backward_capture is False
     assert capabilities.supports_validation_replay is True
     assert capabilities.supports_fastlog is False
     assert capabilities.supports_intervention is False
     assert capabilities.supports_payload_materialization is False
-    assert capabilities.module_identity_modes == ("function_root",)
+    assert capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert capabilities.payload_policy == "audit_only"
     assert capabilities.trace_options == (
         "jax_static_argnums",
         "grad_options",
         "jax_control_flow",
         "jax_max_control_flow_unroll",
+        "module_identity_mode",
     )

@@ -468,7 +468,7 @@ def register_default_backend_specs() -> None:
                 rng_replay=False,
                 payload_materialization=False,
                 streaming=False,
-                module_identity_modes=("function_root",),
+                module_identity_modes=("function_root", "pytree_module"),
                 trace_options=JAX_TRACE_OPTIONS,
             ),
             serialization_policy=SerializationPolicy(

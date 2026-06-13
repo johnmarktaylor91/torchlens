@@ -44,6 +44,7 @@ JAX_TRACE_OPTIONS: tuple[str, ...] = (
     "grad_options",
     "jax_control_flow",
     "jax_max_control_flow_unroll",
+    "module_identity_mode",
 )
 """Trace options implemented by the JAX preview backend."""
 

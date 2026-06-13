@@ -10,7 +10,7 @@ supports_intervention = False
 supports_payload_materialization = False
 supports_rng_replay = False
 supports_validation_replay = True
-module_identity_modes = ("function_root",)
+module_identity_modes = ("function_root", "pytree_module")
 payload_policy = "audit_only"
 trace_options = JAX_TRACE_OPTIONS
 
