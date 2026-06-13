@@ -25,6 +25,12 @@
    metadata ([partial list here](https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf))
    about the network's computational graph.
 
+Backend status: `tl.trace(..., backend=None)` keeps the existing PyTorch eager
+capture default and MLX module auto-routing technical preview. Explicit
+`backend="torch"` is supported; unsupported or mismatched backend selections
+raise typed backend errors. `tl.validate(..., backend=None)` follows the same
+resolution path for forward/saved validation.
+
 Here it is in action for a very simple recurrent model; as you can see, you just define the model like normal and pass
 it in, and *TorchLens* returns a full log of the forward pass along with a visualization:
 
@@ -351,7 +357,8 @@ Use `tl.fastlog` when you already know the events you want and do not need a ful
 `ModelLog`. `log_forward_pass()` remains the exhaustive path for graph metadata,
 visualization, validation, and faithful reconstruction of the forward pass. Fastlog is
 the lighter path for predicate-selected activations across one pass or many repeated
-rollouts.
+rollouts. Fastlog remains a PyTorch-only backend surface in the current backend
+registry.
 
 ```python
 keep_op = lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu"

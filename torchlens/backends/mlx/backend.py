@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import Any, Callable, Literal, cast
 
 from ... import _state
+from ...backends import BackendName
 from ...data_classes.layer import Layer
 from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
@@ -417,7 +418,7 @@ class MLXBackend:
             save_visualizations=save_visualizations,
         )
         trace.trace_label = name
-        trace.backend = cast('Literal["torch", "mlx"]', self.name)
+        trace.backend = cast(BackendName, self.name)
         trace.capture_events = CaptureEvents()
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
@@ -829,7 +830,7 @@ class MLXBackend:
         trace._tracing_finished = True
         trace.has_backward_pass = False
         trace.capture_end_time = time.time()
-        trace.backend = cast('Literal["torch", "mlx"]', self.name)
+        trace.backend = cast(BackendName, self.name)
 
     def _iter_arrays(self, value: object) -> list[object]:
         """Return MLX arrays nested inside ``value``."""

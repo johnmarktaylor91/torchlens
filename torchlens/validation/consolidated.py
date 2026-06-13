@@ -8,6 +8,7 @@ from typing import Any, Callable
 import torch
 from torch import nn
 
+from ..backends import BackendName, BackendUnsupportedError, resolve_backend_spec
 from .backward import validate_backward_pass
 
 
@@ -216,6 +217,7 @@ def validate(
     validate_layer_grads: bool = False,
     layer_grad_atol: float | None = None,
     layer_grad_rtol: float | None = None,
+    backend: BackendName | None = None,
 ) -> bool:
     """Validate a model/input pair for a requested TorchLens scope.
 
@@ -250,6 +252,8 @@ def validate(
         Backward-only layer-gradient absolute tolerance.
     layer_grad_rtol:
         Backward-only layer-gradient relative tolerance.
+    backend:
+        Explicit backend name. ``None`` preserves legacy auto-resolution.
 
     Returns
     -------
@@ -272,6 +276,11 @@ def validate(
         layer_grad_rtol=layer_grad_rtol,
     )
     if normalized_scope == "backward":
+        spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+        if not spec.capabilities.backward_capture:
+            raise BackendUnsupportedError(
+                f"Backend {spec.name!r} does not support backward validation."
+            )
         return validate_backward_pass(
             model,
             input_args,
@@ -297,6 +306,7 @@ def validate(
             random_seed=random_seed,
             verbose=verbose,
             validate_metadata=validate_metadata,
+            backend=backend,
         )
     return _intervention_report(
         model,

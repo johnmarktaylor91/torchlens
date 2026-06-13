@@ -98,6 +98,7 @@ from .user_funcs import (
     show_model_graph as _moved_show_model_graph,
     summary as _moved_summary,
 )
+from .backends import BackendName
 from .validation import (
     validate_backward_pass as _moved_validate_backward_pass,
     validate_forward_pass as _moved_validate_forward_pass,
@@ -635,12 +636,14 @@ def validate_forward_pass(
     random_seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
+    *,
+    backend: BackendName | None = None,
 ) -> bool:
     """Deprecated top-level wrapper for ``torchlens.validation.validate_forward_pass``.
 
     Parameters
     ----------
-    model, input_args, input_kwargs, random_seed, verbose, validate_metadata:
+    model, input_args, input_kwargs, random_seed, verbose, validate_metadata, backend:
         Legacy forward validation arguments.
     """
 
@@ -653,6 +656,7 @@ def validate_forward_pass(
         random_seed=random_seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
+        backend=backend,
     )
 
 

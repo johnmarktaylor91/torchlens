@@ -45,6 +45,14 @@ post-benchmark round) + torch parity goldens once built.
 - [x] 4. BackendSpec registry contract as executable migration map: `.research/backend-substrate/artifact-4-backendspec-registry-migration-map.md`
 - [x] 5. Docs/glossary change list: `.research/backend-substrate/artifact-5-docs-glossary-change-list.md`
 
+## M0.2 substrate checklist
+- [x] 1. BackendSpec registry/API slice: typed registry, torch+MLX default specs, explicit `backend=` resolution, mismatch/ambiguity tests, fake backend public trace/validate harness.
+- [ ] 2. Full registry migration-map cutover: torch capture body fully owned by `TorchSpec.capture_trace`, generated hard-coded-branch audit, MLX canonical unsupported conversion complete.
+- [ ] 3. Neutral data/accessor fields: `dtype_ref`, `device_ref`, `backend_address`, resolver status, `Trace.param_source`, and object-state/default-fill decisions.
+- [ ] 4. Serialization schema v2: backend/runtime manifest fields, nullable torch fields, v1 fixture compatibility, audit-only non-torch payload policy.
+- [ ] 5. Fake backend end-to-end acceptance: trace object, save/load round-trip, accessors, invariant registry split with non-torch corruption fixtures.
+- [ ] 6. Docs/glossary/notebook lockstep for each newly reachable public surface beyond the registry/API slice.
+
 ## Iteration log
 | Round | Lane | Phase | Commit | Result | Next |
 |---|---|---|---|---|---|
@@ -64,3 +72,5 @@ post-benchmark round) + torch parity goldens once built.
 | D5 | 19:55 | backward-spec §9 amendment APPROVED (JAX row -> derived-gradient preview / T1 research; lands in J4 with glossary). | Same delegation. |
 | D6 | 19:55 | Build rounds may run pytest DURING benchmark, with `nice -n 19` on all test commands; measurement-conditions note will record overlapped build activity. | Strict serialization would stall the build ~8h and miss the morning deadline; niced tests yield to the un-niced benchmark process. |
 | 1 | backend | M0.1b torch parity gates | this commit | PASS: added active `tests/backend_parity` torch goldens for default/selective/backward-ready traces, `.tlspec` round-trip/manifest, FIELD_ORDER/dataframe, accessors, and five can-fail meta-tests. Targeted parity gate passed niced. | Continue M0.1b with any remaining fixture breadth review, then assert parity every substrate/backend round. |
+| D7 | 20:08 | M0.1b declared COMPLETE at 1 round (12 tests, 5 can-fail meta-proofs, 3 trace-type fixtures + tlspec + dataframe + accessor goldens). Fixture-breadth expansion deferred to backlog. | Overnight scope; gates demonstrably catch all 5 mutation classes. |
+| 1 | backend | M0.2 additive backend-neutral substrate | this commit | PASS: added public `BackendSpec` registry, canonical backend errors, torch/MLX specs, explicit `backend=` routing for `trace`/`validate`, trace-validation dispatch, backward capability gates, fake backend tests, and backend docs/glossary lockstep. Gates: ruff, mypy, backend_parity, predicate suite, smoke. | Continue M0.2 with full migration-map audit/cutover, neutral accessors, schema v2 serialization, and fake backend save/load/invariant acceptance. |

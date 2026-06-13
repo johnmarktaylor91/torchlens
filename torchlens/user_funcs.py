@@ -52,6 +52,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from .backends import BackendName, resolve_backend_spec
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
 from .fastlog.exceptions import PredicateError
@@ -310,6 +311,79 @@ def _trace_mlx_model(
         save_visualizations=capture_options.save_visualizations,
     )
     return trace
+
+
+def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
+    """Dispatch MLX capture from the public ``trace`` keyword bundle.
+
+    Parameters
+    ----------
+    **kwargs:
+        Public ``trace`` keyword bundle captured before torch-specific normalization.
+
+    Returns
+    -------
+    Trace
+        Captured MLX trace.
+    """
+
+    save_options, save_predicate = _split_save_options_and_predicate(kwargs["save"])
+    if save_predicate is not None:
+        raise NotImplementedError(
+            "MLX backend does not support value-dependent trace(save=predicate) capture. "
+            "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
+            "is_scalar_bool, and bool_value without per-op mx.eval; use static save options "
+            "or the PyTorch backend for value-dependent predicates."
+        )
+    if kwargs["intervene"] is not None:
+        raise NotImplementedError(
+            "MLX backend does not support value-dependent trace(intervene=predicate) capture. "
+            "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
+            "is_scalar_bool, and bool_value without per-op mx.eval; use the PyTorch backend "
+            "for predicate-time interventions."
+        )
+    if kwargs["halt"] is not None:
+        raise NotImplementedError(
+            "MLX backend does not support trace(halt=predicate) capture. "
+            "Use the PyTorch backend for predicate-time halt."
+        )
+    activation_transform = kwargs["activation_transform"]
+    return _trace_mlx_model(
+        kwargs["model"],
+        kwargs["input_args"],
+        kwargs["input_kwargs"],
+        layers_to_save=kwargs["layers_to_save"],
+        transform=kwargs["transform"],
+        save_raw_input=kwargs["save_raw_input"],
+        batch_render=kwargs["batch_render"],
+        output_transform=kwargs["output_transform"],
+        save_raw_output=kwargs["save_raw_output"],
+        layer_visualizers=MISSING,
+        save_visualizations=MISSING,
+        keep_orphans=kwargs["keep_orphans"],
+        output_device=kwargs["output_device"],
+        activation_transform=activation_transform,
+        grad_transform=kwargs["grad_transform"],
+        save_raw_activations=kwargs["save_raw_activations"],
+        save_raw_gradients=kwargs["save_raw_gradients"],
+        capture_tensor_grad_hooks=kwargs["capture_tensor_grad_hooks"],
+        save_arg_values=kwargs["save_arg_values"],
+        save_grads=kwargs["save_grads"],
+        save_code_context=kwargs["save_code_context"],
+        save_rng_states=kwargs["save_rng_states"],
+        random_seed=kwargs["random_seed"],
+        num_context_lines=kwargs["num_context_lines"],
+        recurrence_detection=kwargs["recurrence_detection"],
+        intervention_ready=kwargs["intervention_ready"],
+        hooks=kwargs["hooks"],
+        capture=kwargs["capture"],
+        save=save_options,
+        visualization=None,
+        backward_ready=kwargs["backward_ready"],
+        name=kwargs["name"],
+        module_filter=kwargs["module_filter"],
+        verbose=kwargs["verbose"],
+    )
 
 
 def record_kpi_in_graph(name: str, value: Any) -> None:
@@ -1440,6 +1514,7 @@ def trace(
         | None
         | MissingType
     ) = MISSING,
+    backend: BackendName | None = None,
 ) -> Trace:
     """Run a forward pass through *model*, log every operation, and return a Trace.
 
@@ -1582,6 +1657,7 @@ def trace(
             always populated on ``trace._phase_timings``.
         recipes: Per-trace additive facet recipes captured into the immutable
             registry snapshot for the returned trace.
+        backend: Explicit backend name. ``None`` preserves legacy auto-resolution.
 
     Postfunc behavior:
         ``activation_transform`` and ``grad_transform`` both take a tensor, should return a
@@ -1599,7 +1675,13 @@ def trace(
     Returns:
         A ``Trace`` containing layer outs (if requested) and full metadata.
     """
-    if transform is MISSING and (capture is None or not capture.is_field_explicit("transform")):
+    public_trace_kwargs = locals().copy()
+    public_trace_kwargs.pop("backend")
+    if (
+        backend is None
+        and transform is MISSING
+        and (capture is None or not capture.is_field_explicit("transform"))
+    ):
         from torchlens import autoroute
 
         autoroute_kwargs = {
@@ -1661,70 +1743,9 @@ def trace(
                 return cast("Trace", result)
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
-    if _is_mlx_module_instance(model):
-        mlx_save_options, mlx_save_predicate = _split_save_options_and_predicate(save)
-        if mlx_save_predicate is not None:
-            raise NotImplementedError(
-                "MLX backend does not support value-dependent trace(save=predicate) capture. "
-                "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
-                "is_scalar_bool, and bool_value without per-op mx.eval; use static save options "
-                "or the PyTorch backend for value-dependent predicates."
-            )
-        if intervene is not None:
-            raise NotImplementedError(
-                "MLX backend does not support value-dependent trace(intervene=predicate) capture. "
-                "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
-                "is_scalar_bool, and bool_value without per-op mx.eval; use the PyTorch backend "
-                "for predicate-time interventions."
-            )
-        if halt is not None:
-            raise NotImplementedError(
-                "MLX backend does not support trace(halt=predicate) capture. "
-                "Use the PyTorch backend for predicate-time halt."
-            )
-        if activation_transform is not MISSING:
-            if activation_transform is not MISSING:
-                raise TypeError(
-                    "kwarg activation_transform deprecated, use activation_transform; do not pass both"
-                )
-            warn_deprecated_alias("activation_transform", "activation_transform")
-            activation_transform = activation_transform
-        return _trace_mlx_model(
-            model,
-            input_args,
-            input_kwargs,
-            layers_to_save=layers_to_save,
-            transform=transform,
-            save_raw_input=save_raw_input,
-            batch_render=batch_render,
-            output_transform=output_transform,
-            save_raw_output=save_raw_output,
-            layer_visualizers=MISSING,
-            save_visualizations=MISSING,
-            keep_orphans=keep_orphans,
-            output_device=output_device,
-            activation_transform=activation_transform,
-            grad_transform=grad_transform,
-            save_raw_activations=save_raw_activations,
-            save_raw_gradients=save_raw_gradients,
-            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-            save_arg_values=save_arg_values,
-            save_grads=save_grads,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
-            random_seed=random_seed,
-            num_context_lines=num_context_lines,
-            recurrence_detection=recurrence_detection,
-            intervention_ready=intervention_ready,
-            hooks=hooks,
-            capture=capture,
-            save=mlx_save_options,
-            visualization=None,
-            backward_ready=backward_ready,
-            name=name,
-            module_filter=module_filter,
-            verbose=verbose,
-        )
+    resolved_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    if resolved_spec.name != "torch":
+        return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
     # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
     _reject_opaque_wrappers(model)
@@ -2920,7 +2941,71 @@ def show_bundle_graph(
     )
 
 
+def _trace_torch_model(*args: Any, **kwargs: Any) -> Trace:
+    """Dispatch direct registry torch capture through the public torch path.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public ``trace`` arguments.
+
+    Returns
+    -------
+    Trace
+        Captured torch trace.
+    """
+
+    kwargs["backend"] = "torch"
+    return trace(*args, **kwargs)
+
+
 def validate_forward_pass(
+    model: nn.Module,
+    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
+    random_seed: int | None = None,
+    verbose: bool = False,
+    validate_metadata: bool = True,
+    *,
+    backend: BackendName | None = None,
+) -> bool:
+    """Validate that saved outs faithfully reproduce the model's output.
+
+    Parameters
+    ----------
+    model:
+        Model or callable to validate.
+    input_args:
+        Input for which to validate the saved outs.
+    input_kwargs:
+        Keyword arguments for model forward pass.
+    random_seed:
+        Fixed RNG seed for reproducibility.
+    verbose:
+        If True, print detailed error messages on validation failure.
+    validate_metadata:
+        If True, also run metadata invariant checks.
+    backend:
+        Explicit backend name. ``None`` preserves legacy auto-resolution.
+
+    Returns
+    -------
+    bool
+        True if all validation checks pass, False otherwise.
+    """
+
+    spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    return spec.validate_entry(
+        model,
+        input_args,
+        input_kwargs=input_kwargs,
+        random_seed=random_seed,
+        verbose=verbose,
+        validate_metadata=validate_metadata,
+    )
+
+
+def _validate_forward_pass_torch(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,

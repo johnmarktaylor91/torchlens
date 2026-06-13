@@ -76,6 +76,7 @@ if TYPE_CHECKING:
 
 from .._deprecations import MISSING, MissingType, warn_deprecated_alias
 from .. import _state
+from ..backends import BackendName
 from .._trace_state import TraceState
 from .._training_validation import reject_compiled_model
 from .._literals import (
@@ -1004,7 +1005,7 @@ class Trace(CapturedRun):
             default_state = TraceBuildState()
             setattr(build_state, state_field, getattr(default_state, state_field))
 
-    backend: Literal["torch", "mlx"]
+    backend: BackendName
     state: TraceState
     tlspec_version: int
     annotations: Dict[str, Any]
@@ -1348,7 +1349,7 @@ class Trace(CapturedRun):
         self.trace_label: str | None = None
         self.model_class_name = model_class_name
         self.model_label = model_class_name
-        self.backend: Literal["torch", "mlx"] = "torch"
+        self.backend: BackendName = "torch"
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
         self.tlspec_version = TLSPEC_VERSION
@@ -5349,9 +5350,10 @@ class Trace(CapturedRun):
         bool
             ``True`` if validation succeeds.
         """
-        from ..validation.core import validate_saved_outs as _impl
+        from ..backends import get_backend_spec
 
-        return _impl(
+        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        return spec.validate_trace(
             self,
             ground_truth_output_tensors=ground_truth_output_tensors,
             verbose=verbose,
@@ -5670,8 +5672,13 @@ class Trace(CapturedRun):
         Trace
             This model log, for chaining.
         """
-        if getattr(self, "backend", "torch") == "mlx":
-            raise NotImplementedError("backward capture is not supported on the mlx backend")
+        from ..backends import BackendUnsupportedError, get_backend_spec
+
+        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        if not spec.capabilities.backward_capture:
+            raise BackendUnsupportedError(
+                f"Backend {spec.name!r} does not support backward capture."
+            )
         from ..backends.torch.backward import log_backward as _impl
 
         return cast("Trace", _impl(self, loss, **backward_kwargs))
@@ -5702,8 +5709,13 @@ class Trace(CapturedRun):
         Any
             Backward recording context manager.
         """
-        if getattr(self, "backend", "torch") == "mlx":
-            raise NotImplementedError("backward capture is not supported on the mlx backend")
+        from ..backends import BackendUnsupportedError, get_backend_spec
+
+        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        if not spec.capabilities.backward_capture:
+            raise BackendUnsupportedError(
+                f"Backend {spec.name!r} does not support backward capture."
+            )
         from ..backends.torch.backward import recording_backward as _impl
 
         return _impl(self)
