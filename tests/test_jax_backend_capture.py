@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 
 import torchlens as tl
 from torchlens.backends import BackendUnsupportedError
+from torchlens.backends.jax.backend import (
+    _control_parent_labels,
+    _data_parent_arg_positions,
+    _data_parent_labels,
+)
+from torchlens.intervention.types import EdgeUseRecord
+from torchlens.postprocess.graph_traversal import _remove_orphan_nodes
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -475,6 +484,46 @@ def _jax_equation_op(trace: Any, primitive: str) -> Any:
     raise AssertionError(f"missing JAX primitive op: {primitive}")
 
 
+def _fake_raw_node(
+    label: str,
+    *,
+    parents: list[str] | None = None,
+    children: list[str] | None = None,
+    is_output: bool = False,
+) -> SimpleNamespace:
+    """Build a minimal raw graph node for postprocess pruning tests.
+
+    Parameters
+    ----------
+    label
+        Raw node label.
+    parents
+        Parent labels.
+    children
+        Child labels.
+    is_output
+        Whether the node is an output node.
+
+    Returns
+    -------
+    SimpleNamespace
+        Node carrying the fields used by ``_remove_orphan_nodes``.
+    """
+
+    return SimpleNamespace(
+        _label_raw=label,
+        label=label,
+        parents=[] if parents is None else parents,
+        children=[] if children is None else children,
+        is_output=is_output,
+        is_orphan=False,
+        has_saved_activation=False,
+        out_ref=None,
+        out=None,
+        func_call_id=None,
+    )
+
+
 def test_jax_trace_captures_equation_ops_and_params() -> None:
     """JAX raw functions should produce equation-backed TorchLens traces."""
 
@@ -617,6 +666,125 @@ def test_jax_validation_fails_when_parent_edge_is_rewired_wrong() -> None:
     add_op.parents = [wrong_parent]
 
     assert trace.validate_forward_pass([], validate_metadata=False) is False
+
+
+def test_jax_synthetic_control_parent_is_not_a_value_replay_parent() -> None:
+    """Synthetic control edges should be topology-only for JAX validation."""
+
+    def add_then_square(_: None, x: Any, y: Any) -> Any:
+        """Return a square with an injectable control-parent fixture.
+
+        Parameters
+        ----------
+        _
+            Unused params placeholder.
+        x
+            First input array.
+        y
+            Second input array.
+
+        Returns
+        -------
+        Any
+            Squared sum.
+        """
+
+        summed = x + y
+        return summed * summed
+
+    trace = _trace_jax(
+        add_then_square,
+        (
+            None,
+            jnp.ones((2, 3), dtype=jnp.float32),
+            jnp.full((2, 3), 3.0, dtype=jnp.float32),
+        ),
+    )
+    add_op = _jax_equation_op(trace, "add")
+    mul_op = _jax_equation_op(trace, "mul")
+    control_parent = next(op for op in trace.layer_list if op.is_input)
+
+    mul_op.parents.append(control_parent._label_raw)
+    control_parent.children.append(mul_op._label_raw)
+    mul_op._internal_set(
+        "_edge_uses",
+        [
+            *mul_op._edge_uses,
+            EdgeUseRecord(
+                parent_label=control_parent._label_raw,
+                child_label=mul_op._label_raw,
+                arg_kind="positional",
+                arg_path=(),
+                view_or_copy="unknown",
+                parent_func_call_id=control_parent.func_call_id,
+                child_func_call_id=cast(int, mul_op.func_call_id),
+                edge_use="control",
+            ),
+        ],
+    )
+
+    assert control_parent._label_raw in _control_parent_labels(mul_op)
+    assert control_parent._label_raw not in _data_parent_labels(mul_op)
+    assert _data_parent_arg_positions(mul_op) == {0: add_op._label_raw, 1: add_op._label_raw}
+    assert trace.validate_forward_pass([], validate_metadata=False)
+
+
+def test_synthetic_control_parent_is_retained_by_orphan_pruning() -> None:
+    """Orphan pruning should traverse control parents as topology edges."""
+
+    class FakeTrace:
+        """Minimal raw graph holder for the pruning contract."""
+
+        def __init__(self) -> None:
+            """Initialize a tiny graph with one control-only parent.
+
+            Returns
+            -------
+            None
+                The raw graph fields are populated in place.
+            """
+
+            decision = _fake_raw_node("decision")
+            child = _fake_raw_node("child", parents=["decision"], children=["output"])
+            output = _fake_raw_node("output", parents=["child"], is_output=True)
+            orphan = _fake_raw_node("orphan")
+            decision.children.append("child")
+            self._raw_layer_labels_list = ["decision", "child", "output", "orphan"]
+            self._raw_layer_dict = OrderedDict(
+                (node._label_raw, node) for node in (decision, child, output, orphan)
+            )
+            self.input_layers: list[str] = []
+            self.output_layers = ["output"]
+            self.buffer_layers: list[str] = []
+            self.keep_orphans = False
+            self._orphan_labels: list[str] = []
+
+        def _batch_remove_log_entries(
+            self, _orphan_entries: list[SimpleNamespace], *, remove_references: bool
+        ) -> None:
+            """Accept the postprocess pruning callback.
+
+            Parameters
+            ----------
+            _orphan_entries
+                Orphan entries selected for removal.
+            remove_references
+                Whether references should be scrubbed.
+
+            Returns
+            -------
+            None
+                This fixture does not need reference scrubbing.
+            """
+
+            return None
+
+    fake_trace = FakeTrace()
+
+    _remove_orphan_nodes(fake_trace)  # type: ignore[arg-type]
+
+    assert fake_trace._raw_layer_labels_list == ["decision", "child", "output"]
+    assert fake_trace._orphan_labels == ["orphan"]
 
 
 def test_jax_validation_fails_when_saved_payload_is_dropped() -> None:

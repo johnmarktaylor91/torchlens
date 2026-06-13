@@ -19,6 +19,7 @@ from torchlens.ir.events import (
     ModulePrepEvent,
     OpEvent,
 )
+from torchlens.intervention.types import EdgeUseRecord
 
 from ..backends.torch._tl import get_buffer_address, get_tensor_label, get_tensor_meta
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -158,6 +159,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
         module_enter_addresses,
         live_module_forward_args,
     )
+    op_events_by_label = {event.label_raw: event for event in events.op_events}
     input_io_roles = _input_io_roles(trace, events.op_events)
     # Count ops per innermost module call so a single-op (atomic) leaf module can
     # be told apart from a multi-op one. The innermost module of an op is the last
@@ -169,7 +171,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
     )
     module_output_fields = _module_output_fields(
         events.module_exit_events,
-        {event.label_raw: event for event in events.op_events},
+        op_events_by_label,
         _module_role_hints_by_address(events.module_prep_events),
         innermost_module_op_counts,
     )
@@ -191,6 +193,7 @@ def materialize_from_events(trace: "Trace", events: CaptureEvents) -> None:
             events.grad_fn_handles_by_label_raw.get(event.label_raw),
             input_io_roles.get(event.label_raw),
             output_versions.get(event.label_raw, {}),
+            op_events_by_label,
         )
         with _timed_phase(trace, "object_construction:op"):
             op_log = materialize_log_from_fields(fields_dict)
@@ -265,6 +268,7 @@ def _fields_from_event(
     grad_fn_handle: object | None,
     input_io_role: str | None,
     output_versions_by_child: dict[str, object],
+    op_events_by_label: Mapping[str, OpEvent],
 ) -> dict[str, object]:
     """Build a complete raw ``Op`` field dictionary from one operation event.
 
@@ -294,6 +298,10 @@ def _fields_from_event(
         Live autograd handle side-table entry, when present.
     input_io_role
         Reconstructed input role for source input events.
+    output_versions_by_child
+        Child-specific output snapshots keyed by child label.
+    op_events_by_label
+        Operation events keyed by raw label.
 
     Returns
     -------
@@ -444,7 +452,7 @@ def _fields_from_event(
             "recurrent_ops": [],
             "parents": [edge.parent_label_raw for edge in event.parents],
             "parent_arg_positions": event.parent_arg_positions,
-            "_edge_uses": list(event._edge_uses) if trace.intervention_ready else [],
+            "_edge_uses": _edge_use_records_from_event(event, op_events_by_label),
             "root_ancestors": set(event.root_ancestors),
             "children": children,
             "has_children": bool(children),
@@ -557,6 +565,100 @@ def _children_by_parent(
         if version_label_raw not in children[producer_label_raw]:
             children[producer_label_raw].append(version_label_raw)
     return children
+
+
+def _edge_use_records_from_event(
+    event: OpEvent,
+    op_events_by_label: Mapping[str, OpEvent],
+) -> list[object]:
+    """Return normalized edge-use records for a materialized event.
+
+    Parameters
+    ----------
+    event
+        Operation event whose edge uses should be persisted.
+    op_events_by_label
+        Operation events keyed by raw label, used to annotate parent function
+        call ids when available.
+
+    Returns
+    -------
+    list[object]
+        Edge-use records in the stable dataclass shape used by replay and
+        intervention metadata.
+    """
+
+    records: list[object] = []
+    for record in event._edge_uses:
+        if isinstance(record, EdgeUseRecord):
+            records.append(record)
+            continue
+        normalized = _normalize_edge_use_record(record, event, op_events_by_label)
+        if normalized is not None:
+            records.append(normalized)
+    return records
+
+
+def _normalize_edge_use_record(
+    record: object,
+    event: OpEvent,
+    op_events_by_label: Mapping[str, OpEvent],
+) -> EdgeUseRecord | None:
+    """Normalize a legacy tuple edge-use record.
+
+    Parameters
+    ----------
+    record
+        Edge-use record emitted by a backend.
+    event
+        Child operation event receiving the materialized record.
+    op_events_by_label
+        Operation events keyed by raw label.
+
+    Returns
+    -------
+    EdgeUseRecord | None
+        Normalized edge-use record, or ``None`` when ``record`` is not a known
+        edge-use shape.
+    """
+
+    if not isinstance(record, tuple) or len(record) < 3:
+        return None
+    parent_label, arg_position, edge_use = record[:3]
+    if not isinstance(parent_label, str) or not isinstance(edge_use, str):
+        return None
+    parent_event = op_events_by_label.get(parent_label)
+    return EdgeUseRecord(
+        parent_label=parent_label,
+        child_label=event.label_raw,
+        arg_kind="keyword" if edge_use == "kwarg" else "positional",
+        arg_path=cast(Any, _edge_arg_position_to_path(arg_position)),
+        view_or_copy="unknown",
+        parent_func_call_id=None if parent_event is None else parent_event.func_call_id,
+        child_func_call_id=event.func_call_id or 0,
+        edge_use=edge_use,
+    )
+
+
+def _edge_arg_position_to_path(arg_position: object) -> tuple[object, ...]:
+    """Return a stable tuple path for a backend edge argument position.
+
+    Parameters
+    ----------
+    arg_position
+        Backend-provided argument position.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Tuple path equivalent.
+    """
+
+    if isinstance(arg_position, tuple):
+        return arg_position
+    if arg_position is None:
+        return ()
+    return (arg_position,)
 
 
 def _equivalent_ops_by_label(

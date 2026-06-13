@@ -83,7 +83,7 @@ def _bad_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
 
 @pytest.mark.smoke
 def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
-    """Default captures populate baseline fields and skip intervention-only data."""
+    """Default captures populate baseline fields and persist edge-use metadata."""
 
     log = tl.trace(_TinyShiftModel(), torch.randn(2, 3))
 
@@ -103,7 +103,11 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
     assert all(layer.out is not None for layer in log.layer_list)
     assert all(layer.args_template is None for layer in log.layer_list)
     assert all(layer.kwargs_template is None for layer in log.layer_list)
-    assert all(layer._edge_uses == [] for layer in log.layer_list)
+    edge_layers = [layer for layer in log.layer_list if layer._edge_uses]
+    assert edge_layers
+    for layer in edge_layers:
+        assert {edge.parent_label for edge in layer._edge_uses} == set(layer.parents)
+        assert {edge.edge_use for edge in layer._edge_uses} <= {"arg", "kwarg"}
     assert all(layer.container_path == () for layer in log.layer_list)
 
 

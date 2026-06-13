@@ -23,6 +23,7 @@ from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
 from ...ir.buffer import CaptureEvents
 from ...ir.events import ArgTemplateRef, FunctionCallRef, OpEvent, OutputRef, ParentEdge
+from ...ir.events import is_control_edge_use
 from ...ir.intervention import FunctionEventInput
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
@@ -1908,11 +1909,11 @@ def _inputs_from_trace_graph(
     """
 
     inputs = list(capture.input_values)
-    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
-    parent_labels = tuple(getattr(op, "parents", ()))
+    graph_positions = _data_parent_arg_positions(op)
+    parent_labels = _data_parent_labels(op)
     positioned_labels = {label for label in graph_positions.values() if isinstance(label, str)}
-    if positioned_labels != set(parent_labels):
-        raise ValueError("JAX trace parent labels and parent_arg_positions disagree.")
+    if positioned_labels != parent_labels:
+        raise ValueError("JAX trace data parent labels and parent_arg_positions disagree.")
     for position, parent_label in graph_positions.items():
         if not isinstance(position, int) or position < 0 or position >= len(inputs):
             raise ValueError(f"JAX trace parent arg position {position!r} is invalid.")
@@ -1994,7 +1995,7 @@ def _parent_perturbations_change_output(
 
     import jax
 
-    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
+    graph_positions = _data_parent_arg_positions(op)
     if not graph_positions:
         return True
     positions_by_parent: dict[str, list[int]] = {}
@@ -2010,6 +2011,88 @@ def _parent_perturbations_change_output(
             if not jax.tree.all(jax.tree.map(_values_close, perturbed_outputs, saved_outputs)):
                 return True
     return False
+
+
+def _control_parent_labels(op: Any) -> set[str]:
+    """Return graph parents that express control dependencies.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+
+    Returns
+    -------
+    set[str]
+        Parent labels whose edge-use metadata is marked ``"control"``.
+    """
+
+    return _parent_labels_by_control_class(op)[0]
+
+
+def _data_parent_labels(op: Any) -> set[str]:
+    """Return graph parents that participate in value replay.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+
+    Returns
+    -------
+    set[str]
+        Parent labels excluding control-only dependencies.
+    """
+
+    return _parent_labels_by_control_class(op)[1]
+
+
+def _data_parent_arg_positions(op: Any) -> dict[int, str]:
+    """Return positional parent-argument mappings for data parents only.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+
+    Returns
+    -------
+    dict[int, str]
+        Positional replay inputs keyed by primitive argument position.
+    """
+
+    data_labels = _data_parent_labels(op)
+    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
+    return {
+        position: parent_label
+        for position, parent_label in graph_positions.items()
+        if isinstance(position, int)
+        and isinstance(parent_label, str)
+        and parent_label in data_labels
+    }
+
+
+def _parent_labels_by_control_class(op: Any) -> tuple[set[str], set[str]]:
+    """Split operation parents into control and value-replay sets.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+
+    Returns
+    -------
+    tuple[set[str], set[str]]
+        ``(control_parent_labels, data_parent_labels)``.
+    """
+
+    parents = {label for label in getattr(op, "parents", ()) if isinstance(label, str)}
+    control = {
+        edge.parent_label
+        for edge in getattr(op, "_edge_uses", ())
+        if isinstance(getattr(edge, "parent_label", None), str) and is_control_edge_use(edge)
+    }
+    return control & parents, parents - control
 
 
 def _perturb_candidates(value: Any) -> tuple[Any, ...]:

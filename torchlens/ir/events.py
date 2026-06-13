@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from .semantics import BackendSemantics, CapturePolicy
 
 OpEventKind = Literal["op", "source", "synthetic_output", "intervention_replacement"]
-EdgeUseKind = Literal["arg", "kwarg", "container", "module", "buffer", "output"]
+EdgeUseKind = Literal["arg", "kwarg", "container", "module", "buffer", "output", "control"]
 JaxEquationKind = Literal[
     "primitive",
     "scan_read",
@@ -202,6 +202,65 @@ class ParentEdge:
     parent_label_raw: str
     arg_position: object
     edge_use: str
+
+
+def edge_use_kind(record: object) -> str | None:
+    """Return the semantic edge-use kind stored on an edge record.
+
+    Parameters
+    ----------
+    record
+        Edge-use record. Current backends may provide an object with an
+        ``edge_use`` attribute or the legacy tuple shape
+        ``(parent_label, arg_position, edge_use)``.
+
+    Returns
+    -------
+    str | None
+        Semantic edge-use kind, or ``None`` when the record does not expose one.
+    """
+
+    attr_kind = getattr(record, "edge_use", None)
+    if isinstance(attr_kind, str):
+        return attr_kind
+    if isinstance(record, tuple) and len(record) >= 3 and isinstance(record[2], str):
+        return record[2]
+    return None
+
+
+def is_control_edge_use(record: object) -> bool:
+    """Return whether an edge record expresses a control dependency.
+
+    Parameters
+    ----------
+    record
+        Edge-use record to classify.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``record`` is marked as a control edge.
+    """
+
+    return edge_use_kind(record) == "control"
+
+
+def is_value_edge_use(record: object) -> bool:
+    """Return whether an edge record participates in value replay.
+
+    Parameters
+    ----------
+    record
+        Edge-use record to classify.
+
+    Returns
+    -------
+    bool
+        ``True`` for data/argument-style edges, ``False`` for control edges.
+        Unknown records conservatively count as value edges for compatibility.
+    """
+
+    return not is_control_edge_use(record)
 
 
 @dataclass(frozen=True, slots=True)

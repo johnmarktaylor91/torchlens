@@ -35,6 +35,9 @@ from .events import (
     OutputVersionEvent,
     ParentEdge,
     TraceBuildState,
+    edge_use_kind,
+    is_control_edge_use,
+    is_value_edge_use,
 )
 from .intervention import FireResult, FunctionEventInput, InterventionTemplateRef
 from .live_index import LiveIndex, LiveIndexWindowError
@@ -64,11 +67,14 @@ __all__ = [
     "DeviceRef",
     "DtypeRef",
     "EdgeUseKind",
+    "edge_use_kind",
     "FireResult",
     "FunctionCallRef",
     "FunctionEventInput",
     "InterventionState",
     "InterventionTemplateRef",
+    "is_control_edge_use",
+    "is_value_edge_use",
     "GradFnDiscovered",
     "GradFnFired",
     "LiveOpRecord",

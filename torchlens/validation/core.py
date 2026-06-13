@@ -20,6 +20,7 @@ from typing import Optional, Any, Dict, List, Set, TYPE_CHECKING, Union, cast
 import torch
 
 from ..data_classes.op import Op
+from ..ir.events import is_control_edge_use
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -416,9 +417,10 @@ def _representative_ops_for_replay(self: "Trace", ops_to_validate: List[Op]) -> 
     representative_ops: dict[str, Op] = {}
     fallback_op = ops_to_validate[0]
     for target_op in ops_to_validate:
-        if not target_op.parents:
+        data_parents = _data_parent_labels(target_op)
+        if not data_parents:
             representative_ops.setdefault(target_op.label, target_op)
-        for parent_label in target_op.parents:
+        for parent_label in data_parents:
             parent_layer_label = self[parent_label].layer_label
             representative_ops.setdefault(parent_layer_label, target_op)
     if not representative_ops:
@@ -442,10 +444,33 @@ def _representative_parent_edges(self: "Trace", ops_to_validate: List[Op]) -> Li
 
     representative_edges: dict[str, tuple[Op, str]] = {}
     for target_op in ops_to_validate:
-        for parent_label in target_op.parents:
+        for parent_label in _data_parent_labels(target_op):
             parent_layer_label = self[parent_label].layer_label
             representative_edges.setdefault(parent_layer_label, (target_op, parent_label))
     return list(representative_edges.values())
+
+
+def _data_parent_labels(op: Op) -> set[str]:
+    """Return parent labels that should participate in value replay.
+
+    Parameters
+    ----------
+    op
+        Operation whose parents should be classified.
+
+    Returns
+    -------
+    set[str]
+        Parent labels excluding control-only dependencies.
+    """
+
+    parents = {label for label in op.parents if isinstance(label, str)}
+    control_parents = {
+        edge.parent_label
+        for edge in getattr(op, "_edge_uses", ())
+        if isinstance(getattr(edge, "parent_label", None), str) and is_control_edge_use(edge)
+    }
+    return parents - control_parents
 
 
 def _validation_ops_for_entry(entry: Any) -> List[Op]:
@@ -505,10 +530,11 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
 
         # Make sure that all parent layers appear in at least one argument and
         # that no extra layers appear:
+        data_parents = _data_parent_labels(target_layer)
         parents_in_args = set()
         for arg_type in ["args", "kwargs"]:
             parents_in_args.update(list(target_layer.parent_arg_positions[arg_type].values()))
-        if parents_in_args != set(target_layer.parents):
+        if parents_in_args != data_parents:
             _raise_if_replay_arg_version_data_incomplete(self, target_layer)
             return False
 
@@ -520,7 +546,7 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
         # Check for each parent layer that it is logged as a saved argument when it matches an argument,
         # and is not logged when it does not match a saved argument.
 
-        for parent_layer_label in target_layer.parents:
+        for parent_layer_label in data_parents:
             parent_layer = self[parent_layer_label]
             for arg_type in ["args", "kwargs"]:
                 iterfunc, argtype_field = argtype_dict[arg_type]

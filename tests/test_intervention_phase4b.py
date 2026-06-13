@@ -256,8 +256,8 @@ def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> N
 
 
 @pytest.mark.smoke
-def test_non_intervention_ready_capture_leaves_templates_and_edges_empty() -> None:
-    """Default capture avoids Phase 4b template and edge-provenance overhead."""
+def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persisted() -> None:
+    """Default capture avoids templates but keeps graph edge provenance."""
 
     class TinyModel(torch.nn.Module):
         """Simple model for non-ready gating."""
@@ -282,4 +282,8 @@ def test_non_intervention_ready_capture_leaves_templates_and_edges_empty() -> No
 
     assert all(layer.args_template is None for layer in log.layer_list)
     assert all(layer.kwargs_template is None for layer in log.layer_list)
-    assert all(layer._edge_uses == [] for layer in log.layer_list)
+    edge_layers = [layer for layer in log.layer_list if layer._edge_uses]
+    assert edge_layers
+    for layer in edge_layers:
+        assert {edge.parent_label for edge in layer._edge_uses} == set(layer.parents)
+        assert {edge.edge_use for edge in layer._edge_uses} <= {"arg", "kwarg"}

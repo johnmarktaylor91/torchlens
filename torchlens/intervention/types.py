@@ -460,6 +460,7 @@ class EdgeUseRecord:
     view_or_copy: Literal["view", "copy", "unknown"] | None
     parent_func_call_id: int | None
     child_func_call_id: int
+    edge_use: str = "arg"
 
 
 @dataclass
