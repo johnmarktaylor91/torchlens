@@ -73,6 +73,7 @@ from ..intervention.errors import DirectActivationWriteWarning
 from ..quantities import Bytes, Flops, Macs, as_bytes, as_duration, as_flops, as_macs
 from .._state import pause_logging
 from ._accessor_base import Accessor
+from ._state_adapter import state_items, state_restore
 from ..utils.tensor_utils import (
     SaveMode,
     concatenate_batch_tensors,
@@ -2270,7 +2271,7 @@ class Op:
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
-        state = self.__dict__.copy()
+        state = dict(state_items(self))
         state["_source_trace_ref"] = None
         state.pop("_facets_cache", None)
         state["func"] = None
@@ -2369,7 +2370,7 @@ class Op:
                 state[field_name] = Flops(state[field_name])
         object.__setattr__(self, "_construction_done", False)
         state.pop("source_trace", None)
-        self.__dict__.update(state)
+        state_restore(self, state)
         object.__setattr__(self, "_construction_done", bool(state.get("_construction_done", True)))
 
     # ********************************************

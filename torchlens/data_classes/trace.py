@@ -133,6 +133,7 @@ from .derived_grad import DerivedGradAccessor
 from .grad_fn import GradFnAccessor, GradFn
 from .layer import Layer, OpAccessor
 from .op import Op, TensorLog
+from ._state_adapter import state_items, state_new, state_restore
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
 _USE_STORED_TRANSFORM = object()
@@ -2559,12 +2560,12 @@ class Trace(CapturedRun):
             Forked log whose mutable containers are independent.
         """
 
-        fork = object.__new__(type(self))
+        fork = state_new(type(self))
         fork_state = {
             field_name: self._fork_model_field(field_name, value)
-            for field_name, value in self.__dict__.items()
+            for field_name, value in state_items(self)
         }
-        fork.__dict__.update(fork_state)
+        state_restore(fork, fork_state)
         fork.parent_run = weakref.ref(self)
         fork.trace_label = name or self._next_fork_name()
         fork._intervention_spec = copy.deepcopy(self._ensure_intervention_spec())
@@ -2644,19 +2645,20 @@ class Trace(CapturedRun):
         layer_map: dict[int, Op] = {}
         fork_equivalent_ops = self.op_equivalence_classes
         for parent_pass in parent.layer_list:
-            fork_pass = object.__new__(Op)
+            fork_pass = state_new(Op)
             deep_copy_fields = (
                 deep_copy_layer_labels is None or parent_pass.layer_label in deep_copy_layer_labels
             )
-            fork_pass.__dict__.update(
+            state_restore(
+                fork_pass,
                 {
                     field_name: self._fork_layer_pass_field(
                         field_name,
                         value,
                         deep_copy=deep_copy_fields,
                     )
-                    for field_name, value in parent_pass.__dict__.items()
-                }
+                    for field_name, value in state_items(parent_pass)
+                },
             )
             fork_pass.source_trace = self
             eq_type = getattr(fork_pass, "equivalence_class", None)
@@ -2732,10 +2734,11 @@ class Trace(CapturedRun):
         )
         fork_layer_logs: dict[str, Layer] = OrderedDict()
         for label, parent_layer in parent.layer_logs.items():
-            fork_layer_log = copy.copy(parent_layer)
-            fork_layer_log.__dict__ = {
-                key: self._copy_fork_value(value) for key, value in parent_layer.__dict__.items()
-            }
+            fork_layer_log = state_new(type(parent_layer))
+            state_restore(
+                fork_layer_log,
+                {key: self._copy_fork_value(value) for key, value in state_items(parent_layer)},
+            )
             fork_layer_log.source_trace = self
             fork_layer_log.ops = OpAccessor(
                 OrderedDict(
@@ -3195,7 +3198,7 @@ class Trace(CapturedRun):
 
         This method is intended for intervention rerun. The rerun engine builds
         ``new_log`` off to the side and calls this only after validation ops.
-        The final state replacement uses one ``self.__dict__.update(...)`` call
+        The final state replacement uses one state-restore pass over the new fields
         to minimize torn-state windows. Concurrent reads during rerun are
         unsupported; no lock is taken.
 
@@ -3239,12 +3242,13 @@ class Trace(CapturedRun):
             "_spec_revision",
             "_out_recipe_revision",
         )
+        current_state = dict(state_items(self))
         preserved_state = {
-            field_name: self.__dict__.get(field_name) for field_name in preserved_fields
+            field_name: current_state.get(field_name) for field_name in preserved_fields
         }
-        replacement_state = dict(new_log.__dict__)
+        replacement_state = dict(state_items(new_log))
         replacement_state.update(preserved_state)
-        self.__dict__.update(replacement_state)
+        state_restore(self, replacement_state)
         _TRACE_OP_ACCESSOR_CACHE.pop(self, None)
         _TRACE_LAYER_ACCESSOR_CACHE.pop(self, None)
         _TRACE_MODULE_CALL_ACCESSOR_CACHE.pop(self, None)
@@ -3307,12 +3311,13 @@ class Trace(CapturedRun):
             "num_inputs",
             "is_in_conditional_body",
         }
+        new_layer_state = dict(state_items(new_layer))
         for field_name in LAYER_PASS_LOG_FIELD_ORDER:
             if field_name in preserved_fields:
                 continue
             layer._internal_set(
                 field_name,
-                self._copy_rerun_value(new_layer.__dict__.get(field_name)),
+                self._copy_rerun_value(new_layer_state.get(field_name)),
             )
         for field_name in (
             "out_ref",
@@ -3331,7 +3336,7 @@ class Trace(CapturedRun):
             if hasattr(new_layer, field_name):
                 layer._internal_set(
                     field_name,
-                    self._copy_rerun_value(new_layer.__dict__.get(field_name)),
+                    self._copy_rerun_value(new_layer_state.get(field_name)),
                 )
         layer.source_trace = self
 
@@ -3349,7 +3354,7 @@ class Trace(CapturedRun):
             new_layer_log = new_layer_logs.get(label)
             if new_layer_log is None:
                 continue
-            for field_name, value in new_layer_log.__dict__.items():
+            for field_name, value in state_items(new_layer_log):
                 if field_name in {"_source_trace_ref", "ops"}:
                     continue
                 setattr(layer_log, field_name, self._copy_rerun_value(value))

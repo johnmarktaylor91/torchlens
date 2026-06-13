@@ -17,6 +17,7 @@ from typing import Any, TypeAlias
 import torch
 
 from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
+from ..data_classes._state_adapter import state_items, state_new, state_restore
 from ..data_classes.trace import Trace
 
 BlobSpec: TypeAlias = tuple[str, torch.Tensor, str, str]
@@ -87,7 +88,7 @@ def scrub_for_save(
     if not isinstance(scrubbed_model, Trace):
         raise TorchLensIOError("Portable scrub expected a scrubbed Trace instance.")
 
-    scrubbed_state = dict(scrubbed_model.__dict__)
+    scrubbed_state = dict(state_items(scrubbed_model))
     scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     module_accessor = getattr(trace, "_module_logs", None)
@@ -151,16 +152,18 @@ def _scrub_value(
     if obj_id in memo:
         return memo[obj_id]
 
-    scrubbed_obj = object.__new__(type(value))
+    scrubbed_obj = state_new(type(value))
     memo[obj_id] = scrubbed_obj
     scrubbed_state: dict[str, Any] = {}
-    for field_name, field_value in vars(value).items():
+    for field_name, field_value in state_items(value):
         if isinstance(value, Trace) and _is_runtime_only_trace_field(field_name):
             continue
         if field_name not in spec:
             raise TorchLensIOError(
                 f"{type(value).__name__}.{field_name} is missing from PORTABLE_STATE_SPEC."
             )
+        if field_name == "_is_in_conditional_body" and field_value is None:
+            field_value = False
         policy = _effective_policy(value, field_name, spec[field_name], options)
         scrubbed_state[field_name] = _scrub_field(
             owner=value,
@@ -179,8 +182,7 @@ def _scrub_value(
         )
         scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
-    scrubbed_obj.__dict__.update(scrubbed_state)
-    return scrubbed_obj
+    return state_restore(scrubbed_obj, scrubbed_state)
 
 
 def _is_runtime_only_trace_field(field_name: str) -> bool:
@@ -199,6 +201,10 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
 
     return field_name in {
         "_last_sibling_ordering_decision",
+        "_defer_streaming_bundle_finalization",
+        "_keep_outs_in_memory",
+        "_out_sink",
+        "_out_writer",
         "jax_closed_jaxpr",
         "jax_equation_captures",
         "jax_inlined_call_primitives",

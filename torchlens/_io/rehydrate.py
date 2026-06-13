@@ -21,6 +21,7 @@ from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .paths import resolve_bundle_blob_path
+from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
 
 _LEGACY_CAPTURE_TRACE_KEYS = {
@@ -81,6 +82,7 @@ def rehydrate_trace(
     source_version = _source_io_format_version(state_for_load, manifest)
     state_for_load = _normalize_legacy_trace_state(state_for_load, source_version)
     module_accessor_state = state_for_load.pop("_io_module_accessor_state", None)
+    portable_key_order = tuple(state_for_load)
 
     trace = Trace.__new__(Trace)
     trace.__setstate__(state_for_load)
@@ -104,6 +106,7 @@ def rehydrate_trace(
         materialize_nested=materialize_nested,
         seen=set(),
     )
+    _restore_trace_state_order(trace, portable_key_order)
     return trace
 
 
@@ -177,6 +180,32 @@ def _drop_capture_only_trace_fields(trace: Trace) -> None:
 
     for field_name in _LEGACY_CAPTURE_TRACE_KEYS:
         trace.__dict__.pop(field_name, None)
+
+
+def _restore_trace_state_order(trace: Trace, portable_key_order: tuple[str, ...]) -> None:
+    """Restore loaded Trace ``__dict__`` order to the serialized metadata order.
+
+    Parameters
+    ----------
+    trace:
+        Rehydrated trace whose state order should be restored.
+    portable_key_order:
+        Key order from the source portable metadata.
+    """
+
+    state = trace.__dict__
+    ordered_state = {
+        field_name: state[field_name] for field_name in portable_key_order if field_name in state
+    }
+    ordered_state.update(
+        {
+            field_name: value
+            for field_name, value in state.items()
+            if field_name not in ordered_state
+        }
+    )
+    state.clear()
+    state.update(ordered_state)
 
 
 def _build_manifest_index(
@@ -297,7 +326,7 @@ def _rehydrate_object(
         return value
     seen.add(obj_id)
 
-    for field_name, field_value in list(vars(value).items()):
+    for field_name, field_value in list(state_items(value)):
         if field_name not in spec:
             continue
         policy = spec[field_name]
@@ -309,7 +338,7 @@ def _rehydrate_object(
                         field_value,
                         manifest_index,
                         bundle_path,
-                        kind=field_name,
+                        kind=_lazy_ref_kind(field_name),
                     )
                     if tensor_ref is not None:
                         _assign_rehydrated_field(value, ref_field_name, tensor_ref)
@@ -460,7 +489,7 @@ def _materialize_recursive_blob_refs(
         }
     spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
     if spec is not None and type(value).__name__ == "GradientRecord":
-        for field_name, field_value in list(vars(value).items()):
+        for field_name, field_value in list(state_items(value)):
             if field_name not in spec:
                 continue
             _assign_rehydrated_field(
@@ -885,7 +914,7 @@ def _rehydrate_nested_object(
         return value
     seen.add(obj_id)
 
-    for field_name, field_value in list(vars(value).items()):
+    for field_name, field_value in list(state_items(value)):
         if field_name not in spec:
             continue
         policy = spec[field_name]

@@ -37,6 +37,7 @@ from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 from .. import __version__ as TORCHLENS_VERSION
 from ..backends import BackendPayloadUnsupportedError, get_backend_spec
+from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
 
 if TYPE_CHECKING:
@@ -1117,9 +1118,10 @@ def _maybe_make_fast_copy_spec(
 
     if not bool(getattr(live_layer, has_field, False)):
         return None
-    if getattr(scrubbed_layer, "__dict__", {}).get(tensor_field) is not None:
+    scrubbed_state = dict(state_items(scrubbed_layer))
+    if scrubbed_state.get(tensor_field) is not None:
         return None
-    live_field_value = getattr(live_layer, "__dict__", {}).get(tensor_field)
+    live_field_value = dict(state_items(live_layer)).get(tensor_field)
     if live_field_value is not None:
         return None
 
@@ -1431,7 +1433,7 @@ def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
     if spec is None:
         return value
 
-    for field_name, field_value in list(vars(value).items()):
+    for field_name, field_value in list(state_items(value)):
         replaced_value = _replace_skipped_blob_refs(field_value, skipped_blob_ids)
         setattr(value, field_name, replaced_value)
         if (
@@ -1539,7 +1541,7 @@ def _contains_nested_blob_refs(
         return False
     seen.add(obj_id)
 
-    for field_name, field_value in vars(value).items():
+    for field_name, field_value in state_items(value):
         policy = spec.get(field_name)
         if policy == FieldPolicy.BLOB_RECURSIVE and _container_contains_blob_ref(
             field_value,

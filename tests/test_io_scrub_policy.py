@@ -7,6 +7,7 @@ from torch import nn
 
 from torchlens import trace as trace_fn
 from torchlens.data_classes.buffer import Buffer
+from torchlens.data_classes._state_adapter import state_items
 from torchlens.data_classes.func_call_location import FuncCallLocation
 from torchlens.data_classes.layer import Layer
 from torchlens.data_classes.op import Op
@@ -67,7 +68,9 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
 
     missing_by_class = {}
     for cls, instance in instances.items():
-        missing = sorted(set(vars(instance)) - set(cls.PORTABLE_STATE_SPEC))
+        missing = sorted(
+            {field_name for field_name, _ in state_items(instance)} - set(cls.PORTABLE_STATE_SPEC)
+        )
         if missing:
             missing_by_class[cls.__name__] = missing
 
