@@ -71,6 +71,21 @@ def _params() -> dict[str, Any]:
     }
 
 
+def _nested_params() -> dict[str, Any]:
+    """Build a nested parameter pytree.
+
+    Returns
+    -------
+    dict[str, Any]
+        Nested parameter pytree.
+    """
+
+    return {
+        "encoder": {"w": jnp.ones((3, 4)), "b": jnp.zeros((4,))},
+        "head": {"w": jnp.ones((4, 2))},
+    }
+
+
 def test_jax_trace_captures_equation_ops_and_params() -> None:
     """JAX raw functions should produce equation-backed TorchLens traces."""
 
@@ -90,6 +105,42 @@ def test_jax_trace_captures_equation_ops_and_params() -> None:
     assert "dot_general" in primitive_names
     assert "tanh" in primitive_names
     assert all(op.has_saved_activation for op in trace.layer_list)
+    assert trace.validate_forward_pass([])
+
+
+def test_jax_trace_preserves_nested_param_paths() -> None:
+    """Nested pytree parameter leaves should be addressable without raising."""
+
+    def nested_mlp(params: dict[str, Any], x: Any) -> Any:
+        """Return an MLP result from nested parameters."""
+
+        hidden = jnp.tanh(x @ params["encoder"]["w"] + params["encoder"]["b"])
+        return hidden @ params["head"]["w"]
+
+    trace = tl.trace(nested_mlp, (_nested_params(), jnp.ones((2, 3))), backend="jax")
+
+    assert set(trace.params.keys()) == {"encoder.w", "encoder.b", "head.w"}
+    assert trace.params["encoder.w"].backend_address == "pytree:encoder.w"
+    assert trace.param_source == "pytree-derived"
+
+
+def test_jax_trace_accepts_declared_static_argnums() -> None:
+    """Declared static positional args should be excluded from dynamic jaxpr inputs."""
+
+    def scaled(params: dict[str, Any], x: Any, scale: int) -> Any:
+        """Return a statically scaled JAX result."""
+
+        return (x @ params["w1"]) * scale
+
+    trace = tl.trace(
+        scaled,
+        (_params(), jnp.ones((2, 3)), 3),
+        backend="jax",
+        jax_static_argnums=2,
+    )
+
+    assert trace.jax_static_argnums == (2,)
+    assert "mul" in {op.func_name for op in trace.layer_list}
     assert trace.validate_forward_pass([])
 
 

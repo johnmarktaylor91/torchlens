@@ -74,6 +74,7 @@ class JAXBackend:
         save_visualizations: bool | MissingType = MISSING,
         lookback: int = 0,
         lookback_payload_policy: str = "metadata_only",
+        jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
         **kwargs: Any,
     ) -> Trace:
         """Capture a JAX raw-function forward pass into a TorchLens ``Trace``.
@@ -140,6 +141,10 @@ class JAXBackend:
             Predicate lookback window. Only the default ``0`` is supported.
         lookback_payload_policy
             Predicate lookback payload policy. Only the default is supported.
+        jax_static_argnums
+            Positional callable argument indexes to declare static for
+            ``jax.make_jaxpr``. Static values are not interpreted as dynamic
+            jaxpr leaves.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -174,6 +179,8 @@ class JAXBackend:
         transform = None if _is_missing(transform) else transform
         output_transform = None if _is_missing(output_transform) else output_transform
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
+        args = self._normalize_input_args(input_args)
+        static_argnums = _normalize_static_argnums(jax_static_argnums, len(args))
         self._reject_unsupported_options(
             layers_to_save=layers_to_save,
             input_kwargs=input_kwargs,
@@ -193,7 +200,6 @@ class JAXBackend:
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
         )
-        args = self._normalize_input_args(input_args)
         trace = self._new_trace(
             model=model,
             keep_orphans=cast(bool, keep_orphans),
@@ -209,9 +215,9 @@ class JAXBackend:
         )
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
-        closed_jaxpr = derive_closed_jaxpr(model, args)
+        closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
         reject_undeclared_consts(closed_jaxpr)
-        flat_args, _args_treedef = flatten_dynamic_args(args)
+        flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(closed_jaxpr, flat_args)
         output = model(*args)
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
@@ -226,6 +232,7 @@ class JAXBackend:
         trace.jax_closed_jaxpr = closed_jaxpr
         trace.jax_equation_captures = result.equations
         trace.jax_inlined_call_primitives = result.inlined_call_primitives
+        trace.jax_static_argnums = static_argnums
         return trace
 
     def validate_trace(self, trace: Trace, *_args: Any, **_kwargs: Any) -> bool:
@@ -1031,6 +1038,49 @@ def _default_if_missing(value: Any, default: Any) -> Any:
     """
 
     return default if _is_missing(value) else value
+
+
+def _normalize_static_argnums(value: object, num_args: int) -> tuple[int, ...]:
+    """Normalize declared JAX static positional argument indexes.
+
+    Parameters
+    ----------
+    value
+        Public ``jax_static_argnums`` value.
+    num_args
+        Number of positional arguments in the normalized call.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Unique static argument indexes in ascending order.
+
+    Raises
+    ------
+    ValueError
+        If any static index is out of range.
+    TypeError
+        If the value is neither an integer nor a sequence of integers.
+    """
+
+    if _is_missing(value) or value is None:
+        return ()
+    raw_indexes: tuple[int, ...]
+    if isinstance(value, int):
+        raw_indexes = (value,)
+    elif isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        raw_indexes = tuple(value)
+        if not all(isinstance(index, int) for index in raw_indexes):
+            raise TypeError("jax_static_argnums must contain only integer indexes.")
+    else:
+        raise TypeError("jax_static_argnums must be an int, sequence of ints, or None.")
+    normalized = tuple(sorted({index if index >= 0 else num_args + index for index in raw_indexes}))
+    invalid = [index for index in normalized if index < 0 or index >= num_args]
+    if invalid:
+        raise ValueError(
+            f"jax_static_argnums indexes out of range for {num_args} positional args: {invalid}."
+        )
+    return normalized
 
 
 def _values_close(left: Any, right: Any) -> bool:

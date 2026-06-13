@@ -98,7 +98,7 @@ class JaxCaptureResult:
     inlined_call_primitives: tuple[str, ...]
 
 
-def derive_closed_jaxpr(fn: Any, args: Sequence[Any]) -> Any:
+def derive_closed_jaxpr(fn: Any, args: Sequence[Any], static_argnums: Sequence[int] = ()) -> Any:
     """Derive a closed jaxpr for ``fn(*args)``.
 
     Parameters
@@ -107,6 +107,8 @@ def derive_closed_jaxpr(fn: Any, args: Sequence[Any]) -> Any:
         JAX-compatible callable.
     args
         Dynamic positional arguments.
+    static_argnums
+        Positional argument indexes to treat as declared static values.
 
     Returns
     -------
@@ -116,16 +118,20 @@ def derive_closed_jaxpr(fn: Any, args: Sequence[Any]) -> Any:
 
     import jax
 
-    return jax.make_jaxpr(fn)(*args)
+    return jax.make_jaxpr(fn, static_argnums=tuple(static_argnums))(*args)
 
 
-def flatten_dynamic_args(args: Sequence[Any]) -> tuple[list[Any], Any]:
+def flatten_dynamic_args(
+    args: Sequence[Any], static_argnums: Sequence[int] = ()
+) -> tuple[list[Any], Any]:
     """Flatten positional dynamic arguments in JAX pytree order.
 
     Parameters
     ----------
     args
         Positional arguments passed to the captured function.
+    static_argnums
+        Positional argument indexes excluded from dynamic jaxpr inputs.
 
     Returns
     -------
@@ -135,7 +141,9 @@ def flatten_dynamic_args(args: Sequence[Any]) -> tuple[list[Any], Any]:
 
     import jax
 
-    return jax.tree.flatten(tuple(args))
+    static_indexes = set(static_argnums)
+    dynamic_args = tuple(arg for index, arg in enumerate(args) if index not in static_indexes)
+    return jax.tree.flatten(dynamic_args)
 
 
 def reject_undeclared_consts(closed_jaxpr: Any) -> None:
