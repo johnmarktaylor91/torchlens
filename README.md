@@ -25,11 +25,13 @@
    metadata ([partial list here](https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-023-40807-0/MediaObjects/41598_2023_40807_MOESM1_ESM.pdf))
    about the network's computational graph.
 
-Backend status: `tl.trace(..., backend=None)` keeps the existing PyTorch eager
-capture default and MLX module auto-routing technical preview. Explicit
-`backend="torch"` is supported; unsupported or mismatched backend selections
-raise typed backend errors. `tl.validate(..., backend=None)` follows the same
-resolution path for forward/saved validation.
+Backend status: PyTorch is the full-feature backend and the default
+(`tl.trace(..., backend=None)`). TorchLens 2.x also ships **technical-preview
+backends for MLX, JAX, and tinygrad** behind one `CaptureBackend` protocol —
+select with `backend="jax"` / `backend="tinygrad"` / `backend="mlx"`. Unsupported
+or mismatched selections raise typed backend errors, and `tl.validate(...,
+backend=...)` follows the same resolution path. See
+[What's new in 2.x](#whats-new-in-2x) for the capability matrix.
 
 Here it is in action for a very simple recurrent model; as you can see, you just define the model like normal and pass
 it in, and *TorchLens* returns a full log of the forward pass along with a visualization:
@@ -73,6 +75,84 @@ in its forward pass; you can grab the saved outputs of every last one:
 
 The goal of *TorchLens* is to do this for any PyTorch model whatsoever. You can see a bunch of example model
 visualizations in this [model menagerie](https://drive.google.com/drive/u/0/folders/1BsM6WPf3eB79-CRNgZejMxjg38rN6VCb).
+
+## What's new in 2.x
+
+TorchLens has grown from "log every activation" into a configurable capture
+substrate. The same one-line capture now drives selective saving, interventions,
+backward-pass capture, and — new in 2.x — capture across multiple tensor
+frameworks. Everything below is one `tl.trace(...)` call with different options;
+there is a single capture path underneath, so you pay only for what you ask for.
+
+**Multiple backends, one API.** Every interpretability tool in this space is
+PyTorch-only. TorchLens captures eager-mode execution through a small backend
+protocol, so the same trace/inspect/validate workflow now runs on other
+frameworks:
+
+| Capability | PyTorch | MLX | JAX (preview) | tinygrad (preview) |
+|---|:---:|:---:|:---:|:---:|
+| Forward capture + graph/metadata | ✅ | ✅ | ✅ | ✅ |
+| Replay + perturbation validation | ✅ | ✅ | ✅ | ✅ |
+| Gradients | full backward graph | — | leaf-level (derived) | leaf-level (bracketed) |
+| Interventions / fastlog | ✅ | — | — | — |
+
+The JAX backend is **jaxpr-first**: it captures the lowered jaxpr, so any
+spelling (operators, array methods, `jnp`/`lax` calls) is captured by
+construction, and every captured op is replay-validated — not a best-effort
+trace. Previews are forward-capture + honest validation + derived gradients;
+PyTorch remains the full-feature backend. (Preview backends are pinned and
+documented in [`docs/`](docs/); they are not yet drop-in for arbitrary models.)
+
+```python
+log = tl.trace(torch_model, x)                  # PyTorch (default)
+log = tl.trace(jax_fn,  inputs, backend="jax")       # JAX preview
+log = tl.trace(tg_fn,   inputs, backend="tinygrad")  # tinygrad preview
+```
+
+(JAX/tinygrad capture pure functions; gradient options and exact calling
+conventions are documented per backend in [`docs/`](docs/).)
+
+**Backward-pass capture.** Capture the backward graph the same way you capture
+the forward — per-op gradients, first-class `BackwardPass` records, and
+higher-order support:
+
+```python
+x = torch.randn(2, 8, requires_grad=True)
+log = tl.trace(model, x, save_grads=True)
+log.log_backward(log[log.output_layers[0]].out.sum())
+grad = log["relu_1_1"].grad        # gradient flowing through that op
+```
+
+**Interventions in one line.** Ablate, steer, patch, or swap activations during
+the forward pass, then propagate the edit with replay or rerun (full API in
+[Interventions](#interventions-v20) below):
+
+```python
+ablated = tl.trace(model, x, save=tl.func("relu"),
+                   intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+```
+
+**Pay only for what you use.** Selective, windowed, and early-halting capture
+keep big models cheap — and `halt=` can finish *faster than a plain forward pass*
+when you only need early layers:
+
+```python
+# capture conv2d only where it feeds a relu, keeping a 4-op lookback window
+conv_before_relu = tl.func("conv2d") & tl.followed_by(tl.func("relu"))
+log = tl.trace(model, x, save=conv_before_relu,
+               lookback=4, lookback_payload_policy="detached_raw")
+
+# stop the forward pass as soon as the target is captured
+log = tl.trace(model, x, save=tl.func("layer3"), halt=tl.func("layer3"))
+
+# zero-copy reference saving for read-only inspection of large activations
+log = tl.trace(model, x, save=tl.in_module("encoder"), save_mode="reference")
+```
+
+**Semantic access (facets).** Address named sub-views of an op's output — e.g.
+attention `q`/`k`/`v` from a fused projection — for read, gradient, and
+intervention, without hand-indexing tensors. See the facets tutorial in
+[`notebooks/`](notebooks/).
 
 ## Compatibility report
 
