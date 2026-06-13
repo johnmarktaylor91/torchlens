@@ -232,6 +232,26 @@ def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -
         _trace(**kwargs)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "pattern"),
+    (
+        ({"jax_control_flow": "unroll"}, "control-flow unrolling.*not implemented"),
+        ({"jax_max_control_flow_unroll": 4}, "control-flow unrolling.*not implemented"),
+        ({"module_identity_mode": "pytree_module"}, "module_identity_mode selection"),
+        ({"payload_policy": "full"}, "payload_policy.*not implemented"),
+        ({"save_preview": True}, "save_preview.*not implemented"),
+    ),
+)
+def test_jax_rejects_declared_future_public_options(
+    kwargs: dict[str, Any],
+    pattern: str,
+) -> None:
+    """Declared public-option spine knobs should reject until JAX phases implement them."""
+
+    with pytest.raises(BackendUnsupportedError, match=pattern):
+        _trace(**kwargs)
+
+
 def test_jax_record_backend_jax_rejected() -> None:
     """Sparse ``tl.record`` should stay torch-only for backend v1."""
 
@@ -321,3 +341,4 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert capabilities.supports_payload_materialization is False
     assert capabilities.module_identity_modes == ("function_root",)
     assert capabilities.payload_policy == "audit_only"
+    assert capabilities.trace_options == ("jax_static_argnums", "grad_options")

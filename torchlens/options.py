@@ -62,6 +62,11 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "cache_dir",
     "module_filter",
     "stop_after",
+    "jax_control_flow",
+    "jax_max_control_flow_unroll",
+    "module_identity_mode",
+    "payload_policy",
+    "save_preview",
     "emit_nvtx",
     "raise_on_nan",
     "_module_containment_engine",
@@ -164,6 +169,11 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "cache_dir": "cache_dir",
     "module_filter": "module_filter",
     "stop_after": "stop_after",
+    "jax_control_flow": "jax_control_flow",
+    "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
+    "module_identity_mode": "module_identity_mode",
+    "payload_policy": "payload_policy",
+    "save_preview": "save_preview",
     "raise_on_nan": "raise_on_nan",
 }
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
@@ -625,6 +635,17 @@ class CaptureOptions:
         Returning ``False`` keeps metadata but skips out saving.
     stop_after:
         Experimental stop-early site. Only supported by ``torchlens.peek``.
+    jax_control_flow:
+        Declared JAX control-flow policy. Backends other than torch reject
+        explicit use until their implementation phase supports it.
+    jax_max_control_flow_unroll:
+        Declared maximum JAX control-flow unroll count.
+    module_identity_mode:
+        Declared backend module-mode selection passthrough.
+    payload_policy:
+        Declared payload materialization/codec policy passthrough.
+    save_preview:
+        Declared preview flag for future ``save=`` semantics.
     emit_nvtx:
         Placeholder toggle for future NVTX ranges; currently inert.
     raise_on_nan:
@@ -668,6 +689,11 @@ class CaptureOptions:
     cache_dir: str | Path | None = None
     module_filter: Callable[[Any], bool] | None = None
     stop_after: Any | None = None
+    jax_control_flow: Literal["reject", "unroll"] = "reject"
+    jax_max_control_flow_unroll: int = 64
+    module_identity_mode: str | None = None
+    payload_policy: str | None = None
+    save_preview: bool = False
     emit_nvtx: bool = False
     raise_on_nan: bool = False
     _module_containment_engine: Literal["thread_replay", "hook_stack", "both"] = "hook_stack"
@@ -706,6 +732,11 @@ class CaptureOptions:
         cache_dir: str | Path | None | MissingType = MISSING,
         module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
         stop_after: Any | None | MissingType = MISSING,
+        jax_control_flow: Literal["reject", "unroll"] | MissingType = MISSING,
+        jax_max_control_flow_unroll: int | MissingType = MISSING,
+        module_identity_mode: str | None | MissingType = MISSING,
+        payload_policy: str | None | MissingType = MISSING,
+        save_preview: bool | MissingType = MISSING,
         emit_nvtx: bool | MissingType = MISSING,
         raise_on_nan: bool | MissingType = MISSING,
         _module_containment_engine: (
@@ -815,6 +846,24 @@ class CaptureOptions:
                 "module_filter", module_filter, None, specified_fields
             ),
             "stop_after": _resolve_option_value("stop_after", stop_after, None, specified_fields),
+            "jax_control_flow": _resolve_option_value(
+                "jax_control_flow", jax_control_flow, "reject", specified_fields
+            ),
+            "jax_max_control_flow_unroll": _resolve_option_value(
+                "jax_max_control_flow_unroll",
+                jax_max_control_flow_unroll,
+                64,
+                specified_fields,
+            ),
+            "module_identity_mode": _resolve_option_value(
+                "module_identity_mode", module_identity_mode, None, specified_fields
+            ),
+            "payload_policy": _resolve_option_value(
+                "payload_policy", payload_policy, None, specified_fields
+            ),
+            "save_preview": _resolve_option_value(
+                "save_preview", save_preview, False, specified_fields
+            ),
             "emit_nvtx": _resolve_option_value("emit_nvtx", emit_nvtx, False, specified_fields),
             "raise_on_nan": _resolve_option_value(
                 "raise_on_nan", raise_on_nan, False, specified_fields
@@ -830,6 +879,12 @@ class CaptureOptions:
             raise ValueError(
                 "_module_containment_engine must be 'thread_replay', 'hook_stack', or 'both'"
             )
+        if values["jax_control_flow"] not in {"reject", "unroll"}:
+            raise ValueError("jax_control_flow must be 'reject' or 'unroll'")
+        if not isinstance(values["jax_max_control_flow_unroll"], int):
+            raise TypeError("jax_max_control_flow_unroll must be an integer")
+        if values["jax_max_control_flow_unroll"] < 1:
+            raise ValueError("jax_max_control_flow_unroll must be >= 1")
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 

@@ -13,6 +13,26 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 | `jax` | Preview jaxpr-first functional capture | Per-equation replay and parent perturbation | Audit-only `.tlspec` save/load | `function_root` | `trace.derived_grads` only |
 | `tinygrad` | Preview UOp-snapshot functional capture | UOp replay and parent perturbation on live `DEV=PYTHON` payloads | Audit-only `.tlspec` save/load | `function_root` | `trace.derived_grads` only |
 
+## Public Option Spine
+
+The public `tl.trace()` signature declares backend-growth options before their non-torch
+implementations land. Torch accepts these options as inert cache-key inputs so torch behavior stays
+unchanged. JAX and tinygrad reject explicit use with `BackendUnsupportedError` until the matching
+backend phase implements the capability.
+
+Declared future options:
+
+| Option | Planned owner |
+|---|---|
+| `jax_control_flow` | JAX control-flow boundary or unroll policy |
+| `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
+| `module_identity_mode` | Backend module-mode selection |
+| `payload_policy` | Backend payload codec/materialization policy |
+| `save_preview` | Future non-torch `save=` preview semantics |
+
+Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
+mirrors, cache keys, docs, and tests changing together.
+
 JAX preview traces accept raw callables shaped like `fn(params, *inputs)`. Parameter records are
 derived from the first pytree argument, so `Trace.param_source` is `"pytree-derived"` when tensor
 leaves are present and `"none"` otherwise. Function-root module accessors expose only the root

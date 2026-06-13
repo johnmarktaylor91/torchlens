@@ -68,6 +68,33 @@ def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
     assert first.capture_cache_key == second.capture_cache_key
 
 
+def test_public_option_spine_changes_capture_cache_key(tmp_path: Path) -> None:
+    """Declared public options participate in the content-hash cache key."""
+
+    model = torch.nn.Linear(2, 2)
+    x = torch.ones(1, 2)
+    first = tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            cache=True,
+            cache_dir=tmp_path,
+            jax_max_control_flow_unroll=8,
+        ),
+    )
+    second = tl.trace(
+        model,
+        x,
+        capture=CaptureOptions(
+            cache=True,
+            cache_dir=tmp_path,
+            jax_max_control_flow_unroll=16,
+        ),
+    )
+
+    assert first.capture_cache_key != second.capture_cache_key
+
+
 def test_saved_activation_identity_dedup_reuses_same_source_live_fields() -> None:
     """Live saved activations dedup only when the source tensor object is identical."""
 

@@ -11,7 +11,10 @@ from .registry import (
     BackendCapabilities,
     BackendSpec,
     BackendUnsupportedError,
+    JAX_TRACE_OPTIONS,
     SerializationPolicy,
+    TINYGRAD_TRACE_OPTIONS,
+    TORCH_TRACE_OPTIONS,
     register_backend_spec,
 )
 
@@ -411,6 +414,7 @@ def register_default_backend_specs() -> None:
                 payload_materialization=True,
                 streaming=True,
                 module_identity_modes=("torch_module",),
+                trace_options=TORCH_TRACE_OPTIONS,
             ),
             serialization_policy=SerializationPolicy(
                 payload_policy="full",
@@ -465,7 +469,7 @@ def register_default_backend_specs() -> None:
                 payload_materialization=False,
                 streaming=False,
                 module_identity_modes=("function_root",),
-                trace_options=("jax_static_argnums", "grad_options"),
+                trace_options=JAX_TRACE_OPTIONS,
             ),
             serialization_policy=SerializationPolicy(
                 payload_policy="audit_only",
@@ -493,7 +497,7 @@ def register_default_backend_specs() -> None:
                 payload_materialization=False,
                 streaming=False,
                 module_identity_modes=("function_root",),
-                trace_options=("grad_options",),
+                trace_options=TINYGRAD_TRACE_OPTIONS,
             ),
             serialization_policy=SerializationPolicy(
                 payload_policy="audit_only",

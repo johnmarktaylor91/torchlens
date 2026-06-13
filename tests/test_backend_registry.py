@@ -17,10 +17,14 @@ from torchlens.backends import (
     BackendCapabilities,
     BackendMismatchError,
     BackendSpec,
+    BackendUnsupportedError,
     SerializationPolicy,
+    get_backend_spec,
     register_backend_spec,
     unregister_backend_spec,
 )
+from torchlens.backends.jax import capabilities as jax_capabilities
+from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
 
@@ -208,6 +212,48 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
     assert explicit.layer_labels == legacy.layer_labels
 
 
+def test_capability_sources_agree_for_preview_backends() -> None:
+    """Default specs and per-backend capability mirrors stay in lockstep."""
+
+    jax_spec = get_backend_spec("jax")
+    tinygrad_spec = get_backend_spec("tinygrad")
+
+    assert jax_spec.capabilities.backward_capture == jax_capabilities.supports_backward_capture
+    assert jax_spec.capabilities.validation_replay == jax_capabilities.supports_validation_replay
+    assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
+    assert jax_spec.capabilities.interventions == jax_capabilities.supports_intervention
+    assert jax_spec.capabilities.rng_replay == jax_capabilities.supports_rng_replay
+    assert (
+        jax_spec.capabilities.payload_materialization
+        == jax_capabilities.supports_payload_materialization
+    )
+    assert jax_spec.capabilities.module_identity_modes == jax_capabilities.module_identity_modes
+    assert jax_spec.capabilities.trace_options == jax_capabilities.trace_options
+    assert jax_spec.serialization_policy.payload_policy == jax_capabilities.payload_policy
+
+    assert (
+        tinygrad_spec.capabilities.backward_capture
+        == tinygrad_capabilities.supports_backward_capture
+    )
+    assert (
+        tinygrad_spec.capabilities.validation_replay
+        == tinygrad_capabilities.supports_validation_replay
+    )
+    assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
+    assert tinygrad_spec.capabilities.interventions == tinygrad_capabilities.supports_intervention
+    assert tinygrad_spec.capabilities.rng_replay == tinygrad_capabilities.supports_rng_replay
+    assert (
+        tinygrad_spec.capabilities.payload_materialization
+        == tinygrad_capabilities.supports_payload_materialization
+    )
+    assert (
+        tinygrad_spec.capabilities.module_identity_modes
+        == tinygrad_capabilities.module_identity_modes
+    )
+    assert tinygrad_spec.capabilities.trace_options == tinygrad_capabilities.trace_options
+    assert tinygrad_spec.serialization_policy.payload_policy == tinygrad_capabilities.payload_policy
+
+
 def test_public_trace_dispatches_through_backend_spec() -> None:
     """Public ``trace`` dispatch stays owned by the backend spec."""
 
@@ -274,6 +320,22 @@ def test_fake_backend_explicit_trace_and_validate() -> None:
         assert result.param_source == "none"
         assert result.validate_forward_pass([]) is True
         assert tl.validate(_FakeModel(), object(), scope="forward", backend="fake")
+    finally:
+        unregister_backend_spec("fake")
+
+
+def test_public_option_spine_rejects_unsupported_explicit_option() -> None:
+    """Unsupported explicit public-spine options fail before backend capture."""
+
+    _register_fake_backend()
+    try:
+        with pytest.raises(BackendUnsupportedError, match="module_identity_mode selection"):
+            tl.trace(
+                _FakeModel(),
+                object(),
+                backend="fake",
+                module_identity_mode="function_root",
+            )
     finally:
         unregister_backend_spec("fake")
 

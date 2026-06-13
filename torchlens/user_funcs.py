@@ -52,7 +52,8 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
+from .backends import BackendName, BackendSpec, BackendUnsupportedError, resolve_backend_spec
+from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
 from .fastlog.exceptions import PredicateError
@@ -1433,6 +1434,120 @@ def _split_save_options_and_predicate(
     raise TypeError("save must be a SaveOptions instance, predicate callable, selector, or None")
 
 
+_TRACE_OPTION_FILTERED_NAMES = (
+    *PUBLIC_OPTION_SPINE_TRACE_OPTIONS,
+    "jax_static_argnums",
+    "grad_options",
+)
+
+
+def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]) -> bool:
+    """Return whether a public trace option was explicitly supplied.
+
+    Parameters
+    ----------
+    option_name:
+        Public trace option name.
+    public_trace_kwargs:
+        Mutable public trace keyword bundle.
+
+    Returns
+    -------
+    bool
+        ``True`` when the flat option or grouped ``CaptureOptions`` field was
+        explicitly supplied by the caller.
+    """
+
+    flat_value = public_trace_kwargs.get(option_name, MISSING)
+    if flat_value is not MISSING:
+        return True
+    capture_options = public_trace_kwargs.get("capture")
+    if isinstance(capture_options, CaptureOptions) and hasattr(capture_options, option_name):
+        return capture_options.is_field_explicit(option_name)
+    return False
+
+
+def _unsupported_trace_option_message(option_name: str, backend_name: str) -> str:
+    """Return an actionable unsupported-option message.
+
+    Parameters
+    ----------
+    option_name:
+        Public trace option name.
+    backend_name:
+        Resolved backend name.
+
+    Returns
+    -------
+    str
+        Error message for unsupported explicit option use.
+    """
+
+    if option_name == "jax_static_argnums":
+        return "jax_static_argnums is only supported with backend='jax'."
+    if option_name == "grad_options":
+        return "grad_options is only supported with backend='jax' or backend='tinygrad'."
+    if option_name in {"jax_control_flow", "jax_max_control_flow_unroll"}:
+        return (
+            f"backend={backend_name!r} does not yet support {option_name}. "
+            "JAX control-flow unrolling is declared but not implemented in this backend phase; "
+            "omit the option or use backend='torch'."
+        )
+    if option_name == "module_identity_mode":
+        return (
+            f"backend={backend_name!r} does not yet support module_identity_mode selection. "
+            "Module-mode selection is declared but not implemented for this backend phase; "
+            "omit the option or use backend='torch'."
+        )
+    if option_name == "payload_policy":
+        return (
+            f"backend={backend_name!r} does not yet support payload_policy. "
+            "Non-torch payload codec policy is declared but not implemented in this backend "
+            "phase; omit the option or use backend='torch'."
+        )
+    if option_name == "save_preview":
+        return (
+            f"backend={backend_name!r} does not yet support save_preview. "
+            "Preview save semantics are declared but not implemented for this backend phase; "
+            "omit the option or use backend='torch'."
+        )
+    return (
+        f"backend={backend_name!r} does not support trace option {option_name!r}; "
+        "omit the option or choose a backend that declares it."
+    )
+
+
+def _filter_trace_kwargs_for_backend(
+    public_trace_kwargs: dict[str, Any],
+    resolved_spec: BackendSpec,
+) -> None:
+    """Strip unsupported omitted options and reject unsupported explicit ones.
+
+    Parameters
+    ----------
+    public_trace_kwargs:
+        Mutable public trace keyword bundle passed to the backend entry.
+    resolved_spec:
+        Backend selected for this trace call.
+
+    Returns
+    -------
+    None
+        ``public_trace_kwargs`` is updated in place.
+    """
+
+    supported_trace_options = set(resolved_spec.capabilities.trace_options)
+    backend_name = str(resolved_spec.name)
+    for option_name in _TRACE_OPTION_FILTERED_NAMES:
+        if option_name in supported_trace_options:
+            continue
+        if _trace_option_explicit(option_name, public_trace_kwargs):
+            raise BackendUnsupportedError(
+                _unsupported_trace_option_message(option_name, backend_name)
+            )
+        public_trace_kwargs.pop(option_name, None)
+
+
 def trace(
     model: nn.Module,
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1493,6 +1608,12 @@ def trace(
         | None
         | MissingType
     ) = MISSING,
+    *,
+    jax_control_flow: Literal["reject", "unroll"] | MissingType = MISSING,
+    jax_max_control_flow_unroll: int | MissingType = MISSING,
+    module_identity_mode: str | None | MissingType = MISSING,
+    payload_policy: str | None | MissingType = MISSING,
+    save_preview: bool | MissingType = MISSING,
     jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
     grad_options: Any | None | MissingType = MISSING,
     backend: BackendName | None = None,
@@ -1638,6 +1759,18 @@ def trace(
             always populated on ``trace._phase_timings``.
         recipes: Per-trace additive facet recipes captured into the immutable
             registry snapshot for the returned trace.
+        jax_control_flow: Declared JAX control-flow policy. Current non-torch
+            preview phases reject explicit use until control-flow expansion lands.
+        jax_max_control_flow_unroll: Declared maximum number of JAX
+            control-flow body iterations to unroll when that phase lands.
+        module_identity_mode: Declared module-mode selection passthrough.
+            Current non-torch preview phases reject explicit use until module
+            adapters land.
+        payload_policy: Declared payload materialization/codec policy
+            passthrough. Current non-torch preview phases reject explicit use
+            until codec support lands.
+        save_preview: Declared flag for future ``save=`` preview semantics.
+            Current non-torch preview phases reject explicit use.
         jax_static_argnums: JAX-only positional argument indexes passed to
             ``jax.make_jaxpr(..., static_argnums=...)`` when
             ``backend="jax"``. Non-default values require the explicit JAX
@@ -1665,27 +1798,14 @@ def trace(
     """
     public_trace_kwargs = locals().copy()
     public_trace_kwargs.pop("backend")
+    if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
+        raise BackendUnsupportedError(
+            "jax_static_argnums is only supported with backend='jax'; grad_options is "
+            "only supported with backend='jax' or backend='tinygrad'."
+        )
     explicit_backend_spec = (
         None if backend is None else resolve_backend_spec(backend, model, input_args, input_kwargs)
     )
-    supported_trace_options = (
-        () if explicit_backend_spec is None else explicit_backend_spec.capabilities.trace_options
-    )
-    if "grad_options" not in supported_trace_options:
-        public_trace_kwargs.pop("grad_options")
-    if "jax_static_argnums" not in supported_trace_options:
-        public_trace_kwargs.pop("jax_static_argnums")
-    if (
-        "grad_options" not in supported_trace_options
-        and "jax_static_argnums" not in supported_trace_options
-    ):
-        if jax_static_argnums is not MISSING or grad_options is not MISSING:
-            raise BackendUnsupportedError(
-                "jax_static_argnums is only supported with backend='jax'; grad_options is "
-                "only supported with backend='jax' or backend='tinygrad'."
-            )
-    elif "jax_static_argnums" not in supported_trace_options and jax_static_argnums is not MISSING:
-        raise BackendUnsupportedError("jax_static_argnums is only supported with backend='jax'.")
     if (
         backend is None
         and transform is MISSING
@@ -1745,6 +1865,11 @@ def trace(
             "raise_on_nan": raise_on_nan,
             "profile": profile,
             "recipes": recipes,
+            "jax_control_flow": jax_control_flow,
+            "jax_max_control_flow_unroll": jax_max_control_flow_unroll,
+            "module_identity_mode": module_identity_mode,
+            "payload_policy": payload_policy,
+            "save_preview": save_preview,
         }
         for detector in autoroute.input.iter_by_priority():
             result = detector(model, input_args, **autoroute_kwargs)
@@ -1755,6 +1880,7 @@ def trace(
     resolved_spec = explicit_backend_spec or resolve_backend_spec(
         backend, model, input_args, input_kwargs
     )
+    _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
     return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
 
 
@@ -1812,6 +1938,11 @@ def _trace_torch_model(
     stop_after: Any | None | MissingType = MISSING,
     raise_on_nan: bool | MissingType = MISSING,
     profile: bool | MissingType = MISSING,
+    jax_control_flow: Literal["reject", "unroll"] | MissingType = MISSING,
+    jax_max_control_flow_unroll: int | MissingType = MISSING,
+    module_identity_mode: str | None | MissingType = MISSING,
+    payload_policy: str | None | MissingType = MISSING,
+    save_preview: bool | MissingType = MISSING,
     recipes: (
         list[Callable[[Any], dict[str, Any]]]
         | tuple[Callable[[Any], dict[str, Any]], ...]
@@ -1882,6 +2013,11 @@ def _trace_torch_model(
         cache_dir=cache_dir,
         module_filter=module_filter,
         stop_after=stop_after,
+        jax_control_flow=jax_control_flow,
+        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+        module_identity_mode=module_identity_mode,
+        payload_policy=payload_policy,
+        save_preview=save_preview,
         raise_on_nan=raise_on_nan,
     )
     profile_enabled = False if isinstance(profile, MissingType) else bool(profile)
@@ -2083,6 +2219,11 @@ def _trace_torch_model(
             "halt": repr(halt),
             "lookback": lookback,
             "lookback_payload_policy": lookback_payload_policy,
+            "jax_control_flow": capture_options.jax_control_flow,
+            "jax_max_control_flow_unroll": capture_options.jax_max_control_flow_unroll,
+            "module_identity_mode": capture_options.module_identity_mode,
+            "payload_policy": capture_options.payload_policy,
+            "save_preview": capture_options.save_preview,
         }
         cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
         cache_root = _capture_cache_dir(cache_dir_value) / "capture"

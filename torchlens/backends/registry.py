@@ -13,6 +13,39 @@ ValidateEntryFn: TypeAlias = Callable[..., bool]
 ValidateTraceFn: TypeAlias = Callable[..., bool]
 
 
+TRACE_OPTION_CAPABILITY_EPOCHS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "epoch1_module_modes_control_flow",
+        (
+            "jax_control_flow",
+            "jax_max_control_flow_unroll",
+            "module_identity_mode",
+        ),
+    ),
+    ("epoch2_tinygrad_t1", ()),
+    ("epoch3_codec_materialization", ("payload_policy", "save_preview")),
+)
+"""Ordered public trace-option capability epochs.
+
+Each epoch must update the registry spec, per-backend capability mirrors,
+``CaptureOptions``, cache-key coverage, docs, and tests in one patch.
+"""
+
+PUBLIC_OPTION_SPINE_TRACE_OPTIONS: tuple[str, ...] = tuple(
+    option for _epoch_name, options in TRACE_OPTION_CAPABILITY_EPOCHS for option in options
+)
+"""Trace options declared by the public-option API spine."""
+
+TORCH_TRACE_OPTIONS: tuple[str, ...] = PUBLIC_OPTION_SPINE_TRACE_OPTIONS
+"""Trace options accepted by the torch backend and currently treated as inert metadata."""
+
+JAX_TRACE_OPTIONS: tuple[str, ...] = ("jax_static_argnums", "grad_options")
+"""Trace options implemented by the JAX preview backend."""
+
+TINYGRAD_TRACE_OPTIONS: tuple[str, ...] = ("grad_options",)
+"""Trace options implemented by the tinygrad preview backend."""
+
+
 class BackendRegistryError(ValueError):
     """Base class for backend registry failures."""
 
