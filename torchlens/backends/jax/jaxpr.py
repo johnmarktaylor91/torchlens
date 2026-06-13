@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, cast
 
 from ...ir.events import JaxEquationKind
@@ -72,6 +72,8 @@ class JaxEquationCapture:
         String representations of output abstract values.
     inlined
         Whether this equation came from an accepted nested pure call.
+    control_capture_indices
+        Capture indexes whose synthetic decision nodes control this equation.
     """
 
     index: int
@@ -87,6 +89,7 @@ class JaxEquationCapture:
     input_avals: tuple[str | None, ...]
     output_avals: tuple[str | None, ...]
     inlined: bool
+    control_capture_indices: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -218,6 +221,7 @@ def interpret_closed_jaxpr_with_inlining(
         args: Sequence[Any],
         path: tuple[str, ...],
         inlined_depth: int,
+        control_capture_indices: tuple[int, ...] = (),
     ) -> tuple[Any, ...]:
         """Interpret one closed jaxpr frame.
 
@@ -231,6 +235,8 @@ def interpret_closed_jaxpr_with_inlining(
             Nested source path.
         inlined_depth
             Non-zero when interpreting an accepted call primitive.
+        control_capture_indices
+            Synthetic decision capture indexes that control this frame.
 
         Returns
         -------
@@ -259,6 +265,40 @@ def interpret_closed_jaxpr_with_inlining(
                     captures=captures,
                     interpret_inner=interpret_inner,
                     jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                    control_capture_indices=control_capture_indices,
+                )
+                for var, value in zip(eqn.outvars, outputs):
+                    _write_env(env, var, value, core)
+                continue
+            if primitive_name == "cond":
+                if jax_control_flow == "reject":
+                    raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                outputs = _interpret_cond(
+                    eqn=eqn,
+                    env=env,
+                    core=core,
+                    path=eqn_path,
+                    inlined_depth=inlined_depth,
+                    captures=captures,
+                    interpret_inner=interpret_inner,
+                    control_capture_indices=control_capture_indices,
+                )
+                for var, value in zip(eqn.outvars, outputs):
+                    _write_env(env, var, value, core)
+                continue
+            if primitive_name in {"while", "while_loop"}:
+                if jax_control_flow == "reject":
+                    raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                outputs = _interpret_while(
+                    eqn=eqn,
+                    env=env,
+                    core=core,
+                    path=eqn_path,
+                    inlined_depth=inlined_depth,
+                    captures=captures,
+                    interpret_inner=interpret_inner,
+                    jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                    control_capture_indices=control_capture_indices,
                 )
                 for var, value in zip(eqn.outvars, outputs):
                     _write_env(env, var, value, core)
@@ -278,7 +318,13 @@ def interpret_closed_jaxpr_with_inlining(
                         f"name={eqn.params.get('name')!r}"
                     )
                 inlined_calls.append(primitive_name)
-                outputs = interpret_inner(nested, inputs, eqn_path, inlined_depth + 1)
+                outputs = interpret_inner(
+                    nested,
+                    inputs,
+                    eqn_path,
+                    inlined_depth + 1,
+                    control_capture_indices,
+                )
                 for var, value in zip(eqn.outvars, outputs):
                     _write_env(env, var, value, core)
                 continue
@@ -303,6 +349,7 @@ def interpret_closed_jaxpr_with_inlining(
                     input_avals=tuple(_aval_repr(var) for var in eqn.invars),
                     output_avals=tuple(_aval_repr(var) for var in eqn.outvars),
                     inlined=inlined_depth > 0,
+                    control_capture_indices=control_capture_indices,
                 )
             )
         return tuple(_read_env(env, var, core) for var in inner.jaxpr.outvars)
@@ -319,8 +366,11 @@ def _interpret_scan(
     path: tuple[str, ...],
     inlined_depth: int,
     captures: list[JaxEquationCapture],
-    interpret_inner: Callable[[Any, Sequence[Any], tuple[str, ...], int], tuple[Any, ...]],
+    interpret_inner: Callable[
+        [Any, Sequence[Any], tuple[str, ...], int, tuple[int, ...]], tuple[Any, ...]
+    ],
     jax_max_control_flow_unroll: int,
+    control_capture_indices: tuple[int, ...],
 ) -> tuple[Any, ...]:
     """Unroll one ``lax.scan`` equation into synthetic and body captures.
 
@@ -342,6 +392,8 @@ def _interpret_scan(
         Recursive closed-jaxpr interpreter.
     jax_max_control_flow_unroll
         Maximum supported static scan length.
+    control_capture_indices
+        Synthetic decision capture indexes that control this scan site.
 
     Returns
     -------
@@ -393,6 +445,7 @@ def _interpret_scan(
                     input_avals=(_aval_repr(eqn.invars[num_consts + num_carry + xs_index]),),
                     output_avals=(_aval_repr(body_invars[num_consts + num_carry + xs_index]),),
                     inlined=inlined_depth > 0,
+                    control_capture_indices=control_capture_indices,
                 )
             )
         body_outputs = interpret_inner(
@@ -400,6 +453,7 @@ def _interpret_scan(
             (*consts, *carry, *x_slices),
             (*path, f"iter={logical_index}", "body"),
             inlined_depth,
+            control_capture_indices,
         )
         carry = body_outputs[:num_carry]
         ys = body_outputs[num_carry:]
@@ -434,9 +488,223 @@ def _interpret_scan(
                 ),
                 output_avals=(_aval_repr(eqn.outvars[num_carry + ys_index]),),
                 inlined=inlined_depth > 0,
+                control_capture_indices=control_capture_indices,
             )
         )
     return (*carry, *stack_outputs)
+
+
+def _interpret_cond(
+    *,
+    eqn: Any,
+    env: dict[Any, Any],
+    core: Any,
+    path: tuple[str, ...],
+    inlined_depth: int,
+    captures: list[JaxEquationCapture],
+    interpret_inner: Callable[
+        [Any, Sequence[Any], tuple[str, ...], int, tuple[int, ...]], tuple[Any, ...]
+    ],
+    control_capture_indices: tuple[int, ...],
+) -> tuple[Any, ...]:
+    """Unroll one executed ``lax.cond`` branch into captured equations.
+
+    Parameters
+    ----------
+    eqn
+        Outer cond equation.
+    env
+        Current interpreter environment.
+    core
+        Imported JAX core module.
+    path
+        Source path for the cond equation.
+    inlined_depth
+        Current accepted-call inlining depth.
+    captures
+        Mutable capture list receiving synthetic and branch equations.
+    interpret_inner
+        Recursive closed-jaxpr interpreter.
+    control_capture_indices
+        Synthetic decision capture indexes that control this cond site.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Concrete outputs matching the outer cond equation's outvars.
+    """
+
+    if eqn.effects:
+        raise ValueError(f"unsupported equation effects: {eqn.primitive.name} {eqn.effects}")
+    branches = tuple(eqn.params["branches"])
+    inputs = tuple(_read_env(env, var, core) for var in eqn.invars)
+    branch_index = _control_flow_scalar_int(inputs[0], label="lax.cond branch index")
+    if branch_index < 0 or branch_index >= len(branches):
+        raise ValueError(
+            "JAX lax.cond branch index is out of range: "
+            f"index={branch_index}, branches={len(branches)}."
+        )
+    decision_output = _control_flow_int_array(branch_index)
+    decision_index = len(captures)
+    captures.append(
+        JaxEquationCapture(
+            index=decision_index,
+            kind="cond_decision",
+            primitive="cond_decision",
+            primitive_obj=None,
+            input_values=(inputs[0],),
+            output_values=(decision_output,),
+            params={"branch_index": branch_index, "num_branches": len(branches)},
+            source_path=(*path, "decision:cond_decision"),
+            invars=(str(eqn.invars[0]),),
+            outvars=(f"{path[-1]}/branch_index",),
+            input_avals=(_aval_repr(eqn.invars[0]),),
+            output_avals=("int32[]",),
+            inlined=inlined_depth > 0,
+            control_capture_indices=control_capture_indices,
+        )
+    )
+    return interpret_inner(
+        branches[branch_index],
+        inputs[1:],
+        (*path, f"branch={branch_index}"),
+        inlined_depth,
+        (*control_capture_indices, decision_index),
+    )
+
+
+def _interpret_while(
+    *,
+    eqn: Any,
+    env: dict[Any, Any],
+    core: Any,
+    path: tuple[str, ...],
+    inlined_depth: int,
+    captures: list[JaxEquationCapture],
+    interpret_inner: Callable[
+        [Any, Sequence[Any], tuple[str, ...], int, tuple[int, ...]], tuple[Any, ...]
+    ],
+    jax_max_control_flow_unroll: int,
+    control_capture_indices: tuple[int, ...],
+) -> tuple[Any, ...]:
+    """Unroll one ``lax.while_loop`` equation into condition/body captures.
+
+    Parameters
+    ----------
+    eqn
+        Outer while equation.
+    env
+        Current interpreter environment.
+    core
+        Imported JAX core module.
+    path
+        Source path for the while equation.
+    inlined_depth
+        Current accepted-call inlining depth.
+    captures
+        Mutable capture list receiving synthetic, condition, and body equations.
+    interpret_inner
+        Recursive closed-jaxpr interpreter.
+    jax_max_control_flow_unroll
+        Maximum supported static while iteration count.
+    control_capture_indices
+        Synthetic decision capture indexes that control this while site.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Concrete final carry values matching the outer while equation's outvars.
+    """
+
+    if eqn.effects:
+        raise ValueError(f"unsupported equation effects: {eqn.primitive.name} {eqn.effects}")
+    cond_jaxpr = eqn.params["cond_jaxpr"]
+    body_jaxpr = eqn.params["body_jaxpr"]
+    cond_nconsts = int(eqn.params["cond_nconsts"])
+    body_nconsts = int(eqn.params["body_nconsts"])
+    inputs = tuple(_read_env(env, var, core) for var in eqn.invars)
+    cond_consts = inputs[:cond_nconsts]
+    body_consts = inputs[cond_nconsts : cond_nconsts + body_nconsts]
+    carry = inputs[cond_nconsts + body_nconsts :]
+    decision_index = len(captures)
+    decision_controls = (*control_capture_indices, decision_index)
+    captures.append(
+        JaxEquationCapture(
+            index=decision_index,
+            kind="while_decision",
+            primitive="while_decision",
+            primitive_obj=None,
+            input_values=inputs,
+            output_values=(_control_flow_int_array(0), _control_flow_bool_array(True)),
+            params={
+                "cond_jaxpr": cond_jaxpr,
+                "body_jaxpr": body_jaxpr,
+                "cond_nconsts": cond_nconsts,
+                "body_nconsts": body_nconsts,
+                "iteration_count": 0,
+                "final_predicate": True,
+                "jax_max_control_flow_unroll": jax_max_control_flow_unroll,
+            },
+            source_path=(*path, "decision:while_decision"),
+            invars=tuple(str(var) for var in eqn.invars),
+            outvars=(f"{path[-1]}/iteration_count", f"{path[-1]}/final_predicate"),
+            input_avals=tuple(_aval_repr(var) for var in eqn.invars),
+            output_avals=("int32[]", "bool[]"),
+            inlined=inlined_depth > 0,
+            control_capture_indices=control_capture_indices,
+        )
+    )
+
+    iteration_count = 0
+    final_predicate = True
+    while True:
+        cond_outputs = interpret_inner(
+            cond_jaxpr,
+            (*cond_consts, *carry),
+            (*path, f"iter={iteration_count}", "cond"),
+            inlined_depth,
+            decision_controls,
+        )
+        if len(cond_outputs) != 1:
+            raise ValueError("JAX lax.while_loop condition jaxpr must return one predicate.")
+        predicate = _control_flow_scalar_bool(
+            cond_outputs[0],
+            label="lax.while_loop condition predicate",
+        )
+        final_predicate = predicate
+        if not predicate:
+            break
+        if iteration_count >= jax_max_control_flow_unroll:
+            raise ValueError(
+                "JAX lax.while_loop iteration count exceeds jax_max_control_flow_unroll: "
+                f"max={jax_max_control_flow_unroll}."
+            )
+        carry = interpret_inner(
+            body_jaxpr,
+            (*body_consts, *carry),
+            (*path, f"iter={iteration_count}", "body"),
+            inlined_depth,
+            decision_controls,
+        )
+        iteration_count += 1
+
+    captures[decision_index] = replace(
+        captures[decision_index],
+        output_values=(
+            _control_flow_int_array(iteration_count),
+            _control_flow_bool_array(final_predicate),
+        ),
+        params={
+            "cond_jaxpr": cond_jaxpr,
+            "body_jaxpr": body_jaxpr,
+            "cond_nconsts": cond_nconsts,
+            "body_nconsts": body_nconsts,
+            "iteration_count": iteration_count,
+            "final_predicate": final_predicate,
+            "jax_max_control_flow_unroll": jax_max_control_flow_unroll,
+        },
+    )
+    return tuple(carry)
 
 
 def replay_equation(
@@ -629,39 +897,249 @@ def _replay_scan_stack(
     return (_stack_scan_outputs(replay_inputs),)
 
 
-def _replay_bcf_stub(
-    capture: JaxEquationCapture, _inputs: Sequence[Any] | None = None
+def _replay_cond_decision(
+    capture: JaxEquationCapture, inputs: Sequence[Any] | None = None
 ) -> tuple[Any, ...]:
-    """Raise for control-flow replay kinds reserved for B-CF.
+    """Replay and verify a synthetic ``lax.cond`` branch decision.
 
     Parameters
     ----------
     capture
-        Captured synthetic control-flow equation.
-    _inputs
-        Optional replacement inputs, unused until B-CF implements the kind.
+        Captured synthetic cond decision.
+    inputs
+        Optional replacement branch-index input. When omitted, saved inputs
+        are used.
 
     Returns
     -------
     tuple[Any, ...]
-        Never returned.
+        Single scalar integer array naming the selected branch.
 
     Raises
     ------
-    NotImplementedError
-        Always raised for B-CF-reserved replay kinds.
+    ValueError
+        If the replayed branch does not match the recorded branch.
     """
 
-    raise NotImplementedError(f"kind {capture.kind} lands in B-CF")
+    replay_inputs = tuple(capture.input_values if inputs is None else inputs)
+    if len(replay_inputs) != 1:
+        raise ValueError("cond_decision replay expects exactly one branch-index input.")
+    branch_index = _control_flow_scalar_int(
+        replay_inputs[0],
+        label="lax.cond branch index",
+    )
+    expected = int(capture.params["branch_index"])
+    if branch_index != expected:
+        raise ValueError(
+            "JAX lax.cond replay selected a different branch: "
+            f"expected={expected}, actual={branch_index}."
+        )
+    return (_control_flow_int_array(branch_index),)
+
+
+def _replay_while_decision(
+    capture: JaxEquationCapture, inputs: Sequence[Any] | None = None
+) -> tuple[Any, ...]:
+    """Replay and verify a synthetic ``lax.while_loop`` stop decision.
+
+    Parameters
+    ----------
+    capture
+        Captured synthetic while decision.
+    inputs
+        Optional replacement full while inputs. When omitted, saved inputs are
+        used.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Scalar integer iteration count and scalar boolean final predicate.
+
+    Raises
+    ------
+    ValueError
+        If the replayed stop point does not match the recorded stop point.
+    """
+
+    replay_inputs = tuple(capture.input_values if inputs is None else inputs)
+    cond_jaxpr = capture.params["cond_jaxpr"]
+    body_jaxpr = capture.params["body_jaxpr"]
+    cond_nconsts = int(capture.params["cond_nconsts"])
+    body_nconsts = int(capture.params["body_nconsts"])
+    max_unroll = int(capture.params["jax_max_control_flow_unroll"])
+    cond_consts = replay_inputs[:cond_nconsts]
+    body_consts = replay_inputs[cond_nconsts : cond_nconsts + body_nconsts]
+    carry = replay_inputs[cond_nconsts + body_nconsts :]
+    iteration_count = 0
+    final_predicate = True
+    while True:
+        cond_outputs = _evaluate_closed_jaxpr_no_capture(cond_jaxpr, (*cond_consts, *carry))
+        if len(cond_outputs) != 1:
+            raise ValueError("JAX lax.while_loop condition jaxpr must return one predicate.")
+        predicate = _control_flow_scalar_bool(
+            cond_outputs[0],
+            label="lax.while_loop condition predicate",
+        )
+        final_predicate = predicate
+        if not predicate:
+            break
+        if iteration_count >= max_unroll:
+            raise ValueError(
+                "JAX lax.while_loop replay iteration count exceeds "
+                f"jax_max_control_flow_unroll: max={max_unroll}."
+            )
+        carry = _evaluate_closed_jaxpr_no_capture(body_jaxpr, (*body_consts, *carry))
+        iteration_count += 1
+
+    expected_iterations = int(capture.params["iteration_count"])
+    expected_predicate = bool(capture.params["final_predicate"])
+    if iteration_count != expected_iterations or final_predicate != expected_predicate:
+        raise ValueError(
+            "JAX lax.while_loop replay stopped at a different point: "
+            f"expected=({expected_iterations}, {expected_predicate}), "
+            f"actual=({iteration_count}, {final_predicate})."
+        )
+    return (_control_flow_int_array(iteration_count), _control_flow_bool_array(final_predicate))
 
 
 JAX_REPLAY_HANDLERS: Mapping[JaxEquationKind, JaxReplayHandler] = {
     "primitive": _replay_primitive,
     "scan_read": _replay_scan_read,
     "scan_stack": _replay_scan_stack,
-    "cond_decision": _replay_bcf_stub,
-    "while_decision": _replay_bcf_stub,
+    "cond_decision": _replay_cond_decision,
+    "while_decision": _replay_while_decision,
 }
+
+
+def _evaluate_closed_jaxpr_no_capture(closed_jaxpr: Any, args: Sequence[Any]) -> tuple[Any, ...]:
+    """Evaluate a closed jaxpr without emitting TorchLens captures.
+
+    Parameters
+    ----------
+    closed_jaxpr
+        Closed jaxpr to evaluate.
+    args
+        Concrete inputs in jaxpr input order.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Concrete jaxpr outputs.
+    """
+
+    from jax._src import core
+
+    env: dict[Any, Any] = {}
+    for var, const in zip(closed_jaxpr.jaxpr.constvars, closed_jaxpr.consts):
+        _write_env(env, var, const, core)
+    for var, arg in zip(closed_jaxpr.jaxpr.invars, args):
+        _write_env(env, var, arg, core)
+    for eqn in closed_jaxpr.jaxpr.eqns:
+        primitive_name = eqn.primitive.name
+        if primitive_name in REJECTED_NESTED_PRIMITIVES or _has_nested_jaxpr(eqn, core):
+            raise ValueError(f"unsupported nested jaxpr in replay primitive: {primitive_name}")
+        if eqn.effects:
+            raise ValueError(f"unsupported equation effects: {primitive_name} {eqn.effects}")
+        if primitive_name in EFFECT_PRIMITIVES:
+            raise ValueError(f"unsupported jaxpr effect primitive: {primitive_name}")
+        inputs = tuple(_read_env(env, var, core) for var in eqn.invars)
+        result = eqn.primitive.bind(*inputs, **eqn.params)
+        outputs = tuple(result if eqn.primitive.multiple_results else (result,))
+        for var, value in zip(eqn.outvars, outputs):
+            _write_env(env, var, value, core)
+    return tuple(_read_env(env, var, core) for var in closed_jaxpr.jaxpr.outvars)
+
+
+def _control_flow_scalar_int(value: Any, *, label: str) -> int:
+    """Return a concrete scalar integer for a JAX control-flow value.
+
+    Parameters
+    ----------
+    value
+        Candidate scalar value.
+    label
+        Human-readable value label for errors.
+
+    Returns
+    -------
+    int
+        Scalar integer value.
+    """
+
+    import jax.numpy as jnp
+
+    array = jnp.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{label} must be a scalar, got shape {array.shape}.")
+    if array.dtype == jnp.bool_:
+        return int(bool(array.item()))
+    if not jnp.issubdtype(array.dtype, jnp.integer):
+        raise ValueError(f"{label} must be an integer scalar, got dtype {array.dtype}.")
+    return int(array.item())
+
+
+def _control_flow_scalar_bool(value: Any, *, label: str) -> bool:
+    """Return a concrete scalar boolean for a JAX control-flow value.
+
+    Parameters
+    ----------
+    value
+        Candidate scalar value.
+    label
+        Human-readable value label for errors.
+
+    Returns
+    -------
+    bool
+        Scalar boolean value.
+    """
+
+    import jax.numpy as jnp
+
+    array = jnp.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{label} must be a scalar, got shape {array.shape}.")
+    if array.dtype != jnp.bool_:
+        raise ValueError(f"{label} must be a boolean scalar, got dtype {array.dtype}.")
+    return bool(array.item())
+
+
+def _control_flow_int_array(value: int) -> Any:
+    """Return a scalar JAX integer array for a synthetic decision output.
+
+    Parameters
+    ----------
+    value
+        Integer value to wrap.
+
+    Returns
+    -------
+    Any
+        Scalar JAX int32 array.
+    """
+
+    import jax.numpy as jnp
+
+    return jnp.asarray(value, dtype=jnp.int32)
+
+
+def _control_flow_bool_array(value: bool) -> Any:
+    """Return a scalar JAX boolean array for a synthetic decision output.
+
+    Parameters
+    ----------
+    value
+        Boolean value to wrap.
+
+    Returns
+    -------
+    Any
+        Scalar JAX boolean array.
+    """
+
+    import jax.numpy as jnp
+
+    return jnp.asarray(value, dtype=jnp.bool_)
 
 
 def _slice_scan_leaf(value: Any, index: int) -> Any:

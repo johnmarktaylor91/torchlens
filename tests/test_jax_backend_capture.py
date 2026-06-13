@@ -1097,21 +1097,155 @@ def test_jax_trace_scan_reject_policy_and_max_unroll_guard() -> None:
         _trace_jax(uses_scan, args, jax_max_control_flow_unroll=3)
 
 
-def test_jax_trace_rejects_unimplemented_nested_control_flow() -> None:
-    """Unsupported nested jaxprs should raise actionable errors."""
+def test_jax_trace_unrolls_cond_executed_branch_with_control_edge() -> None:
+    """``lax.cond`` should capture only the executed branch behind a decision node."""
 
     def uses_cond(params: dict[str, Any], x: Any) -> Any:
         """Return a conditional JAX result."""
 
-        return jax.lax.cond(
+        return lax.cond(
             x.sum() > 0,
-            lambda y: y @ params["w1"],
+            lambda y: (y @ params["w1"]) + params["b1"],
             lambda y: (y @ params["w1"]) - params["b1"],
             x,
         )
 
-    with pytest.raises(ValueError, match="unsupported nested primitive: cond"):
-        _trace_jax(uses_cond, (_params(), jnp.ones((2, 3))))
+    trace = _trace_jax(uses_cond, (_params(), jnp.ones((2, 3), dtype=jnp.float32)))
+    decisions = [
+        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "cond_decision"
+    ]
+    branch_ops = [
+        op for op in trace.layer_list if "/branch=1/" in op.annotations.get("jax_source_path", "")
+    ]
+    other_branch_ops = [
+        op for op in trace.layer_list if "/branch=0/" in op.annotations.get("jax_source_path", "")
+    ]
+
+    assert len(decisions) == 1
+    assert decisions[0].out.item() == 1
+    assert branch_ops
+    assert not other_branch_ops
+    assert {decisions[0].label} <= set().union(*(_control_parent_labels(op) for op in branch_ops))
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_trace_unrolls_while_and_groups_iterations() -> None:
+    """``lax.while_loop`` should unroll cond/body frames and group repeated body ops."""
+
+    def uses_while(params: dict[str, Any], x: Any) -> Any:
+        """Return a while-loop accumulator."""
+
+        def condition(state: tuple[Any, Any]) -> Any:
+            """Return whether the carry should continue."""
+
+            i_value, _acc = state
+            return i_value < params["limit"]
+
+        def body(state: tuple[Any, Any]) -> tuple[Any, Any]:
+            """Return one loop body update."""
+
+            i_value, acc = state
+            return i_value + 1, acc + params["step"]
+
+        return lax.while_loop(condition, body, (jnp.asarray(0, dtype=jnp.int32), x))[1]
+
+    trace = _trace_jax(
+        uses_while,
+        (
+            {"limit": jnp.asarray(3, dtype=jnp.int32), "step": jnp.ones((2, 3))},
+            jnp.zeros((2, 3), dtype=jnp.float32),
+        ),
+    )
+    decisions = [
+        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "while_decision"
+    ]
+    cond_ops = [
+        op
+        for op in trace.layer_list
+        if ":while/iter=" in op.annotations.get("jax_source_path", "")
+        and "/cond/" in op.annotations.get("jax_source_path", "")
+    ]
+    body_adds = [
+        op
+        for op in trace.layer_list
+        if op.func_name == "add" and "/body/" in op.annotations.get("jax_source_path", "")
+    ]
+
+    assert len(decisions) == 1
+    assert decisions[0].out[0].item() == 3
+    assert decisions[0].out[1].item() is False
+    assert len(cond_ops) >= 4
+    assert body_adds
+    assert any(op.num_passes == 3 for op in body_adds)
+    assert all(decisions[0].label in _control_parent_labels(op) for op in (*cond_ops, *body_adds))
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_trace_while_zero_iteration_uses_initial_carry() -> None:
+    """A zero-iteration ``lax.while_loop`` should return the initial carry."""
+
+    def zero_while(params: dict[str, Any], x: Any) -> Any:
+        """Return the initial carry because the condition starts false."""
+
+        def condition(state: tuple[Any, Any]) -> Any:
+            """Return whether the carry should continue."""
+
+            i_value, _acc = state
+            return i_value < params["limit"]
+
+        def body(state: tuple[Any, Any]) -> tuple[Any, Any]:
+            """Return one loop body update."""
+
+            i_value, acc = state
+            return i_value + 1, acc + 1.0
+
+        return lax.while_loop(condition, body, (jnp.asarray(0, dtype=jnp.int32), x))[1]
+
+    trace = _trace_jax(
+        zero_while,
+        ({"limit": jnp.asarray(0, dtype=jnp.int32)}, jnp.ones((2, 3), dtype=jnp.float32)),
+    )
+    decisions = [
+        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "while_decision"
+    ]
+    body_ops = [
+        op for op in trace.layer_list if "/body/" in op.annotations.get("jax_source_path", "")
+    ]
+
+    assert len(decisions) == 1
+    assert decisions[0].out[0].item() == 0
+    assert decisions[0].out[1].item() is False
+    assert not body_ops
+    assert jnp.array_equal(trace[trace.output_layers[0]].out, jnp.ones((2, 3), dtype=jnp.float32))
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_trace_while_max_unroll_guard() -> None:
+    """``lax.while_loop`` should fail when dynamic unrolling exceeds the configured cap."""
+
+    def guarded_while(params: dict[str, Any], x: Any) -> Any:
+        """Return a while-loop accumulator."""
+
+        def condition(state: tuple[Any, Any]) -> Any:
+            """Return whether the carry should continue."""
+
+            i_value, _acc = state
+            return i_value < params["limit"]
+
+        def body(state: tuple[Any, Any]) -> tuple[Any, Any]:
+            """Return one loop body update."""
+
+            i_value, acc = state
+            return i_value + 1, acc + 1.0
+
+        return lax.while_loop(condition, body, (jnp.asarray(0, dtype=jnp.int32), x))[1]
+
+    with pytest.raises(ValueError, match="while_loop iteration count exceeds"):
+        _trace_jax(
+            guarded_while,
+            ({"limit": jnp.asarray(4, dtype=jnp.int32)}, jnp.zeros((2, 3))),
+            jax_max_control_flow_unroll=2,
+        )
 
 
 def test_jax_trace_rejects_hidden_consts() -> None:

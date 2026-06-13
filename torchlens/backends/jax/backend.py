@@ -586,14 +586,25 @@ class JAXBackend:
             for event in trace.capture_events.op_events
             if event.output.tensor.payload is not None
         }
+        label_by_capture_index: dict[int, str] = {}
         for equation in result.equations:
-            parents = tuple(
+            data_parents = tuple(
                 ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
                 for index, value in enumerate(equation.input_values)
                 if (label := label_by_value_id.get(id(value))) is not None
             )
+            control_parents = tuple(
+                ParentEdge(
+                    parent_label_raw=label_by_capture_index[control_index],
+                    arg_position=f"control:{control_index}",
+                    edge_use="control",
+                )
+                for control_index in equation.control_capture_indices
+                if control_index in label_by_capture_index
+            )
+            parents = (*data_parents, *control_parents)
             parent_positions = {
-                "args": {edge.arg_position: edge.parent_label_raw for edge in parents},
+                "args": {edge.arg_position: edge.parent_label_raw for edge in data_parents},
                 "kwargs": {},
             }
             output = (
@@ -622,6 +633,7 @@ class JAXBackend:
                     "jax_inlined": equation.inlined,
                 },
             )
+            label_by_capture_index[equation.index] = event.label_raw
             for value in equation.output_values:
                 label_by_value_id[id(value)] = event.label_raw
 
@@ -2232,6 +2244,8 @@ def _parent_perturbations_change_output(
 
     import jax
 
+    if capture.kind in {"cond_decision", "while_decision"}:
+        return True
     graph_positions = _data_parent_arg_positions(op)
     if not graph_positions:
         return True
@@ -2244,7 +2258,12 @@ def _parent_perturbations_change_output(
             perturbed_inputs = list(inputs)
             for position in positions:
                 perturbed_inputs[position] = candidate
-            perturbed_outputs = replay_equation(capture, perturbed_inputs)
+            try:
+                perturbed_outputs = replay_equation(capture, perturbed_inputs)
+            except ValueError:
+                if capture.kind in {"cond_decision", "while_decision"}:
+                    return True
+                raise
             if not jax.tree.all(jax.tree.map(_values_close, perturbed_outputs, saved_outputs)):
                 return True
     return False

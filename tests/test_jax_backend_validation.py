@@ -81,6 +81,60 @@ def test_jax_scan_replay_kinds_are_deterministic() -> None:
     assert replay_equation(stack_capture)[0].tolist() == [1.0, 3.0]
 
 
+def test_jax_decision_replay_kinds_validate_recorded_control_points() -> None:
+    """Decision helper replay kinds should validate branch and stop-point semantics."""
+
+    jnp = pytest.importorskip("jax.numpy")
+    cond_capture = replace(
+        _capture_for_kind("cond_decision"),
+        input_values=(jnp.asarray(1, dtype=jnp.int32),),
+        output_values=(jnp.asarray(1, dtype=jnp.int32),),
+        params={"branch_index": 1, "num_branches": 2},
+    )
+    assert replay_equation(cond_capture)[0].item() == 1
+    with pytest.raises(ValueError, match="different branch"):
+        replay_equation(cond_capture, (jnp.asarray(0, dtype=jnp.int32),))
+
+    jax = pytest.importorskip("jax")
+
+    def cond_fn(limit: Any, value: Any) -> Any:
+        """Return whether ``value`` is below ``limit``."""
+
+        return value < limit
+
+    def body_fn(step: Any, value: Any) -> Any:
+        """Return the next loop carry."""
+
+        return value + step
+
+    cond_jaxpr = jax.make_jaxpr(cond_fn)(jnp.asarray(3), jnp.asarray(0))
+    body_jaxpr = jax.make_jaxpr(body_fn)(jnp.asarray(1), jnp.asarray(0))
+    while_capture = replace(
+        _capture_for_kind("while_decision"),
+        input_values=(jnp.asarray(3), jnp.asarray(1), jnp.asarray(0)),
+        output_values=(jnp.asarray(3, dtype=jnp.int32), jnp.asarray(False)),
+        params={
+            "cond_jaxpr": cond_jaxpr,
+            "body_jaxpr": body_jaxpr,
+            "cond_nconsts": 1,
+            "body_nconsts": 1,
+            "iteration_count": 3,
+            "final_predicate": False,
+            "jax_max_control_flow_unroll": 8,
+        },
+    )
+    iterations, final_predicate = replay_equation(while_capture)
+    assert iterations.item() == 3
+    assert final_predicate.item() is False
+    with pytest.raises(ValueError, match="different point"):
+        replay_equation(
+            replace(
+                while_capture,
+                params={**while_capture.params, "iteration_count": 2},
+            )
+        )
+
+
 def test_jax_replay_unknown_kind_raises_actionable_error() -> None:
     """Unknown replay kinds should fail through the dispatch table."""
 

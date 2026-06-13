@@ -136,7 +136,7 @@ def test_jax_rejects_root_capture_inside_jit() -> None:
                 lambda y: (y @ params["w"]) + params["b"],
                 x,
             ),
-            {},
+            {"jax_control_flow": "reject"},
             "unsupported nested primitive: cond",
         ),
         (
@@ -145,7 +145,7 @@ def test_jax_rejects_root_capture_inside_jit() -> None:
                 lambda state: (state[0] + 1, state[1] + 1),
                 (0, x),
             )[1],
-            {},
+            {"jax_control_flow": "reject"},
             "unsupported nested primitive: while",
         ),
     ),
@@ -164,6 +164,45 @@ def test_jax_rejects_nested_jaxpr_primitives(
             backend="jax",
             **kwargs,
         )
+
+
+def test_jax_accepts_default_unrolled_cond_and_while() -> None:
+    """Default JAX control-flow policy should unroll supported cond and while primitives."""
+
+    def uses_cond(params: dict[str, Any], x: Any) -> Any:
+        """Return a conditional model output."""
+
+        return lax.cond(
+            x.sum() > 0,
+            lambda y: y @ params["w"],
+            lambda y: (y @ params["w"]) + params["b"],
+            x,
+        )
+
+    def uses_while(params: dict[str, Any], x: Any) -> Any:
+        """Return a while-loop model output."""
+
+        return (
+            lax.while_loop(
+                lambda state: state[0] < 2,
+                lambda state: (state[0] + 1, state[1] + 1),
+                (0, x),
+            )[1]
+            @ params["w"]
+        )
+
+    args = (_params(), jnp.ones((2, 3), dtype=jnp.float32))
+    cond_trace = tl.trace(cast(Any, uses_cond), args, backend="jax")
+    while_trace = tl.trace(cast(Any, uses_while), args, backend="jax")
+
+    assert any(
+        op.annotations.get("jax_capture_kind") == "cond_decision" for op in cond_trace.layer_list
+    )
+    assert any(
+        op.annotations.get("jax_capture_kind") == "while_decision" for op in while_trace.layer_list
+    )
+    assert cond_trace.validate_forward_pass([]) is True
+    assert while_trace.validate_forward_pass([]) is True
 
 
 def test_jax_rejects_custom_vjp_nested_primitive() -> None:
