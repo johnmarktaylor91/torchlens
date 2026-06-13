@@ -55,6 +55,20 @@ class TensorEntry:
         Persisted tensor byte size after any ``.contiguous()`` conversion.
     sha256:
         SHA-256 digest of the written blob file bytes.
+    logical_backend:
+        Optional logical backend that produced the payload before transport.
+    codec:
+        Optional payload codec name used to encode the logical payload.
+    logical_dtype:
+        Optional logical backend dtype string before transport conversion.
+    logical_device:
+        Optional logical backend device string before transport conversion.
+    transport_backend:
+        Optional physical transport backend used for persisted bytes.
+    transport_dtype:
+        Optional physical transport dtype string.
+    codec_metadata:
+        Optional best-effort JSON-ready codec metadata.
     """
 
     blob_id: str
@@ -68,6 +82,13 @@ class TensorEntry:
     layout: str
     bytes: int
     sha256: str
+    logical_backend: str | None = None
+    codec: str | None = None
+    logical_dtype: str | None = None
+    logical_device: str | None = None
+    transport_backend: str | None = None
+    transport_dtype: str | None = None
+    codec_metadata: dict[str, Any] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TensorEntry:
@@ -115,6 +136,21 @@ class TensorEntry:
         if not isinstance(num_bytes, int) or num_bytes < 0:
             raise TorchLensIOError("Manifest tensor entry 'bytes' must be a non-negative int.")
 
+        optional_strings = {
+            field_name: _optional_str(data, field_name)
+            for field_name in (
+                "logical_backend",
+                "codec",
+                "logical_dtype",
+                "logical_device",
+                "transport_backend",
+                "transport_dtype",
+            )
+        }
+        codec_metadata = data.get("codec_metadata")
+        if codec_metadata is not None and not isinstance(codec_metadata, dict):
+            raise TorchLensIOError("Manifest tensor entry 'codec_metadata' must be an object.")
+
         return cls(
             blob_id=data["blob_id"],
             kind=data["kind"],
@@ -127,6 +163,8 @@ class TensorEntry:
             layout=data["layout"],
             bytes=num_bytes,
             sha256=data["sha256"],
+            codec_metadata=codec_metadata,
+            **optional_strings,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -138,7 +176,38 @@ class TensorEntry:
             JSON-ready manifest entry.
         """
 
-        return asdict(self)
+        return {key: value for key, value in asdict(self).items() if value is not None}
+
+
+def _optional_str(data: dict[str, Any], field_name: str) -> str | None:
+    """Return an optional manifest string field after validation.
+
+    Parameters
+    ----------
+    data:
+        Manifest entry mapping.
+    field_name:
+        Optional field to read.
+
+    Returns
+    -------
+    str | None
+        Field value, or ``None`` when omitted.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the optional value is present but not a non-empty string.
+    """
+
+    field_value = data.get(field_name)
+    if field_value is None:
+        return None
+    if not isinstance(field_value, str) or field_value == "":
+        raise TorchLensIOError(
+            f"Manifest tensor entry optional field {field_name!r} must be a non-empty string."
+        )
+    return field_value
 
 
 @dataclass(frozen=True)

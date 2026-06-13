@@ -207,9 +207,10 @@ def _validate_v2_backend_fields(manifest: dict[str, Any]) -> None:
     if not isinstance(payload_policy, dict):
         raise ValueError("Manifest schema v2 requires object payload_policy.")
     policy = payload_policy.get("policy")
-    if policy not in {"full", "audit_only", "metadata_only"}:
+    if policy not in {"full", "audit_only", "metadata_only", "array_payloads"}:
         raise ValueError(
-            "Manifest payload_policy.policy must be full, audit_only, or metadata_only."
+            "Manifest payload_policy.policy must be full, audit_only, metadata_only, "
+            "or array_payloads."
         )
     if not isinstance(payload_policy.get("materialization_supported"), bool):
         raise ValueError("Manifest payload_policy.materialization_supported must be a bool.")
@@ -363,6 +364,42 @@ def _validate_body_index(value: Any, *, schema_version: int) -> None:
         intended_use = entry.get("intended_use")
         if intended_use not in allowed_intended_uses:
             raise ValueError(f"Manifest body_index[{index}].intended_use is invalid.")
+        _validate_optional_body_index_codec_fields(entry, index=index)
+
+
+def _validate_optional_body_index_codec_fields(entry: dict[str, Any], *, index: int) -> None:
+    """Validate optional schema-v2 codec vocabulary on one body index entry.
+
+    Parameters
+    ----------
+    entry:
+        Body index entry.
+    index:
+        Entry index used for error messages.
+
+    Raises
+    ------
+    ValueError
+        If an optional codec field is malformed.
+    """
+
+    for field_name in (
+        "logical_backend",
+        "codec",
+        "logical_dtype",
+        "logical_device",
+        "transport_backend",
+        "transport_dtype",
+    ):
+        if field_name not in entry:
+            continue
+        field_value = entry[field_name]
+        if not isinstance(field_value, str) or field_value == "":
+            raise ValueError(
+                f"Manifest body_index[{index}].{field_name} must be a non-empty string."
+            )
+    if "codec_metadata" in entry and not isinstance(entry["codec_metadata"], dict):
+        raise ValueError(f"Manifest body_index[{index}].codec_metadata must be an object.")
 
 
 def _validate_backward_summary(value: Any, *, schema_version: int) -> None:

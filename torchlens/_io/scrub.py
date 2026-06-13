@@ -11,16 +11,16 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict, defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, TypeAlias
+from typing import Any
 
 import torch
 
 from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
+from .payload_codec import PayloadCodec, get_payload_codec
 from ..data_classes._state_adapter import state_items, state_new, state_restore
 from ..data_classes.trace import Trace
-
-BlobSpec: TypeAlias = tuple[str, torch.Tensor, str, str]
 
 _SIMPLE_KEEP_TYPES = (str, int, float, bool, type(None), torch.dtype, torch.device)
 _RAW_INPUT_TEXT_LIMIT = 10_000
@@ -29,6 +29,44 @@ _RAW_OUTPUT_TEXT_LIMIT = _RAW_INPUT_TEXT_LIMIT
 _RAW_OUTPUT_TENSOR_BYTES_LIMIT = _RAW_INPUT_TENSOR_BYTES_LIMIT
 _RAW_CONTAINER_ITEM_LIMIT = 20
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class BlobSpec:
+    """A payload selected for portable blob persistence.
+
+    Parameters
+    ----------
+    blob_id:
+        Opaque zero-padded blob identifier.
+    value:
+        Logical backend payload to persist.
+    kind:
+        Logical payload kind, for example ``"out"``.
+    label:
+        Human-readable TorchLens layer label.
+    logical_backend:
+        Backend name associated with ``value``.
+    """
+
+    blob_id: str
+    value: Any
+    kind: str
+    label: str
+    logical_backend: str
+
+    def __iter__(self) -> Iterator[Any]:
+        """Yield legacy tuple fields for conservative call-site migration."""
+
+        yield self.blob_id
+        yield self.value
+        yield self.kind
+        yield self.label
+
+    def __getitem__(self, index: int) -> Any:
+        """Return a legacy tuple field by position."""
+
+        return (self.blob_id, self.value, self.kind, self.label)[index]
 
 
 @dataclass
@@ -41,6 +79,7 @@ class _ScrubOptions:
     include_rng_states: bool
     backend_name: str = "torch"
     payload_materialization: bool = True
+    payload_codec: PayloadCodec = field(default_factory=lambda: get_payload_codec("torch"))
     unsupported_tensor_records: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -79,8 +118,8 @@ def scrub_for_save(
     Returns
     -------
     tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]
-        Scrubbed top-level state dict plus a list of blob specs
-        ``(blob_id, tensor, kind, label)`` and unsupported tensor audit records.
+        Scrubbed top-level state dict plus blob specs and unsupported tensor
+        audit records.
     """
 
     options = _ScrubOptions(
@@ -91,6 +130,7 @@ def scrub_for_save(
         backend_name=str(backend_name or getattr(trace, "backend", "torch")),
         payload_materialization=payload_materialization,
     )
+    options.payload_codec = get_payload_codec(options.backend_name)
     memo: dict[int, Any] = {}
     blob_specs: list[BlobSpec] = []
     blob_counter = [0]
@@ -414,9 +454,10 @@ def _blobify_tensor_field(
             options,
             reason=f"{options.backend_name}_array_audit_null",
         )
-    if not isinstance(field_value, torch.Tensor):
+    if not options.payload_codec.can_encode(field_value):
         raise TorchLensIOError(
-            f"{type(owner).__name__}.{field_name} expected a tensor for portable blobification, "
+            f"{type(owner).__name__}.{field_name} expected a codec-encodable payload for "
+            "portable blobification, "
             f"got {type(field_value).__name__}."
         )
     blob_id = _next_blob_id(blob_counter)
@@ -425,7 +466,15 @@ def _blobify_tensor_field(
     tensor_payload = (
         field_value.detach() if isinstance(field_value, torch.nn.Parameter) else field_value
     )
-    blob_specs.append((blob_id, tensor_payload, kind, label))
+    blob_specs.append(
+        BlobSpec(
+            blob_id=blob_id,
+            value=tensor_payload,
+            kind=kind,
+            label=label,
+            logical_backend=options.backend_name,
+        )
+    )
     return BlobRef(blob_id=blob_id, kind=kind)
 
 
@@ -485,7 +534,7 @@ def _blobify_recursive_value(
         return tuple(value)
     if isinstance(value, BlobRef):
         return value
-    if isinstance(value, torch.Tensor):
+    if options.payload_codec.can_encode(value):
         return _blobify_tensor_field(owner, field_name, value, blob_specs, blob_counter, options)
     if isinstance(value, list):
         return [

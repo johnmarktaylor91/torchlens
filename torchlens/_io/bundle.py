@@ -30,10 +30,15 @@ from safetensors.torch import load_file, save_file
 from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
+from .payload_codec import (
+    PayloadCodec,
+    get_payload_codec,
+    numpy_to_transport_tensor,
+)
 from .paths import resolve_bundle_blob_path
 from .rehydrate import rehydrate_trace
-from .scrub import scrub_for_save
-from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
+from .scrub import BlobSpec, scrub_for_save
+from .tensor_policy import FailReason, Ok, SkipReason
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 from .. import __version__ as TORCHLENS_VERSION
 from ..backends import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec
@@ -254,7 +259,7 @@ def save(
         )
         _raise_for_unmaterialized_nested_blob_refs(
             scrubbed_state,
-            allowed_blob_ids={blob_id for blob_id, _, _, _ in blob_specs},
+            allowed_blob_ids={blob_spec.blob_id for blob_spec in blob_specs},
         )
         fast_copy_specs = _attach_fast_copy_specs(
             trace,
@@ -276,21 +281,23 @@ def save(
         unsupported_tensors: list[dict[str, str]] = list(scrub_unsupported_tensors)
         skipped_blob_ids: set[str] = set()
 
-        for blob_id, tensor, kind, label in blob_specs:
-            decision = is_supported_for_save(tensor, strict=strict)
+        for blob_spec in blob_specs:
+            codec = get_payload_codec(blob_spec.logical_backend)
+            decision = codec.validate_for_save(blob_spec.value, strict=strict)
             if isinstance(decision, Ok):
                 tensor_entries.append(
-                    _write_tensor_blob(
-                        tmp_path=tmp_path, blob_id=blob_id, tensor=tensor, kind=kind, label=label
-                    )
+                    _write_payload_blob(tmp_path=tmp_path, blob_spec=blob_spec, codec=codec)
                 )
                 continue
             if isinstance(decision, FailReason):
                 raise TorchLensIOError(
-                    f"Unsupported tensor for bundle save at {label} ({kind}): {decision.text}"
+                    "Unsupported tensor for bundle save at "
+                    f"{blob_spec.label} ({blob_spec.kind}): {decision.text}"
                 )
-            unsupported_tensors.append({"label": label, "kind": kind, "reason": decision.text})
-            skipped_blob_ids.add(blob_id)
+            unsupported_tensors.append(
+                {"label": blob_spec.label, "kind": blob_spec.kind, "reason": decision.text}
+            )
+            skipped_blob_ids.add(blob_spec.blob_id)
 
         source_manifest_cache: dict[Path, dict[str, TensorEntry]] = {}
         for fast_copy_spec in fast_copy_specs:
@@ -938,7 +945,7 @@ def _scrub_trace_for_bundle(
     include_grads: bool,
     include_saved_args: bool,
     include_rng_states: bool,
-) -> tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]], list[dict[str, str]]]:
+) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a model log while excluding transient load-only private attrs.
 
     Parameters
@@ -956,7 +963,7 @@ def _scrub_trace_for_bundle(
 
     Returns
     -------
-    tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]], list[dict[str, str]]]
+    tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]
         Scrubbed metadata, blob specs, and unsupported tensor audit records.
     """
 
@@ -1082,11 +1089,65 @@ def _write_tensor_blob(
     )
 
 
+def _write_payload_blob(
+    *,
+    tmp_path: Path,
+    blob_spec: BlobSpec,
+    codec: PayloadCodec,
+) -> TensorEntry:
+    """Write one codec-supported payload blob and build its manifest entry.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary bundle directory root.
+    blob_spec:
+        Logical payload selected during scrub.
+    codec:
+        Backend payload codec for ``blob_spec``.
+
+    Returns
+    -------
+    TensorEntry
+        Manifest tensor entry for the written blob.
+    """
+
+    if blob_spec.logical_backend == "torch" and isinstance(blob_spec.value, torch.Tensor):
+        return _write_tensor_blob(
+            tmp_path=tmp_path,
+            blob_id=blob_spec.blob_id,
+            tensor=blob_spec.value,
+            kind=blob_spec.kind,
+            label=blob_spec.label,
+        )
+
+    encoded = codec.to_numpy(blob_spec.value)
+    transport_tensor = numpy_to_transport_tensor(encoded.array)
+    relative_path = Path("blobs") / f"{blob_spec.blob_id}.safetensors"
+    blob_path = tmp_path / relative_path
+    save_file({_BLOB_TENSOR_KEY: transport_tensor}, str(blob_path))
+    manifest_fields = codec.manifest_fields(blob_spec.value, encoded)
+    return TensorEntry(
+        blob_id=blob_spec.blob_id,
+        kind=blob_spec.kind,
+        label=blob_spec.label,
+        relative_path=relative_path.as_posix(),
+        backend="safetensors",
+        shape=[int(dim) for dim in transport_tensor.shape],
+        dtype=str(transport_tensor.dtype).replace("torch.", ""),
+        device_at_save=encoded.logical_device,
+        layout=str(transport_tensor.layout).replace("torch.", ""),
+        bytes=int(transport_tensor.numel() * transport_tensor.element_size()),
+        sha256=sha256_of_file(blob_path),
+        **manifest_fields,
+    )
+
+
 def _attach_fast_copy_specs(
     trace: Trace,
     *,
     scrubbed_state: dict[str, Any],
-    blob_specs: list[tuple[str, torch.Tensor, str, str]],
+    blob_specs: list[BlobSpec],
     include_outs: bool,
     include_grads: bool,
 ) -> list[_FastCopySpec]:
@@ -1116,7 +1177,7 @@ def _attach_fast_copy_specs(
     if not isinstance(scrubbed_layers, list):
         return []
 
-    used_blob_ids = {blob_id for blob_id, _, _, _ in blob_specs}
+    used_blob_ids = {blob_spec.blob_id for blob_spec in blob_specs}
     fast_copy_specs: list[_FastCopySpec] = []
     for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers):
         if include_outs:
@@ -1335,6 +1396,13 @@ def _fast_copy_tensor_blob(
         layout=source_entry.layout,
         bytes=source_entry.bytes,
         sha256=source_entry.sha256,
+        logical_backend=source_entry.logical_backend,
+        codec=source_entry.codec,
+        logical_dtype=source_entry.logical_dtype,
+        logical_device=source_entry.logical_device,
+        transport_backend=source_entry.transport_backend,
+        transport_dtype=source_entry.transport_dtype,
+        codec_metadata=source_entry.codec_metadata,
     )
 
 

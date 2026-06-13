@@ -1,0 +1,505 @@
+"""Backend-neutral payload codecs for portable bundle writes.
+
+This module keeps logical array extraction separate from the physical
+``safetensors`` transport used by bundle files. The torch codec preserves the
+legacy write path; preview backend codecs expose NumPy arrays for direct unit
+tests and future materialization-enabled saves.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any, Protocol
+
+import numpy as np
+import torch
+
+from .tensor_policy import FailReason, Ok, SkipReason, TensorPolicyDecision, is_supported_for_save
+
+
+@dataclass(frozen=True)
+class EncodedArray:
+    """A logical backend payload normalized to an array boundary.
+
+    Parameters
+    ----------
+    array:
+        Host NumPy array carrying the payload values.
+    logical_dtype:
+        Backend-native dtype string before transport conversion.
+    logical_device:
+        Backend-native device string before transport conversion.
+    codec_metadata:
+        Optional JSON-ready metadata needed by future load-side codecs.
+    """
+
+    array: np.ndarray
+    logical_dtype: str
+    logical_device: str
+    codec_metadata: dict[str, Any] | None = None
+
+
+class PayloadCodec(Protocol):
+    """Protocol implemented by backend payload codecs."""
+
+    backend_name: str
+    codec_name: str
+
+    def can_encode(self, value: Any) -> bool:
+        """Return whether this codec recognizes ``value`` as a logical payload."""
+
+    def validate_for_save(self, value: Any, *, strict: bool = True) -> TensorPolicyDecision:
+        """Validate whether ``value`` can be written as a portable payload."""
+
+    def to_numpy(self, value: Any) -> EncodedArray:
+        """Convert ``value`` to a host NumPy representation."""
+
+    def from_numpy(
+        self,
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        strict_runtime: bool,
+    ) -> Any:
+        """Rebuild a logical backend payload from a NumPy array."""
+
+    def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
+        """Return optional v2 manifest fields for ``value`` and ``encoded``."""
+
+
+class TorchPayloadCodec:
+    """Payload codec for the existing PyTorch bundle behavior."""
+
+    backend_name = "torch"
+    codec_name = "torch_safetensors_v1"
+
+    def can_encode(self, value: Any) -> bool:
+        """Return whether ``value`` is a plain PyTorch tensor payload."""
+
+        return isinstance(value, torch.Tensor)
+
+    def validate_for_save(self, value: Any, *, strict: bool = True) -> TensorPolicyDecision:
+        """Delegate PyTorch payload validation to the existing tensor policy."""
+
+        if not isinstance(value, torch.Tensor):
+            reason = f"expected torch.Tensor, got {type(value).__name__}"
+            return FailReason(reason) if strict else SkipReason(reason)
+        return is_supported_for_save(value, strict=strict)
+
+    def to_numpy(self, value: Any) -> EncodedArray:
+        """Convert a PyTorch tensor to a detached CPU NumPy array."""
+
+        if not isinstance(value, torch.Tensor):
+            raise TypeError(f"torch codec expected torch.Tensor, got {type(value).__name__}.")
+        array = value.detach().cpu().numpy()
+        return EncodedArray(
+            array=array,
+            logical_dtype=str(value.dtype).replace("torch.", ""),
+            logical_device=str(value.device),
+        )
+
+    def from_numpy(
+        self,
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        strict_runtime: bool,
+    ) -> Any:
+        """Rebuild a PyTorch tensor from a NumPy array."""
+
+        tensor = torch.from_numpy(np.ascontiguousarray(array))
+        if map_location is None:
+            return tensor
+        return tensor.to(map_location)
+
+    def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
+        """Return no optional fields so torch manifests stay byte-compatible."""
+
+        return {}
+
+
+class JaxPayloadCodec:
+    """Payload codec for addressable dense JAX arrays."""
+
+    backend_name = "jax"
+    codec_name = "numpy_safetensors_v1"
+
+    def can_encode(self, value: Any) -> bool:
+        """Return whether ``value`` looks like a JAX array without importing JAX."""
+
+        value_type = type(value)
+        module_name = value_type.__module__
+        return module_name.startswith(("jax", "jaxlib")) and hasattr(value, "dtype")
+
+    def validate_for_save(self, value: Any, *, strict: bool = True) -> TensorPolicyDecision:
+        """Validate that a JAX value is dense, addressable, and host-copyable."""
+
+        reason = self._unsupported_reason(value)
+        if reason is None:
+            return Ok()
+        if strict:
+            return FailReason(reason)
+        return SkipReason(reason)
+
+    def to_numpy(self, value: Any) -> EncodedArray:
+        """Copy a JAX array to host NumPy storage."""
+
+        import jax
+
+        if not self.can_encode(value):
+            raise TypeError(f"jax codec cannot encode {type(value).__name__}.")
+        host_value = jax.device_get(value)
+        array = np.asarray(host_value)
+        _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
+        return EncodedArray(
+            array=np.ascontiguousarray(array),
+            logical_dtype=str(getattr(value, "dtype", array.dtype)),
+            logical_device=_device_string(value),
+            codec_metadata=_json_ready_mapping(
+                {
+                    "weak_type": getattr(value, "weak_type", None),
+                    "sharding": _maybe_string(getattr(value, "sharding", None)),
+                    "committed": getattr(value, "committed", None),
+                }
+            ),
+        )
+
+    def from_numpy(
+        self,
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        strict_runtime: bool,
+    ) -> Any:
+        """Rebuild a JAX array from host NumPy storage."""
+
+        import jax
+        import jax.numpy as jnp
+
+        value = jnp.asarray(array)
+        if map_location is None:
+            return value
+        return jax.device_put(value, map_location)
+
+    def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
+        """Return v2 manifest vocabulary for a JAX payload."""
+
+        return _manifest_fields(
+            logical_backend=self.backend_name,
+            codec=self.codec_name,
+            value=value,
+            encoded=encoded,
+        )
+
+    def _unsupported_reason(self, value: Any) -> str | None:
+        """Return the first JAX codec incompatibility reason, if any."""
+
+        if not self.can_encode(value):
+            return f"jax codec cannot encode {type(value).__name__}"
+        if getattr(value, "is_fully_addressable", True) is False:
+            return "unaddressable JAX arrays are not supported by the payload codec"
+        if _jax_sharding_device_count(value) > 1:
+            return "sharded JAX arrays are not supported by the payload codec"
+        dtype = getattr(value, "dtype", None)
+        if dtype is not None and _dtype_string_is_object_like(str(dtype)):
+            return f"object/string dtype {dtype} is not supported by the payload codec"
+        try:
+            array = np.asarray(value)
+        except (TypeError, ValueError, RuntimeError) as exc:
+            return f"JAX array could not be copied to host: {exc}"
+        return _unsupported_array_dtype_reason(array)
+
+
+class TinygradPayloadCodec:
+    """Payload codec for realized dense tinygrad tensors."""
+
+    backend_name = "tinygrad"
+    codec_name = "numpy_safetensors_v1"
+
+    def can_encode(self, value: Any) -> bool:
+        """Return whether ``value`` looks like a tinygrad tensor."""
+
+        value_type = type(value)
+        return value_type.__module__.startswith("tinygrad") and hasattr(value, "dtype")
+
+    def validate_for_save(self, value: Any, *, strict: bool = True) -> TensorPolicyDecision:
+        """Validate that a tinygrad tensor can be copied to a dense host array."""
+
+        reason = self._unsupported_reason(value)
+        if reason is None:
+            return Ok()
+        if strict:
+            return FailReason(reason)
+        return SkipReason(reason)
+
+    def to_numpy(self, value: Any) -> EncodedArray:
+        """Copy a tinygrad tensor to host NumPy storage."""
+
+        if not self.can_encode(value):
+            raise TypeError(f"tinygrad codec cannot encode {type(value).__name__}.")
+        if hasattr(value, "numpy"):
+            array = np.asarray(value.numpy())
+        else:
+            array = np.asarray(value.tolist())
+        _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
+        return EncodedArray(
+            array=np.ascontiguousarray(array),
+            logical_dtype=str(getattr(value, "dtype", array.dtype)),
+            logical_device=str(getattr(value, "device", "unknown")),
+            codec_metadata=_json_ready_mapping(
+                {
+                    "tinygrad_device": str(getattr(value, "device", "unknown")),
+                    "source_type": type(value).__name__,
+                }
+            ),
+        )
+
+    def from_numpy(
+        self,
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        strict_runtime: bool,
+    ) -> Any:
+        """Rebuild a tinygrad tensor from host NumPy storage."""
+
+        from tinygrad import Tensor
+
+        device = map_location
+        if device is None:
+            device = _entry_field(entry, "logical_device") or _entry_field(entry, "device_at_save")
+        return Tensor(array, device=device).realize()
+
+    def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
+        """Return v2 manifest vocabulary for a tinygrad payload."""
+
+        return _manifest_fields(
+            logical_backend=self.backend_name,
+            codec=self.codec_name,
+            value=value,
+            encoded=encoded,
+        )
+
+    def _unsupported_reason(self, value: Any) -> str | None:
+        """Return the first tinygrad codec incompatibility reason, if any."""
+
+        if not self.can_encode(value):
+            return f"tinygrad codec cannot encode {type(value).__name__}"
+        try:
+            if hasattr(value, "numpy"):
+                array = np.asarray(value.numpy())
+            else:
+                array = np.asarray(value.tolist())
+        except (TypeError, ValueError, RuntimeError) as exc:
+            return f"tinygrad tensor could not be copied to host: {exc}"
+        return _unsupported_array_dtype_reason(array)
+
+
+class NullPayloadCodec:
+    """Payload codec for backends without materialization support this round."""
+
+    backend_name = "unknown"
+    codec_name = "none"
+
+    def can_encode(self, value: Any) -> bool:
+        """Return False for all values."""
+
+        return False
+
+    def validate_for_save(self, value: Any, *, strict: bool = True) -> TensorPolicyDecision:
+        """Reject all payload values."""
+
+        reason = f"no payload codec is registered for {self.backend_name!r}"
+        return FailReason(reason) if strict else SkipReason(reason)
+
+    def to_numpy(self, value: Any) -> EncodedArray:
+        """Raise because no payload conversion is available."""
+
+        raise TypeError(f"no payload codec is registered for {self.backend_name!r}.")
+
+    def from_numpy(
+        self,
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        strict_runtime: bool,
+    ) -> Any:
+        """Raise because load-side conversion is unavailable."""
+
+        raise TypeError(f"no payload codec is registered for {self.backend_name!r}.")
+
+    def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
+        """Return no optional manifest fields."""
+
+        return {}
+
+
+_CODECS: dict[str, PayloadCodec] = {
+    "torch": TorchPayloadCodec(),
+    "jax": JaxPayloadCodec(),
+    "tinygrad": TinygradPayloadCodec(),
+}
+
+
+def get_payload_codec(backend_name: str) -> PayloadCodec:
+    """Return the registered payload codec for ``backend_name``.
+
+    Parameters
+    ----------
+    backend_name:
+        Registered TorchLens backend name.
+
+    Returns
+    -------
+    PayloadCodec
+        Backend codec, or a rejecting null codec for unsupported backends.
+    """
+
+    codec = _CODECS.get(backend_name)
+    if codec is not None:
+        return codec
+    null_codec = NullPayloadCodec()
+    null_codec.backend_name = backend_name
+    return null_codec
+
+
+def register_payload_codec(backend_name: str, codec: PayloadCodec) -> None:
+    """Register or replace a payload codec.
+
+    Parameters
+    ----------
+    backend_name:
+        Registry key.
+    codec:
+        Payload codec implementation.
+    """
+
+    _CODECS[backend_name] = codec
+
+
+def numpy_to_transport_tensor(array: np.ndarray) -> torch.Tensor:
+    """Convert an encoded NumPy array to the CPU torch transport tensor."""
+
+    _raise_for_unsupported_array_dtype(array, backend_name="transport")
+    return torch.from_numpy(np.array(array, copy=True, order="C")).contiguous()
+
+
+def _manifest_fields(
+    *,
+    logical_backend: str,
+    codec: str,
+    value: Any,
+    encoded: EncodedArray,
+) -> dict[str, Any]:
+    """Build optional v2 tensor manifest fields for a non-torch payload."""
+
+    transport_tensor = numpy_to_transport_tensor(encoded.array)
+    return {
+        "logical_backend": logical_backend,
+        "codec": codec,
+        "logical_dtype": encoded.logical_dtype,
+        "logical_device": encoded.logical_device,
+        "transport_backend": "safetensors.torch",
+        "transport_dtype": str(transport_tensor.dtype).replace("torch.", ""),
+        "codec_metadata": encoded.codec_metadata,
+    }
+
+
+def _entry_field(entry: Any, field_name: str) -> Any:
+    """Read a field from a dataclass-like object or mapping."""
+
+    if isinstance(entry, Mapping):
+        return entry.get(field_name)
+    return getattr(entry, field_name, None)
+
+
+def _device_string(value: Any) -> str:
+    """Return a stable best-effort logical device string."""
+
+    devices = getattr(value, "devices", None)
+    if callable(devices):
+        try:
+            return ",".join(sorted(str(device) for device in devices()))
+        except (TypeError, RuntimeError):
+            return "unknown"
+    device = getattr(value, "device", None)
+    if callable(device):
+        try:
+            return str(device())
+        except (TypeError, RuntimeError):
+            return "unknown"
+    if device is not None:
+        return str(device)
+    return "unknown"
+
+
+def _maybe_string(value: Any) -> str | None:
+    """Return ``str(value)`` unless ``value`` is ``None``."""
+
+    if value is None:
+        return None
+    return str(value)
+
+
+def _json_ready_mapping(values: dict[str, Any]) -> dict[str, Any]:
+    """Return a mapping with only simple JSON-friendly values."""
+
+    cleaned: dict[str, Any] = {}
+    for key, value in values.items():
+        if value is None:
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            cleaned[key] = value
+        else:
+            cleaned[key] = str(value)
+    return cleaned
+
+
+def _jax_sharding_device_count(value: Any) -> int:
+    """Return a best-effort JAX sharding device count."""
+
+    sharding = getattr(value, "sharding", None)
+    if sharding is None:
+        return 0
+    devices = getattr(sharding, "device_set", None)
+    if devices is not None:
+        try:
+            return len(devices)
+        except TypeError:
+            return 0
+    addressable_devices = getattr(sharding, "addressable_devices", None)
+    if addressable_devices is not None:
+        try:
+            return len(addressable_devices)
+        except TypeError:
+            return 0
+    return 0
+
+
+def _unsupported_array_dtype_reason(array: np.ndarray) -> str | None:
+    """Return an unsupported dtype reason for a host array, if any."""
+
+    if array.dtype.kind in {"O", "S", "U", "V"}:
+        return f"dtype {array.dtype} is not supported by the payload codec"
+    return None
+
+
+def _dtype_string_is_object_like(dtype: str) -> bool:
+    """Return whether a dtype string describes object or string data."""
+
+    lowered = dtype.lower()
+    return any(token in lowered for token in ("object", "str", "string", "bytes", "void"))
+
+
+def _raise_for_unsupported_array_dtype(array: np.ndarray, *, backend_name: str) -> None:
+    """Raise ``TypeError`` if ``array`` has a non-transportable dtype."""
+
+    reason = _unsupported_array_dtype_reason(array)
+    if reason is not None:
+        raise TypeError(f"{backend_name} payload {reason}.")

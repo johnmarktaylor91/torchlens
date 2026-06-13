@@ -183,6 +183,33 @@ def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
     return manifest
 
 
+def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: Path) -> None:
+    """Schema v2 should admit the array-payload vocabulary before capability flips."""
+
+    path = tmp_path / "array_payload_vocab.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_schema_v2_manifest(path)
+    manifest["payload_policy"] = {
+        "policy": "array_payloads",
+        "materialization_supported": False,
+        "payload_kinds": [],
+    }
+    manifest["body_index"][0].update(
+        {
+            "logical_backend": "jax",
+            "codec": "numpy_safetensors_v1",
+            "logical_dtype": "float32",
+            "logical_device": "TFRT_CPU_0",
+            "transport_backend": "safetensors.torch",
+            "transport_dtype": "float32",
+            "codec_metadata": {"weak_type": False},
+        }
+    )
+    _write_manifest(path, manifest)
+
+    validate_tlspec(path)
+
+
 @pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str) -> None:

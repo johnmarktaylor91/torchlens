@@ -23,6 +23,7 @@ from safetensors.torch import save_file
 
 from . import TLSPEC_VERSION, TorchLensIOError
 from .manifest import Manifest, TensorEntry, sha256_of_file
+from .scrub import BlobSpec
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .._state import pause_logging
 from .. import __version__ as TORCHLENS_VERSION
@@ -30,7 +31,6 @@ from .. import __version__ as TORCHLENS_VERSION
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
-BlobSpec = tuple[str, torch.Tensor, str, str]
 
 
 def next_blob_id(blob_index: int) -> str:
@@ -285,6 +285,13 @@ class BundleStreamWriter:
             layout=entry.layout,
             bytes=entry.bytes,
             sha256=entry.sha256,
+            logical_backend=entry.logical_backend,
+            codec=entry.codec,
+            logical_dtype=entry.logical_dtype,
+            logical_device=entry.logical_device,
+            transport_backend=entry.transport_backend,
+            transport_dtype=entry.transport_dtype,
+            codec_metadata=entry.codec_metadata,
         )
         self._entries_by_blob_id[blob_id] = updated_entry
         for index, existing_entry in enumerate(self._tensor_entries):

@@ -64,7 +64,13 @@
       "type": ["object", "null"]
     },
     "payload_policy": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": ["full", "audit_only", "metadata_only", "array_payloads"]
+        }
+      }
     }
   }
 }

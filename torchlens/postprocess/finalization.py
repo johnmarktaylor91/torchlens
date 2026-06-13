@@ -32,6 +32,7 @@ from .._io import BlobRef, TorchLensIOError
 from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
 from .._io.manifest import sha256_of_file
+from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from ..quantities import Bytes, Duration
 from ..data_classes._module_role_hints import (
@@ -1230,9 +1231,9 @@ def _reuse_streamed_blob_ids(
     trace: "Trace",
     *,
     scrubbed_state: dict[str, Any],
-    blob_specs: list[tuple[str, torch.Tensor, str, str]],
+    blob_specs: list[BlobSpec],
     writer: BundleStreamWriter,
-) -> tuple[dict[str, Any], list[tuple[str, torch.Tensor, str, str]]]:
+) -> tuple[dict[str, Any], list[BlobSpec]]:
     """Patch scrubbed tensor refs to reuse blob ids written during capture.
 
     Parameters
@@ -1248,7 +1249,7 @@ def _reuse_streamed_blob_ids(
 
     Returns
     -------
-    tuple[dict, list[tuple[str, torch.Tensor, str, str]]]
+    tuple[dict, list[BlobSpec]]
         Patched scrubbed state and the filtered blob spec list.
     """
 
@@ -1292,7 +1293,7 @@ def _reuse_streamed_blob_ids(
                 skipped_blob_ids=skipped_blob_ids,
             )
 
-    filtered_blob_specs = [spec for spec in blob_specs if spec[0] not in skipped_blob_ids]
+    filtered_blob_specs = [spec for spec in blob_specs if spec.blob_id not in skipped_blob_ids]
     return scrubbed_state, filtered_blob_specs
 
 

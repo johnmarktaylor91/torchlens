@@ -104,7 +104,10 @@ class _TlSpecWriter:
                     "body_format": spec.serialization_policy.body_format,
                     "backward_summary": None,
                     "derived_gradient_summary": cls._derived_gradient_summary(trace),
-                    "payload_policy": cls._payload_policy(trace, backend_name=backend_name),
+                    "payload_policy": cls._payload_policy(
+                        backend_name=backend_name,
+                        tensor_entries=legacy_manifest.tensors,
+                    ),
                 }
             )
         cls.write_json(path, manifest)
@@ -361,15 +364,19 @@ class _TlSpecWriter:
         }
 
     @staticmethod
-    def _payload_policy(source: Any, *, backend_name: str) -> dict[str, Any]:
+    def _payload_policy(
+        *,
+        backend_name: str,
+        tensor_entries: list[TensorEntry],
+    ) -> dict[str, Any]:
         """Build a schema v2 payload policy object.
 
         Parameters
         ----------
-        source:
-            Trace being serialized.
         backend_name:
             Registered backend name.
+        tensor_entries:
+            Saved tensor entries used to derive payload kinds.
 
         Returns
         -------
@@ -378,10 +385,13 @@ class _TlSpecWriter:
         """
 
         spec = get_backend_spec(backend_name)
+        payload_kinds = []
+        if spec.capabilities.payload_materialization:
+            payload_kinds = sorted({entry.kind for entry in tensor_entries})
         return {
             "policy": spec.serialization_policy.payload_policy,
             "materialization_supported": spec.capabilities.payload_materialization,
-            "payload_kinds": [],
+            "payload_kinds": payload_kinds,
         }
 
     @staticmethod
@@ -623,16 +633,27 @@ class _TlSpecWriter:
             num_elements = 1
             for dim in entry.shape:
                 num_elements *= dim
-            index.append(
-                {
-                    "filename": entry.relative_path,
-                    "dtype": entry.dtype,
-                    "shape": entry.shape,
-                    "num_elements": num_elements,
-                    "intended_use": entry.kind,
-                    "sha256": entry.sha256,
-                }
-            )
+            body_entry = {
+                "filename": entry.relative_path,
+                "dtype": entry.dtype,
+                "shape": entry.shape,
+                "num_elements": num_elements,
+                "intended_use": entry.kind,
+                "sha256": entry.sha256,
+            }
+            for field_name in (
+                "logical_backend",
+                "codec",
+                "logical_dtype",
+                "logical_device",
+                "transport_backend",
+                "transport_dtype",
+                "codec_metadata",
+            ):
+                field_value = getattr(entry, field_name)
+                if field_value is not None:
+                    body_entry[field_name] = field_value
+            index.append(body_entry)
         return index
 
     @staticmethod

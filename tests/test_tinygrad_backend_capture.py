@@ -5,9 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._io.payload_codec import get_payload_codec
+from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens.backends import (
     BackendPayloadUnsupportedError,
     BackendUnsupportedError,
@@ -108,6 +111,56 @@ def _tiny_intermediate_loss(x: Any) -> Any:
     activated = (hidden + 1.0).relu()
     scaled = activated * 3.0
     return scaled.sum()
+
+
+def test_tinygrad_payload_codec_encodes_numpy_manifest_fields() -> None:
+    """tinygrad payload codec should expose logical and transport metadata."""
+
+    codec = get_payload_codec("tinygrad")
+    value = Tensor([1.0, 2.0, 3.0]).realize()
+
+    assert codec.can_encode(value)
+    assert isinstance(codec.validate_for_save(value, strict=True), Ok)
+    encoded = codec.to_numpy(value)
+    np.testing.assert_array_equal(encoded.array, value.numpy())
+    assert "float" in encoded.logical_dtype
+    assert encoded.logical_device
+
+    fields = codec.manifest_fields(value, encoded)
+    assert fields["logical_backend"] == "tinygrad"
+    assert fields["codec"] == "numpy_safetensors_v1"
+    assert fields["logical_dtype"] == encoded.logical_dtype
+    assert fields["logical_device"] == encoded.logical_device
+    assert fields["transport_backend"] == "safetensors.torch"
+    assert fields["transport_dtype"] == "float32"
+    assert isinstance(fields["codec_metadata"], dict)
+
+    restored = codec.from_numpy(encoded.array, fields, map_location=None, strict_runtime=True)
+    np.testing.assert_array_equal(restored.numpy(), encoded.array)
+
+
+def test_tinygrad_payload_codec_strict_rejects_object_dtype_arrays() -> None:
+    """tinygrad codec strict validation should reject object dtype payloads."""
+
+    class _FakeObjectTinygradTensor:
+        """Minimal tinygrad-shaped value for object dtype rejection."""
+
+        __module__ = "tinygrad.tensor"
+        dtype = "object"
+        device = "CPU"
+
+        def numpy(self) -> np.ndarray:
+            """Return an unsupported object dtype array."""
+
+            return np.asarray([object()], dtype=object)
+
+    decision = get_payload_codec("tinygrad").validate_for_save(
+        _FakeObjectTinygradTensor(),
+        strict=True,
+    )
+
+    assert isinstance(decision, FailReason)
+    assert "object" in decision.text
 
 
 def _multi_output(x: Any) -> tuple[Any, Any]:

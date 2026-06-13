@@ -6,9 +6,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
+import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._io.payload_codec import get_payload_codec
+from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens.backends import (
     BackendPayloadUnsupportedError,
     BackendUnsupportedError,
@@ -75,6 +78,67 @@ def _trace(**kwargs: Any) -> Any:
         backend="jax",
         **kwargs,
     )
+
+
+def test_jax_payload_codec_encodes_numpy_manifest_fields() -> None:
+    """JAX payload codec should expose logical and transport metadata."""
+
+    codec = get_payload_codec("jax")
+    value = jnp.arange(6, dtype=jnp.float32).reshape(2, 3)
+
+    assert codec.can_encode(value)
+    assert isinstance(codec.validate_for_save(value, strict=True), Ok)
+    encoded = codec.to_numpy(value)
+    np.testing.assert_array_equal(encoded.array, np.asarray(value))
+    assert encoded.logical_dtype == "float32"
+    assert encoded.logical_device
+
+    fields = codec.manifest_fields(value, encoded)
+    assert fields["logical_backend"] == "jax"
+    assert fields["codec"] == "numpy_safetensors_v1"
+    assert fields["logical_dtype"] == "float32"
+    assert fields["logical_device"] == encoded.logical_device
+    assert fields["transport_backend"] == "safetensors.torch"
+    assert fields["transport_dtype"] == "float32"
+    assert isinstance(fields["codec_metadata"], dict)
+
+    restored = codec.from_numpy(encoded.array, fields, map_location=None, strict_runtime=True)
+    np.testing.assert_array_equal(np.asarray(restored), encoded.array)
+
+
+def test_jax_payload_codec_strict_rejects_sharded_and_object_like_arrays() -> None:
+    """JAX codec strict validation should reject unsafe array payload forms."""
+
+    class _FakeSharding:
+        """Minimal sharding object with multiple devices."""
+
+        device_set = {"device0", "device1"}
+
+    class _FakeShardedJaxArray:
+        """Minimal JAX-shaped value for sharding rejection."""
+
+        __module__ = "jax._src.array"
+        dtype = "float32"
+        is_fully_addressable = True
+        sharding = _FakeSharding()
+
+    class _FakeObjectJaxArray:
+        """Minimal JAX-shaped value for object dtype rejection."""
+
+        __module__ = "jax._src.array"
+        dtype = "object"
+        is_fully_addressable = True
+        sharding = None
+
+    codec = get_payload_codec("jax")
+
+    sharded = codec.validate_for_save(_FakeShardedJaxArray(), strict=True)
+    assert isinstance(sharded, FailReason)
+    assert "sharded" in sharded.text
+
+    object_like = codec.validate_for_save(_FakeObjectJaxArray(), strict=True)
+    assert isinstance(object_like, FailReason)
+    assert "object" in object_like.text
 
 
 @pytest.mark.parametrize(
