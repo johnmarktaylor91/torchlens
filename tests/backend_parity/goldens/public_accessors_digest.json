@@ -48,34 +48,50 @@
     },
     "params": {
       "fc1.bias": {
+        "backend_address": "fc1.bias",
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "has_grad": true,
         "module_address": "fc1",
+        "resolver_status": "resolved",
         "shape": [
           4
         ]
       },
       "fc1.weight": {
+        "backend_address": "fc1.weight",
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "has_grad": true,
         "module_address": "fc1",
+        "resolver_status": "resolved",
         "shape": [
           4,
           3
         ]
       },
       "fc2.bias": {
+        "backend_address": "fc2.bias",
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "has_grad": true,
         "module_address": "fc2",
+        "resolver_status": "resolved",
         "shape": [
           2
         ]
       },
       "fc2.weight": {
+        "backend_address": "fc2.weight",
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "has_grad": true,
         "module_address": "fc2",
+        "resolver_status": "resolved",
         "shape": [
           2,
           4
@@ -84,13 +100,13 @@
     }
   },
   "sha256_chunks": [
-    "ee334c15",
-    "3a648c4b",
-    "63db7593",
-    "bf883b61",
-    "6e288402",
-    "af762d71",
-    "40ad43c8",
-    "c01b4cf1"
+    "94f5e172",
+    "ee7040c0",
+    "a820ca18",
+    "fffaae7a",
+    "8122caf7",
+    "61eeb5db",
+    "18705186",
+    "10337b74"
   ]
 }

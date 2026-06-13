@@ -22,9 +22,9 @@ import torch
 
 from ..errors._base import CompatibilityError
 
-# v4 drops capture-only scratch fields from portable Trace state after the
-# capture-pipeline-unification sprint (2026-05-11).
-TLSPEC_VERSION = 4
+# v5 adds backend-neutral object-state fields for the backend substrate
+# (`module_identity_mode`, `param_source`, and neutral dtype/device/address refs).
+TLSPEC_VERSION = 5
 _LEGACY_THREAD_WARNING_EMITTED: dict[str, bool] = {"flag": False}
 
 

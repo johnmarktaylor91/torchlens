@@ -68,6 +68,7 @@ from .._trace_state import TraceState
 from .._training_validation import _NON_GRAD_DTYPES, TrainingModeConfigError
 from ..constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..intervention.types import LAYER_PASS_LOG_FIELD_FORK_POLICY
+from ..ir.refs import DeviceRef, DtypeRef
 from ..intervention.errors import DirectActivationWriteWarning
 from ..quantities import Bytes, Flops, Macs, as_bytes, as_duration, as_flops, as_macs
 from .._state import pause_logging
@@ -111,6 +112,10 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "transformed_out": None,
     "transformed_out_shape": None,
     "transformed_out_dtype": None,
+    "dtype_ref": None,
+    "device_ref": None,
+    "backend_address": None,
+    "resolver_status": "resolved",
     "transformed_activation_memory": None,
     "visualizer_path": None,
     "transformed_grad": None,
@@ -157,6 +162,22 @@ def _dtype_or_none(value: Any) -> torch.dtype | None:
     """Return a tensor dtype, or ``None`` for non-tensor values."""
 
     return value.dtype if isinstance(value, torch.Tensor) else None
+
+
+def _dtype_ref_or_none(value: Any) -> DtypeRef | None:
+    """Return a neutral dtype reference for a dtype-like value."""
+
+    return DtypeRef.from_value(value)
+
+
+def _device_ref_from_metadata(out: Any, output_device: Any) -> DeviceRef | None:
+    """Return a neutral device reference from payload or output-device metadata."""
+
+    if isinstance(out, torch.Tensor):
+        return DeviceRef.from_value(out.device)
+    if output_device in (None, "same"):
+        return None
+    return DeviceRef.from_value(output_device)
 
 
 def _memory_or_none(value: Any) -> Bytes | None:
@@ -571,6 +592,8 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     dtype = tensor.dtype
     entry._internal_set("shape", shape)
     entry._internal_set("dtype", dtype)
+    entry._internal_set("dtype_ref", DtypeRef.from_value(dtype))
+    entry._internal_set("device_ref", DeviceRef.from_value(tensor.device))
     entry._internal_set(
         "activation_memory",
         Bytes(get_memory_amount_from_metadata(tensor, shape, dtype)),
@@ -822,7 +845,11 @@ class Op:
         "shape": FieldPolicy.KEEP,
         "transformed_out_shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
+        "dtype_ref": FieldPolicy.KEEP,
         "transformed_out_dtype": FieldPolicy.KEEP,
+        "device_ref": FieldPolicy.KEEP,
+        "backend_address": FieldPolicy.KEEP,
+        "resolver_status": FieldPolicy.KEEP,
         "activation_memory": FieldPolicy.KEEP,
         "transformed_activation_memory": FieldPolicy.KEEP,
         "visualizer_path": FieldPolicy.KEEP,
@@ -1096,6 +1123,16 @@ class Op:
             fields_dict["ordinal_index"] = -1
         if "grad_fn" not in fields_dict:
             fields_dict["grad_fn"] = None
+        if fields_dict.get("dtype_ref") is None:
+            fields_dict["dtype_ref"] = _dtype_ref_or_none(fields_dict.get("dtype"))
+        if fields_dict.get("device_ref") is None:
+            fields_dict["device_ref"] = _device_ref_from_metadata(
+                fields_dict.get("out"), fields_dict.get("output_device")
+            )
+        if fields_dict.get("backend_address") is None:
+            fields_dict["backend_address"] = fields_dict.get("address")
+        if fields_dict.get("resolver_status") is None:
+            fields_dict["resolver_status"] = "resolved"
         if "save_gradients" in fields_dict and "save_grads" not in fields_dict:
             fields_dict["save_grads"] = fields_dict.pop("save_gradients")
         for derived_field in (
@@ -1159,7 +1196,11 @@ class Op:
         self.shape = fields_dict["shape"]
         self.transformed_out_shape = fields_dict["transformed_out_shape"]
         self.dtype = fields_dict["dtype"]
+        self.dtype_ref: DtypeRef | None = fields_dict["dtype_ref"]
         self.transformed_out_dtype = fields_dict["transformed_out_dtype"]
+        self.device_ref: DeviceRef | None = fields_dict["device_ref"]
+        self.backend_address: str | None = fields_dict["backend_address"]
+        self.resolver_status: str = fields_dict["resolver_status"]
         self.activation_memory: Bytes | None = as_bytes(fields_dict["activation_memory"])
         self.transformed_activation_memory: Bytes | None = as_bytes(
             fields_dict["transformed_activation_memory"]
@@ -2292,6 +2333,16 @@ class Op:
             state,
             defaults=self.DEFAULT_FILL_STATE,
         )
+        if state.get("dtype_ref") is None:
+            state["dtype_ref"] = _dtype_ref_or_none(state.get("dtype"))
+        if state.get("device_ref") is None:
+            state["device_ref"] = _device_ref_from_metadata(
+                state.get("out"), state.get("output_device")
+            )
+        if state.get("backend_address") is None:
+            state["backend_address"] = state.get("address")
+        if state.get("resolver_status") is None:
+            state["resolver_status"] = "resolved"
         for field_name in (
             "activation_memory",
             "transformed_activation_memory",

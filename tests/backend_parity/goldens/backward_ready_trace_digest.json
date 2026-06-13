@@ -51,16 +51,20 @@
         "output_1:1"
       ]
     },
+    "module_identity_mode": "torch_module",
     "num_backward_passes": 1,
     "num_ops": 3,
     "num_saved_ops": 5,
     "ops": [
       {
+        "backend_address": null,
         "children": [
           "linear_1_1"
         ],
         "containing_modules": null,
+        "device_ref": "cpu",
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "none",
         "has_grad": true,
         "has_saved_activation": true,
@@ -84,17 +88,21 @@
           "kwargs": {}
         },
         "parents": [],
+        "resolver_status": "resolved",
         "shape": [
           2,
           3
         ]
       },
       {
+        "backend_address": "fc1",
         "children": [
           "relu_1_2"
         ],
         "containing_modules": null,
+        "device_ref": "cpu",
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "linear",
         "has_grad": true,
         "has_saved_activation": true,
@@ -124,17 +132,21 @@
         "parents": [
           "input_1"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           4
         ]
       },
       {
+        "backend_address": null,
         "children": [
           "linear_2_3"
         ],
         "containing_modules": null,
+        "device_ref": "cpu",
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "relu",
         "has_grad": true,
         "has_saved_activation": true,
@@ -161,17 +173,21 @@
         "parents": [
           "linear_1_1"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           4
         ]
       },
       {
+        "backend_address": "fc2",
         "children": [
           "output_1"
         ],
         "containing_modules": null,
+        "device_ref": "cpu",
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "linear",
         "has_grad": true,
         "has_saved_activation": true,
@@ -201,15 +217,19 @@
         "parents": [
           "relu_1_2"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           2
         ]
       },
       {
+        "backend_address": "fc2",
         "children": [],
         "containing_modules": null,
+        "device_ref": "cpu",
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "none",
         "has_grad": true,
         "has_saved_activation": true,
@@ -239,6 +259,7 @@
         "parents": [
           "linear_2_3"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           2
@@ -247,16 +268,17 @@
     ],
     "output_layers": [
       "output_1"
-    ]
+    ],
+    "param_source": "native-module"
   },
   "sha256_chunks": [
-    "89e7f824",
-    "23f9e878",
-    "44747cea",
-    "a01d011a",
-    "d969e01e",
-    "1d6e6baf",
-    "bb27662b",
-    "c96c4fd2"
+    "a04ab4a3",
+    "a5f5f0c5",
+    "0e55d71c",
+    "4ebbbdd3",
+    "fa6f2be3",
+    "b41efe85",
+    "c0d367cb",
+    "5e73e062"
   ]
 }

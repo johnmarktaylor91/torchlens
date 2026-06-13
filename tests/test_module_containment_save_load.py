@@ -35,10 +35,10 @@ def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
     return model, torch.randn(2, 8)
 
 
-def test_io_format_version_is_four() -> None:
-    """M8 bumps ``TLSPEC_VERSION`` from 3 to 4."""
+def test_io_format_version_is_five() -> None:
+    """Backend-neutral object-state fields bump ``TLSPEC_VERSION`` to 5."""
 
-    assert TLSPEC_VERSION == 4
+    assert TLSPEC_VERSION == 5
 
 
 def test_round_trip_save_load_preserves_module_containment(tmp_path: Path) -> None:

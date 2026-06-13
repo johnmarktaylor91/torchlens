@@ -132,6 +132,15 @@ manifests. `io.detect_tlspec_format()` distinguishes unified and legacy formats.
 `validation.validate_tlspec()` validates unified manifests only; older 2.16 formats remain
 loadable.
 
+### Backend-Neutral Substrate
+`Trace.backend` is the public backend tag resolved by `BackendSpec`. Trace identity also records
+`module_identity_mode` (`torch_module`, future `pytree_module`, or `function_root`) and
+`param_source` (`native-module`, future `pytree-derived`, or `none`). Op, Layer, and Param records
+carry neutral `dtype_ref`, `device_ref`, `backend_address`, and `resolver_status` mirror fields
+beside existing torch-shaped fields so torch accessors stay stable while non-torch builders can
+populate backend-native metadata. This is a pickled object-state change, so `_io.TLSPEC_VERSION`
+is 5; the public manifest schema remains v1 until the schema-v2 serialization item lands.
+
 ### Fastlog vs Full Capture
 Full capture returns a faithful `ModelLog` and runs postprocess. Fastlog returns a sparse
 `Recording` of predicate-selected operation/module events. It can store to RAM, disk, or both,

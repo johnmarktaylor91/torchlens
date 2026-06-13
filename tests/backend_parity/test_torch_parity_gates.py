@@ -340,6 +340,10 @@ def _op_projection(op: Any) -> dict[str, Any]:
         "num_saved_grads": len(op.grads),
         "shape": _normalize(op.shape),
         "dtype": _normalize(op.dtype),
+        "dtype_ref": None if op.dtype_ref is None else str(op.dtype_ref),
+        "device_ref": None if op.device_ref is None else str(op.device_ref),
+        "backend_address": _normalize(op.backend_address),
+        "resolver_status": op.resolver_status,
         "module_address": _normalize(getattr(op, "module_address", None)),
         "module_pass": _normalize(getattr(op, "module_pass", None)),
         "containing_modules": _normalize(getattr(op, "containing_modules_origin_nested", None)),
@@ -363,6 +367,8 @@ def _trace_projection(trace: Trace) -> dict[str, Any]:
 
     return {
         "backend": trace.backend,
+        "module_identity_mode": trace.module_identity_mode,
+        "param_source": trace.param_source,
         "num_ops": trace.num_ops,
         "num_saved_ops": trace.num_saved_ops,
         "has_backward_pass": trace.has_backward_pass,
@@ -490,6 +496,10 @@ def _public_accessor_projection(trace: Trace) -> dict[str, Any]:
                 "module_address": param.module_address,
                 "shape": _normalize(param.shape),
                 "dtype": _normalize(param.dtype),
+                "dtype_ref": None if param.dtype_ref is None else str(param.dtype_ref),
+                "device_ref": None if param.device_ref is None else str(param.device_ref),
+                "backend_address": _normalize(param.backend_address),
+                "resolver_status": param.resolver_status,
                 "has_grad": bool(param.has_grad),
             }
             for key, param in trace.params.items()

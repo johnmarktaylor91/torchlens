@@ -140,6 +140,8 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "trace_label": None,
     "model_label": None,
     "backend": "torch",
+    "module_identity_mode": "torch_module",
+    "param_source": "native-module",
     "intervention_ready": False,
     "save_arg_templates": False,
     "raw_input": None,
@@ -1006,6 +1008,8 @@ class Trace(CapturedRun):
             setattr(build_state, state_field, getattr(default_state, state_field))
 
     backend: BackendName
+    module_identity_mode: Literal["torch_module", "pytree_module", "function_root"]
+    param_source: Literal["native-module", "pytree-derived", "none"]
     state: TraceState
     tlspec_version: int
     annotations: Dict[str, Any]
@@ -1031,6 +1035,8 @@ class Trace(CapturedRun):
         "model_class_name": FieldPolicy.KEEP,
         "model_label": FieldPolicy.KEEP,
         "backend": FieldPolicy.KEEP,
+        "module_identity_mode": FieldPolicy.KEEP,
+        "param_source": FieldPolicy.KEEP,
         "num_context_lines": FieldPolicy.KEEP,
         "_optimizer": FieldPolicy.DROP,
         "tlspec_version": FieldPolicy.KEEP,
@@ -1350,6 +1356,10 @@ class Trace(CapturedRun):
         self.model_class_name = model_class_name
         self.model_label = model_class_name
         self.backend: BackendName = "torch"
+        self.module_identity_mode: Literal["torch_module", "pytree_module", "function_root"] = (
+            "torch_module"
+        )
+        self.param_source: Literal["native-module", "pytree-derived", "none"] = "native-module"
         self.num_context_lines = num_context_lines
         self._optimizer = optimizer
         self.tlspec_version = TLSPEC_VERSION
@@ -3012,6 +3022,8 @@ class Trace(CapturedRun):
                 **_MODEL_LOG_DEFAULT_FILL,
                 "tlspec_version": TLSPEC_VERSION,
                 "_activation_transform_repr": None,
+                "module_identity_mode": "torch_module",
+                "param_source": "native-module",
                 "save_raw_activations": True,
                 "save_mode": "copy",
                 "raw_output": None,

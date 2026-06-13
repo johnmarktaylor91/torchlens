@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple, Uni
 
 from .._deprecations import MISSING
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
+from ..ir.refs import DeviceRef, DtypeRef
 from ..quantities import Bytes, Duration, Flops, Macs, as_bytes, as_flops, as_macs
 from ._accessor_base import Accessor
 
@@ -190,7 +191,11 @@ class Layer:
         "shape": FieldPolicy.KEEP,
         "transformed_out_shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
+        "dtype_ref": FieldPolicy.KEEP,
         "transformed_out_dtype": FieldPolicy.KEEP,
+        "device_ref": FieldPolicy.KEEP,
+        "backend_address": FieldPolicy.KEEP,
+        "resolver_status": FieldPolicy.KEEP,
         "activation_memory": FieldPolicy.KEEP,
         "transformed_activation_memory": FieldPolicy.KEEP,
         "transformed_out": FieldPolicy.BLOB,
@@ -299,7 +304,11 @@ class Layer:
         self.shape = first_pass.shape
         self.transformed_out_shape = first_pass.transformed_out_shape
         self.dtype = first_pass.dtype
+        self.dtype_ref: DtypeRef | None = first_pass.dtype_ref
         self.transformed_out_dtype = first_pass.transformed_out_dtype
+        self.device_ref: DeviceRef | None = first_pass.device_ref
+        self.backend_address: str | None = first_pass.backend_address
+        self.resolver_status: str = first_pass.resolver_status
         self.activation_memory: Bytes | None = as_bytes(first_pass.activation_memory)
         self.transformed_activation_memory: Bytes | None = as_bytes(
             first_pass.transformed_activation_memory
@@ -637,6 +646,10 @@ class Layer:
                 "transformed_out": None,
                 "transformed_out_shape": None,
                 "transformed_out_dtype": None,
+                "dtype_ref": DtypeRef.from_value(state.get("dtype")),
+                "device_ref": None,
+                "backend_address": state.get("address"),
+                "resolver_status": "resolved",
                 "transformed_activation_memory": None,
                 "transformed_grad": None,
                 "transformed_grad_shape": None,
@@ -644,6 +657,12 @@ class Layer:
                 "transformed_gradient_memory": None,
             },
         )
+        if state.get("dtype_ref") is None:
+            state["dtype_ref"] = DtypeRef.from_value(state.get("dtype"))
+        if state.get("backend_address") is None:
+            state["backend_address"] = state.get("address")
+        if state.get("resolver_status") is None:
+            state["resolver_status"] = "resolved"
         if "activation_memory" not in state and "memory" in state:
             state["activation_memory"] = state.pop("memory")
         for field_name in (

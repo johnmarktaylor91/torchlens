@@ -193,5 +193,63 @@ def test_phase0_dtype_device_refs_round_trip(monkeypatch: pytest.MonkeyPatch) ->
 
     assert isinstance(DtypeRef.from_value(output_op.dtype), DtypeRef)
     assert isinstance(DeviceRef.from_value(output_op.out.device), DeviceRef)
+    assert output_op.dtype_ref == DtypeRef.from_value(output_op.dtype)
+    assert output_op.device_ref == DeviceRef.from_value(output_op.out.device)
+    assert output_op.backend_address == output_op.address
+    assert output_op.resolver_status == "resolved"
+    assert trace.layers[output_op.layer_label].dtype_ref == output_op.dtype_ref
+    assert trace.layers[output_op.layer_label].device_ref == output_op.device_ref
     assert output_event.output.tensor.dtype == str(output_op.dtype)
     assert output_event.output.tensor.device == str(output_op.out.device)
+
+
+def test_phase0_trace_param_source_and_neutral_param_refs() -> None:
+    """Assert torch traces expose native-module params with neutral mirror fields."""
+
+    model = TwoModuleModel()
+    x = torch.randn(2, 3)
+    trace = tl.trace(model, x)
+
+    assert trace.backend == "torch"
+    assert trace.module_identity_mode == "torch_module"
+    assert trace.param_source == "native-module"
+    param = trace.params["linear.weight"]
+    assert param.dtype_ref == DtypeRef.from_value(param.dtype)
+    assert param.device_ref is None
+    assert param.backend_address == param.address
+    assert param.resolver_status == "resolved"
+
+
+def test_phase0_neutral_refs_default_fill_legacy_object_state() -> None:
+    """Assert object-state defaults preserve neutral metadata for legacy state."""
+
+    model = TwoModuleModel()
+    x = torch.randn(2, 3)
+    trace = tl.trace(model, x)
+
+    trace_state = trace.__getstate__()
+    trace_state.pop("module_identity_mode")
+    trace_state.pop("param_source")
+    loaded = type(trace).__new__(type(trace))
+    loaded.__setstate__(trace_state)
+
+    op = trace.ops[0]
+    op_state = op.__getstate__()
+    for field_name in ("dtype_ref", "device_ref", "backend_address", "resolver_status"):
+        op_state.pop(field_name)
+    loaded_op = type(op).__new__(type(op))
+    loaded_op.__setstate__(op_state)
+
+    param = trace.params["linear.weight"]
+    param_state = param.__getstate__()
+    for field_name in ("dtype_ref", "device_ref", "backend_address", "resolver_status"):
+        param_state.pop(field_name)
+    loaded_param = type(param).__new__(type(param))
+    loaded_param.__setstate__(param_state)
+
+    assert loaded.module_identity_mode == "torch_module"
+    assert loaded.param_source == "native-module"
+    assert loaded_op.dtype_ref == DtypeRef.from_value(loaded_op.dtype)
+    assert loaded_op.resolver_status == "resolved"
+    assert loaded_param.dtype_ref == DtypeRef.from_value(loaded_param.dtype)
+    assert loaded_param.backend_address == loaded_param.address

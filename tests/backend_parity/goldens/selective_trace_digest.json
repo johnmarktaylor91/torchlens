@@ -35,17 +35,21 @@
         "tanh_1_2:1"
       ]
     },
+    "module_identity_mode": "torch_module",
     "num_backward_passes": 0,
     "num_ops": 4,
     "num_saved_ops": 1,
     "ops": [
       {
+        "backend_address": null,
         "children": [
           "linear_1_1",
           "add_1_3"
         ],
         "containing_modules": null,
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "none",
         "has_grad": false,
         "has_saved_activation": false,
@@ -69,17 +73,21 @@
           "kwargs": {}
         },
         "parents": [],
+        "resolver_status": "resolved",
         "shape": [
           2,
           3
         ]
       },
       {
+        "backend_address": "proj",
         "children": [
           "tanh_1_2"
         ],
         "containing_modules": null,
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "linear",
         "has_grad": false,
         "has_saved_activation": false,
@@ -109,17 +117,21 @@
         "parents": [
           "input_1"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           3
         ]
       },
       {
+        "backend_address": null,
         "children": [
           "add_1_3"
         ],
         "containing_modules": null,
+        "device_ref": "cpu",
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "tanh",
         "has_grad": false,
         "has_saved_activation": true,
@@ -146,17 +158,21 @@
         "parents": [
           "linear_1_1"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           3
         ]
       },
       {
+        "backend_address": null,
         "children": [
           "linear_2_4"
         ],
         "containing_modules": null,
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "__add__",
         "has_grad": false,
         "has_saved_activation": false,
@@ -185,17 +201,21 @@
           "tanh_1_2",
           "input_1"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           3
         ]
       },
       {
+        "backend_address": "out",
         "children": [
           "output_1"
         ],
         "containing_modules": null,
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "linear",
         "has_grad": false,
         "has_saved_activation": false,
@@ -225,15 +245,19 @@
         "parents": [
           "add_1_3"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           1
         ]
       },
       {
+        "backend_address": "out",
         "children": [],
         "containing_modules": null,
+        "device_ref": null,
         "dtype": "float32",
+        "dtype_ref": "torch.float32",
         "func_name": "none",
         "has_grad": false,
         "has_saved_activation": false,
@@ -263,6 +287,7 @@
         "parents": [
           "linear_2_4"
         ],
+        "resolver_status": "resolved",
         "shape": [
           2,
           1
@@ -271,16 +296,17 @@
     ],
     "output_layers": [
       "output_1"
-    ]
+    ],
+    "param_source": "native-module"
   },
   "sha256_chunks": [
-    "b11aa789",
-    "449b16a4",
-    "96ce18b4",
-    "c75a542f",
-    "2ee9576c",
-    "430d6870",
-    "1077d32c",
-    "4dd8943a"
+    "5adf3df4",
+    "1ffc0bfd",
+    "ef281c11",
+    "bbb857e9",
+    "e3e39f08",
+    "22b77e51",
+    "6b2ef07e",
+    "77fe66e7"
   ]
 }

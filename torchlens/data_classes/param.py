@@ -28,6 +28,7 @@ import torch
 from .._io import FieldPolicy, TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from .._errors import PostTraceParamUnavailable
 from ..constants import PARAM_LOG_FIELD_ORDER
+from ..ir.refs import DeviceRef, DtypeRef
 from ..quantities import Bytes
 from ._accessor_base import Accessor
 from .op import GradientRecord, GradientRecordAccessor
@@ -65,6 +66,10 @@ class Param:
         "name": FieldPolicy.KEEP,
         "shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
+        "dtype_ref": FieldPolicy.KEEP,
+        "device_ref": FieldPolicy.KEEP,
+        "backend_address": FieldPolicy.KEEP,
+        "resolver_status": FieldPolicy.KEEP,
         "num_params": FieldPolicy.KEEP,
         "param_memory": FieldPolicy.KEEP,
         "is_trainable": FieldPolicy.KEEP,
@@ -104,6 +109,10 @@ class Param:
         self.name = name  # short name, e.g. "weight"
         self.shape = shape
         self.dtype = dtype
+        self.dtype_ref: DtypeRef | None = DtypeRef.from_value(dtype)
+        self.device_ref: DeviceRef | None = None
+        self.backend_address: str | None = address
+        self.resolver_status: str = "resolved"
         self.num_params = num_params
         self.param_memory = Bytes(param_memory)
         self.is_trainable = trainable
@@ -563,8 +572,18 @@ class Param:
                 "_param_ref": None,
                 "_param_ref_released": False,
                 "_source_trace_ref": None,
+                "dtype_ref": DtypeRef.from_value(state.get("dtype")),
+                "device_ref": None,
+                "backend_address": state.get("address"),
+                "resolver_status": "resolved",
             },
         )
+        if state.get("dtype_ref") is None:
+            state["dtype_ref"] = DtypeRef.from_value(state.get("dtype"))
+        if state.get("backend_address") is None:
+            state["backend_address"] = state.get("address")
+        if state.get("resolver_status") is None:
+            state["resolver_status"] = "resolved"
         state["param_memory"] = Bytes(state.get("param_memory", 0) or 0)
         state["_grad_memory"] = Bytes(state.get("_grad_memory", 0) or 0)
         self.__dict__.update(state)
