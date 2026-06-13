@@ -580,9 +580,10 @@ def _load_unified_tlspec(
         return load_intervention_spec(bundle_path)
     if kind == "trace":
         _preflight_unified_trace_manifest(manifest)
+        parsed_manifest = _manifest_for_unified_trace_load(manifest)
         return _load_trace_payload(
             bundle_path,
-            Manifest.from_dict(manifest),
+            parsed_manifest,
             lazy=lazy,
             map_location=map_location,
             materialize_nested=materialize_nested,
@@ -641,15 +642,38 @@ def _preflight_unified_trace_manifest(manifest: dict[str, Any]) -> None:
 
     payload_policy = manifest["payload_policy"]
     materializes = bool(payload_policy.get("materialization_supported", False))
-    if not materializes:
+    if not materializes and manifest.get("body_index"):
         raise BackendPayloadUnsupportedError(
             f"Manifest schema v2 trace for backend {backend_name!r} is audit-only; "
             "this runtime cannot materialize non-torch payloads from .tlspec yet."
         )
-    raise BackendPayloadUnsupportedError(
-        f"Manifest schema v2 trace for backend {backend_name!r} requires a backend payload codec "
-        "that is not installed in this runtime."
-    )
+    if materializes:
+        raise BackendPayloadUnsupportedError(
+            f"Manifest schema v2 trace for backend {backend_name!r} requires a backend payload "
+            "codec that is not installed in this runtime."
+        )
+
+
+def _manifest_for_unified_trace_load(manifest: dict[str, Any]) -> Manifest:
+    """Build the legacy payload manifest used by trace rehydration.
+
+    Parameters
+    ----------
+    manifest:
+        Raw unified trace manifest.
+
+    Returns
+    -------
+    Manifest
+        Manifest object for the metadata/body payload loader.
+    """
+
+    if manifest.get("schema_version", 1) != 2 or manifest.get("backend") == "torch":
+        return Manifest.from_dict(manifest)
+
+    payload_manifest = dict(manifest)
+    payload_manifest["torch_version"] = torch.__version__
+    return Manifest.from_dict(payload_manifest)
 
 
 def _load_unified_bundle(bundle_path: Path) -> "Bundle":

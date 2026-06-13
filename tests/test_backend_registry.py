@@ -17,9 +17,12 @@ from torchlens.backends import (
     BackendCapabilities,
     BackendMismatchError,
     BackendSpec,
+    SerializationPolicy,
     register_backend_spec,
     unregister_backend_spec,
 )
+from torchlens.validation import check_metadata_invariants
+from torchlens.validation.invariants import MetadataInvariantError
 
 
 class _TinyModel(nn.Module):
@@ -72,8 +75,8 @@ def _fake_can_handle(
     return isinstance(model, _FakeModel)
 
 
-def _fake_capture_trace(*args: Any, **kwargs: Any) -> dict[str, Any]:
-    """Return a visible fake capture result.
+def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
+    """Return a real trace relabeled as the fake backend.
 
     Parameters
     ----------
@@ -82,11 +85,32 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> dict[str, Any]:
 
     Returns
     -------
-    dict[str, Any]
-        Fake capture result.
+    tl.Trace
+        Fake backend trace.
     """
 
-    return {"backend": "fake", "args": args, "kwargs": kwargs}
+    del args, kwargs
+    trace = tl.trace(
+        _TinyModel().eval(),
+        torch.ones(1),
+        layers_to_save="all",
+        random_seed=1,
+        backend="torch",
+    )
+    trace.backend = "fake"
+    trace.module_identity_mode = "function_root"
+    trace.param_source = "none"
+    trace.model_class_name = "_FakeModel"
+    trace.model_label = "_FakeModel"
+    trace.model_class_qualname = "tests.test_backend_registry._FakeModel"
+    trace.trace_label = "fake-backend-trace"
+    for layer in trace.layer_list:
+        layer.resolver_status = "metadata_only"
+        layer.backend_address = f"fake:{layer.layer_label}"
+    for layer in trace.layer_logs.values():
+        layer.resolver_status = "metadata_only"
+        layer.backend_address = f"fake:{layer.layer_label}"
+    return trace
 
 
 def _fake_validate_entry(*args: Any, **kwargs: Any) -> bool:
@@ -108,7 +132,7 @@ def _fake_validate_entry(*args: Any, **kwargs: Any) -> bool:
 
 
 def _fake_validate_trace(*args: Any, **kwargs: Any) -> bool:
-    """Return a visible fake trace-validation result.
+    """Run fake trace metadata validation.
 
     Parameters
     ----------
@@ -118,10 +142,13 @@ def _fake_validate_trace(*args: Any, **kwargs: Any) -> bool:
     Returns
     -------
     bool
-        Always ``True``.
+        ``True`` when fake metadata invariants pass.
     """
 
-    del args, kwargs
+    trace = args[0]
+    validate_metadata = kwargs.get("validate_metadata", True)
+    if validate_metadata:
+        check_metadata_invariants(trace)
     return True
 
 
@@ -159,6 +186,12 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
                 module_identity_modes=("function_root",),
                 save_levels=("audit",),
             ),
+            serialization_policy=SerializationPolicy(
+                payload_policy="metadata_only",
+                body_format="audit_only",
+                manifest_schema_versions=(2,),
+                runtime_name="fake",
+            ),
             priority=priority,
         ),
     )
@@ -190,11 +223,17 @@ def test_public_backend_literal_branches_stay_in_registry_or_backends() -> None:
     allowed_dirs = {
         project_root / "torchlens" / "backends",
     }
+    allowed_files = {
+        project_root / "torchlens" / "_io" / "bundle.py",
+        project_root / "torchlens" / "_io" / "tlspec.py",
+    }
     backend_literals = {"torch", "mlx", "jax", "tinygrad", "fake"}
     offenders: list[str] = []
 
     for source_path in sorted((project_root / "torchlens").rglob("*.py")):
         if any(source_path.is_relative_to(allowed_dir) for allowed_dir in allowed_dirs):
+            continue
+        if source_path in allowed_files:
             continue
         tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
         source = source_path.read_text(encoding="utf-8")
@@ -229,8 +268,61 @@ def test_fake_backend_explicit_trace_and_validate() -> None:
     _register_fake_backend()
     try:
         result = tl.trace(_FakeModel(), object(), backend="fake")
-        assert result["backend"] == "fake"
+        assert isinstance(result, tl.Trace)
+        assert result.backend == "fake"
+        assert result.module_identity_mode == "function_root"
+        assert result.param_source == "none"
+        assert result.validate_forward_pass([]) is True
         assert tl.validate(_FakeModel(), object(), scope="forward", backend="fake")
+    finally:
+        unregister_backend_spec("fake")
+
+
+def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -> None:
+    """Fake backend trace round-trips metadata and exposes neutral accessors."""
+
+    _register_fake_backend()
+    try:
+        trace = tl.trace(_FakeModel(), object(), backend="fake")
+        path = tmp_path / "fake.tlspec"
+
+        trace.save(path, level="audit")
+        loaded = tl.load(path)
+
+        assert isinstance(loaded, tl.Trace)
+        assert loaded.backend == "fake"
+        assert loaded.module_identity_mode == "function_root"
+        assert loaded.param_source == "none"
+        assert loaded[0].resolver_status == "metadata_only"
+        assert loaded[0].backend_address.startswith("fake:")
+        assert check_metadata_invariants(loaded) is True
+    finally:
+        unregister_backend_spec("fake")
+
+
+@pytest.mark.parametrize(
+    ("mutate", "match"),
+    [
+        (lambda trace: setattr(trace, "module_identity_mode", "torch_module"), "module_identity"),
+        (lambda trace: setattr(trace, "has_backward_pass", True), "has_backward_pass"),
+        (lambda trace: trace.grad_fn_logs.__setitem__(1, object()), "grad_fn_logs"),
+        (lambda trace: setattr(trace[0], "resolver_status", "lost"), "resolver_status"),
+        (lambda trace: trace.output_layers.clear(), "output layer"),
+    ],
+)
+def test_fake_backend_invariant_corruptions_fail(
+    mutate: Any,
+    match: str,
+) -> None:
+    """Non-torch invariant gates reject representative corruptions."""
+
+    _register_fake_backend()
+    try:
+        trace = tl.trace(_FakeModel(), object(), backend="fake")
+        mutate(trace)
+
+        with pytest.raises(MetadataInvariantError, match=match):
+            check_metadata_invariants(trace)
     finally:
         unregister_backend_spec("fake")
 

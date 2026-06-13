@@ -19,6 +19,7 @@ from safetensors.torch import save_file
 from . import TorchLensIOError
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .. import __version__ as TORCHLENS_VERSION
+from ..backends import get_backend_spec
 
 TLSPEC_VERSION = 1
 TLSPEC_SCHEMA_VERSION = 1
@@ -87,6 +88,25 @@ class _TlSpecWriter:
                 intervention_compat_metadata=None,
             )
         )
+        backend_name = str(getattr(trace, "backend", "torch"))
+        if backend_name != "torch":
+            spec = get_backend_spec(backend_name)
+            manifest.update(
+                {
+                    "schema_version": 2,
+                    "backend": backend_name,
+                    "backend_runtime": cls._backend_runtime(trace, backend_name=backend_name),
+                    "torch_version": None,
+                    "model_fingerprint": cls._backend_model_fingerprint(
+                        trace,
+                        backend_name=backend_name,
+                    ),
+                    "body_format": spec.serialization_policy.body_format,
+                    "backward_summary": None,
+                    "derived_gradient_summary": None,
+                    "payload_policy": cls._payload_policy(trace, backend_name=backend_name),
+                }
+            )
         cls.write_json(path, manifest)
 
     @classmethod
@@ -312,6 +332,86 @@ class _TlSpecWriter:
         with path.open("w", encoding="utf-8") as handle:
             json.dump(data, handle, indent=2, sort_keys=False)
             handle.write("\n")
+
+    @staticmethod
+    def _backend_runtime(source: Any, *, backend_name: str) -> dict[str, Any]:
+        """Build a schema v2 backend runtime fingerprint.
+
+        Parameters
+        ----------
+        source:
+            Trace being serialized.
+        backend_name:
+            Registered backend name.
+
+        Returns
+        -------
+        dict[str, Any]
+            JSON-ready backend runtime metadata.
+        """
+
+        spec = get_backend_spec(backend_name)
+        runtime_name = spec.serialization_policy.runtime_name or backend_name
+        return {
+            "name": runtime_name,
+            "version": str(getattr(source, "backend_runtime_version", "0.0.metadata")),
+            "runtime_config": {},
+            "device_summary": {},
+            "compat_policy": {"policy": "metadata-only"},
+        }
+
+    @staticmethod
+    def _payload_policy(source: Any, *, backend_name: str) -> dict[str, Any]:
+        """Build a schema v2 payload policy object.
+
+        Parameters
+        ----------
+        source:
+            Trace being serialized.
+        backend_name:
+            Registered backend name.
+
+        Returns
+        -------
+        dict[str, Any]
+            JSON-ready payload policy metadata.
+        """
+
+        spec = get_backend_spec(backend_name)
+        return {
+            "policy": spec.serialization_policy.payload_policy,
+            "materialization_supported": spec.capabilities.payload_materialization,
+            "payload_kinds": [],
+        }
+
+    @classmethod
+    def _backend_model_fingerprint(cls, source: Any, *, backend_name: str) -> dict[str, Any]:
+        """Build a schema v2 backend-owned model fingerprint.
+
+        Parameters
+        ----------
+        source:
+            Trace being serialized.
+        backend_name:
+            Registered backend name.
+
+        Returns
+        -------
+        dict[str, Any]
+            JSON-ready backend fingerprint.
+        """
+
+        model_signature = cls._model_signature(source, kind="trace")
+        graph_shape_hash = getattr(source, "graph_shape_hash", None)
+        return {
+            "backend_fingerprint": {
+                "backend": backend_name,
+                "model_signature": model_signature,
+                "graph_digest": graph_shape_hash or "metadata-only",
+                "module_identity_mode": getattr(source, "module_identity_mode", None),
+                "param_source": getattr(source, "param_source", None),
+            }
+        }
 
     @classmethod
     def _model_signature(cls, source: Any, *, kind: TlspecKind) -> str:

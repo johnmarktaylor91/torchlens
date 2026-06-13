@@ -106,6 +106,29 @@ def check_metadata_invariants(trace: "Trace") -> bool:
     bool
         ``True`` if all invariants pass.
     """
+    from ..backends import get_backend_spec
+
+    spec = get_backend_spec(getattr(trace, "backend", "torch"))
+    if spec is not get_backend_spec("torch"):
+        return _check_backend_neutral_metadata_invariants(trace)
+
+    return _check_torch_metadata_invariants(trace)
+
+
+def _check_torch_metadata_invariants(trace: "Trace") -> bool:
+    """Run the unchanged torch metadata invariant sequence.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed torch trace to validate.
+
+    Returns
+    -------
+    bool
+        ``True`` if all torch invariants pass.
+    """
+
     # --- Phase 1: structural invariants (A-L) ---
     _check_trace_self_consistency(trace)  # A
     _check_backward_graph_invariants(trace)  # T
@@ -131,6 +154,144 @@ def check_metadata_invariants(trace: "Trace") -> bool:
     _check_lookup_key_consistency(trace)  # R
     check_func_call_id_invariant(trace)  # S
     return True
+
+
+def _check_backend_neutral_metadata_invariants(trace: "Trace") -> bool:
+    """Run backend-neutral metadata invariants for non-torch traces.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed non-torch trace to validate.
+
+    Returns
+    -------
+    bool
+        ``True`` if all backend-neutral invariants pass.
+    """
+
+    _check_backend_identity_invariants(trace)
+    _check_trace_self_consistency(trace)
+    _check_non_torch_backward_inert(trace)
+    _check_backend_neutral_accessor_refs(trace)
+    _check_graph_ordering(trace)
+    _check_lookup_key_consistency(trace)
+    return True
+
+
+def _check_backend_identity_invariants(trace: "Trace") -> None:
+    """Check backend identity and declared mode fields for non-torch traces.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed non-torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If backend identity fields are invalid or unsupported by the registry.
+    """
+
+    from ..backends import UnknownBackendError, get_backend_spec
+
+    name = "backend_identity_invariants"
+    backend = getattr(trace, "backend", None)
+    if not isinstance(backend, str) or backend == "":
+        raise MetadataInvariantError(name, "Trace.backend must be a non-empty string")
+    try:
+        spec = get_backend_spec(backend)
+    except UnknownBackendError as exc:
+        raise MetadataInvariantError(name, f"Trace.backend {backend!r} is not registered") from exc
+
+    module_identity_mode = getattr(trace, "module_identity_mode", None)
+    if module_identity_mode not in spec.capabilities.module_identity_modes:
+        raise MetadataInvariantError(
+            name,
+            f"module_identity_mode={module_identity_mode!r} is not supported by backend "
+            f"{backend!r}",
+        )
+
+    param_source = getattr(trace, "param_source", None)
+    valid_param_sources = {"native-module", "pytree-derived", "none"}
+    if param_source not in valid_param_sources:
+        raise MetadataInvariantError(name, f"param_source={param_source!r} is invalid")
+    if param_source == "none" and getattr(trace, "num_param_tensors", 0) != 0:
+        raise MetadataInvariantError(
+            name,
+            "param_source='none' requires num_param_tensors=0",
+        )
+
+
+def _check_non_torch_backward_inert(trace: "Trace") -> None:
+    """Check that non-torch traces do not fake true backward graph metadata.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed non-torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If true-backward metadata is populated on a non-torch trace.
+    """
+
+    name = "non_torch_backward_inert"
+    if getattr(trace, "has_backward_pass", False):
+        raise MetadataInvariantError(name, "non-torch traces must not set has_backward_pass")
+    if getattr(trace, "grad_fn_logs", None):
+        raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_logs")
+    if getattr(trace, "grad_fn_order", None):
+        raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_order")
+    if getattr(trace, "backward_pass_logs", None):
+        raise MetadataInvariantError(name, "non-torch traces must not populate backward_pass_logs")
+    if getattr(trace, "backward_root_grad_fn_object_ids", None):
+        raise MetadataInvariantError(
+            name,
+            "non-torch traces must not populate backward_root_grad_fn_object_ids",
+        )
+    if getattr(trace, "num_backward_passes", 0) != 0:
+        raise MetadataInvariantError(name, "non-torch traces must have num_backward_passes=0")
+
+
+def _check_backend_neutral_accessor_refs(trace: "Trace") -> None:
+    """Check backend-neutral dtype/device/address resolver fields.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed non-torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a layer or param has malformed neutral accessor metadata.
+    """
+
+    name = "backend_neutral_accessor_refs"
+    valid_statuses = {"resolved", "unresolved", "audit_only", "metadata_only"}
+    records = [*getattr(trace, "layer_list", ()), *list(getattr(trace, "param_logs", {}).values())]
+    for record in records:
+        label = getattr(record, "layer_label", getattr(record, "address", type(record).__name__))
+        resolver_status = getattr(record, "resolver_status", None)
+        if resolver_status not in valid_statuses:
+            raise MetadataInvariantError(
+                name,
+                f"{label} has invalid resolver_status={resolver_status!r}",
+            )
+        for field_name in ("dtype_ref", "device_ref"):
+            ref = getattr(record, field_name, None)
+            if ref is not None and (
+                not isinstance(getattr(ref, "backend", None), str)
+                or getattr(ref, "backend", "") == ""
+                or not isinstance(getattr(ref, "name", None), str)
+                or getattr(ref, "name", "") == ""
+            ):
+                raise MetadataInvariantError(name, f"{label} has malformed {field_name}")
+        backend_address = getattr(record, "backend_address", None)
+        if backend_address is not None and not isinstance(backend_address, str):
+            raise MetadataInvariantError(name, f"{label} has non-string backend_address")
 
 
 def check_func_call_id_invariant(trace: "Trace") -> InvariantResult:
