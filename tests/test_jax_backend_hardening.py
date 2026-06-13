@@ -122,10 +122,11 @@ def test_jax_rejects_root_capture_inside_jit() -> None:
 
 
 @pytest.mark.parametrize(
-    ("fn", "pattern"),
+    ("fn", "kwargs", "pattern"),
     (
         (
             lambda params, x: lax.scan(lambda carry, item: (carry + item, carry), x[0], x)[1],
+            {"jax_control_flow": "reject"},
             "unsupported nested primitive: scan",
         ),
         (
@@ -135,6 +136,7 @@ def test_jax_rejects_root_capture_inside_jit() -> None:
                 lambda y: (y @ params["w"]) + params["b"],
                 x,
             ),
+            {},
             "unsupported nested primitive: cond",
         ),
         (
@@ -143,12 +145,14 @@ def test_jax_rejects_root_capture_inside_jit() -> None:
                 lambda state: (state[0] + 1, state[1] + 1),
                 (0, x),
             )[1],
+            {},
             "unsupported nested primitive: while",
         ),
     ),
 )
 def test_jax_rejects_nested_jaxpr_primitives(
     fn: Callable[[dict[str, Any], Any], Any],
+    kwargs: dict[str, Any],
     pattern: str,
 ) -> None:
     """Nested jaxpr control-flow primitives should name the unsupported primitive."""
@@ -158,6 +162,7 @@ def test_jax_rejects_nested_jaxpr_primitives(
             cast(Any, fn),
             (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
             backend="jax",
+            **kwargs,
         )
 
 
@@ -235,8 +240,6 @@ def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"jax_control_flow": "unroll"}, "control-flow unrolling.*not implemented"),
-        ({"jax_max_control_flow_unroll": 4}, "control-flow unrolling.*not implemented"),
         ({"module_identity_mode": "pytree_module"}, "module_identity_mode selection"),
         ({"payload_policy": "full"}, "payload_policy.*not implemented"),
         ({"save_preview": True}, "save_preview.*not implemented"),
@@ -343,4 +346,9 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert capabilities.supports_payload_materialization is False
     assert capabilities.module_identity_modes == ("function_root",)
     assert capabilities.payload_policy == "audit_only"
-    assert capabilities.trace_options == ("jax_static_argnums", "grad_options")
+    assert capabilities.trace_options == (
+        "jax_static_argnums",
+        "grad_options",
+        "jax_control_flow",
+        "jax_max_control_flow_unroll",
+    )

@@ -689,7 +689,7 @@ class CaptureOptions:
     cache_dir: str | Path | None = None
     module_filter: Callable[[Any], bool] | None = None
     stop_after: Any | None = None
-    jax_control_flow: Literal["reject", "unroll"] = "reject"
+    jax_control_flow: Literal["reject", "unroll"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
     payload_policy: str | None = None
@@ -847,7 +847,7 @@ class CaptureOptions:
             ),
             "stop_after": _resolve_option_value("stop_after", stop_after, None, specified_fields),
             "jax_control_flow": _resolve_option_value(
-                "jax_control_flow", jax_control_flow, "reject", specified_fields
+                "jax_control_flow", jax_control_flow, "unroll", specified_fields
             ),
             "jax_max_control_flow_unroll": _resolve_option_value(
                 "jax_max_control_flow_unroll",

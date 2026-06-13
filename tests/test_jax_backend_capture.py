@@ -946,7 +946,158 @@ def test_jax_trace_rejects_save_shaping_kwargs() -> None:
         _trace_jax(_mlp, (_params(), jnp.ones((2, 3))), layers_to_save=["tanh"])
 
 
-def test_jax_trace_rejects_nested_control_flow() -> None:
+def test_jax_trace_unrolls_scan_and_groups_body_iterations() -> None:
+    """``lax.scan`` should unroll with helper nodes and recurrent body grouping."""
+
+    def uses_scan(params: dict[str, Any], xs: Any) -> Any:
+        """Return carry and stacked ys from a simple scan."""
+
+        def body(carry: Any, x_value: Any) -> tuple[Any, Any]:
+            """Return one scan body step."""
+
+            scaled = x_value * params["scale"]
+            carry_next = carry + scaled
+            y_value = carry_next - params["scale"]
+            return carry_next, y_value
+
+        return lax.scan(body, params["carry0"], xs)
+
+    trace = _trace_jax(
+        uses_scan,
+        (
+            {"scale": jnp.asarray(2.0, dtype=jnp.float32), "carry0": jnp.asarray(0.0)},
+            jnp.arange(4, dtype=jnp.float32),
+        ),
+    )
+    scan_reads = [
+        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "scan_read"
+    ]
+    scan_stacks = [
+        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "scan_stack"
+    ]
+    body_muls = [
+        op
+        for op in trace.layer_list
+        if op.func_name == "mul" and "/body/" in op.annotations.get("jax_source_path", "")
+    ]
+
+    assert len(scan_reads) == 4
+    assert len(scan_stacks) == 1
+    assert len(body_muls) == 4
+    assert {op.layer_label for op in body_muls} == {body_muls[0].layer_label}
+    assert [op.pass_index for op in body_muls] == [1, 2, 3, 4]
+    assert {op.num_passes for op in body_muls} == {4}
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_trace_keeps_two_scan_groups_separate() -> None:
+    """Two scan sites with the same body primitive should not overgroup."""
+
+    def two_scans(params: dict[str, Any], xs: Any) -> Any:
+        """Return outputs from two separate scans."""
+
+        def body(carry: Any, x_value: Any) -> tuple[Any, Any]:
+            """Return one additive body step."""
+
+            carry_next = carry + x_value
+            return carry_next, carry_next
+
+        _carry_a, ys_a = lax.scan(body, params["carry0"], xs)
+        _carry_b, ys_b = lax.scan(body, params["carry1"], xs)
+        return ys_a + ys_b
+
+    trace = _trace_jax(
+        two_scans,
+        (
+            {"carry0": jnp.asarray(0.0), "carry1": jnp.asarray(10.0)},
+            jnp.arange(3, dtype=jnp.float32),
+        ),
+    )
+    first_scan_adds = [
+        op
+        for op in trace.layer_list
+        if op.func_name == "add" and "root/0:scan/" in op.annotations.get("jax_source_path", "")
+    ]
+    second_scan_adds = [
+        op
+        for op in trace.layer_list
+        if op.func_name == "add" and "root/1:scan/" in op.annotations.get("jax_source_path", "")
+    ]
+
+    assert len(first_scan_adds) == 3
+    assert len(second_scan_adds) == 3
+    assert {op.layer_label for op in first_scan_adds}.isdisjoint(
+        {op.layer_label for op in second_scan_adds}
+    )
+    assert {op.num_passes for op in first_scan_adds} == {3}
+    assert {op.num_passes for op in second_scan_adds} == {3}
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_trace_keeps_scan_body_primitive_separate_from_outside() -> None:
+    """A primitive outside scan should not group with the scan body primitive."""
+
+    def scan_then_add(params: dict[str, Any], xs: Any) -> Any:
+        """Return scan output followed by an outside add."""
+
+        def body(carry: Any, x_value: Any) -> tuple[Any, Any]:
+            """Return one additive body step."""
+
+            carry_next = carry + x_value
+            return carry_next, carry_next
+
+        _carry, ys = lax.scan(body, params["carry0"], xs)
+        return ys + params["bias"]
+
+    trace = _trace_jax(
+        scan_then_add,
+        (
+            {"carry0": jnp.asarray(0.0), "bias": jnp.asarray(1.0)},
+            jnp.arange(3, dtype=jnp.float32),
+        ),
+    )
+    body_adds = [
+        op
+        for op in trace.layer_list
+        if op.func_name == "add" and "/body/" in op.annotations.get("jax_source_path", "")
+    ]
+    outside_adds = [
+        op
+        for op in trace.layer_list
+        if op.func_name == "add" and "/body/" not in op.annotations.get("jax_source_path", "")
+    ]
+
+    assert len(body_adds) == 3
+    assert len(outside_adds) == 1
+    assert {op.layer_label for op in body_adds}.isdisjoint({op.layer_label for op in outside_adds})
+    assert {op.num_passes for op in body_adds} == {3}
+    assert outside_adds[0].num_passes == 1
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_trace_scan_reject_policy_and_max_unroll_guard() -> None:
+    """JAX scan policy controls unroll vs historical rejection and length guard."""
+
+    def uses_scan(params: dict[str, Any], xs: Any) -> Any:
+        """Return a scan output."""
+
+        def body(carry: Any, x_value: Any) -> tuple[Any, Any]:
+            """Return one additive body step."""
+
+            carry_next = carry + x_value
+            return carry_next, carry_next
+
+        return lax.scan(body, params["carry0"], xs)
+
+    args = ({"carry0": jnp.asarray(0.0)}, jnp.arange(4, dtype=jnp.float32))
+
+    with pytest.raises(ValueError, match="unsupported nested primitive: scan"):
+        _trace_jax(uses_scan, args, jax_control_flow="reject")
+    with pytest.raises(ValueError, match="length exceeds jax_max_control_flow_unroll"):
+        _trace_jax(uses_scan, args, jax_max_control_flow_unroll=3)
+
+
+def test_jax_trace_rejects_unimplemented_nested_control_flow() -> None:
     """Unsupported nested jaxprs should raise actionable errors."""
 
     def uses_cond(params: dict[str, Any], x: Any) -> Any:

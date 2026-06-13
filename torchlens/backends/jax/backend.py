@@ -136,6 +136,8 @@ class JAXBackend:
         lookback: int = 0,
         lookback_payload_policy: str = "metadata_only",
         jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
+        jax_control_flow: str | MissingType = MISSING,
+        jax_max_control_flow_unroll: int | MissingType = MISSING,
         grad_options: GradOptions | None | MissingType = MISSING,
         **kwargs: Any,
     ) -> Trace:
@@ -207,6 +209,13 @@ class JAXBackend:
             Positional callable argument indexes to declare static for
             ``jax.make_jaxpr``. Static values are not interpreted as dynamic
             jaxpr leaves.
+        jax_control_flow
+            JAX nested control-flow policy. ``"unroll"`` expands supported
+            control-flow primitives into graph-visible equations; ``"reject"``
+            preserves the earlier nested-primitive rejection behavior.
+        jax_max_control_flow_unroll
+            Maximum allowed static unroll length for one JAX control-flow
+            primitive.
         grad_options
             Optional JAX derived-gradient configuration. This runs a second
             pure functional ``jax.value_and_grad`` pass and populates
@@ -245,9 +254,15 @@ class JAXBackend:
         transform = None if _is_missing(transform) else transform
         output_transform = None if _is_missing(output_transform) else output_transform
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
+        jax_control_flow = _default_if_missing(jax_control_flow, "unroll")
+        jax_max_control_flow_unroll = _default_if_missing(jax_max_control_flow_unroll, 64)
         grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
         _reject_tracer_inputs(args)
+        if jax_control_flow not in {"reject", "unroll"}:
+            raise ValueError("jax_control_flow must be 'reject' or 'unroll'")
+        if not isinstance(jax_max_control_flow_unroll, int) or jax_max_control_flow_unroll < 1:
+            raise ValueError("jax_max_control_flow_unroll must be an integer >= 1")
         if not _is_missing(random_seed) and random_seed is not None:
             raise BackendUnsupportedError(
                 "JAX backend preview requires explicit PRNG keys as params/input leaves; "
@@ -291,7 +306,12 @@ class JAXBackend:
         closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
         reject_undeclared_consts(closed_jaxpr)
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
-        result = interpret_closed_jaxpr_with_inlining(closed_jaxpr, flat_args)
+        result = interpret_closed_jaxpr_with_inlining(
+            closed_jaxpr,
+            flat_args,
+            jax_control_flow=cast(str, jax_control_flow),
+            jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
+        )
         output = model(*args)
         output_leaf_paths = self._output_leaf_paths(output)
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)

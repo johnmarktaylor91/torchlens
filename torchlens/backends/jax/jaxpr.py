@@ -180,7 +180,11 @@ def reject_undeclared_consts(closed_jaxpr: Any) -> None:
 
 
 def interpret_closed_jaxpr_with_inlining(
-    closed_jaxpr: Any, flat_args: Sequence[Any]
+    closed_jaxpr: Any,
+    flat_args: Sequence[Any],
+    *,
+    jax_control_flow: str = "unroll",
+    jax_max_control_flow_unroll: int = 64,
 ) -> JaxCaptureResult:
     """Interpret a closed jaxpr while inlining safe pure call primitives.
 
@@ -190,6 +194,12 @@ def interpret_closed_jaxpr_with_inlining(
         Closed jaxpr to interpret.
     flat_args
         Dynamic argument leaves in jaxpr input order.
+    jax_control_flow
+        Control-flow handling policy. ``"reject"`` preserves the historical
+        nested-primitive error; ``"unroll"`` expands supported control-flow
+        primitives into graph-visible equations.
+    jax_max_control_flow_unroll
+        Maximum supported static unroll length for one control-flow primitive.
 
     Returns
     -------
@@ -237,6 +247,22 @@ def interpret_closed_jaxpr_with_inlining(
         for eqn_index, eqn in enumerate(inner.jaxpr.eqns):
             primitive_name = eqn.primitive.name
             eqn_path = (*path, f"{eqn_index}:{primitive_name}")
+            if primitive_name == "scan":
+                if jax_control_flow == "reject":
+                    raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                outputs = _interpret_scan(
+                    eqn=eqn,
+                    env=env,
+                    core=core,
+                    path=eqn_path,
+                    inlined_depth=inlined_depth,
+                    captures=captures,
+                    interpret_inner=interpret_inner,
+                    jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                )
+                for var, value in zip(eqn.outvars, outputs):
+                    _write_env(env, var, value, core)
+                continue
             if primitive_name in REJECTED_NESTED_PRIMITIVES:
                 raise ValueError(f"unsupported nested primitive: {primitive_name}")
             if eqn.effects:
@@ -283,6 +309,134 @@ def interpret_closed_jaxpr_with_inlining(
 
     outputs = interpret_inner(closed_jaxpr, flat_args, ("root",), 0)
     return JaxCaptureResult(outputs, tuple(captures), tuple(inlined_calls))
+
+
+def _interpret_scan(
+    *,
+    eqn: Any,
+    env: dict[Any, Any],
+    core: Any,
+    path: tuple[str, ...],
+    inlined_depth: int,
+    captures: list[JaxEquationCapture],
+    interpret_inner: Callable[[Any, Sequence[Any], tuple[str, ...], int], tuple[Any, ...]],
+    jax_max_control_flow_unroll: int,
+) -> tuple[Any, ...]:
+    """Unroll one ``lax.scan`` equation into synthetic and body captures.
+
+    Parameters
+    ----------
+    eqn
+        Outer scan equation.
+    env
+        Current interpreter environment.
+    core
+        Imported JAX core module.
+    path
+        Source path for the scan equation.
+    inlined_depth
+        Current accepted-call inlining depth.
+    captures
+        Mutable capture list receiving synthetic and body equations.
+    interpret_inner
+        Recursive closed-jaxpr interpreter.
+    jax_max_control_flow_unroll
+        Maximum supported static scan length.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Concrete outputs matching the outer scan equation's outvars.
+    """
+
+    num_consts = int(eqn.params["num_consts"])
+    num_carry = int(eqn.params["num_carry"])
+    length = int(eqn.params["length"])
+    reverse = bool(eqn.params.get("reverse", False))
+    body_jaxpr = eqn.params["jaxpr"]
+    if length < 1:
+        raise ValueError("unsupported lax.scan length: zero-length scans are not yet supported.")
+    if length > jax_max_control_flow_unroll:
+        raise ValueError(
+            "JAX lax.scan length exceeds jax_max_control_flow_unroll: "
+            f"length={length}, max={jax_max_control_flow_unroll}."
+        )
+
+    inputs = tuple(_read_env(env, var, core) for var in eqn.invars)
+    consts = inputs[:num_consts]
+    carry = inputs[num_consts : num_consts + num_carry]
+    xs_values = inputs[num_consts + num_carry :]
+    ys_by_output_index: list[list[Any]] | None = None
+    body_invars = tuple(body_jaxpr.jaxpr.invars)
+    body_outvars = tuple(body_jaxpr.jaxpr.outvars)
+
+    for logical_index in range(length):
+        physical_index = length - 1 - logical_index if reverse else logical_index
+        x_slices = tuple(_slice_scan_leaf(value, physical_index) for value in xs_values)
+        for xs_index, (xs_value, x_slice) in enumerate(zip(xs_values, x_slices)):
+            captures.append(
+                JaxEquationCapture(
+                    index=len(captures),
+                    kind="scan_read",
+                    primitive="scan_read",
+                    primitive_obj=None,
+                    input_values=(xs_value,),
+                    output_values=(x_slice,),
+                    params={"index": physical_index, "axis": 0},
+                    source_path=(
+                        *path,
+                        f"iter={logical_index}",
+                        f"x={xs_index}:scan_read",
+                    ),
+                    invars=(str(eqn.invars[num_consts + num_carry + xs_index]),),
+                    outvars=(f"{path[-1]}/iter={logical_index}/x={xs_index}",),
+                    input_avals=(_aval_repr(eqn.invars[num_consts + num_carry + xs_index]),),
+                    output_avals=(_aval_repr(body_invars[num_consts + num_carry + xs_index]),),
+                    inlined=inlined_depth > 0,
+                )
+            )
+        body_outputs = interpret_inner(
+            body_jaxpr,
+            (*consts, *carry, *x_slices),
+            (*path, f"iter={logical_index}", "body"),
+            inlined_depth,
+        )
+        carry = body_outputs[:num_carry]
+        ys = body_outputs[num_carry:]
+        if ys_by_output_index is None:
+            ys_by_output_index = [[] for _value in ys]
+        for ys_index, y_value in enumerate(ys):
+            ys_by_output_index[ys_index].append((physical_index, y_value))
+
+    stack_outputs: list[Any] = []
+    for ys_index, indexed_values in enumerate(ys_by_output_index or []):
+        sorted_indexed_values = tuple(sorted(indexed_values, key=lambda item: item[0]))
+        ordered_values = tuple(value for _index, value in sorted_indexed_values)
+        output = _stack_scan_outputs(ordered_values)
+        stack_outputs.append(output)
+        captures.append(
+            JaxEquationCapture(
+                index=len(captures),
+                kind="scan_stack",
+                primitive="scan_stack",
+                primitive_obj=None,
+                input_values=ordered_values,
+                output_values=(output,),
+                params={"axis": 0},
+                source_path=(*path, f"ys={ys_index}:scan_stack"),
+                invars=tuple(
+                    f"{path[-1]}/ys={ys_index}/index={index}"
+                    for index, _value in sorted_indexed_values
+                ),
+                outvars=(str(eqn.outvars[num_carry + ys_index]),),
+                input_avals=tuple(
+                    _aval_repr(body_outvars[num_carry + ys_index]) for _ in ordered_values
+                ),
+                output_avals=(_aval_repr(eqn.outvars[num_carry + ys_index]),),
+                inlined=inlined_depth > 0,
+            )
+        )
+    return (*carry, *stack_outputs)
 
 
 def replay_equation(
@@ -428,6 +582,53 @@ def _replay_primitive(
     return tuple(result if capture.primitive_obj.multiple_results else (result,))
 
 
+def _replay_scan_read(
+    capture: JaxEquationCapture, inputs: Sequence[Any] | None = None
+) -> tuple[Any, ...]:
+    """Replay a synthetic scan leaf read.
+
+    Parameters
+    ----------
+    capture
+        Captured synthetic scan-read equation.
+    inputs
+        Optional replacement parent array. When omitted, saved inputs are used.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Single sliced scan leaf.
+    """
+
+    replay_inputs = tuple(capture.input_values if inputs is None else inputs)
+    if len(replay_inputs) != 1:
+        raise ValueError("scan_read replay expects exactly one scanned input leaf.")
+    return (_slice_scan_leaf(replay_inputs[0], int(capture.params["index"])),)
+
+
+def _replay_scan_stack(
+    capture: JaxEquationCapture, inputs: Sequence[Any] | None = None
+) -> tuple[Any, ...]:
+    """Replay a synthetic scan output stack.
+
+    Parameters
+    ----------
+    capture
+        Captured synthetic scan-stack equation.
+    inputs
+        Optional replacement per-iteration y leaves. When omitted, saved inputs
+        are used.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Single stacked scan output leaf.
+    """
+
+    replay_inputs = tuple(capture.input_values if inputs is None else inputs)
+    return (_stack_scan_outputs(replay_inputs),)
+
+
 def _replay_bcf_stub(
     capture: JaxEquationCapture, _inputs: Sequence[Any] | None = None
 ) -> tuple[Any, ...]:
@@ -456,11 +657,49 @@ def _replay_bcf_stub(
 
 JAX_REPLAY_HANDLERS: Mapping[JaxEquationKind, JaxReplayHandler] = {
     "primitive": _replay_primitive,
-    "scan_read": _replay_bcf_stub,
-    "scan_stack": _replay_bcf_stub,
+    "scan_read": _replay_scan_read,
+    "scan_stack": _replay_scan_stack,
     "cond_decision": _replay_bcf_stub,
     "while_decision": _replay_bcf_stub,
 }
+
+
+def _slice_scan_leaf(value: Any, index: int) -> Any:
+    """Return one leading-axis leaf from a scanned input.
+
+    Parameters
+    ----------
+    value
+        Scanned input leaf.
+    index
+        Leading-axis index to read.
+
+    Returns
+    -------
+    Any
+        Sliced scan input leaf.
+    """
+
+    return value[index]
+
+
+def _stack_scan_outputs(values: Sequence[Any]) -> Any:
+    """Stack per-iteration scan y leaves on the leading axis.
+
+    Parameters
+    ----------
+    values
+        Per-iteration scan output leaves in final scan output order.
+
+    Returns
+    -------
+    Any
+        Leading-axis stacked output leaf.
+    """
+
+    import jax.numpy as jnp
+
+    return jnp.stack(tuple(values), axis=0)
 
 
 def _read_env(env: Mapping[Any, Any], atom: Any, core: Any) -> Any:

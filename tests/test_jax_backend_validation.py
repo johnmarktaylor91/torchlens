@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any, cast
 
 import pytest
@@ -60,11 +61,24 @@ def test_jax_replay_kind_table_covers_foundation_kinds() -> None:
     assert set(JAX_REPLAY_HANDLERS) == set(ALL_JAX_EQUATION_KINDS)
 
 
-def test_jax_replay_unimplemented_kind_raises_bcf_message() -> None:
-    """Control-flow replay kinds should raise the planned B-CF handoff error."""
+def test_jax_scan_replay_kinds_are_deterministic() -> None:
+    """Scan helper replay kinds should reconstruct deterministic slice and stack values."""
 
-    with pytest.raises(NotImplementedError, match="kind scan_read lands in B-CF"):
-        replay_equation(_capture_for_kind("scan_read"))
+    jnp = pytest.importorskip("jax.numpy")
+    scan_input = jnp.arange(4, dtype=jnp.float32)
+    read_capture = replace(
+        _capture_for_kind("scan_read"),
+        input_values=(scan_input,),
+        params={"index": 2},
+    )
+    stack_capture = replace(
+        _capture_for_kind("scan_stack"),
+        input_values=(jnp.asarray(1.0), jnp.asarray(3.0)),
+        params={"axis": 0},
+    )
+
+    assert replay_equation(read_capture)[0].item() == 2.0
+    assert replay_equation(stack_capture)[0].tolist() == [1.0, 3.0]
 
 
 def test_jax_replay_unknown_kind_raises_actionable_error() -> None:

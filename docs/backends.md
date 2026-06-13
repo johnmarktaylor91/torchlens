@@ -17,15 +17,16 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 
 The public `tl.trace()` signature declares backend-growth options before their non-torch
 implementations land. Torch accepts these options as inert cache-key inputs so torch behavior stays
-unchanged. JAX and tinygrad reject explicit use with `BackendUnsupportedError` until the matching
+unchanged. JAX now implements the control-flow policy knobs for `lax.scan`; tinygrad and
+unimplemented option families reject explicit use with `BackendUnsupportedError` until the matching
 backend phase implements the capability.
 
 Declared future options:
 
 | Option | Planned owner |
 |---|---|
-| `jax_control_flow` | JAX control-flow boundary or unroll policy |
-| `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
+| `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan` supports `unroll` or `reject` |
+| `jax_max_control_flow_unroll` | JAX `lax.scan` unroll safety limit |
 | `module_identity_mode` | Backend module-mode selection |
 | `payload_policy` | Backend payload codec/materialization policy |
 | `save_preview` | Future non-torch `save=` preview semantics |
@@ -67,12 +68,14 @@ trace.derived_grads["params.w"]
 ```
 
 The JAX backend rejects transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`), root
-capture from inside those transforms, nested-jaxpr primitives such as `scan`, `cond`, `while`, and
+capture from inside those transforms, nested-jaxpr primitives such as `cond`, `while`, and
 `custom_vjp`, callback effects, closed-over array constants, selective save predicates,
-intervention, halt, streaming, `save_grads=`, and `tl.record(backend="jax")`. Workarounds are to
-pass raw functions and explicit params/input leaves to full-save `tl.trace(..., backend="jax")`, or
-use the PyTorch backend for predicate capture, intervention, sparse fastlog, and true backward
-graphs.
+intervention, halt, streaming, `save_grads=`, and `tl.record(backend="jax")`. `lax.scan` is
+unrolled by default with `jax_control_flow="unroll"` and guarded by
+`jax_max_control_flow_unroll`; pass `jax_control_flow="reject"` to preserve the earlier scan
+rejection behavior. Workarounds are to pass raw functions and explicit params/input leaves to
+full-save `tl.trace(..., backend="jax")`, or use the PyTorch backend for predicate capture,
+intervention, sparse fastlog, and true backward graphs.
 
 JAX `.tlspec` support is audit-only: `trace.save(path, level="audit")` persists metadata. Default
 materialized payload save fails with `BackendPayloadUnsupportedError` until a non-torch payload

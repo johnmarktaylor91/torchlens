@@ -39,7 +39,12 @@ PUBLIC_OPTION_SPINE_TRACE_OPTIONS: tuple[str, ...] = tuple(
 TORCH_TRACE_OPTIONS: tuple[str, ...] = PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 """Trace options accepted by the torch backend and currently treated as inert metadata."""
 
-JAX_TRACE_OPTIONS: tuple[str, ...] = ("jax_static_argnums", "grad_options")
+JAX_TRACE_OPTIONS: tuple[str, ...] = (
+    "jax_static_argnums",
+    "grad_options",
+    "jax_control_flow",
+    "jax_max_control_flow_unroll",
+)
 """Trace options implemented by the JAX preview backend."""
 
 TINYGRAD_TRACE_OPTIONS: tuple[str, ...] = ("grad_options",)
