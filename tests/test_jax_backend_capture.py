@@ -12,6 +12,8 @@ from torchlens.backends import BackendUnsupportedError
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
+lax = pytest.importorskip("jax.lax")
+random = pytest.importorskip("jax.random")
 
 
 pytestmark = pytest.mark.backend_jax
@@ -56,6 +58,295 @@ def _relu_block(params: dict[str, Any], x: Any) -> Any:
     return jax.nn.relu(x @ params["w"])
 
 
+def _attention_block(params: dict[str, Any], x: Any) -> Any:
+    """Return a small single-head attention output.
+
+    Parameters
+    ----------
+    params
+        Parameter pytree.
+    x
+        Input sequence.
+
+    Returns
+    -------
+    Any
+        Attention block output.
+    """
+
+    q = x @ params["wq"]
+    k = x @ params["wk"]
+    v = x @ params["wv"]
+    scores = (q @ jnp.swapaxes(k, -1, -2)) / jnp.sqrt(jnp.asarray(q.shape[-1], dtype=x.dtype))
+    weights = jax.nn.softmax(scores, axis=-1)
+    return weights @ v
+
+
+def _operator_heavy(_: None, x: Any) -> Any:
+    """Return an operator-heavy expression.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Combined expression result.
+    """
+
+    return ((x + 2.0) * (x - 1.0)) / jnp.maximum(x, 1.0)
+
+
+def _method_spellings(_: None, x: Any) -> Any:
+    """Return a result using array method spellings.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Method-spelling result.
+    """
+
+    return x.reshape((2, 3)).transpose().sum(axis=0)
+
+
+def _reductions(_: None, x: Any) -> Any:
+    """Return reductions over an input array.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Reduction result.
+    """
+
+    return x.sum(axis=0) + x.mean(axis=1, keepdims=True)
+
+
+def _broadcasting(_: None, x: Any) -> Any:
+    """Return a broadcasting-heavy expression.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Broadcast result.
+    """
+
+    return x + jnp.arange(x.shape[-1], dtype=x.dtype)
+
+
+def _slicing(_: None, x: Any) -> Any:
+    """Return a dynamic-slice-style expression.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Sliced result.
+    """
+
+    return x[:, 1:] * 2.0
+
+
+def _einsum(_: None, x: Any) -> Any:
+    """Return an einsum-lowered matrix product.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Einsum result.
+    """
+
+    return jnp.einsum("ij,jk->ik", x, x.T)
+
+
+def _dtype_cast(_: None, x: Any) -> Any:
+    """Return a dtype-cast expression.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Cast result.
+    """
+
+    return x.astype(jnp.float32) + 1.0
+
+
+def _depthwise_conv(params: dict[str, Any], x: Any) -> Any:
+    """Return a grouped convolution output.
+
+    Parameters
+    ----------
+    params
+        Parameter pytree.
+    x
+        Input image batch.
+
+    Returns
+    -------
+    Any
+        Convolution result.
+    """
+
+    return lax.conv_general_dilated(
+        x,
+        params["kernel"],
+        (1, 1),
+        "SAME",
+        dimension_numbers=("NHWC", "HWIO", "NHWC"),
+        feature_group_count=2,
+    )
+
+
+def _pointwise_relu(params: dict[str, Any], x: Any) -> Any:
+    """Return a pointwise convolution followed by library ReLU.
+
+    Parameters
+    ----------
+    params
+        Parameter pytree.
+    x
+        Input image batch.
+
+    Returns
+    -------
+    Any
+        Activated convolution result.
+    """
+
+    y = lax.conv_general_dilated(
+        x, params["kernel"], (1, 1), "VALID", dimension_numbers=("NHWC", "HWIO", "NHWC")
+    )
+    return jax.nn.relu(y)
+
+
+def _dropout_like(_: None, key: Any, x: Any) -> Any:
+    """Return explicit-key dropout-like output.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    key
+        Explicit JAX random key.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Dropout-like result.
+    """
+
+    keep = random.bernoulli(key, 0.75, x.shape)
+    return jnp.where(keep, x / 0.75, 0.0)
+
+
+def _randint_index(_: None, key: Any, x: Any) -> Any:
+    """Return an explicit-key random index selection.
+
+    Parameters
+    ----------
+    _
+        Unused parameter tree placeholder.
+    key
+        Explicit JAX random key.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Selected row.
+    """
+
+    index = random.randint(key, (), 0, x.shape[0])
+    return x[index]
+
+
+def _layer_norm(params: dict[str, Any], x: Any) -> Any:
+    """Return a layer-normalization expression.
+
+    Parameters
+    ----------
+    params
+        Parameter pytree.
+    x
+        Input array.
+
+    Returns
+    -------
+    Any
+        Normalized result.
+    """
+
+    centered = x - x.mean(axis=-1, keepdims=True)
+    variance = jnp.mean(centered * centered, axis=-1, keepdims=True)
+    return centered * lax.rsqrt(variance + 1e-5) * params["scale"] + params["bias"]
+
+
+def _one_hot_take(params: dict[str, Any], x: Any) -> Any:
+    """Return one-hot matrix selection.
+
+    Parameters
+    ----------
+    params
+        Explicit pytree containing row indices.
+    x
+        Input matrix.
+
+    Returns
+    -------
+    Any
+        One-hot selected rows.
+    """
+
+    return jax.nn.one_hot(params["indices"], x.shape[-1]) @ x.T
+
+
 def _params() -> dict[str, Any]:
     """Build a nested parameter pytree.
 
@@ -84,6 +375,22 @@ def _nested_params() -> dict[str, Any]:
     return {
         "encoder": {"w": jnp.ones((3, 4)), "b": jnp.zeros((4,))},
         "head": {"w": jnp.ones((4, 2))},
+    }
+
+
+def _attention_params() -> dict[str, Any]:
+    """Build parameter leaves for the attention corpus case.
+
+    Returns
+    -------
+    dict[str, Any]
+        Attention parameter pytree.
+    """
+
+    return {
+        "wq": jnp.eye(4, dtype=jnp.float32),
+        "wk": jnp.eye(4, dtype=jnp.float32),
+        "wv": jnp.eye(4, dtype=jnp.float32),
     }
 
 
@@ -239,6 +546,117 @@ def test_jax_trace_inlines_allowlisted_pure_library_calls() -> None:
     assert "custom_jvp_call" in trace.jax_inlined_call_primitives
     assert any(capture.inlined for capture in trace.jax_equation_captures)
     assert "max" in {op.func_name for op in trace.layer_list}
+
+
+def test_jax_trace_accepts_s0j_extended_corpus_subset() -> None:
+    """Representative S0.J corpus cases should capture through public JAX tracing."""
+
+    cases: tuple[tuple[str, Callable[..., Any], tuple[Any, ...], set[str]], ...] = (
+        (
+            "attention",
+            _attention_block,
+            (_attention_params(), jnp.ones((2, 3, 4), dtype=jnp.float32)),
+            {"dot_general", "div"},
+        ),
+        (
+            "operator_heavy",
+            _operator_heavy,
+            (None, jnp.linspace(1.0, 3.0, 6, dtype=jnp.float32).reshape(2, 3)),
+            {"add", "mul", "div", "max"},
+        ),
+        (
+            "method_spellings",
+            _method_spellings,
+            (None, jnp.arange(6, dtype=jnp.float32)),
+            {"reshape", "transpose", "reduce_sum"},
+        ),
+        (
+            "reductions",
+            _reductions,
+            (None, jnp.arange(6, dtype=jnp.float32).reshape(2, 3)),
+            {"reduce_sum", "div"},
+        ),
+        (
+            "broadcasting",
+            _broadcasting,
+            (None, jnp.ones((2, 3), dtype=jnp.float32)),
+            {"add"},
+        ),
+        (
+            "slicing",
+            _slicing,
+            (None, jnp.arange(8, dtype=jnp.float32).reshape(2, 4)),
+            {"slice", "mul"},
+        ),
+        (
+            "einsum",
+            _einsum,
+            (None, jnp.arange(6, dtype=jnp.float32).reshape(2, 3)),
+            {"dot_general"},
+        ),
+        (
+            "dtype_cast",
+            _dtype_cast,
+            (None, jnp.arange(4, dtype=jnp.int32)),
+            {"convert_element_type", "add"},
+        ),
+        (
+            "depthwise_conv",
+            _depthwise_conv,
+            (
+                {"kernel": jnp.ones((3, 3, 1, 2), dtype=jnp.float32) / 9.0},
+                jnp.ones((1, 4, 4, 2), dtype=jnp.float32),
+            ),
+            {"conv_general_dilated"},
+        ),
+        (
+            "pointwise_conv_relu",
+            _pointwise_relu,
+            (
+                {"kernel": jnp.ones((1, 1, 2, 3), dtype=jnp.float32) / 2.0},
+                jnp.ones((1, 4, 4, 2), dtype=jnp.float32),
+            ),
+            {"conv_general_dilated", "max"},
+        ),
+        (
+            "dropout_like_explicit_key",
+            _dropout_like,
+            (None, random.key(42), jnp.ones((2, 3), dtype=jnp.float32)),
+            {"random_bits", "lt", "select_n"},
+        ),
+        (
+            "randint_index_explicit_key",
+            _randint_index,
+            (
+                None,
+                random.PRNGKey(7),
+                jnp.arange(12, dtype=jnp.float32).reshape(4, 3),
+            ),
+            {"random_bits", "dynamic_slice"},
+        ),
+        (
+            "layer_norm",
+            _layer_norm,
+            (
+                {"scale": jnp.ones((4,), dtype=jnp.float32), "bias": jnp.zeros((4,))},
+                jnp.arange(8, dtype=jnp.float32).reshape(2, 4),
+            ),
+            {"reduce_sum", "rsqrt"},
+        ),
+        (
+            "one_hot_take",
+            _one_hot_take,
+            ({"indices": jnp.asarray([0, 2, 1], dtype=jnp.int32)}, jnp.eye(4, dtype=jnp.float32)),
+            {"broadcast_in_dim", "eq", "dot_general"},
+        ),
+    )
+
+    for name, fn, args, expected_primitives in cases:
+        trace = _trace_jax(fn, args)
+        primitive_names = {op.func_name for op in trace.layer_list}
+
+        assert expected_primitives <= primitive_names, name
+        assert trace.validate_forward_pass([]), name
 
 
 def test_jax_trace_rejects_save_shaping_kwargs() -> None:
