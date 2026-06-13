@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 import pytest
@@ -170,6 +171,14 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
     explicit = tl.trace(model, x, layers_to_save="all", random_seed=1, backend="torch")
     assert explicit.backend == legacy.backend == "torch"
     assert explicit.layer_labels == legacy.layer_labels
+
+
+def test_public_trace_dispatches_through_backend_spec() -> None:
+    """Public ``trace`` dispatch stays owned by the backend spec."""
+
+    source = inspect.getsource(tl.trace)
+    assert "capture_trace(**public_trace_kwargs)" in source
+    assert "resolved_spec.name" not in source
 
 
 def test_explicit_backend_mismatch_is_deterministic() -> None:

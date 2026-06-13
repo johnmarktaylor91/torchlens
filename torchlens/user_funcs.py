@@ -1744,8 +1744,88 @@ def trace(
     if os.environ.get("TORCHLENS_AUTO") == "1":
         raise RuntimeError("TORCHLENS_AUTO=1 is intentionally unsupported; use auto_capture().")
     resolved_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
-    if resolved_spec.name != "torch":
-        return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
+    return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
+
+
+def _trace_torch_model(
+    model: nn.Module,
+    input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
+    input_kwargs: dict[Any, Any] | None = None,
+    layers_to_save: str | list[Any] | None | MissingType = MISSING,
+    transform: Callable[[Any], Any] | None | MissingType = MISSING,
+    save_raw_input: str | bool | MissingType = MISSING,
+    batch_render: str | MissingType = MISSING,
+    output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
+    save_raw_output: str | bool | MissingType = MISSING,
+    keep_orphans: bool | MissingType = MISSING,
+    output_device: OutputDeviceLiteral | MissingType = MISSING,
+    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    save_raw_activations: bool | MissingType = MISSING,
+    save_raw_gradients: bool | MissingType = MISSING,
+    save_mode: SaveMode | MissingType = MISSING,
+    capture_tensor_grad_hooks: bool | MissingType = MISSING,
+    mark_layer_depths: bool | MissingType = MISSING,
+    detach_saved_activations: bool | MissingType = MISSING,
+    save_arg_values: bool | MissingType = MISSING,
+    save_grads: bool | str | list[Any] | PredicateFn | BaseSelector | None | MissingType = MISSING,
+    save_code_context: bool | MissingType = MISSING,
+    save_rng_states: bool | MissingType = MISSING,
+    reconstruction_ready: bool | MissingType = MISSING,
+    random_seed: int | None | MissingType = MISSING,
+    num_context_lines: int | MissingType = MISSING,
+    optimizer: Any | MissingType = MISSING,
+    save_outs_to: str | Path | None | MissingType = MISSING,
+    keep_outs_in_memory: bool | MissingType = MISSING,
+    out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
+    intervention_ready: bool | MissingType = MISSING,
+    hooks: Any | None | MissingType = MISSING,
+    unwrap_when_done: bool | MissingType = MISSING,
+    verbose: bool | MissingType = MISSING,
+    source_context_lines: int | MissingType = MISSING,
+    compute_input_output_distances: bool | MissingType = MISSING,
+    recurrence_detection: bool | MissingType = MISSING,
+    capture: CaptureOptions | None = None,
+    save: SaveOptions | PredicateFn | BaseSelector | None = None,
+    intervene: InterventionPredicate | None = None,
+    halt: HaltPredicateFn | None = None,
+    lookback: int = 0,
+    lookback_payload_policy: str = "metadata_only",
+    storage: StreamingOptions | None = None,
+    streaming: StreamingOptions | None = None,
+    backward_ready: bool | MissingType = MISSING,
+    name: str | None | MissingType = MISSING,
+    cache: bool | MissingType = MISSING,
+    cache_dir: str | Path | None | MissingType = MISSING,
+    module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
+    stop_after: Any | None | MissingType = MISSING,
+    raise_on_nan: bool | MissingType = MISSING,
+    profile: bool | MissingType = MISSING,
+    recipes: (
+        list[Callable[[Any], dict[str, Any]]]
+        | tuple[Callable[[Any], dict[str, Any]], ...]
+        | None
+        | MissingType
+    ) = MISSING,
+) -> Trace:
+    """Run the registry-owned torch trace implementation.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model.
+    input_args:
+        Positional args for ``model.forward()``.
+    input_kwargs:
+        Keyword args for ``model.forward()``.
+    **capture_options:
+        The remaining parameters match ``trace`` exactly, excluding ``backend``.
+
+    Returns
+    -------
+    Trace
+        Captured torch trace.
+    """
     # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
     _reject_opaque_wrappers(model)
@@ -2939,24 +3019,6 @@ def show_bundle_graph(
         vis_fileformat,
         vis_save_only,
     )
-
-
-def _trace_torch_model(*args: Any, **kwargs: Any) -> Trace:
-    """Dispatch direct registry torch capture through the public torch path.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Public ``trace`` arguments.
-
-    Returns
-    -------
-    Trace
-        Captured torch trace.
-    """
-
-    kwargs["backend"] = "torch"
-    return trace(*args, **kwargs)
 
 
 def validate_forward_pass(
