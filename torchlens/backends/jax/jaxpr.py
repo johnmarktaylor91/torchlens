@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable, cast
 
+from ...ir.events import JaxEquationKind
 
 SAFE_JIT_NAMES = frozenset(
     {
@@ -41,6 +42,8 @@ class JaxEquationCapture:
     ----------
     index
         Sequential equation index in flattened capture order.
+    kind
+        Replay kind used to dispatch validation.
     primitive
         JAX primitive name.
     primitive_obj
@@ -66,6 +69,7 @@ class JaxEquationCapture:
     """
 
     index: int
+    kind: JaxEquationKind
     primitive: str
     primitive_obj: Any
     input_values: tuple[Any, ...]
@@ -255,6 +259,7 @@ def interpret_closed_jaxpr_with_inlining(
             captures.append(
                 JaxEquationCapture(
                     index=len(captures),
+                    kind="primitive",
                     primitive=primitive_name,
                     primitive_obj=eqn.primitive,
                     input_values=inputs,
@@ -277,12 +282,50 @@ def interpret_closed_jaxpr_with_inlining(
 def replay_equation(
     capture: JaxEquationCapture, inputs: Sequence[Any] | None = None
 ) -> tuple[Any, ...]:
-    """Replay a captured primitive equation on saved inputs.
+    """Replay a captured equation on saved inputs.
 
     Parameters
     ----------
     capture
         Captured equation.
+    inputs
+        Optional replacement inputs. When omitted, saved inputs are used.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Captured outputs.
+    """
+
+    try:
+        handler = JAX_REPLAY_HANDLERS[cast(JaxEquationKind, capture.kind)]
+    except KeyError as exc:
+        expected = ", ".join(ALL_JAX_EQUATION_KINDS)
+        raise NotImplementedError(
+            f"JAX replay kind {capture.kind!r} is not registered; expected one of: {expected}."
+        ) from exc
+    return handler(capture, inputs)
+
+
+JaxReplayHandler = Callable[[JaxEquationCapture, Sequence[Any] | None], tuple[Any, ...]]
+ALL_JAX_EQUATION_KINDS: tuple[JaxEquationKind, ...] = (
+    "primitive",
+    "scan_read",
+    "scan_stack",
+    "cond_decision",
+    "while_decision",
+)
+
+
+def _replay_primitive(
+    capture: JaxEquationCapture, inputs: Sequence[Any] | None = None
+) -> tuple[Any, ...]:
+    """Replay a captured JAX primitive bind.
+
+    Parameters
+    ----------
+    capture
+        Captured primitive equation.
     inputs
         Optional replacement inputs. When omitted, saved inputs are used.
 
@@ -295,6 +338,41 @@ def replay_equation(
     replay_inputs = tuple(capture.input_values if inputs is None else inputs)
     result = capture.primitive_obj.bind(*replay_inputs, **capture.params)
     return tuple(result if capture.primitive_obj.multiple_results else (result,))
+
+
+def _replay_bcf_stub(
+    capture: JaxEquationCapture, _inputs: Sequence[Any] | None = None
+) -> tuple[Any, ...]:
+    """Raise for control-flow replay kinds reserved for B-CF.
+
+    Parameters
+    ----------
+    capture
+        Captured synthetic control-flow equation.
+    _inputs
+        Optional replacement inputs, unused until B-CF implements the kind.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Never returned.
+
+    Raises
+    ------
+    NotImplementedError
+        Always raised for B-CF-reserved replay kinds.
+    """
+
+    raise NotImplementedError(f"kind {capture.kind} lands in B-CF")
+
+
+JAX_REPLAY_HANDLERS: Mapping[JaxEquationKind, JaxReplayHandler] = {
+    "primitive": _replay_primitive,
+    "scan_read": _replay_bcf_stub,
+    "scan_stack": _replay_bcf_stub,
+    "cond_decision": _replay_bcf_stub,
+    "while_decision": _replay_bcf_stub,
+}
 
 
 def _read_env(env: Mapping[Any, Any], atom: Any, core: Any) -> Any:

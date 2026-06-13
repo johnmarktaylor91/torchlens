@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import json
 import time
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import reduce
@@ -31,6 +32,7 @@ from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_root_module_log
 from ...quantities import Bytes, Duration
 from .jaxpr import (
+    ALL_JAX_EQUATION_KINDS,
     JaxCaptureResult,
     JaxEquationCapture,
     derive_closed_jaxpr,
@@ -338,7 +340,7 @@ class JAXBackend:
             return False
 
     def _validate_jax_equations(self, trace: Trace) -> bool:
-        """Validate JAX primitive equations against materialized trace payloads.
+        """Validate JAX equation captures against materialized trace payloads.
 
         Parameters
         ----------
@@ -357,10 +359,16 @@ class JAXBackend:
         equation_ops = _jax_equation_ops(trace)
         if len(captures) != len(equation_ops):
             return False
+        capture_kind_counts = Counter(capture.kind for capture in captures)
+        op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
+        if capture_kind_counts != op_kind_counts:
+            return False
         ops_by_raw_label = {
             getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", [])
         }
         for capture, op in zip(captures, equation_ops):
+            if capture.kind != _jax_op_capture_kind(op):
+                return False
             inputs = _inputs_from_trace_graph(capture, op, ops_by_raw_label)
             replayed = replay_equation(capture, inputs)
             saved_outputs = _saved_op_outputs(op, len(replayed))
@@ -574,6 +582,7 @@ class JAXBackend:
                 container_path=(),
                 annotations={
                     "jax_params": repr(dict(equation.params)),
+                    "jax_capture_kind": equation.kind,
                     "jax_source_path": "/".join(equation.source_path),
                     "jax_invars": equation.invars,
                     "jax_outvars": equation.outvars,
@@ -1832,7 +1841,7 @@ def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
 
 
 def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
-    """Return materialized operation logs that correspond to JAX equations.
+    """Return materialized operation logs that correspond to JAX replay captures.
 
     Parameters
     ----------
@@ -1842,15 +1851,38 @@ def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
     Returns
     -------
     tuple[Any, ...]
-        Operation logs with JAX equation annotations, in execution order.
+        Operation logs with JAX replay-kind annotations, in execution order.
     """
 
     return tuple(
         op
         for op in getattr(trace, "layer_list", ())
         if isinstance(getattr(op, "annotations", None), Mapping)
-        and "jax_source_path" in op.annotations
+        and "jax_capture_kind" in op.annotations
     )
+
+
+def _jax_op_capture_kind(op: Any) -> str:
+    """Return the replay kind annotation from a materialized JAX op.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+
+    Returns
+    -------
+    str
+        JAX replay kind stored on the operation.
+    """
+
+    annotations = getattr(op, "annotations", {})
+    kind = annotations.get("jax_capture_kind") if isinstance(annotations, Mapping) else None
+    if not isinstance(kind, str):
+        raise ValueError("JAX equation op is missing a string replay kind.")
+    if kind not in ALL_JAX_EQUATION_KINDS:
+        raise ValueError(f"JAX equation op has unknown replay kind: {kind!r}.")
+    return kind
 
 
 def _inputs_from_trace_graph(

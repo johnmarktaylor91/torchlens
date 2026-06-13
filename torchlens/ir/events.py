@@ -13,6 +13,13 @@ if TYPE_CHECKING:
 
 OpEventKind = Literal["op", "source", "synthetic_output", "intervention_replacement"]
 EdgeUseKind = Literal["arg", "kwarg", "container", "module", "buffer", "output"]
+JaxEquationKind = Literal[
+    "primitive",
+    "scan_read",
+    "scan_stack",
+    "cond_decision",
+    "while_decision",
+]
 BackwardTrigger = Literal[
     "backward",
     "autograd_grad",
