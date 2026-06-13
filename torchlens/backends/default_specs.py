@@ -106,6 +106,60 @@ def _jax_can_handle(
     return any(isinstance(leaf, jax.Array) for leaf in leaves)
 
 
+def _tinygrad_can_handle(
+    model: object,
+    input_args: object,
+    input_kwargs: dict[Any, Any] | None,
+) -> bool:
+    """Return whether the tinygrad spec can handle the public call.
+
+    Parameters
+    ----------
+    model:
+        Candidate callable.
+    input_args:
+        Positional inputs.
+    input_kwargs:
+        Keyword inputs.
+
+    Returns
+    -------
+    bool
+        ``True`` when tinygrad is installed, ``model`` is callable, and any
+        input leaf is a tinygrad tensor.
+    """
+
+    del input_kwargs
+    if not callable(model):
+        return False
+    try:
+        from tinygrad import Tensor
+    except ImportError:
+        return False
+    return any(isinstance(leaf, Tensor) for leaf in _simple_leaves(input_args))
+
+
+def _simple_leaves(value: object) -> tuple[object, ...]:
+    """Return leaves from simple Python containers.
+
+    Parameters
+    ----------
+    value:
+        Candidate tree.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Flat leaves.
+    """
+
+    if isinstance(value, dict):
+        return tuple(leaf for child in value.values() for leaf in _simple_leaves(child))
+    if isinstance(value, tuple | list):
+        return tuple(leaf for child in value for leaf in _simple_leaves(child))
+    return (value,)
+
+
 def _torch_capture_trace(*args: Any, **kwargs: Any) -> Any:
     """Dispatch to the current torch public trace body.
 
@@ -161,6 +215,25 @@ def _jax_capture_trace(*args: Any, **kwargs: Any) -> Any:
     from .jax import JAXBackend
 
     return JAXBackend().capture_trace(*args, **kwargs)
+
+
+def _tinygrad_capture_trace(*args: Any, **kwargs: Any) -> Any:
+    """Dispatch to the UOp-snapshot tinygrad backend.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public ``trace`` arguments.
+
+    Returns
+    -------
+    Any
+        Captured trace.
+    """
+
+    from .tinygrad import TinygradBackend
+
+    return TinygradBackend().capture_trace(*args, **kwargs)
 
 
 def _torch_validate_entry(*args: Any, **kwargs: Any) -> bool:
@@ -219,6 +292,25 @@ def _jax_validate_entry(*args: Any, **kwargs: Any) -> bool:
     return JAXBackend().validate_entry(*args, **kwargs)
 
 
+def _tinygrad_validate_entry(*args: Any, **kwargs: Any) -> bool:
+    """Dispatch to tinygrad model/input validation.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public validation arguments.
+
+    Returns
+    -------
+    bool
+        Validation result.
+    """
+
+    from .tinygrad import TinygradBackend
+
+    return TinygradBackend().validate_entry(*args, **kwargs)
+
+
 def _torch_validate_trace(*args: Any, **kwargs: Any) -> bool:
     """Dispatch to the current torch trace validation implementation.
 
@@ -273,6 +365,25 @@ def _jax_validate_trace(*args: Any, **kwargs: Any) -> bool:
     from .jax import JAXBackend
 
     return JAXBackend().validate_trace(*args, **kwargs)
+
+
+def _tinygrad_validate_trace(*args: Any, **kwargs: Any) -> bool:
+    """Dispatch to tinygrad trace replay validation.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Trace validation arguments.
+
+    Returns
+    -------
+    bool
+        Validation result.
+    """
+
+    from .tinygrad import TinygradBackend
+
+    return TinygradBackend().validate_trace(*args, **kwargs)
 
 
 def register_default_backend_specs() -> None:
@@ -362,6 +473,33 @@ def register_default_backend_specs() -> None:
                 runtime_name="jax",
             ),
             priority=20,
+        ),
+        replace=True,
+    )
+    register_backend_spec(
+        BackendSpec(
+            name="tinygrad",
+            can_handle=_tinygrad_can_handle,
+            capture_trace=_tinygrad_capture_trace,
+            validate_entry=_tinygrad_validate_entry,
+            validate_trace=_tinygrad_validate_trace,
+            capabilities=BackendCapabilities(
+                backward_capture=False,
+                validation_replay=True,
+                fastlog=False,
+                interventions=False,
+                rng_replay=False,
+                payload_materialization=False,
+                streaming=False,
+                module_identity_modes=("function_root",),
+            ),
+            serialization_policy=SerializationPolicy(
+                payload_policy="audit_only",
+                body_format="audit_only",
+                manifest_schema_versions=(2,),
+                runtime_name="tinygrad",
+            ),
+            priority=30,
         ),
         replace=True,
     )
