@@ -36,7 +36,7 @@ from .scrub import scrub_for_save
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 from .. import __version__ as TORCHLENS_VERSION
-from ..backends import BackendPayloadUnsupportedError, get_backend_spec
+from ..backends import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec
 from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
 
@@ -212,6 +212,15 @@ def save(
         include_rng_states = True
     backend_name = str(getattr(trace, "backend", "torch"))
     backend_spec = get_backend_spec(backend_name)
+    _reject_audit_only_materialized_payload_save(
+        backend_name=backend_name,
+        backend_spec=backend_spec,
+        save_level=save_level,
+        include_outs=include_outs,
+        include_grads=include_grads,
+        include_saved_args=include_saved_args,
+        include_rng_states=include_rng_states,
+    )
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="save target")
@@ -328,6 +337,57 @@ def save(
         if backup_path is not None and not bundle_path.exists() and backup_path.exists():
             _restore_backup(backup_path, bundle_path)
         raise TorchLensIOError(f"Failed to save bundle at {bundle_path}.") from exc
+
+
+def _reject_audit_only_materialized_payload_save(
+    *,
+    backend_name: str,
+    backend_spec: BackendSpec,
+    save_level: str,
+    include_outs: bool,
+    include_grads: bool,
+    include_saved_args: bool,
+    include_rng_states: bool,
+) -> None:
+    """Reject materialized payload saves before audit-only scrub blobification.
+
+    Parameters
+    ----------
+    backend_name:
+        Backend identifier recorded on the trace.
+    backend_spec:
+        Registered backend capability spec.
+    save_level:
+        Public ``.tlspec`` save level after coercion.
+    include_outs:
+        Whether activation outputs would be materialized.
+    include_grads:
+        Whether gradient outputs would be materialized.
+    include_saved_args:
+        Whether captured args/kwargs would be materialized.
+    include_rng_states:
+        Whether RNG states would be materialized.
+
+    Raises
+    ------
+    BackendPayloadUnsupportedError
+        If the requested save would require payload materialization for a
+        backend whose public serialization contract is audit-only.
+    """
+
+    payload_requested = include_outs or include_grads or include_saved_args or include_rng_states
+    if (
+        backend_name == "mlx"
+        or save_level == "audit"
+        or backend_spec.capabilities.payload_materialization
+        or not payload_requested
+    ):
+        return
+    raise BackendPayloadUnsupportedError(
+        f"Backend {backend_name!r} .tlspec payloads are audit-only in this runtime. "
+        "Portable saves with materialized payloads require a backend payload codec; "
+        "use level='audit' to save metadata without materialized payloads."
+    )
 
 
 @overload
@@ -917,6 +977,10 @@ def _scrub_trace_for_bundle(
             include_grads=include_grads,
             include_saved_args=include_saved_args,
             include_rng_states=include_rng_states,
+            backend_name=str(getattr(trace, "backend", "torch")),
+            payload_materialization=get_backend_spec(
+                str(getattr(trace, "backend", "torch"))
+            ).capabilities.payload_materialization,
         )
     finally:
         for attr_name, attr_value in transient_attrs.items():

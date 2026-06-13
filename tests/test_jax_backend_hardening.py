@@ -311,9 +311,11 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     loaded = tl.load(audit_path)
     assert loaded.backend == "jax"
     assert loaded.param_source == "pytree-derived"
+    assert all(op.out is None for op in loaded.layer_list)
 
-    with pytest.raises(BackendPayloadUnsupportedError, match="audit-only|materialize"):
+    with pytest.raises(BackendPayloadUnsupportedError, match="audit-only|materialize") as exc_info:
         trace.save(tmp_path / "jax_portable.tlspec")
+    assert "expected a tensor for portable blobification" not in str(exc_info.value)
     with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
         trace.log_backward(cast(Any, trace[trace.output_layers[0]].out))
     with pytest.raises(ValueError, match="derived_grads"):

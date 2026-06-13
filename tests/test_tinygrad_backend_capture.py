@@ -551,8 +551,11 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(BackendUnsupportedError, match="audit-only|realized-copy"):
         loaded.validate_forward_pass([_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))])
 
-    with pytest.raises(BackendPayloadUnsupportedError, match="audit-only|materialized payloads"):
+    with pytest.raises(
+        BackendPayloadUnsupportedError, match="audit-only|materialized payloads"
+    ) as exc_info:
         trace.save(tmp_path / "tinygrad_portable.tlspec")
+    assert "expected a tensor for portable blobification" not in str(exc_info.value)
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.derived_grads"):

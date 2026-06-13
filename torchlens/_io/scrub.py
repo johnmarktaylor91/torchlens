@@ -39,6 +39,8 @@ class _ScrubOptions:
     include_grads: bool
     include_saved_args: bool
     include_rng_states: bool
+    backend_name: str = "torch"
+    payload_materialization: bool = True
     unsupported_tensor_records: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -49,6 +51,8 @@ def scrub_for_save(
     include_grads: bool = True,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
+    backend_name: str | None = None,
+    payload_materialization: bool = True,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
 
@@ -66,6 +70,11 @@ def scrub_for_save(
     include_rng_states:
         Whether captured RNG state tensors should be preserved via blob
         references.
+    backend_name:
+        Backend identifier for payload audit records. Defaults to
+        ``trace.backend`` when present.
+    payload_materialization:
+        Whether this backend can serialize materialized tensor payloads.
 
     Returns
     -------
@@ -79,6 +88,8 @@ def scrub_for_save(
         include_grads=include_grads,
         include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
+        backend_name=str(backend_name or getattr(trace, "backend", "torch")),
+        payload_materialization=payload_materialization,
     )
     memo: dict[int, Any] = {}
     blob_specs: list[BlobSpec] = []
@@ -395,16 +406,14 @@ def _blobify_tensor_field(
     if field_value is None:
         return None
     if _is_mlx_array(field_value):
-        options.unsupported_tensor_records.append(
-            {
-                "owner_type": type(owner).__name__,
-                "owner_label": _blob_label_for_owner(owner),
-                "field": field_name,
-                "kind": _blob_kind_for_field(owner, field_name),
-                "reason": "mlx_array_audit_null",
-            }
+        return _audit_null_tensor_field(owner, field_name, options, reason="mlx_array_audit_null")
+    if not options.payload_materialization and not isinstance(field_value, torch.Tensor):
+        return _audit_null_tensor_field(
+            owner,
+            field_name,
+            options,
+            reason=f"{options.backend_name}_array_audit_null",
         )
-        return None
     if not isinstance(field_value, torch.Tensor):
         raise TorchLensIOError(
             f"{type(owner).__name__}.{field_name} expected a tensor for portable blobification, "
@@ -418,6 +427,44 @@ def _blobify_tensor_field(
     )
     blob_specs.append((blob_id, tensor_payload, kind, label))
     return BlobRef(blob_id=blob_id, kind=kind)
+
+
+def _audit_null_tensor_field(
+    owner: Any,
+    field_name: str,
+    options: _ScrubOptions,
+    *,
+    reason: str,
+) -> None:
+    """Record an audit-only tensor payload that cannot be blobified.
+
+    Parameters
+    ----------
+    owner:
+        Object carrying the payload field.
+    field_name:
+        Name of the payload field.
+    options:
+        Active scrub options that collect unsupported tensor records.
+    reason:
+        Stable manifest reason code.
+
+    Returns
+    -------
+    None
+        The live payload is replaced by ``None`` in scrubbed state.
+    """
+
+    options.unsupported_tensor_records.append(
+        {
+            "owner_type": type(owner).__name__,
+            "owner_label": _blob_label_for_owner(owner),
+            "field": field_name,
+            "kind": _blob_kind_for_field(owner, field_name),
+            "reason": reason,
+        }
+    )
+    return None
 
 
 def _blobify_recursive_value(
