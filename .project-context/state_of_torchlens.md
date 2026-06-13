@@ -152,6 +152,17 @@ are not backward capture; JAX traces keep `backward_capture=False`, and `trace.l
 `trace.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise with guidance to
 `trace.derived_grads`.
 
+tinygrad M2 exposes a preview UOp-snapshot backend through explicit `backend="tinygrad"` on raw
+callables with positional tinygrad `Tensor` inputs. It is pinned to the `tinygrad>=0.13,<0.14`
+series and the runtime guard currently accepts `tinygrad==0.13.0`; live replay validation and
+derived gradients require `DEV=PYTHON` realized-copy payloads. The module mode is
+`function_root`, `Trace.param_source` is `"none"`, `.tlspec` save/load is audit-only, and
+`tl.backends.tinygrad.GradOptions` populates leaf-level `trace.derived_grads` without enabling
+true backward capture. Selective save predicates, module predicates, intervention, halt,
+streaming, `save_grads=`, `backward_ready=True`, `tl.record(backend="tinygrad")`, mid-capture
+realize/assign/replace/setitem mutation, and TinyJit execution raise typed backend errors with
+workarounds.
+
 ### Fastlog vs Full Capture
 Full capture returns a faithful `Trace` and runs postprocess. Fastlog returns a sparse
 `Recording` of predicate-selected torch operation/module events. It can store to RAM, disk, or

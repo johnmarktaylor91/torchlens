@@ -10,6 +10,8 @@ metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_so
 `Trace.derived_grads`, `dtype_ref`, `device_ref`, `backend_address`, and `resolver_status`.
 JAX leaf gradients are requested with `tl.backends.jax.GradOptions`; they are derived by a
 second functional AD run and never populate backward-pass or op-gradient surfaces.
+tinygrad leaf gradients use `tl.backends.tinygrad.GradOptions`; they are bracketed
+`DEV=PYTHON` leaf-gradient runs and likewise never populate true backward surfaces.
 
 ## Public surface map
 

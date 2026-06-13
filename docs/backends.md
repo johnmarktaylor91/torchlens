@@ -2,7 +2,7 @@
 
 TorchLens resolves capture through `BackendSpec`. `backend=None` keeps the stable PyTorch eager
 default and existing MLX module auto-routing; explicit `backend="jax"` enables the JAX functional
-preview.
+preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 
 ## Capability Matrix
 
@@ -11,6 +11,7 @@ preview.
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Technical preview | Unsupported | Audit-only | `torch_module` compatibility mode | Unsupported |
 | `jax` | Preview jaxpr-first functional capture | Per-equation replay and parent perturbation | Audit-only `.tlspec` save/load | `function_root` | `trace.derived_grads` only |
+| `tinygrad` | Preview UOp-snapshot functional capture | UOp replay and parent perturbation on live `DEV=PYTHON` payloads | Audit-only `.tlspec` save/load | `function_root` | `trace.derived_grads` only |
 
 JAX preview traces accept raw callables shaped like `fn(params, *inputs)`. Parameter records are
 derived from the first pytree argument, so `Trace.param_source` is `"pytree-derived"` when tensor
@@ -56,3 +57,39 @@ graphs.
 JAX `.tlspec` support is audit-only: `trace.save(path, level="audit")` persists metadata. Default
 materialized payload save fails with `BackendPayloadUnsupportedError` until a non-torch payload
 codec exists.
+
+## tinygrad Preview
+
+Install the optional runtime with `torchlens[tinygrad]`; the preview is pinned to the
+`tinygrad>=0.13,<0.14` series and currently accepts `tinygrad==0.13.0` at runtime. For live
+payload validation and derived gradients, run with `DEV=PYTHON`.
+
+```python
+from tinygrad import Tensor
+import torchlens as tl
+
+def fn(x):
+    return ((x + 1).relu() * 2).sum()
+
+trace = tl.trace(fn, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
+assert trace.validate_forward_pass([fn(Tensor([1.0, -2.0, 3.0]))])
+```
+
+tinygrad derived gradients are a bracketed leaf-gradient preview, not backward capture:
+
+```python
+grad_options = tl.backends.tinygrad.GradOptions(input_grad_argnums=(0,))
+trace = tl.trace(fn, Tensor([1.0, -2.0, 3.0]), backend="tinygrad", grad_options=grad_options)
+trace.derived_grads["inputs.0"]
+```
+
+The tinygrad backend rejects mid-capture `Tensor.realize()`, `Tensor.assign()`,
+`Tensor.replace()`, setitem input mutation, TinyJit execution, selective save predicates,
+module predicates, intervention, halt, streaming, `save_grads=`, `backward_ready=True`, and
+`tl.record(backend="tinygrad")`. Workarounds are to return a pure lazy tinygrad expression from a
+raw callable and use full-save `tl.trace(..., backend="tinygrad")`, or use the PyTorch backend for
+predicate capture, intervention, sparse fastlog, and true backward graphs.
+
+tinygrad `.tlspec` support is audit-only: `trace.save(path, level="audit")` persists metadata.
+Loaded audit traces cannot replay-validate or materialize tinygrad payloads; default materialized
+payload save fails with `BackendPayloadUnsupportedError` until a tinygrad payload codec exists.

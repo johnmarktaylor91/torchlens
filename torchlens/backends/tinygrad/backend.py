@@ -1084,7 +1084,8 @@ class TinygradBackend:
             True when every captured UOp replays to its saved payload.
         """
 
-        captures = tuple(getattr(trace, "tinygrad_uop_captures", ()))
+        captures_raw = getattr(trace, "tinygrad_uop_captures", None)
+        captures = tuple(captures_raw) if captures_raw is not None else ()
         if not captures:
             raise BackendUnsupportedError(
                 "tinygrad validation requires live DEV=PYTHON realized-copy payloads; "

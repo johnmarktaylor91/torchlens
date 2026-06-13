@@ -63,6 +63,12 @@ gradients, and J4 hardening/docs/spec amendment are complete. JAX remains a
 functional preview with true backward capture and T1 per-op gradients reserved for
 research.
 
+## tinygrad M2 status
+tinygrad M2 COMPLETE: G1 UOp-snapshot capture, G2 validation tripwire, G3 bracketed
+derived gradients, and G4 hardening/docs/public-surface matrix are complete. tinygrad remains a
+functional preview with audit-only `.tlspec` load payloads and true backward capture reserved for
+research.
+
 ## Iteration log
 | Round | Lane | Phase | Commit | Result | Next |
 |---|---|---|---|---|---|
@@ -100,6 +106,7 @@ research.
 | 1 | tinygrad | G1 forward capture core | this commit | PASS: added `torchlens.backends.tinygrad`, registered TinygradSpec, captured materializable UOps from output snapshots with Tensor-op observations, live `DEV=PYTHON` realized-copy payloads, function-root mode, validation replay, and full-save-only rejection tests. Gates: ruff, mypy, canonical tinygrad tests, backend_parity, predicate suite, smoke. | Continue G1 with broader tinygrad op corpus, mutation/JIT rejection hardening, portable audit-only save/load coverage, and any nn.Module identity decision. |
 | 1 | tinygrad | G2 validation tripwire + capture hardening | this commit | PASS: tinygrad trace validation now runs backend-neutral invariants plus materialized UOp replay from saved value parents and parent perturbation; public `tl.validate(..., backend="tinygrad")` returns honest bools for live DEV=PYTHON realized-copy payloads and raises for audit-only payloads; negative controls prove corrupted saved output, wrong parent wiring, and dropped payloads fail; capture rejects mid-call realize/assign/TinyJit and covers conv/matmul/reduce/elementwise plus multi-output. Gates: ruff, touched mypy, canonical tinygrad tests, backend_parity, predicate suite, smoke. | G2 complete; proceed to G3 bracketed leaf grads. |
 | 1 | tinygrad | G3 bracketed leaf grads | this commit | PASS: added `tl.backends.tinygrad.GradOptions`, bracketed input-leaf `trace.derived_grads` via snapshot/backward/increment/restore, audit-only refusal, and tinygrad non-backward surface errors pointing to derived_grads. Gates: ruff, touched mypy, canonical tinygrad tests, backend_parity, predicate suite, smoke. | G3 complete; proceed to G4 hardening + docs to close tinygrad M2. |
+| 1 | tinygrad | G4 hardening + docs | this commit | PASS: added tinygrad rejection suite coverage for mutation/JIT/save-shaping/record/module predicates/backward surfaces, executable public-surface matrix, audit-only save/load refusal checks, capability audit, docs/glossary lockstep, and `tinygrad>=0.13,<0.14` extra. Gates: canonical tinygrad tests, then ruff/mypy/base gates. | tinygrad M2 COMPLETE. |
 
 ## M0 SUBSTRATE — independent Opus review (orchestrator, post-M0-complete)
 VERDICT: PASS. Reviewed the two highest-risk surfaces directly:

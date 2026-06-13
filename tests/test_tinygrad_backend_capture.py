@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError, get_backend_spec
-from torchlens.backends.tinygrad import GradOptions, TinygradBackend
+from torchlens.backends import (
+    BackendPayloadUnsupportedError,
+    BackendUnsupportedError,
+    get_backend_spec,
+)
+from torchlens.backends.tinygrad import GradOptions, TinygradBackend, capabilities
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
@@ -160,6 +165,59 @@ def _assign_inside(x: Any) -> Any:
     return x * 2.0
 
 
+def _replace_inside(x: Any) -> Any:
+    """Return an expression after replacing an input tensor's backing UOp.
+
+    Parameters
+    ----------
+    x
+        tinygrad Tensor input.
+
+    Returns
+    -------
+    Any
+        tinygrad Tensor output.
+    """
+
+    x.replace(x + 1.0)
+    return x * 2.0
+
+
+def _setitem_inside(x: Any) -> Any:
+    """Return an expression after mutating an input tensor through setitem.
+
+    Parameters
+    ----------
+    x
+        tinygrad Tensor input.
+
+    Returns
+    -------
+    Any
+        tinygrad Tensor output.
+    """
+
+    x[0] = x[0] + 1.0
+    return x * 2.0
+
+
+def _trace(**kwargs: Any) -> Any:
+    """Trace the shared tinygrad scalar block.
+
+    Parameters
+    ----------
+    **kwargs
+        Public trace keyword overrides.
+
+    Returns
+    -------
+    Any
+        Captured tinygrad trace.
+    """
+
+    return tl.trace(_tiny_block, Tensor([1.0, -2.0, 3.0]), backend="tinygrad", **kwargs)
+
+
 def test_tinygrad_spec_registered() -> None:
     """Assert the built-in tinygrad spec exposes the G1 capability split."""
 
@@ -171,6 +229,14 @@ def test_tinygrad_spec_registered() -> None:
     assert spec.capabilities.payload_materialization is False
     assert spec.capabilities.module_identity_modes == ("function_root",)
     assert spec.serialization_policy.payload_policy == "audit_only"
+    assert capabilities.supports_backward_capture is False
+    assert capabilities.supports_validation_replay is True
+    assert capabilities.supports_fastlog is False
+    assert capabilities.supports_intervention is False
+    assert capabilities.supports_payload_materialization is False
+    assert capabilities.module_identity_modes == ("function_root",)
+    assert capabilities.payload_policy == "audit_only"
+    assert capabilities.live_payload_policy == "dev_python_realized_copy"
 
 
 def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
@@ -217,16 +283,23 @@ def test_tinygrad_wide_corpus_capture_and_validation() -> None:
     assert trace.validate_forward_pass(list(_wide_corpus(x))) is True
 
 
-def test_tinygrad_rejects_mid_capture_realize_and_mutation() -> None:
+@pytest.mark.parametrize(
+    ("fn", "pattern"),
+    (
+        (_realize_inside, "Tensor\\.realize|lazy tinygrad expression"),
+        (_assign_inside, "Tensor\\.assign|lazy tinygrad expression"),
+        (_replace_inside, "Tensor\\.replace|pure lazy tinygrad expression"),
+        (_setitem_inside, "setitem input mutation|pure lazy tinygrad expression"),
+    ),
+)
+def test_tinygrad_rejects_mid_capture_realize_and_mutation(
+    fn: Any,
+    pattern: str,
+) -> None:
     """Reject tinygrad execution that can truncate lazy lineage during capture."""
 
-    x = Tensor([1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="realize|assign|TinyJit"):
-        tl.trace(_realize_inside, x, backend="tinygrad")
-
-    y = Tensor([1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="realize|assign|TinyJit"):
-        tl.trace(_assign_inside, y, backend="tinygrad")
+    with pytest.raises(BackendUnsupportedError, match=pattern):
+        tl.trace(fn, Tensor([1.0, 2.0]), backend="tinygrad")
 
 
 def test_tinygrad_rejects_tinyjit_callable() -> None:
@@ -256,12 +329,36 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
         tl.trace(jit_block, x, backend="tinygrad")
 
 
-def test_tinygrad_save_shaping_rejected() -> None:
+@pytest.mark.parametrize(
+    ("kwargs", "pattern"),
+    (
+        ({"save": tl.func("relu")}, "full-save only.*save-shaping"),
+        ({"layers_to_save": ["relu"]}, "full-save only.*save shaping"),
+        ({"lookback": 1}, "full-save only.*save-window"),
+        ({"intervene": tl.when(tl.func("relu"), tl.zero_ablate())}, "full-save only"),
+        ({"halt": tl.func("relu")}, "full-save only"),
+        ({"save_grads": True}, "save_grads.*full-save forward capture"),
+    ),
+)
+def test_tinygrad_save_shaping_rejected(kwargs: dict[str, Any], pattern: str) -> None:
     """Reject save shaping because tinygrad preview is full-save only."""
 
-    x = Tensor([1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="full-save only|save-shaping"):
-        tl.trace(_tiny_block, x, backend="tinygrad", save=tl.func("relu"))
+    with pytest.raises(BackendUnsupportedError, match=pattern):
+        _trace(**kwargs)
+
+
+def test_tinygrad_record_backend_rejected() -> None:
+    """Sparse ``tl.record`` should stay torch-only for backend v1."""
+
+    with pytest.raises(BackendUnsupportedError, match="torch-only.*tl\\.trace"):
+        tl.record(_tiny_block, Tensor([1.0, 2.0]), backend="tinygrad")
+
+
+def test_tinygrad_module_predicate_surfaces_rejected_for_function_root() -> None:
+    """Module predicate capture should fail because tinygrad only has function_root."""
+
+    with pytest.raises(BackendUnsupportedError, match="full-save only.*save-shaping"):
+        _trace(save=tl.in_module("self"))
 
 
 def test_tinygrad_backward_ready_rejected() -> None:
@@ -394,3 +491,50 @@ def test_tinygrad_derived_grads_reject_audit_only_payload_envelope() -> None:
             captured_output=_tiny_square_loss(x),
             grad_options=GradOptions(input_grad_argnums=(0,)),
         )
+
+
+def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
+    """Assert supported and unsupported public surfaces on a real tinygrad trace."""
+
+    trace = tl.trace(
+        _tiny_square_loss,
+        Tensor([1.0, -2.0, 3.0]),
+        backend="tinygrad",
+        grad_options=GradOptions(input_grad_argnums=(0,)),
+    )
+
+    assert trace.backend == "tinygrad"
+    assert trace.validate_forward_pass([_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))]) is True
+    assert isinstance(trace.summary(), str)
+    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert trace.modules["self"].address == "self"
+    assert trace.module_identity_mode == "function_root"
+    assert trace.param_source == "none"
+    assert list(trace.params.keys()) == []
+    assert trace.has_backward_pass is False
+    assert trace.num_backward_passes == 0
+    assert trace.num_backward_edges is None
+    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+
+    outpath = tmp_path / "tinygrad_graph"
+    dot = trace.draw(vis_outpath=str(outpath), vis_save_only=True, vis_fileformat="dot")
+    assert isinstance(dot, str)
+
+    audit_path = tmp_path / "tinygrad_audit.tlspec"
+    trace.save(audit_path, level="audit")
+    loaded = tl.load(audit_path)
+    assert loaded.backend == "tinygrad"
+    assert loaded.param_source == "none"
+    assert all(op.out is None for op in loaded.layer_list)
+    with pytest.raises(BackendUnsupportedError, match="audit-only|realized-copy"):
+        loaded.validate_forward_pass([_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))])
+
+    with pytest.raises(BackendPayloadUnsupportedError, match="audit-only|materialized payloads"):
+        trace.save(tmp_path / "tinygrad_portable.tlspec")
+    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+        trace.log_backward(trace[trace.output_layers[0]].out)
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace.backward_passes
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace[0].grads

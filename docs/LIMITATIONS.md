@@ -20,14 +20,17 @@ catalog](https://github.com/johnmarktaylor91/torchlens/pull/143) for the
 original analysis.
 
 Backend note: `backend=None` preserves current PyTorch eager capture and MLX
-module auto-routing. Explicit `backend="torch"` and `backend="jax"` are
-supported; unknown, ambiguous, or mismatched backend selections fail before
-capture with typed backend registry errors. MLX remains a technical preview with
-limited capabilities. JAX is a jaxpr-first functional preview with full-save
-forward capture, replay validation, function-root modules, pytree-derived
-params, audit-only `.tlspec` payloads, and derived gradients only. Fastlog,
-intervention, and true backward capture are PyTorch-only in the current
-registry.
+module auto-routing. Explicit `backend="torch"`, `backend="jax"`, and
+`backend="tinygrad"` are supported; unknown, ambiguous, or mismatched backend
+selections fail before capture with typed backend registry errors. MLX remains a
+technical preview with limited capabilities. JAX is a jaxpr-first functional
+preview with full-save forward capture, replay validation, function-root modules,
+pytree-derived params, audit-only `.tlspec` payloads, and derived gradients only.
+tinygrad is a UOp-snapshot functional preview pinned to the `tinygrad>=0.13,<0.14`
+series; live validation and derived gradients require `DEV=PYTHON`, function-root
+modules, audit-only `.tlspec` payloads after load, no parameter records, and no
+mid-capture realization/mutation/TinyJit. Fastlog, intervention, and true backward
+capture are PyTorch-only in the current registry.
 
 If you hit a case we haven't listed, please
 [open an issue](https://github.com/johnmarktaylor91/torchlens/issues/new).
