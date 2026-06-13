@@ -44,6 +44,27 @@ class UnifiedTinyModel(nn.Module):
         return torch.relu(self.linear(x))
 
 
+class UnifiedSavedOrphanModel(nn.Module):
+    """Tiny model with a saved factory tensor outside the output graph."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create an orphan tensor and return an unrelated output.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Model output unrelated to the orphan tensor.
+        """
+
+        _unused = torch.randn(x.shape)
+        return x + 1
+
+
 def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
     """Create a deterministic captured model log.
 
@@ -185,6 +206,28 @@ def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str)
 
 
 @pytest.mark.smoke
+def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
+    """Portable saves preserve orphan record payload tensors."""
+
+    x = torch.ones(2, 2)
+    log = tl.trace(UnifiedSavedOrphanModel(), x, save=tl.func("randn"), random_seed=1)
+    path = tmp_path / "orphan_records.tlspec"
+    expected_payload = log.orphan_records[0]["payload_ref"].detach().clone()
+
+    log.save(path, level="portable")
+    validate_tlspec(path)
+    loaded = tl.load(path)
+    manifest = _read_manifest(path)
+
+    assert isinstance(loaded, tl.Trace)
+    assert loaded.orphan_records
+    assert loaded.orphan_records[0]["raw_label"].startswith("randn")
+    assert isinstance(loaded.orphan_records[0]["payload_ref"], torch.Tensor)
+    assert torch.equal(loaded.orphan_records[0]["payload_ref"], expected_payload)
+    assert any(entry["intended_use"] == "orphan_payload" for entry in manifest["body_index"])
+
+
+@pytest.mark.smoke
 @pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
 def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Bundle.save writes unified manifests that load as Bundle objects."""
@@ -271,6 +314,7 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     loaded = tl.load(path)
     manifest = _read_manifest(path)
 
+    assert isinstance(loaded, tl.Trace)
     assert loaded.has_backward_pass is True
     assert loaded.backward_passes.for_pass(1).pass_index == 1
     assert manifest["backward_summary"]["has_backward_pass"] is True

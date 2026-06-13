@@ -399,6 +399,10 @@ def _blobify_recursive_value(
 ) -> Any:
     """Blobify tensors recursively inside nested containers."""
 
+    if isinstance(value, _SIMPLE_KEEP_TYPES):
+        return value
+    if isinstance(value, torch.Size):
+        return tuple(value)
     if isinstance(value, BlobRef):
         return value
     if isinstance(value, torch.Tensor):
@@ -542,6 +546,8 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "grad_fn_grad"
     if field_name == "_buffer_initial_values":
         return "buffer_initial_value"
+    if field_name == "orphan_records":
+        return "orphan_payload"
     raise TorchLensIOError(f"No blob kind mapping defined for {type(owner).__name__}.{field_name}.")
 
 
