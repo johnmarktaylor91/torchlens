@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, cast
 
 from ...ir.events import JaxEquationKind
-from .modules import decode_module_scope
+from .modules import decode_module_call_scope, decode_module_scope
 
 SAFE_JIT_NAMES = frozenset(
     {
@@ -77,6 +77,8 @@ class JaxEquationCapture:
         Capture indexes whose synthetic decision nodes control this equation.
     module_stack
         TorchLens module-address stack decoded from JAX source ``name_stack``.
+    module_call_stack
+        TorchLens module call stack decoded from JAX source ``name_stack``.
     """
 
     index: int
@@ -94,6 +96,7 @@ class JaxEquationCapture:
     inlined: bool
     control_capture_indices: tuple[int, ...] = ()
     module_stack: tuple[str, ...] = ()
+    module_call_stack: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -227,6 +230,7 @@ def interpret_closed_jaxpr_with_inlining(
         inlined_depth: int,
         control_capture_indices: tuple[int, ...] = (),
         inherited_module_stack: tuple[str, ...] = (),
+        inherited_module_call_stack: tuple[tuple[str, int], ...] = (),
     ) -> tuple[Any, ...]:
         """Interpret one closed jaxpr frame.
 
@@ -244,6 +248,8 @@ def interpret_closed_jaxpr_with_inlining(
             Synthetic decision capture indexes that control this frame.
         inherited_module_stack
             Module stack inherited from an accepted parent call primitive.
+        inherited_module_call_stack
+            Module call stack inherited from an accepted parent call primitive.
 
         Returns
         -------
@@ -332,6 +338,7 @@ def interpret_closed_jaxpr_with_inlining(
                     inlined_depth + 1,
                     control_capture_indices,
                     module_stack_from_eqn(eqn) or inherited_module_stack,
+                    module_call_stack_from_eqn(eqn) or inherited_module_call_stack,
                 )
                 for var, value in zip(eqn.outvars, outputs):
                     _write_env(env, var, value, core)
@@ -343,6 +350,9 @@ def interpret_closed_jaxpr_with_inlining(
             for var, value in zip(eqn.outvars, outputs):
                 _write_env(env, var, value, core)
             equation_module_stack = module_stack_from_eqn(eqn) or inherited_module_stack
+            equation_module_call_stack = (
+                module_call_stack_from_eqn(eqn) or inherited_module_call_stack
+            )
             captures.append(
                 JaxEquationCapture(
                     index=len(captures),
@@ -360,6 +370,7 @@ def interpret_closed_jaxpr_with_inlining(
                     inlined=inlined_depth > 0,
                     control_capture_indices=control_capture_indices,
                     module_stack=equation_module_stack,
+                    module_call_stack=equation_module_call_stack,
                 )
             )
         return tuple(_read_env(env, var, core) for var in inner.jaxpr.outvars)
@@ -809,6 +820,24 @@ def module_stack_from_eqn(eqn: Any) -> tuple[str, ...]:
     return module_stack_from_name_stack(getattr(source_info, "name_stack", None))
 
 
+def module_call_stack_from_eqn(eqn: Any) -> tuple[tuple[str, int], ...]:
+    """Return the TorchLens module-call stack encoded on one JAX equation.
+
+    Parameters
+    ----------
+    eqn
+        JAX equation whose source metadata may carry a name stack.
+
+    Returns
+    -------
+    tuple[tuple[str, int], ...]
+        Decoded module calls in outer-to-inner order.
+    """
+
+    source_info = getattr(eqn, "source_info", None)
+    return module_call_stack_from_name_stack(getattr(source_info, "name_stack", None))
+
+
 def module_stack_from_name_stack(name_stack: Any) -> tuple[str, ...]:
     """Decode TorchLens module markers from a JAX ``NameStack``.
 
@@ -830,6 +859,30 @@ def module_stack_from_name_stack(name_stack: Any) -> tuple[str, ...]:
         address = decode_module_scope(str(name))
         if address is not None and (not decoded or decoded[-1] != address):
             decoded.append(address)
+    return tuple(decoded)
+
+
+def module_call_stack_from_name_stack(name_stack: Any) -> tuple[tuple[str, int], ...]:
+    """Decode TorchLens module-call markers from a JAX ``NameStack``.
+
+    Parameters
+    ----------
+    name_stack
+        JAX source-info name stack, or ``None``.
+
+    Returns
+    -------
+    tuple[tuple[str, int], ...]
+        Module-call pairs in outer-to-inner order.
+    """
+
+    stack = getattr(name_stack, "stack", ())
+    decoded: list[tuple[str, int]] = []
+    for component in stack:
+        name = getattr(component, "name", str(component))
+        call = decode_module_call_scope(str(name))
+        if call is not None and (not decoded or decoded[-1] != call):
+            decoded.append(call)
     return tuple(decoded)
 
 

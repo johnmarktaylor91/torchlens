@@ -340,9 +340,14 @@ class JAXBackend:
             with scoped_equinox_module_calls(eqx_tree):
                 closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
             reject_attributed_module_strict_control_flow(closed_jaxpr)
+            eqx_tree.call_counts.clear()
+            eqx_tree.forward_args_by_call.clear()
+            with scoped_equinox_module_calls(eqx_tree):
+                output = model(*args)
         else:
             closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
             reject_undeclared_consts(closed_jaxpr)
+            output = model(*args)
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(
             closed_jaxpr,
@@ -350,7 +355,6 @@ class JAXBackend:
             jax_control_flow=cast(str, jax_control_flow),
             jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
         )
-        output = model(*args)
         output_leaf_paths = self._output_leaf_paths(output)
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
         trace.raw_output = output_transform(output) if callable(output_transform) else None
@@ -670,6 +674,7 @@ class JAXBackend:
                 container_path=(),
                 equivalence_class=jax_equivalence_key(equation),
                 module_stack=equation.module_stack,
+                module_call_stack=equation.module_call_stack,
                 annotations={
                     "jax_params": repr(dict(equation.params)),
                     "jax_capture_kind": equation.kind,
@@ -680,6 +685,7 @@ class JAXBackend:
                     "jax_output_avals": equation.output_avals,
                     "jax_inlined": equation.inlined,
                     "jax_module_stack": equation.module_stack,
+                    "jax_module_call_stack": equation.module_call_stack,
                 },
             )
             label_by_capture_index[equation.index] = event.label_raw
@@ -700,6 +706,7 @@ class JAXBackend:
         annotations: Mapping[str, object],
         equivalence_class: str | None = None,
         module_stack: Sequence[str] = (),
+        module_call_stack: Sequence[tuple[str, int]] = (),
     ) -> OpEvent:
         """Append one JAX event to the trace event stream.
 
@@ -726,6 +733,8 @@ class JAXBackend:
             unique fallback key.
         module_stack
             Decoded module scopes for operation events.
+        module_call_stack
+            Decoded module calls for operation events.
         annotations
             Extra annotations.
 
@@ -750,7 +759,10 @@ class JAXBackend:
         )
         tensor_ref = self._tensor_ref(output, reserved.label_raw)
         module_addresses = _jax_event_module_stack(module_stack)
-        module_frames = tuple(_jax_module_frame(address) for address in module_addresses)
+        module_calls = _jax_event_module_call_stack(module_addresses, module_call_stack)
+        module_frames = tuple(
+            _jax_module_frame(address, call_index) for address, call_index in module_calls
+        )
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
@@ -816,7 +828,7 @@ class JAXBackend:
             params=(),
             parent_params=(),
             module_stack=module_frames,
-            modules=tuple((address, 1) for address in module_addresses),
+            modules=module_calls,
             backend_semantics=BackendSemantics(
                 backend_grad_handle=None,
                 grad_fn_class_name=None,
@@ -1443,6 +1455,21 @@ class JAXBackend:
         trace.num_layers_with_params = len(
             {op.layer_label for op in trace.layer_list if op.uses_params}
         )
+        seen_layers: set[str] = set()
+        num_param_tensors = 0
+        num_params = 0
+        num_params_trainable = 0
+        for op_log in trace.layer_list:
+            if op_log.layer_label in seen_layers:
+                continue
+            seen_layers.add(op_log.layer_label)
+            num_param_tensors += op_log.num_param_tensors
+            num_params += op_log.num_params
+            num_params_trainable += op_log.num_params_trainable
+        trace.num_param_tensors = num_param_tensors
+        trace.num_params = num_params
+        trace.num_params_trainable = num_params_trainable
+        trace.num_params_frozen = num_params - num_params_trainable
 
     def _attach_pytree_module_logs(self, trace: Trace, tree: EquinoxModuleTree) -> None:
         """Build public module logs for an Equinox pytree-module trace.
@@ -1461,7 +1488,7 @@ class JAXBackend:
         """
 
         trace._module_build_data = _init_module_hierarchy_data()
-        trace._module_forward_args = {}
+        trace._module_forward_args = dict(tree.forward_args_by_call)
         trace._module_metadata = tree.metadata
         mbd = trace._module_build_data
         for address, metadata in tree.metadata.items():
@@ -1469,6 +1496,7 @@ class JAXBackend:
                 mbd["addresses"].append(address)
             mbd["module_types"][address] = str(metadata.get("class_name", ""))
             mbd["module_training_modes"][address] = False
+            mbd["module_num_calls"][address] = max(1, tree.call_counts.get(address, 1))
             for child_address in metadata.get("address_children", []):
                 if child_address not in mbd["module_children"][address]:
                     mbd["module_children"][address].append(child_address)
@@ -1509,17 +1537,14 @@ class JAXBackend:
         seen_addresses = set(mbd["addresses"])
 
         for op_log in trace.layer_list:
-            normalized_modules = _jax_event_module_stack(
-                tuple(
-                    entry[0] if not isinstance(entry, str) else entry.split(":", 1)[0]
-                    for entry in op_log.modules
-                )
-            )
-            op_log.modules = [f"{address}:1" for address in normalized_modules]
+            normalized_calls = _jax_op_module_calls(op_log.modules)
+            op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
             op_log.module = op_log.modules[-1] if op_log.modules else None
             parent_call_label: str | None = None
-            for module_index, address in enumerate(normalized_modules):
-                call_label = f"{address}:1"
+            for module_index, (address, call_index) in enumerate(normalized_calls):
+                call_label = f"{address}:{call_index}"
+                if mbd["module_num_calls"][address] < call_index:
+                    mbd["module_num_calls"][address] = call_index
                 mbd["module_num_tensors"][address] += 1
                 mbd["module_call_index_tensors"][call_label] += 1
                 if op_log.layer_label not in seen_layers[address]:
@@ -2025,25 +2050,77 @@ def _jax_event_module_stack(module_stack: Sequence[str]) -> tuple[str, ...]:
     return stack
 
 
-def _jax_module_frame(address: str) -> ModuleFrame:
+def _jax_event_module_call_stack(
+    module_addresses: Sequence[str],
+    module_call_stack: Sequence[tuple[str, int]],
+) -> tuple[tuple[str, int], ...]:
+    """Normalize decoded JAX module-call scopes for event emission.
+
+    Parameters
+    ----------
+    module_addresses
+        Address-only module stack after root elision.
+    module_call_stack
+        Decoded module-call stack in outer-to-inner order.
+
+    Returns
+    -------
+    tuple[tuple[str, int], ...]
+        Module calls aligned with ``module_addresses``.
+    """
+
+    call_by_address = {address: call_index for address, call_index in module_call_stack}
+    return tuple((address, call_by_address.get(address, 1)) for address in module_addresses)
+
+
+def _jax_op_module_calls(modules: Sequence[Any]) -> tuple[tuple[str, int], ...]:
+    """Return ``(address, call_index)`` pairs from a materialized JAX op.
+
+    Parameters
+    ----------
+    modules
+        Raw ``Op.modules`` entries, either legacy strings or event tuples.
+
+    Returns
+    -------
+    tuple[tuple[str, int], ...]
+        Normalized module-call pairs.
+    """
+
+    calls: list[tuple[str, int]] = []
+    for entry in modules:
+        if isinstance(entry, str):
+            address, separator, call_index_text = entry.partition(":")
+            call_index = int(call_index_text) if separator else 1
+            calls.append((address, call_index))
+            continue
+        address = str(entry[0])
+        call_index = int(entry[1]) if len(entry) > 1 else 1
+        calls.append((address, call_index))
+    return tuple(calls)
+
+
+def _jax_module_frame(address: str, call_index: int) -> ModuleFrame:
     """Return an event-layer module frame for one JAX module address.
 
     Parameters
     ----------
     address
         TorchLens module address.
+    call_index
+        One-based module call index.
 
     Returns
     -------
     ModuleFrame
-        Single-call module frame.
+        Module frame.
     """
 
     return ModuleFrame(
         address=address,
         address_normalized=address,
         module_type="pytree_module",
-        call_index=1,
+        call_index=call_index,
         fx_qualpath=None,
         entry_argnames=(),
     )

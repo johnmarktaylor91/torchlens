@@ -14,6 +14,7 @@ from ...data_classes.param import Param
 from ...ir.refs import DeviceRef, DtypeRef
 
 MODULE_SCOPE_PREFIX = "tlm_"
+MODULE_CALL_SCOPE_PREFIX = "tlc_"
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,10 @@ class EquinoxModuleTree:
         Owning module address keyed by pytree parameter address.
     param_address_by_value_id
         Parameter address keyed by array object identity.
+    call_counts
+        Per-primary-address module call counts recorded during JAX tracing.
+    forward_args_by_call
+        Live module forward args keyed by ``(primary_address, call_index)``.
     """
 
     root: Any
@@ -42,6 +47,8 @@ class EquinoxModuleTree:
     modules_by_class: dict[type[Any], dict[int, str]]
     param_owner_by_address: dict[str, str]
     param_address_by_value_id: dict[int, str]
+    call_counts: dict[str, int]
+    forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]]
 
 
 def is_equinox_module(value: object) -> bool:
@@ -91,9 +98,12 @@ def discover_equinox_module_tree(model: Any) -> EquinoxModuleTree | None:
         address_by_id=address_by_id,
         modules_by_class=modules_by_class,
     )
+    module_addresses = {
+        alias for module_metadata in metadata.values() for alias in module_metadata["all_addresses"]
+    }
     param_owner_by_address, param_address_by_value_id = _equinox_param_maps(
         model,
-        set(metadata),
+        module_addresses,
     )
     return EquinoxModuleTree(
         root=model,
@@ -102,6 +112,8 @@ def discover_equinox_module_tree(model: Any) -> EquinoxModuleTree | None:
         modules_by_class=dict(modules_by_class),
         param_owner_by_address=param_owner_by_address,
         param_address_by_value_id=param_address_by_value_id,
+        call_counts={},
+        forward_args_by_call={},
     )
 
 
@@ -139,8 +151,12 @@ def scoped_equinox_module_calls(tree: EquinoxModuleTree) -> Iterator[None]:
             address = __address_by_id.get(id(self))
             if address is None:
                 return __original(self, *args, **kwargs)
+            call_index = tree.call_counts.get(address, 0) + 1
+            tree.call_counts[address] = call_index
+            tree.forward_args_by_call[(address, call_index)] = (args, kwargs)
             with jax.named_scope(encode_module_scope(address)):
-                return __original(self, *args, **kwargs)
+                with jax.named_scope(encode_module_call_scope(address, call_index)):
+                    return __original(self, *args, **kwargs)
 
         setattr(module_class, "__call__", wrapper)
     try:
@@ -168,6 +184,27 @@ def encode_module_scope(address: str) -> str:
     return MODULE_SCOPE_PREFIX + encoded.rstrip("=")
 
 
+def encode_module_call_scope(address: str, call_index: int) -> str:
+    """Return a reversible ``jax.named_scope`` marker for a module call.
+
+    Parameters
+    ----------
+    address
+        TorchLens module address.
+    call_index
+        One-based module call index.
+
+    Returns
+    -------
+    str
+        Named-scope-safe marker string.
+    """
+
+    payload = f"{address}\0{call_index}"
+    encoded = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+    return MODULE_CALL_SCOPE_PREFIX + encoded.rstrip("=")
+
+
 def decode_module_scope(scope_name: str) -> str | None:
     """Decode a TorchLens module named-scope marker.
 
@@ -192,6 +229,41 @@ def decode_module_scope(scope_name: str) -> str | None:
         return None
 
 
+def decode_module_call_scope(scope_name: str) -> tuple[str, int] | None:
+    """Decode a TorchLens module-call named-scope marker.
+
+    Parameters
+    ----------
+    scope_name
+        Name-stack component.
+
+    Returns
+    -------
+    tuple[str, int] | None
+        Decoded ``(module_address, call_index)``, or ``None`` for non-call
+        TorchLens scopes.
+    """
+
+    if not scope_name.startswith(MODULE_CALL_SCOPE_PREFIX):
+        return None
+    payload = scope_name.removeprefix(MODULE_CALL_SCOPE_PREFIX)
+    padded = payload + "=" * (-len(payload) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    address, separator, call_index_text = decoded.partition("\0")
+    if not separator:
+        return None
+    try:
+        call_index = int(call_index_text)
+    except ValueError:
+        return None
+    if call_index < 1:
+        return None
+    return address, call_index
+
+
 def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
     """Build TorchLens parameter logs from Equinox pytree array leaves.
 
@@ -212,12 +284,27 @@ def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
     import jax
 
     param_logs: dict[str, Param] = {}
+    param_address_by_value_id: dict[int, str] = {}
     leaves_with_paths, _treedef = jax.tree_util.tree_flatten_with_path(tree.root)
     for path, value in leaves_with_paths:
         if not eqx.is_array(value):
             continue
         address = _path_to_string(path)
         module_address = tree.param_owner_by_address.get(address, "self")
+        existing_address = param_address_by_value_id.get(id(value))
+        if existing_address is not None:
+            param = param_logs[existing_address]
+            if address not in param.all_addresses:
+                param.all_addresses.append(address)
+            if address not in param.co_parent_params:
+                param.co_parent_params.append(address)
+            for alias in tree.metadata.get(module_address, {}).get(
+                "all_addresses", [module_address]
+            ):
+                if alias not in param.all_module_addresses:
+                    param.all_module_addresses.append(alias)
+            continue
+        param_address_by_value_id[id(value)] = address
         shape = tuple(getattr(value, "shape", ()))
         dtype = str(getattr(value, "dtype", ""))
         param = Param(
@@ -238,8 +325,9 @@ def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
         param.resolver_status = "metadata_only"
         param._param_ref = None
         param.source_trace = trace
-        setattr(param, "address_kind", "pytree_path")
-        setattr(param, "param_source", "pytree-derived")
+        param.all_module_addresses = list(
+            tree.metadata.get(module_address, {}).get("all_addresses", [module_address])
+        )
         param_logs[address] = param
     return param_logs
 
@@ -372,7 +460,7 @@ def _equinox_param_maps(
         address = _path_to_string(path)
         owner = _deepest_module_prefix(address, module_addresses)
         owners[address] = owner or "self"
-        value_ids[id(value)] = address
+        value_ids.setdefault(id(value), address)
     return owners, value_ids
 
 
