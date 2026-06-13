@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._io.manifest import Manifest
+from torchlens.backends import BackendPayloadUnsupportedError
 from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_tlspec
@@ -85,6 +87,79 @@ def _read_manifest(path: Path) -> dict[str, Any]:
     data = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     assert isinstance(data, dict)
     return data
+
+
+def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
+    """Write one manifest JSON object.
+
+    Parameters
+    ----------
+    path:
+        ``.tlspec`` path.
+    manifest:
+        Manifest object to persist.
+    """
+
+    (path / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
+    """Return a schema v2 non-torch audit manifest based on a torch fixture.
+
+    Parameters
+    ----------
+    path:
+        Existing ``.tlspec`` path whose v1 manifest supplies common fields.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mutable schema v2 manifest.
+    """
+
+    manifest = _read_manifest(path)
+    manifest.update(
+        {
+            "schema_version": 2,
+            "backend": "mlx",
+            "backend_runtime": {
+                "name": "mlx",
+                "version": "0.0.test",
+                "runtime_config": {},
+                "device_summary": {},
+                "compat_policy": {"policy": "audit-only-test"},
+            },
+            "torch_version": None,
+            "model_fingerprint": {
+                "backend_fingerprint": {
+                    "callable_identity": "tests.test_tlspec_unified.mlx_fixture",
+                    "graph_digest": "mlx-audit-fixture",
+                }
+            },
+            "body_format": "audit_only",
+            "body_index": [
+                {
+                    "filename": "audit.json",
+                    "dtype": "mlx.float32",
+                    "shape": [2, 3],
+                    "num_elements": 6,
+                    "intended_use": "audit_record",
+                    "sha256": "0" * 64,
+                }
+            ],
+            "backward_summary": None,
+            "derived_gradient_summary": None,
+            "payload_policy": {
+                "policy": "audit_only",
+                "materialization_supported": False,
+                "payload_kinds": ["audit_record"],
+            },
+        }
+    )
+    return manifest
 
 
 @pytest.mark.smoke
@@ -226,4 +301,93 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
     (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="gradient_blob_kinds"):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_schema_v2_non_torch_audit_manifest_validates(tmp_path: Path) -> None:
+    """Schema v2 accepts backend/runtime fields and nullable torch fields."""
+
+    path = tmp_path / "mlx_audit.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_schema_v2_manifest(path)
+    _write_manifest(path, manifest)
+
+    validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_schema_v2_non_torch_load_refuses_before_torch_manifest_parse(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-torch schema v2 traces dispatch before torch-shaped manifest parsing."""
+
+    path = tmp_path / "mlx_audit_load.tlspec"
+    _captured_log().save(path)
+    _write_manifest(path, _mlx_schema_v2_manifest(path))
+
+    def _fail_from_dict(cls: type[Manifest], data: dict[str, Any]) -> Manifest:
+        """Fail if the loader takes the legacy torch manifest path."""
+
+        del cls
+        del data
+        raise AssertionError("Manifest.from_dict should not run for non-torch schema v2")
+
+    monkeypatch.setattr(Manifest, "from_dict", classmethod(_fail_from_dict))
+
+    with pytest.raises(BackendPayloadUnsupportedError, match="audit-only"):
+        tl.load(path)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize(
+    ("mutation", "match"),
+    [
+        (lambda manifest: manifest.pop("backend"), "backend"),
+        (lambda manifest: manifest.__setitem__("backend", "unknown-backend"), "unknown backend"),
+        (lambda manifest: manifest.pop("backend_runtime"), "backend_runtime"),
+        (
+            lambda manifest: manifest.__setitem__("backward_summary", {"has_backward_pass": True}),
+            "backward_summary",
+        ),
+        (lambda manifest: manifest.__setitem__("torch_version", "2.0.0"), "torch_version=null"),
+    ],
+)
+def test_schema_v2_non_torch_corruptions_fail_closed(
+    tmp_path: Path,
+    mutation: Callable[[dict[str, Any]], Any],
+    match: str,
+) -> None:
+    """Schema v2 backend-conditional fields reject malformed non-torch manifests."""
+
+    path = tmp_path / "bad_v2.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_schema_v2_manifest(path)
+    mutation(manifest)
+    _write_manifest(path, manifest)
+
+    with pytest.raises(ValueError, match=match):
+        validate_tlspec(path)
+
+
+@pytest.mark.smoke
+def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:
+    """Schema v1 fixtures stay torch-only and reject v2 intended-use literals."""
+
+    path = tmp_path / "v1_with_v2_body_use.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    manifest["body_index"] = [
+        {
+            "filename": "audit.json",
+            "dtype": "mlx.float32",
+            "shape": [1],
+            "num_elements": 1,
+            "intended_use": "audit_record",
+        }
+    ]
+    _write_manifest(path, manifest)
+
+    with pytest.raises(ValueError, match="intended_use"):
         validate_tlspec(path)

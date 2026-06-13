@@ -211,7 +211,10 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("torch_module",),
             ),
             serialization_policy=SerializationPolicy(
-                payload_policy="full", body_format="safetensors"
+                payload_policy="full",
+                body_format="safetensors",
+                manifest_schema_versions=(1, 2),
+                runtime_name="torch",
             ),
             priority=0,
         ),
@@ -237,6 +240,8 @@ def register_default_backend_specs() -> None:
             serialization_policy=SerializationPolicy(
                 payload_policy="audit_only",
                 body_format="audit_only",
+                manifest_schema_versions=(2,),
+                runtime_name="mlx",
             ),
             priority=10,
         ),

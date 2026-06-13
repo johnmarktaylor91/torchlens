@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://torchlens.org/schemas/tlspec_manifest_v2.json",
+  "title": "TorchLens unified .tlspec manifest schema v2",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "tlspec_version",
+    "kind",
+    "created_at",
+    "torchlens_version",
+    "python_version",
+    "backend",
+    "backend_runtime",
+    "torch_version",
+    "schema_version",
+    "model_signature",
+    "model_fingerprint",
+    "sites",
+    "spec_compat_info",
+    "body_format",
+    "body_index",
+    "backward_summary",
+    "derived_gradient_summary",
+    "payload_policy",
+    "save_level",
+    "optional_dependencies",
+    "intervention_compat_metadata"
+  ],
+  "properties": {
+    "tlspec_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["intervention", "trace", "bundle"]
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "backend": {
+      "type": "string",
+      "minLength": 1
+    },
+    "backend_runtime": {
+      "type": "object"
+    },
+    "torch_version": {
+      "type": ["string", "null"]
+    },
+    "model_fingerprint": {
+      "type": ["object", "null"]
+    },
+    "body_format": {
+      "type": "string",
+      "enum": ["safetensors", "audit_only"]
+    },
+    "backward_summary": {
+      "type": ["object", "null"]
+    },
+    "derived_gradient_summary": {
+      "type": ["object", "null"]
+    },
+    "payload_policy": {
+      "type": "object"
+    }
+  }
+}

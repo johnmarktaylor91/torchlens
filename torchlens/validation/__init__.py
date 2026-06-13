@@ -23,7 +23,7 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def validate_tlspec(path: str | Path) -> None:
-    """Validate a unified ``.tlspec`` manifest against schema v1.
+    """Validate a unified ``.tlspec`` manifest against its manifest schema.
 
     Legacy TorchLens 2.16 formats are intentionally accepted without schema
     validation so old artifacts remain loadable.
@@ -45,13 +45,48 @@ def validate_tlspec(path: str | Path) -> None:
 
     if detect_tlspec_format(path) != "v2.0_unified":
         return
-    schema = _load_tlspec_manifest_schema()
     manifest = inspect_tlspec(path)
+    schema_version = _manifest_schema_version(manifest)
+    schema = _load_tlspec_manifest_schema(schema_version)
     _validate_manifest_against_schema(manifest, schema)
 
 
-def _load_tlspec_manifest_schema() -> dict[str, Any]:
+def _manifest_schema_version(manifest: dict[str, Any]) -> int:
+    """Return the manifest schema version from a decoded unified manifest.
+
+    Parameters
+    ----------
+    manifest:
+        Decoded manifest object.
+
+    Returns
+    -------
+    int
+        Manifest schema version.
+
+    Raises
+    ------
+    ValueError
+        If the schema version is missing or unsupported.
+    """
+
+    schema_version = manifest.get("schema_version", 1)
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+        raise ValueError("Manifest field 'schema_version' must be an integer.")
+    if schema_version not in {1, 2}:
+        raise ValueError(
+            f"Unsupported .tlspec manifest schema_version={schema_version}; expected 1 or 2."
+        )
+    return schema_version
+
+
+def _load_tlspec_manifest_schema(schema_version: int) -> dict[str, Any]:
     """Load the bundled unified manifest schema.
+
+    Parameters
+    ----------
+    schema_version:
+        Manifest schema version to load.
 
     Returns
     -------
@@ -59,7 +94,9 @@ def _load_tlspec_manifest_schema() -> dict[str, Any]:
         Decoded JSON schema object.
     """
 
-    schema_path = Path(__file__).resolve().parents[1] / "schemas" / "tlspec_manifest_v1.json"
+    schema_path = (
+        Path(__file__).resolve().parents[1] / "schemas" / f"tlspec_manifest_v{schema_version}.json"
+    )
     with schema_path.open("r", encoding="utf-8") as handle:
         schema = json.load(handle)
     if not isinstance(schema, dict):
@@ -90,19 +127,24 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
     if missing:
         raise ValueError(f"Unified .tlspec manifest missing required fields: {missing}.")
 
+    schema_version = _manifest_schema_version(manifest)
     _require_int(manifest, "tlspec_version", expected=1)
     _require_str_enum(manifest, "kind", {"intervention", "trace", "bundle"})
     _require_str(manifest, "created_at")
     _require_str(manifest, "torchlens_version")
     _require_str(manifest, "python_version")
-    _require_str(manifest, "torch_version")
-    _require_int(manifest, "schema_version", minimum=1)
+    if schema_version == 1:
+        _require_str(manifest, "torch_version")
+    else:
+        _validate_v2_backend_fields(manifest)
+    _require_int(manifest, "schema_version", expected=schema_version)
     _require_str(manifest, "model_signature")
-    _validate_model_fingerprint(manifest.get("model_fingerprint"))
+    _validate_model_fingerprint(manifest.get("model_fingerprint"), schema_version=schema_version)
     _validate_sites(manifest.get("sites"))
-    _require_str_enum(manifest, "body_format", {"safetensors"})
-    _validate_body_index(manifest.get("body_index"))
-    _validate_backward_summary(manifest.get("backward_summary"))
+    body_formats = {"safetensors"} if schema_version == 1 else {"safetensors", "audit_only"}
+    _require_str_enum(manifest, "body_format", body_formats)
+    _validate_body_index(manifest.get("body_index"), schema_version=schema_version)
+    _validate_backward_summary(manifest.get("backward_summary"), schema_version=schema_version)
     _require_str_enum(manifest, "save_level", {"audit", "executable_with_callables", "portable"})
     _validate_optional_dependencies(manifest.get("optional_dependencies"))
 
@@ -123,13 +165,81 @@ def _validate_manifest_against_schema(manifest: dict[str, Any], schema: dict[str
             )
 
 
-def _validate_model_fingerprint(value: Any) -> None:
+def _validate_v2_backend_fields(manifest: dict[str, Any]) -> None:
+    """Validate manifest schema v2 backend-owned fields.
+
+    Parameters
+    ----------
+    manifest:
+        Decoded manifest object.
+
+    Raises
+    ------
+    ValueError
+        If backend-aware fields are invalid.
+    """
+
+    from ..backends import UnknownBackendError, get_backend_spec
+
+    backend_name = manifest.get("backend")
+    if not isinstance(backend_name, str) or backend_name == "":
+        raise ValueError("Manifest schema v2 requires non-empty backend.")
+    try:
+        spec = get_backend_spec(backend_name)
+    except UnknownBackendError as exc:
+        raise ValueError(f"Manifest schema v2 has unknown backend {backend_name!r}.") from exc
+
+    runtime = manifest.get("backend_runtime")
+    if not isinstance(runtime, dict):
+        raise ValueError("Manifest schema v2 requires object backend_runtime.")
+    for field_name in ("name", "version", "runtime_config", "device_summary", "compat_policy"):
+        if field_name not in runtime:
+            raise ValueError(f"Manifest backend_runtime missing {field_name!r}.")
+    if not isinstance(runtime.get("name"), str) or runtime.get("name") == "":
+        raise ValueError("Manifest backend_runtime.name must be a non-empty string.")
+    if not isinstance(runtime.get("version"), str) or runtime.get("version") == "":
+        raise ValueError("Manifest backend_runtime.version must be a non-empty string.")
+    for field_name in ("runtime_config", "device_summary", "compat_policy"):
+        if not isinstance(runtime.get(field_name), dict):
+            raise ValueError(f"Manifest backend_runtime.{field_name} must be an object.")
+
+    payload_policy = manifest.get("payload_policy")
+    if not isinstance(payload_policy, dict):
+        raise ValueError("Manifest schema v2 requires object payload_policy.")
+    policy = payload_policy.get("policy")
+    if policy not in {"full", "audit_only", "metadata_only"}:
+        raise ValueError(
+            "Manifest payload_policy.policy must be full, audit_only, or metadata_only."
+        )
+    if not isinstance(payload_policy.get("materialization_supported"), bool):
+        raise ValueError("Manifest payload_policy.materialization_supported must be a bool.")
+    payload_kinds = payload_policy.get("payload_kinds")
+    if not isinstance(payload_kinds, list) or any(
+        not isinstance(item, str) for item in payload_kinds
+    ):
+        raise ValueError("Manifest payload_policy.payload_kinds must be a list of strings.")
+
+    torch_version = manifest.get("torch_version")
+    if str(spec.name) == "torch":
+        if not isinstance(torch_version, str) or torch_version == "":
+            raise ValueError("Torch schema v2 manifests require non-empty torch_version.")
+    elif torch_version is not None:
+        raise ValueError("Non-torch schema v2 manifests require torch_version=null.")
+    if str(spec.name) != "torch" and manifest.get("backward_summary") is not None:
+        raise ValueError("Non-torch schema v2 manifests require backward_summary=null.")
+    if "derived_gradient_summary" not in manifest:
+        raise ValueError("Manifest schema v2 requires derived_gradient_summary.")
+
+
+def _validate_model_fingerprint(value: Any, *, schema_version: int) -> None:
     """Validate a manifest model fingerprint object.
 
     Parameters
     ----------
     value:
         Raw fingerprint value.
+    schema_version:
+        Manifest schema version.
 
     Raises
     ------
@@ -137,8 +247,17 @@ def _validate_model_fingerprint(value: Any) -> None:
         If the value is invalid.
     """
 
+    if value is None and schema_version == 2:
+        return
     if not isinstance(value, dict):
         raise ValueError("Manifest model_fingerprint must be an object.")
+    if schema_version == 2 and not {"parameter_meta_hash", "buffer_meta_hash"} <= set(value):
+        if not isinstance(value.get("backend_fingerprint"), dict):
+            raise ValueError(
+                "Manifest schema v2 backend-shaped model_fingerprint requires "
+                "backend_fingerprint object."
+            )
+        return
     for field_name in ("parameter_meta_hash", "buffer_meta_hash"):
         field_value = value.get(field_name)
         if not isinstance(field_value, str) or _SHA256_RE.fullmatch(field_value) is None:
@@ -181,13 +300,15 @@ def _validate_sites(value: Any) -> None:
                 raise ValueError(f"Manifest sites[{index}].{field_name} must be a string or null.")
 
 
-def _validate_body_index(value: Any) -> None:
+def _validate_body_index(value: Any, *, schema_version: int) -> None:
     """Validate manifest body index entries.
 
     Parameters
     ----------
     value:
         Raw body index value.
+    schema_version:
+        Manifest schema version.
 
     Raises
     ------
@@ -197,6 +318,29 @@ def _validate_body_index(value: Any) -> None:
 
     if not isinstance(value, list):
         raise ValueError("Manifest body_index must be a list.")
+    v1_intended_uses = {
+        "bundle_marker",
+        "captured_arg",
+        "child_version",
+        "func_config",
+        "grad",
+        "grad_fn_grad",
+        "module_arg",
+        "module_meta",
+        "out",
+        "rng_state",
+        "transformed_grad",
+        "transformed_out",
+    }
+    v2_intended_uses = v1_intended_uses | {
+        "audit_record",
+        "jax_const_leaf",
+        "jax_derived_grad",
+        "jax_equation_out",
+        "jax_input_leaf",
+        "jax_param_leaf",
+    }
+    allowed_intended_uses = v1_intended_uses if schema_version == 1 else v2_intended_uses
     for index, entry in enumerate(value):
         if not isinstance(entry, dict):
             raise ValueError(f"Manifest body_index[{index}] must be an object.")
@@ -214,15 +358,20 @@ def _validate_body_index(value: Any) -> None:
             raise ValueError(
                 f"Manifest body_index[{index}].num_elements must be a non-negative int."
             )
+        intended_use = entry.get("intended_use")
+        if intended_use not in allowed_intended_uses:
+            raise ValueError(f"Manifest body_index[{index}].intended_use is invalid.")
 
 
-def _validate_backward_summary(value: Any) -> None:
+def _validate_backward_summary(value: Any, *, schema_version: int) -> None:
     """Validate manifest backward summary metadata.
 
     Parameters
     ----------
     value:
         Raw backward summary object.
+    schema_version:
+        Manifest schema version.
 
     Raises
     ------
@@ -230,6 +379,8 @@ def _validate_backward_summary(value: Any) -> None:
         If the value is invalid.
     """
 
+    if value is None and schema_version == 2:
+        return
     if not isinstance(value, dict):
         raise ValueError("Manifest backward_summary must be an object.")
     if not isinstance(value.get("has_backward_pass"), bool):

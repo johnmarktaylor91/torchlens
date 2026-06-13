@@ -102,10 +102,16 @@ class SerializationPolicy:
         Public payload policy literal.
     body_format:
         Manifest body format literal.
+    manifest_schema_versions:
+        Manifest schema versions this backend can load.
+    runtime_name:
+        Runtime fingerprint name written in backend-aware manifests.
     """
 
     payload_policy: str = "full"
     body_format: str = "safetensors"
+    manifest_schema_versions: tuple[int, ...] = (1, 2)
+    runtime_name: str | None = None
 
 
 @dataclass(frozen=True)

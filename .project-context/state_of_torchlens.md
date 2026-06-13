@@ -130,7 +130,10 @@ Portable artifacts are directory bundles with a public `manifest.json` schema an
 stored as safetensors. `_io/tlspec.py` writes unified model-log, intervention, and bundle
 manifests. `io.detect_tlspec_format()` distinguishes unified and legacy formats.
 `validation.validate_tlspec()` validates unified manifests only; older 2.16 formats remain
-loadable.
+loadable. Unified manifests currently support manifest schema v1 for torch writes and schema v2
+for backend-aware validation/loading preflight. Schema v2 adds `backend`, `backend_runtime`,
+nullable torch-specific fields, `payload_policy`, and audit-only non-torch payload refusal before
+torch-shaped manifest parsing.
 
 ### Backend-Neutral Substrate
 `Trace.backend` is the public backend tag resolved by `BackendSpec`. Trace identity also records
@@ -139,7 +142,8 @@ loadable.
 carry neutral `dtype_ref`, `device_ref`, `backend_address`, and `resolver_status` mirror fields
 beside existing torch-shaped fields so torch accessors stay stable while non-torch builders can
 populate backend-native metadata. This is a pickled object-state change, so `_io.TLSPEC_VERSION`
-is 5; the public manifest schema remains v1 until the schema-v2 serialization item lands.
+is 5; manifest schema v2 support is manifest-only and does not bump the pickled object-state
+version again.
 
 ### Fastlog vs Full Capture
 Full capture returns a faithful `ModelLog` and runs postprocess. Fastlog returns a sparse
@@ -214,7 +218,7 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 | Where are field orders defined? | `torchlens/constants.py` |
 | Where is `ModelLog.__getitem__` behavior? | `torchlens/data_classes/interface.py` and `model_log.py` |
 | Where is portable save/load? | `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py` |
-| Where is manifest schema validation? | `torchlens/validation/__init__.py`, `torchlens/schemas/tlspec_manifest_v1.json` |
+| Where is manifest schema validation? | `torchlens/validation/__init__.py`, `torchlens/schemas/tlspec_manifest_v1.json`, `torchlens/schemas/tlspec_manifest_v2.json` |
 | Where is Graphviz rendering? | `torchlens/visualization/rendering.py` |
 | Where is ELK layout? | `torchlens/visualization/_elk_internal/layout.py` |
 | Where is NodeSpec customization? | `torchlens/visualization/node_spec.py`, `torchlens/visualization/modes.py` |

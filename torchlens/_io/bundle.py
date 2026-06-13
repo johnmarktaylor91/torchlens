@@ -36,6 +36,7 @@ from .scrub import scrub_for_save
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 from .. import __version__ as TORCHLENS_VERSION
+from ..backends import BackendPayloadUnsupportedError, get_backend_spec
 from ..data_classes.trace import Trace
 
 if TYPE_CHECKING:
@@ -578,6 +579,7 @@ def _load_unified_tlspec(
 
         return load_intervention_spec(bundle_path)
     if kind == "trace":
+        _preflight_unified_trace_manifest(manifest)
         return _load_trace_payload(
             bundle_path,
             Manifest.from_dict(manifest),
@@ -588,6 +590,66 @@ def _load_unified_tlspec(
     if kind == "bundle":
         return _load_unified_bundle(bundle_path)
     raise TorchLensIOError(f"Unsupported unified tlspec kind={kind!r}.")
+
+
+def _preflight_unified_trace_manifest(manifest: dict[str, Any]) -> None:
+    """Inspect backend-aware trace manifest fields before torch manifest parsing.
+
+    Parameters
+    ----------
+    manifest:
+        Raw unified manifest object.
+
+    Raises
+    ------
+    TorchLensIOError
+        If the manifest schema version is unsupported or inconsistent.
+    BackendPayloadUnsupportedError
+        If a non-torch audit-only manifest cannot be materialized by this runtime.
+    """
+
+    schema_version = manifest.get("schema_version", 1)
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+        raise TorchLensIOError("Unified trace manifest schema_version must be an integer.")
+    if schema_version == 1:
+        return
+    if schema_version != 2:
+        raise TorchLensIOError(
+            f"Unsupported unified trace manifest schema_version={schema_version}; "
+            "this runtime supports schema versions 1 and 2."
+        )
+
+    backend_name = manifest.get("backend")
+    if not isinstance(backend_name, str) or backend_name == "":
+        raise TorchLensIOError("Manifest schema v2 trace requires a non-empty backend field.")
+    spec = get_backend_spec(backend_name)
+    if schema_version not in spec.serialization_policy.manifest_schema_versions:
+        raise TorchLensIOError(
+            f"Backend {backend_name!r} does not support manifest schema_version={schema_version}."
+        )
+    if not isinstance(manifest.get("backend_runtime"), dict):
+        raise TorchLensIOError("Manifest schema v2 trace requires object backend_runtime.")
+    if not isinstance(manifest.get("payload_policy"), dict):
+        raise TorchLensIOError("Manifest schema v2 trace requires object payload_policy.")
+    if str(spec.name) == "torch":
+        if (
+            not isinstance(manifest.get("torch_version"), str)
+            or manifest.get("torch_version") == ""
+        ):
+            raise TorchLensIOError("Torch manifest schema v2 requires non-empty torch_version.")
+        return
+
+    payload_policy = manifest["payload_policy"]
+    materializes = bool(payload_policy.get("materialization_supported", False))
+    if not materializes:
+        raise BackendPayloadUnsupportedError(
+            f"Manifest schema v2 trace for backend {backend_name!r} is audit-only; "
+            "this runtime cannot materialize non-torch payloads from .tlspec yet."
+        )
+    raise BackendPayloadUnsupportedError(
+        f"Manifest schema v2 trace for backend {backend_name!r} requires a backend payload codec "
+        "that is not installed in this runtime."
+    )
 
 
 def _load_unified_bundle(bundle_path: Path) -> "Bundle":
