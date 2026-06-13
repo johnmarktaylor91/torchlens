@@ -72,6 +72,40 @@ def _mlx_can_handle(
     return isinstance(model, mlx_nn.Module)
 
 
+def _jax_can_handle(
+    model: object,
+    input_args: object,
+    input_kwargs: dict[Any, Any] | None,
+) -> bool:
+    """Return whether the JAX spec can handle the public call.
+
+    Parameters
+    ----------
+    model:
+        Candidate callable.
+    input_args:
+        Positional inputs.
+    input_kwargs:
+        Keyword inputs.
+
+    Returns
+    -------
+    bool
+        ``True`` when JAX is installed, ``model`` is callable, and any input
+        leaf is a JAX array.
+    """
+
+    del input_kwargs
+    if not callable(model):
+        return False
+    try:
+        import jax
+    except ImportError:
+        return False
+    leaves, _treedef = jax.tree.flatten(input_args)
+    return any(isinstance(leaf, jax.Array) for leaf in leaves)
+
+
 def _torch_capture_trace(*args: Any, **kwargs: Any) -> Any:
     """Dispatch to the current torch public trace body.
 
@@ -108,6 +142,25 @@ def _mlx_capture_trace(*args: Any, **kwargs: Any) -> Any:
     from ..user_funcs import _trace_mlx_model_from_public_kwargs
 
     return _trace_mlx_model_from_public_kwargs(*args, **kwargs)
+
+
+def _jax_capture_trace(*args: Any, **kwargs: Any) -> Any:
+    """Dispatch to the jaxpr-first JAX backend.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public ``trace`` arguments.
+
+    Returns
+    -------
+    Any
+        Captured trace.
+    """
+
+    from .jax import JAXBackend
+
+    return JAXBackend().capture_trace(*args, **kwargs)
 
 
 def _torch_validate_entry(*args: Any, **kwargs: Any) -> bool:
@@ -147,6 +200,25 @@ def _unsupported_validate_entry(*args: Any, **kwargs: Any) -> bool:
     raise BackendUnsupportedError("This backend does not support replay validation yet.")
 
 
+def _jax_validate_entry(*args: Any, **kwargs: Any) -> bool:
+    """Dispatch to JAX model/input validation.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Public validation arguments.
+
+    Returns
+    -------
+    bool
+        Validation result.
+    """
+
+    from .jax import JAXBackend
+
+    return JAXBackend().validate_entry(*args, **kwargs)
+
+
 def _torch_validate_trace(*args: Any, **kwargs: Any) -> bool:
     """Dispatch to the current torch trace validation implementation.
 
@@ -182,6 +254,25 @@ def _unsupported_validate_trace(*args: Any, **kwargs: Any) -> bool:
 
     del args, kwargs
     raise BackendUnsupportedError("This backend does not support trace replay validation yet.")
+
+
+def _jax_validate_trace(*args: Any, **kwargs: Any) -> bool:
+    """Dispatch to JAX trace replay validation.
+
+    Parameters
+    ----------
+    *args, **kwargs:
+        Trace validation arguments.
+
+    Returns
+    -------
+    bool
+        Validation result.
+    """
+
+    from .jax import JAXBackend
+
+    return JAXBackend().validate_trace(*args, **kwargs)
 
 
 def register_default_backend_specs() -> None:
@@ -244,6 +335,33 @@ def register_default_backend_specs() -> None:
                 runtime_name="mlx",
             ),
             priority=10,
+        ),
+        replace=True,
+    )
+    register_backend_spec(
+        BackendSpec(
+            name="jax",
+            can_handle=_jax_can_handle,
+            capture_trace=_jax_capture_trace,
+            validate_entry=_jax_validate_entry,
+            validate_trace=_jax_validate_trace,
+            capabilities=BackendCapabilities(
+                backward_capture=False,
+                validation_replay=True,
+                fastlog=False,
+                interventions=False,
+                rng_replay=False,
+                payload_materialization=False,
+                streaming=False,
+                module_identity_modes=("function_root",),
+            ),
+            serialization_policy=SerializationPolicy(
+                payload_policy="audit_only",
+                body_format="audit_only",
+                manifest_schema_versions=(2,),
+                runtime_name="jax",
+            ),
+            priority=20,
         ),
         replace=True,
     )

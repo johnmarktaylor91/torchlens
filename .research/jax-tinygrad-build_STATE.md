@@ -84,3 +84,19 @@ docs/glossary/notebook lockstep are complete.
 | 5 | backend | M0.2 additive backend-neutral substrate | this commit | PASS: added manifest schema v2 validation/preflight with backend/runtime fields, nullable torch fields, backend payload policy metadata, v1 intended-use compatibility, and audit-only non-torch load refusal before torch manifest parsing. Gates: ruff, mypy, backend registry audit, backend_parity, predicate suite, smoke, focused tlspec schema tests. | Continue M0.2 item 5 fake backend save/load/invariant acceptance, then remaining docs/glossary/notebook lockstep. |
 | 6 | backend | M0.2 additive backend-neutral substrate | this commit | PASS: fake backend now returns a real Trace through public `tl.trace(..., backend="fake")`, dispatches trace validation, saves/loads metadata-only schema v2 bundles, exposes neutral accessors after load, and exercises non-torch invariant gates with corruption fixtures. Gates: ruff, mypy, backend_parity, predicate suite, smoke, focused backend/tlspec tests. | Continue M0.2 item 6 docs/glossary/notebook lockstep for remaining backend substrate public surfaces. |
 | 7 | backend | M0.3 docs/glossary lockstep | this commit | PASS: updated canonical working glossary, root agent guides, backend/capture/serialization docs, migration pages, audit/example indexes, and notebook markdown for public `backend=`, `BackendSpec`/`BackendName`, neutral accessors, validation dispatch, TLSPEC schema v2, audit-only payloads, and invariant split. Gates: ruff, mypy, backend_parity, predicate suite, smoke. | M0 COMPLETE; proceed to next phase per plan. |
+| 1 | jax | M1 J1 jaxpr-first capture core | this commit | PASS: added `torchlens.backends.jax` preview package, registered `JaxSpec`, derived/interpreted closed jaxprs with safe pure-call inlining, rejected hidden consts/nested control flow, built full-save Trace/Op records with function-root module mode and pytree-derived params, and added backend_jax tests. Gates: ruff, mypy, jax focused tests, backend_parity, predicate suite, smoke. | Continue J1 with declared statics API, richer container paths/output pytrees, broader corpus fixtures, and validation hardening in J2. |
+
+## M0 SUBSTRATE — independent Opus review (orchestrator, post-M0-complete)
+VERDICT: PASS. Reviewed the two highest-risk surfaces directly:
+- Invariant split (validation/invariants.py): torch traces -> _check_torch_metadata_invariants
+  (verbatim original A-T sequence, just wrapped); non-torch -> neutral path that STILL runs the
+  shared _check_trace_self_consistency tripwire (the one that caught d589c1c5) + non-torch guards
+  incl. _check_non_torch_backward_inert (forbids faking backward metadata). Additive, not a
+  weakening. 5 corruption fixtures prove the neutral path bites. LOCKED principle intact.
+- Entry routing (user_funcs.trace): explicit backend= wins (skips autoroute -> resolve_backend_spec);
+  backend=None preserves legacy autoroute (MLX isinstance) + torch default; 12 byte-stable parity
+  digests prove torch output unchanged.
+SMELL (morning review, low priority, NOT blocking): the autoroute_kwargs dict in trace() is
+hand-maintained as an explicit ~45-key list; a future trace() kwarg added without updating it would
+be silently dropped from the autoroute path. Suggest a tracker item: derive it programmatically or
+add a test asserting it covers the full trace() signature.

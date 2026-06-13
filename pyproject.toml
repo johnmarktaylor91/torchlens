@@ -109,6 +109,7 @@ markers = [
     "rare: marks tests that are always excluded unless explicitly requested (select with '-m rare')",
     "optional: marks tests that require optional dependencies",
     "backend_parity: marks active backend substrate parity gates",
+    "backend_jax: marks tests that require the optional JAX backend runtime",
 ]
 addopts = "-m 'not rare'"
 filterwarnings = [
