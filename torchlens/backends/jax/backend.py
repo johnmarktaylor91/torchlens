@@ -237,8 +237,8 @@ class JAXBackend:
         trace.jax_static_argnums = static_argnums
         return trace
 
-    def validate_trace(self, trace: Trace, *_args: Any, **_kwargs: Any) -> bool:
-        """Validate a JAX trace by replaying saved primitive equations.
+    def validate_trace(self, trace: Trace, *_args: Any, **kwargs: Any) -> bool:
+        """Validate a JAX trace with replay, perturbation, and invariants.
 
         Parameters
         ----------
@@ -246,21 +246,55 @@ class JAXBackend:
             Trace produced by this backend.
         *_args
             Ignored compatibility arguments.
-        **_kwargs
-            Ignored compatibility keyword arguments.
+        **kwargs
+            Compatibility keyword arguments. ``validate_metadata`` controls
+            whether backend-neutral invariant checks run.
 
         Returns
         -------
         bool
-            True when every saved equation replays exactly enough for JAX allclose.
+            True when saved graph payloads replay and parent edges perturb.
+        """
+
+        try:
+            if kwargs.get("validate_metadata", True):
+                from ...validation.invariants import check_metadata_invariants
+
+                check_metadata_invariants(trace)
+            return self._validate_jax_equations(trace)
+        except Exception:
+            return False
+
+    def _validate_jax_equations(self, trace: Trace) -> bool:
+        """Validate JAX primitive equations against materialized trace payloads.
+
+        Parameters
+        ----------
+        trace
+            Trace produced by this backend.
+
+        Returns
+        -------
+        bool
+            True when equation replay and parent perturbation checks pass.
         """
 
         import jax
 
-        captures = getattr(trace, "jax_equation_captures", ())
-        for capture in captures:
-            replayed = replay_equation(capture)
-            if not jax.tree.all(jax.tree.map(_values_close, replayed, capture.output_values)):
+        captures = tuple(getattr(trace, "jax_equation_captures", ()))
+        equation_ops = _jax_equation_ops(trace)
+        if len(captures) != len(equation_ops):
+            return False
+        ops_by_raw_label = {
+            getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", [])
+        }
+        for capture, op in zip(captures, equation_ops):
+            inputs = _inputs_from_trace_graph(capture, op, ops_by_raw_label)
+            replayed = replay_equation(capture, inputs)
+            saved_outputs = _saved_op_outputs(op, len(replayed))
+            if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
+                return False
+            if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
                 return False
         return True
 
@@ -280,8 +314,9 @@ class JAXBackend:
             Validation result.
         """
 
+        validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
-        return self.validate_trace(trace)
+        return self.validate_trace(trace, validate_metadata=validate_metadata)
 
     def is_tensor(self, value: object) -> bool:
         """Return whether ``value`` is a JAX array.
@@ -880,7 +915,22 @@ class JAXBackend:
             layer_log.backend_address = op_log.backend_address
             layer_log.resolver_status = op_log.resolver_status
             trace.layer_logs[label] = layer_log
-        trace.num_ops = len(trace.layer_list)
+        trace.num_ops = sum(
+            1
+            for op_log in trace.layer_list
+            if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
+        )
+        for op_log in trace.layer_list:
+            path = getattr(op_log, "annotations", {}).get("jax_container_path")
+            if not isinstance(path, str) or not path.startswith("0."):
+                continue
+            param_address = path.removeprefix("0.")
+            if param_address not in trace.param_logs:
+                continue
+            param = trace.param_logs[param_address]
+            op_log._param_barcodes = [param.barcode]
+            op_log._param_logs = [param]
+            op_log.num_params = param.num_params
         trace._layers_logged = True
         trace._layers_saved = True
         trace.has_backward_pass = False
@@ -1129,6 +1179,207 @@ def _normalize_static_argnums(value: object, num_args: int) -> tuple[int, ...]:
     return normalized
 
 
+def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
+    """Return materialized operation logs that correspond to JAX equations.
+
+    Parameters
+    ----------
+    trace
+        Trace produced by the JAX backend.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Operation logs with JAX equation annotations, in execution order.
+    """
+
+    return tuple(
+        op
+        for op in getattr(trace, "layer_list", ())
+        if isinstance(getattr(op, "annotations", None), Mapping)
+        and "jax_source_path" in op.annotations
+    )
+
+
+def _inputs_from_trace_graph(
+    capture: JaxEquationCapture,
+    op: Any,
+    ops_by_raw_label: Mapping[str, Any],
+) -> tuple[Any, ...]:
+    """Build replay inputs from the trace's recorded parent graph.
+
+    Parameters
+    ----------
+    capture
+        Captured JAX equation metadata.
+    op
+        Materialized TorchLens operation for the equation.
+    ops_by_raw_label
+        Materialized operations keyed by raw label.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Replay inputs where graph parents come from saved parent payloads.
+    """
+
+    inputs = list(capture.input_values)
+    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
+    parent_labels = tuple(getattr(op, "parents", ()))
+    positioned_labels = {label for label in graph_positions.values() if isinstance(label, str)}
+    if positioned_labels != set(parent_labels):
+        raise ValueError("JAX trace parent labels and parent_arg_positions disagree.")
+    for position, parent_label in graph_positions.items():
+        if not isinstance(position, int) or position < 0 or position >= len(inputs):
+            raise ValueError(f"JAX trace parent arg position {position!r} is invalid.")
+        parent_op = ops_by_raw_label[parent_label]
+        inputs[position] = _saved_single_output(parent_op)
+    return tuple(inputs)
+
+
+def _saved_op_outputs(op: Any, expected_count: int) -> tuple[Any, ...]:
+    """Return saved output payloads from a materialized JAX operation.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+    expected_count
+        Number of primitive outputs expected by replay.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Saved output payloads.
+    """
+
+    output = _saved_single_output(op)
+    if expected_count == 1:
+        return (output,)
+    if not isinstance(output, tuple) or len(output) != expected_count:
+        raise ValueError("JAX multi-output payload does not match primitive replay.")
+    return output
+
+
+def _saved_single_output(op: Any) -> Any:
+    """Return one operation's saved payload, failing when it was dropped.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+
+    Returns
+    -------
+    Any
+        Saved output payload.
+    """
+
+    if not getattr(op, "has_saved_activation", False):
+        raise ValueError("JAX validation requires every equation payload to be saved.")
+    output = op.out
+    if output is None:
+        raise ValueError("JAX validation found a missing saved payload.")
+    return output
+
+
+def _parent_perturbations_change_output(
+    capture: JaxEquationCapture,
+    op: Any,
+    inputs: tuple[Any, ...],
+    saved_outputs: tuple[Any, ...],
+) -> bool:
+    """Return whether a recorded parent perturbation affects child replay output.
+
+    Parameters
+    ----------
+    capture
+        Captured JAX equation metadata.
+    op
+        Materialized TorchLens operation for the equation.
+    inputs
+        Replay inputs derived from trace graph parents.
+    saved_outputs
+        Saved child output payloads.
+
+    Returns
+    -------
+    bool
+        True when at least one graph parent perturbation changes the child output.
+    """
+
+    import jax
+
+    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
+    if not graph_positions:
+        return True
+    positions_by_parent: dict[str, list[int]] = {}
+    for position, parent_label in graph_positions.items():
+        positions_by_parent.setdefault(parent_label, []).append(position)
+    for positions in positions_by_parent.values():
+        first_position = positions[0]
+        for candidate in _perturb_candidates(inputs[first_position]):
+            perturbed_inputs = list(inputs)
+            for position in positions:
+                perturbed_inputs[position] = candidate
+            perturbed_outputs = replay_equation(capture, perturbed_inputs)
+            if not jax.tree.all(jax.tree.map(_values_close, perturbed_outputs, saved_outputs)):
+                return True
+    return False
+
+
+def _perturb_candidates(value: Any) -> tuple[Any, ...]:
+    """Return deterministic perturbation candidates for a JAX value.
+
+    Parameters
+    ----------
+    value
+        Parent payload to perturb.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Perturbed values with the same shape and dtype family.
+    """
+
+    import jax
+    import jax.numpy as jnp
+
+    array = jnp.asarray(value)
+    if str(array.dtype).startswith("key<"):
+        if not array.shape:
+            return (jax.random.fold_in(value, 1),)
+        flat = jnp.reshape(array, (-1,))
+        folded = jax.vmap(lambda key: jax.random.fold_in(key, 1))(flat)
+        return (jnp.reshape(folded, array.shape),)
+    if array.dtype == jnp.bool_:
+        return (jnp.logical_not(array),)
+    if jnp.issubdtype(array.dtype, jnp.integer):
+        info = jnp.iinfo(array.dtype)
+        base_candidates = [
+            array + jnp.asarray(1, dtype=array.dtype),
+            array - jnp.asarray(1, dtype=array.dtype),
+            jnp.zeros_like(array),
+            jnp.full_like(array, info.max),
+        ]
+        if info.min < 0:
+            base_candidates.append(jnp.full_like(array, info.min))
+        return (
+            *base_candidates,
+            jnp.bitwise_xor(array, jnp.asarray(info.max, dtype=array.dtype)),
+        )
+    if jnp.issubdtype(array.dtype, jnp.complexfloating):
+        magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.real.dtype)
+        return (
+            array + jnp.asarray(magnitude + 0.125j, dtype=array.dtype),
+            array - jnp.asarray(magnitude + 0.125j, dtype=array.dtype),
+        )
+    if jnp.issubdtype(array.dtype, jnp.floating):
+        magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.dtype)
+        return (array + magnitude, array - magnitude)
+    return (array,)
+
+
 def _values_close(left: Any, right: Any) -> bool:
     """Return whether two JAX values are numerically close.
 
@@ -1147,7 +1398,17 @@ def _values_close(left: Any, right: Any) -> bool:
 
     import jax.numpy as jnp
 
-    return bool(jnp.allclose(left, right))
+    left_array = jnp.asarray(left)
+    right_array = jnp.asarray(right)
+    if left_array.shape != right_array.shape or left_array.dtype != right_array.dtype:
+        return False
+    if left_array.dtype == jnp.bool_ or jnp.issubdtype(left_array.dtype, jnp.integer):
+        return bool(jnp.array_equal(left_array, right_array, equal_nan=True))
+    if jnp.issubdtype(left_array.dtype, jnp.floating):
+        return bool(jnp.allclose(left_array, right_array, rtol=1e-5, atol=1e-6, equal_nan=True))
+    if jnp.issubdtype(left_array.dtype, jnp.complexfloating):
+        return bool(jnp.allclose(left_array, right_array, rtol=1e-5, atol=1e-6, equal_nan=True))
+    return bool(jnp.array_equal(left_array, right_array))
 
 
 def _numel(shape: Sequence[int]) -> int:

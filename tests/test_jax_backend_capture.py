@@ -453,6 +453,28 @@ def _trace_jax(model: Callable[..., Any], args: tuple[Any, ...], **kwargs: Any) 
     return tl.trace(cast(Any, model), args, backend="jax", **kwargs)
 
 
+def _jax_equation_op(trace: Any, primitive: str) -> Any:
+    """Return the first JAX equation op with a matching primitive name.
+
+    Parameters
+    ----------
+    trace
+        Captured JAX trace.
+    primitive
+        JAX primitive name to find.
+
+    Returns
+    -------
+    Any
+        Matching TorchLens op.
+    """
+
+    for op in trace.layer_list:
+        if op.func_name == primitive and "jax_source_path" in op.annotations:
+            return op
+    raise AssertionError(f"missing JAX primitive op: {primitive}")
+
+
 def test_jax_trace_captures_equation_ops_and_params() -> None:
     """JAX raw functions should produce equation-backed TorchLens traces."""
 
@@ -546,6 +568,66 @@ def test_jax_trace_inlines_allowlisted_pure_library_calls() -> None:
     assert "custom_jvp_call" in trace.jax_inlined_call_primitives
     assert any(capture.inlined for capture in trace.jax_equation_captures)
     assert "max" in {op.func_name for op in trace.layer_list}
+    assert trace.validate_forward_pass([])
+
+
+def test_jax_validate_public_entry_returns_real_bool() -> None:
+    """Public validation should capture and validate JAX traces."""
+
+    assert tl.validate(
+        cast(Any, _mlp),
+        (_params(), jnp.ones((2, 3))),
+        scope="forward",
+        backend="jax",
+    )
+
+
+def test_jax_validation_fails_when_equation_output_is_corrupted() -> None:
+    """Replay validation should catch a corrupted saved equation output."""
+
+    trace = _trace_jax(_mlp, (_params(), jnp.ones((2, 3))))
+    tanh_op = _jax_equation_op(trace, "tanh")
+
+    tanh_op._internal_set("out", tanh_op.out + jnp.asarray(0.5, dtype=tanh_op.out.dtype))
+
+    assert trace.validate_forward_pass([], validate_metadata=False) is False
+
+
+def test_jax_validation_fails_when_parent_edge_is_rewired_wrong() -> None:
+    """Replay validation should catch graph parent wiring that points to the wrong payload."""
+
+    def add_then_square(_: None, x: Any, y: Any) -> Any:
+        """Return a result with same-shaped parent inputs."""
+
+        summed = x + y
+        return summed * summed
+
+    trace = _trace_jax(
+        add_then_square,
+        (
+            None,
+            jnp.ones((2, 3), dtype=jnp.float32),
+            jnp.full((2, 3), 3.0, dtype=jnp.float32),
+        ),
+    )
+    add_op = _jax_equation_op(trace, "add")
+    wrong_parent = add_op.parent_arg_positions["args"][0]
+
+    add_op.parent_arg_positions["args"][1] = wrong_parent
+    add_op.parents = [wrong_parent]
+
+    assert trace.validate_forward_pass([], validate_metadata=False) is False
+
+
+def test_jax_validation_fails_when_saved_payload_is_dropped() -> None:
+    """Replay validation should catch a dropped JAX equation payload."""
+
+    trace = _trace_jax(_mlp, (_params(), jnp.ones((2, 3))))
+    tanh_op = _jax_equation_op(trace, "tanh")
+
+    tanh_op._internal_set("has_saved_activation", False)
+
+    assert trace.validate_forward_pass([], validate_metadata=False) is False
 
 
 def test_jax_trace_accepts_s0j_extended_corpus_subset() -> None:
