@@ -438,12 +438,27 @@ def test_validation_with_empty_like():
 
 
 class _SimpleFF(nn.Module):
-    def __init__(self):
+    """Single-module feed-forward model for validation invariant tests."""
+
+    def __init__(self) -> None:
+        """Initialize the model."""
+
         super().__init__()
         self.fc = nn.Linear(5, 3)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run one attributed linear operation."""
+
         return self.fc(x)
+
+
+class _RootOnlyModel(nn.Module):
+    """Root-only model with compute ops outside child modules."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a simple top-level tensor operation."""
+
+        return x * 2
 
 
 class _MidForwardGradModel(nn.Module):
@@ -471,12 +486,62 @@ class _MidForwardGradModel(nn.Module):
         return self.fc2(hidden + adapted_bias)
 
 
-def _make_clean_log():
+def _make_clean_log() -> Trace:
     """Return a Trace with all outs and metadata for a simple FF model."""
     from torchlens import trace as trace_fn
 
     model = _SimpleFF()
     return trace_fn(model, torch.randn(2, 5), random_seed=42)
+
+
+def _make_root_only_log() -> Trace:
+    """Return a Trace for a model whose compute op is attributed only to root."""
+    from torchlens import trace as trace_fn
+
+    model = _RootOnlyModel()
+    return trace_fn(model, torch.randn(2, 5), random_seed=42)
+
+
+def _relabel_as_mlx_torch_module(trace: Trace) -> Trace:
+    """Relabel a torch trace as an MLX-style non-function-root trace.
+
+    Parameters
+    ----------
+    trace:
+        Source trace with torch-module metadata.
+
+    Returns
+    -------
+    Trace
+        Same trace object routed through backend-neutral torch_module validation.
+    """
+
+    trace.backend = "mlx"
+    trace.module_identity_mode = "torch_module"
+    trace.param_source = "native-module"
+    return trace
+
+
+def _relabel_as_function_root(trace: Trace, backend: str) -> Trace:
+    """Relabel a root-only trace as a synthetic function-root backend trace.
+
+    Parameters
+    ----------
+    trace:
+        Root-only source trace.
+    backend:
+        Backend name whose spec supports ``function_root``.
+
+    Returns
+    -------
+    Trace
+        Same trace object routed through backend-neutral function_root validation.
+    """
+
+    trace.backend = backend
+    trace.module_identity_mode = "function_root"
+    trace.param_source = "none"
+    return trace
 
 
 def _make_backward_log() -> Trace:
@@ -682,6 +747,75 @@ def test_corruption_module_back_reference():
     with pytest.raises(MetadataInvariantError, match="module_layer_containment"):
         check_metadata_invariants(log)
     log.cleanup()
+
+
+def test_torch_trace_metadata_invariants_still_green() -> None:
+    """Torch traces still validate through the unchanged torch invariant path."""
+
+    log = _make_clean_log()
+    try:
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+@pytest.mark.parametrize("backend", ["jax", "tinygrad"])
+def test_function_root_module_invariants_green_for_synthetic_backends(backend: str) -> None:
+    """Synthetic JAX/tinygrad function-root traces pass minimal module invariants."""
+
+    log = _relabel_as_function_root(_make_root_only_log(), backend)
+    try:
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
+
+
+def test_non_function_root_drop_op_module_attribution_raises() -> None:
+    """Dropping an op's module attribution fails before output validation matters."""
+
+    log = _relabel_as_mlx_torch_module(_make_clean_log())
+    try:
+        victim = next(layer for layer in log.layer_list if layer.module)
+        victim.module = None
+        victim.modules = []
+        victim.module_call_stack = []
+        victim.output_of_modules = []
+        victim.output_of_module_calls = []
+        victim.atomic_module_call = None
+
+        with pytest.raises(MetadataInvariantError, match="module_attribution"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_non_function_root_cyclic_address_parent_raises() -> None:
+    """Cyclic module address_parent links fail module containment logic."""
+
+    log = _relabel_as_mlx_torch_module(_make_clean_log())
+    try:
+        root = log.modules["self"]
+        child = log.modules["fc"]
+        root.address_parent = "fc"
+        root.address_children = ["fc"]
+        child.address_parent = "self"
+        child.address_children = ["self"]
+
+        with pytest.raises(MetadataInvariantError, match="module_containment_logic"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_plain_non_function_root_unattributed_compute_op_raises() -> None:
+    """A non-function-root trace with an unattributed compute op is invalid."""
+
+    log = _relabel_as_mlx_torch_module(_make_root_only_log())
+    try:
+        with pytest.raises(MetadataInvariantError, match="module_attribution"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
 
 
 def test_corruption_layer_num_calls():

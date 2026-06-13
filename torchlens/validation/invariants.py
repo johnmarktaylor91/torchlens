@@ -174,9 +174,222 @@ def _check_backend_neutral_metadata_invariants(trace: "Trace") -> bool:
     _check_trace_self_consistency(trace)
     _check_non_torch_backward_inert(trace)
     _check_backend_neutral_accessor_refs(trace)
+    _check_backend_neutral_module_mode_invariants(trace)
     _check_graph_ordering(trace)
     _check_lookup_key_consistency(trace)
     return True
+
+
+def _check_backend_neutral_module_mode_invariants(trace: "Trace") -> None:
+    """Run module invariants appropriate to the trace's module identity mode.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed non-torch trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If mode-specific module metadata is internally inconsistent.
+    """
+
+    if getattr(trace, "module_identity_mode", None) == "function_root":
+        _check_function_root_module_invariants(trace)
+        return
+
+    _check_compute_op_module_attribution(trace)
+    _check_module_layer_containment(trace)  # H
+    _check_module_hierarchy(trace)  # I
+    _check_param_xrefs(trace)  # J
+    _check_module_containment_logic(trace)  # Q
+
+
+def _check_function_root_module_invariants(trace: "Trace") -> None:
+    """Check minimal module metadata required for ``function_root`` traces.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed function-root trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If the root module is not the sole module, does not mirror trace
+        layers, has invalid root boundary lists, or compute ops claim non-root
+        module attribution.
+    """
+
+    name = "function_root_module_invariants"
+    modules = list(trace.modules)
+    module_addresses = [module.address for module in modules]
+    if module_addresses != ["self"]:
+        raise MetadataInvariantError(
+            name,
+            f"function_root traces must contain exactly ['self'] modules, got {module_addresses}",
+        )
+
+    root = modules[0]
+    trace_layer_labels = list(trace.layer_labels)
+    if list(root.layer_labels) != trace_layer_labels:
+        raise MetadataInvariantError(
+            name,
+            "root module layer_labels must exactly match trace.layer_labels",
+        )
+
+    root_call = root.ops.get(1)
+    if root_call is None:
+        raise MetadataInvariantError(name, "root module must have exactly one self:1 call")
+    if list(root_call.ops) != trace_layer_labels:
+        raise MetadataInvariantError(
+            name,
+            "root module self:1 ops must exactly match trace.layer_labels",
+        )
+
+    trace_layer_set = set(trace_layer_labels)
+    for owner_label, owner in (("root module", root), ("root module call", root_call)):
+        for attr_name in ("input_layers", "output_layers"):
+            labels = set(getattr(owner, attr_name, ()) or ())
+            extra = labels - trace_layer_set
+            if extra:
+                raise MetadataInvariantError(
+                    name,
+                    f"{owner_label} {attr_name} contains labels outside trace.layer_labels: "
+                    f"{extra}",
+                )
+
+    for layer in _compute_ops(trace):
+        non_root_claims = [
+            claim
+            for claim in _module_claims(layer)
+            if _module_claim_address(claim) not in {None, "self"}
+        ]
+        if non_root_claims:
+            raise MetadataInvariantError(
+                name,
+                f"Compute op '{layer.layer_label}' claims non-root module attribution: "
+                f"{non_root_claims}",
+            )
+
+
+def _check_compute_op_module_attribution(trace: "Trace") -> None:
+    """Check compute ops resolve to a containing module in non-root modes.
+
+    Parameters
+    ----------
+    trace:
+        Postprocessed non-function-root trace to validate.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If a compute op has no module/module-call attribution, or the
+        attribution does not resolve to a module that lists the op.
+    """
+
+    name = "module_attribution"
+    for layer in _compute_ops(trace):
+        claims = _module_claims(layer)
+        if not claims:
+            raise MetadataInvariantError(
+                name,
+                f"Compute op '{layer.layer_label}' has no module/module-call attribution",
+            )
+
+        resolved = False
+        for claim in claims:
+            address = _module_claim_address(claim)
+            if address is None:
+                continue
+            try:
+                module = trace.modules[address]
+            except (KeyError, IndexError):
+                continue
+            if layer.layer_label in module.layer_labels:
+                resolved = True
+                break
+
+        if not resolved:
+            raise MetadataInvariantError(
+                name,
+                f"Compute op '{layer.layer_label}' attribution {claims} does not resolve "
+                "to a Module that lists it",
+            )
+
+
+def _compute_ops(trace: "Trace") -> list["Op"]:
+    """Return non-bookkeeping compute ops from ``trace``.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose layer list should be filtered.
+
+    Returns
+    -------
+    list[Op]
+        Layers that are not synthetic input, output, or buffer entries.
+    """
+
+    return [
+        layer
+        for layer in trace.layer_list
+        if not (layer.is_input or layer.is_output or layer.is_buffer)
+    ]
+
+
+def _module_claims(layer: "Op") -> list[str]:
+    """Return module/module-call attribution claims from an op.
+
+    Parameters
+    ----------
+    layer:
+        Op to inspect.
+
+    Returns
+    -------
+    list[str]
+        Non-empty string module claims in stable field order.
+    """
+
+    claims: list[str] = []
+    for attr_name in (
+        "module",
+        "modules",
+        "module_call_stack",
+        "input_to_module_calls",
+        "output_of_modules",
+        "output_of_module_calls",
+        "atomic_module_call",
+    ):
+        value = getattr(layer, attr_name, None)
+        if isinstance(value, str):
+            if value:
+                claims.append(value)
+        elif value:
+            claims.extend(str(item) for item in value if item)
+    return claims
+
+
+def _module_claim_address(claim: str) -> str | None:
+    """Return a module address from a module or module-call claim.
+
+    Parameters
+    ----------
+    claim:
+        Module address or call-qualified module label.
+
+    Returns
+    -------
+    str | None
+        Address with a trailing call suffix removed, or ``None`` for empty
+        claims.
+    """
+
+    if not claim:
+        return None
+    return claim.rsplit(":", 1)[0]
 
 
 def _check_backend_identity_invariants(trace: "Trace") -> None:
