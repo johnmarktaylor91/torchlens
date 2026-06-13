@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Callable, cast
@@ -32,6 +34,10 @@ REJECTED_NESTED_PRIMITIVES = frozenset(
     }
 )
 EFFECT_PRIMITIVES = frozenset({"debug_callback", "io_callback", "pure_callback"})
+_ITERATION_COMPONENT_RE = re.compile(
+    r"^(?P<prefix>(?:scan|while)[_\-:]?)?(?:iter|iteration)(?P<sep>[:=_-])\d+$"
+)
+_BRACKETED_ITERATION_RE = re.compile(r"(?P<prefix>\b(?:scan|while))\[(?:iter=)?\d+\]")
 
 
 @dataclass(frozen=True)
@@ -305,6 +311,88 @@ def replay_equation(
             f"JAX replay kind {capture.kind!r} is not registered; expected one of: {expected}."
         ) from exc
     return handler(capture, inputs)
+
+
+def jax_equivalence_key(capture: JaxEquationCapture) -> str:
+    """Return the backend-neutral structural key for a JAX equation.
+
+    Parameters
+    ----------
+    capture
+        Captured JAX equation metadata.
+
+    Returns
+    -------
+    str
+        Stable key composed from primitive name, input/output avals, and the
+        normalized source path.
+    """
+
+    payload = {
+        "primitive": capture.primitive,
+        "input_avals": tuple(capture.input_avals),
+        "output_avals": tuple(capture.output_avals),
+        "source_path": normalize_jax_source_path(capture.source_path),
+    }
+    return "jax:" + json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def normalize_jax_source_path(source_path: Sequence[str]) -> tuple[str, ...]:
+    """Normalize a JAX source path for cross-iteration grouping.
+
+    Parameters
+    ----------
+    source_path
+        Nested source path emitted by the jaxpr interpreter.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Path with scan/while iteration indexes removed and the leaf equation
+        ordinal stripped, while retaining non-leaf call/control-site identity.
+    """
+
+    normalized: list[str] = []
+    last_index = len(source_path) - 1
+    for index, component in enumerate(source_path):
+        normalized_component = _normalize_jax_source_path_component(
+            str(component),
+            is_leaf=index == last_index,
+        )
+        if normalized_component is not None:
+            normalized.append(normalized_component)
+    return tuple(normalized)
+
+
+def _normalize_jax_source_path_component(component: str, *, is_leaf: bool) -> str | None:
+    """Normalize one source-path component.
+
+    Parameters
+    ----------
+    component
+        Source-path component.
+    is_leaf
+        Whether this component names the captured equation itself.
+
+    Returns
+    -------
+    str | None
+        Normalized component, or ``None`` when the component is only an
+        iteration marker.
+    """
+
+    iteration_match = _ITERATION_COMPONENT_RE.match(component)
+    if iteration_match is not None:
+        return None
+    without_bracketed_iteration = _BRACKETED_ITERATION_RE.sub(
+        lambda match: match.group("prefix"),
+        component,
+    )
+    if is_leaf:
+        _ordinal, separator, primitive_name = without_bracketed_iteration.partition(":")
+        if separator and _ordinal.isdigit() and primitive_name:
+            return primitive_name
+    return without_bracketed_iteration
 
 
 JaxReplayHandler = Callable[[JaxEquationCapture, Sequence[Any] | None], tuple[Any, ...]]

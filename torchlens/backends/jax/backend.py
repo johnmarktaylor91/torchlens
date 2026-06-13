@@ -31,6 +31,12 @@ from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...intervention.types import DictKey, TupleIndex
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_root_module_log
+from ...postprocess.loop_grouping_adapter import (
+    RecurrenceAssignment,
+    RecurrenceGroupingGraph,
+    RecurrenceNode,
+    group_recurrent_nodes,
+)
 from ...quantities import Bytes, Duration
 from .jaxpr import (
     ALL_JAX_EQUATION_KINDS,
@@ -39,6 +45,7 @@ from .jaxpr import (
     derive_closed_jaxpr,
     flatten_dynamic_args,
     interpret_closed_jaxpr_with_inlining,
+    jax_equivalence_key,
     reject_undeclared_consts,
     replay_equation,
 )
@@ -364,13 +371,15 @@ class JAXBackend:
         op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
         if capture_kind_counts != op_kind_counts:
             return False
-        ops_by_raw_label = {
-            getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", [])
-        }
+        ops_by_label: dict[str, Any] = {}
+        for op in getattr(trace, "layer_list", []):
+            for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
+                if isinstance(label, str):
+                    ops_by_label[label] = op
         for capture, op in zip(captures, equation_ops):
             if capture.kind != _jax_op_capture_kind(op):
                 return False
-            inputs = _inputs_from_trace_graph(capture, op, ops_by_raw_label)
+            inputs = _inputs_from_trace_graph(capture, op, ops_by_label)
             replayed = replay_equation(capture, inputs)
             saved_outputs = _saved_op_outputs(op, len(replayed))
             if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
@@ -581,6 +590,7 @@ class JAXBackend:
                 parents=parents,
                 parent_arg_positions=parent_positions,
                 container_path=(),
+                equivalence_class=jax_equivalence_key(equation),
                 annotations={
                     "jax_params": repr(dict(equation.params)),
                     "jax_capture_kind": equation.kind,
@@ -607,6 +617,7 @@ class JAXBackend:
         parent_arg_positions: dict[str, dict[Any, str]],
         container_path: tuple[str, ...],
         annotations: Mapping[str, object],
+        equivalence_class: str | None = None,
     ) -> OpEvent:
         """Append one JAX event to the trace event stream.
 
@@ -628,6 +639,9 @@ class JAXBackend:
             Parent argument-position metadata.
         container_path
             Pytree container path.
+        equivalence_class
+            Optional structural equivalence key. Source events receive a
+            unique fallback key.
         annotations
             Extra annotations.
 
@@ -733,7 +747,7 @@ class JAXBackend:
             pass_index=1,
             grad_fn_class_qualname=None,
             grad_fn_handle=None,
-            equivalence_class=layer_type,
+            equivalence_class=equivalence_class or f"jax:{kind}:{layer_type}:{reserved.label_raw}",
             is_transform=False,
             transform_kind=None,
             transform_chain=(),
@@ -1129,38 +1143,91 @@ class JAXBackend:
             Trace accessors are populated.
         """
 
-        for raw_index, (label, op_log) in enumerate(trace._raw_layer_dict.items()):
-            pass_label = f"{label}:1"
+        assignments = self._jax_recurrence_assignments(trace)
+        raw_labels = tuple(trace._raw_layer_labels_list)
+        raw_to_final_op_label: dict[str, str] = {}
+
+        trace.layer_list = []
+        trace.layer_dict_main_keys.clear()
+        trace.layer_dict_all_keys.clear()
+        trace.layer_logs.clear()
+        trace.op_labels = []
+        trace.layer_labels = []
+        trace.layer_num_calls.clear()
+        trace._lookup_keys_to_layer_num_dict.clear()
+        trace._layer_num_to_lookup_keys_dict.clear()
+
+        for raw_index, label in enumerate(raw_labels):
+            op_log = trace._raw_layer_dict[label]
+            assignment = assignments.get(
+                label,
+                RecurrenceAssignment(
+                    layer_label=label,
+                    recurrent_labels=(label,),
+                    pass_index=1,
+                    num_passes=1,
+                    equivalence_key=op_log.equivalence_class or label,
+                ),
+            )
+            pass_label = f"{assignment.layer_label}:{assignment.pass_index}"
             op_log._label_raw = label
-            op_log._layer_label_raw = label
+            op_log._layer_label_raw = assignment.layer_label
             op_log.label = pass_label
             op_log.label_short = pass_label
-            op_log.layer_label = label
-            op_log.layer_label_short = label
-            op_log.lookup_keys = [label, pass_label]
-            op_log.pass_index = 1
-            op_log.num_passes = 1
+            op_log.layer_label = assignment.layer_label
+            op_log.layer_label_short = assignment.layer_label
+            op_log.pass_index = assignment.pass_index
+            op_log.num_passes = assignment.num_passes
+            op_log.equivalence_class = assignment.equivalence_key
             op_log.dtype_ref = DtypeRef.from_value(op_log.dtype)
             op_log.device_ref = DeviceRef.from_value(getattr(op_log.out, "device", None))
             op_log.backend_address = f"jaxpr:{label}"
             op_log.resolver_status = "resolved"
+            raw_to_final_op_label[label] = pass_label
+
+        self._relabel_jax_graph_edges(trace, raw_to_final_op_label)
+        equivalent_labels_by_key: dict[str, set[str]] = {}
+        for label in raw_labels:
+            op_log = trace._raw_layer_dict[label]
+            equivalent_labels_by_key.setdefault(op_log.equivalence_class, set()).add(op_log.label)
+
+        for raw_index, label in enumerate(raw_labels):
+            op_log = trace._raw_layer_dict[label]
+            assignment = assignments[label]
+            op_log.recurrent_ops = [
+                raw_to_final_op_label[member]
+                for member in assignment.recurrent_labels
+                if member in raw_to_final_op_label
+            ]
+            op_log.equivalent_ops = equivalent_labels_by_key.get(op_log.equivalence_class, set())
+            op_log.lookup_keys = [label, op_log.label]
+            if op_log.layer_label not in trace.layer_dict_all_keys:
+                op_log.lookup_keys.append(op_log.layer_label)
             trace.layer_list.append(op_log)
-            trace.layer_dict_main_keys[label] = op_log
-            trace.layer_dict_all_keys[label] = op_log
-            trace.layer_dict_all_keys[pass_label] = op_log
-            trace.op_labels.append(pass_label)
-            trace.layer_labels.append(label)
-            trace.layer_num_calls[label] = 1
-            trace._lookup_keys_to_layer_num_dict[label] = raw_index
-            trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
-            layer_log = Layer(op_log)
-            layer_log.ops[1] = op_log
-            layer_log.call_labels.append(pass_label)
+            trace.layer_dict_main_keys[op_log.label] = op_log
+            for lookup_key in op_log.lookup_keys:
+                if lookup_key not in trace.layer_dict_all_keys:
+                    trace.layer_dict_all_keys[lookup_key] = op_log
+                    trace._lookup_keys_to_layer_num_dict[lookup_key] = raw_index
+                trace._layer_num_to_lookup_keys_dict[raw_index].append(lookup_key)
+            trace.op_labels.append(op_log.label)
+            if op_log.layer_label not in trace.layer_labels:
+                trace.layer_labels.append(op_log.layer_label)
+            trace.layer_num_calls[op_log.layer_label] = op_log.num_passes
+            layer_log = trace.layer_logs.get(op_log.layer_label)
+            if layer_log is None:
+                layer_log = Layer(op_log)
+                trace.layer_logs[op_log.layer_label] = layer_log
+            layer_log.num_passes = op_log.num_passes
+            layer_log.ops[op_log.pass_index] = op_log
+            layer_log.call_labels.append(op_log.label)
             layer_log.dtype_ref = op_log.dtype_ref
             layer_log.device_ref = op_log.device_ref
             layer_log.backend_address = op_log.backend_address
             layer_log.resolver_status = op_log.resolver_status
-            trace.layer_logs[label] = layer_log
+
+        trace.op_equivalence_classes.clear()
+        trace.op_equivalence_classes.update(equivalent_labels_by_key)
         trace.num_ops = sum(
             1
             for op_log in trace.layer_list
@@ -1177,6 +1244,10 @@ class JAXBackend:
             op_log._param_barcodes = [param.barcode]
             op_log._param_logs = [param]
             op_log.num_params = param.num_params
+        trace.output_layers = [
+            trace._raw_layer_dict[label].layer_label if label in trace._raw_layer_dict else label
+            for label in trace.output_layers
+        ]
         trace._layers_logged = True
         trace._layers_saved = True
         trace.has_backward_pass = False
@@ -1185,6 +1256,152 @@ class JAXBackend:
         trace.module_identity_mode = "function_root"
         self._attach_function_root_module(trace)
         trace._tracing_finished = True
+
+    def _jax_recurrence_assignments(self, trace: Trace) -> dict[str, RecurrenceAssignment]:
+        """Return recurrence assignments for a materialized JAX raw trace.
+
+        Parameters
+        ----------
+        trace
+            Trace containing materialized raw JAX ops.
+
+        Returns
+        -------
+        dict[str, RecurrenceAssignment]
+            Recurrence assignments keyed by raw label.
+        """
+
+        if not trace.recurrence_detection:
+            return {
+                label: self._jax_singleton_assignment(label, op_log)
+                for label, op_log in trace._raw_layer_dict.items()
+            }
+        graph = self._build_jax_recurrence_grouping_graph(trace)
+        assignments = group_recurrent_nodes(graph)
+        return {
+            label: assignments.get(label, self._jax_singleton_assignment(label, op_log))
+            for label, op_log in trace._raw_layer_dict.items()
+        }
+
+    def _build_jax_recurrence_grouping_graph(self, trace: Trace) -> RecurrenceGroupingGraph:
+        """Build the neutral recurrence graph from JAX materialized raw logs.
+
+        Parameters
+        ----------
+        trace
+            Trace containing materialized raw JAX ops.
+
+        Returns
+        -------
+        RecurrenceGroupingGraph
+            Backend-neutral graph with data edges only.
+        """
+
+        nodes: dict[str, RecurrenceNode] = {}
+        raw_labels = tuple(trace._raw_layer_labels_list)
+        raw_label_set = set(raw_labels)
+        data_parents_by_label = {
+            label: _ordered_jax_data_parent_labels(op_log, raw_label_set)
+            for label, op_log in trace._raw_layer_dict.items()
+        }
+        data_children_by_label: dict[str, list[str]] = {label: [] for label in raw_labels}
+        for label, parents in data_parents_by_label.items():
+            for parent in parents:
+                data_children_by_label[parent].append(label)
+
+        eligible_labels: list[str] = []
+        source_labels: list[str] = []
+        for label in raw_labels:
+            op_log = trace._raw_layer_dict[label]
+            pruned = bool(getattr(op_log, "is_orphan", False))
+            retain = not pruned
+            if retain:
+                eligible_labels.append(label)
+            if op_log.is_input or op_log.is_internal_source or not data_parents_by_label[label]:
+                source_labels.append(label)
+            nodes[label] = RecurrenceNode(
+                label=label,
+                raw_order=op_log.raw_index,
+                equivalence_key=op_log.equivalence_class,
+                equivalent_labels=tuple(
+                    member for member in op_log.equivalent_ops if member in raw_label_set
+                ),
+                data_parents=data_parents_by_label[label],
+                data_children=tuple(data_children_by_label[label]),
+                layer_label=op_log._layer_label_raw,
+                recurrent_labels=(label,),
+                uses_params=bool(op_log.uses_params),
+                func_name=op_log.func_name,
+                param_barcodes=tuple(op_log._param_barcodes),
+                retain=retain,
+                pruned=pruned,
+            )
+
+        return RecurrenceGroupingGraph(
+            nodes=nodes,
+            raw_labels=raw_labels,
+            source_labels=tuple(source_labels),
+            eligible_labels=tuple(eligible_labels),
+        )
+
+    def _jax_singleton_assignment(self, label: str, op_log: Any) -> RecurrenceAssignment:
+        """Return a singleton recurrence assignment for one JAX op.
+
+        Parameters
+        ----------
+        label
+            Raw operation label.
+        op_log
+            Materialized operation log.
+
+        Returns
+        -------
+        RecurrenceAssignment
+            Single-pass assignment preserving the op's current key.
+        """
+
+        return RecurrenceAssignment(
+            layer_label=label,
+            recurrent_labels=(label,),
+            pass_index=1,
+            num_passes=1,
+            equivalence_key=op_log.equivalence_class or label,
+        )
+
+    def _relabel_jax_graph_edges(self, trace: Trace, raw_to_final: Mapping[str, str]) -> None:
+        """Replace raw graph edge labels with final pass-qualified op labels.
+
+        Parameters
+        ----------
+        trace
+            Trace containing materialized raw JAX ops.
+        raw_to_final
+            Mapping from raw op labels to final op labels.
+
+        Returns
+        -------
+        None
+            Parent, child, parent-position, and edge-use labels are updated in
+            place.
+        """
+
+        for op_log in trace._raw_layer_dict.values():
+            op_log.parents = [
+                raw_to_final.get(parent, parent) if isinstance(parent, str) else parent
+                for parent in op_log.parents
+            ]
+            op_log.children = [
+                raw_to_final.get(child, child) if isinstance(child, str) else child
+                for child in op_log.children
+            ]
+            op_log.parent_arg_positions = _relabel_jax_parent_arg_positions(
+                op_log.parent_arg_positions,
+                raw_to_final,
+            )
+            op_log._internal_set(
+                "_edge_uses",
+                tuple(_relabel_jax_edge_use(edge, raw_to_final) for edge in op_log._edge_uses),
+            )
 
     def _attach_function_root_module(self, trace: Trace) -> None:
         """Attach a function-root module accessor to ``trace``.
@@ -1889,7 +2106,7 @@ def _jax_op_capture_kind(op: Any) -> str:
 def _inputs_from_trace_graph(
     capture: JaxEquationCapture,
     op: Any,
-    ops_by_raw_label: Mapping[str, Any],
+    ops_by_label: Mapping[str, Any],
 ) -> tuple[Any, ...]:
     """Build replay inputs from the trace's recorded parent graph.
 
@@ -1899,8 +2116,8 @@ def _inputs_from_trace_graph(
         Captured JAX equation metadata.
     op
         Materialized TorchLens operation for the equation.
-    ops_by_raw_label
-        Materialized operations keyed by raw label.
+    ops_by_label
+        Materialized operations keyed by raw and final op labels.
 
     Returns
     -------
@@ -1917,7 +2134,7 @@ def _inputs_from_trace_graph(
     for position, parent_label in graph_positions.items():
         if not isinstance(position, int) or position < 0 or position >= len(inputs):
             raise ValueError(f"JAX trace parent arg position {position!r} is invalid.")
-        parent_op = ops_by_raw_label[parent_label]
+        parent_op = ops_by_label[parent_label]
         inputs[position] = _saved_single_output(parent_op)
     return tuple(inputs)
 
@@ -2070,6 +2287,91 @@ def _data_parent_arg_positions(op: Any) -> dict[int, str]:
         and isinstance(parent_label, str)
         and parent_label in data_labels
     }
+
+
+def _ordered_jax_data_parent_labels(op: Any, raw_label_set: set[str]) -> tuple[str, ...]:
+    """Return raw data-parent labels in recorded parent order.
+
+    Parameters
+    ----------
+    op
+        Materialized JAX operation log.
+    raw_label_set
+        Raw labels present in the materialized trace.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Deduplicated data-parent labels that belong to the raw graph.
+    """
+
+    data_parent_set = _data_parent_labels(op)
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for parent in getattr(op, "parents", ()):
+        if parent in data_parent_set and parent in raw_label_set and parent not in seen:
+            ordered.append(parent)
+            seen.add(parent)
+    return tuple(ordered)
+
+
+def _relabel_jax_parent_arg_positions(
+    parent_arg_positions: Mapping[str, Mapping[Any, Any]],
+    raw_to_final: Mapping[str, str],
+) -> dict[str, dict[Any, Any]]:
+    """Return parent-argument positions with raw labels replaced.
+
+    Parameters
+    ----------
+    parent_arg_positions
+        Existing parent-position metadata.
+    raw_to_final
+        Mapping from raw op labels to final op labels.
+
+    Returns
+    -------
+    dict[str, dict[Any, Any]]
+        Relabeled parent-position metadata.
+    """
+
+    return {
+        arg_kind: {
+            position: raw_to_final.get(parent_label, parent_label)
+            if isinstance(parent_label, str)
+            else parent_label
+            for position, parent_label in positions.items()
+        }
+        for arg_kind, positions in parent_arg_positions.items()
+    }
+
+
+def _relabel_jax_edge_use(edge: Any, raw_to_final: Mapping[str, str]) -> Any:
+    """Return an edge-use record with raw endpoint labels replaced.
+
+    Parameters
+    ----------
+    edge
+        Edge-use record or legacy tuple.
+    raw_to_final
+        Mapping from raw op labels to final op labels.
+
+    Returns
+    -------
+    Any
+        Relabeled edge-use record.
+    """
+
+    parent_label = getattr(edge, "parent_label", None)
+    child_label = getattr(edge, "child_label", None)
+    if isinstance(parent_label, str) and isinstance(child_label, str):
+        return replace(
+            edge,
+            parent_label=raw_to_final.get(parent_label, parent_label),
+            child_label=raw_to_final.get(child_label, child_label),
+        )
+    if isinstance(edge, tuple) and len(edge) >= 3 and isinstance(edge[0], str):
+        return (raw_to_final.get(edge[0], edge[0]), *edge[1:])
+    return edge
 
 
 def _parent_labels_by_control_class(op: Any) -> tuple[set[str], set[str]]:

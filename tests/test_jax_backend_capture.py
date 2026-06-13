@@ -620,6 +620,36 @@ def test_jax_trace_inlines_allowlisted_pure_library_calls() -> None:
     assert trace.validate_forward_pass([])
 
 
+def test_jax_repeated_op_block_groups_into_passes() -> None:
+    """Repeated equivalent JAX op blocks should share multi-pass layer groups."""
+
+    def repeated_block(_: None, x: Any) -> Any:
+        """Return two structurally identical add/mul blocks."""
+
+        y = x + 1.0
+        y = y * 2.0
+        y = y + 1.0
+        return y * 2.0
+
+    trace = _trace_jax(
+        repeated_block,
+        (None, jnp.ones((2, 3), dtype=jnp.float32)),
+    )
+    add_ops = [op for op in trace.layer_list if op.func_name == "add"]
+    mul_ops = [op for op in trace.layer_list if op.func_name == "mul"]
+
+    assert [op.pass_index for op in add_ops] == [1, 2]
+    assert [op.pass_index for op in mul_ops] == [1, 2]
+    assert {op.layer_label for op in add_ops} == {add_ops[0].layer_label}
+    assert {op.layer_label for op in mul_ops} == {mul_ops[0].layer_label}
+    assert all(op.num_passes == 2 for op in (*add_ops, *mul_ops))
+    assert add_ops[0].recurrent_ops == [op.label for op in add_ops]
+    assert mul_ops[0].recurrent_ops == [op.label for op in mul_ops]
+    assert trace.layer_num_calls[add_ops[0].layer_label] == 2
+    assert trace.layer_num_calls[mul_ops[0].layer_label] == 2
+    assert trace.validate_forward_pass([])
+
+
 def test_jax_validate_public_entry_returns_real_bool() -> None:
     """Public validation should capture and validate JAX traces."""
 
@@ -725,7 +755,7 @@ def test_jax_synthetic_control_parent_is_not_a_value_replay_parent() -> None:
 
     assert control_parent._label_raw in _control_parent_labels(mul_op)
     assert control_parent._label_raw not in _data_parent_labels(mul_op)
-    assert _data_parent_arg_positions(mul_op) == {0: add_op._label_raw, 1: add_op._label_raw}
+    assert _data_parent_arg_positions(mul_op) == {0: add_op.label, 1: add_op.label}
     assert trace.validate_forward_pass([], validate_metadata=False)
 
 
