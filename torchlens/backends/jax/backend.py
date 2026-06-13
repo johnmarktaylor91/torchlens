@@ -22,6 +22,7 @@ from ...ir.intervention import FunctionEventInput
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...intervention.types import DictKey, TupleIndex
 from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_root_module_log
 from ...quantities import Bytes, Duration
@@ -220,11 +221,12 @@ class JAXBackend:
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(closed_jaxpr, flat_args)
         output = model(*args)
+        output_leaf_paths = self._output_leaf_paths(output)
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
         trace.raw_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
         self._emit_equations(trace, result)
-        self._mark_output_events(trace, result.outputs)
+        self._mark_output_events(trace, result.outputs, output_leaf_paths)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
         self._attach_params(trace, args[0] if args else None)
@@ -728,7 +730,12 @@ class JAXBackend:
             bool_value=None,
         )
 
-    def _mark_output_events(self, trace: Trace, outputs: Sequence[Any]) -> None:
+    def _mark_output_events(
+        self,
+        trace: Trace,
+        outputs: Sequence[Any],
+        output_leaf_paths: Sequence[tuple[object, ...]],
+    ) -> None:
         """Mark final equation outputs as output parents.
 
         Parameters
@@ -737,6 +744,8 @@ class JAXBackend:
             Trace whose events are updated.
         outputs
             Flat interpreter outputs.
+        output_leaf_paths
+            Flat direct-output pytree container paths in jaxpr output order.
 
         Returns
         -------
@@ -745,11 +754,29 @@ class JAXBackend:
         """
 
         output_ids = {id(output) for output in outputs}
+        output_metadata_by_id = {
+            id(output): (
+                index,
+                output_leaf_paths[index] if index < len(output_leaf_paths) else (),
+            )
+            for index, output in enumerate(outputs)
+        }
+        is_multi_output = len(outputs) > 1
         for event in list(trace.capture_events.op_events):
             if id(event.output.tensor.payload) not in output_ids:
                 continue
+            leaf_index, container_path = output_metadata_by_id.get(
+                id(event.output.tensor.payload),
+                (len(trace.output_layers), ()),
+            )
             trace.output_layers.append(event.label_raw)
-            updated = replace(event, is_output_parent=True)
+            updated_output = replace(
+                event.output,
+                multi_output_index=leaf_index if is_multi_output else None,
+                in_multi_output=is_multi_output,
+                container_path=container_path,
+            )
+            updated = replace(event, is_output_parent=True, output=updated_output)
             trace.capture_events.op_event_by_label_raw[event.label_raw] = updated
             trace.capture_events.live_index.replace(updated)
             for index, candidate in enumerate(trace.capture_events.op_events):
@@ -930,6 +957,25 @@ class JAXBackend:
 
         leaves_with_paths, _treedef = jax.tree_util.tree_flatten_with_path(tree)
         return [(_path_to_string(path), value) for path, value in leaves_with_paths]
+
+    def _output_leaf_paths(self, output: object) -> tuple[tuple[object, ...], ...]:
+        """Return flat output pytree paths.
+
+        Parameters
+        ----------
+        output
+            Direct callable output.
+
+        Returns
+        -------
+        tuple[tuple[object, ...], ...]
+            Flat output container paths.
+        """
+
+        import jax
+
+        leaves_with_paths, _treedef = jax.tree_util.tree_flatten_with_path(output)
+        return tuple(_path_to_components(path) for path, _value in leaves_with_paths)
 
     def _reject_unsupported_options(self, **options: Any) -> None:
         """Reject public trace options unsupported by the JAX preview.
@@ -1168,3 +1214,30 @@ def _path_to_string(path: Sequence[Any]) -> str:
         else:
             parts.append(str(entry).strip("[]'"))
     return ".".join(parts)
+
+
+def _path_to_components(path: Sequence[Any]) -> tuple[object, ...]:
+    """Convert a JAX pytree path to TorchLens output-path components.
+
+    Parameters
+    ----------
+    path
+        JAX pytree path entries.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Backend-neutral container path components.
+    """
+
+    components: list[object] = []
+    for entry in path:
+        key = getattr(entry, "key", None)
+        idx = getattr(entry, "idx", None)
+        if key is not None:
+            components.append(DictKey(key))
+        elif idx is not None:
+            components.append(TupleIndex(int(idx)))
+        else:
+            components.append(str(entry).strip("[]'"))
+    return tuple(components)
