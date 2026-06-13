@@ -51,8 +51,8 @@ Deferred items are listed at the end instead of promoted as final API.
 - `root_trace`: Root Trace of a fork tree; `None` on the root itself.
 - `run_state`: Enum-like state indicator describing whether the Trace is pristine, rerun, appended, or directly modified.
 - `io_format_version`: Portable file format version used for save/load compatibility.
-- `backend`: Public `BackendName` tag identifying the capture backend, e.g. `"torch"`, `"mlx"`, or `"jax"`. Survives portable save/load.
-- `module_identity_mode`: Module-record interpretation for the trace: `"torch_module"`, `"pytree_module"`, or `"function_root"`.
+- `backend`: Public `BackendName` tag identifying the capture backend, e.g. `"torch"`, `"mlx"`, `"jax"`, or `"tinygrad"`. Survives portable save/load.
+- `module_identity_mode`: Module-record interpretation for the trace: `"torch_module"`, `"pytree_module"`, `"object_module"`, or `"function_root"`.
 - `jax_control_flow`: Public `trace()` option for JAX control-flow handling; `lax.scan`/`cond`/`while` can be unrolled for raw JAX function-root captures.
 - `jax_max_control_flow_unroll`: Public `trace()` option for the JAX control-flow unroll safety limit.
 - `payload_policy`: Declared public `trace()` option for future backend payload codec/materialization policy; current non-torch preview backends reject explicit use.
@@ -1114,8 +1114,8 @@ These helpers operate during a backward pass. Mount-shape metadata: `bwd_hook`/`
 - `MIN_MODULE_OUTPUT_COVERAGE: float = 0.80`: Minimum covered ratio required for `overall_passed`.
 
 ## Backend integration
-- `Trace.backend`: Public `BackendName` tag for the capture backend (`"torch"`, `"mlx"`, or `"jax"` in shipped code). Survives portable save/load.
-- `Trace.module_identity_mode`: Status field declaring whether module accessors expose torch modules, pytree-derived modules, or only a function root.
+- `Trace.backend`: Public `BackendName` tag for the capture backend (`"torch"`, `"mlx"`, `"jax"`, or `"tinygrad"` in shipped code). Survives portable save/load.
+- `Trace.module_identity_mode`: Status field declaring whether module accessors expose torch modules, pytree-derived modules, object-discovered modules, or only a function root.
 - `Trace.param_source`: Status field declaring whether `Trace.params` comes from native module parameters, pytree-derived leaves, or no declared params.
 - `dtype_ref` / `device_ref`: Neutral mirror fields on tensor/parameter records. Torch keeps existing `dtype` and device-facing fields byte-stable; the mirrors let non-torch backends expose dtype/device metadata without torch objects.
 - `backend_address` / `resolver_status`: Neutral address metadata on records. `backend_address` stores the backend-native address or handle used by the builder; `resolver_status` records whether that address is currently resolved.
@@ -1123,6 +1123,7 @@ These helpers operate during a backward pass. Mount-shape metadata: `bwd_hook`/`
 - Public option capability epochs: ordered patches that update `trace()` signature, `CaptureOptions`, backend registry specs, per-backend capability mirrors, cache-key inclusion, docs, and tests together whenever a declared backend option changes capability status.
 - MLX capability contract: the MLX `BackendSpec` reports no backward capture, fastlog, intervention, RNG replay, payload materialization, or streaming support. Unsupported public surfaces raise canonical backend errors where the registry owns dispatch; backend-private defensive checks may still raise existing concrete errors during the cutover.
 - JAX capability contract: the JAX `BackendSpec` reports `validation_replay=True`, `backward_capture=False`, `fastlog=False`, `interventions=False`, `payload_materialization=False`, and `module_identity_modes=("function_root", "pytree_module")`. Raw callables use `function_root`; Equinox roots use `pytree_module` with strict rejection of inner JAX transforms/control flow. `tl.backends.jax.GradOptions` populates `trace.derived_grads`; true backward surfaces raise with guidance to that accessor.
+- tinygrad capability contract: the tinygrad `BackendSpec` reports `validation_replay=True`, `backward_capture=False`, `fastlog=False`, `interventions=False`, `payload_materialization=False`, and `module_identity_modes=("function_root", "object_module")`. Raw callables use `function_root`; callable object graphs with discoverable tinygrad module attributes use `object_module` unless explicitly forced back to `function_root`. UOp attribution follows first observed construction when tinygrad reuses a UOp identity.
 - MLX wrapped surface (since post-backward megasprint): Conv2d, normalization layers, Embedding, Dropout, MultiHeadAttention, reductions, shape ops, activations. Pinned to `mlx>=0.26,<0.27`.
 
 ## Portable save scrub

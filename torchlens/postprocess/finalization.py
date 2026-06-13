@@ -858,10 +858,10 @@ def _build_module_logs(self: "Trace") -> None:
 
     # GC-11: Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.
-    keep_forward_args = (
-        getattr(self, "backend", None) == "jax"
-        and getattr(self, "module_identity_mode", None) == "pytree_module"
-    )
+    keep_forward_args = getattr(self, "module_identity_mode", None) in {
+        "pytree_module",
+        "object_module",
+    }
     for pass_log in pass_dict.values():
         pass_log.forward_args_summary = format_call_arg(pass_log.forward_args)
         pass_log.forward_kwargs_summary = format_call_arg(pass_log.forward_kwargs)

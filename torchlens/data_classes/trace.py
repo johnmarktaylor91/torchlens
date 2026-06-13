@@ -1011,7 +1011,7 @@ class Trace(CapturedRun):
             setattr(build_state, state_field, getattr(default_state, state_field))
 
     backend: BackendName
-    module_identity_mode: Literal["torch_module", "pytree_module", "function_root"]
+    module_identity_mode: Literal["torch_module", "pytree_module", "function_root", "object_module"]
     param_source: Literal["native-module", "pytree-derived", "none"]
     state: TraceState
     tlspec_version: int
@@ -1365,9 +1365,9 @@ class Trace(CapturedRun):
         self.model_class_name = model_class_name
         self.model_label = model_class_name
         self.backend: BackendName = "torch"
-        self.module_identity_mode: Literal["torch_module", "pytree_module", "function_root"] = (
-            "torch_module"
-        )
+        self.module_identity_mode: Literal[
+            "torch_module", "pytree_module", "function_root", "object_module"
+        ] = "torch_module"
         self.param_source: Literal["native-module", "pytree-derived", "none"] = "native-module"
         self.derived_grads = DerivedGradAccessor()
         self.num_context_lines = num_context_lines

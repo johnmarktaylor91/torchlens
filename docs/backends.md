@@ -11,7 +11,7 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Technical preview | Unsupported | Audit-only | `torch_module` compatibility mode | Unsupported |
 | `jax` | Preview jaxpr-first functional capture | Per-equation replay and parent perturbation | Audit-only `.tlspec` save/load | `function_root`, Equinox `pytree_module` | `trace.derived_grads` only |
-| `tinygrad` | Preview UOp-snapshot functional capture | UOp replay and parent perturbation on live `DEV=PYTHON` payloads | Audit-only `.tlspec` save/load | `function_root` | `trace.derived_grads` only |
+| `tinygrad` | Preview UOp-snapshot functional capture | UOp replay and parent perturbation on live `DEV=PYTHON` payloads | Audit-only `.tlspec` save/load | `function_root`, object `object_module` | `trace.derived_grads` only |
 
 ## Public Option Spine
 
@@ -27,7 +27,7 @@ Declared future options:
 |---|---|
 | `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan` supports `unroll` or `reject` |
 | `jax_max_control_flow_unroll` | JAX `lax.scan` unroll safety limit |
-| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox `pytree_module` |
+| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox `pytree_module`; tinygrad supports raw `function_root` and callable object `object_module` |
 | `payload_policy` | Backend payload codec/materialization policy |
 | `save_preview` | Future non-torch `save=` preview semantics |
 
@@ -45,6 +45,14 @@ entries with `training=False`, and derives parameter owners from pytree array pa
 rejects `jax.jit`/`pjit`/`shard_map`, `lax.cond`, `lax.scan`, `lax.while_loop`, remat/custom-VJP,
 and callback effects inside attributed modules; move those transforms outside the module or capture a
 raw `function_root` callable until widened attribution lands.
+
+tinygrad raw callables use `module_identity_mode="function_root"`. Callable object graphs with
+discoverable tinygrad module attributes default to `module_identity_mode="object_module"`; pass
+`module_identity_mode="function_root"` to force the older root-only surface. Discovery walks object
+attributes for callable children that own `Tensor` attributes or are known `tinygrad.nn.*` layer
+objects, records shared children under the first address with later aliases, and attributes UOps from
+the live module stack observed at construction time. If tinygrad reuses an existing UOp identity, the
+UOp keeps its first observed module attribution rather than being duplicated for a later call.
 
 ## JAX Preview
 
@@ -103,6 +111,26 @@ def fn(x):
 
 trace = tl.trace(fn, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
 assert trace.validate_forward_pass([fn(Tensor([1.0, -2.0, 3.0]))])
+```
+
+tinygrad callable object models expose object-module hierarchy and native parameter records when
+TorchLens can discover them:
+
+```python
+from tinygrad import Tensor
+import tinygrad.nn as nn
+import torchlens as tl
+
+class TinyMlp:
+    def __init__(self):
+        self.fc = nn.Linear(3, 4)
+
+    def __call__(self, x):
+        return self.fc(x).relu()
+
+trace = tl.trace(TinyMlp(), Tensor.ones(1, 3), backend="tinygrad")
+assert trace.module_identity_mode == "object_module"
+assert trace.modules["fc"].params
 ```
 
 tinygrad derived gradients are a bracketed leaf-gradient preview, not backward capture:

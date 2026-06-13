@@ -227,17 +227,17 @@ def test_tinygrad_spec_registered() -> None:
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is False
-    assert spec.capabilities.module_identity_modes == ("function_root",)
+    assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
     assert spec.serialization_policy.payload_policy == "audit_only"
     assert capabilities.supports_backward_capture is False
     assert capabilities.supports_validation_replay is True
     assert capabilities.supports_fastlog is False
     assert capabilities.supports_intervention is False
     assert capabilities.supports_payload_materialization is False
-    assert capabilities.module_identity_modes == ("function_root",)
+    assert capabilities.module_identity_modes == ("function_root", "object_module")
     assert capabilities.payload_policy == "audit_only"
     assert capabilities.live_payload_policy == "dev_python_realized_copy"
-    assert capabilities.trace_options == ("grad_options",)
+    assert capabilities.trace_options == ("module_identity_mode", "grad_options")
 
 
 def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
@@ -353,7 +353,7 @@ def test_tinygrad_save_shaping_rejected(kwargs: dict[str, Any], pattern: str) ->
     (
         ({"jax_control_flow": "unroll"}, "control-flow unrolling.*not implemented"),
         ({"jax_max_control_flow_unroll": 4}, "control-flow unrolling.*not implemented"),
-        ({"module_identity_mode": "object_module"}, "module_identity_mode selection"),
+        ({"module_identity_mode": "pytree_module"}, "module_identity_mode must be"),
         ({"payload_policy": "full"}, "payload_policy.*not implemented"),
         ({"save_preview": True}, "save_preview.*not implemented"),
     ),
