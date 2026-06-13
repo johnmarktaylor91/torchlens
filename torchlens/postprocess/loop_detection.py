@@ -8,11 +8,9 @@ ALGORITHM OVERVIEW (5 phases):
 ==============================
 
 Phase 1 — Entry (``_detect_and_label_loops``):
-    Iterates nodes in realtime order via a min-heap BFS from inputs. For each
-    unprocessed ``equivalence_class``, calls ``_expand_isomorphic_subgraphs``.
-    The ``equivalence_classs_seen`` set ensures each equivalence type is
-    processed exactly once, providing convergence. After all rounds, calls
-    ``_rebuild_pass_assignments`` to fix stale cross-references.
+    Builds a backend-neutral ``RecurrenceGroupingGraph`` from torch postprocess
+    state, delegates grouping to ``loop_grouping_adapter.group_recurrent_nodes``,
+    then applies returned assignments back onto ``Op`` objects.
 
 Phase 2 — BFS Expansion (``_expand_isomorphic_subgraphs``):
     Given a node with equivalent operations, starts one subgraph per equivalent
@@ -60,13 +58,18 @@ ADJACENCY TRACKING:
     are merged. All labels in a connected component point to the SAME set object.
 """
 
-import heapq
 import itertools as it
 from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 from ..data_classes.op import Op
+from .loop_grouping_adapter import (
+    RecurrenceAssignment,
+    RecurrenceGroupingGraph,
+    RecurrenceNode,
+    group_recurrent_nodes,
+)
 
 if TYPE_CHECKING:
     from ..data_classes.trace import Trace
@@ -179,58 +182,84 @@ def _detect_and_label_loops(self: "Trace") -> None:
     processed exactly once, which guarantees convergence. ``_rebuild_pass_assignments``
     (Phase 5) still reconciles conflicts left by repeated expansion rounds.
     """
-    # Pre-compute sort keys to avoid repeated attribute lookups in the heap.
-    _sort_keys = {label: self[label].raw_index for label in self._raw_layer_labels_list}
+    grouping_graph = _build_recurrence_grouping_graph(self)
+    assignments = group_recurrent_nodes(grouping_graph)
+    _apply_recurrence_assignments(self, assignments)
 
-    # Seed the heap with root nodes (inputs + internally-initialized tensors).
-    initial_labels = [
-        label
-        for label in self.input_layers + self.internal_source_ops
-        if not getattr(self[label], "is_orphan", False)
-    ]
-    node_heap = [(_sort_keys[label], label) for label in initial_labels]
-    heapq.heapify(node_heap)
-    heap_seen = set(initial_labels)
 
-    # Track which equivalence types have been processed to avoid redundant work.
-    equivalence_classs_seen = set()
-    while node_heap:
-        _, node_label = heapq.heappop(node_heap)
-        node = self[node_label]
-        node_equivalence_class = node.equivalence_class
+def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
+    """Build the backend-neutral recurrence graph from torch postprocess state.
 
-        # Dedup: skip if this equivalence type has already been processed.
-        if node_equivalence_class in equivalence_classs_seen:
-            continue
-        equivalence_classs_seen.add(node_equivalence_class)
+    Parameters
+    ----------
+    self:
+        Trace currently running Step 7 postprocessing.
 
-        # Push children of ALL equivalent operations onto the heap to ensure
-        # downstream nodes are eventually visited, even if this node is skipped.
-        for equiv_op in node.equivalent_ops:
-            if getattr(self[equiv_op], "is_orphan", False):
-                continue
-            for child in self[equiv_op].children:
-                if child not in heap_seen and not getattr(self[child], "is_orphan", False):
-                    heap_seen.add(child)
-                    heapq.heappush(node_heap, (_sort_keys[child], child))
+    Returns
+    -------
+    RecurrenceGroupingGraph
+        Neutral graph containing only the fields the shared grouper needs.
+    """
+    nodes: dict[str, RecurrenceNode] = {}
+    eligible_labels: list[str] = []
+    raw_labels = tuple(self._raw_layer_labels_list)
+    raw_label_set = set(raw_labels)
 
-        # Singleton: only one operation of this type, no loop possible.
-        if len(node.equivalent_ops) == 1:
-            node.recurrent_ops = [node_label]
-            continue
+    for label in raw_labels:
+        node = self[label]
+        is_pruned = bool(getattr(node, "is_orphan", False))
+        retain = not is_pruned
+        if retain:
+            eligible_labels.append(label)
+        nodes[label] = RecurrenceNode(
+            label=label,
+            raw_order=node.raw_index,
+            equivalence_key=node.equivalence_class,
+            equivalent_labels=tuple(node.equivalent_ops),
+            data_parents=tuple(parent for parent in node.parents if parent in raw_label_set),
+            data_children=tuple(child for child in node.children if child in raw_label_set),
+            layer_label=node._layer_label_raw,
+            recurrent_labels=tuple(node.recurrent_ops),
+            uses_params=bool(node.uses_params),
+            func_name=node.func_name,
+            param_barcodes=tuple(node._param_barcodes),
+            retain=retain,
+            pruned=is_pruned,
+        )
 
-        # Already fully resolved by a previous expansion round.
-        if len(node.equivalent_ops) == len(node.recurrent_ops):
-            continue
+    return RecurrenceGroupingGraph(
+        nodes=nodes,
+        raw_labels=raw_labels,
+        source_labels=tuple(self.input_layers + self.internal_source_ops),
+        eligible_labels=tuple(eligible_labels),
+    )
 
-        # Multiple equivalent operations exist — expand isomorphic subgraphs
-        # to determine which ones belong to the same layer.
-        _expand_isomorphic_subgraphs(self, node)
 
-    # Phase 5: Rebuild pass assignments from authoritative _layer_label_raw.
-    # This is NECESSARY (not just defensive) because multiple expansion rounds
-    # can leave stale recurrent_ops references. See module docstring.
-    _rebuild_pass_assignments(self)
+def _apply_recurrence_assignments(
+    self: "Trace",
+    assignments: dict[str, RecurrenceAssignment],
+) -> None:
+    """Apply neutral recurrence assignments back onto torch ``Op`` objects.
+
+    Parameters
+    ----------
+    self:
+        Trace currently running Step 7 postprocessing.
+    assignments:
+        Neutral assignments returned by ``group_recurrent_nodes``.
+
+    Returns
+    -------
+    None
+        Mutates grouped ``Op`` fields on ``self``.
+    """
+    for label, assignment in assignments.items():
+        node = self[label]
+        node._layer_label_raw = assignment.layer_label
+        node.recurrent_ops = list(assignment.recurrent_labels)
+        node.pass_index = assignment.pass_index
+        node.num_passes = assignment.num_passes
+        node.equivalence_class = assignment.equivalence_key
 
 
 def _rebuild_pass_assignments(self: "Trace") -> None:

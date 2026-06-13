@@ -69,6 +69,12 @@ from .labeling import (
     _trim_and_reorder_model_history_fields,
 )
 from .loop_detection import _detect_and_label_loops, _group_by_shared_params
+from .loop_grouping_adapter import (
+    RecurrenceAssignment,
+    RecurrenceGroupingGraph,
+    RecurrenceNode,
+    group_recurrent_nodes,
+)
 from ._materialize import materialize_from_events
 
 if TYPE_CHECKING:
