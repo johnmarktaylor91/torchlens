@@ -92,9 +92,9 @@ frameworks:
 | Capability | PyTorch | JAX (preview) | tinygrad (preview) | MLX (preview) |
 |---|:---:|:---:|:---:|:---:|
 | Forward capture + graph/metadata | ✅ | ✅ | ✅ | ✅ |
-| Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | object `object_module`; raw `function_root` | compatibility mode |
+| Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | object `object_module`; raw `function_root` | object `object_module`; raw `function_root` |
 | Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited |
-| Static-label `save=` | ✅ | ✅ | ✅ | ✅ func/label/contains only |
+| Static-label `save=` | ✅ | ✅ | ✅ | ✅ |
 | Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | forward/derived arrays |
 | Gradients | full backward graph | leaf-level derived | leaf-level + T1 intermediate derived | leaf-level derived |
 | Interventions / halt / fastlog | ✅ | — | — | — |
@@ -120,6 +120,12 @@ MLX preview traces support static-label `save=` for `tl.func`, `tl.label`,
 `tl.module`, `tl.in_module`, `tl.contains`, and boolean composites of those.
 Portable MLX saves round-trip saved forward and derived payloads as
 `mlx.core.array` values when the MLX runtime is installed.
+JAX portable saves round-trip typed PRNG keys and fully addressable single-host
+sharded arrays by value with audit-only sharding metadata; multi-host or
+unaddressable sharded arrays fail closed instead of silently losing topology.
+The Op `__slots__` retained-memory baseline is tracked in
+[`benchmarks/perf/slots_baseline.md`](benchmarks/perf/slots_baseline.md) and
+shows roughly 10-15% lower retained trace memory on the measured fixtures.
 
 ```python
 log = tl.trace(torch_model, x)                  # PyTorch (default)

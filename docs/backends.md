@@ -52,8 +52,9 @@ For that reason, non-torch backends support static-label `save=` only. Value-dep
 `intervene=`, and `halt=` are rejected with typed backend errors instead of false partial traces or
 validation passes. Live JAX/tinygrad selective-save traces still run real replay validation through
 runtime-only hidden payloads; loaded traces report replay unavailable when those runtime captures
-were stripped. MLX supports a narrower static-label `save=` phase for `tl.func`, `tl.label`,
-`tl.contains`, and boolean composites of those; MLX validation is currently unsupported.
+were stripped. MLX supports static-label `save=` for `tl.func`, `tl.label`, `tl.module`,
+`tl.in_module`, `tl.contains`, and boolean composites of those; MLX validation is currently
+unsupported.
 
 ## MLX Preview
 
@@ -164,9 +165,11 @@ intervention, sparse fastlog, and true backward graphs.
 
 JAX `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
 forward and derived array payloads and load them back as `jax.Array` values.
+Typed JAX PRNG keys round-trip as typed keys rather than legacy integer-key arrays.
 Fully addressable single-host sharded arrays are saved as assembled host values; manifest
 `codec_metadata` may include `jax_sharding_*` audit fields such as sharding kind, mesh axis
 names, partition spec strings, and device counts, but load does not reconstruct that topology.
+Multi-host or otherwise unaddressable sharded arrays fail closed during save.
 `trace.payload_load_status` records load-time materialization state. Runtime-only
 `jax_equation_captures` are stripped from portable artifacts, so loaded JAX traces expose
 `ValidationReplayStatus` at `trace.validation_replay_status.state == "unavailable"` with reason

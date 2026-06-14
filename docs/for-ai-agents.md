@@ -24,6 +24,12 @@ surfaces.
 MLX leaf gradients use `tl.backends.mlx.GradOptions`; they run a second
 `mx.value_and_grad` pass with module param rebinding and expose only `Trace.derived_grads` after
 the raw-output honesty guard passes.
+JAX `array_payloads` saves round-trip typed PRNG keys and fully addressable single-host sharded
+arrays by value; `jax_sharding_*` manifest fields are audit-only and multi-host/unaddressable
+sharded arrays fail closed.
+The retained-memory baseline for Op `__slots__` lives at
+`benchmarks/perf/slots_baseline.md` and records roughly 10-15% lower trace-level retained memory
+on the measured fixtures.
 
 ## Public surface map
 

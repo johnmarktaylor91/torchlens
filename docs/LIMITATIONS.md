@@ -24,19 +24,21 @@ module auto-routing. Explicit `backend="torch"`, `backend="jax"`, and
 `backend="tinygrad"` are supported; unknown, ambiguous, or mismatched backend
 selections fail before capture with typed backend registry errors. MLX remains a
 technical preview with limited capabilities, static-label save support for
-`tl.func`/`tl.label`/`tl.contains`, and materialized `.tlspec` forward array
-payloads. JAX is a jaxpr-first functional
+`tl.func`/`tl.label`/`tl.module`/`tl.in_module`/`tl.contains`, object-module
+hierarchy for `mlx.nn.Module` roots, materialized `.tlspec` forward and derived array
+payloads, and leaf derived gradients. JAX is a jaxpr-first functional
 preview with full-save forward capture, live replay validation, raw `function_root`
 captures, Equinox/Flax NNX `pytree_module` hierarchy, pytree-derived params,
-materialized `.tlspec` array payloads, and derived gradients only.
+materialized `.tlspec` array payloads, typed PRNG key round-trip, audit-only
+single-host sharding metadata, strict failure for multi-host/unaddressable sharded arrays, and
+derived gradients only.
 tinygrad is a UOp-snapshot functional preview pinned to the `tinygrad>=0.13,<0.14`
 series; live validation and derived gradients require `DEV=PYTHON`; raw callables use
 `function_root`, callable objects use `object_module` hierarchy with parameter records
 when discoverable, portable saves materialize `.tlspec` array payloads, and capture
 rejects mid-capture realization/mutation/TinyJit. JAX, tinygrad, and MLX support static-label `save=`
-selectors after full graph capture. MLX supports that surface only for `tl.func`,
-`tl.label`, `tl.contains`, and boolean composites of those; `tl.module` and `tl.in_module`
-are rejected because module hierarchy is required and not yet available on MLX. Value-dependent
+selectors after full graph capture. MLX supports `tl.func`, `tl.label`, `tl.module`,
+`tl.in_module`, `tl.contains`, and boolean composites of those. Value-dependent
 save predicates, halt, intervention,
 streaming, fastlog, and true backward capture remain PyTorch-only. Loaded non-torch traces cannot
 replay-validate because portable save strips or lacks runtime replay captures; inspect
