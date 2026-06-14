@@ -1138,6 +1138,174 @@ FUNC_ARG_SPECS["addcmul"] = _ADDC_SPEC
 FUNC_ARG_SPECS["addcdiv"] = _ADDC_SPEC
 FUNC_ARG_SPECS["lerp"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "end", "weight"))
 
+# High-confidence public schemas missing from the generic groups above. These
+# entries are schema-derived to keep keyword-passed tensor operands from being
+# hidden by a first-call dynamic fallback that only saw positional operands.
+for _name in [
+    "adaptivemaxpool1dwithindices",
+    "adaptivemaxpool2dwithindices",
+    "adaptivemaxpool3dwithindices",
+    "airyai",
+    "aminmax",
+    "argwhere",
+    "besselj0",
+    "besselj1",
+    "bessely0",
+    "bessely1",
+    "chebyshevpolynomialt",
+    "chebyshevpolynomialu",
+    "chebyshevpolynomialv",
+    "chebyshevpolynomialw",
+    "choleskyex",
+    "cond",
+    "corrcoef",
+    "dequantize",
+    "dropout1d",
+    "entr",
+    "erfcx",
+    "frexp",
+    "gammaln",
+    "geqrf",
+    "glu",
+    "gradient",
+    "hermitepolynomialh",
+    "hermitepolynomialhe",
+    "hfftn",
+    "ihfftn",
+    "inv",
+    "invex",
+    "isconj",
+    "isinference",
+    "isnonzero",
+    "laguerrepolynomiall",
+    "ldlfactor",
+    "ldlfactorex",
+    "legendrepolynomialp",
+    "localresponsenorm",
+    "logndtr",
+    "lppool3d",
+    "lufactor",
+    "lufactorex",
+    "modifiedbesseli0",
+    "modifiedbesseli1",
+    "modifiedbesselk0",
+    "modifiedbesselk1",
+    "multigammaln",
+    "multinomial",
+    "nanquantile",
+    "ndtr",
+    "ndtri",
+    "normalize",
+    "pcalowrank",
+    "pdist",
+    "pinv",
+    "poisson",
+    "psi",
+    "quantile",
+    "randintlike",
+    "renorm",
+    "scaledmodifiedbesselk0",
+    "scaledmodifiedbesselk1",
+    "shiftedchebyshevpolynomialt",
+    "shiftedchebyshevpolynomialu",
+    "shiftedchebyshevpolynomialv",
+    "shiftedchebyshevpolynomialw",
+    "softmin",
+    "stdmean",
+    "svdvals",
+    "tensorinv",
+    "unsafechunk",
+    "varmean",
+]:
+    FUNC_ARG_SPECS[_name] = _P0_INPUT
+
+_P0_A_SPEC = ArgSpec(positions=(0,), tensor_kwargs=("A",))
+for _name in [
+    "choleskyex",
+    "cond",
+    "inv",
+    "invex",
+    "ldlfactor",
+    "ldlfactorex",
+    "lufactor",
+    "lufactorex",
+    "pcalowrank",
+    "pinv",
+    "svdvals",
+    "tensorinv",
+]:
+    FUNC_ARG_SPECS[_name] = _P0_A_SPEC
+
+for _name in [
+    "gammainc",
+    "gammaincc",
+    "gcd",
+    "igamma",
+    "igammac",
+    "lcm",
+    "ldexp",
+    "logaddexp",
+    "logaddexp2",
+    "zeta",
+]:
+    FUNC_ARG_SPECS[_name] = _P01_BINARY
+
+FUNC_ARG_SPECS["addr"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "vec1", "vec2"))
+FUNC_ARG_SPECS["alignas"] = ArgSpec(positions=(0, 1), tensor_kwargs=("self", "other"))
+FUNC_ARG_SPECS["binarycrossentropy"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("input", "target", "weight")
+)
+FUNC_ARG_SPECS["bucketize"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "boundaries"))
+FUNC_ARG_SPECS["cdist"] = ArgSpec(positions=(0, 1), tensor_kwargs=("x1", "x2"))
+FUNC_ARG_SPECS["chainmatmul"] = _S0
+FUNC_ARG_SPECS["choleskyinverse"] = ArgSpec(positions=(0,), tensor_kwargs=("L",))
+FUNC_ARG_SPECS["cov"] = ArgSpec(
+    positions=(0, 2, 3), tensor_kwargs=("input", "fweights", "aweights")
+)
+FUNC_ARG_SPECS["cumulativetrapezoid"] = ArgSpec(positions=(0, 1), tensor_kwargs=("y", "x"))
+FUNC_ARG_SPECS["diff"] = ArgSpec(positions=(0, 3, 4), tensor_kwargs=("input", "prepend", "append"))
+FUNC_ARG_SPECS["fakequantizeperchannelaffine"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("input", "scale", "zero_point")
+)
+FUNC_ARG_SPECS["fakequantizepertensoraffine"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("input", "scale", "zero_point")
+)
+FUNC_ARG_SPECS["ger"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "vec2"))
+FUNC_ARG_SPECS["gumbelsoftmax"] = ArgSpec(positions=(0,), tensor_kwargs=("logits",))
+FUNC_ARG_SPECS["hspmm"] = ArgSpec(positions=(0, 1), tensor_kwargs=("mat1", "mat2"))
+FUNC_ARG_SPECS["isin"] = ArgSpec(positions=(0, 1), tensor_kwargs=("elements", "test_elements"))
+FUNC_ARG_SPECS["issetto"] = ArgSpec(positions=(0, 1), tensor_kwargs=("self", "tensor"))
+FUNC_ARG_SPECS["ldlsolve"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("LD", "pivots", "B"))
+FUNC_ARG_SPECS["lobpcg"] = ArgSpec(positions=(0, 2, 3, 5), tensor_kwargs=("A", "B", "X", "iK"))
+FUNC_ARG_SPECS["map"] = ArgSpec(positions=(0, 1), tensor_kwargs=("self", "tensor"))
+FUNC_ARG_SPECS["moduleload"] = ArgSpec(positions=(0, 1), tensor_kwargs=("self", "other"))
+FUNC_ARG_SPECS["orgqr"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "tau"))
+FUNC_ARG_SPECS["ormqr"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "tau", "other"))
+FUNC_ARG_SPECS["pairwisedistance"] = ArgSpec(positions=(0, 1), tensor_kwargs=("x1", "x2"))
+FUNC_ARG_SPECS["quantizeperchannel"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("input", "scales", "zero_points")
+)
+FUNC_ARG_SPECS["quantizepertensor"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("input", "scale", "zero_point")
+)
+FUNC_ARG_SPECS["quantizepertensordynamic"] = ArgSpec(positions=(0,), tensor_kwargs=("input",))
+FUNC_ARG_SPECS["resize"] = _P0
+FUNC_ARG_SPECS["smm"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "mat"))
+FUNC_ARG_SPECS["solveex"] = ArgSpec(positions=(0, 1), tensor_kwargs=("A", "B"))
+FUNC_ARG_SPECS["solvetriangular"] = ArgSpec(positions=(0, 1), tensor_kwargs=("A", "B"))
+FUNC_ARG_SPECS["sspaddmm"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "mat1", "mat2"))
+FUNC_ARG_SPECS["svdlowrank"] = ArgSpec(positions=(0, 3), tensor_kwargs=("A", "M"))
+FUNC_ARG_SPECS["tensorsolve"] = ArgSpec(positions=(0, 1), tensor_kwargs=("A", "B"))
+FUNC_ARG_SPECS["trapezoid"] = ArgSpec(positions=(0, 1), tensor_kwargs=("y", "x"))
+FUNC_ARG_SPECS["trapz"] = ArgSpec(positions=(0, 1), tensor_kwargs=("y", "x"))
+FUNC_ARG_SPECS["tripletmarginwithdistanceloss"] = ArgSpec(
+    positions=(0, 1, 2), tensor_kwargs=("anchor", "positive", "negative")
+)
+FUNC_ARG_SPECS["truncnormal"] = ArgSpec(positions=(0,), tensor_kwargs=("tensor",))
+FUNC_ARG_SPECS["unravelindex"] = ArgSpec(positions=(0,), tensor_kwargs=("indices",))
+FUNC_ARG_SPECS["unsafesplit"] = ArgSpec(positions=(0,), tensor_kwargs=("tensor",))
+FUNC_ARG_SPECS["vecdot"] = ArgSpec(positions=(0, 1), tensor_kwargs=("x", "y"))
+
 # Tensor iterator and subclass custom_methods
 for _name in [
     "iter",
