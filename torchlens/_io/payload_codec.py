@@ -420,6 +420,114 @@ class TinygradPayloadCodec:
         return _unsupported_array_dtype_reason(array)
 
 
+class MlxPayloadCodec:
+    """Payload codec for dense MLX arrays."""
+
+    backend_name = "mlx"
+    codec_name = "numpy_safetensors_v1"
+
+    def can_encode(self, value: Any) -> bool:
+        """Return whether ``value`` looks like an MLX array."""
+
+        value_type = type(value)
+        return (
+            value_type.__module__.startswith("mlx.core")
+            and value_type.__name__ == "array"
+            and hasattr(value, "dtype")
+        )
+
+    def validate_for_save(self, value: Any, *, strict: bool = True) -> TensorPolicyDecision:
+        """Validate that an MLX array can be copied to a dense host array."""
+
+        reason = self._unsupported_reason(value)
+        if reason is None:
+            return Ok()
+        if strict:
+            return FailReason(reason)
+        return SkipReason(reason)
+
+    def to_numpy(self, value: Any) -> EncodedArray:
+        """Copy an MLX array to host NumPy storage."""
+
+        if not self.can_encode(value):
+            raise TypeError(f"mlx codec cannot encode {type(value).__name__}.")
+        mx = _import_mlx_core()
+        try:
+            mx.eval(value)
+        except (TypeError, ValueError, RuntimeError) as exc:
+            raise TypeError(f"MLX array could not be realized before host copy: {exc}") from exc
+        array = np.asarray(value)
+        _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
+        return EncodedArray(
+            array=np.ascontiguousarray(array),
+            logical_dtype=str(getattr(value, "dtype", array.dtype)),
+            logical_device=_device_string(value),
+            codec_metadata=_json_ready_mapping(
+                {
+                    "logical_shape": [int(dim) for dim in array.shape],
+                    "source_type": type(value).__name__,
+                }
+            ),
+        )
+
+    def from_numpy(
+        self,
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        strict_runtime: bool,
+    ) -> Any:
+        """Rebuild an MLX array from host NumPy storage."""
+
+        del strict_runtime
+        from ..backends.registry import BackendRuntimeCompatibilityError
+
+        mx = _import_mlx_core()
+        logical_dtype = str(_entry_field(entry, "logical_dtype") or array.dtype)
+        dtype = _resolve_mlx_dtype(mx, logical_dtype)
+        if dtype is None:
+            raise BackendRuntimeCompatibilityError(
+                f"Portable MLX payload dtype {logical_dtype!r} is not supported by "
+                "the installed MLX runtime."
+            )
+
+        target_device = _resolve_mlx_device(mx, map_location)
+        if target_device is None:
+            return mx.array(array, dtype=dtype)
+
+        previous_device = mx.default_device()
+        try:
+            mx.set_default_device(target_device)
+            return mx.array(array, dtype=dtype)
+        finally:
+            mx.set_default_device(previous_device)
+
+    def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
+        """Return v2 manifest vocabulary for an MLX payload."""
+
+        return _manifest_fields(
+            logical_backend=self.backend_name,
+            codec=self.codec_name,
+            value=value,
+            encoded=encoded,
+        )
+
+    def _unsupported_reason(self, value: Any) -> str | None:
+        """Return the first MLX codec incompatibility reason, if any."""
+
+        if not self.can_encode(value):
+            return f"mlx codec cannot encode {type(value).__name__}"
+        dtype = getattr(value, "dtype", None)
+        if dtype is not None and _dtype_string_is_object_like(str(dtype)):
+            return f"object/string dtype {dtype} is not supported by the payload codec"
+        try:
+            array = np.asarray(value)
+        except (TypeError, ValueError, RuntimeError) as exc:
+            return f"MLX array could not be copied to host: {exc}"
+        return _unsupported_array_dtype_reason(array)
+
+
 class NullPayloadCodec:
     """Payload codec for backends without materialization support this round."""
 
@@ -463,6 +571,7 @@ class NullPayloadCodec:
 _CODECS: dict[str, PayloadCodec] = {
     "torch": TorchPayloadCodec(),
     "jax": JaxPayloadCodec(),
+    "mlx": MlxPayloadCodec(),
     "tinygrad": TinygradPayloadCodec(),
 }
 _TORCH_BACKEND_NAME = "torch"
@@ -702,6 +811,63 @@ def _resolve_tinygrad_dtype(dtypes_module: Any, dtype_name: str) -> Any | None:
         dtype = getattr(dtypes_module, candidate_name, None)
         if dtype is not None:
             return dtype
+    return None
+
+
+def _import_mlx_core() -> Any:
+    """Import ``mlx.core`` or raise a targeted backend compatibility error."""
+
+    from ..backends.registry import BackendRuntimeCompatibilityError
+
+    try:
+        import mlx.core as mx
+    except ImportError as exc:
+        raise BackendRuntimeCompatibilityError(
+            "Portable MLX payload materialization requires the mlx runtime."
+        ) from exc
+    return mx
+
+
+def _resolve_mlx_dtype(mx_module: Any, dtype_name: str) -> Any | None:
+    """Resolve an MLX dtype object from a manifest dtype string."""
+
+    candidate_names = [dtype_name]
+    if dtype_name.startswith("mlx.core."):
+        candidate_names.append(dtype_name.rsplit(".", maxsplit=1)[-1])
+    if dtype_name == "bool":
+        candidate_names.append("bool_")
+    if dtype_name == "mlx.core.bool":
+        candidate_names.append("bool_")
+    for candidate_name in candidate_names:
+        dtype = getattr(mx_module, candidate_name, None)
+        if dtype is not None:
+            return dtype
+    return None
+
+
+def _resolve_mlx_device(mx_module: Any, map_location: Any) -> Any | None:
+    """Resolve an MLX default device override from ``map_location`` when possible."""
+
+    if map_location is None:
+        return None
+    device_type = getattr(mx_module, "DeviceType", None)
+    device = getattr(mx_module, "Device", None)
+    if device is not None and isinstance(map_location, device):
+        return map_location
+    if device_type is not None and isinstance(map_location, device_type):
+        return mx_module.Device(map_location)
+    if not isinstance(map_location, str):
+        return None
+    requested = map_location.lower()
+    if requested.startswith("device(") and "cpu" in requested:
+        requested = "cpu"
+    if requested.startswith("device(") and "gpu" in requested:
+        requested = "gpu"
+    if requested in {"cpu", "gpu"}:
+        device_type_value = getattr(mx_module, requested, None)
+        if device_type_value is None or device is None:
+            return None
+        return mx_module.Device(device_type_value)
     return None
 
 
