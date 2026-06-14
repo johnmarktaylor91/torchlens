@@ -9,7 +9,7 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 | Backend | Capture | Validation | Payloads | Modules | Gradients |
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
-| `mlx` | Technical preview | Unsupported | Materialized forward array `.tlspec` payloads | `function_root`, object `object_module` | Unsupported |
+| `mlx` | Technical preview | Unsupported | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads` only |
 | `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads` only |
 | `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 
@@ -70,12 +70,30 @@ Selective save is applied after full graph finalization: unsaved ops keep graph 
 public activation payloads, while saved payloads remain live MLX arrays in memory and round-trip
 through portable `.tlspec` saves with `payload_policy="array_payloads"`.
 
+MLX leaf gradients are a derived-gradient preview, not backward capture:
+
+```python
+grad_options = tl.backends.mlx.GradOptions(
+    loss_fn=lambda output: mx.sum(output * output),
+    input_grad_argnums=(0,),
+)
+trace = tl.trace(model, x, backend="mlx", grad_options=grad_options)
+trace.derived_grads["inputs.0"]
+```
+
+For `mlx.nn.Module` roots, TorchLens passes `model.parameters()` as an explicit
+`mx.value_and_grad` argument and rebinds it with `model.update(params)` during the AD rerun. The raw
+AD-rerun output must match the captured forward output within dtype tolerance before records are
+exposed. MLX intermediate derived gradients remain deferred, and `op.grads` /
+`trace.saved_grad_ops` stay true-backward-only.
+
 MLX rejects `tl.output(...)`, `tl.where(...)`,
 `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `intervene=`, `halt=`,
 streaming, `save_grads=`, `backward_ready=True`, and `tl.record(backend="mlx")`. MLX validation is
 currently unsupported, so selective save does not fabricate a replay pass. Portable MLX saves
-materialize forward array payloads and load them back as `mlx.core.array` values when the MLX runtime
-is installed; loaded MLX traces still report replay validation as unavailable rather than as a pass.
+materialize forward and derived array payloads and load them back as `mlx.core.array` values when the
+MLX runtime is installed; loaded MLX traces still report replay validation as unavailable rather than
+as a pass.
 
 JAX preview traces accept raw callables shaped like `fn(params, *inputs)`. Parameter records are
 derived from the first pytree argument, so `Trace.param_source` is `"pytree-derived"` when tensor

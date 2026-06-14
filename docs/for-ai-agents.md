@@ -21,6 +21,9 @@ tinygrad leaf gradients use `tl.backends.tinygrad.GradOptions`; they are bracket
 with `GradOptions(intermediate_grads=True)` and are exposed only through
 `Trace.intermediate_derived_grads` and `Op.derived_grad`; they never populate true backward
 surfaces.
+MLX leaf gradients use `tl.backends.mlx.GradOptions`; they run a second
+`mx.value_and_grad` pass with module param rebinding and expose only `Trace.derived_grads` after
+the raw-output honesty guard passes.
 
 ## Public surface map
 

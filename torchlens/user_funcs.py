@@ -172,6 +172,7 @@ def _trace_mlx_model(
     name: str | None | MissingType,
     module_filter: Callable[[Any], bool] | None | MissingType,
     module_identity_mode: str | None | MissingType,
+    grad_options: Any | None | MissingType,
     verbose: bool | MissingType,
 ) -> Trace:
     """Dispatch an MLX module capture through the optional MLX backend.
@@ -297,6 +298,7 @@ def _trace_mlx_model(
         ),
         save_visualizations=capture_options.save_visualizations,
         module_identity_mode=capture_options.module_identity_mode,
+        grad_options=cast("Any", None if grad_options is MISSING else grad_options),
     )
     apply_static_label_save_policy(trace, save_predicate, backend_name="MLX")
     return trace
@@ -372,6 +374,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         name=kwargs["name"],
         module_filter=kwargs["module_filter"],
         module_identity_mode=kwargs["module_identity_mode"],
+        grad_options=kwargs["grad_options"],
         verbose=kwargs["verbose"],
     )
 
@@ -1496,7 +1499,10 @@ def _unsupported_trace_option_message(option_name: str, backend_name: str) -> st
     if option_name == "jax_static_argnums":
         return "jax_static_argnums is only supported with backend='jax'."
     if option_name == "grad_options":
-        return "grad_options is only supported with backend='jax' or backend='tinygrad'."
+        return (
+            "grad_options is only supported with backend='jax', backend='mlx', "
+            "or backend='tinygrad'."
+        )
     if option_name in {"jax_control_flow", "jax_max_control_flow_unroll"}:
         return (
             f"backend={backend_name!r} does not yet support {option_name}. "
@@ -1811,7 +1817,7 @@ def trace(
     if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
         raise BackendUnsupportedError(
             "jax_static_argnums is only supported with backend='jax'; grad_options is "
-            "only supported with backend='jax' or backend='tinygrad'."
+            "only supported with backend='jax', backend='mlx', or backend='tinygrad'."
         )
     explicit_backend_spec = (
         None if backend is None else resolve_backend_spec(backend, model, input_args, input_kwargs)

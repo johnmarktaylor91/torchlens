@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import random
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from collections import defaultdict
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from dataclasses import replace
 from typing import Any, Callable, Literal, cast
 
+import numpy as np
+
 from ... import _state
 from ...backends import BackendName, BackendUnsupportedError
+from ...data_classes.derived_grad import DerivedGradAccessor, DerivedGradRecord
 from ...data_classes.layer import Layer
 from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import Param, ParamAccessor
@@ -66,6 +69,52 @@ class MLXParameterCandidate:
     address: str
     value: Any
     owner: str
+
+
+@dataclass(frozen=True)
+class GradOptions:
+    """MLX derived-gradient preview options.
+
+    Parameters
+    ----------
+    params
+        Optional MLX parameter tree to pass as explicit AD argument 0. When
+        omitted for ``mlx.nn.Module`` models, ``model.parameters()`` is used.
+    loss_fn
+        Optional callable mapping raw function output to a scalar loss. Required
+        unless the raw traced output is already scalar.
+    input_grad_argnums
+        Positional input argument indexes to differentiate in addition to params.
+    """
+
+    params: Any | None = None
+    loss_fn: Callable[[Any], Any] | None = None
+    input_grad_argnums: tuple[int, ...] = ()
+
+    def __init__(
+        self,
+        *,
+        params: Any | None = None,
+        loss_fn: Callable[[Any], Any] | None = None,
+        input_grad_argnums: Sequence[int] = (),
+    ) -> None:
+        """Initialize MLX derived-gradient options.
+
+        Parameters
+        ----------
+        params
+            Explicit MLX parameter tree, or ``None`` to use module parameters
+            when the captured model exposes ``parameters()``.
+        loss_fn
+            Callable mapping raw output to scalar loss, or ``None`` for scalar
+            raw outputs.
+        input_grad_argnums
+            Input-relative argnums to differentiate.
+        """
+
+        object.__setattr__(self, "params", params)
+        object.__setattr__(self, "loss_fn", loss_fn)
+        object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
 
 
 class MLXBackend:
@@ -415,6 +464,7 @@ class MLXBackend:
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool = False,
         module_identity_mode: str | None = None,
+        grad_options: GradOptions | None = None,
     ) -> Trace:
         """Capture an MLX forward pass into a smoke-compatible Trace."""
 
@@ -499,12 +549,188 @@ class MLXBackend:
                 trace.num_params_frozen = 0
                 trace.param_source = "none"
             self._finish_trace(trace, module_tree if use_object_module else None)
+            if grad_options is not None:
+                self._attach_derived_grads(
+                    trace=trace,
+                    model=cast(Callable[..., Any], model),
+                    args=args,
+                    kwargs=kwargs,
+                    captured_output=output,
+                    grad_options=grad_options,
+                )
             if hasattr(trace, "_mlx_module_stack"):
                 delattr(trace, "_mlx_module_stack")
             return trace
         finally:
             self.cleanup_model_session(trace, model)
             self.unwrap(model)
+
+    def _attach_derived_grads(
+        self,
+        *,
+        trace: Trace,
+        model: Callable[..., Any],
+        args: Sequence[Any],
+        kwargs: Mapping[Any, Any],
+        captured_output: Any,
+        grad_options: GradOptions,
+    ) -> None:
+        """Compute and attach MLX leaf-level derived gradients.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving derived gradient records.
+        model
+            Captured MLX callable.
+        args
+            Positional call arguments used for capture.
+        kwargs
+            Keyword call arguments used for capture.
+        captured_output
+            Raw output from the captured forward call.
+        grad_options
+            MLX derived-gradient options.
+
+        Returns
+        -------
+        None
+            ``trace.derived_grads`` and unambiguous param gradient slots are populated.
+        """
+
+        params = grad_options.params
+        if params is None:
+            parameters = getattr(model, "parameters", None)
+            if callable(parameters):
+                params = parameters()
+        has_params = _has_mlx_array_leaf(params)
+        input_grad_argnums = _normalize_mlx_input_grad_argnums(
+            grad_options.input_grad_argnums,
+            len(args),
+        )
+        if not has_params and not input_grad_argnums:
+            raise ValueError(
+                "MLX derived gradients require module params or at least one input argnum."
+            )
+
+        value_args: tuple[Any, ...]
+        differentiated_argnums: tuple[int, ...]
+        param_argnum: int | None
+        input_argnum_by_value_argnum: dict[int, int]
+        if has_params:
+            value_args = (params, *args)
+            param_argnum = 0
+            input_argnum_by_value_argnum = {index + 1: index for index in input_grad_argnums}
+            differentiated_argnums = (0, *(index + 1 for index in input_grad_argnums))
+        else:
+            value_args = tuple(args)
+            param_argnum = None
+            input_argnum_by_value_argnum = {index: index for index in input_grad_argnums}
+            differentiated_argnums = tuple(input_grad_argnums)
+
+        original_params = params if has_params else None
+
+        def value_fn(*value_fn_args: Any) -> tuple[Any, Any]:
+            """Return scalar loss plus raw output aux for ``mx.value_and_grad``.
+
+            Parameters
+            ----------
+            *value_fn_args
+                Positional values passed by MLX AD.
+
+            Returns
+            -------
+            tuple[Any, Any]
+                Scalar loss and raw model output.
+            """
+
+            offset = 0
+            if has_params:
+                update = getattr(model, "update", None)
+                if not callable(update):
+                    raise BackendUnsupportedError(
+                        "MLX derived gradients require model.update(params) for parameter "
+                        "rebinding."
+                    )
+                update(value_fn_args[0])
+                offset = 1
+            raw_output = model(*value_fn_args[offset:], **dict(kwargs))
+            loss = grad_options.loss_fn(raw_output) if grad_options.loss_fn else raw_output
+            if not _is_scalar_mlx_value(loss):
+                raise ValueError(
+                    "MLX derived gradients require loss_fn(raw_output) to be scalar unless "
+                    "the traced output is already scalar."
+                )
+            return loss, raw_output
+
+        grad_fn = cast(Any, self.mx).value_and_grad(
+            value_fn,
+            argnums=differentiated_argnums[0]
+            if len(differentiated_argnums) == 1
+            else differentiated_argnums,
+        )
+        try:
+            (_loss, aux_output), grads = grad_fn(*value_args)
+            _eval_mlx_tree(self.mx, aux_output)
+            _eval_mlx_tree(self.mx, captured_output)
+            if not _mlx_trees_close(aux_output, captured_output):
+                raise ValueError(
+                    "MLX derived gradient run raw output diverged from captured raw output; "
+                    "refusing to expose trace.derived_grads."
+                )
+            grad_trees = grads if len(differentiated_argnums) != 1 else (grads,)
+            records: dict[str, DerivedGradRecord] = {}
+            for value_argnum, grad_tree in zip(differentiated_argnums, grad_trees):
+                records.update(
+                    _records_for_mlx_grad_tree(
+                        grad_tree=grad_tree,
+                        argnum=value_argnum,
+                        param_argnum=param_argnum,
+                        input_argnum_by_value_argnum=input_argnum_by_value_argnum,
+                        provenance={
+                            "backend": "mlx",
+                            "kind": "derived_gradient",
+                            "mechanism": "mlx_value_and_grad",
+                            "loss_fn": _callable_identity(grad_options.loss_fn),
+                        },
+                    )
+                )
+        finally:
+            if has_params:
+                update = getattr(model, "update", None)
+                if callable(update):
+                    update(original_params)
+        trace.derived_grads = DerivedGradAccessor(records)
+        self._mirror_param_derived_grads(trace, records)
+
+    def _mirror_param_derived_grads(
+        self,
+        trace: Trace,
+        records: Mapping[str, DerivedGradRecord],
+    ) -> None:
+        """Mirror unambiguous param derived gradients onto param records.
+
+        Parameters
+        ----------
+        trace
+            Trace containing MLX module-derived params.
+        records
+            Derived gradient records keyed by leaf path.
+
+        Returns
+        -------
+        None
+            Matching ``trace.params`` entries receive the same gradient payload.
+        """
+
+        for address, param in trace.params.items():
+            record = records.get(f"params.{address}")
+            if record is None:
+                continue
+            param._derived_grad_payload = record.grad
+            param._derived_grad_record_path = record.path
+            param.has_grad = True
+            param.grad_shape = tuple(getattr(record.grad, "shape", ()))
 
     def emit_mlx_operation(
         self,
@@ -1495,4 +1721,260 @@ def _nbytes(value: object) -> int | None:
     return None
 
 
-__all__ = ["MLXBackend"]
+def _normalize_mlx_input_grad_argnums(
+    input_grad_argnums: Sequence[int],
+    num_args: int,
+) -> tuple[int, ...]:
+    """Validate MLX input-relative gradient argnums.
+
+    Parameters
+    ----------
+    input_grad_argnums
+        User-supplied positional input indexes.
+    num_args
+        Number of positional model inputs.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Normalized unique input argnums.
+    """
+
+    normalized = tuple(int(index) for index in input_grad_argnums)
+    if len(set(normalized)) != len(normalized):
+        raise ValueError("MLX derived gradient input_grad_argnums must be unique.")
+    for index in normalized:
+        if index < 0 or index >= num_args:
+            raise ValueError("MLX derived gradient input_grad_argnums are out of range.")
+    return normalized
+
+
+def _has_mlx_array_leaf(value: Any) -> bool:
+    """Return whether ``value`` contains at least one MLX array leaf.
+
+    Parameters
+    ----------
+    value
+        Candidate tree.
+
+    Returns
+    -------
+    bool
+        True when an MLX array appears in ``value``.
+    """
+
+    return any(True for _path, _leaf in _flatten_mlx_array_tree(value, ""))
+
+
+def _flatten_mlx_array_tree(value: Any, prefix: str) -> Iterator[tuple[str, Any]]:
+    """Yield MLX array leaves from a nested tree.
+
+    Parameters
+    ----------
+    value
+        Tree value to flatten.
+    prefix
+        Dotted path prefix.
+
+    Yields
+    ------
+    tuple[str, Any]
+        Local dotted path and array leaf.
+    """
+
+    if _is_mlx_array(value):
+        yield prefix, value
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child_prefix = _join_module_address(prefix, str(key)) if prefix else str(key)
+            yield from _flatten_mlx_array_tree(item, child_prefix)
+        return
+    if isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            child_prefix = _join_module_address(prefix, str(index)) if prefix else str(index)
+            yield from _flatten_mlx_array_tree(item, child_prefix)
+
+
+def _records_for_mlx_grad_tree(
+    *,
+    grad_tree: Any,
+    argnum: int,
+    param_argnum: int | None,
+    input_argnum_by_value_argnum: Mapping[int, int],
+    provenance: Mapping[str, Any],
+) -> dict[str, DerivedGradRecord]:
+    """Build derived-gradient records for one differentiated MLX arg tree.
+
+    Parameters
+    ----------
+    grad_tree
+        Gradient tree returned by MLX AD.
+    argnum
+        Backend positional argnum for this gradient tree.
+    param_argnum
+        Backend positional argnum containing params, if present.
+    input_argnum_by_value_argnum
+        Mapping from backend value argnum to user input argnum.
+    provenance
+        Shared provenance metadata.
+
+    Returns
+    -------
+    dict[str, DerivedGradRecord]
+        Records keyed by stable leaf path.
+    """
+
+    records: dict[str, DerivedGradRecord] = {}
+    for local_path, grad in _flatten_mlx_array_tree(grad_tree, ""):
+        if argnum == param_argnum:
+            source = "params"
+            input_argnum = None
+            full_path = f"params.{local_path}" if local_path else "params"
+        else:
+            source = "inputs"
+            input_argnum = input_argnum_by_value_argnum[argnum]
+            prefix = f"inputs.{input_argnum}"
+            full_path = f"{prefix}.{local_path}" if local_path else prefix
+        records[full_path] = DerivedGradRecord(
+            path=full_path,
+            source=source,
+            argnum=argnum,
+            input_argnum=input_argnum,
+            aval=f"array(shape={tuple(getattr(grad, 'shape', ()))}, dtype={getattr(grad, 'dtype', None)})",
+            dtype_ref=DtypeRef(backend="mlx", name=str(getattr(grad, "dtype", ""))),
+            grad=grad,
+            provenance=provenance,
+        )
+    return records
+
+
+def _is_scalar_mlx_value(value: Any) -> bool:
+    """Return whether an MLX value is scalar-shaped.
+
+    Parameters
+    ----------
+    value
+        Candidate MLX value.
+
+    Returns
+    -------
+    bool
+        True when ``value`` has shape ``()``.
+    """
+
+    return tuple(getattr(value, "shape", ())) == ()
+
+
+def _eval_mlx_tree(mx: Any, value: Any) -> None:
+    """Force all MLX array leaves in ``value``.
+
+    Parameters
+    ----------
+    mx
+        Imported ``mlx.core`` module.
+    value
+        Tree whose array leaves should be evaluated.
+
+    Returns
+    -------
+    None
+        MLX evaluation has been requested for all leaves.
+    """
+
+    leaves = [leaf for _path, leaf in _flatten_mlx_array_tree(value, "")]
+    if leaves:
+        mx.eval(*leaves)
+
+
+def _mlx_trees_close(left: Any, right: Any) -> bool:
+    """Return whether two MLX output trees are numerically close.
+
+    Parameters
+    ----------
+    left
+        Left output tree.
+    right
+        Right output tree.
+
+    Returns
+    -------
+    bool
+        True when both trees have matching structure and close leaves.
+    """
+
+    if _is_mlx_array(left) or _is_mlx_array(right):
+        if not (_is_mlx_array(left) and _is_mlx_array(right)):
+            return False
+        return _mlx_values_close(left, right)
+    if isinstance(left, tuple) or isinstance(right, tuple):
+        if not (isinstance(left, tuple) and isinstance(right, tuple)):
+            return False
+        return len(left) == len(right) and all(
+            _mlx_trees_close(left_item, right_item) for left_item, right_item in zip(left, right)
+        )
+    if isinstance(left, list) or isinstance(right, list):
+        if not (isinstance(left, list) and isinstance(right, list)):
+            return False
+        return len(left) == len(right) and all(
+            _mlx_trees_close(left_item, right_item) for left_item, right_item in zip(left, right)
+        )
+    if isinstance(left, dict) or isinstance(right, dict):
+        if not (isinstance(left, dict) and isinstance(right, dict)):
+            return False
+        if set(left.keys()) != set(right.keys()):
+            return False
+        return all(_mlx_trees_close(left[key], right[key]) for key in left)
+    return left == right
+
+
+def _mlx_values_close(left: Any, right: Any) -> bool:
+    """Return whether two MLX arrays are numerically close.
+
+    Parameters
+    ----------
+    left
+        Left MLX array.
+    right
+        Right MLX array.
+
+    Returns
+    -------
+    bool
+        True when arrays have matching shape, dtype, and values.
+    """
+
+    left_array = np.asarray(left)
+    right_array = np.asarray(right)
+    if left_array.shape != right_array.shape or left_array.dtype != right_array.dtype:
+        return False
+    if np.issubdtype(left_array.dtype, np.bool_) or np.issubdtype(left_array.dtype, np.integer):
+        return bool(np.array_equal(left_array, right_array, equal_nan=True))
+    if np.issubdtype(left_array.dtype, np.floating) or np.issubdtype(
+        left_array.dtype,
+        np.complexfloating,
+    ):
+        return bool(np.allclose(left_array, right_array, rtol=1e-5, atol=1e-6, equal_nan=True))
+    return bool(np.array_equal(left_array, right_array))
+
+
+def _callable_identity(fn: Callable[[Any], Any] | None) -> str | None:
+    """Return a stable best-effort callable identity.
+
+    Parameters
+    ----------
+    fn
+        Callable or ``None``.
+
+    Returns
+    -------
+    str | None
+        Identity string used in derived-gradient provenance.
+    """
+
+    if fn is None:
+        return None
+    return f"{getattr(fn, '__module__', '')}.{getattr(fn, '__qualname__', repr(fn))}:{id(fn)}"
+
+
+__all__ = ["GradOptions", "MLXBackend"]

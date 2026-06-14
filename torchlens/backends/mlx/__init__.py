@@ -9,6 +9,6 @@ are unsupported, backward capture is unsupported so MLX traces always report
 
 from __future__ import annotations
 
-from .backend import MLXBackend
+from .backend import GradOptions, MLXBackend
 
-__all__ = ["MLXBackend"]
+__all__ = ["GradOptions", "MLXBackend"]

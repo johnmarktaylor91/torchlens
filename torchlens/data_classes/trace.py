@@ -4318,7 +4318,7 @@ class Trace(CapturedRun):
     def backward_passes(self) -> BackwardPassAccessor:
         """Access backward pass records by 0-based position or named pass number."""
 
-        if getattr(self, "backend", "torch") in {"jax", "tinygrad"}:
+        if getattr(self, "backend", "torch") in {"jax", "mlx", "tinygrad"}:
             raise ValueError(
                 f"{getattr(self, 'backend', 'backend')} traces do not support true backward "
                 "capture. Use trace.derived_grads for leaf-level derived gradients computed "
@@ -4370,7 +4370,7 @@ class Trace(CapturedRun):
     def saved_grad_ops(self) -> Accessor[Op]:
         """Access Ops with saved gradients."""
 
-        if getattr(self, "backend", "torch") in {"jax", "tinygrad"}:
+        if getattr(self, "backend", "torch") in {"jax", "mlx", "tinygrad"}:
             raise ValueError(
                 f"{getattr(self, 'backend', 'backend')} traces do not expose op-level saved "
                 "gradients. Use trace.derived_grads for leaf-level derived gradients computed "

@@ -48,6 +48,9 @@ JAX_TRACE_OPTIONS: tuple[str, ...] = (
 )
 """Trace options implemented by the JAX preview backend."""
 
+MLX_TRACE_OPTIONS: tuple[str, ...] = ("module_identity_mode", "grad_options")
+"""Trace options implemented by the MLX preview backend."""
+
 TINYGRAD_TRACE_OPTIONS: tuple[str, ...] = ("module_identity_mode", "grad_options")
 """Trace options implemented by the tinygrad preview backend."""
 

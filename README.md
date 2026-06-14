@@ -95,8 +95,8 @@ frameworks:
 | Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | object `object_module`; raw `function_root` | compatibility mode |
 | Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited |
 | Static-label `save=` | ✅ | ✅ | ✅ | ✅ func/label/contains only |
-| Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | forward arrays |
-| Gradients | full backward graph | leaf-level derived | leaf-level + T1 intermediate derived | — |
+| Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | forward/derived arrays |
+| Gradients | full backward graph | leaf-level derived | leaf-level + T1 intermediate derived | leaf-level derived |
 | Interventions / halt / fastlog | ✅ | — | — | — |
 
 The JAX backend is **jaxpr-first**: it captures the lowered jaxpr, so any
@@ -107,7 +107,8 @@ use `function_root`. The tinygrad backend captures UOp graphs, supports
 callable-object `object_module` hierarchy, and exposes T1 intermediate derived
 gradients through `trace.intermediate_derived_grads` / `op.derived_grad`.
 MLX `mlx.nn.Module` roots use object-discovered `object_module` hierarchy, with
-`function_root` available as an explicit root-only fallback.
+`function_root` available as an explicit root-only fallback, and expose leaf-only
+derived gradients through `tl.backends.mlx.GradOptions`.
 JAX/tinygrad/MLX portable saves use `payload_policy="array_payloads"` and loaded
 traces report replay as unavailable rather than as a false pass. PyTorch remains
 the full-feature backend: true backward capture, value-dependent predicates,
@@ -117,8 +118,8 @@ arbitrary models.)
 
 MLX preview traces support static-label `save=` for `tl.func`, `tl.label`,
 `tl.module`, `tl.in_module`, `tl.contains`, and boolean composites of those.
-Portable MLX saves round-trip saved forward payloads as `mlx.core.array` values
-when the MLX runtime is installed.
+Portable MLX saves round-trip saved forward and derived payloads as
+`mlx.core.array` values when the MLX runtime is installed.
 
 ```python
 log = tl.trace(torch_model, x)                  # PyTorch (default)
@@ -126,7 +127,8 @@ log = tl.trace(jax_fn,  inputs, backend="jax")       # JAX preview
 log = tl.trace(tg_fn,   inputs, backend="tinygrad")  # tinygrad preview
 ```
 
-(JAX/tinygrad capture pure functions; gradient options and exact calling
+(JAX/tinygrad capture pure functions; MLX gradients run a second guarded AD pass
+over module params and selected inputs. Gradient options and exact calling
 conventions are documented per backend in [`docs/`](docs/).)
 
 **Backward-pass capture.** Capture the backward graph the same way you capture

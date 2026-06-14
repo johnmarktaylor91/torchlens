@@ -18,6 +18,7 @@ from torchlens.backends import (  # noqa: E402
     BackendUnsupportedError,
     get_backend_spec,
 )
+from torchlens.backends.mlx import GradOptions  # noqa: E402
 import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 
 
@@ -86,6 +87,38 @@ class TinyAttention(nn.Module):
         """Run a self-attention forward pass."""
 
         return self.proj(self.attn(x, x, x))
+
+
+class TinyGradLinear(nn.Module):
+    """Small MLX module used by derived-gradient tests."""
+
+    def __init__(self) -> None:
+        """Initialize the projection layer."""
+
+        super().__init__()
+        self.proj = nn.Linear(3, 2)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        """Run a single linear projection."""
+
+        return self.proj(x)
+
+
+class DivergentGradLinear(nn.Module):
+    """MLX module whose second raw output intentionally diverges."""
+
+    def __init__(self) -> None:
+        """Initialize state used to trip the derived-gradient honesty guard."""
+
+        super().__init__()
+        self.proj = nn.Linear(3, 2)
+        self.calls = 0
+
+    def __call__(self, x: mx.array) -> mx.array:
+        """Return a call-count-dependent output."""
+
+        self.calls += 1
+        return self.proj(x) + self.calls
 
 
 def _tiny_mlp_input() -> mx.array:
@@ -157,6 +190,12 @@ def _always_true(_op: Any) -> bool:
     return True
 
 
+def _grad_loss(output: mx.array) -> mx.array:
+    """Return a scalar loss for MLX derived-gradient tests."""
+
+    return mx.sum(output * output)
+
+
 @pytest.mark.optional
 def test_mlx_intervention_ready_raises() -> None:
     """MLX capture rejects intervention metadata requests explicitly."""
@@ -171,6 +210,110 @@ def test_mlx_save_grads_raises() -> None:
 
     with pytest.raises(BackendUnsupportedError, match="backward capture"):
         tl.trace(TinyMLP(), _tiny_mlp_input(), save_grads=True)
+
+
+@pytest.mark.optional
+def test_mlx_derived_grads_match_value_and_grad_oracle() -> None:
+    """MLX leaf derived gradients should match a direct MLX AD oracle."""
+
+    model = TinyGradLinear()
+    x = mx.array([[1.0, -2.0, 0.5], [0.25, 0.75, -1.5]], dtype=mx.float32)
+    params = model.parameters()
+    trace = tl.trace(
+        model,
+        x,
+        backend="mlx",
+        grad_options=GradOptions(params=params, loss_fn=_grad_loss, input_grad_argnums=(0,)),
+    )
+
+    def value_fn(test_params: dict[str, Any], test_x: mx.array) -> mx.array:
+        """Return direct oracle loss."""
+
+        model.update(test_params)
+        return _grad_loss(model(test_x))
+
+    expected_param_grads, expected_x_grad = mx.grad(value_fn, argnums=(0, 1))(params, x)
+    mx.eval(
+        expected_x_grad,
+        expected_param_grads["proj"]["weight"],
+        expected_param_grads["proj"]["bias"],
+    )
+
+    assert set(trace.derived_grads.keys()) == {
+        "params.proj.bias",
+        "params.proj.weight",
+        "inputs.0",
+    }
+    np.testing.assert_allclose(
+        np.asarray(trace.derived_grads["params.proj.weight"].grad),
+        np.asarray(expected_param_grads["proj"]["weight"]),
+    )
+    np.testing.assert_allclose(
+        np.asarray(trace.derived_grads["params.proj.bias"].grad),
+        np.asarray(expected_param_grads["proj"]["bias"]),
+    )
+    np.testing.assert_allclose(
+        np.asarray(trace.derived_grads["inputs.0"].grad),
+        np.asarray(expected_x_grad),
+    )
+    assert trace.derived_grads["inputs.0"].provenance["mechanism"] == "mlx_value_and_grad"
+    assert trace.params["proj.weight"].grad is trace.derived_grads["params.proj.weight"].grad
+    assert trace.params["proj.bias"].grad is trace.derived_grads["params.proj.bias"].grad
+    assert len(trace.intermediate_derived_grads) == 0
+
+
+@pytest.mark.optional
+def test_mlx_derived_grads_allow_scalar_output_without_loss_fn() -> None:
+    """MLX derived gradients should allow scalar raw outputs without a loss function."""
+
+    def scalar_model(x: mx.array) -> mx.array:
+        """Return a scalar MLX output."""
+
+        return mx.sum(x * x)
+
+    x = mx.array([1.0, -2.0, 3.0], dtype=mx.float32)
+    trace = tl.trace(
+        scalar_model,
+        x,
+        backend="mlx",
+        grad_options=GradOptions(input_grad_argnums=(0,)),
+    )
+
+    np.testing.assert_allclose(np.asarray(trace.derived_grads["inputs.0"].grad), [2.0, -4.0, 6.0])
+
+
+@pytest.mark.optional
+def test_mlx_derived_grads_reject_raw_output_divergence() -> None:
+    """MLX derived gradients should refuse records when the AD rerun output diverges."""
+
+    with pytest.raises(ValueError, match="raw output diverged"):
+        tl.trace(
+            DivergentGradLinear(),
+            mx.ones((1, 3), dtype=mx.float32),
+            backend="mlx",
+            grad_options=GradOptions(loss_fn=_grad_loss, input_grad_argnums=(0,)),
+        )
+
+
+@pytest.mark.optional
+def test_mlx_derived_grads_are_not_backward_capture() -> None:
+    """MLX derived gradients should not unlock true backward surfaces."""
+
+    trace = tl.trace(
+        TinyGradLinear(),
+        mx.ones((1, 3), dtype=mx.float32),
+        backend="mlx",
+        grad_options=GradOptions(loss_fn=_grad_loss, input_grad_argnums=(0,)),
+    )
+
+    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+        trace.log_backward(trace[trace.output_layers[0]].out)
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace.backward_passes
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace.saved_grad_ops
+    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+        _ = trace[0].grads
 
 
 @pytest.mark.optional
@@ -386,7 +529,7 @@ def test_mlx_capability_flags_match_materialized_contract() -> None:
 
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
-    assert spec.capabilities.trace_options == ("module_identity_mode",)
+    assert spec.capabilities.trace_options == ("module_identity_mode", "grad_options")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
     assert capabilities.supports_payload_materialization is True

@@ -1566,7 +1566,7 @@ class Op:
         """Per-pass gradient records saved for this Op."""
 
         trace = self.source_trace
-        if getattr(trace, "backend", "torch") in {"jax", "tinygrad"}:
+        if getattr(trace, "backend", "torch") in {"jax", "mlx", "tinygrad"}:
             raise ValueError(
                 f"{getattr(trace, 'backend', 'backend')} traces do not expose op.grads or "
                 "saved_grad_ops because they do not capture true backward graphs. Use "

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import torch
@@ -12,6 +13,7 @@ from .registry import (
     BackendSpec,
     BackendUnsupportedError,
     JAX_TRACE_OPTIONS,
+    MLX_TRACE_OPTIONS,
     SerializationPolicy,
     TINYGRAD_TRACE_OPTIONS,
     TORCH_TRACE_OPTIONS,
@@ -31,9 +33,9 @@ def _torch_can_handle(
     model:
         Candidate model.
     input_args:
-        Positional inputs, unused.
+        Positional inputs.
     input_kwargs:
-        Keyword inputs, unused.
+        Keyword inputs.
 
     Returns
     -------
@@ -64,15 +66,70 @@ def _mlx_can_handle(
     Returns
     -------
     bool
-        ``True`` when MLX is installed and ``model`` is an ``mlx.nn.Module``.
+        ``True`` when MLX is installed, ``model`` is callable, and either the
+        model is an ``mlx.nn.Module`` or an input leaf is an MLX array.
     """
 
-    del input_args, input_kwargs
+    if not callable(model):
+        return False
     try:
+        import mlx.core as mx
         import mlx.nn as mlx_nn
     except ImportError:
         return False
-    return isinstance(model, mlx_nn.Module)
+    return isinstance(model, mlx_nn.Module) or _contains_mlx_array(input_args, input_kwargs, mx)
+
+
+def _contains_mlx_array(input_args: object, input_kwargs: object, mx: object) -> bool:
+    """Return whether public inputs contain at least one MLX array leaf.
+
+    Parameters
+    ----------
+    input_args
+        Positional public inputs.
+    input_kwargs
+        Keyword public inputs.
+    mx
+        Imported ``mlx.core`` module.
+
+    Returns
+    -------
+    bool
+        True when an MLX array leaf is present.
+    """
+
+    array_type = getattr(mx, "array")
+    return any(_iter_mlx_input_array_flags(input_args, array_type)) or any(
+        _iter_mlx_input_array_flags(input_kwargs, array_type)
+    )
+
+
+def _iter_mlx_input_array_flags(value: object, array_type: type[Any]) -> Iterator[bool]:
+    """Yield MLX-array membership flags for nested public inputs.
+
+    Parameters
+    ----------
+    value
+        Candidate nested value.
+    array_type
+        Runtime MLX array type.
+
+    Yields
+    ------
+    bool
+        True for each MLX array leaf.
+    """
+
+    if isinstance(value, array_type):
+        yield True
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from _iter_mlx_input_array_flags(item, array_type)
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _iter_mlx_input_array_flags(item, array_type)
 
 
 def _jax_can_handle(
@@ -442,7 +499,7 @@ def register_default_backend_specs() -> None:
                 payload_materialization=True,
                 streaming=False,
                 module_identity_modes=("function_root", "object_module"),
-                trace_options=("module_identity_mode",),
+                trace_options=MLX_TRACE_OPTIONS,
             ),
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
