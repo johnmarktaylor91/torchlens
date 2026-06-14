@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import pickle
 from pathlib import Path
 from typing import Any
 
@@ -9,10 +11,14 @@ import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._io.bundle import _build_manifest, _write_payload_blob
 from torchlens._io.payload_codec import get_payload_codec
+from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
+from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends import (
     BackendPayloadUnsupportedError,
+    BackendRuntimeCompatibilityError,
     BackendUnsupportedError,
     get_backend_spec,
 )
@@ -137,6 +143,55 @@ def test_tinygrad_payload_codec_encodes_numpy_manifest_fields() -> None:
 
     restored = codec.from_numpy(encoded.array, fields, map_location=None, strict_runtime=True)
     np.testing.assert_array_equal(restored.numpy(), encoded.array)
+
+
+def test_tinygrad_codec_fixture_loads_eager_payloads_as_tensors(tmp_path: Path) -> None:
+    """Direct-writer tinygrad codec fixtures should load eager outs as tinygrad tensors."""
+
+    path = tmp_path / "tinygrad_codec_roundtrip.tlspec"
+    _, expected, expected_dtype, expected_device = _write_tinygrad_codec_fixture(path)
+
+    loaded = tl.load(path)
+    loaded_op = _first_saved_op(loaded)
+
+    assert loaded.backend == "tinygrad"
+    assert isinstance(loaded_op.out, Tensor)
+    assert str(loaded_op.out.dtype) == expected_dtype
+    assert str(loaded_op.out.device) == expected_device
+    assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
+    np.testing.assert_allclose(loaded_op.out.numpy(), expected)
+
+
+def test_tinygrad_codec_fixture_loads_lazy_refs_as_tensors(tmp_path: Path) -> None:
+    """Lazy tinygrad codec fixtures should defer payload decode until materialization."""
+
+    path = tmp_path / "tinygrad_codec_lazy.tlspec"
+    _, expected, expected_dtype, expected_device = _write_tinygrad_codec_fixture(path)
+
+    loaded = tl.load(path, lazy=True)
+    loaded_op = _first_saved_op(loaded)
+
+    assert loaded_op.out is None
+    assert loaded_op.out_ref is not None
+    assert loaded_op.out_ref.logical_backend == "tinygrad"
+    materialized = loaded_op.out_ref.materialize()
+    assert isinstance(materialized, Tensor)
+    assert str(materialized.dtype) == expected_dtype
+    assert str(materialized.device) == expected_device
+    np.testing.assert_allclose(materialized.numpy(), expected)
+
+
+def test_tinygrad_payload_codec_rejects_unresolved_load_dtype() -> None:
+    """tinygrad load should fail closed for unresolvable dtype strings."""
+
+    codec = get_payload_codec("tinygrad")
+    with pytest.raises(BackendRuntimeCompatibilityError, match="not-a-real-dtype"):
+        codec.from_numpy(
+            np.asarray([1.0], dtype=np.float32),
+            {"logical_dtype": "not-a-real-dtype", "logical_device": "CPU"},
+            map_location=None,
+            strict_runtime=True,
+        )
 
 
 def test_tinygrad_payload_codec_strict_rejects_object_dtype_arrays() -> None:
@@ -289,6 +344,86 @@ def _trace(**kwargs: Any) -> Any:
     """
 
     return tl.trace(_tiny_block, Tensor([1.0, -2.0, 3.0]), backend="tinygrad", **kwargs)
+
+
+def _write_tinygrad_codec_fixture(path: Path) -> tuple[Any, np.ndarray, str, str]:
+    """Write a materialized tinygrad bundle through the private codec writer path.
+
+    Parameters
+    ----------
+    path
+        Destination tlspec directory.
+
+    Returns
+    -------
+    tuple[Any, np.ndarray, str, str]
+        Source trace, first saved payload values, dtype string, and device string.
+    """
+
+    trace = _trace()
+    scrubbed_state, blob_specs, unsupported_tensors = scrub_for_save(
+        trace,
+        include_outs=True,
+        include_grads=False,
+        include_saved_args=False,
+        include_rng_states=False,
+        backend_name="tinygrad",
+        payload_materialization=True,
+    )
+    if not blob_specs:
+        raise AssertionError("tinygrad codec fixture expected at least one saved payload.")
+
+    path.mkdir()
+    (path / "blobs").mkdir()
+    codec = get_payload_codec("tinygrad")
+    tensor_entries = [
+        _write_payload_blob(tmp_path=path, blob_spec=blob_spec, codec=codec)
+        for blob_spec in blob_specs
+    ]
+    manifest = _build_manifest(
+        trace=trace,
+        tensor_entries=tensor_entries,
+        unsupported_tensors=unsupported_tensors,
+    )
+    _TlSpecWriter.write_trace_manifest(
+        path=path / "manifest.json",
+        trace=trace,
+        legacy_manifest=manifest,
+        save_level="portable",
+    )
+    with (path / "metadata.pkl").open("wb") as handle:
+        pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    _mark_fixture_manifest_materialized(path)
+    first_payload = blob_specs[0].value
+    return (
+        trace,
+        np.asarray(first_payload.numpy()),
+        str(first_payload.dtype),
+        str(first_payload.device),
+    )
+
+
+def _mark_fixture_manifest_materialized(path: Path) -> None:
+    """Patch a direct-writer fixture manifest to declare materialized payloads."""
+
+    manifest_path = path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["body_format"] = "safetensors"
+    manifest["payload_policy"] = {
+        "policy": "array_payloads",
+        "materialization_supported": True,
+        "payload_kinds": sorted({entry["kind"] for entry in manifest["tensors"]}),
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+
+def _first_saved_op(trace: Any) -> Any:
+    """Return the first op with a saved activation."""
+
+    for op in trace.layer_list:
+        if op.has_saved_activation:
+            return op
+    raise AssertionError("trace has no saved activation op")
 
 
 def test_tinygrad_spec_registered() -> None:

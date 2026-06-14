@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import pickle
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -10,10 +12,14 @@ import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._io.bundle import _build_manifest, _write_payload_blob
 from torchlens._io.payload_codec import get_payload_codec
+from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
+from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends import (
     BackendPayloadUnsupportedError,
+    BackendRuntimeCompatibilityError,
     BackendUnsupportedError,
     get_backend_spec,
 )
@@ -80,6 +86,80 @@ def _trace(**kwargs: Any) -> Any:
     )
 
 
+def _write_jax_codec_fixture(path: Path) -> tuple[Any, np.ndarray]:
+    """Write a materialized JAX bundle through the private codec writer path.
+
+    Parameters
+    ----------
+    path
+        Destination tlspec directory.
+
+    Returns
+    -------
+    tuple[Any, np.ndarray]
+        Source trace and expected first saved payload values.
+    """
+
+    trace = _trace()
+    scrubbed_state, blob_specs, unsupported_tensors = scrub_for_save(
+        trace,
+        include_outs=True,
+        include_grads=False,
+        include_saved_args=False,
+        include_rng_states=False,
+        backend_name="jax",
+        payload_materialization=True,
+    )
+    if not blob_specs:
+        raise AssertionError("JAX codec fixture expected at least one saved payload.")
+
+    path.mkdir()
+    (path / "blobs").mkdir()
+    codec = get_payload_codec("jax")
+    tensor_entries = [
+        _write_payload_blob(tmp_path=path, blob_spec=blob_spec, codec=codec)
+        for blob_spec in blob_specs
+    ]
+    manifest = _build_manifest(
+        trace=trace,
+        tensor_entries=tensor_entries,
+        unsupported_tensors=unsupported_tensors,
+    )
+    _TlSpecWriter.write_trace_manifest(
+        path=path / "manifest.json",
+        trace=trace,
+        legacy_manifest=manifest,
+        save_level="portable",
+    )
+    with (path / "metadata.pkl").open("wb") as handle:
+        pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    _mark_fixture_manifest_materialized(path)
+    return trace, np.asarray(blob_specs[0].value)
+
+
+def _mark_fixture_manifest_materialized(path: Path) -> None:
+    """Patch a direct-writer fixture manifest to declare materialized payloads."""
+
+    manifest_path = path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["body_format"] = "safetensors"
+    manifest["payload_policy"] = {
+        "policy": "array_payloads",
+        "materialization_supported": True,
+        "payload_kinds": sorted({entry["kind"] for entry in manifest["tensors"]}),
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+
+def _first_saved_op(trace: Any) -> Any:
+    """Return the first op with a saved activation."""
+
+    for op in trace.layer_list:
+        if op.has_saved_activation:
+            return op
+    raise AssertionError("trace has no saved activation op")
+
+
 def test_jax_payload_codec_encodes_numpy_manifest_fields() -> None:
     """JAX payload codec should expose logical and transport metadata."""
 
@@ -104,6 +184,86 @@ def test_jax_payload_codec_encodes_numpy_manifest_fields() -> None:
 
     restored = codec.from_numpy(encoded.array, fields, map_location=None, strict_runtime=True)
     np.testing.assert_array_equal(np.asarray(restored), encoded.array)
+
+
+def test_jax_codec_fixture_loads_eager_payloads_as_jax_arrays(tmp_path: Path) -> None:
+    """Direct-writer JAX codec fixtures should load eager outs as JAX arrays."""
+
+    path = tmp_path / "jax_codec_roundtrip.tlspec"
+    _, expected = _write_jax_codec_fixture(path)
+
+    loaded = tl.load(path)
+    loaded_op = _first_saved_op(loaded)
+
+    assert loaded.backend == "jax"
+    assert isinstance(loaded_op.out, jax.Array)
+    assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
+    np.testing.assert_allclose(np.asarray(loaded_op.out), expected)
+
+
+def test_jax_codec_fixture_loads_lazy_refs_as_jax_arrays(tmp_path: Path) -> None:
+    """Lazy JAX codec fixtures should defer payload decode until materialization."""
+
+    path = tmp_path / "jax_codec_lazy.tlspec"
+    _, expected = _write_jax_codec_fixture(path)
+
+    loaded = tl.load(path, lazy=True)
+    loaded_op = _first_saved_op(loaded)
+
+    assert loaded_op.out is None
+    assert loaded_op.out_ref is not None
+    assert loaded_op.out_ref.logical_backend == "jax"
+    materialized = loaded_op.out_ref.materialize()
+    assert isinstance(materialized, jax.Array)
+    np.testing.assert_allclose(np.asarray(materialized), expected)
+
+
+def test_jax_codec_runtime_missing_loads_audit_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing JAX runtime during decode should preserve metadata and lazy refs."""
+
+    path = tmp_path / "jax_codec_missing_runtime.tlspec"
+    _write_jax_codec_fixture(path)
+    codec = get_payload_codec("jax")
+
+    def _missing_runtime(
+        array: np.ndarray,
+        entry: Any,
+        *,
+        map_location: Any,
+        strict_runtime: bool,
+    ) -> Any:
+        """Pretend the JAX runtime is unavailable during payload decode."""
+
+        del array, entry, map_location, strict_runtime
+        raise BackendRuntimeCompatibilityError("jax runtime unavailable")
+
+    monkeypatch.setattr(codec, "from_numpy", _missing_runtime)
+
+    loaded = tl.load(path)
+    loaded_op = _first_saved_op(loaded)
+
+    assert getattr(loaded, "payload_load_status") == "audit_only_missing_runtime"
+    assert loaded_op.has_saved_activation is True
+    assert loaded_op.out is None
+    assert loaded_op.out_ref is not None
+    with pytest.raises(BackendRuntimeCompatibilityError, match="jax runtime unavailable"):
+        loaded_op.out_ref.materialize()
+
+
+def test_jax_payload_codec_rejects_prng_key_dtype_reconstruction() -> None:
+    """JAX typed PRNG key dtype reconstruction should fail closed for now."""
+
+    codec = get_payload_codec("jax")
+    with pytest.raises(BackendRuntimeCompatibilityError, match="PRNG key dtype"):
+        codec.from_numpy(
+            np.asarray([0, 0], dtype=np.uint32),
+            {"logical_dtype": "key<fry>", "logical_device": "TFRT_CPU_0"},
+            map_location=None,
+            strict_runtime=True,
+        )
 
 
 def test_jax_payload_codec_strict_rejects_sharded_and_object_like_arrays() -> None:

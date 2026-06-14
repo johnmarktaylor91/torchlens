@@ -721,16 +721,57 @@ def _preflight_unified_trace_manifest(manifest: dict[str, Any]) -> None:
 
     payload_policy = manifest["payload_policy"]
     materializes = bool(payload_policy.get("materialization_supported", False))
-    if not materializes and manifest.get("body_index"):
-        raise BackendPayloadUnsupportedError(
-            f"Manifest schema v2 trace for backend {backend_name!r} is audit-only; "
-            "this runtime cannot materialize non-torch payloads from .tlspec yet."
-        )
     if materializes:
-        raise BackendPayloadUnsupportedError(
-            f"Manifest schema v2 trace for backend {backend_name!r} requires a backend payload "
-            "codec that is not installed in this runtime."
-        )
+        _preflight_schema_v2_payload_codecs(manifest, backend_name=backend_name)
+
+
+def _preflight_schema_v2_payload_codecs(
+    manifest: dict[str, Any],
+    *,
+    backend_name: str,
+) -> None:
+    """Fail closed for schema-v2 materialized payloads with unknown codecs.
+
+    Parameters
+    ----------
+    manifest:
+        Raw unified trace manifest.
+    backend_name:
+        Logical backend declared by the trace manifest.
+
+    Raises
+    ------
+    TorchLensIOError
+        If body-index codec fields are malformed.
+    BackendPayloadUnsupportedError
+        If a declared materialized body entry uses an unsupported codec.
+    """
+
+    body_index = manifest.get("body_index", [])
+    if not isinstance(body_index, list):
+        raise TorchLensIOError("Manifest schema v2 trace body_index must be a list.")
+    for raw_entry in body_index:
+        if not isinstance(raw_entry, dict):
+            raise TorchLensIOError("Manifest schema v2 body_index entries must be objects.")
+        logical_backend = raw_entry.get("logical_backend", backend_name)
+        codec_name = raw_entry.get("codec")
+        if not isinstance(logical_backend, str) or logical_backend == "":
+            raise TorchLensIOError(
+                "Manifest body entry logical_backend must be a non-empty string."
+            )
+        if logical_backend != backend_name:
+            raise TorchLensIOError(
+                f"Manifest backend {backend_name!r} conflicts with body entry "
+                f"logical_backend={logical_backend!r}."
+            )
+        if not isinstance(codec_name, str) or codec_name == "":
+            raise TorchLensIOError("Materialized schema v2 body entries require a codec string.")
+        codec = get_payload_codec(logical_backend)
+        if codec.codec_name == "none" or codec.codec_name != codec_name:
+            raise BackendPayloadUnsupportedError(
+                f"Manifest schema v2 trace for backend {backend_name!r} declares unsupported "
+                f"payload codec {codec_name!r}."
+            )
 
 
 def _manifest_for_unified_trace_load(manifest: dict[str, Any]) -> Manifest:
@@ -748,11 +789,21 @@ def _manifest_for_unified_trace_load(manifest: dict[str, Any]) -> Manifest:
     """
 
     if manifest.get("schema_version", 1) != 2 or manifest.get("backend") == "torch":
-        return Manifest.from_dict(manifest)
+        parsed_manifest = Manifest.from_dict(manifest)
+        object.__setattr__(parsed_manifest, "_tl_logical_backend", "torch")
+        object.__setattr__(parsed_manifest, "_tl_payload_materialization_supported", True)
+        return parsed_manifest
 
     payload_manifest = dict(manifest)
     payload_manifest["torch_version"] = torch.__version__
-    return Manifest.from_dict(payload_manifest)
+    parsed_manifest = Manifest.from_dict(payload_manifest)
+    payload_policy = manifest.get("payload_policy", {})
+    materializes = isinstance(payload_policy, dict) and bool(
+        payload_policy.get("materialization_supported", False)
+    )
+    object.__setattr__(parsed_manifest, "_tl_logical_backend", manifest.get("backend"))
+    object.__setattr__(parsed_manifest, "_tl_payload_materialization_supported", materializes)
+    return parsed_manifest
 
 
 def _load_unified_bundle(bundle_path: Path) -> "Bundle":
@@ -973,6 +1024,7 @@ def _scrub_trace_for_bundle(
         "_source_bundle_manifest_sha256",
         "_source_bundle_path",
         "_source_bundle_created_at",
+        "payload_load_status",
     ):
         if hasattr(trace, attr_name):
             transient_attrs[attr_name] = getattr(trace, attr_name)

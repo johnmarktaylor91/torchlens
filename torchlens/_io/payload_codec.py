@@ -177,13 +177,34 @@ class JaxPayloadCodec:
     ) -> Any:
         """Rebuild a JAX array from host NumPy storage."""
 
-        import jax
-        import jax.numpy as jnp
+        from ..backends.registry import BackendRuntimeCompatibilityError
 
-        value = jnp.asarray(array)
+        try:
+            import jax
+            import jax.numpy as jnp
+        except ImportError as exc:
+            raise BackendRuntimeCompatibilityError(
+                "Portable JAX payload materialization requires the jax runtime."
+            ) from exc
+
+        logical_dtype = str(_entry_field(entry, "logical_dtype") or array.dtype)
+        if logical_dtype.startswith("key<"):
+            raise BackendRuntimeCompatibilityError(
+                "Portable JAX PRNG key dtype payloads are stored as raw transport data; "
+                "typed-key reconstruction is not supported by this runtime."
+            )
+
+        dtype = getattr(jnp, logical_dtype, None)
+        value = jnp.asarray(array, dtype=dtype) if dtype is not None else jnp.asarray(array)
         if map_location is None:
             return value
-        return jax.device_put(value, map_location)
+        target_device = _resolve_jax_device(jax, map_location)
+        if target_device is None:
+            return value
+        try:
+            return jax.device_put(value, target_device)
+        except (TypeError, ValueError, RuntimeError):
+            return value
 
     def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
         """Return v2 manifest vocabulary for a JAX payload."""
@@ -268,12 +289,30 @@ class TinygradPayloadCodec:
     ) -> Any:
         """Rebuild a tinygrad tensor from host NumPy storage."""
 
-        from tinygrad import Tensor
+        from ..backends.registry import BackendRuntimeCompatibilityError
+
+        try:
+            from tinygrad import Tensor, dtypes
+        except ImportError as exc:
+            raise BackendRuntimeCompatibilityError(
+                "Portable tinygrad payload materialization requires the tinygrad runtime."
+            ) from exc
+
+        logical_dtype = str(_entry_field(entry, "logical_dtype") or array.dtype)
+        dtype = _resolve_tinygrad_dtype(dtypes, logical_dtype)
+        if dtype is None:
+            raise BackendRuntimeCompatibilityError(
+                f"Portable tinygrad payload dtype {logical_dtype!r} is not supported by "
+                "the installed tinygrad runtime."
+            )
 
         device = map_location
         if device is None:
             device = _entry_field(entry, "logical_device") or _entry_field(entry, "device_at_save")
-        return Tensor(array, device=device).realize()
+        kwargs: dict[str, Any] = {"dtype": dtype}
+        if device not in (None, "", "unknown"):
+            kwargs["device"] = device
+        return Tensor(array, **kwargs).realize()
 
     def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
         """Return v2 manifest vocabulary for a tinygrad payload."""
@@ -345,6 +384,7 @@ _CODECS: dict[str, PayloadCodec] = {
     "jax": JaxPayloadCodec(),
     "tinygrad": TinygradPayloadCodec(),
 }
+_TORCH_BACKEND_NAME = "torch"
 
 
 def get_payload_codec(backend_name: str) -> PayloadCodec:
@@ -390,6 +430,77 @@ def numpy_to_transport_tensor(array: np.ndarray) -> torch.Tensor:
     return torch.from_numpy(np.array(array, copy=True, order="C")).contiguous()
 
 
+def materialize_transport_tensor(
+    tensor: torch.Tensor,
+    entry: Any,
+    *,
+    map_location: Any,
+) -> Any:
+    """Decode a safetensors transport tensor into its logical backend payload.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor decoded from the physical safetensors blob.
+    entry:
+        Manifest tensor entry or public body-index mapping for the payload.
+    map_location:
+        Optional target device passed to the logical backend codec.
+
+    Returns
+    -------
+    Any
+        Materialized logical payload for the entry's backend.
+
+    Raises
+    ------
+    BackendPayloadUnsupportedError
+        If the manifest declares an unknown or mismatched codec.
+    BackendRuntimeCompatibilityError
+        If the logical backend runtime is unavailable or incompatible.
+    """
+
+    from ..backends.registry import (
+        BackendPayloadUnsupportedError,
+        BackendRuntimeCompatibilityError,
+    )
+
+    logical_backend = str(_entry_field(entry, "logical_backend") or "torch")
+    codec_name = _entry_field(entry, "codec")
+    if logical_backend == _TORCH_BACKEND_NAME:
+        if map_location is None:
+            return tensor
+        return tensor.to(map_location)
+
+    codec = get_payload_codec(logical_backend)
+    if codec.codec_name == "none" or codec_name != codec.codec_name:
+        raise BackendPayloadUnsupportedError(
+            f"Manifest declares unsupported payload codec {codec_name!r} for "
+            f"backend {logical_backend!r}."
+        )
+
+    try:
+        array = _transport_tensor_to_numpy(tensor, entry)
+        codec_map_location = map_location
+        if isinstance(map_location, str) and map_location == "cpu":
+            codec_map_location = None
+        if isinstance(map_location, torch.device) and map_location.type == "cpu":
+            codec_map_location = None
+        return codec.from_numpy(
+            array,
+            entry,
+            map_location=codec_map_location,
+            strict_runtime=True,
+        )
+    except BackendRuntimeCompatibilityError:
+        raise
+    except ImportError as exc:
+        raise BackendRuntimeCompatibilityError(
+            f"Portable {logical_backend} payload materialization requires the "
+            f"{logical_backend} runtime."
+        ) from exc
+
+
 def _manifest_fields(
     *,
     logical_backend: str,
@@ -417,6 +528,51 @@ def _entry_field(entry: Any, field_name: str) -> Any:
     if isinstance(entry, Mapping):
         return entry.get(field_name)
     return getattr(entry, field_name, None)
+
+
+def _transport_tensor_to_numpy(tensor: torch.Tensor, entry: Any) -> np.ndarray:
+    """Convert a torch transport tensor to host NumPy storage for a codec."""
+
+    transport = tensor.detach().cpu().contiguous()
+    logical_dtype = str(_entry_field(entry, "logical_dtype") or "")
+    if logical_dtype in {"bfloat16", "jax.numpy.bfloat16"}:
+        return transport.to(torch.float32).numpy()
+    return transport.numpy()
+
+
+def _resolve_jax_device(jax_module: Any, map_location: Any) -> Any | None:
+    """Resolve a JAX device from a user map-location value when possible."""
+
+    if not isinstance(map_location, str):
+        return map_location
+    requested = map_location.lower()
+    try:
+        devices = list(jax_module.devices())
+    except RuntimeError:
+        return None
+    for device in devices:
+        device_text = str(device).lower()
+        platform = str(getattr(device, "platform", "")).lower()
+        if requested in {device_text, platform} or requested in device_text:
+            return device
+    return None
+
+
+def _resolve_tinygrad_dtype(dtypes_module: Any, dtype_name: str) -> Any | None:
+    """Resolve a tinygrad dtype object from a manifest dtype string."""
+
+    candidate_names = [dtype_name]
+    if dtype_name.startswith("dtypes."):
+        candidate_names.append(dtype_name.split(".", maxsplit=1)[1])
+    if dtype_name.startswith("tinygrad.dtype."):
+        candidate_names.append(dtype_name.rsplit(".", maxsplit=1)[-1])
+    if dtype_name == "float":
+        candidate_names.append("float32")
+    for candidate_name in candidate_names:
+        dtype = getattr(dtypes_module, candidate_name, None)
+        if dtype is not None:
+            return dtype
+    return None
 
 
 def _device_string(value: Any) -> str:

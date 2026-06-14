@@ -20,7 +20,9 @@ from . import BlobRef, FieldPolicy, TorchLensIOError
 from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, sha256_of_file
+from .payload_codec import materialize_transport_tensor
 from .paths import resolve_bundle_blob_path
+from ..backends import BackendRuntimeCompatibilityError
 from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
 
@@ -43,6 +45,7 @@ _LEGACY_CAPTURE_TRACE_KEYS = {
     "_in_exhaustive_pass",
     "_pending_live_fire_records",
 }
+_TORCH_BACKEND_NAME = "torch"
 
 
 def rehydrate_trace(
@@ -86,6 +89,7 @@ def rehydrate_trace(
 
     trace = Trace.__new__(Trace)
     trace.__setstate__(state_for_load)
+    _apply_manifest_backend(trace, manifest)
     _drop_capture_only_trace_fields(trace)
 
     if module_accessor_state is not None:
@@ -97,6 +101,10 @@ def rehydrate_trace(
         )
 
     manifest_index = _build_manifest_index(manifest)
+    audit_only_payloads = _manifest_uses_audit_only_payloads(manifest)
+    payload_statuses: list[str] = []
+    if audit_only_payloads:
+        payload_statuses.append("audit_only")
     _rehydrate_object(
         trace,
         manifest_index=manifest_index,
@@ -104,8 +112,11 @@ def rehydrate_trace(
         lazy=lazy,
         map_location=map_location,
         materialize_nested=materialize_nested,
+        audit_only_payloads=audit_only_payloads,
+        payload_statuses=payload_statuses,
         seen=set(),
     )
+    _set_payload_load_status(trace, manifest_index, payload_statuses)
     _restore_trace_state_order(trace, portable_key_order)
     return trace
 
@@ -208,6 +219,17 @@ def _restore_trace_state_order(trace: Trace, portable_key_order: tuple[str, ...]
     state.update(ordered_state)
 
 
+def _apply_manifest_backend(trace: Trace, manifest: Manifest | dict[str, Any]) -> None:
+    """Prefer schema-v2 manifest backend metadata over legacy scrubbed state."""
+
+    if isinstance(manifest, Manifest):
+        backend_name = getattr(manifest, "_tl_logical_backend", None)
+    else:
+        backend_name = manifest.get("backend")
+    if isinstance(backend_name, str) and backend_name:
+        setattr(trace, "backend", backend_name)
+
+
 def _build_manifest_index(
     manifest: Manifest | dict[str, Any],
 ) -> Mapping[str, dict[str, Any] | TensorEntry]:
@@ -236,6 +258,8 @@ def _rehydrate_object(
     lazy: bool,
     map_location: str | torch.device,
     materialize_nested: bool,
+    audit_only_payloads: bool,
+    payload_statuses: list[str],
     seen: set[int],
 ) -> Any:
     """Walk a rehydrated object graph and materialize blob refs in place."""
@@ -251,6 +275,8 @@ def _rehydrate_object(
                 lazy=lazy,
                 map_location=map_location,
                 materialize_nested=materialize_nested,
+                audit_only_payloads=audit_only_payloads,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
             for item in value
@@ -264,6 +290,8 @@ def _rehydrate_object(
                 lazy=lazy,
                 map_location=map_location,
                 materialize_nested=materialize_nested,
+                audit_only_payloads=audit_only_payloads,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
         return value
@@ -276,6 +304,8 @@ def _rehydrate_object(
                 lazy=lazy,
                 map_location=map_location,
                 materialize_nested=materialize_nested,
+                audit_only_payloads=audit_only_payloads,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
         return value
@@ -288,6 +318,8 @@ def _rehydrate_object(
                 lazy=lazy,
                 map_location=map_location,
                 materialize_nested=materialize_nested,
+                audit_only_payloads=audit_only_payloads,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
         return value
@@ -300,6 +332,8 @@ def _rehydrate_object(
                 lazy=lazy,
                 map_location=map_location,
                 materialize_nested=materialize_nested,
+                audit_only_payloads=audit_only_payloads,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
         return value
@@ -312,6 +346,8 @@ def _rehydrate_object(
                 lazy=lazy,
                 map_location=map_location,
                 materialize_nested=materialize_nested,
+                audit_only_payloads=audit_only_payloads,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
             for item in value
@@ -334,6 +370,9 @@ def _rehydrate_object(
             if isinstance(field_value, BlobRef):
                 ref_field_name = _lazy_ref_field_name(field_name)
                 if ref_field_name is not None:
+                    if audit_only_payloads:
+                        _assign_rehydrated_field(value, field_name, None)
+                        continue
                     tensor_ref = _build_lazy_tensor_ref(
                         field_value,
                         manifest_index,
@@ -345,26 +384,31 @@ def _rehydrate_object(
                     if lazy:
                         _assign_rehydrated_field(value, field_name, None)
                     else:
-                        _assign_rehydrated_field(
-                            value,
-                            field_name,
-                            _materialize_blob_ref(
+                        try:
+                            materialized = _materialize_blob_ref(
                                 field_value,
                                 manifest_index,
                                 bundle_path,
                                 map_location,
-                            ),
-                        )
+                            )
+                        except BackendRuntimeCompatibilityError:
+                            payload_statuses.append("audit_only_missing_runtime")
+                            materialized = None
+                        _assign_rehydrated_field(value, field_name, materialized)
                 elif not lazy or field_name in {"transformed_out", "transformed_grad"}:
-                    _assign_rehydrated_field(
-                        value,
-                        field_name,
-                        _materialize_blob_ref(
+                    if audit_only_payloads:
+                        _assign_rehydrated_field(value, field_name, None)
+                        continue
+                    try:
+                        materialized = _materialize_blob_ref(
                             field_value, manifest_index, bundle_path, map_location
-                        ),
-                    )
+                        )
+                    except BackendRuntimeCompatibilityError:
+                        payload_statuses.append("audit_only_missing_runtime")
+                        materialized = None
+                    _assign_rehydrated_field(value, field_name, materialized)
         elif policy == FieldPolicy.BLOB_RECURSIVE:
-            if lazy and not materialize_nested:
+            if audit_only_payloads or (lazy and not materialize_nested):
                 continue
             _assign_rehydrated_field(
                 value,
@@ -374,6 +418,7 @@ def _rehydrate_object(
                     manifest_index=manifest_index,
                     bundle_path=bundle_path,
                     map_location=map_location,
+                    payload_statuses=payload_statuses,
                 ),
             )
         elif policy == FieldPolicy.KEEP:
@@ -387,6 +432,8 @@ def _rehydrate_object(
                     lazy=lazy,
                     map_location=map_location,
                     materialize_nested=materialize_nested,
+                    audit_only_payloads=audit_only_payloads,
+                    payload_statuses=payload_statuses,
                     seen=seen,
                 ),
             )
@@ -419,11 +466,16 @@ def _materialize_recursive_blob_refs(
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
     map_location: str | torch.device,
+    payload_statuses: list[str],
 ) -> Any:
     """Materialize ``BlobRef`` objects inside nested containers and portable objects."""
 
     if isinstance(value, BlobRef):
-        return _materialize_blob_ref(value, manifest_index, bundle_path, map_location)
+        try:
+            return _materialize_blob_ref(value, manifest_index, bundle_path, map_location)
+        except BackendRuntimeCompatibilityError:
+            payload_statuses.append("audit_only_missing_runtime")
+            return value
     if isinstance(value, list):
         return [
             _materialize_recursive_blob_refs(
@@ -431,6 +483,7 @@ def _materialize_recursive_blob_refs(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
             )
             for item in value
         ]
@@ -441,6 +494,7 @@ def _materialize_recursive_blob_refs(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
             )
             for item in value
         )
@@ -453,6 +507,7 @@ def _materialize_recursive_blob_refs(
                     manifest_index=manifest_index,
                     bundle_path=bundle_path,
                     map_location=map_location,
+                    payload_statuses=payload_statuses,
                 ),
             )
             for key, item in value.items()
@@ -465,6 +520,7 @@ def _materialize_recursive_blob_refs(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
             )
         return materialized
     if isinstance(value, dict):
@@ -474,6 +530,7 @@ def _materialize_recursive_blob_refs(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
             )
             for key, item in value.items()
         }
@@ -484,6 +541,7 @@ def _materialize_recursive_blob_refs(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
             )
             for item in value
         }
@@ -500,6 +558,7 @@ def _materialize_recursive_blob_refs(
                     manifest_index=manifest_index,
                     bundle_path=bundle_path,
                     map_location=map_location,
+                    payload_statuses=payload_statuses,
                 ),
             )
         return value
@@ -511,8 +570,8 @@ def _materialize_blob_ref(
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
     map_location: str | torch.device,
-) -> torch.Tensor:
-    """Load one tensor blob from disk using safetensors.
+) -> Any:
+    """Load one payload blob from disk using safetensors and its codec.
 
     Parameters
     ----------
@@ -527,8 +586,8 @@ def _materialize_blob_ref(
 
     Returns
     -------
-    torch.Tensor
-        Materialized tensor.
+    Any
+        Materialized logical payload.
     """
 
     tensor_ref = _build_lazy_tensor_ref(
@@ -559,7 +618,8 @@ def _materialize_blob_ref(
             f"blob at {blob_path} sha256 mismatch; expected {expected_sha256} got {observed_sha256}"
         )
 
-    return _load_safetensors_tensor(blob_path, map_location)
+    tensor = _load_safetensors_tensor(blob_path, map_location, entry)
+    return materialize_transport_tensor(tensor, entry, map_location=map_location)
 
 
 def _build_lazy_tensor_ref(
@@ -601,6 +661,10 @@ def _build_lazy_tensor_ref(
         relative_path=entry.relative_path,
         kind=kind,
         expected_sha256=entry.sha256,
+        logical_backend=entry.logical_backend or "torch",
+        codec=entry.codec or "torch_safetensors_v1",
+        logical_dtype=entry.logical_dtype,
+        logical_device=entry.logical_device,
     )
 
 
@@ -722,6 +786,7 @@ def _normalize_map_location(map_location: str | torch.device) -> str:
 def _load_safetensors_tensor(
     blob_path: Path,
     map_location: str | torch.device,
+    entry: TensorEntry | dict[str, Any],
 ) -> torch.Tensor:
     """Load a single tensor from one safetensors blob.
 
@@ -731,6 +796,8 @@ def _load_safetensors_tensor(
         Blob file path to decode.
     map_location:
         Target device for the decoded tensor.
+    entry:
+        Manifest entry used to choose the physical decode device.
 
     Returns
     -------
@@ -743,8 +810,12 @@ def _load_safetensors_tensor(
         If the blob does not contain exactly one tensor.
     """
 
+    logical_backend = _entry_logical_backend(entry)
+    device = (
+        _normalize_map_location(map_location) if logical_backend == _TORCH_BACKEND_NAME else "cpu"
+    )
     try:
-        tensor_map = load_file(blob_path, device=_normalize_map_location(map_location))
+        tensor_map = load_file(blob_path, device=device)
     except ImportError as exc:
         raise TorchLensIOError(
             "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
@@ -755,6 +826,50 @@ def _load_safetensors_tensor(
     if len(tensor_map) != 1:
         raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
     return next(iter(tensor_map.values()))
+
+
+def _set_payload_load_status(
+    trace: Trace,
+    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
+    payload_statuses: list[str],
+) -> None:
+    """Attach public payload load status metadata to a rehydrated trace."""
+
+    if "audit_only_missing_runtime" in payload_statuses:
+        setattr(trace, "payload_load_status", "audit_only_missing_runtime")
+        return
+    if "audit_only" in payload_statuses:
+        setattr(trace, "payload_load_status", "audit_only")
+        return
+    if any(
+        _entry_logical_backend(entry) != _TORCH_BACKEND_NAME for entry in manifest_index.values()
+    ):
+        setattr(trace, "payload_load_status", "loaded_device_best_effort")
+        return
+    setattr(trace, "payload_load_status", "loaded")
+
+
+def _manifest_uses_audit_only_payloads(manifest: Manifest | dict[str, Any]) -> bool:
+    """Return whether the manifest declares metadata-only payload loading."""
+
+    if isinstance(manifest, Manifest):
+        backend_name = getattr(manifest, "_tl_logical_backend", "torch")
+        materializes = getattr(manifest, "_tl_payload_materialization_supported", True)
+        return backend_name != _TORCH_BACKEND_NAME and not bool(materializes)
+    if manifest.get("backend", _TORCH_BACKEND_NAME) == _TORCH_BACKEND_NAME:
+        return False
+    payload_policy = manifest.get("payload_policy", {})
+    if not isinstance(payload_policy, dict):
+        return False
+    return not bool(payload_policy.get("materialization_supported", False))
+
+
+def _entry_logical_backend(entry: dict[str, Any] | TensorEntry) -> str:
+    """Return the manifest entry logical backend, defaulting legacy entries to torch."""
+
+    if isinstance(entry, TensorEntry):
+        return entry.logical_backend or _TORCH_BACKEND_NAME
+    return str(entry.get("logical_backend") or _TORCH_BACKEND_NAME)
 
 
 def rehydrate_nested(
@@ -802,13 +917,17 @@ def rehydrate_nested(
 
     manifest = Manifest.read(manifest_path)
     manifest_index = _build_manifest_index(manifest)
+    payload_statuses: list[str] = []
     _rehydrate_nested_object(
         trace,
         manifest_index=manifest_index,
         bundle_path=bundle_path,
         map_location=map_location,
+        payload_statuses=payload_statuses,
         seen=set(),
     )
+    if payload_statuses:
+        _set_payload_load_status(trace, manifest_index, payload_statuses)
 
 
 def _rehydrate_nested_object(
@@ -817,6 +936,7 @@ def _rehydrate_nested_object(
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
     bundle_path: Path,
     map_location: str | torch.device,
+    payload_statuses: list[str],
     seen: set[int],
 ) -> Any:
     """Walk an object graph and materialize only nested ``BlobRef`` fields.
@@ -849,6 +969,7 @@ def _rehydrate_nested_object(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
             for item in value
@@ -860,6 +981,7 @@ def _rehydrate_nested_object(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
         return value
@@ -870,6 +992,7 @@ def _rehydrate_nested_object(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
         return value
@@ -880,6 +1003,7 @@ def _rehydrate_nested_object(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
         return value
@@ -890,6 +1014,7 @@ def _rehydrate_nested_object(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
         return value
@@ -900,6 +1025,7 @@ def _rehydrate_nested_object(
                 manifest_index=manifest_index,
                 bundle_path=bundle_path,
                 map_location=map_location,
+                payload_statuses=payload_statuses,
                 seen=seen,
             )
             for item in value
@@ -927,6 +1053,7 @@ def _rehydrate_nested_object(
                     manifest_index=manifest_index,
                     bundle_path=bundle_path,
                     map_location=map_location,
+                    payload_statuses=payload_statuses,
                 ),
             )
         elif policy == FieldPolicy.KEEP:
@@ -938,6 +1065,7 @@ def _rehydrate_nested_object(
                     manifest_index=manifest_index,
                     bundle_path=bundle_path,
                     map_location=map_location,
+                    payload_statuses=payload_statuses,
                     seen=seen,
                 ),
             )

@@ -11,7 +11,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.manifest import Manifest
 from torchlens.backends import BackendPayloadUnsupportedError
 from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions
@@ -409,26 +408,48 @@ def test_schema_v2_non_torch_audit_manifest_validates(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_schema_v2_non_torch_load_refuses_before_torch_manifest_parse(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Non-torch schema v2 traces dispatch before torch-shaped manifest parsing."""
+def test_schema_v2_non_torch_audit_loads_metadata(tmp_path: Path) -> None:
+    """Non-torch schema v2 audit traces load metadata without payloads."""
 
     path = tmp_path / "mlx_audit_load.tlspec"
     _captured_log().save(path)
     _write_manifest(path, _mlx_schema_v2_manifest(path))
 
-    def _fail_from_dict(cls: type[Manifest], data: dict[str, Any]) -> Manifest:
-        """Fail if the loader takes the legacy torch manifest path."""
+    loaded = tl.load(path)
 
-        del cls
-        del data
-        raise AssertionError("Manifest.from_dict should not run for non-torch schema v2")
+    assert isinstance(loaded, tl.Trace)
+    assert loaded.backend == "mlx"
+    assert getattr(loaded, "payload_load_status") == "audit_only"
+    saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    assert saved_ops
+    assert all(op.out is None for op in saved_ops)
 
-    monkeypatch.setattr(Manifest, "from_dict", classmethod(_fail_from_dict))
 
-    with pytest.raises(BackendPayloadUnsupportedError, match="audit-only"):
+@pytest.mark.smoke
+def test_schema_v2_materialized_unknown_codec_fails_closed(tmp_path: Path) -> None:
+    """Materialized schema-v2 manifests with unknown codecs fail before loading."""
+
+    path = tmp_path / "jax_unknown_codec.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_schema_v2_manifest(path)
+    manifest["backend"] = "jax"
+    manifest["backend_runtime"]["name"] = "jax"
+    manifest["payload_policy"] = {
+        "policy": "array_payloads",
+        "materialization_supported": True,
+        "payload_kinds": ["out"],
+    }
+    manifest["body_index"][0].update(
+        {
+            "logical_backend": "jax",
+            "codec": "unknown_codec_v1",
+            "logical_dtype": "float32",
+            "logical_device": "cpu",
+        }
+    )
+    _write_manifest(path, manifest)
+
+    with pytest.raises(BackendPayloadUnsupportedError, match="unknown_codec_v1"):
         tl.load(path)
 
 
