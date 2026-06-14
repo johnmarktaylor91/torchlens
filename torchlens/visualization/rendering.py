@@ -69,7 +69,7 @@ from .._literals import (
     VisRendererLiteral,
 )
 from ..data_classes.internal_types import VisualizationOverrides
-from ..utils.display import in_notebook, int_list_to_compact_str, _vprint
+from ..utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
 from ..data_classes.op import Op
 from ..data_classes.layer import Layer
 from ..viz import batch_summary
@@ -960,26 +960,27 @@ def draw(
     if engine == "rank":
         from ._rank_layout_internal.layout import render_rank_layout
 
-        result = render_rank_layout(
-            self,
-            entries_to_plot,
-            vis_mode,
-            vis_call_depth,
-            show_buffer_layers == "always",
-            overrides,
-            node_mode,
-            intervention_node_spec_fn,
-            collapsed_node_spec_fn,
-            collapse_fn,
-            skip_fn,
-            edge_map,
-            skipped_labels,
-            vis_outpath,
-            vis_fileformat,
-            vis_save_only,
-            graph_caption,
-            rankdir,
-        )
+        with _timed_phase(self, "render:graphviz:forward"):
+            result = render_rank_layout(
+                self,
+                entries_to_plot,
+                vis_mode,
+                vis_call_depth,
+                show_buffer_layers == "always",
+                overrides,
+                node_mode,
+                intervention_node_spec_fn,
+                collapsed_node_spec_fn,
+                collapse_fn,
+                skip_fn,
+                edge_map,
+                skipped_labels,
+                vis_outpath,
+                vis_fileformat,
+                vis_save_only,
+                graph_caption,
+                rankdir,
+            )
         _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
         return result
 
@@ -1136,40 +1137,41 @@ def draw(
     source_path = dot.save(vis_outpath)
     with open(source_path, "w", encoding="utf-8") as source_file:
         source_file.write(final_source)
-    try:
-        # dot engine (default for local-topology graphs)
-        rendered_path = f"{vis_outpath}.{vis_fileformat}"
-        if compose_code_panel:
-            _write_composed_code_panel(
-                dot.engine,
+    with _timed_phase(self, "render:graphviz:forward"):
+        try:
+            # dot engine (default for local-topology graphs)
+            rendered_path = f"{vis_outpath}.{vis_fileformat}"
+            if compose_code_panel:
+                _write_composed_code_panel(
+                    dot.engine,
+                    source_path,
+                    cast(str, source_text),
+                    rendered_path,
+                    vis_fileformat,
+                    _RENDER_TIMEOUT,
+                )
+            else:
+                cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+                subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+            _validate_rendered_output(rendered_path, source_path, "forward graph")
+            if not vis_save_only:
+                _view_rendered_file(rendered_path)
+            _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
+        except subprocess.TimeoutExpired as e:
+            _raise_graphviz_timeout(
+                "forward graph",
+                f"{self.num_tensors} nodes",
                 source_path,
-                cast(str, source_text),
-                rendered_path,
-                vis_fileformat,
                 _RENDER_TIMEOUT,
+                e,
             )
-        else:
-            cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
-            subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
-        _validate_rendered_output(rendered_path, source_path, "forward graph")
-        if not vis_save_only:
-            _view_rendered_file(rendered_path)
-        _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
-    except subprocess.TimeoutExpired as e:
-        _raise_graphviz_timeout(
-            "forward graph",
-            f"{self.num_tensors} nodes",
-            source_path,
-            _RENDER_TIMEOUT,
-            e,
-        )
-    except subprocess.CalledProcessError as e:
-        _raise_graphviz_failure("forward graph", source_path, e)
-    finally:
-        import os
+        except subprocess.CalledProcessError as e:
+            _raise_graphviz_failure("forward graph", source_path, e)
+        finally:
+            import os
 
-        if os.path.exists(source_path):
-            os.remove(source_path)
+            if os.path.exists(source_path):
+                os.remove(source_path)
     if return_graph:
         return dot
     return final_source
@@ -1459,39 +1461,40 @@ def render_backward_graph(
 
     _RENDER_TIMEOUT = 120
     source_path = dot.save(vis_outpath)
-    try:
-        rendered_path = f"{vis_outpath}.{vis_fileformat}"
-        if compose_code_panel:
-            _write_composed_code_panel(
-                dot.engine,
+    with _timed_phase(self, "render:graphviz:backward"):
+        try:
+            rendered_path = f"{vis_outpath}.{vis_fileformat}"
+            if compose_code_panel:
+                _write_composed_code_panel(
+                    dot.engine,
+                    source_path,
+                    cast(str, source_text),
+                    rendered_path,
+                    vis_fileformat,
+                    _RENDER_TIMEOUT,
+                )
+            else:
+                cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+                subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+            _validate_rendered_output(rendered_path, source_path, "backward graph")
+            if not vis_save_only:
+                _view_rendered_file(rendered_path)
+            _vprint(self, f"Backward graph saved to {vis_outpath}.{vis_fileformat}")
+        except subprocess.TimeoutExpired as e:
+            _raise_graphviz_timeout(
+                "backward graph",
+                f"{self.num_grad_fns} grad_fn_handle nodes",
                 source_path,
-                cast(str, source_text),
-                rendered_path,
-                vis_fileformat,
                 _RENDER_TIMEOUT,
+                e,
             )
-        else:
-            cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
-            subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
-        _validate_rendered_output(rendered_path, source_path, "backward graph")
-        if not vis_save_only:
-            _view_rendered_file(rendered_path)
-        _vprint(self, f"Backward graph saved to {vis_outpath}.{vis_fileformat}")
-    except subprocess.TimeoutExpired as e:
-        _raise_graphviz_timeout(
-            "backward graph",
-            f"{self.num_grad_fns} grad_fn_handle nodes",
-            source_path,
-            _RENDER_TIMEOUT,
-            e,
-        )
-    except subprocess.CalledProcessError as e:
-        _raise_graphviz_failure("backward graph", source_path, e)
-    finally:
-        import os
+        except subprocess.CalledProcessError as e:
+            _raise_graphviz_failure("backward graph", source_path, e)
+        finally:
+            import os
 
-        if os.path.exists(source_path):
-            os.remove(source_path)
+            if os.path.exists(source_path):
+                os.remove(source_path)
     return cast(str, dot.source)
 
 
@@ -1647,27 +1650,28 @@ def render_combined_graph(
 
     _RENDER_TIMEOUT = 120
     source_path = dot.save(vis_outpath)
-    try:
-        rendered_path = f"{vis_outpath}.{vis_fileformat}"
-        cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
-        subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
-        _validate_rendered_output(rendered_path, source_path, "combined graph")
-        if not vis_save_only:
-            _view_rendered_file(rendered_path)
-        _vprint(self, f"Combined graph saved to {vis_outpath}.{vis_fileformat}")
-    except subprocess.TimeoutExpired as e:
-        _raise_graphviz_timeout(
-            "combined graph",
-            f"{self.num_tensors + self.num_grad_fns} nodes",
-            source_path,
-            _RENDER_TIMEOUT,
-            e,
-        )
-    except subprocess.CalledProcessError as e:
-        _raise_graphviz_failure("combined graph", source_path, e)
-    finally:
-        if os.path.exists(source_path):
-            os.remove(source_path)
+    with _timed_phase(self, "render:graphviz:combined"):
+        try:
+            rendered_path = f"{vis_outpath}.{vis_fileformat}"
+            cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
+            subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+            _validate_rendered_output(rendered_path, source_path, "combined graph")
+            if not vis_save_only:
+                _view_rendered_file(rendered_path)
+            _vprint(self, f"Combined graph saved to {vis_outpath}.{vis_fileformat}")
+        except subprocess.TimeoutExpired as e:
+            _raise_graphviz_timeout(
+                "combined graph",
+                f"{self.num_tensors + self.num_grad_fns} nodes",
+                source_path,
+                _RENDER_TIMEOUT,
+                e,
+            )
+        except subprocess.CalledProcessError as e:
+            _raise_graphviz_failure("combined graph", source_path, e)
+        finally:
+            if os.path.exists(source_path):
+                os.remove(source_path)
     return cast(str, dot.source)
 
 

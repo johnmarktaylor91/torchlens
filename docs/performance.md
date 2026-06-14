@@ -82,6 +82,14 @@ assert gelu_site.out.shape == (2, 4)
 | Gradients | `save_grads=False` unless needed | Backward-ready captures preserve more state and hooks. |
 | Visualization | Call `trace.draw()` after capture, not during hot loops | Rendering is separate from activation collection. |
 
+### Phase timing buckets
+
+`trace._phase_timings` groups wall-clock timings by stable bucket names. Capture buckets include
+`ctx_build:*`, `dispatch:*`, `clone_save:*`, and `object_construction:op`. Postprocess buckets use
+`postprocess:Step N: ...`, matching the numbered postprocess pipeline. Graphviz rendering records
+`render:graphviz:forward`, `render:graphviz:backward`, or `render:graphviz:combined` when those
+render entrypoints run.
+
 ## Windowed and disk-backed capture
 
 ```python
