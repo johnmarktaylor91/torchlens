@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+import pytest
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
@@ -120,6 +121,104 @@ class SquareTarget(nn.Module):
         return inputs.square().sum(dim=-1, keepdim=True)
 
 
+class TwoInputLinear(nn.Module):
+    """Two-input linear model for multi-leaf attribution tests."""
+
+    def forward(self, first: Tensor, second: Tensor) -> Tensor:
+        """Combine two input tensors into two logits.
+
+        Parameters
+        ----------
+        first
+            First input tensor with shape ``N, 2``.
+        second
+            Second input tensor with shape ``N, 2``.
+
+        Returns
+        -------
+        Tensor
+            Output tensor with shape ``N, 2``.
+        """
+
+        first_logit = (2.0 * first[..., 0] - 3.0 * second[..., 0]).unsqueeze(-1)
+        second_logit = (first[..., 1] + 4.0 * second[..., 1]).unsqueeze(-1)
+        return torch.cat((first_logit, second_logit), dim=-1)
+
+
+class TwoInputSmooth(nn.Module):
+    """Smooth two-input scalar model for Integrated Gradients completeness."""
+
+    def forward(self, first: Tensor, second: Tensor) -> Tensor:
+        """Return a smooth scalar-like output from two tensors.
+
+        Parameters
+        ----------
+        first
+            First input tensor.
+        second
+            Second input tensor.
+
+        Returns
+        -------
+        Tensor
+            Output tensor with shape ``1, 1``.
+        """
+
+        value = (
+            torch.nn.functional.softplus(first + 0.5 * second).sum()
+            + (first * second).sum()
+            + 0.25 * second.square().sum()
+        )
+        return value.reshape(1, 1)
+
+
+class KwargScaleModel(nn.Module):
+    """Model that consumes an attributed tensor keyword argument."""
+
+    def forward(self, inputs: Tensor, *, scale: Tensor, offset: float = 0.0) -> Tensor:
+        """Scale inputs with a tensor kwarg and add a non-attributed offset.
+
+        Parameters
+        ----------
+        inputs
+            Positional input tensor.
+        scale
+            Keyword tensor input.
+        offset
+            Non-tensor keyword offset.
+
+        Returns
+        -------
+        Tensor
+            Output tensor with shape matching ``inputs``.
+        """
+
+        return inputs * scale + offset
+
+
+def _sum_attribution_values(values: object) -> Tensor:
+    """Sum every tensor leaf in an attribution value tree.
+
+    Parameters
+    ----------
+    values
+        Bare tensor or nested attribution values.
+
+    Returns
+    -------
+    Tensor
+        Scalar sum over tensor leaves.
+    """
+
+    if isinstance(values, Tensor):
+        return values.sum()
+    if isinstance(values, tuple | list):
+        return sum(_sum_attribution_values(value) for value in values if value is not None)
+    if isinstance(values, dict):
+        return sum(_sum_attribution_values(value) for value in values.values() if value is not None)
+    return torch.tensor(0.0)
+
+
 def test_saliency_matches_linear_weight_oracle() -> None:
     """Saliency for ``y = W x`` equals the absolute selected row of ``W``."""
 
@@ -211,21 +310,99 @@ def test_smoothgrad_seed_determinism() -> None:
     assert not torch.allclose(first.values, different.values)
 
 
-def test_v1_rejects_multi_input_and_pytree_inputs() -> None:
-    """Tuple and dict inputs raise the v1 unsupported-input error."""
+def test_saliency_supports_two_positional_tensor_inputs() -> None:
+    """Saliency returns one attribution tensor per positional tensor input."""
 
-    model = TinyLinear(torch.tensor([[1.0, 2.0]]))
-    first = torch.ones(1, 2)
-    second = torch.zeros(1, 2)
-    expected = "multi-input / kwarg / pytree inputs unsupported in v1; pass a single tensor"
+    model = TwoInputLinear()
+    first = torch.tensor([[0.5, -1.0]])
+    second = torch.tensor([[2.0, 3.0]])
 
-    for bad_inputs in [(first, second), {"inputs": first}]:
-        try:
-            attribution.saliency(model, bad_inputs, target=0)  # type: ignore[arg-type]
-        except attribution.AttributionError as exc:
-            assert str(exc) == expected
-        else:
-            raise AssertionError("AttributionError was not raised")
+    result = attribution.saliency(model, (first, second), target=0)
+
+    assert isinstance(result.values, tuple)
+    assert len(result.values) == 2
+    first_values, second_values = result.values
+    assert isinstance(first_values, Tensor)
+    assert isinstance(second_values, Tensor)
+    assert first_values.shape == first.shape
+    assert second_values.shape == second.shape
+    torch.testing.assert_close(first_values, torch.tensor([[2.0, 0.0]]))
+    torch.testing.assert_close(second_values, torch.tensor([[3.0, 0.0]]))
+
+
+def test_integrated_gradients_two_input_shapes_and_completeness() -> None:
+    """Multi-input Integrated Gradients satisfies completeness across leaves."""
+
+    model = TwoInputSmooth()
+    first = torch.tensor([[0.5, -0.7]], dtype=torch.float64)
+    second = torch.tensor([[1.2, -0.3]], dtype=torch.float64)
+    first_baseline = torch.tensor([[0.1, -0.2]], dtype=torch.float64)
+    second_baseline = torch.tensor([[0.0, 0.4]], dtype=torch.float64)
+
+    result = attribution.integrated_gradients(
+        model,
+        (first, second),
+        target=lambda output: output.sum(),
+        baseline=(first_baseline, second_baseline),
+        n_steps=512,
+    )
+
+    assert isinstance(result.values, tuple)
+    assert len(result.values) == 2
+    first_values, second_values = result.values
+    assert isinstance(first_values, Tensor)
+    assert isinstance(second_values, Tensor)
+    assert first_values.shape == first.shape
+    assert second_values.shape == second.shape
+    with torch.no_grad():
+        target_delta = model(first, second).sum() - model(first_baseline, second_baseline).sum()
+    attribution_sum = _sum_attribution_values(result.values)
+    residual = (attribution_sum - target_delta).abs()
+
+    assert residual <= 1e-4
+    torch.testing.assert_close(attribution_sum, target_delta, rtol=1e-3, atol=1e-4)
+
+
+def test_input_attribution_supports_tensor_kwargs() -> None:
+    """Tensor keyword arguments are attributed and non-tensors pass through."""
+
+    model = KwargScaleModel()
+    inputs = torch.tensor([[1.0, -2.0]])
+    scale = torch.tensor([[3.0, -4.0]])
+
+    result = attribution.input_x_grad(
+        model,
+        inputs,
+        {"scale": scale, "offset": 1.5},
+        target=lambda output: output.sum(),
+    )
+
+    assert isinstance(result.values, dict)
+    input_values = result.values["inputs"]
+    kwarg_values = result.values["input_kwargs"]
+    assert isinstance(input_values, tuple)
+    assert isinstance(input_values[0], Tensor)
+    assert isinstance(kwarg_values, dict)
+    assert isinstance(kwarg_values["scale"], Tensor)
+    assert kwarg_values["offset"] is None
+    torch.testing.assert_close(input_values[0], inputs * scale)
+    torch.testing.assert_close(kwarg_values["scale"], inputs * scale)
+
+
+def test_integrated_gradients_rejects_mismatched_baseline_structure() -> None:
+    """Structured baselines must mirror attributed input leaves."""
+
+    model = TwoInputLinear()
+    first = torch.tensor([[0.5, -1.0]])
+    second = torch.tensor([[2.0, 3.0]])
+
+    with pytest.raises(attribution.AttributionError, match="baseline must mirror"):
+        attribution.integrated_gradients(
+            model,
+            (first, second),
+            target=0,
+            baseline=(torch.zeros_like(first),),
+        )
 
 
 def test_int_and_callable_targets_produce_valid_attributions() -> None:

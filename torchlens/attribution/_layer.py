@@ -14,12 +14,15 @@ from torch.utils.hooks import RemovableHandle
 from torchlens.attribution._core import (
     AttributionError,
     AttributionResult,
+    InputKwargs,
     TargetSpec,
-    _make_input_leaf,
+    _PreparedInputs,
+    _call_model,
+    _make_input_leaves,
+    _normalize_model_inputs,
     _scalarize_output,
     _target_repr,
     _temporarily_eval,
-    _validate_single_tensor_input,
 )
 
 LayerAttributionMethod: TypeAlias = Literal["activation_x_grad", "grad"]
@@ -101,7 +104,7 @@ def _resolve_named_layer(model: Module, layer: str) -> Module:
 
 def _capture_layer_activation(
     model: Module,
-    inputs: Tensor,
+    inputs: _PreparedInputs,
     target: TargetSpec,
     layer: str,
 ) -> tuple[Tensor, Tensor]:
@@ -112,7 +115,7 @@ def _capture_layer_activation(
     model
         PyTorch module to attribute.
     inputs
-        Validated user input tensor.
+        Normalized attribution inputs.
     target
         Integer class index or callable scalarizer.
     layer
@@ -143,8 +146,8 @@ def _capture_layer_activation(
     hook_handles.append(target_layer.register_forward_hook(_forward_hook))
     try:
         with _temporarily_eval(model):
-            input_leaf = _make_input_leaf(inputs)
-            output = model(input_leaf)
+            input_leaves = _make_input_leaves(inputs)
+            output = _call_model(model, inputs, input_leaves)
             activation = capture.activation
             if activation is None:
                 raise AttributionError(f"layer {layer!r} did not run during the forward pass")
@@ -164,6 +167,31 @@ def _capture_layer_activation(
             handle.remove()
 
     return activation.detach(), gradient.detach()
+
+
+def _spatial_reference_tensor(inputs: _PreparedInputs) -> Tensor:
+    """Return the attributed input tensor used for Grad-CAM spatial upsampling.
+
+    Parameters
+    ----------
+    inputs
+        Normalized attribution inputs.
+
+    Returns
+    -------
+    Tensor
+        First attributed leaf with at least two spatial dimensions.
+
+    Raises
+    ------
+    AttributionError
+        If no attributed tensor leaf has spatial dimensions.
+    """
+
+    for input_tensor in inputs.attributed_leaves:
+        if input_tensor.ndim >= 4:
+            return input_tensor
+    raise AttributionError("grad_cam requires an input tensor with spatial dimensions")
 
 
 def _validate_conv_activation(activation: Tensor, layer: str) -> None:
@@ -191,7 +219,8 @@ def _validate_conv_activation(activation: Tensor, layer: str) -> None:
 
 def grad_cam(
     model: Module,
-    inputs: Tensor,
+    inputs: Any,
+    input_kwargs: InputKwargs = None,
     *,
     target: TargetSpec,
     layer: str,
@@ -204,8 +233,10 @@ def grad_cam(
     model
         PyTorch module to attribute.
     inputs
-        Single differentiable tensor positional input. Multi-input and pytree
-        inputs are unsupported in v1.
+        Bare tensor for v1 behavior, or tuple/list of positional model arguments.
+        Floating-point or complex tensor leaves are threaded through the model call.
+    input_kwargs
+        Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
         selected values, or callable ``output -> scalar tensor``.
@@ -221,11 +252,10 @@ def grad_cam(
         ``N, 1, Hin, Win``.
     """
 
-    input_tensor = _validate_single_tensor_input(inputs)
-    if input_tensor.ndim < 4:
-        raise AttributionError("grad_cam requires an input tensor with spatial dimensions")
+    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    spatial_reference = _spatial_reference_tensor(prepared_inputs)
 
-    activation, gradient = _capture_layer_activation(model, input_tensor, target, layer)
+    activation, gradient = _capture_layer_activation(model, prepared_inputs, target, layer)
     _validate_conv_activation(activation, layer)
     alpha = gradient.mean(dim=(2, 3), keepdim=True)
     cam = (alpha * activation).sum(dim=1, keepdim=True)
@@ -233,7 +263,7 @@ def grad_cam(
         cam = torch.relu(cam)
     upsampled_cam = F.interpolate(
         cam,
-        size=input_tensor.shape[-2:],
+        size=spatial_reference.shape[-2:],
         mode="bilinear",
         align_corners=False,
     )
@@ -247,7 +277,8 @@ def grad_cam(
 
 def layer_attribution(
     model: Module,
-    inputs: Tensor,
+    inputs: Any,
+    input_kwargs: InputKwargs = None,
     *,
     target: TargetSpec,
     layer: str,
@@ -260,8 +291,10 @@ def layer_attribution(
     model
         PyTorch module to attribute.
     inputs
-        Single differentiable tensor positional input. Multi-input and pytree
-        inputs are unsupported in v1.
+        Bare tensor for v1 behavior, or tuple/list of positional model arguments.
+        Floating-point or complex tensor leaves are threaded through the model call.
+    input_kwargs
+        Optional keyword arguments for ``model``.
     target
         Integer class index selecting ``output[..., target]`` and summing the
         selected values, or callable ``output -> scalar tensor``.
@@ -285,8 +318,8 @@ def layer_attribution(
     if method not in ("activation_x_grad", "grad"):
         raise AttributionError("method must be 'activation_x_grad' or 'grad'")
 
-    input_tensor = _validate_single_tensor_input(inputs)
-    activation, gradient = _capture_layer_activation(model, input_tensor, target, layer)
+    prepared_inputs = _normalize_model_inputs(inputs, input_kwargs)
+    activation, gradient = _capture_layer_activation(model, prepared_inputs, target, layer)
     if method == "activation_x_grad":
         values = activation * gradient
     else:

@@ -54,6 +54,57 @@ class TinyCnn(nn.Module):
         return self.classifier(pooled)
 
 
+class MultiInputCnn(nn.Module):
+    """CNN that accepts multiple tensor inputs."""
+
+    def __init__(self) -> None:
+        """Initialize deterministic convolutional and linear layers."""
+
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 2, kernel_size=3, padding=1, bias=False),
+            nn.ReLU(),
+        )
+        self.classifier = nn.Linear(2, 2, bias=False)
+        with torch.no_grad():
+            conv = self.features[0]
+            assert isinstance(conv, nn.Conv2d)
+            conv.weight.copy_(
+                torch.tensor(
+                    [
+                        [[[0.10, 0.20, 0.10], [0.20, 0.40, 0.20], [0.10, 0.20, 0.10]]],
+                        [[[0.00, -0.15, 0.00], [-0.15, 0.30, -0.15], [0.00, -0.15, 0.00]]],
+                    ]
+                )
+            )
+            self.classifier.weight.copy_(torch.tensor([[0.50, -0.25], [-0.10, 0.75]]))
+
+    def forward(self, image: Tensor, residual: Tensor, *, gain: Tensor | None = None) -> Tensor:
+        """Run the CNN on combined positional and keyword tensor inputs.
+
+        Parameters
+        ----------
+        image
+            Primary image tensor with shape ``N, 1, H, W``.
+        residual
+            Residual image tensor with shape ``N, 1, H, W``.
+        gain
+            Optional tensor multiplier broadcastable to image shape.
+
+        Returns
+        -------
+        Tensor
+            Class logits with shape ``N, 2``.
+        """
+
+        combined = image + residual
+        if gain is not None:
+            combined = combined * gain
+        features = self.features(combined)
+        pooled = features.mean(dim=(2, 3))
+        return self.classifier(pooled)
+
+
 def test_grad_cam_upsamples_to_input_spatial_size_and_is_finite() -> None:
     """Grad-CAM returns a finite non-negative map at input spatial resolution."""
 
@@ -151,13 +202,36 @@ def test_bad_layer_name_lists_available_options() -> None:
         attribution.grad_cam(model, inputs, target=0, layer="missing")
 
 
-def test_layer_methods_reject_multi_input_scope() -> None:
-    """Layer attribution keeps the v1 single-tensor input contract."""
+def test_grad_cam_supports_multi_input_model_call() -> None:
+    """Grad-CAM threads multiple positional tensors through the model call."""
 
-    model = TinyCnn()
-    first = torch.randn(1, 1, 5, 5)
-    second = torch.randn(1, 1, 5, 5)
-    expected = "multi-input / kwarg / pytree inputs unsupported in v1; pass a single tensor"
+    model = MultiInputCnn()
+    image = torch.randn(1, 1, 5, 5)
+    residual = torch.randn(1, 1, 5, 5)
 
-    with pytest.raises(attribution.AttributionError, match=expected):
-        attribution.layer_attribution(model, (first, second), target=0, layer="features.0")  # type: ignore[arg-type]
+    result = attribution.grad_cam(model, (image, residual), target=0, layer="features.0")
+
+    assert result.method == "grad_cam"
+    assert result.values.shape == (1, 1, 5, 5)
+    assert torch.isfinite(result.values).all()
+
+
+def test_layer_attribution_supports_tensor_kwargs_model_call() -> None:
+    """Layer attribution threads tensor kwargs through the model call."""
+
+    model = MultiInputCnn()
+    image = torch.randn(1, 1, 5, 5)
+    residual = torch.randn(1, 1, 5, 5)
+    gain = torch.full((1, 1, 5, 5), 0.5)
+
+    result = attribution.layer_attribution(
+        model,
+        (image, residual),
+        {"gain": gain},
+        target=1,
+        layer="features.0",
+    )
+
+    assert result.method == "layer_activation_x_grad"
+    assert result.values.shape == (1, 2, 5, 5)
+    assert torch.isfinite(result.values).all()
