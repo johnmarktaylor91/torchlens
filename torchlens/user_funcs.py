@@ -1625,7 +1625,7 @@ def trace(
         | MissingType
     ) = MISSING,
     *,
-    jax_control_flow: Literal["reject", "unroll"] | MissingType = MISSING,
+    jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
     jax_max_control_flow_unroll: int | MissingType = MISSING,
     module_identity_mode: str | None | MissingType = MISSING,
     payload_policy: str | None | MissingType = MISSING,
@@ -1775,8 +1775,8 @@ def trace(
             always populated on ``trace._phase_timings``.
         recipes: Per-trace additive facet recipes captured into the immutable
             registry snapshot for the returned trace.
-        jax_control_flow: Declared JAX control-flow policy. Current non-torch
-            preview phases reject explicit use until control-flow expansion lands.
+        jax_control_flow: Declared JAX control-flow policy. JAX accepts
+            ``"reject"``, default ``"unroll"``, and explicit ``"region"``.
         jax_max_control_flow_unroll: Declared maximum number of JAX
             control-flow body iterations to unroll when that phase lands.
         module_identity_mode: Declared module-mode selection passthrough.
@@ -1954,7 +1954,7 @@ def _trace_torch_model(
     stop_after: Any | None | MissingType = MISSING,
     raise_on_nan: bool | MissingType = MISSING,
     profile: bool | MissingType = MISSING,
-    jax_control_flow: Literal["reject", "unroll"] | MissingType = MISSING,
+    jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
     jax_max_control_flow_unroll: int | MissingType = MISSING,
     module_identity_mode: str | None | MissingType = MISSING,
     payload_policy: str | None | MissingType = MISSING,

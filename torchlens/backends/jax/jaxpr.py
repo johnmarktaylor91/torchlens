@@ -6,7 +6,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Callable, cast
+from typing import Any, Callable, Literal, TypeAlias, cast
 
 from ...ir.events import JaxEquationKind
 from .modules import decode_module_call_scope, decode_module_scope
@@ -116,6 +116,77 @@ class JaxEquationCapture:
 
 
 @dataclass(frozen=True)
+class JaxRegionCapture:
+    """Captured metadata-first JAX region boundary or projection.
+
+    Parameters
+    ----------
+    index
+        Sequential capture index in the common flattened capture order.
+    kind
+        ``"region"`` for the black-box boundary or ``"region_output"`` for one
+        per-output projection.
+    primitive
+        JAX primitive name represented by the region.
+    primitive_obj
+        Primitive object used for seam validation on boundary captures.
+    input_values
+        Concrete boundary inputs. Projection captures store the boundary output.
+    output_values
+        Concrete boundary outputs, or one projection output.
+    params
+        Runtime-only primitive bind parameters.
+    region_metadata
+        Portable metadata summary for annotations.
+    source_path
+        Nested source path through the outer jaxpr.
+    invars
+        String representations of region input variables.
+    outvars
+        String representations of region output variables.
+    input_avals
+        String representations of input abstract values.
+    output_avals
+        String representations of output abstract values.
+    inlined
+        Whether the region came from an accepted nested pure call.
+    module_stack
+        TorchLens module-address stack decoded from JAX source ``name_stack``.
+    module_call_stack
+        TorchLens module call stack decoded from JAX source ``name_stack``.
+    unverified_reason
+        Stable reason code explaining why the region is not per-op replayable.
+    region_index
+        Boundary capture index for projection captures.
+    output_index
+        Boundary output position for projection captures.
+    """
+
+    index: int
+    kind: Literal["region", "region_output"]
+    primitive: str
+    primitive_obj: Any
+    input_values: tuple[Any, ...]
+    output_values: tuple[Any, ...]
+    params: Mapping[str, Any]
+    region_metadata: Mapping[str, Any]
+    source_path: tuple[str, ...]
+    invars: tuple[str, ...]
+    outvars: tuple[str, ...]
+    input_avals: tuple[str | None, ...]
+    output_avals: tuple[str | None, ...]
+    inlined: bool
+    module_stack: tuple[str, ...] = ()
+    module_call_stack: tuple[tuple[str, int], ...] = ()
+    unverified_reason: str = "jax_region_not_per_op_replayable"
+    region_index: int | None = None
+    output_index: int | None = None
+
+
+JaxRuntimeCapture: TypeAlias = JaxEquationCapture | JaxRegionCapture
+
+
+@dataclass(frozen=True)
 class JaxCaptureResult:
     """Concrete result for an interpreted closed jaxpr.
 
@@ -125,6 +196,9 @@ class JaxCaptureResult:
         Flat dynamic jaxpr outputs.
     equations
         Captured primitive equations.
+    captures
+        Common ordered stream containing replayable equations and unverified
+        region boundary/projection captures.
     outvar_key_to_capture_index
         Stable JAX outvar-string keys mapped to flattened capture indexes.
     inlined_call_primitives
@@ -133,6 +207,7 @@ class JaxCaptureResult:
 
     outputs: tuple[Any, ...]
     equations: tuple[JaxEquationCapture, ...]
+    captures: tuple[JaxRuntimeCapture, ...]
     outvar_key_to_capture_index: Mapping[str, int]
     inlined_call_primitives: tuple[str, ...]
 
@@ -228,7 +303,9 @@ def interpret_closed_jaxpr_with_inlining(
     jax_control_flow
         Control-flow handling policy. ``"reject"`` preserves the historical
         nested-primitive error; ``"unroll"`` expands supported control-flow
-        primitives into graph-visible equations.
+        primitives into graph-visible equations with region fallback for
+        over-cap scan/while boundaries; ``"region"`` imports supported
+        scan/while/custom-VJP forward boundaries as regions.
     jax_max_control_flow_unroll
         Maximum supported static unroll length for one control-flow primitive.
     tap_values_by_capture_output
@@ -247,7 +324,7 @@ def interpret_closed_jaxpr_with_inlining(
     from jax.extend import core
 
     _assert_no_rejected_effects(closed_jaxpr)
-    captures: list[JaxEquationCapture] = []
+    captures: list[JaxRuntimeCapture] = []
     inlined_calls: list[str] = []
     tap_values = {} if tap_values_by_capture_output is None else tap_values_by_capture_output
     replacement_values = (
@@ -326,18 +403,52 @@ def interpret_closed_jaxpr_with_inlining(
             if primitive_name == "scan":
                 if jax_control_flow == "reject":
                     raise ValueError(f"unsupported nested primitive: {primitive_name}")
-                outputs = _interpret_scan(
-                    eqn=eqn,
-                    env=env,
-                    core=core,
-                    path=eqn_path,
-                    inlined_depth=inlined_depth,
-                    captures=captures,
-                    interpret_inner=interpret_inner,
-                    jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-                    control_capture_indices=control_capture_indices,
-                    rewrite_outputs=rewrite_outputs,
-                )
+                if jax_control_flow == "region":
+                    outputs = _interpret_region(
+                        eqn=eqn,
+                        env=env,
+                        core=core,
+                        path=eqn_path,
+                        inlined_depth=inlined_depth,
+                        captures=captures,
+                        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                        unverified_reason="scan_region_requested",
+                        inherited_module_stack=inherited_module_stack,
+                        inherited_module_call_stack=inherited_module_call_stack,
+                        rewrite_outputs=rewrite_outputs,
+                    )
+                else:
+                    checkpoint = len(captures)
+                    try:
+                        outputs = _interpret_scan(
+                            eqn=eqn,
+                            env=env,
+                            core=core,
+                            path=eqn_path,
+                            inlined_depth=inlined_depth,
+                            captures=captures,
+                            interpret_inner=interpret_inner,
+                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                            control_capture_indices=control_capture_indices,
+                            rewrite_outputs=rewrite_outputs,
+                        )
+                    except ValueError as exc:
+                        if not _should_region_fallback(primitive_name, exc):
+                            raise
+                        del captures[checkpoint:]
+                        outputs = _interpret_region(
+                            eqn=eqn,
+                            env=env,
+                            core=core,
+                            path=eqn_path,
+                            inlined_depth=inlined_depth,
+                            captures=captures,
+                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                            unverified_reason="scan_length_exceeds_unroll_cap",
+                            inherited_module_stack=inherited_module_stack,
+                            inherited_module_call_stack=inherited_module_call_stack,
+                            rewrite_outputs=rewrite_outputs,
+                        )
                 for var, value in zip(eqn.outvars, outputs):
                     _write_env(env, var, value, core)
                 continue
@@ -360,16 +471,69 @@ def interpret_closed_jaxpr_with_inlining(
             if primitive_name in {"while", "while_loop"}:
                 if jax_control_flow == "reject":
                     raise ValueError(f"unsupported nested primitive: {primitive_name}")
-                outputs = _interpret_while(
+                if jax_control_flow == "region":
+                    outputs = _interpret_region(
+                        eqn=eqn,
+                        env=env,
+                        core=core,
+                        path=eqn_path,
+                        inlined_depth=inlined_depth,
+                        captures=captures,
+                        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                        unverified_reason="while_region_requested",
+                        inherited_module_stack=inherited_module_stack,
+                        inherited_module_call_stack=inherited_module_call_stack,
+                        rewrite_outputs=rewrite_outputs,
+                    )
+                else:
+                    checkpoint = len(captures)
+                    try:
+                        outputs = _interpret_while(
+                            eqn=eqn,
+                            env=env,
+                            core=core,
+                            path=eqn_path,
+                            inlined_depth=inlined_depth,
+                            captures=captures,
+                            interpret_inner=interpret_inner,
+                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                            control_capture_indices=control_capture_indices,
+                        )
+                    except ValueError as exc:
+                        if not _should_region_fallback(primitive_name, exc):
+                            raise
+                        del captures[checkpoint:]
+                        outputs = _interpret_region(
+                            eqn=eqn,
+                            env=env,
+                            core=core,
+                            path=eqn_path,
+                            inlined_depth=inlined_depth,
+                            captures=captures,
+                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                            unverified_reason="while_iteration_count_exceeds_unroll_cap",
+                            inherited_module_stack=inherited_module_stack,
+                            inherited_module_call_stack=inherited_module_call_stack,
+                            rewrite_outputs=rewrite_outputs,
+                        )
+                for var, value in zip(eqn.outvars, outputs):
+                    _write_env(env, var, value, core)
+                continue
+            if primitive_name == "custom_vjp_call":
+                if jax_control_flow == "reject":
+                    raise ValueError(f"unsupported nested primitive: {primitive_name}")
+                outputs = _interpret_region(
                     eqn=eqn,
                     env=env,
                     core=core,
                     path=eqn_path,
                     inlined_depth=inlined_depth,
                     captures=captures,
-                    interpret_inner=interpret_inner,
                     jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-                    control_capture_indices=control_capture_indices,
+                    unverified_reason="custom_vjp_forward_region",
+                    inherited_module_stack=inherited_module_stack,
+                    inherited_module_call_stack=inherited_module_call_stack,
+                    rewrite_outputs=rewrite_outputs,
                 )
                 for var, value in zip(eqn.outvars, outputs):
                     _write_env(env, var, value, core)
@@ -436,17 +600,21 @@ def interpret_closed_jaxpr_with_inlining(
         return tuple(_read_env(env, var, core) for var in inner.jaxpr.outvars)
 
     outputs = interpret_inner(closed_jaxpr, flat_args, ("root",), 0)
-    equations = tuple(captures)
+    ordered_captures = tuple(captures)
+    equations = tuple(
+        capture for capture in ordered_captures if isinstance(capture, JaxEquationCapture)
+    )
     return JaxCaptureResult(
         outputs=outputs,
         equations=equations,
-        outvar_key_to_capture_index=_outvar_key_to_capture_index(equations),
+        captures=ordered_captures,
+        outvar_key_to_capture_index=_outvar_key_to_capture_index(ordered_captures),
         inlined_call_primitives=tuple(inlined_calls),
     )
 
 
 def _outvar_key_to_capture_index(
-    equations: Sequence[JaxEquationCapture],
+    equations: Sequence[JaxRuntimeCapture],
 ) -> dict[str, int]:
     """Return the durable JAX outvar-key to capture-index map.
 
@@ -469,7 +637,7 @@ def _outvar_key_to_capture_index(
 
 
 def _outvar_key(
-    equation: JaxEquationCapture,
+    equation: JaxRuntimeCapture,
     output_index: int,
     outvar: str,
 ) -> str:
@@ -500,7 +668,7 @@ def _interpret_scan(
     core: Any,
     path: tuple[str, ...],
     inlined_depth: int,
-    captures: list[JaxEquationCapture],
+    captures: list[JaxRuntimeCapture],
     interpret_inner: Callable[
         [Any, Sequence[Any], tuple[str, ...], int, tuple[int, ...]], tuple[Any, ...]
     ],
@@ -643,7 +811,7 @@ def _interpret_cond(
     core: Any,
     path: tuple[str, ...],
     inlined_depth: int,
-    captures: list[JaxEquationCapture],
+    captures: list[JaxRuntimeCapture],
     interpret_inner: Callable[
         [Any, Sequence[Any], tuple[str, ...], int, tuple[int, ...]], tuple[Any, ...]
     ],
@@ -722,7 +890,7 @@ def _interpret_while(
     core: Any,
     path: tuple[str, ...],
     inlined_depth: int,
-    captures: list[JaxEquationCapture],
+    captures: list[JaxRuntimeCapture],
     interpret_inner: Callable[
         [Any, Sequence[Any], tuple[str, ...], int, tuple[int, ...]], tuple[Any, ...]
     ],
@@ -847,6 +1015,385 @@ def _interpret_while(
         },
     )
     return tuple(carry)
+
+
+def _interpret_region(
+    *,
+    eqn: Any,
+    env: dict[Any, Any],
+    core: Any,
+    path: tuple[str, ...],
+    inlined_depth: int,
+    captures: list[JaxRuntimeCapture],
+    jax_max_control_flow_unroll: int,
+    unverified_reason: str,
+    inherited_module_stack: tuple[str, ...],
+    inherited_module_call_stack: tuple[tuple[str, int], ...],
+    rewrite_outputs: Callable[[int, tuple[Any, ...]], tuple[Any, ...]],
+) -> tuple[Any, ...]:
+    """Import one supported nested JAX boundary as an unverified region.
+
+    Parameters
+    ----------
+    eqn
+        Outer JAX equation that owns the nested boundary.
+    env
+        Current interpreter environment.
+    core
+        Imported JAX core module.
+    path
+        Source path for the region equation.
+    inlined_depth
+        Current accepted-call inlining depth.
+    captures
+        Mutable common capture list receiving the boundary and projections.
+    jax_max_control_flow_unroll
+        Configured unroll cap, recorded in region metadata.
+    unverified_reason
+        Stable reason for region fallback.
+    inherited_module_stack
+        Module stack inherited from an accepted parent call primitive.
+    inherited_module_call_stack
+        Module call stack inherited from an accepted parent call primitive.
+    rewrite_outputs
+        Replay-only output replacement/tap hook shared with the parent interpreter.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Concrete boundary outputs matching the outer equation's outvars.
+    """
+
+    primitive_name = eqn.primitive.name
+    if not _can_import_region(eqn, core):
+        raise ValueError(f"unsupported nested primitive: {primitive_name}")
+    inputs = tuple(_read_env(env, var, core) for var in eqn.invars)
+    outputs = _execute_region_equation(eqn, inputs)
+    boundary_index = len(captures)
+    outputs = rewrite_outputs(boundary_index, outputs)
+    equation_module_stack = module_stack_from_eqn(eqn) or inherited_module_stack
+    equation_module_call_stack = module_call_stack_from_eqn(eqn) or inherited_module_call_stack
+    metadata = _region_metadata(
+        eqn=eqn,
+        core=core,
+        path=path,
+        input_values=inputs,
+        output_values=outputs,
+        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+        unverified_reason=unverified_reason,
+        module_stack=equation_module_stack,
+        module_call_stack=equation_module_call_stack,
+    )
+    captures.append(
+        JaxRegionCapture(
+            index=boundary_index,
+            kind="region",
+            primitive=primitive_name,
+            primitive_obj=eqn.primitive,
+            input_values=inputs,
+            output_values=outputs,
+            params=eqn.params,
+            region_metadata=metadata,
+            source_path=path,
+            invars=tuple(str(var) for var in eqn.invars),
+            outvars=tuple(str(var) for var in eqn.outvars),
+            input_avals=tuple(_aval_repr(var) for var in eqn.invars),
+            output_avals=tuple(_aval_repr(var) for var in eqn.outvars),
+            inlined=inlined_depth > 0,
+            module_stack=equation_module_stack,
+            module_call_stack=equation_module_call_stack,
+            unverified_reason=unverified_reason,
+        )
+    )
+    for output_index, output in enumerate(outputs):
+        captures.append(
+            JaxRegionCapture(
+                index=len(captures),
+                kind="region_output",
+                primitive=primitive_name,
+                primitive_obj=None,
+                input_values=(output,),
+                output_values=(output,),
+                params={},
+                region_metadata=metadata,
+                source_path=(*path, f"out={output_index}:region_output"),
+                invars=(str(eqn.outvars[output_index]),),
+                outvars=(str(eqn.outvars[output_index]),),
+                input_avals=(_aval_repr(eqn.outvars[output_index]),),
+                output_avals=(_aval_repr(eqn.outvars[output_index]),),
+                inlined=inlined_depth > 0,
+                module_stack=equation_module_stack,
+                module_call_stack=equation_module_call_stack,
+                unverified_reason=unverified_reason,
+                region_index=boundary_index,
+                output_index=output_index,
+            )
+        )
+    return outputs
+
+
+def _execute_region_equation(eqn: Any, inputs: Sequence[Any]) -> tuple[Any, ...]:
+    """Execute one supported region equation as a black box.
+
+    Parameters
+    ----------
+    eqn
+        Supported region-owning JAX equation.
+    inputs
+        Concrete boundary inputs.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Boundary outputs.
+    """
+
+    if eqn.primitive.name == "custom_vjp_call":
+        return _evaluate_closed_jaxpr_no_capture(eqn.params["call_jaxpr"], inputs)
+    result = eqn.primitive.bind(*tuple(inputs), **eqn.params)
+    return tuple(result if eqn.primitive.multiple_results else (result,))
+
+
+def _should_region_fallback(primitive_name: str, exc: ValueError) -> bool:
+    """Return whether an unroll failure should fall back to a JAX region.
+
+    Parameters
+    ----------
+    primitive_name
+        JAX primitive whose unroll attempt failed.
+    exc
+        Unroll exception.
+
+    Returns
+    -------
+    bool
+        True only for scan/while cap failures owned by the region importer.
+    """
+
+    message = str(exc)
+    if primitive_name == "scan":
+        return "lax.scan length exceeds jax_max_control_flow_unroll" in message
+    if primitive_name in {"while", "while_loop"}:
+        return "lax.while_loop iteration count exceeds jax_max_control_flow_unroll" in message
+    return False
+
+
+def _can_import_region(eqn: Any, core: Any) -> bool:
+    """Return whether a nested JAX equation can be imported as a region.
+
+    Parameters
+    ----------
+    eqn
+        Candidate nested-boundary equation.
+    core
+        Imported JAX core module.
+
+    Returns
+    -------
+    bool
+        True when the primitive is in the supported region scope and all nested
+        jaxprs are effect-free and closed-constant-free.
+    """
+
+    primitive_name = eqn.primitive.name
+    if primitive_name not in {"scan", "while", "while_loop", "custom_vjp_call"}:
+        return False
+    if eqn.effects:
+        return False
+    if primitive_name in EFFECT_PRIMITIVES:
+        return False
+    nested_jaxprs = _nested_jaxpr_params(eqn, core)
+    if primitive_name == "custom_vjp_call":
+        call_jaxpr = eqn.params.get("call_jaxpr")
+        if not isinstance(call_jaxpr, core.ClosedJaxpr):
+            return False
+    return all(
+        _closed_jaxpr_is_effect_free_and_const_free(nested, core) for nested in nested_jaxprs
+    )
+
+
+def _region_metadata(
+    *,
+    eqn: Any,
+    core: Any,
+    path: tuple[str, ...],
+    input_values: tuple[Any, ...],
+    output_values: tuple[Any, ...],
+    jax_max_control_flow_unroll: int,
+    unverified_reason: str,
+    module_stack: tuple[str, ...],
+    module_call_stack: tuple[tuple[str, int], ...],
+) -> dict[str, Any]:
+    """Build portable metadata for one JAX region capture.
+
+    Parameters
+    ----------
+    eqn
+        Region-owning JAX equation.
+    core
+        Imported JAX core module.
+    path
+        Source path for the region equation.
+    input_values
+        Concrete boundary inputs.
+    output_values
+        Concrete boundary outputs.
+    jax_max_control_flow_unroll
+        Configured unroll cap.
+    unverified_reason
+        Stable reason for the unverified region.
+    module_stack
+        Decoded owning module stack.
+    module_call_stack
+        Decoded owning module-call stack.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-ish metadata safe for Op annotations.
+    """
+
+    nested_jaxprs = _nested_jaxpr_params(eqn, core)
+    metadata: dict[str, Any] = {
+        "primitive": eqn.primitive.name,
+        "source_path": path,
+        "invars": tuple(str(var) for var in eqn.invars),
+        "outvars": tuple(str(var) for var in eqn.outvars),
+        "input_avals": tuple(_aval_repr(var) for var in eqn.invars),
+        "output_avals": tuple(_aval_repr(var) for var in eqn.outvars),
+        "num_inputs": len(input_values),
+        "num_outputs": len(output_values),
+        "effects": (),
+        "has_closed_consts": False,
+        "param_keys": tuple(sorted(str(key) for key in eqn.params)),
+        "params": _region_sanitized_params(eqn.params),
+        "body_summaries": tuple(
+            _closed_jaxpr_summary(name, nested)
+            for name, nested in _named_region_jaxprs(eqn, nested_jaxprs)
+        ),
+        "module_stack": module_stack,
+        "module_call_stack": module_call_stack,
+        "fallback_threshold": jax_max_control_flow_unroll,
+        "unverified_reason": unverified_reason,
+    }
+    primitive_name = eqn.primitive.name
+    if primitive_name == "scan":
+        metadata.update(
+            {
+                "length": int(eqn.params["length"]),
+                "reverse": bool(eqn.params.get("reverse", False)),
+                "num_consts": int(eqn.params["num_consts"]),
+                "num_carry": int(eqn.params["num_carry"]),
+                "num_xs": len(eqn.invars)
+                - int(eqn.params["num_consts"])
+                - int(eqn.params["num_carry"]),
+                "num_ys": len(eqn.outvars) - int(eqn.params["num_carry"]),
+                "trip_count_kind": "static",
+                "trip_count": int(eqn.params["length"]),
+            }
+        )
+    elif primitive_name in {"while", "while_loop"}:
+        metadata.update(
+            {
+                "cond_nconsts": int(eqn.params["cond_nconsts"]),
+                "body_nconsts": int(eqn.params["body_nconsts"]),
+                "num_carry": len(eqn.outvars),
+                "trip_count_kind": "dynamic",
+                "observed_trip_count_lower_bound": jax_max_control_flow_unroll + 1,
+                "trip_count_status": "exceeds_unroll_cap",
+            }
+        )
+    elif primitive_name == "custom_vjp_call":
+        metadata.update(
+            {
+                "has_custom_backward": True,
+                "true_backward_status": "rejected",
+                "trip_count_kind": "call_region",
+            }
+        )
+    return metadata
+
+
+def _named_region_jaxprs(eqn: Any, nested_jaxprs: Sequence[Any]) -> tuple[tuple[str, Any], ...]:
+    """Return stable names for nested jaxprs inside a region equation.
+
+    Parameters
+    ----------
+    eqn
+        Region-owning JAX equation.
+    nested_jaxprs
+        Nested jaxprs discovered in the equation params.
+
+    Returns
+    -------
+    tuple[tuple[str, Any], ...]
+        ``(name, closed_jaxpr)`` pairs for metadata summaries.
+    """
+
+    if eqn.primitive.name == "scan":
+        return (("body", eqn.params["jaxpr"]),)
+    if eqn.primitive.name in {"while", "while_loop"}:
+        return (
+            ("cond", eqn.params["cond_jaxpr"]),
+            ("body", eqn.params["body_jaxpr"]),
+        )
+    if eqn.primitive.name == "custom_vjp_call":
+        return (("forward", eqn.params["call_jaxpr"]),)
+    return tuple((f"nested_{index}", nested) for index, nested in enumerate(nested_jaxprs))
+
+
+def _closed_jaxpr_summary(name: str, closed_jaxpr: Any) -> dict[str, Any]:
+    """Return portable structural metadata for one nested closed jaxpr.
+
+    Parameters
+    ----------
+    name
+        Stable nested-jaxpr role name.
+    closed_jaxpr
+        Closed jaxpr to summarize.
+
+    Returns
+    -------
+    dict[str, Any]
+        JSON-ish structural summary.
+    """
+
+    primitive_histogram: dict[str, int] = {}
+    for eqn in closed_jaxpr.jaxpr.eqns:
+        primitive_name = eqn.primitive.name
+        primitive_histogram[primitive_name] = primitive_histogram.get(primitive_name, 0) + 1
+    return {
+        "name": name,
+        "num_invars": len(closed_jaxpr.jaxpr.invars),
+        "num_outvars": len(closed_jaxpr.jaxpr.outvars),
+        "in_avals": tuple(_aval_repr(var) for var in closed_jaxpr.jaxpr.invars),
+        "out_avals": tuple(_aval_repr(var) for var in closed_jaxpr.jaxpr.outvars),
+        "num_eqns": len(closed_jaxpr.jaxpr.eqns),
+        "primitive_histogram": dict(sorted(primitive_histogram.items())),
+        "has_effects": bool(getattr(closed_jaxpr, "effects", ())),
+        "has_consts": bool(getattr(closed_jaxpr, "consts", ())),
+    }
+
+
+def _region_sanitized_params(params: Mapping[str, Any]) -> dict[str, Any]:
+    """Return scalar/string region params safe for portable annotations.
+
+    Parameters
+    ----------
+    params
+        Raw JAX primitive params, possibly containing executable jaxprs.
+
+    Returns
+    -------
+    dict[str, Any]
+        Params restricted to JSON-ish scalar values.
+    """
+
+    sanitized: dict[str, Any] = {}
+    for key, value in params.items():
+        if isinstance(value, bool | int | float | str) or value is None:
+            sanitized[str(key)] = value
+    return sanitized
 
 
 def replay_equation(

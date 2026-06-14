@@ -689,7 +689,7 @@ class CaptureOptions:
     cache_dir: str | Path | None = None
     module_filter: Callable[[Any], bool] | None = None
     stop_after: Any | None = None
-    jax_control_flow: Literal["reject", "unroll"] = "unroll"
+    jax_control_flow: Literal["reject", "unroll", "region"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
     payload_policy: str | None = None
@@ -732,7 +732,7 @@ class CaptureOptions:
         cache_dir: str | Path | None | MissingType = MISSING,
         module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
         stop_after: Any | None | MissingType = MISSING,
-        jax_control_flow: Literal["reject", "unroll"] | MissingType = MISSING,
+        jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
         payload_policy: str | None | MissingType = MISSING,
@@ -879,8 +879,8 @@ class CaptureOptions:
             raise ValueError(
                 "_module_containment_engine must be 'thread_replay', 'hook_stack', or 'both'"
             )
-        if values["jax_control_flow"] not in {"reject", "unroll"}:
-            raise ValueError("jax_control_flow must be 'reject' or 'unroll'")
+        if values["jax_control_flow"] not in {"reject", "unroll", "region"}:
+            raise ValueError("jax_control_flow must be 'reject', 'unroll', or 'region'")
         if not isinstance(values["jax_max_control_flow_unroll"], int):
             raise TypeError("jax_max_control_flow_unroll must be an integer")
         if values["jax_max_control_flow_unroll"] < 1:

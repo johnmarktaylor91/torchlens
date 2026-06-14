@@ -672,8 +672,8 @@ def test_jax_accepts_default_unrolled_cond_and_while() -> None:
     assert while_trace.validate_forward_pass([]) is True
 
 
-def test_jax_rejects_custom_vjp_nested_primitive() -> None:
-    """User custom VJP call primitives should be rejected for M1."""
+def test_jax_accepts_custom_vjp_forward_region() -> None:
+    """User custom VJP forward calls should import as unverified regions."""
 
     @jax.custom_vjp
     def custom_square(x: Any) -> Any:
@@ -699,12 +699,22 @@ def test_jax_rejects_custom_vjp_nested_primitive() -> None:
         del params
         return custom_square(x)
 
-    with pytest.raises(ValueError, match="unsupported nested primitive: custom_vjp_call"):
-        tl.trace(
-            cast(Any, uses_custom_vjp),
-            (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
-            backend="jax",
-        )
+    trace = tl.trace(
+        cast(Any, uses_custom_vjp),
+        (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
+        backend="jax",
+    )
+    region_ops = [
+        op
+        for op in trace.layer_list
+        if op.annotations.get("jax_region_primitive") == "custom_vjp_call"
+    ]
+
+    assert [op.annotations.get("jax_capture_kind") for op in region_ops] == [
+        "region",
+        "region_output",
+    ]
+    assert trace.validate_forward_pass([]).state == "unverified"
 
 
 def test_jax_rejects_nested_jit_closure_constants() -> None:

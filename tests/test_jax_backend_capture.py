@@ -20,6 +20,7 @@ from torchlens.backends.jax.backend import (
 )
 from torchlens.intervention.types import EdgeUseRecord
 from torchlens.postprocess.graph_traversal import _remove_orphan_nodes
+from torchlens.validation.invariants import MetadataInvariantError
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
@@ -532,6 +533,30 @@ def _jax_equation_op(trace: Any, primitive: str) -> Any:
     raise AssertionError(f"missing JAX primitive op: {primitive}")
 
 
+def _jax_region_ops(trace: Any, primitive: str | None = None) -> list[Any]:
+    """Return JAX region boundary/projection ops from a trace.
+
+    Parameters
+    ----------
+    trace
+        Captured JAX trace.
+    primitive
+        Optional JAX primitive name to filter by.
+
+    Returns
+    -------
+    list[Any]
+        Region ops in trace order.
+    """
+
+    return [
+        op
+        for op in trace.layer_list
+        if op.annotations.get("jax_capture_kind") in {"region", "region_output"}
+        and (primitive is None or op.annotations.get("jax_region_primitive") == primitive)
+    ]
+
+
 def _fake_raw_node(
     label: str,
     *,
@@ -963,6 +988,208 @@ def test_jax_validation_reports_synthetic_importer_region_as_unverified() -> Non
         bool(result)
 
 
+def test_jax_scan_over_cap_imports_unverified_region() -> None:
+    """Over-cap ``lax.scan`` should fall back to a region with projection outputs."""
+
+    def uses_scan(params: dict[str, Any], x: Any) -> Any:
+        """Return a scan output whose static length exceeds the unroll cap."""
+
+        del params
+        return lax.scan(lambda carry, item: (carry + item, carry), x[0], x)[1]
+
+    trace = _trace_jax(
+        uses_scan,
+        ({}, jnp.ones((5,), dtype=jnp.float32)),
+        jax_max_control_flow_unroll=2,
+    )
+    region_ops = _jax_region_ops(trace, "scan")
+    boundary_ops = [op for op in region_ops if op.annotations.get("jax_capture_kind") == "region"]
+    projection_ops = [
+        op for op in region_ops if op.annotations.get("jax_capture_kind") == "region_output"
+    ]
+
+    assert len(boundary_ops) == 1
+    assert len(projection_ops) == 2
+    assert boundary_ops[0].annotations[REGION_REPLAY_CLASS_KEY] == REGION_REPLAY_CLASS
+    assert boundary_ops[0].annotations["jax_region_reason"] == "scan_length_exceeds_unroll_cap"
+    assert trace.validate_forward_pass([]).state == "unverified"
+    assert trace.validation_replay_status.unverified_node_count == 1
+
+
+def test_jax_dynamic_while_over_cap_imports_unverified_region() -> None:
+    """Over-cap ``lax.while_loop`` should roll back partial unroll and emit a region."""
+
+    def uses_while(params: dict[str, Any], x: Any) -> Any:
+        """Return a while-loop output that exceeds the unroll cap."""
+
+        del params
+        return lax.while_loop(
+            lambda state: state[0] < 5,
+            lambda state: (state[0] + 1, state[1] + 1.0),
+            (0, x),
+        )[1]
+
+    trace = _trace_jax(
+        uses_while,
+        ({}, jnp.ones((2,), dtype=jnp.float32)),
+        jax_max_control_flow_unroll=2,
+    )
+    region_ops = _jax_region_ops(trace, "while")
+    replay_kinds = {
+        op.annotations.get("jax_capture_kind")
+        for op in trace.layer_list
+        if "jax_capture_kind" in op.annotations
+    }
+
+    assert len([op for op in region_ops if op.layer_type == "jax_region"]) == 1
+    assert len([op for op in region_ops if op.layer_type == "jax_region_out"]) == 2
+    assert "while_decision" not in replay_kinds
+    assert trace.validate_forward_pass([]).state == "unverified"
+
+
+def test_jax_custom_vjp_forward_imports_unverified_region() -> None:
+    """Forward ``custom_vjp_call`` should import as an unverified region."""
+
+    @jax.custom_vjp
+    def custom_square(x: Any) -> Any:
+        """Return a custom-VJP square."""
+
+        return x * x
+
+    def fwd(x: Any) -> tuple[Any, Any]:
+        """Return custom VJP forward output and residual."""
+
+        return custom_square(x), x
+
+    def bwd(residual: Any, grad: Any) -> tuple[Any]:
+        """Return custom VJP backward output."""
+
+        return (2 * residual * grad,)
+
+    custom_square.defvjp(fwd, bwd)
+
+    def uses_custom_vjp(params: dict[str, Any], x: Any) -> Any:
+        """Return output through a custom-VJP function."""
+
+        del params
+        return custom_square(x) + 1.0
+
+    trace = _trace_jax(
+        uses_custom_vjp,
+        ({}, jnp.ones((2, 3), dtype=jnp.float32)),
+    )
+    region_ops = _jax_region_ops(trace, "custom_vjp_call")
+
+    assert len([op for op in region_ops if op.layer_type == "jax_region"]) == 1
+    assert len([op for op in region_ops if op.layer_type == "jax_region_out"]) == 1
+    assert trace.validate_forward_pass([]).state == "unverified"
+
+
+def test_jax_region_boundary_corruption_is_caught() -> None:
+    """Region seam validation should catch corrupted boundary payloads."""
+
+    def uses_scan(params: dict[str, Any], x: Any) -> Any:
+        """Return an over-cap scan output."""
+
+        del params
+        return lax.scan(lambda carry, item: (carry + item, carry), x[0], x)[1]
+
+    trace = _trace_jax(
+        uses_scan,
+        ({}, jnp.ones((5,), dtype=jnp.float32)),
+        jax_max_control_flow_unroll=2,
+    )
+    boundary = next(op for op in _jax_region_ops(trace, "scan") if op.layer_type == "jax_region")
+    corrupted = (boundary.out[0] + 10.0, *boundary.out[1:])
+    boundary._internal_set("out", corrupted)
+
+    assert trace.validate_forward_pass([], validate_metadata=False) is False
+    assert trace.validation_replay_status.state == "failed"
+
+
+def test_jax_region_does_not_mask_downstream_replay_failure() -> None:
+    """A replayable child failure should dominate region unverified status."""
+
+    @jax.custom_vjp
+    def custom_square(x: Any) -> Any:
+        """Return a custom-VJP square."""
+
+        return x * x
+
+    def fwd(x: Any) -> tuple[Any, Any]:
+        """Return custom VJP forward output and residual."""
+
+        return custom_square(x), x
+
+    def bwd(residual: Any, grad: Any) -> tuple[Any]:
+        """Return custom VJP backward output."""
+
+        return (2 * residual * grad,)
+
+    custom_square.defvjp(fwd, bwd)
+
+    def uses_custom_vjp(params: dict[str, Any], x: Any) -> Any:
+        """Return a replayable add after a custom-VJP region."""
+
+        del params
+        return custom_square(x) + 1.0
+
+    trace = _trace_jax(
+        uses_custom_vjp,
+        ({}, jnp.ones((2, 3), dtype=jnp.float32)),
+    )
+    add_op = _jax_equation_op(trace, "add")
+    add_op._internal_set("out", add_op.out + 10.0)
+
+    assert trace.validate_forward_pass([], validate_metadata=False) is False
+    assert trace.validation_replay_status.state == "failed"
+
+
+def test_jax_region_without_trace_importer_provenance_fails_invariants() -> None:
+    """Region annotations require importer provenance on both trace and boundary."""
+
+    def uses_scan(params: dict[str, Any], x: Any) -> Any:
+        """Return an over-cap scan output."""
+
+        del params
+        return lax.scan(lambda carry, item: (carry + item, carry), x[0], x)[1]
+
+    trace = _trace_jax(
+        uses_scan,
+        ({}, jnp.ones((5,), dtype=jnp.float32)),
+        jax_max_control_flow_unroll=2,
+    )
+    trace.annotations.pop(REGION_REPLAY_PROVENANCE_KEY, None)
+
+    with pytest.raises(MetadataInvariantError, match="region_replay_provenance"):
+        trace.check_metadata_invariants()
+
+
+def test_jax_region_summary_pandas_and_draw_work(tmp_path: Path) -> None:
+    """Region traces should work with summary, pandas export, and graph drawing."""
+
+    def uses_scan(params: dict[str, Any], x: Any) -> Any:
+        """Return an over-cap scan output."""
+
+        del params
+        return lax.scan(lambda carry, item: (carry + item, carry), x[0], x)[1]
+
+    trace = _trace_jax(
+        uses_scan,
+        ({}, jnp.ones((5,), dtype=jnp.float32)),
+        jax_max_control_flow_unroll=2,
+    )
+
+    assert "jax_region" in trace.summary(show_ops=True)
+    assert len(trace.to_pandas()) == len(trace.layer_list)
+    dot = trace.draw(
+        vis_outpath=str(tmp_path / "jax_region_graph"),
+        vis_save_only=True,
+        vis_fileformat="dot",
+    )
+    assert "jax_region" in dot
+
+
 def test_jax_trace_accepts_s0j_extended_corpus_subset() -> None:
     """Representative S0.J corpus cases should capture through public JAX tracing."""
 
@@ -1307,8 +1534,8 @@ def test_jax_trace_keeps_scan_body_primitive_separate_from_outside() -> None:
     assert trace.validate_forward_pass([]) is True
 
 
-def test_jax_trace_scan_reject_policy_and_max_unroll_guard() -> None:
-    """JAX scan policy controls unroll vs historical rejection and length guard."""
+def test_jax_trace_scan_reject_policy_and_max_unroll_region_fallback() -> None:
+    """JAX scan policy controls historical rejection and over-cap region fallback."""
 
     def uses_scan(params: dict[str, Any], xs: Any) -> Any:
         """Return a scan output."""
@@ -1325,8 +1552,15 @@ def test_jax_trace_scan_reject_policy_and_max_unroll_guard() -> None:
 
     with pytest.raises(ValueError, match="unsupported nested primitive: scan"):
         _trace_jax(uses_scan, args, jax_control_flow="reject")
-    with pytest.raises(ValueError, match="length exceeds jax_max_control_flow_unroll"):
-        _trace_jax(uses_scan, args, jax_max_control_flow_unroll=3)
+    trace = _trace_jax(uses_scan, args, jax_max_control_flow_unroll=3)
+    region_ops = _jax_region_ops(trace, "scan")
+
+    assert [op.annotations.get("jax_capture_kind") for op in region_ops] == [
+        "region",
+        "region_output",
+        "region_output",
+    ]
+    assert trace.validate_forward_pass([]).state == "unverified"
 
 
 def test_jax_trace_unrolls_cond_executed_branch_with_control_edge() -> None:
@@ -1452,8 +1686,8 @@ def test_jax_trace_while_zero_iteration_uses_initial_carry() -> None:
     assert trace.validate_forward_pass([]) is True
 
 
-def test_jax_trace_while_max_unroll_guard() -> None:
-    """``lax.while_loop`` should fail when dynamic unrolling exceeds the configured cap."""
+def test_jax_trace_while_max_unroll_region_fallback() -> None:
+    """``lax.while_loop`` should region-fallback when unrolling exceeds the cap."""
 
     def guarded_while(params: dict[str, Any], x: Any) -> Any:
         """Return a while-loop accumulator."""
@@ -1472,12 +1706,19 @@ def test_jax_trace_while_max_unroll_guard() -> None:
 
         return lax.while_loop(condition, body, (jnp.asarray(0, dtype=jnp.int32), x))[1]
 
-    with pytest.raises(ValueError, match="while_loop iteration count exceeds"):
-        _trace_jax(
-            guarded_while,
-            ({"limit": jnp.asarray(4, dtype=jnp.int32)}, jnp.zeros((2, 3))),
-            jax_max_control_flow_unroll=2,
-        )
+    trace = _trace_jax(
+        guarded_while,
+        ({"limit": jnp.asarray(4, dtype=jnp.int32)}, jnp.zeros((2, 3))),
+        jax_max_control_flow_unroll=2,
+    )
+    region_ops = _jax_region_ops(trace, "while")
+
+    assert [op.annotations.get("jax_capture_kind") for op in region_ops] == [
+        "region",
+        "region_output",
+        "region_output",
+    ]
+    assert trace.validate_forward_pass([]).state == "unverified"
 
 
 def test_jax_trace_rejects_hidden_consts() -> None:

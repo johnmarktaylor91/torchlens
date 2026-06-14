@@ -259,6 +259,8 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_validation_replay_status",
         "jax_closed_jaxpr",
         "jax_equation_captures",
+        "jax_ordered_captures",
+        "jax_region_captures",
         "_jax_capture_index_to_raw_op_label",
         "jax_capture_index_to_final_op_label",
         "jax_inlined_call_primitives",

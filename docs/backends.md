@@ -28,7 +28,7 @@ Declared future options:
 
 | Option | Planned owner |
 |---|---|
-| `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan`/`cond`/`while_loop` support `unroll` or `reject` |
+| `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan`/`cond`/`while_loop` support `unroll` or `reject`; `region` forces supported scan/while/custom-VJP-forward regions |
 | `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
 | `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad and MLX support raw `function_root` and callable object `object_module` |
 | `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX use `array_payloads` |
@@ -160,10 +160,15 @@ closed-over array constants for raw function-root callables, value-dependent `sa
 `followed_by`/`preceded_by` window selectors, `intervene=`, `halt=`, streaming, `save_grads=`, and
 `tl.record(backend="jax")`. Static-label `save=` selectors such as `tl.func(...)`,
 `tl.label(...)`, `tl.contains(...)`, and module selectors are applied after full graph
-finalization: unsaved ops keep metadata but drop public activation payloads. `lax.scan` is
-unrolled by default with `jax_control_flow="unroll"` and guarded by
-`jax_max_control_flow_unroll`; pass `jax_control_flow="reject"` to preserve the earlier scan
-rejection behavior. Workarounds are to pass raw functions and explicit params/input leaves to
+finalization: unsaved ops keep metadata but drop public activation payloads. `lax.scan`,
+`lax.cond`, and capped `lax.while_loop` are unrolled by default with
+`jax_control_flow="unroll"` and guarded by `jax_max_control_flow_unroll`. Over-cap
+`lax.scan` and `lax.while_loop` fall back to importer-owned graph regions with one boundary
+node and per-output projection nodes; forward `custom_vjp_call` is also represented as a
+region. These traces report `trace.validation_replay_status.state == "unverified"` after
+replayable ops and region seam checks pass. Pass `jax_control_flow="reject"` to preserve the
+earlier nested-primitive rejection behavior, or `jax_control_flow="region"` to force supported
+scan/while/custom-VJP-forward boundaries to regions. Workarounds are to pass raw functions and explicit params/input leaves to
 `tl.trace(..., backend="jax")`, or use the PyTorch backend for value-dependent predicate capture,
 intervention, sparse fastlog, and true backward graphs.
 
@@ -180,9 +185,9 @@ Multi-host or otherwise unaddressable sharded arrays fail closed during save.
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
 Live JAX traces, including static-label selectively saved traces, still run real replay validation
 using runtime-only replay payloads that are separate from the public saved-activation surface.
-Future importer-owned control-flow regions may report
-`trace.validation_replay_status.state == "unverified"` after all replayable boundary checks pass;
-that status means replay was partial, is available for inspection, and is not a validation pass.
+Importer-owned JAX regions report `trace.validation_replay_status.state == "unverified"` after
+all replayable ops and region seams pass; that status means replay was partial, is available for
+inspection, and is not a validation pass.
 
 ## tinygrad Preview
 

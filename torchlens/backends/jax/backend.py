@@ -54,6 +54,10 @@ from ...postprocess.loop_grouping_adapter import (
 )
 from ...quantities import Bytes, Duration
 from ...validation.status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
     ValidationReplaySource,
     ValidationReplayStatus,
     count_importer_region_annotations,
@@ -64,6 +68,8 @@ from .jaxpr import (
     ALL_JAX_EQUATION_KINDS,
     JaxCaptureResult,
     JaxEquationCapture,
+    JaxRegionCapture,
+    JaxRuntimeCapture,
     derive_closed_jaxpr,
     flatten_dynamic_args,
     interpret_closed_jaxpr_with_inlining,
@@ -329,8 +335,11 @@ class JAXBackend:
             jaxpr leaves.
         jax_control_flow
             JAX nested control-flow policy. ``"unroll"`` expands supported
-            control-flow primitives into graph-visible equations; ``"reject"``
-            preserves the earlier nested-primitive rejection behavior.
+            control-flow primitives into graph-visible equations and falls
+            back to regions for over-cap scan/while; ``"region"`` imports
+            supported scan/while/custom-VJP forward boundaries as unverified
+            regions; ``"reject"`` preserves the earlier nested-primitive
+            rejection behavior.
         jax_max_control_flow_unroll
             Maximum allowed static unroll length for one JAX control-flow
             primitive.
@@ -382,8 +391,8 @@ class JAXBackend:
         grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
         _reject_tracer_inputs(args)
-        if jax_control_flow not in {"reject", "unroll"}:
-            raise ValueError("jax_control_flow must be 'reject' or 'unroll'")
+        if jax_control_flow not in {"reject", "unroll", "region"}:
+            raise ValueError("jax_control_flow must be 'reject', 'unroll', or 'region'")
         if not isinstance(jax_max_control_flow_unroll, int) or jax_max_control_flow_unroll < 1:
             raise ValueError("jax_max_control_flow_unroll must be an integer >= 1")
         eqx_tree = discover_equinox_module_tree(model)
@@ -489,6 +498,10 @@ class JAXBackend:
         )
         trace.jax_closed_jaxpr = closed_jaxpr
         trace.jax_equation_captures = result.equations
+        trace.jax_ordered_captures = result.captures
+        trace.jax_region_captures = tuple(
+            capture for capture in result.captures if isinstance(capture, JaxRegionCapture)
+        )
         trace.jax_inlined_call_primitives = result.inlined_call_primitives
         trace.jax_static_argnums = static_argnums
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
@@ -541,7 +554,7 @@ class JAXBackend:
                 from ...validation.invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
-            passed = self._validate_jax_equations(trace)
+            passed = self._validate_jax_equations(trace) and self._validate_jax_regions(trace)
             status_result = self._validation_status_from_counts(trace, passed=passed)
         except Exception:
             passed = False
@@ -643,6 +656,70 @@ class JAXBackend:
             if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
                 return False
             if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
+                return False
+        return True
+
+    def _validate_jax_regions(self, trace: Trace) -> bool:
+        """Validate JAX region boundary/projection metadata and seams.
+
+        Parameters
+        ----------
+        trace
+            Trace produced by this backend.
+
+        Returns
+        -------
+        bool
+            True when every region has well-formed provenance, exact boundary
+            arity, saved projection payloads, and non-vacuous seam checks for
+            real graph-parent positions.
+        """
+
+        captures = tuple(
+            capture
+            for capture in getattr(trace, "jax_region_captures", ())
+            if isinstance(capture, JaxRegionCapture)
+        )
+        if not captures:
+            return True
+        region_ops = _jax_region_ops(trace)
+        if len(captures) != len(region_ops):
+            return False
+        ops_by_label: dict[str, Any] = {}
+        for op in getattr(trace, "layer_list", []):
+            for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
+                if isinstance(label, str):
+                    ops_by_label[label] = op
+        hidden_outputs_by_label: dict[str, tuple[Any, ...]] = {
+            label: value if isinstance(value, tuple) else (value,)
+            for label, value in getattr(trace, "_selective_save_hidden_payloads", {}).items()
+        }
+        region_ops_by_capture_index = {
+            capture.index: op for capture, op in zip(captures, region_ops, strict=False)
+        }
+        boundary_captures = tuple(capture for capture in captures if capture.kind == "region")
+        for boundary in boundary_captures:
+            boundary_op = region_ops_by_capture_index.get(boundary.index)
+            if boundary_op is None:
+                return False
+            projections = tuple(
+                capture
+                for capture in captures
+                if capture.kind == "region_output" and capture.region_index == boundary.index
+            )
+            projection_ops = tuple(
+                region_ops_by_capture_index.get(projection.index) for projection in projections
+            )
+            if any(op is None for op in projection_ops):
+                return False
+            if not _validate_region_boundary(
+                boundary=boundary,
+                boundary_op=boundary_op,
+                projections=projections,
+                projection_ops=cast(tuple[Any, ...], projection_ops),
+                ops_by_label=ops_by_label,
+                hidden_outputs_by_label=hidden_outputs_by_label,
+            ):
                 return False
         return True
 
@@ -810,7 +887,7 @@ class JAXBackend:
             )
 
     def _emit_equations(self, trace: Trace, result: JaxCaptureResult) -> None:
-        """Emit operation events for interpreted JAX equations.
+        """Emit operation events for interpreted JAX equations and regions.
 
         Parameters
         ----------
@@ -832,7 +909,16 @@ class JAXBackend:
         }
         label_by_capture_index: dict[int, str] = {}
         capture_index_to_raw_op_label: dict[int, str] = {}
-        for equation in result.equations:
+        for equation in result.captures:
+            if isinstance(equation, JaxRegionCapture):
+                self._emit_region_capture(
+                    trace=trace,
+                    capture=equation,
+                    label_by_value_id=label_by_value_id,
+                    label_by_capture_index=label_by_capture_index,
+                    capture_index_to_raw_op_label=capture_index_to_raw_op_label,
+                )
+                continue
             data_parents = tuple(
                 ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
                 for index, value in enumerate(equation.input_values)
@@ -887,6 +973,129 @@ class JAXBackend:
             for value in equation.output_values:
                 label_by_value_id[id(value)] = event.label_raw
         trace._jax_capture_index_to_raw_op_label = capture_index_to_raw_op_label
+
+    def _emit_region_capture(
+        self,
+        *,
+        trace: Trace,
+        capture: JaxRegionCapture,
+        label_by_value_id: dict[int, str],
+        label_by_capture_index: dict[int, str],
+        capture_index_to_raw_op_label: dict[int, str],
+    ) -> None:
+        """Emit one JAX region boundary or projection event.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving events.
+        capture
+            Region capture to emit.
+        label_by_value_id
+            Mutable map from runtime value identity to raw producer label.
+        label_by_capture_index
+            Mutable map from capture index to raw producer label.
+        capture_index_to_raw_op_label
+            Mutable runtime capture-index map for finalized labels.
+
+        Returns
+        -------
+        None
+            Region event is appended to ``trace.capture_events``.
+        """
+
+        if capture.kind == "region":
+            trace.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
+            data_parents = tuple(
+                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                for index, value in enumerate(capture.input_values)
+                if (label := label_by_value_id.get(id(value))) is not None
+            )
+            parent_positions = {
+                "args": {edge.arg_position: edge.parent_label_raw for edge in data_parents},
+                "kwargs": {},
+            }
+            output = tuple(capture.output_values)
+            annotations = {
+                REGION_REPLAY_CLASS_KEY: REGION_REPLAY_CLASS,
+                REGION_REPLAY_PROVENANCE_KEY: REGION_REPLAY_IMPORTER_PROVENANCE,
+                "jax_capture_kind": "region",
+                "jax_region_primitive": capture.primitive,
+                "jax_region_replay_status": "unverified",
+                "jax_region_reason": capture.unverified_reason,
+                "jax_region_metadata": dict(capture.region_metadata),
+                "jax_source_path": "/".join(capture.source_path),
+                "jax_invars": capture.invars,
+                "jax_outvars": capture.outvars,
+                "jax_input_avals": capture.input_avals,
+                "jax_output_avals": capture.output_avals,
+                "jax_inlined": capture.inlined,
+                "jax_module_stack": capture.module_stack,
+                "jax_module_call_stack": capture.module_call_stack,
+            }
+            event = self._append_event(
+                trace=trace,
+                kind="op",
+                layer_type="jax_region",
+                func_name=f"region:{capture.primitive}",
+                output=output,
+                parents=data_parents,
+                parent_arg_positions=parent_positions,
+                container_path=(),
+                equivalence_class=f"jax:region:{capture.primitive}:{capture.index}",
+                module_stack=capture.module_stack,
+                module_call_stack=capture.module_call_stack,
+                annotations=annotations,
+            )
+        else:
+            if capture.region_index is None or capture.output_index is None:
+                raise ValueError("JAX region projection capture is missing boundary metadata.")
+            boundary_label = label_by_capture_index[capture.region_index]
+            parents = (
+                ParentEdge(
+                    parent_label_raw=boundary_label,
+                    arg_position=f"region_output:{capture.output_index}",
+                    edge_use="control",
+                ),
+            )
+            output = capture.output_values[0]
+            event = self._append_event(
+                trace=trace,
+                kind="op",
+                layer_type="jax_region_out",
+                func_name=f"region_out:{capture.primitive}[{capture.output_index}]",
+                output=output,
+                parents=parents,
+                parent_arg_positions={"args": {}, "kwargs": {}},
+                container_path=(),
+                equivalence_class=(
+                    f"jax:region_out:{capture.primitive}:"
+                    f"{capture.region_index}:{capture.output_index}"
+                ),
+                module_stack=capture.module_stack,
+                module_call_stack=capture.module_call_stack,
+                annotations={
+                    REGION_REPLAY_PROVENANCE_KEY: REGION_REPLAY_IMPORTER_PROVENANCE,
+                    "jax_capture_kind": "region_output",
+                    "jax_region_primitive": capture.primitive,
+                    "jax_region_output_index": capture.output_index,
+                    "jax_region_boundary_index": capture.region_index,
+                    "jax_region_replay_status": "unverified",
+                    "jax_region_reason": capture.unverified_reason,
+                    "jax_region_metadata": dict(capture.region_metadata),
+                    "jax_source_path": "/".join(capture.source_path),
+                    "jax_invars": capture.invars,
+                    "jax_outvars": capture.outvars,
+                    "jax_input_avals": capture.input_avals,
+                    "jax_output_avals": capture.output_avals,
+                    "jax_inlined": capture.inlined,
+                    "jax_module_stack": capture.module_stack,
+                    "jax_module_call_stack": capture.module_call_stack,
+                },
+            )
+            label_by_value_id[id(output)] = event.label_raw
+        label_by_capture_index[capture.index] = event.label_raw
+        capture_index_to_raw_op_label[capture.index] = event.label_raw
 
     def _append_event(
         self,
@@ -1085,7 +1294,7 @@ class JAXBackend:
         """
 
         if not self.is_tensor(value):
-            return TensorRef(label_raw, None, None, None, None, None, value, None, str(id(value)))
+            return TensorRef(label_raw, None, None, None, None, 0, value, None, str(id(value)))
         return TensorRef(
             label_raw=label_raw,
             shape=tuple(cast(Any, value).shape),
@@ -1665,7 +1874,7 @@ class JAXBackend:
         self,
         trace: Trace,
         module_tree: EquinoxModuleTree | NnxModuleTree | None = None,
-        captures: Sequence[JaxEquationCapture] = (),
+        captures: Sequence[JaxRuntimeCapture] = (),
     ) -> None:
         """Finalize materialized JAX raw logs into public accessors.
 
@@ -1815,7 +2024,7 @@ class JAXBackend:
         self,
         trace: Trace,
         tree: EquinoxModuleTree | NnxModuleTree,
-        captures: Sequence[JaxEquationCapture],
+        captures: Sequence[JaxRuntimeCapture],
     ) -> None:
         """Attach JAX module parameters to primitive ops that consume them.
 
@@ -3301,7 +3510,29 @@ def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
         op
         for op in getattr(trace, "layer_list", ())
         if isinstance(getattr(op, "annotations", None), Mapping)
-        and "jax_capture_kind" in op.annotations
+        and op.annotations.get("jax_capture_kind") in ALL_JAX_EQUATION_KINDS
+    )
+
+
+def _jax_region_ops(trace: Trace) -> tuple[Any, ...]:
+    """Return materialized operation logs that correspond to JAX regions.
+
+    Parameters
+    ----------
+    trace
+        Trace produced by the JAX backend.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Region boundary and projection operation logs in execution order.
+    """
+
+    return tuple(
+        op
+        for op in getattr(trace, "layer_list", ())
+        if isinstance(getattr(op, "annotations", None), Mapping)
+        and op.annotations.get("jax_capture_kind") in {"region", "region_output"}
     )
 
 
@@ -3326,6 +3557,257 @@ def _jax_op_capture_kind(op: Any) -> str:
     if kind not in ALL_JAX_EQUATION_KINDS:
         raise ValueError(f"JAX equation op has unknown replay kind: {kind!r}.")
     return kind
+
+
+def _validate_region_boundary(
+    *,
+    boundary: JaxRegionCapture,
+    boundary_op: Any,
+    projections: tuple[JaxRegionCapture, ...],
+    projection_ops: tuple[Any, ...],
+    ops_by_label: Mapping[str, Any],
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
+) -> bool:
+    """Validate one JAX region boundary and its projection seams.
+
+    Parameters
+    ----------
+    boundary
+        Runtime boundary capture.
+    boundary_op
+        Materialized boundary op.
+    projections
+        Runtime projection captures for the boundary outputs.
+    projection_ops
+        Materialized projection ops aligned with ``projections``.
+    ops_by_label
+        Materialized operations keyed by raw and final labels.
+    hidden_outputs_by_label
+        Runtime-only replay outputs keyed by raw and final op labels.
+
+    Returns
+    -------
+    bool
+        True when boundary/projection metadata and seam perturbation pass.
+    """
+
+    import jax
+
+    if boundary.kind != "region":
+        return False
+    if _jax_region_capture_kind(boundary_op) != "region":
+        return False
+    annotations = getattr(boundary_op, "annotations", {})
+    if not isinstance(annotations, Mapping):
+        return False
+    if annotations.get(REGION_REPLAY_CLASS_KEY) != REGION_REPLAY_CLASS:
+        return False
+    if annotations.get(REGION_REPLAY_PROVENANCE_KEY) != REGION_REPLAY_IMPORTER_PROVENANCE:
+        return False
+    metadata = annotations.get("jax_region_metadata")
+    if not isinstance(metadata, Mapping):
+        return False
+    if metadata.get("num_inputs") != len(boundary.input_values):
+        return False
+    if metadata.get("num_outputs") != len(boundary.output_values):
+        return False
+    if len(projections) != len(boundary.output_values):
+        return False
+    ordered_projections = tuple(sorted(projections, key=lambda item: item.output_index or -1))
+    if tuple(projection.output_index for projection in ordered_projections) != tuple(
+        range(len(boundary.output_values))
+    ):
+        return False
+    inputs = _inputs_from_region_trace_graph(
+        boundary,
+        boundary_op,
+        ops_by_label,
+        hidden_outputs_by_label,
+    )
+    replayed_outputs = _bind_region(boundary, inputs)
+    if len(replayed_outputs) != len(boundary.output_values):
+        return False
+    boundary_outputs = _saved_region_boundary_outputs(
+        boundary_op,
+        len(boundary.output_values),
+        hidden_outputs_by_label=hidden_outputs_by_label,
+    )
+    if not jax.tree.all(jax.tree.map(_values_close, replayed_outputs, boundary_outputs)):
+        return False
+    saved_projection_outputs: list[Any] = []
+    for projection, projection_op in zip(ordered_projections, projection_ops, strict=False):
+        if _jax_region_capture_kind(projection_op) != "region_output":
+            return False
+        if projection.region_index != boundary.index or projection.output_index is None:
+            return False
+        if not _projection_has_boundary_parent(projection_op, boundary_op):
+            return False
+        saved_output = _saved_single_output(projection_op, hidden_outputs_by_label)
+        expected_output = replayed_outputs[projection.output_index]
+        if not _values_close(saved_output, expected_output):
+            return False
+        saved_projection_outputs.append(saved_output)
+    if not jax.tree.all(
+        jax.tree.map(_values_close, tuple(saved_projection_outputs), replayed_outputs)
+    ):
+        return False
+    return _region_seam_perturbation_changes_output(boundary, boundary_op, inputs, replayed_outputs)
+
+
+def _jax_region_capture_kind(op: Any) -> str:
+    """Return the region capture-kind annotation from a materialized op.
+
+    Parameters
+    ----------
+    op
+        Materialized TorchLens operation.
+
+    Returns
+    -------
+    str
+        ``"region"`` or ``"region_output"``.
+    """
+
+    annotations = getattr(op, "annotations", {})
+    kind = annotations.get("jax_capture_kind") if isinstance(annotations, Mapping) else None
+    if kind not in {"region", "region_output"}:
+        raise ValueError(f"JAX region op has unknown capture kind: {kind!r}.")
+    return cast(str, kind)
+
+
+def _inputs_from_region_trace_graph(
+    capture: JaxRegionCapture,
+    op: Any,
+    ops_by_label: Mapping[str, Any],
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
+) -> tuple[Any, ...]:
+    """Build region boundary inputs from recorded graph parents.
+
+    Parameters
+    ----------
+    capture
+        Runtime region boundary capture.
+    op
+        Materialized region boundary operation.
+    ops_by_label
+        Materialized operations keyed by raw and final op labels.
+    hidden_outputs_by_label
+        Runtime-only replay outputs keyed by raw and final op labels.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Boundary inputs with graph-parent positions reconstructed from saved
+        parent payloads.
+    """
+
+    inputs = list(capture.input_values)
+    graph_positions = _data_parent_arg_positions(op)
+    parent_labels = _data_parent_labels(op)
+    positioned_labels = {label for label in graph_positions.values() if isinstance(label, str)}
+    if positioned_labels != parent_labels:
+        raise ValueError("JAX region parent labels and parent_arg_positions disagree.")
+    for position, parent_label in graph_positions.items():
+        if not isinstance(position, int) or position < 0 or position >= len(inputs):
+            raise ValueError(f"JAX region parent arg position {position!r} is invalid.")
+        parent_op = ops_by_label[parent_label]
+        inputs[position] = _saved_single_output(parent_op, hidden_outputs_by_label)
+    return tuple(inputs)
+
+
+def _bind_region(capture: JaxRegionCapture, inputs: Sequence[Any]) -> tuple[Any, ...]:
+    """Execute a JAX region boundary as a black-box primitive.
+
+    Parameters
+    ----------
+    capture
+        Runtime region boundary capture.
+    inputs
+        Boundary inputs to bind.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Boundary outputs.
+    """
+
+    if capture.primitive == "custom_vjp_call":
+        from .jaxpr import _evaluate_closed_jaxpr_no_capture
+
+        return _evaluate_closed_jaxpr_no_capture(capture.params["call_jaxpr"], tuple(inputs))
+    result = capture.primitive_obj.bind(*tuple(inputs), **capture.params)
+    return tuple(result if capture.primitive_obj.multiple_results else (result,))
+
+
+def _projection_has_boundary_parent(projection_op: Any, boundary_op: Any) -> bool:
+    """Return whether one projection has the boundary as a control parent.
+
+    Parameters
+    ----------
+    projection_op
+        Materialized region projection op.
+    boundary_op
+        Materialized region boundary op.
+
+    Returns
+    -------
+    bool
+        True when the projection records a control edge from the boundary.
+    """
+
+    boundary_labels = {
+        label
+        for label in (getattr(boundary_op, "_label_raw", None), getattr(boundary_op, "label", None))
+        if isinstance(label, str)
+    }
+    control_parents = _control_parent_labels(projection_op)
+    return bool(boundary_labels & control_parents)
+
+
+def _region_seam_perturbation_changes_output(
+    capture: JaxRegionCapture,
+    op: Any,
+    inputs: tuple[Any, ...],
+    saved_outputs: tuple[Any, ...],
+) -> bool:
+    """Return whether real region parent perturbations change boundary outputs.
+
+    Parameters
+    ----------
+    capture
+        Runtime region boundary capture.
+    op
+        Materialized region boundary operation.
+    inputs
+        Boundary inputs reconstructed from the trace graph.
+    saved_outputs
+        Saved boundary outputs.
+
+    Returns
+    -------
+    bool
+        True only when a real graph-parent input position can perturb the
+        region output, avoiding the normal parent check's no-parent vacuity.
+    """
+
+    import jax
+
+    graph_positions = _data_parent_arg_positions(op)
+    if not graph_positions:
+        return not inputs
+    positions_by_parent: dict[str, list[int]] = {}
+    for position, parent_label in graph_positions.items():
+        positions_by_parent.setdefault(parent_label, []).append(position)
+    for positions in positions_by_parent.values():
+        first_position = positions[0]
+        for candidate in _perturb_candidates(inputs[first_position]):
+            perturbed_inputs = list(inputs)
+            for position in positions:
+                perturbed_inputs[position] = candidate
+            perturbed_outputs = _bind_region(capture, perturbed_inputs)
+            if not jax.tree.all(jax.tree.map(_values_close, perturbed_outputs, saved_outputs)):
+                return True
+    return False
 
 
 def _inputs_from_trace_graph(
@@ -3395,6 +3877,35 @@ def _saved_op_outputs(
         return (output,)
     if not isinstance(output, tuple) or len(output) != expected_count:
         raise ValueError("JAX multi-output payload does not match primitive replay.")
+    return output
+
+
+def _saved_region_boundary_outputs(
+    op: Any,
+    expected_count: int,
+    *,
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
+) -> tuple[Any, ...]:
+    """Return the saved output tuple from a JAX region boundary op.
+
+    Parameters
+    ----------
+    op
+        Materialized region boundary op.
+    expected_count
+        Number of boundary outputs expected by the runtime capture.
+    hidden_outputs_by_label
+        Runtime-only replay outputs keyed by raw and final op labels.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Saved boundary output tuple.
+    """
+
+    output = _saved_single_output(op, hidden_outputs_by_label)
+    if not isinstance(output, tuple) or len(output) != expected_count:
+        raise ValueError("JAX region boundary payload does not match output arity.")
     return output
 
 
@@ -3645,11 +4156,33 @@ def _parent_labels_by_control_class(op: Any) -> tuple[set[str], set[str]]:
 
     parents = {label for label in getattr(op, "parents", ()) if isinstance(label, str)}
     control = {
-        edge.parent_label
+        parent_label
         for edge in getattr(op, "_edge_uses", ())
-        if isinstance(getattr(edge, "parent_label", None), str) and is_control_edge_use(edge)
+        if (parent_label := _edge_parent_label(edge)) is not None and is_control_edge_use(edge)
     }
     return control & parents, parents - control
+
+
+def _edge_parent_label(edge: Any) -> str | None:
+    """Return the parent label from an edge-use record or legacy tuple.
+
+    Parameters
+    ----------
+    edge
+        Edge-use record or tuple.
+
+    Returns
+    -------
+    str | None
+        Parent label when present.
+    """
+
+    parent_label = getattr(edge, "parent_label", None)
+    if isinstance(parent_label, str):
+        return parent_label
+    if isinstance(edge, tuple) and edge and isinstance(edge[0], str):
+        return edge[0]
+    return None
 
 
 def _perturb_candidates(value: Any) -> tuple[Any, ...]:
