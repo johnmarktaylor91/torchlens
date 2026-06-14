@@ -96,7 +96,7 @@ frameworks:
 | Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited |
 | Static-label `save=` | ✅ | ✅ | ✅ | ✅ |
 | Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | forward/derived arrays |
-| Gradients | full backward graph | leaf-level + T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level derived |
+| Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived |
 | Interventions / halt / fastlog | ✅ | — | — | — |
 
 The JAX backend is **jaxpr-first**: it captures the lowered jaxpr, so any
@@ -110,8 +110,8 @@ The JAX backend exposes the same intermediate surface when
 `tl.backends.jax.GradOptions(intermediate_grads=True, max_intermediate_grads=...)`
 passes its zero-tap producer and per-boundary oracle.
 MLX `mlx.nn.Module` roots use object-discovered `object_module` hierarchy, with
-`function_root` available as an explicit root-only fallback, and expose leaf-only
-derived gradients through `tl.backends.mlx.GradOptions`.
+`function_root` available as an explicit root-only fallback, and expose leaf plus
+custom-VJP-tap intermediate derived gradients through `tl.backends.mlx.GradOptions`.
 JAX/tinygrad/MLX portable saves use `payload_policy="array_payloads"` and loaded
 traces report replay as unavailable rather than as a false pass. PyTorch remains
 the full-feature backend: true backward capture, value-dependent predicates,

@@ -26,13 +26,14 @@ selections fail before capture with typed backend registry errors. MLX remains a
 technical preview with limited capabilities, static-label save support for
 `tl.func`/`tl.label`/`tl.module`/`tl.in_module`/`tl.contains`, object-module
 hierarchy for `mlx.nn.Module` roots, materialized `.tlspec` forward and derived array
-payloads, and leaf derived gradients. JAX is a jaxpr-first functional
+payloads, leaf derived gradients, and opt-in custom-VJP-tap intermediate derived gradients.
+JAX is a jaxpr-first functional
 preview with full-save forward capture, live replay validation, raw `function_root`
 captures, Equinox/Flax NNX `pytree_module` hierarchy, pytree-derived params,
 materialized `.tlspec` array payloads, typed PRNG key round-trip, reconstructible
 single-host `NamedSharding` metadata with explicit `PayloadLoadHints` re-shard opt-in,
 strict failure for multi-host/unaddressable sharded arrays, and
-derived gradients only.
+opt-in zero-tap intermediate derived gradients.
 tinygrad is a UOp-snapshot functional preview pinned to the `tinygrad>=0.13,<0.14`
 series; live validation and derived gradients require `DEV=PYTHON`; raw callables use
 `function_root`, callable objects use `object_module` hierarchy with parameter records
