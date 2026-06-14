@@ -18,7 +18,9 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 The public `tl.trace()` signature declares backend-growth options before their non-torch
 implementations land. Torch accepts these options as inert cache-key inputs so torch behavior stays
 unchanged. JAX now implements the control-flow policy knobs for `lax.scan`, `lax.cond`, and
-`lax.while_loop`; tinygrad and
+`lax.while_loop`, and raw `function_root` JAX captures transparently inline pure nested `jax.jit`
+calls before applying that control-flow policy. Nested JIT calls with closed constants, effects,
+donated inputs, or explicit shardings remain rejected. tinygrad and
 unimplemented option families reject explicit use with `BackendUnsupportedError` until the matching
 backend phase implements the capability.
 

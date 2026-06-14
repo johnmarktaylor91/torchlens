@@ -615,6 +615,124 @@ def test_jax_rejects_custom_vjp_nested_primitive() -> None:
         )
 
 
+def test_jax_rejects_nested_jit_closure_constants() -> None:
+    """Nested JIT calls with closed constants should fail the recursive purity gate."""
+
+    hidden = jnp.ones((2,), dtype=jnp.float32)
+
+    @jax.jit
+    def uses_hidden(x: Any) -> Any:
+        """Return output using a hidden closed constant."""
+
+        return x + hidden
+
+    def model(params: dict[str, Any], x: Any) -> Any:
+        """Return output through a JIT closure."""
+
+        del params
+        return uses_hidden(x)
+
+    with pytest.raises(ValueError, match="unsupported nested call primitive: jit"):
+        tl.trace(cast(Any, model), ({}, jnp.ones((2,), dtype=jnp.float32)), backend="jax")
+
+
+def test_jax_rejects_debug_print_inside_nested_jit() -> None:
+    """Nested JIT calls with debug effects should remain rejected."""
+
+    @jax.jit
+    def prints_value(x: Any) -> Any:
+        """Return a value after emitting a JAX debug print effect."""
+
+        jax.debug.print("value {}", x[0])
+        return x + 1.0
+
+    def model(params: dict[str, Any], x: Any) -> Any:
+        """Return output through an effectful JIT."""
+
+        del params
+        return prints_value(x)
+
+    with pytest.raises(ValueError, match="unsupported.*effect"):
+        tl.trace(cast(Any, model), ({}, jnp.ones((2,), dtype=jnp.float32)), backend="jax")
+
+
+def test_jax_rejects_donated_nested_jit_args() -> None:
+    """Nested JIT calls with donated inputs should not be inlined."""
+
+    donated_add = jax.jit(lambda value: value + 1.0, donate_argnums=(0,))
+
+    def model(params: dict[str, Any], x: Any) -> Any:
+        """Return output through a donated-input JIT."""
+
+        del params
+        return donated_add(x)
+
+    with pytest.raises(ValueError, match="unsupported nested call primitive: jit"):
+        tl.trace(cast(Any, model), ({}, jnp.ones((2,), dtype=jnp.float32)), backend="jax")
+
+
+def test_jax_rejects_explicit_sharded_nested_jit() -> None:
+    """Nested JIT calls with explicit sharding topology should not be inlined."""
+
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    mesh = Mesh(np.asarray(jax.devices()), ("x",))
+    sharding = NamedSharding(mesh, PartitionSpec("x"))
+    sharded_add = jax.jit(lambda value: value + 1.0, in_shardings=sharding, out_shardings=sharding)
+
+    def model(params: dict[str, Any], x: Any) -> Any:
+        """Return output through an explicitly sharded JIT."""
+
+        del params
+        return sharded_add(x)
+
+    with pytest.raises(ValueError, match="unsupported nested call primitive: jit"):
+        tl.trace(cast(Any, model), ({}, jnp.ones((2,), dtype=jnp.float32)), backend="jax")
+
+
+def test_jax_rejects_remat2_nested_primitive() -> None:
+    """Rematerialization uses a bare Jaxpr frame and remains out of scope."""
+
+    @jax.checkpoint
+    def checkpointed_add(x: Any) -> Any:
+        """Return a checkpointed value."""
+
+        return x + 1.0
+
+    def model(params: dict[str, Any], x: Any) -> Any:
+        """Return output through a checkpointed function."""
+
+        del params
+        return checkpointed_add(x)
+
+    with pytest.raises(ValueError, match="unsupported nested primitive: remat2"):
+        tl.trace(cast(Any, model), ({}, jnp.ones((2,), dtype=jnp.float32)), backend="jax")
+
+
+def test_jax_rejects_shard_map_nested_primitive() -> None:
+    """Shard-map nested jaxprs should remain rejected as distributed regions."""
+
+    shard_map_module = pytest.importorskip("jax.experimental.shard_map")
+    from jax.sharding import Mesh, PartitionSpec
+
+    mesh = Mesh(np.asarray(jax.devices()), ("x",))
+    sharded_map = shard_map_module.shard_map(
+        lambda value: value + 1.0,
+        mesh=mesh,
+        in_specs=PartitionSpec("x"),
+        out_specs=PartitionSpec("x"),
+    )
+
+    def model(params: dict[str, Any], x: Any) -> Any:
+        """Return output through a shard-map boundary."""
+
+        del params
+        return sharded_map(x)
+
+    with pytest.raises(ValueError, match="unsupported nested jaxpr in primitive: shard_map"):
+        tl.trace(cast(Any, model), ({}, jnp.ones((1,), dtype=jnp.float32)), backend="jax")
+
+
 def test_jax_rejects_callback_effects() -> None:
     """JAX callback effects should be rejected with effect wording."""
 

@@ -622,6 +622,68 @@ def test_jax_trace_inlines_allowlisted_pure_library_calls() -> None:
     assert trace.validate_forward_pass([])
 
 
+def test_jax_trace_inlines_non_allowlisted_jit_call() -> None:
+    """Pure user ``jax.jit`` calls should inline without relying on a name allowlist."""
+
+    @jax.jit
+    def user_dense(params: dict[str, Any], x: Any) -> Any:
+        """Return a dense block behind a non-allowlisted JIT boundary."""
+
+        return (x @ params["w1"]) + params["b1"]
+
+    def model(params: dict[str, Any], x: Any) -> Any:
+        """Return output through the nested JIT block."""
+
+        return user_dense(params, x) * 2.0
+
+    trace = _trace_jax(model, (_params(), jnp.ones((2, 3), dtype=jnp.float32)))
+    inlined_ops = [op for op in trace.layer_list if op.annotations.get("jax_inlined") is True]
+
+    assert "jit" in trace.jax_inlined_call_primitives
+    assert "dot_general" in {op.func_name for op in inlined_ops}
+    assert "add" in {op.func_name for op in inlined_ops}
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_trace_inlines_jitted_scan_and_unrolls_body() -> None:
+    """A pure JIT-wrapped scan should inline, then use the existing scan unroll path."""
+
+    @jax.jit
+    def user_scan(carry0: Any, xs: Any) -> Any:
+        """Return a scan output behind a non-allowlisted JIT boundary."""
+
+        def body(carry: Any, item: Any) -> tuple[Any, Any]:
+            """Return one additive scan step."""
+
+            carry_next = carry + item
+            return carry_next, carry_next
+
+        return lax.scan(body, carry0, xs)[1]
+
+    def model(params: dict[str, Any], xs: Any) -> Any:
+        """Return output through the nested JIT-wrapped scan."""
+
+        return user_scan(params["carry0"], xs)
+
+    trace = _trace_jax(
+        model,
+        ({"carry0": jnp.asarray(0.0, dtype=jnp.float32)}, jnp.arange(4, dtype=jnp.float32)),
+    )
+    body_adds = [
+        op
+        for op in trace.layer_list
+        if op.func_name == "add"
+        and op.annotations.get("jax_inlined") is True
+        and ":jit/" in op.annotations.get("jax_source_path", "")
+        and "/body/" in op.annotations.get("jax_source_path", "")
+    ]
+
+    assert "jit" in trace.jax_inlined_call_primitives
+    assert len(body_adds) == 4
+    assert any(op.annotations.get("jax_capture_kind") == "scan_stack" for op in trace.layer_list)
+    assert trace.validate_forward_pass([]) is True
+
+
 def test_jax_repeated_op_block_groups_into_passes() -> None:
     """Repeated equivalent JAX op blocks should share multi-pass layer groups."""
 

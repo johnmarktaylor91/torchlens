@@ -35,6 +35,22 @@ REJECTED_NESTED_PRIMITIVES = frozenset(
     }
 )
 EFFECT_PRIMITIVES = frozenset({"debug_callback", "io_callback", "pure_callback"})
+PURE_JIT_CALL_PRIMITIVES = frozenset({"jit", "pjit"})
+JIT_CALL_PARAM_NAMES = frozenset(
+    {
+        "compiler_options_kvs",
+        "ctx_mesh",
+        "donated_invars",
+        "in_layouts",
+        "in_shardings",
+        "inline",
+        "jaxpr",
+        "keep_unused",
+        "name",
+        "out_layouts",
+        "out_shardings",
+    }
+)
 _ITERATION_COMPONENT_RE = re.compile(
     r"^(?P<prefix>(?:scan|while)[_\-:]?)?(?:iter|iteration)(?P<sep>[:=_-])\d+$"
 )
@@ -1481,7 +1497,7 @@ def _closed_jaxpr_param(eqn: Any, core: Any) -> Any | None:
         Nested closed jaxpr, if recognized.
     """
 
-    if eqn.primitive.name == "jit":
+    if eqn.primitive.name in PURE_JIT_CALL_PRIMITIVES:
         nested = eqn.params.get("jaxpr")
     elif eqn.primitive.name == "custom_jvp_call":
         nested = eqn.params.get("call_jaxpr")
@@ -1574,16 +1590,166 @@ def _can_inline_call(eqn: Any, core: Any) -> bool:
     Returns
     -------
     bool
-        True when the equation matches the pure library allowlist.
+        True when the equation matches the pure inlinable call surface.
     """
 
     if eqn.effects:
         return False
-    if eqn.primitive.name == "jit":
-        return eqn.params.get("name") in SAFE_JIT_NAMES
+    nested = _closed_jaxpr_param(eqn, core)
+    if nested is None:
+        return False
+    if eqn.primitive.name in PURE_JIT_CALL_PRIMITIVES:
+        return _nested_jaxpr_is_pure_inlinable(eqn, nested, core)
     if eqn.primitive.name == "custom_jvp_call":
         return _is_library_custom_jvp_call(eqn, core)
     return False
+
+
+def _nested_jaxpr_is_pure_inlinable(eqn: Any, closed_jaxpr: Any, core: Any) -> bool:
+    """Return whether a nested JIT-shaped call is safe to inline.
+
+    Parameters
+    ----------
+    eqn
+        Candidate call equation carrying ``closed_jaxpr``.
+    closed_jaxpr
+        Nested closed jaxpr frame to inspect.
+    core
+        Imported JAX core module.
+
+    Returns
+    -------
+    bool
+        True when the nested call and all nested closed jaxprs have no
+        closure constants, effects, donation, explicit shardings, or unknown
+        call parameters.
+    """
+
+    if not _jit_call_params_are_known(eqn):
+        return False
+    if _has_donated_invars(eqn.params.get("donated_invars", ())):
+        return False
+    if not _jit_shardings_are_unspecified(eqn.params.get("in_shardings", ())):
+        return False
+    if not _jit_shardings_are_unspecified(eqn.params.get("out_shardings", ())):
+        return False
+    return _closed_jaxpr_is_effect_free_and_const_free(closed_jaxpr, core)
+
+
+def _jit_call_params_are_known(eqn: Any) -> bool:
+    """Return whether a JIT-shaped call uses only audited parameters.
+
+    Parameters
+    ----------
+    eqn
+        Candidate call equation.
+
+    Returns
+    -------
+    bool
+        True when all parameter names are part of the audited JIT-call frame.
+    """
+
+    return set(eqn.params) <= JIT_CALL_PARAM_NAMES
+
+
+def _has_donated_invars(donated_invars: Any) -> bool:
+    """Return whether any nested JIT input is donated.
+
+    Parameters
+    ----------
+    donated_invars
+        Donation flags from the JAX call equation.
+
+    Returns
+    -------
+    bool
+        True when any donation flag is truthy.
+    """
+
+    if isinstance(donated_invars, bool):
+        return donated_invars
+    if isinstance(donated_invars, Sequence):
+        return any(bool(flag) for flag in donated_invars)
+    return bool(donated_invars)
+
+
+def _jit_shardings_are_unspecified(shardings: Any) -> bool:
+    """Return whether a JIT sharding parameter is fully unspecified.
+
+    Parameters
+    ----------
+    shardings
+        JAX ``in_shardings`` or ``out_shardings`` parameter value.
+
+    Returns
+    -------
+    bool
+        True when every entry is JAX's unspecified sharding sentinel.
+    """
+
+    if shardings is None:
+        return True
+    if not isinstance(shardings, Sequence) or isinstance(shardings, str):
+        shardings = (shardings,)
+    return all(_is_unspecified_jax_sharding(sharding) for sharding in shardings)
+
+
+def _is_unspecified_jax_sharding(sharding: Any) -> bool:
+    """Return whether a value is JAX's unspecified sharding sentinel.
+
+    Parameters
+    ----------
+    sharding
+        Candidate sharding value.
+
+    Returns
+    -------
+    bool
+        True for the JAX ``UnspecifiedValue`` sentinel.
+    """
+
+    return type(sharding).__name__ == "UnspecifiedValue"
+
+
+def _closed_jaxpr_is_effect_free_and_const_free(closed_jaxpr: Any, core: Any) -> bool:
+    """Return whether a closed jaxpr tree has no constants or effects.
+
+    Parameters
+    ----------
+    closed_jaxpr
+        Closed jaxpr frame to inspect recursively.
+    core
+        Imported JAX core module.
+
+    Returns
+    -------
+    bool
+        True when the closed jaxpr and all nested closed jaxprs are pure and
+        free of closed-over constants.
+    """
+
+    if tuple(getattr(closed_jaxpr, "consts", ())):
+        return False
+    if tuple(getattr(closed_jaxpr, "effects", ())):
+        return False
+    for child_eqn in closed_jaxpr.jaxpr.eqns:
+        if child_eqn.effects:
+            return False
+        if child_eqn.primitive.name in EFFECT_PRIMITIVES:
+            return False
+        child_nested = _closed_jaxpr_param(child_eqn, core)
+        if child_nested is not None:
+            if child_eqn.primitive.name in PURE_JIT_CALL_PRIMITIVES:
+                if not _nested_jaxpr_is_pure_inlinable(child_eqn, child_nested, core):
+                    return False
+            elif not _closed_jaxpr_is_effect_free_and_const_free(child_nested, core):
+                return False
+            continue
+        for child_closed_jaxpr in _nested_jaxpr_params(child_eqn, core):
+            if not _closed_jaxpr_is_effect_free_and_const_free(child_closed_jaxpr, core):
+                return False
+    return True
 
 
 def _assert_no_rejected_effects(closed_jaxpr: Any) -> None:
