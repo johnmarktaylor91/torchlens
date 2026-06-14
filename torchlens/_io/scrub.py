@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from collections import OrderedDict, defaultdict
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,6 +19,7 @@ import torch
 
 from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
 from .payload_codec import PayloadCodec, get_payload_codec
+from ..constants import MODEL_LOG_FIELD_ORDER
 from ..data_classes._state_adapter import state_items, state_new, state_restore
 from ..data_classes.trace import Trace
 
@@ -206,7 +207,7 @@ def _scrub_value(
     scrubbed_obj = state_new(type(value))
     memo[obj_id] = scrubbed_obj
     scrubbed_state: dict[str, Any] = {}
-    for field_name, field_value in state_items(value):
+    for field_name, field_value in _state_items_for_scrub(value, spec):
         if isinstance(value, Trace) and _is_runtime_only_trace_field(field_name):
             continue
         if field_name not in spec:
@@ -234,6 +235,70 @@ def _scrub_value(
         scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     return state_restore(scrubbed_obj, scrubbed_state)
+
+
+def _state_items_for_scrub(
+    value: Any, spec: Mapping[str, FieldPolicy]
+) -> Iterable[tuple[str, Any]]:
+    """Yield scrub fields in the portable on-disk order for ``value``.
+
+    Parameters
+    ----------
+    value:
+        Portable-state object being scrubbed.
+    spec:
+        Portable state policy mapping for ``value``.
+
+    Returns
+    -------
+    Iterable[tuple[str, Any]]
+        Field/value pairs in deterministic scrub order. Only Trace receives
+        portable serialization ordering; other classes keep adapter order,
+        including slot order for slotted objects.
+    """
+
+    if isinstance(value, Trace):
+        return _trace_state_items_for_scrub(value, spec)
+    return state_items(value)
+
+
+def _trace_state_items_for_scrub(
+    trace: Trace, spec: Mapping[str, FieldPolicy]
+) -> Iterable[tuple[str, Any]]:
+    """Yield Trace fields in deterministic portable serialization order.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose live state should be scrubbed.
+    spec:
+        Trace portable state policy mapping.
+
+    Yields
+    ------
+    tuple[str, Any]
+        Live Trace field/value pairs: first fields present in
+        ``MODEL_LOG_FIELD_ORDER`` order, then remaining present fields in
+        ``PORTABLE_STATE_SPEC`` order, then any still-unseen fields so the
+        existing unknown-field guard can raise.
+    """
+
+    live_state = dict(state_items(trace))
+    yielded_fields: set[str] = set()
+
+    for field_name in MODEL_LOG_FIELD_ORDER:
+        if field_name in live_state:
+            yielded_fields.add(field_name)
+            yield field_name, live_state[field_name]
+
+    for field_name in spec:
+        if field_name in live_state and field_name not in yielded_fields:
+            yielded_fields.add(field_name)
+            yield field_name, live_state[field_name]
+
+    for field_name, field_value in live_state.items():
+        if field_name not in yielded_fields:
+            yield field_name, field_value
 
 
 def _is_runtime_only_trace_field(field_name: str) -> bool:

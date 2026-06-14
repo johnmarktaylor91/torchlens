@@ -12,9 +12,9 @@ Step 9 (_log_final_info_for_layers): Logs operation numbers, module hierarchy,
     that Step 11 and Step 16 depend on. MUST run before Step 11 because
     _add_lookup_keys_for_layer_entry needs module_num_calls data.
 
-Step 10 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fields):
+Step 10 (_rename_model_history_layer_names):
     Renames all raw labels (e.g., "cos_3_raw") to final labels in both Trace-level
-    fields and Op fields, then reorders Trace fields into canonical order.
+    fields and Op fields.
 
 Step 11 (_build_lookup_keys_and_finalize_retained_layers): Builds lookup key mappings (integer
     index, label, module path, buffer/input/output address), and logs retained layer metadata.
@@ -24,7 +24,6 @@ from collections import defaultdict
 from dataclasses import fields, is_dataclass, replace
 from typing import Any, Dict, List, TYPE_CHECKING
 
-from ..constants import MODEL_LOG_FIELD_ORDER
 from ..data_classes.op import Op
 from ..intervention.types import ParentRef
 
@@ -890,20 +889,3 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
             if raw_name in self._raw_to_final_layer_labels:
                 new_arglist.append((self._raw_to_final_layer_labels[raw_name], argname))
         mla[module_pass] = new_arglist
-
-
-def _trim_and_reorder_model_history_fields(self: "Trace") -> None:
-    """Reorder Trace fields into canonical display order.
-
-    This PRESERVES all fields. Public fields listed in MODEL_LOG_FIELD_ORDER come first,
-    followed by any private fields (starting with ``_``) not already in the order list.
-    """
-    new_dir_dict = {}
-    for field in MODEL_LOG_FIELD_ORDER:
-        new_dir_dict[field] = getattr(self, field)
-    # Preserve all remaining fields not in the canonical order (private/internal
-    # fields AND runtime-config attributes like ``verbose``).
-    for field, value in self.__dict__.items():
-        if field not in new_dir_dict:
-            new_dir_dict[field] = value
-    self.__dict__ = new_dir_dict

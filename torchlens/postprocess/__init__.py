@@ -66,7 +66,6 @@ from .labeling import (
     _map_raw_labels_to_final_labels,
     _build_lookup_keys_and_finalize_retained_layers,
     _rename_model_history_layer_names,
-    _trim_and_reorder_model_history_fields,
 )
 from .loop_detection import _detect_and_label_loops, _group_by_shared_params
 from .loop_grouping_adapter import (
@@ -292,7 +291,6 @@ def postprocess(
     # Step 10: Rename all raw labels to final labels
     with _vtimed(self, "  Step 10: Rename labels"):
         _rename_model_history_layer_names(self)
-        _trim_and_reorder_model_history_fields(self)
 
     # Step 11: Build lookup keys and finalize retained layer lists
     with _vtimed(self, "  Step 11: Build lookup keys"):
@@ -413,7 +411,6 @@ def postprocess_fast(self: "Trace") -> None:
         output_layer.transformed_grad_dtype = parent_layer.transformed_grad_dtype
         output_layer.transformed_gradient_memory = parent_layer.transformed_gradient_memory
     _refresh_fast_saved_summary(self)
-    _trim_and_reorder_model_history_fields(self)
     _undecorate_all_saved_tensors(self)
 
     # Gated behind cached cuda.is_available() so CPU-only fast-pass runs don't

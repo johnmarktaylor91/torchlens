@@ -33,7 +33,7 @@ eviction. Step order is load-bearing.
 | 7 | `_detect_and_label_loops` or `_group_by_shared_params` | Recurrent grouping |
 | 8 | `_map_raw_labels_to_final_labels` | Build raw-to-final label map |
 | 9 | `_log_final_info_for_layers` | Write final layer/module fields |
-| 10 | `_rename_model_history_layer_names` and `_trim_and_reorder_model_history_fields` | Rename global refs |
+| 10 | `_rename_model_history_layer_names` | Rename global refs (field reorder removed — scrub order is now deterministic) |
 | 11 | `_build_lookup_keys_and_finalize_retained_layers` | Build lookup keys and finalize retained layer lists |
 | 12 | `_undecorate_all_saved_tensors` | Strip TorchLens attrs from saved tensors |
 | 13 | `torch.cuda.empty_cache` | Optional CUDA cache clear |
