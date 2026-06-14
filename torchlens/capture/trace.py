@@ -210,10 +210,8 @@ def save_new_outs(
         layer_log_entry.transformed_grad_dtype = None
         layer_log_entry.transformed_gradient_memory = None
         layer_log_entry.has_out_variations = False
-        # Note: out_versions_by_child is cleared and NOT rebuilt in fast pass.
-        # This is a known limitation (#93): validation should not be run after
-        # save_new_outs since child tensor variations aren't recaptured.
         layer_log_entry.out_versions_by_child = {}
+    self._replay_arg_version_data_complete = False
 
     # Reset per-pass bookkeeping fields.  Graph-level totals (total_activation_memory,
     # num_tensors) are NOT reset — they describe the static graph structure.
@@ -241,6 +239,8 @@ def save_new_outs(
     self._run_and_log_inputs_through_model(
         model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, random_seed
     )
+    if self.save_arg_values:
+        self._replay_arg_version_data_complete = True
 
 
 def _get_op_nums_from_user_labels(

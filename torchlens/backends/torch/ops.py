@@ -1188,6 +1188,7 @@ def log_function_output_tensors(
     elif self.capture_mode == "fast":
         log_function_output_tensors_fast(
             self,
+            func,
             func_name,
             args,
             kwargs,
@@ -2202,36 +2203,140 @@ def _tag_tensor_and_track_variations(
     for parent_label in new_layer_entry.parents:
         parent_event = self.capture_events.live_index.require_event(parent_label)
         contract = child_event.backend_semantics
-        contract_positions = tuple(contract.mutated_input_positions) + tuple(
-            contract.aliased_output_inputs
-        )
-        should_snapshot_by_contract = parent_label_has_alias_contract(
+        parent_tensor_contents = _get_parent_output_version_snapshot(
+            self,
             parent_label,
             new_layer_entry.parent_arg_positions,
-            contract_positions,
+            contract.mutated_input_positions,
+            contract.aliased_output_inputs,
+            parent_event.output.has_saved_activation,
+            parent_event.output.tensor.payload,
+            arg_copies,
+            kwarg_copies,
         )
-        should_snapshot_by_value = parent_event.output.has_saved_activation
-        if self.save_arg_values and (should_snapshot_by_contract or should_snapshot_by_value):
-            parent_tensor_contents = get_parent_contents_for_contract_position(
-                parent_label,
-                arg_copies,
-                kwarg_copies,
-                new_layer_entry.parent_arg_positions,
-            )
-            if should_snapshot_by_contract or not tensor_nanequal(
-                parent_tensor_contents,
-                parent_event.output.tensor.payload,
-            ):
-                self.capture_events.append_output_version(
-                    OutputVersionEvent(
-                        parent_raw_label=parent_label,
-                        child_raw_label=new_layer_entry._label_raw,
-                        child_output_path=tuple(fields_dict_onetensor["container_path"]),
-                        payload=parent_tensor_contents,
-                        transform_state=fields_dict_onetensor["activation_transform"],
-                        detach_grad_policy=fields_dict_onetensor["detach_saved_activations"],
-                    )
+        if parent_tensor_contents is not None:
+            self.capture_events.append_output_version(
+                OutputVersionEvent(
+                    parent_raw_label=parent_label,
+                    child_raw_label=new_layer_entry._label_raw,
+                    child_output_path=tuple(fields_dict_onetensor["container_path"]),
+                    payload=parent_tensor_contents,
+                    transform_state=fields_dict_onetensor["activation_transform"],
+                    detach_grad_policy=fields_dict_onetensor["detach_saved_activations"],
                 )
+            )
+
+
+def _get_parent_output_version_snapshot(
+    self: "Trace",
+    parent_label: str,
+    parent_arg_positions: dict[str, dict[Any, str]],
+    mutated_input_positions: tuple[object, ...],
+    aliased_output_inputs: tuple[object, ...],
+    parent_has_saved_activation: bool,
+    parent_saved_output: Any,
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+) -> Any | None:
+    """Return the pre-call parent snapshot needed for child-version replay.
+
+    Parameters
+    ----------
+    self
+        Active trace.
+    parent_label
+        Parent label in the same label space as ``parent_arg_positions``.
+    parent_arg_positions
+        Mapping from argument positions to parent labels.
+    mutated_input_positions
+        Input positions the backend contract says may be mutated.
+    aliased_output_inputs
+        Input positions the backend contract says may alias the output.
+    parent_has_saved_activation
+        Whether the parent currently has a saved activation payload.
+    parent_saved_output
+        Parent's currently saved activation payload, if any.
+    arg_copies
+        Pre-call positional argument copies.
+    kwarg_copies
+        Pre-call keyword argument copies.
+
+    Returns
+    -------
+    Any | None
+        Pre-call parent value when replay needs a child-specific version;
+        otherwise ``None``.
+    """
+
+    contract_positions = tuple(mutated_input_positions) + tuple(aliased_output_inputs)
+    should_snapshot_by_contract = parent_label_has_alias_contract(
+        parent_label,
+        parent_arg_positions,
+        contract_positions,
+    )
+    should_snapshot_by_value = parent_has_saved_activation
+    if not (self.save_arg_values and (should_snapshot_by_contract or should_snapshot_by_value)):
+        return None
+
+    parent_tensor_contents = get_parent_contents_for_contract_position(
+        parent_label,
+        arg_copies,
+        kwarg_copies,
+        parent_arg_positions,
+    )
+    if should_snapshot_by_contract or not tensor_nanequal(
+        parent_tensor_contents,
+        parent_saved_output,
+    ):
+        return parent_tensor_contents
+    return None
+
+
+def _track_fast_parent_output_versions(
+    self: "Trace",
+    orig_layer_entry: Op,
+    backend_semantics: BackendSemantics,
+    arg_copies: tuple[Any, ...],
+    kwarg_copies: dict[str, Any],
+) -> None:
+    """Record child-version snapshots while refreshing an existing fast trace.
+
+    Parameters
+    ----------
+    self
+        Trace being refreshed in fast mode.
+    orig_layer_entry
+        Existing child operation matched by counter alignment.
+    backend_semantics
+        Backend alias/mutation contract detected for the current call.
+    arg_copies
+        Pre-call positional argument copies.
+    kwarg_copies
+        Pre-call keyword argument copies.
+
+    Returns
+    -------
+    None
+        Mutates parent ``out_versions_by_child`` fields.
+    """
+
+    for parent_label in orig_layer_entry.parents:
+        parent_layer = self[parent_label]
+        parent_tensor_contents = _get_parent_output_version_snapshot(
+            self,
+            parent_label,
+            orig_layer_entry.parent_arg_positions,
+            backend_semantics.mutated_input_positions,
+            backend_semantics.aliased_output_inputs,
+            parent_layer.has_saved_activation,
+            parent_layer.out if parent_layer.has_saved_activation else None,
+            arg_copies,
+            kwarg_copies,
+        )
+        if parent_tensor_contents is None:
+            continue
+        parent_layer.out_versions_by_child[orig_layer_entry.layer_label] = parent_tensor_contents
+        parent_layer.has_out_variations = True
 
 
 def log_function_output_tensors_exhaustive(
@@ -2404,6 +2509,7 @@ def _get_parent_contents(
 
 def log_function_output_tensors_fast(
     self: "Trace",
+    func: Callable[..., Any],
     func_name: str,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
@@ -2433,6 +2539,21 @@ def log_function_output_tensors_fast(
     # O(1) tensor extraction via lookup table (replaces BFS crawl)
     arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     out_iter = ensure_iterable(out_orig)
+    expected_output_count = len(out_iter)
+    func_event_input = FunctionEventInput(
+        func=func,
+        func_name=func_name,
+        func_qualname=getattr(func, "__qualname__", None),
+        args=args,
+        kwargs=kwargs,
+        raw_output=out_orig,
+        arg_copies=arg_copies,
+        kwarg_copies=kwarg_copies,
+        module_stack=(),
+        is_bottom_level_func=is_bottom_level_func,
+        func_call_id=func_call_id,
+        expected_output_count=expected_output_count,
+    )
 
     for i, out in enumerate(out_iter):
         if not _output_should_be_logged(out, is_bottom_level_func):
@@ -2495,6 +2616,27 @@ def log_function_output_tensors_fast(
                 "random seed), so save_new_outs failed. Please re-run "
                 "trace with the desired inputs."
             )
+        detect_backend_semantics = (
+            detect_torch_alias_contract
+            if _should_keep_alias_mutation_contract(self)
+            else detect_torch_output_alias_contract
+        )
+        backend_semantics = detect_backend_semantics(
+            func_event_input,
+            backend_grad_handle=orig_layer_entry.grad_fn_handle,
+            grad_fn_class_name=orig_layer_entry.grad_fn_class_name,
+            autograd_memory=orig_layer_entry.autograd_memory,
+            num_autograd_tensors=orig_layer_entry.num_autograd_tensors,
+            bytes_delta_at_call=orig_layer_entry.bytes_delta_at_call,
+            bytes_peak_at_call=orig_layer_entry.bytes_peak_at_call,
+        )
+        _track_fast_parent_output_versions(
+            self,
+            orig_layer_entry,
+            backend_semantics,
+            arg_copies,
+            kwarg_copies,
+        )
 
         # Save out data if this layer is in the save list.
         layer_nums_to_save = cast(Any, self._layer_nums_to_save)
@@ -2532,6 +2674,10 @@ def log_function_output_tensors_fast(
                             if not getattr(self, "save_raw_activations", True):
                                 child_output._internal_set("out", None)
                     child_output.has_saved_activation = True
+                    if self.save_arg_values:
+                        child_output.has_saved_args = True
+                        child_output._internal_set("saved_args", [safe_copy(child_output.out)])
+                        child_output._internal_set("saved_kwargs", {})
                     if child_output.out is not None:
                         child_output.activation_memory = Bytes(
                             get_memory_amount_from_metadata(

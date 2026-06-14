@@ -552,6 +552,7 @@ def _check_layer_arguments_logged_correctly(self: "Trace", target_layer_label: s
                 iterfunc, argtype_field = argtype_dict[arg_type]
                 saved_values = getattr(target_layer, argtype_field)
                 if saved_values is None:
+                    _raise_if_replay_arg_version_data_incomplete(self, target_layer)
                     raise ValueError(
                         "Cannot validate saved layer "
                         f"{target_layer.label}: {argtype_field} was not saved. "
@@ -590,8 +591,8 @@ def _raise_if_replay_arg_version_data_incomplete(self: "Trace", target_layer: Op
         return
     raise ValueError(
         "Cannot validate saved layer "
-        f"{target_layer.label}: this trace was materialized from a sparse Recording "
-        "without saved argument values or child-version snapshots. "
+        f"{target_layer.label}: this trace does not have complete saved argument "
+        "values or child-version snapshots for replay validation. "
         "Use tl.trace(..., save_arg_values=True) for replay validation."
     )
 

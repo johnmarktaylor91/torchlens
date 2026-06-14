@@ -62,6 +62,17 @@ class RecordingAliasMutation(nn.Module):
         return parent * 3
 
 
+class InplaceVersionModel(nn.Module):
+    """Model that requires child-version snapshots for in-place replay."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Mutate an intermediate in place before a downstream consumer."""
+
+        parent = x + 1
+        parent.relu_()
+        return parent * 2
+
+
 def _linear_op(log: tl.Trace) -> tl.Op:
     """Return the first linear op in a trace."""
 
@@ -176,6 +187,52 @@ def test_recording_to_trace_refuses_missing_child_version_replay_data() -> None:
     assert all(not op.out_versions_by_child for op in trace.layer_list)
     with pytest.raises(ValueError, match="child-version snapshots"):
         trace.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
+
+
+def test_save_new_outs_rebuilds_child_versions_and_validates_alias_mutation() -> None:
+    """Fast refresh with saved args rebuilds child versions and replays."""
+
+    model = InplaceVersionModel()
+    x = torch.tensor([-2.0, 3.0])
+    new_x = torch.tensor([-5.0, 1.0])
+    log = tl.trace(model, x, layers_to_save="all", save_arg_values=True)
+
+    log.save_new_outs(model, new_x, layers_to_save="all")
+
+    add_site = log["add_1_1"]
+    assert log._replay_arg_version_data_complete
+    assert torch.equal(add_site.out_versions_by_child["relu_1_2"], torch.tensor([-4.0, 2.0]))
+    assert log.validate_forward_pass([model(new_x).detach().clone()], validate_metadata=False)
+
+
+def test_selective_fast_save_rebuilds_versions_without_unsaved_out_postprocess() -> None:
+    """Selective two-pass rebuilds versions and skips unsaved public ``.out`` reads."""
+
+    model = RecordingAliasMutation()
+    x = torch.ones(2, 4)
+    log = tl.trace(model, x, layers_to_save=["mul"], save_arg_values=True)
+
+    assert log._replay_arg_version_data_complete
+    assert log["mul_1_4"].has_saved_activation
+    assert not log["add_1_1"].has_saved_activation
+    assert "viewas_1_2" in log["add_1_1"].out_versions_by_child
+    assert torch.equal(
+        log["add_1_1"].out_versions_by_child["viewas_1_2"],
+        torch.full((2, 4), 2.0),
+    )
+
+
+def test_selective_fast_save_without_arg_values_marks_replay_versions_incomplete() -> None:
+    """Fast selective save without arg snapshots refuses replay honestly."""
+
+    model = RecordingAliasMutation()
+    x = torch.ones(2, 4)
+    log = tl.trace(model, x, layers_to_save=["mul"], save_arg_values=False)
+
+    assert not log._replay_arg_version_data_complete
+    assert all(not op.out_versions_by_child for op in log.layer_list)
+    with pytest.raises(ValueError, match="child-version snapshots"):
+        log.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
 
 
 def test_fastlog_record_intervene_save_captures_post_hook_payload() -> None:
