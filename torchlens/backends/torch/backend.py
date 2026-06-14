@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, Mapping, cast
 
@@ -15,7 +16,8 @@ from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...utils.introspection import get_vars_of_type_from_obj
+from ...utils.arg_handling import normalize_input_args, safe_copy_args, safe_copy_kwargs
+from ...utils.introspection import get_vars_of_type_from_obj, nested_assign
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.tensor_utils import safe_copy
 from . import _tl
@@ -32,6 +34,38 @@ from .wrappers import unwrap_torch, wrap_torch
 
 if TYPE_CHECKING:
     from ...data_classes.trace import Trace
+
+
+def _get_input_arg_names(model: torch.nn.Module, input_args: list[Any]) -> list[str]:
+    """Extract parameter names from the model's forward() signature for the given input args.
+
+    Parameters
+    ----------
+    model:
+        Model whose ``forward`` signature should be inspected.
+    input_args:
+        Normalized positional inputs.
+
+    Returns
+    -------
+    list[str]
+        Forward parameter names aligned to ``input_args``.
+
+    Notes
+    -----
+    Inspects the forward method's argspec, strips 'self', and generates synthetic
+    names for any *args overflow positions.
+    """
+    spec = inspect.getfullargspec(model.forward)
+    input_arg_names = list(spec.args)
+    if "self" in input_arg_names:
+        input_arg_names.remove("self")
+    input_arg_names = input_arg_names[0 : len(input_args)]
+    # Handle *args: generate synthetic names for uncovered positions
+    if len(input_arg_names) < len(input_args) and spec.varargs is not None:
+        for i in range(len(input_arg_names), len(input_args)):
+            input_arg_names.append(f"{spec.varargs}_{i}")
+    return input_arg_names
 
 
 class TorchBackend:
@@ -93,6 +127,162 @@ class TorchBackend:
     def pause_logging(self, session: object) -> AbstractContextManager[None]:
         """Return the existing torch pause-logging context manager."""
         return _state.pause_logging()
+
+    def setup_inputs_and_device(
+        self,
+        session: object,
+        model: object,
+        input_args: object,
+        input_kwargs: dict[Any, Any] | None,
+    ) -> tuple[list[Any], dict[Any, Any], list[str], object]:
+        """Normalize inputs, detect model device, copy args, and extract input arg names.
+
+        Parameters
+        ----------
+        session:
+            Active capture session. Unused for the torch implementation.
+        model:
+            Torch module being captured.
+        input_args:
+            Caller-provided positional inputs.
+        input_kwargs:
+            Caller-provided keyword inputs, or ``None``.
+
+        Returns
+        -------
+        tuple[list[Any], dict[Any, Any], list[str], object]
+            Copied positional inputs, copied keyword inputs, positional input names,
+            and the selected model device.
+
+        Notes
+        -----
+        This is the single place where user-provided inputs are transformed into
+        the canonical internal form:
+          1. Unwrap DataParallel to get the underlying module.
+          2. ``normalize_input_args``: resolve the tuple-vs-single-arg ambiguity
+             by inspecting the model's forward() signature.
+          3. ``safe_copy_args/kwargs``: clone tensors so in-place device moves
+             (in ``fetch_label_move_input_tensors``) don't mutate the caller's data.
+          4. Detect model device from first param or buffer (for auto-moving inputs).
+        """
+        del session
+        torch_model = cast(torch.nn.Module, model)
+        if type(torch_model) == torch.nn.DataParallel:
+            torch_model = torch_model.module
+
+        # Resolve ambiguity: is [tensor_a, tensor_b] two args or one list-arg?
+        # normalize_input_args checks the model's forward() signature to decide.
+        input_args = normalize_input_args(input_args, torch_model)
+
+        if not input_kwargs:
+            input_kwargs = {}
+
+        # Detect device from first param or buffer; fall back to CPU for param-free models.
+        first_param = next(torch_model.parameters(), None)
+        first_buffer = next(torch_model.buffers(), None)
+        if first_param is not None:
+            model_device: object = first_param.device
+        elif first_buffer is not None:
+            model_device = first_buffer.device
+        else:
+            model_device = "cpu"
+
+        # Clone tensors to protect user's originals from in-place device moves.
+        input_args = safe_copy_args(input_args)
+        input_arg_names = _get_input_arg_names(torch_model, input_args)
+        input_kwargs = safe_copy_kwargs(input_kwargs)
+
+        return input_args, input_kwargs, input_arg_names, model_device
+
+    def fetch_label_move_input_tensors(
+        self,
+        session: object,
+        input_args: list[Any],
+        input_arg_names: list[str],
+        input_kwargs: dict[Any, Any],
+        model_device: object,
+    ) -> tuple[list[Any], list[str]]:
+        """Extract all tensors from input args/kwargs, move to model device, and build addresses.
+
+        Parameters
+        ----------
+        session:
+            Active capture session. Unused for the torch implementation.
+        input_args:
+            Copied positional inputs that may be mutated for internal device moves.
+        input_arg_names:
+            Forward signature names for positional inputs.
+        input_kwargs:
+            Copied keyword inputs that may be mutated for internal device moves.
+        model_device:
+            Device selected by :meth:`setup_inputs_and_device`.
+
+        Returns
+        -------
+        tuple[list[Any], list[str]]
+            Input tensor leaves and their source-address labels.
+
+        Notes
+        -----
+        Handles nested structures (lists, tuples, dicts) up to ``search_depth=5``.
+        Each tensor gets a hierarchical address string like ``"input.x"`` or
+        ``"input.x.0.nested"`` that is stored as its ``io_role``.
+        """
+        del session
+        input_arg_tensors = [
+            get_vars_of_type_from_obj(arg, torch.Tensor, search_depth=5, return_addresses=True)
+            for arg in input_args
+        ]
+        input_kwarg_tensors = [
+            get_vars_of_type_from_obj(kwarg, torch.Tensor, search_depth=5, return_addresses=True)
+            for kwarg in input_kwargs.values()
+        ]
+        # Move each tensor to model device.  Tuples must be temporarily converted
+        # to lists for item assignment, then converted back to preserve type.
+        for arg_idx, arg in enumerate(input_args):
+            was_tuple = isinstance(arg, tuple)
+            if was_tuple:
+                input_args[arg_idx] = list(arg)
+            for tensor_idx, (tensor, addr, addr_full) in enumerate(input_arg_tensors[arg_idx]):
+                moved_tensor = tensor.to(model_device)
+                input_arg_tensors[arg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
+                if not addr_full:
+                    input_args[arg_idx] = moved_tensor
+                else:
+                    nested_assign(input_args[arg_idx], addr_full, moved_tensor)
+            if was_tuple and isinstance(input_args[arg_idx], list):
+                input_args[arg_idx] = tuple(input_args[arg_idx])
+
+        for kwarg_idx, (key, val) in enumerate(input_kwargs.items()):
+            for tensor_idx, (tensor, addr, addr_full) in enumerate(input_kwarg_tensors[kwarg_idx]):
+                moved_tensor = tensor.to(model_device)
+                input_kwarg_tensors[kwarg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
+                if not addr_full:
+                    input_kwargs[key] = moved_tensor
+                else:
+                    nested_assign(input_kwargs[key], addr_full, moved_tensor)
+
+        # Build flat lists of (tensor, address) for both positional and keyword args.
+        # Address format: "input.<argname>" or "input.<argname>.<nested_path>"
+        input_tensors = []
+        input_tensor_addresses = []
+        for arg_idx, arg_tensors in enumerate(input_arg_tensors):
+            for tensor, addr, addr_full in arg_tensors:
+                input_tensors.append(tensor)
+                tensor_addr = f"input.{input_arg_names[arg_idx]}"
+                if addr != "":
+                    tensor_addr += f".{addr}"
+                input_tensor_addresses.append(tensor_addr)
+
+        for arg_idx, kwarg_tensors in enumerate(input_kwarg_tensors):
+            for tensor, addr, addr_full in kwarg_tensors:
+                input_tensors.append(tensor)
+                tensor_addr = f"input.{list(input_kwargs.keys())[arg_idx]}"
+                if addr != "":
+                    tensor_addr += f".{addr}"
+                input_tensor_addresses.append(tensor_addr)
+
+        return input_tensors, input_tensor_addresses
 
     def snapshot_rng(self, session: object) -> object:
         """Capture the current torch RNG state."""

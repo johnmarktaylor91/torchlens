@@ -58,6 +58,27 @@ class CaptureBackend(Protocol):
         """Return a context manager that pauses backend logging."""
         ...
 
+    def setup_inputs_and_device(
+        self,
+        session: object,
+        model: object,
+        input_args: object,
+        input_kwargs: dict[Any, Any] | None,
+    ) -> tuple[list[Any], dict[Any, Any], list[str], object]:
+        """Normalize inputs, copy caller-owned values, and detect the model device."""
+        ...
+
+    def fetch_label_move_input_tensors(
+        self,
+        session: object,
+        input_args: list[Any],
+        input_arg_names: list[str],
+        input_kwargs: dict[Any, Any],
+        model_device: object,
+    ) -> tuple[list[Any], list[str]]:
+        """Extract input tensors, move them to the model device, and build labels."""
+        ...
+
     def snapshot_rng(self, session: object) -> object:
         """Capture backend RNG state for the current session."""
         ...
