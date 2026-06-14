@@ -1306,6 +1306,738 @@ FUNC_ARG_SPECS["unravelindex"] = ArgSpec(positions=(0,), tensor_kwargs=("indices
 FUNC_ARG_SPECS["unsafesplit"] = ArgSpec(positions=(0,), tensor_kwargs=("tensor",))
 FUNC_ARG_SPECS["vecdot"] = ArgSpec(positions=(0, 1), tensor_kwargs=("x", "y"))
 
+# ---------------------------------------------------------------------------
+# Phase 5b validated audit-fragment fills
+# ---------------------------------------------------------------------------
+
+_PHASE5B_VALIDATED_ARG_SPECS = {
+    "affinegridgenerator": ArgSpec(positions=(0,), tensor_kwargs=("theta",)),
+    "aliascopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "alignto": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "ampforeachnonfinitecheckandunscale": ArgSpec(
+        positions=(1, 2), sequence_positions=(0,), tensor_kwargs=("self", "found_inf", "inv_scale")
+    ),
+    "ampupdatescale": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("self", "growth_tracker", "found_inf")
+    ),
+    "asstridedcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "autocast": ArgSpec(),
+    "autocasttofullprecision": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "autocasttoreducedprecision": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "batchnormelemt": ArgSpec(
+        positions=(0, 1, 2, 3, 4), tensor_kwargs=("input", "weight", "bias", "mean", "invstd")
+    ),
+    "batchnormgatherstats": ArgSpec(
+        positions=(0, 1, 2, 3, 4),
+        tensor_kwargs=("input", "mean", "invstd", "running_mean", "running_var"),
+    ),
+    "batchnormgatherstatswithcounts": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 7),
+        tensor_kwargs=("input", "mean", "invstd", "running_mean", "running_var", "counts"),
+    ),
+    "batchnormimplindex": ArgSpec(
+        positions=(0, 1, 2, 3, 4),
+        tensor_kwargs=("input", "weight", "bias", "running_mean", "running_var"),
+    ),
+    "batchnormstats": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "batchnormupdatestats": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("input", "running_mean", "running_var")
+    ),
+    "binarycrossentropywithlogits": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("self", "target", "weight", "pos_weight")
+    ),
+    "binomial": ArgSpec(positions=(0, 1), tensor_kwargs=("count", "prob")),
+    "castbyte": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "castchar": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "castdouble": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "castfloat": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "casthalf": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "castint": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "castlong": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "castshort": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "ccolindicescopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "chooseqparamsoptimized": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "chooseqparamspertensor": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "chunkcat": ArgSpec(sequence_positions=(0,), tensor_kwargs=("tensors",)),
+    "coalesced": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "colindicescopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "computelinearcombination": ArgSpec(positions=(0, 1), tensor_kwargs=("input", "coefficients")),
+    "conjcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "constantpadnd": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "convertindicesfromcootocsr": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "convertindicesfromcsrtocoo": ArgSpec(
+        positions=(0, 1), tensor_kwargs=("crow_indices", "col_indices")
+    ),
+    "convertweighttoint4pack": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "convertweighttoint4packforcpu": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "convolution": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "weight", "bias")),
+    "convolutionmode": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "weight", "bias")),
+    "convtbc": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("self", "weight", "bias")),
+    "copyfrom": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "dst")),
+    "copyfromandresize": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "dst")),
+    "crowindicescopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "csltcompress": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "csltsparsemm": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("compressed_A", "dense_B", "bias", "alpha")
+    ),
+    "csltsparsemmsearch": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("compressed_A", "dense_B", "bias", "alpha")
+    ),
+    "cudnnconvolutionaddrelu": ArgSpec(
+        positions=(0, 1, 2, 4), tensor_kwargs=("self", "weight", "z", "bias")
+    ),
+    "cudnnctcloss": ArgSpec(
+        positions=(0, 1, 2, 3),
+        tensor_kwargs=("log_probs", "targets", "input_lengths", "target_lengths"),
+    ),
+    "cudnninitdropoutstate": ArgSpec(),
+    "cudnnrnnflattenweight": ArgSpec(sequence_positions=(0,), tensor_kwargs=("weight_arr",)),
+    "cufftclearplancache": ArgSpec(),
+    "cufftgetplancachemaxsize": ArgSpec(),
+    "cufftgetplancachesize": ArgSpec(),
+    "cufftsetplancachemaxsize": ArgSpec(),
+    "cummaxhelper": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("self", "values", "indices")),
+    "cumminhelper": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("self", "values", "indices")),
+    "dirichletgrad": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("x", "alpha", "total")),
+    "dlpack": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "dlpackdevice": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "dynquantmatmul4bit": ArgSpec(positions=(0, 1), tensor_kwargs=("inp", "packed_weights")),
+    "dynquantpack4bitweight": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("weights", "scales_zeros", "bias")
+    ),
+    "efficientzerotensor": ArgSpec(),
+    "embeddingbag": ArgSpec(
+        positions=(0, 1, 2, 6), tensor_kwargs=("weight", "indices", "offsets", "per_sample_weights")
+    ),
+    "embeddingbagforwardonly": ArgSpec(
+        positions=(0, 1, 2, 6), tensor_kwargs=("weight", "indices", "offsets", "per_sample_weights")
+    ),
+    "embeddingrenorm": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "indices")),
+    "emptyaffinequantized": ArgSpec(),
+    "emptyperchannelaffinequantized": ArgSpec(tensor_kwargs=("scales", "zero_points")),
+    "euclideandist": ArgSpec(positions=(0, 1), tensor_kwargs=("x1", "x2")),
+    "fakequantizelearnableperchannelaffine": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("self", "scale", "zero_point")
+    ),
+    "fakequantizelearnablepertensoraffine": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("self", "scale", "zero_point")
+    ),
+    "fakequantizepertensoraffinecachemasktensorqparams": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("self", "scale", "zero_point", "fake_quant_enabled")
+    ),
+    "fbgemmlinearfp16weight": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("input", "packed_weight", "bias")
+    ),
+    "fbgemmlinearfp16weightfp32activation": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("input", "packed_weight", "bias")
+    ),
+    "fbgemmlinearint8weight": ArgSpec(
+        positions=(0, 1, 2, 3, 6),
+        tensor_kwargs=("input", "weight", "packed", "col_offsets", "bias"),
+    ),
+    "fbgemmlinearint8weightfp32activation": ArgSpec(
+        positions=(0, 1, 2, 3, 6),
+        tensor_kwargs=("input", "weight", "packed", "col_offsets", "bias"),
+    ),
+    "fbgemmlinearquantizeweight": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "fbgemmpackgemmmatrixfp16": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "fbgemmpackquantizedmatrix": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "featuredropout": ArgSpec(positions=(0,), tensor_kwargs=("input", "self")),
+    "fftc2c": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "fftc2r": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "fftr2c": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "fillmemeffdropoutmask": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "floordiv": ArgSpec(positions=(0, 1)),
+    "foobar": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "foreachabs": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachacos": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachadd": ArgSpec(
+        positions=(1,), sequence_positions=(0, 1), tensor_kwargs=("self", "other")
+    ),
+    "foreachaddcdiv": ArgSpec(
+        positions=(3,),
+        sequence_positions=(0, 1, 2),
+        tensor_kwargs=("self", "tensor1", "tensor2", "scalars"),
+    ),
+    "foreachaddcmul": ArgSpec(
+        positions=(3,),
+        sequence_positions=(0, 1, 2),
+        tensor_kwargs=("self", "tensor1", "tensor2", "scalars"),
+    ),
+    "foreachasin": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachatan": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachceil": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachclampmax": ArgSpec(sequence_positions=(0, 1), tensor_kwargs=("self", "other")),
+    "foreachclampmin": ArgSpec(sequence_positions=(0, 1), tensor_kwargs=("self", "other")),
+    "foreachcopy": ArgSpec(sequence_positions=(0, 1), tensor_kwargs=("self", "src")),
+    "foreachcos": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachcosh": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachdiv": ArgSpec(
+        positions=(1,), sequence_positions=(0, 1), tensor_kwargs=("self", "other")
+    ),
+    "foreacherf": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreacherfc": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachexp": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachexpm1": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachfloor": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachfrac": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachlerp": ArgSpec(
+        sequence_positions=(0, 1, 2), tensor_kwargs=("self", "tensors1", "weights")
+    ),
+    "foreachlgamma": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachlog": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachlog10": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachlog1p": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachlog2": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachmax": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachmaximum": ArgSpec(sequence_positions=(0, 1), tensor_kwargs=("self", "other")),
+    "foreachminimum": ArgSpec(sequence_positions=(0, 1), tensor_kwargs=("self", "other")),
+    "foreachmul": ArgSpec(
+        positions=(1,), sequence_positions=(0, 1), tensor_kwargs=("self", "other")
+    ),
+    "foreachneg": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachnorm": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachpow": ArgSpec(sequence_positions=(0, 1), tensor_kwargs=("self", "exponent")),
+    "foreachreciprocal": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachround": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachrsqrt": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachsigmoid": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachsign": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachsin": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachsinh": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachsqrt": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachsub": ArgSpec(sequence_positions=(0, 1), tensor_kwargs=("self", "other")),
+    "foreachtan": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachtanh": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachtrunc": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "foreachzero": ArgSpec(sequence_positions=(0,), tensor_kwargs=("self",)),
+    "fractionalmaxpool2dwithindices": ArgSpec(
+        positions=(0, 5), tensor_kwargs=("input", "_random_samples")
+    ),
+    "fractionalmaxpool3dwithindices": ArgSpec(
+        positions=(0, 5), tensor_kwargs=("input", "_random_samples")
+    ),
+    "frobeniusnorm": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "fusedadagrad": ArgSpec(
+        sequence_positions=(0, 1, 2, 3),
+        tensor_kwargs=(
+            "self",
+            "grads",
+            "state_sums",
+            "state_steps",
+            "lr",
+            "grad_scale",
+            "found_inf",
+        ),
+    ),
+    "fusedadam": ArgSpec(
+        sequence_positions=(0, 1, 2, 3, 4, 5),
+        tensor_kwargs=(
+            "self",
+            "grads",
+            "exp_avgs",
+            "exp_avg_sqs",
+            "max_exp_avg_sqs",
+            "state_steps",
+            "lr",
+            "grad_scale",
+            "found_inf",
+        ),
+    ),
+    "fusedadamw": ArgSpec(
+        sequence_positions=(0, 1, 2, 3, 4, 5),
+        tensor_kwargs=(
+            "self",
+            "grads",
+            "exp_avgs",
+            "exp_avg_sqs",
+            "max_exp_avg_sqs",
+            "state_steps",
+            "lr",
+            "grad_scale",
+            "found_inf",
+        ),
+    ),
+    "fuseddropout": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "fusedmovingavgobsfakequant": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5, 6),
+        tensor_kwargs=(
+            "self",
+            "observer_on",
+            "fake_quant_on",
+            "running_min",
+            "running_max",
+            "scale",
+            "zero_point",
+        ),
+    ),
+    "fusedmovingavgobsfqhelper": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5, 6),
+        tensor_kwargs=(
+            "self",
+            "observer_on",
+            "fake_quant_on",
+            "running_min",
+            "running_max",
+            "scale",
+            "zero_point",
+        ),
+    ),
+    "fusedrmsnorm": ArgSpec(positions=(0, 2), tensor_kwargs=("input", "weight")),
+    "fusedsdpchoice": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("query", "key", "value", "attn_mask")
+    ),
+    "fusedsgd": ArgSpec(
+        sequence_positions=(0, 1, 2),
+        tensor_kwargs=("self", "grads", "momentum_buffer_list", "lr", "grad_scale", "found_inf"),
+    ),
+    "fwprimalcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "gridsampler": ArgSpec(positions=(0, 1), tensor_kwargs=("input", "grid")),
+    "gridsampler2d": ArgSpec(positions=(0, 1), tensor_kwargs=("input", "grid")),
+    "gridsampler2dcpufallback": ArgSpec(positions=(0, 1), tensor_kwargs=("input", "grid")),
+    "gridsampler3d": ArgSpec(positions=(0, 1), tensor_kwargs=("input", "grid")),
+    "groupedmm": ArgSpec(positions=(0, 1, 2, 3), tensor_kwargs=("self", "mat2", "offs", "bias")),
+    "gru": ArgSpec(
+        positions=(0, 1, 2),
+        sequence_positions=(3,),
+        tensor_kwargs=("input", "data", "batch_sizes", "hx", "params"),
+    ),
+    "grucell": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5), tensor_kwargs=("input", "hx", "w_ih", "w_hh", "b_ih", "b_hh")
+    ),
+    "hascompatibleshallowcopytype": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "from")),
+    "histogramddbinedges": ArgSpec(positions=(0,), tensor_kwargs=("self", "weight")),
+    "histogramddfrombincts": ArgSpec(positions=(0,), tensor_kwargs=("self", "weight")),
+    "histogramddfrombintensors": ArgSpec(
+        positions=(0,), sequence_positions=(1,), tensor_kwargs=("self", "bins", "weight")
+    ),
+    "indexputimpl": ArgSpec(
+        positions=(0, 2), sequence_positions=(1,), tensor_kwargs=("self", "indices", "values")
+    ),
+    "indicescopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "infersize": ArgSpec(),
+    "inprojection": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5, 6, 7, 8),
+        tensor_kwargs=("q", "k", "v", "w_q", "w_k", "w_v", "b_q", "b_k", "b_v"),
+    ),
+    "inprojectionpacked": ArgSpec(
+        positions=(0, 1, 2, 3, 4), tensor_kwargs=("q", "k", "v", "w", "b")
+    ),
+    "intmm": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "mat2")),
+    "intrepr": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "isalltrue": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "isanytrue": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "isdistributed": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "isneg": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "ispinned": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "lstm": ArgSpec(
+        positions=(0, 1),
+        sequence_positions=(2, 3),
+        tensor_kwargs=("input", "data", "batch_sizes", "hx", "params"),
+    ),
+    "lstmcell": ArgSpec(
+        positions=(0, 2, 3, 4, 5),
+        sequence_positions=(1,),
+        tensor_kwargs=("input", "hx", "w_ih", "w_hh", "b_ih", "b_hh"),
+    ),
+    "lstmmps": ArgSpec(
+        positions=(0,), sequence_positions=(1, 2), tensor_kwargs=("input", "hx", "params")
+    ),
+    "makedualcopy": ArgSpec(positions=(0, 1), tensor_kwargs=("primal", "tangent")),
+    "makeperchannelquantizedtensor": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("self", "scale", "zero_point")
+    ),
+    "makepertensorquantizedtensor": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "miopenbatchnorm": ArgSpec(
+        positions=(0, 1, 2, 3, 4),
+        tensor_kwargs=("input", "weight", "bias", "running_mean", "running_var"),
+    ),
+    "miopenconvolution": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("self", "weight", "bias")),
+    "miopenconvolutionaddrelu": ArgSpec(
+        positions=(0, 1, 2, 4), tensor_kwargs=("self", "weight", "z", "bias")
+    ),
+    "miopenconvolutionrelu": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("self", "weight", "bias")),
+    "miopenconvolutiontranspose": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("self", "weight", "bias")
+    ),
+    "miopendepthwiseconvolution": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("self", "weight", "bias")
+    ),
+    "miopenrnn": ArgSpec(
+        positions=(0, 3, 4, 13),
+        sequence_positions=(1,),
+        tensor_kwargs=("input", "weight", "hx", "cx", "dropout_state"),
+    ),
+    "mpsconvolution": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("self", "weight", "bias")),
+    "mpsconvolutiontranspose": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "weight")),
+    "nativebatchnorm": ArgSpec(
+        positions=(0, 1, 2, 3, 4),
+        tensor_kwargs=("input", "weight", "bias", "running_mean", "running_var"),
+    ),
+    "nativebatchnormlegit": ArgSpec(
+        positions=(0, 1, 2, 3, 4),
+        tensor_kwargs=("input", "weight", "bias", "running_mean", "running_var"),
+    ),
+    "nativebatchnormlegitnotraining": ArgSpec(
+        positions=(0, 1, 2, 3, 4),
+        tensor_kwargs=("input", "weight", "bias", "running_mean", "running_var"),
+    ),
+    "nativedropout": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "nativegroupnorm": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "weight", "bias")),
+    "nativelayernorm": ArgSpec(positions=(0, 2, 3), tensor_kwargs=("input", "weight", "bias")),
+    "nativemultiheadattention": ArgSpec(
+        positions=(0, 1, 2, 5, 6, 7, 8, 9),
+        tensor_kwargs=(
+            "query",
+            "key",
+            "value",
+            "qkv_weight",
+            "qkv_bias",
+            "proj_weight",
+            "proj_bias",
+            "mask",
+        ),
+    ),
+    "nativenorm": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "negview": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "negviewcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedcomputecontiguousstridesoffsets": ArgSpec(
+        positions=(0,), tensor_kwargs=("nested_size",)
+    ),
+    "nestedfrompadded": ArgSpec(
+        positions=(0, 1), tensor_kwargs=("padded", "cpu_nested_shape_example")
+    ),
+    "nestedfrompaddedandnestedexample": ArgSpec(
+        positions=(0, 1), tensor_kwargs=("padded", "nt_example")
+    ),
+    "nestedfrompaddedtensor": ArgSpec(
+        positions=(0, 1, 2, 4, 5),
+        tensor_kwargs=("padded", "offsets", "dummy", "min_seqlen", "max_seqlen"),
+    ),
+    "nestedgetjaggeddummy": ArgSpec(positions=(0,), tensor_kwargs=("any",)),
+    "nestedgetlengths": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedgetmaxseqlen": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedgetminseqlen": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedgetoffsets": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedgetraggedidx": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedgetvalues": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedgetvaluescopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedtensorfrommask": ArgSpec(positions=(0, 1), tensor_kwargs=("t", "mask")),
+    "nestedtensorfrommaskleftaligned": ArgSpec(positions=(0, 1), tensor_kwargs=("t", "mask")),
+    "nestedtensorfromtensorlist": ArgSpec(sequence_positions=(0,), tensor_kwargs=("list",)),
+    "nestedtensorsize": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedtensorsoftmaxwithshape": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "query")),
+    "nestedtensorstorageoffsets": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedtensorstrides": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nestedviewfrombuffer": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("self", "nested_size", "nested_strides", "offsets")
+    ),
+    "nestedviewfrombuffercopy": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("self", "nested_size", "nested_strides", "offsets")
+    ),
+    "nestedviewfromjagged": ArgSpec(
+        positions=(0, 1, 2, 3, 5, 6),
+        tensor_kwargs=("self", "offsets", "dummy", "lengths", "min_seqlen", "max_seqlen"),
+    ),
+    "nestedviewfromjaggedcopy": ArgSpec(
+        positions=(0, 1, 2, 3, 5, 6),
+        tensor_kwargs=("self", "offsets", "dummy", "lengths", "min_seqlen", "max_seqlen"),
+    ),
+    "nnpackavailable": ArgSpec(),
+    "nnpackspatialconvolution": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("input", "weight", "bias")
+    ),
+    "nnz": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "nogradembeddingrenorm": ArgSpec(positions=(0, 1), tensor_kwargs=("weight", "input")),
+    "nogradfill": ArgSpec(positions=(0,), tensor_kwargs=("tensor",)),
+    "nogradnormal": ArgSpec(positions=(0,), tensor_kwargs=("tensor",)),
+    "nogradtruncnormal": ArgSpec(positions=(0,), tensor_kwargs=("tensor",)),
+    "nogradzero": ArgSpec(positions=(0,), tensor_kwargs=("tensor",)),
+    "nonzerostatic": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "normexceptdim": ArgSpec(positions=(0,), tensor_kwargs=("v",)),
+    "nuclearnorm": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "permutecopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "prelukernel": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "weight")),
+    "put": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("self", "input", "index", "source")),
+    "qperchannelaxis": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "qperchannelscales": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "qperchannelzeropoints": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "qscale": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "qscheme": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "quantizedbatchnorm": ArgSpec(
+        positions=(0, 1, 2, 3, 4), tensor_kwargs=("input", "weight", "bias", "mean", "var")
+    ),
+    "quantizedgrucell": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+        tensor_kwargs=(
+            "input",
+            "hx",
+            "w_ih",
+            "w_hh",
+            "b_ih",
+            "b_hh",
+            "packed_ih",
+            "packed_hh",
+            "col_offsets_ih",
+            "col_offsets_hh",
+        ),
+    ),
+    "quantizedlstmcell": ArgSpec(
+        positions=(0, 2, 3, 4, 5, 6, 7, 8, 9),
+        sequence_positions=(1,),
+        tensor_kwargs=(
+            "input",
+            "hx",
+            "w_ih",
+            "w_hh",
+            "b_ih",
+            "b_hh",
+            "packed_ih",
+            "packed_hh",
+            "col_offsets_ih",
+            "col_offsets_hh",
+        ),
+    ),
+    "quantizedmaxpool1d": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "quantizedmaxpool2d": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "quantizedmaxpool3d": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "quantizedrnnrelucell": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+        tensor_kwargs=(
+            "input",
+            "hx",
+            "w_ih",
+            "w_hh",
+            "b_ih",
+            "b_hh",
+            "packed_ih",
+            "packed_hh",
+            "col_offsets_ih",
+            "col_offsets_hh",
+        ),
+    ),
+    "quantizedrnntanhcell": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+        tensor_kwargs=(
+            "input",
+            "hx",
+            "w_ih",
+            "w_hh",
+            "b_ih",
+            "b_hh",
+            "packed_ih",
+            "packed_hh",
+            "col_offsets_ih",
+            "col_offsets_hh",
+        ),
+    ),
+    "qzeropoint": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "range": ArgSpec(),
+    "reduceex": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "registerpostaccumulategradhook": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "reshapealiascopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "reshapefromtensor": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "shape")),
+    "resizeas": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "the_template")),
+    "resizeassparse": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "the_template")),
+    "resizeoutput": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "rmsnorm": ArgSpec(positions=(0, 2), tensor_kwargs=("input", "weight")),
+    "rnnrelu": ArgSpec(
+        positions=(0, 1, 2),
+        sequence_positions=(3,),
+        tensor_kwargs=("input", "data", "batch_sizes", "hx", "params"),
+    ),
+    "rnnrelucell": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5), tensor_kwargs=("input", "hx", "w_ih", "w_hh", "b_ih", "b_hh")
+    ),
+    "rnntanh": ArgSpec(
+        positions=(0, 1, 2),
+        sequence_positions=(3,),
+        tensor_kwargs=("input", "data", "batch_sizes", "hx", "params"),
+    ),
+    "rnntanhcell": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5), tensor_kwargs=("input", "hx", "w_ih", "w_hh", "b_ih", "b_hh")
+    ),
+    "rowindicescopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "rowwiseprune": ArgSpec(positions=(0, 1), tensor_kwargs=("weight", "mask")),
+    "safesoftmax": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sampledirichlet": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "saturateweighttofp16": ArgSpec(positions=(0,), tensor_kwargs=("weight",)),
+    "scaleddotproductattentionmath": ArgSpec(
+        positions=(0, 1, 2, 3, 6),
+        tensor_kwargs=("query", "key", "value", "attn_mask", "dropout_mask"),
+    ),
+    "scaleddotproductattentionmathformps": ArgSpec(
+        positions=(0, 1, 2, 3, 6),
+        tensor_kwargs=("query", "key", "value", "attn_mask", "dropout_mask"),
+    ),
+    "scaleddotproductcudnnattention": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("query", "key", "value", "attn_bias")
+    ),
+    "scaleddotproductefficientattention": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("query", "key", "value", "attn_bias")
+    ),
+    "scaleddotproductflashattention": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("query", "key", "value")
+    ),
+    "scaleddotproductflashattentionforcpu": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("query", "key", "value", "attn_mask")
+    ),
+    "scaledgroupedmm": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5, 6),
+        tensor_kwargs=("self", "mat2", "scale_a", "scale_b", "offs", "bias", "scale_result"),
+    ),
+    "scaledmm": ArgSpec(
+        positions=(0, 1, 2, 3, 4, 5),
+        tensor_kwargs=("self", "mat2", "scale_a", "scale_b", "bias", "scale_result"),
+    ),
+    "segmentreduce": ArgSpec(
+        positions=(0,), tensor_kwargs=("data", "lengths", "indices", "offsets")
+    ),
+    "selectcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "shapeastensor": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "slicecopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sliceinverse": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "src")),
+    "sobolenginedraw": ArgSpec(positions=(0, 2), tensor_kwargs=("quasi", "sobolstate")),
+    "sobolengineff": ArgSpec(positions=(0, 2), tensor_kwargs=("self", "sobolstate")),
+    "sobolengineinitializestate": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sobolenginescramble": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "ltm")),
+    "sparsebroadcastto": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sparsebroadcasttocopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sparsecootensor": ArgSpec(positions=(0, 1), tensor_kwargs=("indices", "values")),
+    "sparsecsrprod": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sparsecsrsum": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sparsecsrtensor": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("crow_indices", "col_indices", "values")
+    ),
+    "sparsemaskprojection": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "mask")),
+    "sparseresize": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sparseresizeandclear": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sparsesemistructuredaddmm": ArgSpec(
+        positions=(0, 1, 2, 3), tensor_kwargs=("input", "mat1", "mat1_meta", "mat2")
+    ),
+    "sparsesemistructuredapply": ArgSpec(positions=(0, 1), tensor_kwargs=("input", "thread_masks")),
+    "sparsesemistructuredapplydense": ArgSpec(
+        positions=(0, 1), tensor_kwargs=("input", "thread_masks")
+    ),
+    "sparsesemistructuredlinear": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("input", "weight", "meta", "bias")
+    ),
+    "sparsesemistructuredmm": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("mat1", "mat1_meta", "mat2")
+    ),
+    "sparsesemistructuredtile": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "sparsesparsematmul": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "other")),
+    "sparsesum": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sphericalbesselj0": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "splitcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "splitwithsizescopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "squeezecopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "standardgamma": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "sumtosize": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "tcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "tocpu": ArgSpec(sequence_positions=(0,), tensor_kwargs=("tensors",)),
+    "tosparsesemistructured": ArgSpec(positions=(0,), tensor_kwargs=("dense",)),
+    "transformbiasrescaleqkv": ArgSpec(positions=(0, 1), tensor_kwargs=("qkv", "qkv_bias")),
+    "transformerencoderlayerfwd": ArgSpec(
+        positions=(0, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18),
+        tensor_kwargs=(
+            "src",
+            "qkv_weight",
+            "qkv_bias",
+            "proj_weight",
+            "proj_bias",
+            "norm_weight_1",
+            "norm_bias_1",
+            "norm_weight_2",
+            "norm_bias_2",
+            "ffn_weight_1",
+            "ffn_bias_1",
+            "ffn_weight_2",
+            "ffn_bias_2",
+            "mask",
+        ),
+    ),
+    "transposecopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "trilinear": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("i1", "i2", "i3")),
+    "tritonmultiheadattention": ArgSpec(
+        positions=(0, 1, 2, 5, 6, 7, 8, 9),
+        tensor_kwargs=(
+            "query",
+            "key",
+            "value",
+            "qkv_weight",
+            "qkv_bias",
+            "proj_weight",
+            "proj_bias",
+            "mask",
+        ),
+    ),
+    "tritonscaleddotattention": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("q", "k", "v")),
+    "truediv": ArgSpec(positions=(0, 1), tensor_kwargs=("self", "input", "other")),
+    "unbindcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "unfoldcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "unique2": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "unpooloutputsize": ArgSpec(positions=(0,), tensor_kwargs=("input",)),
+    "unsafeindex": ArgSpec(
+        positions=(0,), sequence_positions=(1,), tensor_kwargs=("self", "indices")
+    ),
+    "unsafeindexput": ArgSpec(
+        positions=(0, 2), sequence_positions=(1,), tensor_kwargs=("self", "indices", "values")
+    ),
+    "unsafemaskedindex": ArgSpec(
+        positions=(0, 1), sequence_positions=(2,), tensor_kwargs=("self", "mask", "indices")
+    ),
+    "unsafemaskedindexputaccumulate": ArgSpec(
+        positions=(0, 1, 3),
+        sequence_positions=(2,),
+        tensor_kwargs=("self", "mask", "indices", "values"),
+    ),
+    "unsafesplitwithsizes": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "unsqueezecopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "updatenames": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "usecudnnctcloss": ArgSpec(
+        positions=(0, 1, 2, 3),
+        tensor_kwargs=("log_probs", "targets", "input_lengths", "target_lengths"),
+    ),
+    "usecudnnrnnflattenweight": ArgSpec(),
+    "validatecompressedsparseindices": ArgSpec(
+        positions=(1, 2), tensor_kwargs=("compressed_idx", "plain_idx")
+    ),
+    "validatesparsebsctensorargs": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("ccol_indices", "row_indices", "values")
+    ),
+    "validatesparsebsrtensorargs": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("crow_indices", "col_indices", "values")
+    ),
+    "validatesparsecompressedtensorargs": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("compressed_indices", "plain_indices", "values")
+    ),
+    "validatesparsecootensorargs": ArgSpec(positions=(0, 1), tensor_kwargs=("indices", "values")),
+    "validatesparsecsctensorargs": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("ccol_indices", "row_indices", "values")
+    ),
+    "validatesparsecsrtensorargs": ArgSpec(
+        positions=(0, 1, 2), tensor_kwargs=("crow_indices", "col_indices", "values")
+    ),
+    "valuescopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "viewcopy": ArgSpec(positions=(0,), tensor_kwargs=("self",)),
+    "weightint4packmm": ArgSpec(
+        positions=(0, 1, 3), tensor_kwargs=("self", "mat2", "qScaleAndZeros")
+    ),
+    "weightint4packmmforcpu": ArgSpec(
+        positions=(0, 1, 3), tensor_kwargs=("self", "mat2", "qScaleAndZeros")
+    ),
+    "weightint4packmmwithscalesandzeros": ArgSpec(
+        positions=(0, 1, 3, 4), tensor_kwargs=("self", "mat2", "qScale", "qZeros")
+    ),
+    "weightint8packmm": ArgSpec(positions=(0, 1, 2), tensor_kwargs=("self", "mat2", "scales")),
+    "weightnorm": ArgSpec(positions=(0, 1), tensor_kwargs=("v", "g")),
+    "weightnorminterface": ArgSpec(positions=(0, 1), tensor_kwargs=("v", "g")),
+}
+
+for _name, _spec in _PHASE5B_VALIDATED_ARG_SPECS.items():
+    FUNC_ARG_SPECS[_name] = _spec
+
 # Tensor iterator and subclass custom_methods
 for _name in [
     "iter",
@@ -1319,4 +2051,4 @@ for _name in [
     FUNC_ARG_SPECS[_name] = _P0
 
 # Cleanup loop variable leakage
-del _name
+del _name, _spec
