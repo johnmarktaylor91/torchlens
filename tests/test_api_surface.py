@@ -11,6 +11,8 @@ TARGET_ALL = [
     "trace",
     "fastlog",
     "facets",
+    "JaxPayloadLoadHint",
+    "PayloadLoadHints",
     "load",
     "save",
     "do",
@@ -97,7 +99,7 @@ CANONICAL_SUBMODULES = [
 ]
 
 
-def test_all_size_exactly_60() -> None:
+def test_all_size_exactly_62() -> None:
     """Top-level ``__all__`` should contain exactly the current API budget.
 
     Phase 1a budget was 40; backward-parity sprint added 6 (grad_clip, grad_noise,
@@ -109,9 +111,11 @@ def test_all_size_exactly_60() -> None:
     `followed_by` and `preceded_by` predicate-window selectors = 56.
     Capture-unification P5 adds `when`, `add`, and `replace_with` = 59.
     torch.func transform capture adds `func_transform` = 60.
+    Backend-completion sharded payload hints add `JaxPayloadLoadHint` and
+    `PayloadLoadHints` = 62.
     """
 
-    assert len(torchlens.__all__) == 60
+    assert len(torchlens.__all__) == 62
     assert torchlens.__all__ == TARGET_ALL
 
 

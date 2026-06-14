@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import copy
 import warnings
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, NamedTuple
 
@@ -58,6 +60,49 @@ def reset_legacy_thread_warning() -> None:
 
 class TorchLensIOError(CompatibilityError, RuntimeError):
     """Raised when TorchLens portable bundle state is invalid or unsupported."""
+
+
+@dataclass(frozen=True)
+class JaxPayloadLoadHint:
+    """JAX-specific payload materialization hints.
+
+    Parameters
+    ----------
+    sharding:
+        Explicit JAX ``Sharding`` target. When supplied, materialized JAX
+        payloads are placed with this sharding and reconstruction metadata is
+        not consulted.
+    reconstruct_sharding:
+        Whether to reconstruct a saved ``NamedSharding`` from portable
+        ``codec_metadata``.
+    mesh_axis_names:
+        Optional expected mesh axis names for metadata reconstruction. When
+        provided, the saved contract must match exactly.
+    platform:
+        Optional JAX device platform to use for metadata reconstruction, for
+        example ``"cpu"``.
+    devices:
+        Optional explicit local devices to use for metadata reconstruction.
+    """
+
+    sharding: Any | None = None
+    reconstruct_sharding: bool = False
+    mesh_axis_names: tuple[str, ...] | None = None
+    platform: str | None = None
+    devices: Sequence[Any] | None = None
+
+
+@dataclass(frozen=True)
+class PayloadLoadHints:
+    """Backend-specific payload materialization hints.
+
+    Parameters
+    ----------
+    jax:
+        Optional JAX payload hint.
+    """
+
+    jax: JaxPayloadLoadHint | None = None
 
 
 class BlobRef(NamedTuple):
@@ -136,7 +181,12 @@ def default_fill_state(state: dict[str, Any], *, defaults: dict[str, Any]) -> No
             state[field_name] = copy.deepcopy(default_value)
 
 
-def rehydrate_nested(trace: Any, *, map_location: str | torch.device = "cpu") -> None:
+def rehydrate_nested(
+    trace: Any,
+    *,
+    map_location: str | torch.device = "cpu",
+    payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+) -> None:
     """Replace any remaining nested portable blob refs on a loaded model log.
 
     This function is a no-op unless the model log was loaded with
@@ -149,6 +199,8 @@ def rehydrate_nested(trace: Any, *, map_location: str | torch.device = "cpu") ->
         Model log loaded from a portable bundle.
     map_location:
         Target device for the materialized nested tensors.
+    payload_hints:
+        Optional backend payload hints used during materialization.
 
     Examples
     --------
@@ -160,4 +212,4 @@ def rehydrate_nested(trace: Any, *, map_location: str | torch.device = "cpu") ->
 
     from .rehydrate import rehydrate_nested as _rehydrate_nested
 
-    _rehydrate_nested(trace, map_location=map_location)
+    _rehydrate_nested(trace, map_location=map_location, payload_hints=payload_hints)

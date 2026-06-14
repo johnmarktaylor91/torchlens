@@ -187,8 +187,14 @@ JAX `.tlspec` support uses `payload_policy="array_payloads"`: default portable s
 forward and derived array payloads and load them back as `jax.Array` values.
 Typed JAX PRNG keys round-trip as typed keys rather than legacy integer-key arrays.
 Fully addressable single-host sharded arrays are saved as assembled host values; manifest
-`codec_metadata` may include `jax_sharding_*` audit fields such as sharding kind, mesh axis
-names, partition spec strings, and device counts, but load does not reconstruct that topology.
+`codec_metadata` includes versioned `jax_sharding_*` fields plus a reconstructible
+`jax_named_sharding` block for `NamedSharding`. The block stores mesh `axis_names`, mesh
+`shape`, and `PartitionSpec` as JSON primitives (`null`, strings, and string lists for
+multi-axis entries). Default load does not reconstruct that topology; it remains value-only.
+To opt in, pass `PayloadLoadHints(jax=JaxPayloadLoadHint(sharding=...))` with a concrete
+JAX sharding, or `JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")` to rebuild
+from metadata when the requested local mesh is available. `map_location` remains the
+single-device `str | torch.device` load target and does not accept JAX shardings.
 Multi-host or otherwise unaddressable sharded arrays fail closed during save.
 `trace.payload_load_status` records load-time materialization state. Runtime-only
 `jax_equation_captures` are stripped from portable artifacts, so loaded JAX traces expose

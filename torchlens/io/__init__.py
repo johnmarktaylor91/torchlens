@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .._io import rehydrate_nested
+from .._io import JaxPayloadLoadHint, PayloadLoadHints, rehydrate_nested
 from .._io.bundle import cleanup_tmp, load, save
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
@@ -144,6 +144,8 @@ def load_intervention_spec(path: str | Path) -> InterventionSpec:
 
 __all__ = [
     "TraceState",
+    "JaxPayloadLoadHint",
+    "PayloadLoadHints",
     "cleanup_tmp",
     "detect_tlspec_format",
     "get_model_metadata",

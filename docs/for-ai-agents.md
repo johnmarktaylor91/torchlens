@@ -29,8 +29,9 @@ the raw-output honesty guard passes. MLX intermediate derived gradients are requ
 custom-VJP taps through the MLX wrappers, then exposes only exact grouped-signature matches whose
 replacement-gradient and perturbation oracle passes.
 JAX `array_payloads` saves round-trip typed PRNG keys and fully addressable single-host sharded
-arrays by value; `jax_sharding_*` manifest fields are audit-only and multi-host/unaddressable
-sharded arrays fail closed.
+arrays by value. `jax_named_sharding` metadata is a reconstructible JSON-primitive contract,
+but default load stays value-only; explicit re-sharding goes through `PayloadLoadHints` /
+`JaxPayloadLoadHint`, not `map_location`. Multi-host/unaddressable sharded arrays fail closed.
 The retained-memory baseline for Op `__slots__` lives at
 `benchmarks/perf/slots_baseline.md` and records roughly 10-15% lower trace-level retained memory
 on the measured fixtures.

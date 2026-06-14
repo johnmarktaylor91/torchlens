@@ -2298,18 +2298,21 @@ class Op:
         self,
         *,
         map_location: str | torch.device = "cpu",
-    ) -> torch.Tensor:
+        payload_hints: Any | None = None,
+    ) -> Any:
         """Materialize this layer's saved out from a lazy bundle ref.
 
         Parameters
         ----------
         map_location:
             Target device for the materialized tensor.
+        payload_hints:
+            Optional backend payload hints used during materialization.
 
         Returns
         -------
-        torch.Tensor
-            Materialized out tensor.
+        Any
+            Materialized out payload.
 
         Raises
         ------
@@ -2326,29 +2329,35 @@ class Op:
         """
 
         current_out = self._slot("out")
-        if isinstance(current_out, torch.Tensor):
+        if current_out is not None:
             return current_out
         if self.out_ref is None:
             raise TorchLensIOError("no out_ref to materialize from")
-        self._internal_set("out", self.out_ref.materialize(map_location=map_location))
-        return cast(torch.Tensor, self.out)
+        self._internal_set(
+            "out",
+            self.out_ref.materialize(map_location=map_location, payload_hints=payload_hints),
+        )
+        return self.out
 
     def materialize_grad(
         self,
         *,
         map_location: str | torch.device = "cpu",
-    ) -> torch.Tensor:
+        payload_hints: Any | None = None,
+    ) -> Any:
         """Materialize this layer's saved grad from a lazy bundle ref.
 
         Parameters
         ----------
         map_location:
             Target device for the materialized tensor.
+        payload_hints:
+            Optional backend payload hints used during materialization.
 
         Returns
         -------
-        torch.Tensor
-            Materialized grad tensor.
+        Any
+            Materialized grad payload.
 
         Raises
         ------
@@ -2365,12 +2374,15 @@ class Op:
         """
 
         grad = self._slot("grad")
-        if isinstance(grad, torch.Tensor):
+        if grad is not None:
             return grad
         if self.grad_ref is None:
             raise TorchLensIOError("no grad_ref to materialize from")
-        self._internal_set("grad", self.grad_ref.materialize(map_location=map_location))
-        return cast(torch.Tensor, self.grad)
+        self._internal_set(
+            "grad",
+            self.grad_ref.materialize(map_location=map_location, payload_hints=payload_hints),
+        )
+        return self.grad
 
     def __getstate__(self) -> Dict[str, Any]:
         """Return pickle state with weakrefs stripped."""

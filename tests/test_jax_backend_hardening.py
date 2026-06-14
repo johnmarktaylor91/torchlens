@@ -138,8 +138,13 @@ def _sample_key_pair(key: Any) -> Any:
     return random.normal(key, (2,), dtype=jnp.float32)
 
 
-def _named_sharded_array() -> tuple[Any, np.ndarray, int]:
+def _named_sharded_array(*, platform: str | None = None) -> tuple[Any, np.ndarray, int]:
     """Return a fully addressable NamedSharding array over local JAX devices.
+
+    Parameters
+    ----------
+    platform:
+        Optional JAX platform used to select local devices.
 
     Returns
     -------
@@ -149,13 +154,52 @@ def _named_sharded_array() -> tuple[Any, np.ndarray, int]:
 
     from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-    local_devices = list(jax.local_devices())
+    local_devices = (
+        list(jax.local_devices(backend=platform))
+        if platform is not None
+        else list(jax.local_devices())
+    )
     device_count = len(local_devices)
     host_value = np.arange(device_count * 4, dtype=np.float32).reshape(device_count, 4)
     mesh = Mesh(np.asarray(local_devices), ("x",))
     sharding = NamedSharding(mesh, PartitionSpec("x"))
     sharded = jax.device_put(jnp.asarray(host_value), sharding)
     return sharded, host_value, device_count
+
+
+def _require_local_cpu_devices(count: int) -> None:
+    """Skip unless JAX has exactly ``count`` local CPU devices."""
+
+    observed = len(jax.local_devices(backend="cpu"))
+    if observed != count:
+        pytest.skip(
+            f"requires {count} local CPU devices; observed {observed}. "
+            "Run with XLA_FLAGS='--xla_force_host_platform_device_count=8'."
+        )
+
+
+def _sharded_entry_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Return the first manifest codec metadata block with NamedSharding."""
+
+    sharded_entries = [
+        entry
+        for entry in manifest["body_index"]
+        if entry.get("codec_metadata", {}).get("jax_sharding_kind") == "NamedSharding"
+    ]
+    assert sharded_entries
+    metadata = sharded_entries[0]["codec_metadata"]
+    assert isinstance(metadata, dict)
+    return metadata
+
+
+def _assert_named_sharding(value: Any, *, axis_name: str, device_count: int) -> None:
+    """Assert that a JAX array uses the expected one-axis ``NamedSharding``."""
+
+    sharding = value.sharding
+    assert type(sharding).__name__ == "NamedSharding"
+    assert tuple(sharding.mesh.axis_names) == (axis_name,)
+    assert dict(sharding.mesh.shape) == {axis_name: device_count}
+    assert tuple(sharding.spec) == (axis_name,)
 
 
 def _trace(**kwargs: Any) -> Any:
@@ -349,11 +393,12 @@ def test_jax_codec_runtime_missing_loads_audit_only(
         entry: Any,
         *,
         map_location: Any,
-        strict_runtime: bool,
+        payload_hints: Any = None,
+        strict_runtime: bool = True,
     ) -> Any:
         """Pretend the JAX runtime is unavailable during payload decode."""
 
-        del array, entry, map_location, strict_runtime
+        del array, entry, map_location, payload_hints, strict_runtime
         raise BackendRuntimeCompatibilityError("jax runtime unavailable")
 
     monkeypatch.setattr(codec, "from_numpy", _missing_runtime)
@@ -459,7 +504,7 @@ def test_jax_old_style_prng_key_tlspec_round_trips_as_uint32_array(tmp_path: Pat
 def test_jax_sharded_array_tlspec_round_trips_value_with_audit_metadata(
     tmp_path: Path,
 ) -> None:
-    """Fully addressable sharded JAX arrays should save/load by value."""
+    """Fully addressable sharded JAX arrays should save reconstructible metadata."""
 
     sharded, expected, device_count = _named_sharded_array()
     trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
@@ -472,19 +517,20 @@ def test_jax_sharded_array_tlspec_round_trips_value_with_audit_metadata(
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     loaded = tl.load(path)
     loaded_array = _first_saved_op(loaded).out
-    sharded_entries = [
-        entry
-        for entry in manifest["body_index"]
-        if entry.get("codec_metadata", {}).get("jax_sharding_kind") == "NamedSharding"
-    ]
+    metadata = _sharded_entry_metadata(manifest)
 
-    assert sharded_entries
-    metadata = sharded_entries[0]["codec_metadata"]
+    assert metadata["jax_sharding_schema_version"] == 1
+    assert metadata["jax_sharding_reconstructible"] is True
     assert metadata["jax_sharding_mesh_axis_names"] == ["x"]
+    assert metadata["jax_sharding_mesh_shape"] == {"x": device_count}
     assert metadata["jax_sharding_partition_spec"] == ["x"]
     assert metadata["jax_sharding_device_count"] == device_count
     assert metadata["jax_sharding_addressable_device_count"] == device_count
     assert metadata["jax_sharding_is_fully_addressable"] is True
+    assert metadata["jax_named_sharding"] == {
+        "mesh": {"axis_names": ["x"], "shape": {"x": device_count}},
+        "partition_spec": ["x"],
+    }
     assert loaded.backend == "jax"
     assert isinstance(loaded_array, jax.Array)
     assert loaded_array.shape == sharded.shape
@@ -508,6 +554,126 @@ def test_jax_sharded_array_default_load_does_not_recreate_sharding(
     assert type(sharded.sharding).__name__ == "NamedSharding"
     assert type(loaded_array.sharding).__name__ != "NamedSharding"
     np.testing.assert_array_equal(np.asarray(loaded_array), expected)
+
+
+def test_jax_sharded_array_explicit_sharding_hint_restores_requested_sharding(
+    tmp_path: Path,
+) -> None:
+    """A concrete JAX sharding hint should re-shard loaded payloads."""
+
+    _require_local_cpu_devices(8)
+    sharded, expected, device_count = _named_sharded_array(platform="cpu")
+    trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
+    path = tmp_path / "jax_sharded_concrete_hint.tlspec"
+
+    trace.save(path, level="portable")
+    loaded = tl.load(
+        path,
+        payload_hints=tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(sharding=sharded.sharding)),
+    )
+    loaded_array = _first_saved_op(loaded).out
+
+    assert loaded_array.sharding == sharded.sharding
+    _assert_named_sharding(loaded_array, axis_name="x", device_count=device_count)
+    np.testing.assert_array_equal(np.asarray(loaded_array), expected)
+
+
+def test_jax_sharded_array_reconstruct_hint_uses_saved_metadata(
+    tmp_path: Path,
+) -> None:
+    """A reconstruction hint should rebuild ``NamedSharding`` from metadata."""
+
+    _require_local_cpu_devices(8)
+    sharded, expected, device_count = _named_sharded_array(platform="cpu")
+    trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
+    path = tmp_path / "jax_sharded_reconstruct_hint.tlspec"
+
+    trace.save(path, level="portable")
+    loaded = tl.load(
+        path,
+        payload_hints=tl.PayloadLoadHints(
+            jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")
+        ),
+    )
+    loaded_array = _first_saved_op(loaded).out
+
+    _assert_named_sharding(loaded_array, axis_name="x", device_count=device_count)
+    np.testing.assert_array_equal(np.asarray(loaded_array), expected)
+
+
+def test_jax_sharded_array_lazy_and_op_materialize_accept_payload_hints(
+    tmp_path: Path,
+) -> None:
+    """Lazy refs and op materializers should thread JAX payload hints."""
+
+    _require_local_cpu_devices(8)
+    sharded, expected, device_count = _named_sharded_array(platform="cpu")
+    trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
+    path = tmp_path / "jax_sharded_lazy_hint.tlspec"
+    hint = tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu"))
+
+    trace.save(path, level="portable")
+    lazy_loaded = tl.load(path, lazy=True, payload_hints=hint)
+    lazy_op = _first_saved_op(lazy_loaded)
+    assert lazy_op.out_ref is not None
+    direct_value = lazy_op.out_ref.materialize()
+    op_value = lazy_op.materialize_out()
+
+    override_loaded = tl.load(path, lazy=True)
+    override_op = _first_saved_op(override_loaded)
+    assert override_op.out_ref is not None
+    override_op._internal_set("grad_ref", override_op.out_ref)
+    override_op._internal_set("grad", None)
+    grad_value = override_op.materialize_grad(payload_hints=hint)
+
+    for value in (direct_value, op_value, grad_value):
+        _assert_named_sharding(value, axis_name="x", device_count=device_count)
+        np.testing.assert_array_equal(np.asarray(value), expected)
+
+
+def test_jax_sharded_array_unsatisfiable_hint_fails_closed(tmp_path: Path) -> None:
+    """Explicit reconstruction requests should fail instead of falling back."""
+
+    sharded, _expected, _device_count = _named_sharded_array()
+    trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
+    path = tmp_path / "jax_sharded_bad_hint.tlspec"
+
+    trace.save(path, level="portable")
+    with pytest.raises(BackendRuntimeCompatibilityError, match="mesh axis names"):
+        tl.load(
+            path,
+            payload_hints=tl.PayloadLoadHints(
+                jax=tl.JaxPayloadLoadHint(
+                    reconstruct_sharding=True,
+                    mesh_axis_names=("wrong",),
+                )
+            ),
+        )
+
+
+def test_jax_sharding_reconstruction_rejects_unaddressable_metadata() -> None:
+    """Explicit reconstruction should reject multi-host/unaddressable metadata."""
+
+    codec = get_payload_codec("jax")
+    metadata = {
+        "jax_sharding_schema_version": 1,
+        "jax_sharding_reconstructible": True,
+        "jax_sharding_kind": "NamedSharding",
+        "jax_sharding_is_fully_addressable": False,
+        "jax_named_sharding": {
+            "mesh": {"axis_names": ["x"], "shape": {"x": 1}},
+            "partition_spec": ["x"],
+        },
+    }
+
+    with pytest.raises(BackendRuntimeCompatibilityError, match="multi-host or unaddressable"):
+        codec.from_numpy(
+            np.asarray([1.0], dtype=np.float32),
+            {"logical_dtype": "float32", "codec_metadata": metadata},
+            map_location=None,
+            payload_hints=tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True)),
+            strict_runtime=True,
+        )
 
 
 def test_jax_payload_codec_strict_rejects_unaddressable_and_object_like_arrays() -> None:
@@ -778,7 +944,8 @@ def test_jax_rejects_explicit_sharded_nested_jit() -> None:
 
     from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
-    mesh = Mesh(np.asarray(jax.devices()), ("x",))
+    devices = jax.devices()
+    mesh = Mesh(np.asarray(devices), ("x",))
     sharding = NamedSharding(mesh, PartitionSpec("x"))
     sharded_add = jax.jit(lambda value: value + 1.0, in_shardings=sharding, out_shardings=sharding)
 
@@ -789,7 +956,11 @@ def test_jax_rejects_explicit_sharded_nested_jit() -> None:
         return sharded_add(x)
 
     with pytest.raises(ValueError, match="unsupported nested call primitive: jit"):
-        tl.trace(cast(Any, model), ({}, jnp.ones((2,), dtype=jnp.float32)), backend="jax")
+        tl.trace(
+            cast(Any, model),
+            ({}, jnp.ones((len(devices),), dtype=jnp.float32)),
+            backend="jax",
+        )
 
 
 def test_jax_rejects_remat2_nested_primitive() -> None:
@@ -817,7 +988,8 @@ def test_jax_rejects_shard_map_nested_primitive() -> None:
     shard_map_module = pytest.importorskip("jax.experimental.shard_map")
     from jax.sharding import Mesh, PartitionSpec
 
-    mesh = Mesh(np.asarray(jax.devices()), ("x",))
+    devices = jax.devices()
+    mesh = Mesh(np.asarray(devices), ("x",))
     sharded_map = shard_map_module.shard_map(
         lambda value: value + 1.0,
         mesh=mesh,
@@ -832,7 +1004,11 @@ def test_jax_rejects_shard_map_nested_primitive() -> None:
         return sharded_map(x)
 
     with pytest.raises(ValueError, match="unsupported nested jaxpr in primitive: shard_map"):
-        tl.trace(cast(Any, model), ({}, jnp.ones((1,), dtype=jnp.float32)), backend="jax")
+        tl.trace(
+            cast(Any, model),
+            ({}, jnp.ones((len(devices),), dtype=jnp.float32)),
+            backend="jax",
+        )
 
 
 def test_jax_rejects_callback_effects() -> None:

@@ -11,11 +11,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import json
+import math
 from typing import Any, ClassVar, Protocol
 
 import numpy as np
 import torch
 
+from . import JaxPayloadLoadHint, PayloadLoadHints
 from .tensor_policy import FailReason, Ok, SkipReason, TensorPolicyDecision, is_supported_for_save
 
 
@@ -41,6 +43,14 @@ class EncodedArray:
     codec_metadata: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class _JaxHintResult:
+    """Internal result for JAX hint application."""
+
+    applied: bool
+    value: Any
+
+
 class PayloadCodec(Protocol):
     """Protocol implemented by backend payload codecs."""
 
@@ -62,7 +72,8 @@ class PayloadCodec(Protocol):
         entry: Any,
         *,
         map_location: Any,
-        strict_runtime: bool,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+        strict_runtime: bool = True,
     ) -> Any:
         """Rebuild a logical backend payload from a NumPy array."""
 
@@ -107,10 +118,12 @@ class TorchPayloadCodec:
         entry: Any,
         *,
         map_location: Any,
-        strict_runtime: bool,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+        strict_runtime: bool = True,
     ) -> Any:
         """Rebuild a PyTorch tensor from a NumPy array."""
 
+        del payload_hints
         tensor = torch.from_numpy(np.ascontiguousarray(array))
         if map_location is None:
             return tensor
@@ -203,7 +216,8 @@ class JaxPayloadCodec:
         entry: Any,
         *,
         map_location: Any,
-        strict_runtime: bool,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+        strict_runtime: bool = True,
     ) -> Any:
         """Rebuild a JAX array from host NumPy storage."""
 
@@ -221,15 +235,32 @@ class JaxPayloadCodec:
         if logical_dtype.startswith("key<"):
             impl = self._jax_prng_impl_from_entry(entry, logical_dtype)
             try:
-                return jax.random.wrap_key_data(jnp.asarray(array, dtype=jnp.uint32), impl=impl)
+                value = jax.random.wrap_key_data(jnp.asarray(array, dtype=jnp.uint32), impl=impl)
             except (TypeError, ValueError, RuntimeError) as exc:
                 raise BackendRuntimeCompatibilityError(
                     f"Portable JAX PRNG key impl {impl!r} is not supported by the installed "
                     "jax runtime."
                 ) from exc
+            hint_result = _apply_jax_payload_hints(
+                jax,
+                value,
+                entry,
+                map_location=map_location,
+                payload_hints=payload_hints,
+            )
+            return hint_result.value
 
         dtype = getattr(jnp, logical_dtype, None)
         value = jnp.asarray(array, dtype=dtype) if dtype is not None else jnp.asarray(array)
+        hint_result = _apply_jax_payload_hints(
+            jax,
+            value,
+            entry,
+            map_location=map_location,
+            payload_hints=payload_hints,
+        )
+        if hint_result.applied:
+            return hint_result.value
         if map_location is None:
             return value
         target_device = _resolve_jax_device(jax, map_location)
@@ -366,10 +397,12 @@ class TinygradPayloadCodec:
         entry: Any,
         *,
         map_location: Any,
-        strict_runtime: bool,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+        strict_runtime: bool = True,
     ) -> Any:
         """Rebuild a tinygrad tensor from host NumPy storage."""
 
+        del payload_hints
         from ..backends.registry import BackendRuntimeCompatibilityError
 
         try:
@@ -476,11 +509,12 @@ class MlxPayloadCodec:
         entry: Any,
         *,
         map_location: Any,
-        strict_runtime: bool,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+        strict_runtime: bool = True,
     ) -> Any:
         """Rebuild an MLX array from host NumPy storage."""
 
-        del strict_runtime
+        del payload_hints, strict_runtime
         from ..backends.registry import BackendRuntimeCompatibilityError
 
         mx = _import_mlx_core()
@@ -556,10 +590,12 @@ class NullPayloadCodec:
         entry: Any,
         *,
         map_location: Any,
-        strict_runtime: bool,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+        strict_runtime: bool = True,
     ) -> Any:
         """Raise because load-side conversion is unavailable."""
 
+        del payload_hints
         raise TypeError(f"no payload codec is registered for {self.backend_name!r}.")
 
     def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
@@ -625,6 +661,7 @@ def materialize_transport_tensor(
     entry: Any,
     *,
     map_location: Any,
+    payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
 ) -> Any:
     """Decode a safetensors transport tensor into its logical backend payload.
 
@@ -636,6 +673,8 @@ def materialize_transport_tensor(
         Manifest tensor entry or public body-index mapping for the payload.
     map_location:
         Optional target device passed to the logical backend codec.
+    payload_hints:
+        Optional backend-specific materialization hints.
 
     Returns
     -------
@@ -680,6 +719,7 @@ def materialize_transport_tensor(
             array,
             entry,
             map_location=codec_map_location,
+            payload_hints=payload_hints,
             strict_runtime=True,
         )
     except BackendRuntimeCompatibilityError:
@@ -777,6 +817,258 @@ def _logical_shape_from_metadata(codec_metadata: Any) -> tuple[int, ...] | None:
     if not all(isinstance(dim, int) and not isinstance(dim, bool) for dim in logical_shape):
         return None
     return tuple(logical_shape)
+
+
+def _apply_jax_payload_hints(
+    jax_module: Any,
+    value: Any,
+    entry: Any,
+    *,
+    map_location: Any,
+    payload_hints: PayloadLoadHints | Mapping[str, Any] | None,
+) -> _JaxHintResult:
+    """Apply explicit JAX payload hints to a decoded value.
+
+    Parameters
+    ----------
+    jax_module:
+        Imported ``jax`` module.
+    value:
+        Decoded JAX value before optional device placement.
+    entry:
+        Manifest entry carrying codec metadata.
+    map_location:
+        Public load ``map_location`` value, used only to preserve unchanged
+        single-device behavior outside explicit hints.
+    payload_hints:
+        Optional backend payload hints.
+
+    Returns
+    -------
+    _JaxHintResult
+        Whether a hint was applied and the resulting value.
+    """
+
+    del map_location
+    hint = _coerce_jax_payload_hint(payload_hints)
+    if hint is None:
+        return _JaxHintResult(applied=False, value=value)
+    if hint.sharding is not None:
+        return _JaxHintResult(
+            applied=True,
+            value=_jax_device_put_or_raise(jax_module, value, hint.sharding),
+        )
+    if not hint.reconstruct_sharding:
+        return _JaxHintResult(applied=False, value=value)
+    sharding = _reconstruct_jax_named_sharding(jax_module, entry, hint)
+    return _JaxHintResult(
+        applied=True,
+        value=_jax_device_put_or_raise(jax_module, value, sharding),
+    )
+
+
+def _coerce_jax_payload_hint(
+    payload_hints: PayloadLoadHints | Mapping[str, Any] | None,
+) -> JaxPayloadLoadHint | None:
+    """Return a JAX payload hint from public dataclasses or mappings."""
+
+    if payload_hints is None:
+        return None
+    if isinstance(payload_hints, PayloadLoadHints):
+        return payload_hints.jax
+    if not isinstance(payload_hints, Mapping):
+        return None
+    jax_hint = payload_hints.get("jax")
+    if jax_hint is None or isinstance(jax_hint, JaxPayloadLoadHint):
+        return jax_hint
+    if isinstance(jax_hint, Mapping):
+        axis_names = jax_hint.get("mesh_axis_names")
+        if axis_names is not None:
+            axis_names = tuple(str(axis_name) for axis_name in axis_names)
+        return JaxPayloadLoadHint(
+            sharding=jax_hint.get("sharding"),
+            reconstruct_sharding=bool(jax_hint.get("reconstruct_sharding", False)),
+            mesh_axis_names=axis_names,
+            platform=jax_hint.get("platform"),
+            devices=jax_hint.get("devices"),
+        )
+    return None
+
+
+def _jax_device_put_or_raise(jax_module: Any, value: Any, sharding: Any) -> Any:
+    """Place a JAX value on an explicit sharding or fail closed."""
+
+    from ..backends.registry import BackendRuntimeCompatibilityError
+
+    try:
+        return jax_module.device_put(value, sharding)
+    except (TypeError, ValueError, RuntimeError) as exc:
+        raise BackendRuntimeCompatibilityError(
+            f"Requested JAX payload sharding could not be applied: {exc}"
+        ) from exc
+
+
+def _reconstruct_jax_named_sharding(
+    jax_module: Any,
+    entry: Any,
+    hint: JaxPayloadLoadHint,
+) -> Any:
+    """Reconstruct a JAX ``NamedSharding`` from codec metadata."""
+
+    from ..backends.registry import BackendRuntimeCompatibilityError
+
+    codec_metadata = _entry_field(entry, "codec_metadata")
+    if not isinstance(codec_metadata, Mapping):
+        raise BackendRuntimeCompatibilityError(
+            "Requested JAX sharding reconstruction, but payload codec metadata is missing."
+        )
+    if codec_metadata.get("jax_sharding_schema_version") != 1:
+        raise BackendRuntimeCompatibilityError(
+            "Requested JAX sharding reconstruction, but the saved sharding schema is unsupported."
+        )
+    if codec_metadata.get("jax_sharding_reconstructible") is not True:
+        raise BackendRuntimeCompatibilityError(
+            "Requested JAX sharding reconstruction, but the saved sharding is not reconstructible."
+        )
+    if codec_metadata.get("jax_sharding_is_fully_addressable") is not True:
+        raise BackendRuntimeCompatibilityError(
+            "Requested JAX sharding reconstruction for a multi-host or unaddressable payload; "
+            "only fully addressable single-host JAX arrays are supported."
+        )
+
+    named = codec_metadata.get("jax_named_sharding")
+    if not isinstance(named, Mapping):
+        raise BackendRuntimeCompatibilityError(
+            "Requested JAX sharding reconstruction, but jax_named_sharding metadata is missing."
+        )
+    mesh_metadata = named.get("mesh")
+    if not isinstance(mesh_metadata, Mapping):
+        raise BackendRuntimeCompatibilityError(
+            "Requested JAX sharding reconstruction, but mesh metadata is missing."
+        )
+    axis_names = _decode_jax_mesh_axis_names(mesh_metadata)
+    if hint.mesh_axis_names is not None and hint.mesh_axis_names != axis_names:
+        raise BackendRuntimeCompatibilityError(
+            "Requested JAX sharding reconstruction with mesh axis names "
+            f"{hint.mesh_axis_names!r}, but saved axis names are {axis_names!r}."
+        )
+    mesh_shape = _decode_jax_mesh_shape(mesh_metadata, axis_names)
+    partition_spec = _decode_jax_partition_spec(named.get("partition_spec"))
+    devices = _resolve_jax_mesh_devices(jax_module, mesh_shape, hint)
+
+    try:
+        from jax.sharding import Mesh, NamedSharding
+
+        device_array = np.asarray(devices, dtype=object).reshape(
+            tuple(mesh_shape[axis_name] for axis_name in axis_names)
+        )
+        return NamedSharding(Mesh(device_array, axis_names), partition_spec)
+    except (TypeError, ValueError, RuntimeError) as exc:
+        raise BackendRuntimeCompatibilityError(
+            f"Saved JAX NamedSharding metadata could not be reconstructed: {exc}"
+        ) from exc
+
+
+def _decode_jax_mesh_axis_names(mesh_metadata: Mapping[str, Any]) -> tuple[str, ...]:
+    """Decode mesh axis names from a JAX sharding metadata block."""
+
+    from ..backends.registry import BackendRuntimeCompatibilityError
+
+    axis_names = mesh_metadata.get("axis_names")
+    if not isinstance(axis_names, list) or not all(isinstance(name, str) for name in axis_names):
+        raise BackendRuntimeCompatibilityError(
+            "Saved JAX sharding metadata must contain mesh.axis_names as strings."
+        )
+    return tuple(axis_names)
+
+
+def _decode_jax_mesh_shape(
+    mesh_metadata: Mapping[str, Any],
+    axis_names: tuple[str, ...],
+) -> dict[str, int]:
+    """Decode and validate mesh shape metadata."""
+
+    from ..backends.registry import BackendRuntimeCompatibilityError
+
+    shape = mesh_metadata.get("shape")
+    if not isinstance(shape, Mapping):
+        raise BackendRuntimeCompatibilityError(
+            "Saved JAX sharding metadata must contain mesh.shape as an object."
+        )
+    decoded: dict[str, int] = {}
+    for axis_name in axis_names:
+        axis_size = shape.get(axis_name)
+        if not isinstance(axis_size, int) or isinstance(axis_size, bool) or axis_size <= 0:
+            raise BackendRuntimeCompatibilityError(
+                f"Saved JAX sharding metadata has invalid mesh size for axis {axis_name!r}."
+            )
+        decoded[axis_name] = axis_size
+    if set(decoded) != {str(key) for key in shape.keys()}:
+        raise BackendRuntimeCompatibilityError(
+            "Saved JAX sharding metadata mesh.shape keys must match mesh.axis_names."
+        )
+    return decoded
+
+
+def _decode_jax_partition_spec(partition_spec: Any) -> Any:
+    """Decode a JSON primitive partition spec into JAX ``PartitionSpec``."""
+
+    from ..backends.registry import BackendRuntimeCompatibilityError
+
+    if not isinstance(partition_spec, list):
+        raise BackendRuntimeCompatibilityError(
+            "Saved JAX sharding metadata must contain partition_spec as a list."
+        )
+    decoded_parts: list[Any] = []
+    for part in partition_spec:
+        if part is None or isinstance(part, str):
+            decoded_parts.append(part)
+        elif isinstance(part, list) and all(isinstance(axis_name, str) for axis_name in part):
+            decoded_parts.append(tuple(part))
+        else:
+            raise BackendRuntimeCompatibilityError(
+                "Saved JAX sharding metadata contains an unsupported PartitionSpec entry."
+            )
+    try:
+        from jax.sharding import PartitionSpec
+
+        return PartitionSpec(*decoded_parts)
+    except (TypeError, ValueError, RuntimeError) as exc:
+        raise BackendRuntimeCompatibilityError(
+            f"Saved JAX PartitionSpec metadata could not be reconstructed: {exc}"
+        ) from exc
+
+
+def _resolve_jax_mesh_devices(
+    jax_module: Any,
+    mesh_shape: Mapping[str, int],
+    hint: JaxPayloadLoadHint,
+) -> list[Any]:
+    """Resolve local devices for a reconstructed JAX mesh."""
+
+    from ..backends.registry import BackendRuntimeCompatibilityError
+
+    required = math.prod(mesh_shape.values())
+    if hint.devices is not None:
+        devices = list(hint.devices)
+    else:
+        try:
+            devices = list(
+                jax_module.local_devices(backend=hint.platform)
+                if hint.platform is not None
+                else jax_module.local_devices()
+            )
+        except RuntimeError as exc:
+            raise BackendRuntimeCompatibilityError(
+                f"Requested JAX mesh devices are not available: {exc}"
+            ) from exc
+    if len(devices) != required:
+        platform_text = f" {hint.platform}" if hint.platform is not None else ""
+        raise BackendRuntimeCompatibilityError(
+            f"Saved JAX sharding requires {required} local{platform_text} devices; "
+            f"found {len(devices)}."
+        )
+    return devices
 
 
 def _resolve_jax_device(jax_module: Any, map_location: Any) -> Any | None:
@@ -914,21 +1206,28 @@ def _jax_prng_dtag_from_dtype(dtype: str) -> str | None:
 
 
 def _json_ready_mapping(values: dict[str, Any]) -> dict[str, Any]:
-    """Return a mapping with only simple JSON-friendly values."""
+    """Return a mapping with only JSON-friendly values."""
 
     cleaned: dict[str, Any] = {}
     for key, value in values.items():
         if value is None:
             continue
-        if isinstance(value, (str, int, float, bool)):
-            cleaned[key] = value
-        elif isinstance(value, list) and all(
-            isinstance(item, (str, int, float, bool)) for item in value
-        ):
-            cleaned[key] = value
-        else:
-            cleaned[key] = str(value)
+        cleaned[key] = _json_ready_value(value)
     return cleaned
+
+
+def _json_ready_value(value: Any) -> Any:
+    """Convert one value to JSON-friendly primitives."""
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Mapping):
+        return {
+            str(key): _json_ready_value(item) for key, item in value.items() if item is not None
+        }
+    if isinstance(value, (list, tuple)):
+        return [_json_ready_value(item) for item in value]
+    return str(value)
 
 
 def _jax_unaddressable_reason(value: Any) -> str | None:
@@ -943,13 +1242,16 @@ def _jax_unaddressable_reason(value: Any) -> str | None:
 
 
 def _jax_sharding_metadata(value: Any) -> dict[str, Any]:
-    """Return audit-only JSON primitive metadata for a JAX array sharding."""
+    """Return JSON primitive metadata for a JAX array sharding."""
 
     sharding = getattr(value, "sharding", None)
     if sharding is None:
         return {}
+    named_sharding = _jax_named_sharding_contract(sharding)
     metadata: dict[str, Any] = {
+        "jax_sharding_schema_version": 1,
         "jax_sharding_kind": type(sharding).__name__,
+        "jax_sharding_reconstructible": named_sharding is not None,
         "jax_sharding_is_fully_addressable": getattr(value, "is_fully_addressable", None),
         "jax_sharding_is_fully_replicated": getattr(value, "is_fully_replicated", None),
         "jax_sharding_device_count": _jax_sharding_device_count(value),
@@ -960,13 +1262,15 @@ def _jax_sharding_metadata(value: Any) -> dict[str, Any]:
     if mesh_metadata:
         metadata.update(mesh_metadata)
     partition_spec = _jax_sharding_partition_spec(sharding)
-    if partition_spec:
+    if partition_spec is not None:
         metadata["jax_sharding_partition_spec"] = partition_spec
+    if named_sharding is not None:
+        metadata["jax_named_sharding"] = named_sharding
     return _json_ready_mapping(metadata)
 
 
 def _jax_named_sharding_mesh_metadata(sharding: Any) -> dict[str, Any]:
-    """Return audit metadata for a JAX ``NamedSharding`` mesh when present."""
+    """Return flat audit metadata for a JAX ``NamedSharding`` mesh."""
 
     mesh = getattr(sharding, "mesh", None)
     if mesh is None:
@@ -977,24 +1281,70 @@ def _jax_named_sharding_mesh_metadata(sharding: Any) -> dict[str, Any]:
     if axis_names is not None:
         metadata["jax_sharding_mesh_axis_names"] = [str(axis_name) for axis_name in axis_names]
     if isinstance(shape, Mapping):
-        metadata["jax_sharding_mesh_shape_keys"] = [str(key) for key in shape.keys()]
-        metadata["jax_sharding_mesh_shape_values"] = [int(value) for value in shape.values()]
+        metadata["jax_sharding_mesh_shape"] = {str(key): int(value) for key, value in shape.items()}
     return metadata
 
 
-def _jax_sharding_partition_spec(sharding: Any) -> list[str]:
-    """Return the JAX partition spec as a list of primitive strings."""
+def _jax_named_sharding_contract(sharding: Any) -> dict[str, Any] | None:
+    """Return the reconstructible JAX ``NamedSharding`` metadata block."""
+
+    if type(sharding).__name__ != "NamedSharding":
+        return None
+    mesh = getattr(sharding, "mesh", None)
+    if mesh is None:
+        return None
+    axis_names = getattr(mesh, "axis_names", None)
+    shape = getattr(mesh, "shape", None)
+    partition_spec = _jax_sharding_partition_spec(sharding)
+    if axis_names is None or not isinstance(shape, Mapping) or partition_spec is None:
+        return None
+    axis_names_list = [str(axis_name) for axis_name in axis_names]
+    mesh_shape = {str(key): int(value) for key, value in shape.items()}
+    if set(axis_names_list) != set(mesh_shape):
+        return None
+    return {
+        "mesh": {
+            "axis_names": axis_names_list,
+            "shape": mesh_shape,
+        },
+        "partition_spec": partition_spec,
+    }
+
+
+def _jax_sharding_partition_spec(sharding: Any) -> list[Any] | None:
+    """Return the JAX partition spec as JSON primitives."""
 
     spec = getattr(sharding, "spec", None)
     if spec is None:
-        return []
+        return None
     parts = getattr(spec, "partitions", None)
     if parts is None:
         try:
             parts = tuple(spec)
         except TypeError:
-            return [str(spec)]
-    return [str(part) for part in parts]
+            return None
+    encoded_parts: list[Any] = []
+    for part in parts:
+        encoded_part = _jax_partition_spec_part(part)
+        if encoded_part is _UNSUPPORTED_JAX_PARTITION_SPEC:
+            return None
+        encoded_parts.append(encoded_part)
+    return encoded_parts
+
+
+_UNSUPPORTED_JAX_PARTITION_SPEC = object()
+
+
+def _jax_partition_spec_part(part: Any) -> Any:
+    """Encode one JAX ``PartitionSpec`` part as a JSON primitive."""
+
+    if part is None or isinstance(part, str):
+        return part
+    if isinstance(part, tuple) and all(isinstance(axis_name, str) for axis_name in part):
+        return list(part)
+    if isinstance(part, list) and all(isinstance(axis_name, str) for axis_name in part):
+        return list(part)
+    return _UNSUPPORTED_JAX_PARTITION_SPEC
 
 
 def _jax_sharding_platforms(sharding: Any) -> list[str]:

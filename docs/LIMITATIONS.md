@@ -29,8 +29,9 @@ hierarchy for `mlx.nn.Module` roots, materialized `.tlspec` forward and derived 
 payloads, and leaf derived gradients. JAX is a jaxpr-first functional
 preview with full-save forward capture, live replay validation, raw `function_root`
 captures, Equinox/Flax NNX `pytree_module` hierarchy, pytree-derived params,
-materialized `.tlspec` array payloads, typed PRNG key round-trip, audit-only
-single-host sharding metadata, strict failure for multi-host/unaddressable sharded arrays, and
+materialized `.tlspec` array payloads, typed PRNG key round-trip, reconstructible
+single-host `NamedSharding` metadata with explicit `PayloadLoadHints` re-shard opt-in,
+strict failure for multi-host/unaddressable sharded arrays, and
 derived gradients only.
 tinygrad is a UOp-snapshot functional preview pinned to the `tinygrad>=0.13,<0.14`
 series; live validation and derived gradients require `DEV=PYTHON`; raw callables use

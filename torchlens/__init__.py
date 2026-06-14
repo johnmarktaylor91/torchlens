@@ -36,6 +36,7 @@ from . import (
     viz,
 )
 from .semantic import facets
+from ._io import JaxPayloadLoadHint, PayloadLoadHints
 from ._io.bundle import load, save
 from .captured_run import ActivationLookup, CapturedRun
 from .stats import aggregate
@@ -826,6 +827,8 @@ __all__ = [
     "trace",
     "fastlog",
     "facets",
+    "JaxPayloadLoadHint",
+    "PayloadLoadHints",
     "load",
     "save",
     "do",

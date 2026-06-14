@@ -27,7 +27,7 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 
-from . import BlobRef, FieldPolicy, TLSPEC_VERSION, TorchLensIOError
+from . import BlobRef, FieldPolicy, PayloadLoadHints, TLSPEC_VERSION, TorchLensIOError
 from .lazy import LazyActivationRef
 from .manifest import Manifest, TensorEntry, enforce_version_policy, sha256_of_file
 from .payload_codec import (
@@ -404,6 +404,7 @@ def load(
     lazy: Literal[False] = False,
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
+    payload_hints: PayloadLoadHints | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object with eager tensor materialization.
 
@@ -417,6 +418,8 @@ def load(
         Target device for eager tensor materialization.
     materialize_nested:
         Whether nested blob refs should be materialized.
+    payload_hints:
+        Optional backend payload hints used during materialization.
 
     Returns
     -------
@@ -433,6 +436,7 @@ def load(
     lazy: Literal[True],
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
+    payload_hints: PayloadLoadHints | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
 
@@ -446,6 +450,8 @@ def load(
         Target device for deferred tensor materialization.
     materialize_nested:
         Whether nested blob refs should be materialized.
+    payload_hints:
+        Optional backend payload hints used during materialization.
 
     Returns
     -------
@@ -461,6 +467,7 @@ def load(
     lazy: bool = False,
     map_location: str | torch.device = "cpu",
     materialize_nested: bool = True,
+    payload_hints: PayloadLoadHints | None = None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a TorchLens ``.tlspec`` object polymorphically.
 
@@ -475,6 +482,9 @@ def load(
     materialize_nested:
         Whether nested blob refs in captured args and RNG states should be
         materialized when ``lazy=True``.
+    payload_hints:
+        Optional backend payload hints used during materialization. This is
+        separate from ``map_location``; JAX sharding hints must be passed here.
 
     Returns
     -------
@@ -521,6 +531,7 @@ def load(
                 lazy=lazy,
                 map_location=map_location,
                 materialize_nested=materialize_nested,
+                payload_hints=payload_hints,
             )
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
@@ -544,6 +555,7 @@ def load(
         lazy=lazy,
         map_location=map_location,
         materialize_nested=materialize_nested,
+        payload_hints=payload_hints,
     )
 
 
@@ -554,6 +566,7 @@ def _load_trace_payload(
     lazy: bool,
     map_location: str | torch.device,
     materialize_nested: bool,
+    payload_hints: PayloadLoadHints | None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a portable Trace payload after manifest dispatch.
 
@@ -569,6 +582,8 @@ def _load_trace_payload(
         Target device for eager tensor materialization.
     materialize_nested:
         Whether nested blob refs should be materialized when ``lazy=True``.
+    payload_hints:
+        Optional backend payload hints used during materialization.
 
     Returns
     -------
@@ -612,6 +627,7 @@ def _load_trace_payload(
         lazy=lazy,
         map_location=map_location,
         materialize_nested=materialize_nested,
+        payload_hints=payload_hints,
     )
     setattr(trace, "_loaded_from_bundle", True)
     setattr(trace, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
@@ -626,6 +642,7 @@ def _load_unified_tlspec(
     lazy: bool,
     map_location: str | torch.device,
     materialize_nested: bool,
+    payload_hints: PayloadLoadHints | None,
 ) -> "Trace | Bundle | InterventionSpec":
     """Load a Phase-11 unified ``.tlspec`` bundle by manifest kind.
 
@@ -639,6 +656,8 @@ def _load_unified_tlspec(
         Target device for eager tensor materialization.
     materialize_nested:
         Whether nested blob refs should be materialized when ``lazy=True``.
+    payload_hints:
+        Optional backend payload hints used during materialization.
 
     Returns
     -------
@@ -666,6 +685,7 @@ def _load_unified_tlspec(
             lazy=lazy,
             map_location=map_location,
             materialize_nested=materialize_nested,
+            payload_hints=payload_hints,
         )
     if kind == "bundle":
         return _load_unified_bundle(bundle_path)

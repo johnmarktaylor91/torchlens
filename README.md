@@ -127,8 +127,12 @@ MLX preview traces support static-label `save=` for `tl.func`, `tl.label`,
 Portable MLX saves round-trip saved forward and derived payloads as
 `mlx.core.array` values when the MLX runtime is installed.
 JAX portable saves round-trip typed PRNG keys and fully addressable single-host
-sharded arrays by value with audit-only sharding metadata; multi-host or
-unaddressable sharded arrays fail closed instead of silently losing topology.
+sharded arrays by value. Their `codec_metadata` includes a reconstructible
+JSON-primitive `jax_named_sharding` contract with mesh axis names, mesh shape,
+and `PartitionSpec`; default load remains value-only, and callers must pass
+`PayloadLoadHints(jax=JaxPayloadLoadHint(...))` to explicitly re-shard. The
+`map_location` API remains single-device only. Multi-host or unaddressable
+sharded arrays fail closed instead of silently losing topology.
 The Op `__slots__` retained-memory baseline is tracked in
 [`benchmarks/perf/slots_baseline.md`](benchmarks/perf/slots_baseline.md) and
 shows roughly 10-15% lower retained trace memory on the measured fixtures.

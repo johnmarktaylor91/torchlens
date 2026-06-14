@@ -8,6 +8,7 @@ verify integrity, return a tensor, and close the file immediately.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -17,7 +18,7 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load, load_file
 
-from . import TorchLensIOError
+from . import PayloadLoadHints, TorchLensIOError
 from .manifest import sha256_of_file
 from .payload_codec import materialize_transport_tensor
 from .paths import resolve_bundle_blob_path
@@ -58,6 +59,8 @@ class LazyActivationRef:
         Backend-native device string before transport conversion.
     codec_metadata:
         Optional JSON-ready codec metadata.
+    payload_hints:
+        Optional backend payload hints captured from lazy load.
     """
 
     blob_id: str
@@ -73,6 +76,7 @@ class LazyActivationRef:
     logical_dtype: str | None = None
     logical_device: str | None = None
     codec_metadata: dict[str, Any] | None = None
+    payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None
 
     def blob_path(self) -> Path:
         """Return the absolute path to the referenced blob file.
@@ -85,13 +89,21 @@ class LazyActivationRef:
 
         return resolve_bundle_blob_path(self.source_bundle_path, self.relative_path)
 
-    def materialize(self, *, map_location: Any = "cpu") -> Any:
+    def materialize(
+        self,
+        *,
+        map_location: Any = "cpu",
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
+    ) -> Any:
         """Materialize the referenced payload from disk.
 
         Parameters
         ----------
         map_location:
             Requested target device for the materialized tensor.
+        payload_hints:
+            Optional backend payload hints. When omitted, hints captured during
+            ``torchlens.load(..., lazy=True)`` are used.
 
         Returns
         -------
@@ -157,4 +169,10 @@ class LazyActivationRef:
         if len(tensor_map) != 1:
             raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
         tensor = next(iter(tensor_map.values()))
-        return materialize_transport_tensor(tensor, self, map_location=map_location)
+        effective_hints = self.payload_hints if payload_hints is None else payload_hints
+        return materialize_transport_tensor(
+            tensor,
+            self,
+            map_location=map_location,
+            payload_hints=effective_hints,
+        )
