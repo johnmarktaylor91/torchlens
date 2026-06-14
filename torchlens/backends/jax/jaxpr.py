@@ -125,12 +125,15 @@ class JaxCaptureResult:
         Flat dynamic jaxpr outputs.
     equations
         Captured primitive equations.
+    outvar_key_to_capture_index
+        Stable JAX outvar-string keys mapped to flattened capture indexes.
     inlined_call_primitives
         Names of pure call primitives expanded during interpretation.
     """
 
     outputs: tuple[Any, ...]
     equations: tuple[JaxEquationCapture, ...]
+    outvar_key_to_capture_index: Mapping[str, int]
     inlined_call_primitives: tuple[str, ...]
 
 
@@ -392,7 +395,61 @@ def interpret_closed_jaxpr_with_inlining(
         return tuple(_read_env(env, var, core) for var in inner.jaxpr.outvars)
 
     outputs = interpret_inner(closed_jaxpr, flat_args, ("root",), 0)
-    return JaxCaptureResult(outputs, tuple(captures), tuple(inlined_calls))
+    equations = tuple(captures)
+    return JaxCaptureResult(
+        outputs=outputs,
+        equations=equations,
+        outvar_key_to_capture_index=_outvar_key_to_capture_index(equations),
+        inlined_call_primitives=tuple(inlined_calls),
+    )
+
+
+def _outvar_key_to_capture_index(
+    equations: Sequence[JaxEquationCapture],
+) -> dict[str, int]:
+    """Return the durable JAX outvar-key to capture-index map.
+
+    Parameters
+    ----------
+    equations
+        Flattened equation captures emitted by the interpreter.
+
+    Returns
+    -------
+    dict[str, int]
+        Mapping from string outvar keys to capture indexes.
+    """
+
+    return {
+        _outvar_key(equation, output_index, outvar): equation.index
+        for equation in equations
+        for output_index, outvar in enumerate(equation.outvars)
+    }
+
+
+def _outvar_key(
+    equation: JaxEquationCapture,
+    output_index: int,
+    outvar: str,
+) -> str:
+    """Return a unique durable key for one captured JAX output variable.
+
+    Parameters
+    ----------
+    equation
+        Equation capture that produced the outvar.
+    output_index
+        Position of the outvar in the equation output tuple.
+    outvar
+        String representation of the JAX outvar.
+
+    Returns
+    -------
+    str
+        Composite outvar key stable across later TorchLens label finalization.
+    """
+
+    return f"{equation.index}:{output_index}:{outvar}"
 
 
 def _interpret_scan(

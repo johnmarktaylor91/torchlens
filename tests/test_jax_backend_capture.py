@@ -50,6 +50,45 @@ def _mlp(params: dict[str, Any], x: Any) -> Any:
     return hidden @ params["w2"]
 
 
+def _scan_recurrent(_: None, x: Any) -> Any:
+    """Return an output with repeated body ops from an unrolled scan.
+
+    Parameters
+    ----------
+    _
+        Unused parameter placeholder.
+    x
+        Input vector scanned over the leading axis.
+
+    Returns
+    -------
+    Any
+        Scalar output from the final carry and stacked scan outputs.
+    """
+
+    def body(carry: Any, value: Any) -> tuple[Any, Any]:
+        """Return one scan body step.
+
+        Parameters
+        ----------
+        carry
+            Running scalar carry.
+        value
+            Current scanned scalar.
+
+        Returns
+        -------
+        tuple[Any, Any]
+            Updated carry and emitted scalar.
+        """
+
+        updated = carry + value
+        return updated, updated * 2.0
+
+    final, ys = lax.scan(body, jnp.asarray(0.0, dtype=x.dtype), x)
+    return final + jnp.sum(ys)
+
+
 def _relu_block(params: dict[str, Any], x: Any) -> Any:
     """Return an output that lowers through JAX's library ReLU wrapper.
 
@@ -1045,6 +1084,55 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
         op.has_saved_activation for op in trace.layer_list
     ]
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
+
+
+def test_jax_capture_index_map_survives_recurrent_relabeling() -> None:
+    """JAX capture-index labels should reflect final recurrent pass labels."""
+
+    trace = _trace_jax(
+        _scan_recurrent,
+        (None, jnp.asarray([1.0, 2.0, 3.0], dtype=jnp.float32)),
+    )
+    capture_to_label = trace.jax_capture_index_to_final_op_label
+    outvar_to_capture = trace.jax_outvar_key_to_capture_index
+    body_add_labels = [
+        capture_to_label[capture.index]
+        for capture in trace.jax_equation_captures
+        if capture.primitive == "add" and "body" in capture.source_path
+    ]
+
+    assert set(capture_to_label) == {capture.index for capture in trace.jax_equation_captures}
+    assert len(outvar_to_capture) == sum(
+        len(capture.outvars) for capture in trace.jax_equation_captures
+    )
+    assert all(index in capture_to_label for index in outvar_to_capture.values())
+    assert all(key.startswith(f"{index}:") for key, index in outvar_to_capture.items())
+    assert [trace[label].pass_index for label in body_add_labels] == [1, 2, 3]
+    assert len({trace[label].layer_label for label in body_add_labels}) == 1
+
+
+def test_jax_capture_index_map_survives_selective_save_filtering() -> None:
+    """JAX capture-index labels should remain usable after static-label save filtering."""
+
+    trace = _trace_jax(
+        _mlp,
+        (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
+        save=tl.func("dot_general"),
+    )
+    capture_to_label = trace.jax_capture_index_to_final_op_label
+    unsaved_capture_labels = {
+        label for label in capture_to_label.values() if not trace[label].has_saved_activation
+    }
+
+    assert set(capture_to_label) == {capture.index for capture in trace.jax_equation_captures}
+    assert all(label in trace.op_labels for label in capture_to_label.values())
+    assert {
+        trace[label].func_name
+        for label in capture_to_label.values()
+        if trace[label].out is not None
+    } == {"dot_general"}
+    assert unsaved_capture_labels
+    assert all(trace[label].out is None for label in unsaved_capture_labels)
 
 
 def test_jax_value_dependent_save_predicate_rejected_with_traced_value_blocker() -> None:

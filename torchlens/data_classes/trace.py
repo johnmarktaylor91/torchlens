@@ -1066,6 +1066,9 @@ class Trace(CapturedRun):
     code_context: list["FuncCallLocation"]
     jax_closed_jaxpr: Any
     jax_equation_captures: tuple[Any, ...]
+    jax_outvar_key_to_capture_index: dict[str, int]
+    _jax_capture_index_to_raw_op_label: dict[int, str]
+    jax_capture_index_to_final_op_label: dict[int, str]
     jax_inlined_call_primitives: tuple[str, ...]
     jax_static_argnums: tuple[int, ...]
     _last_sibling_ordering_decision: Any

@@ -145,7 +145,9 @@ MLX currently declares backward capture unsupported and raises tiered backend er
 features such as autograd node records and live backward intervention remain out of reach unless
 another backend exposes hookable backward graphs. JAX exposes only `trace.derived_grads`,
 populated by `tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
-`fn(params, *inputs)`. tinygrad exposes `trace.derived_grads`, populated by
+`fn(params, *inputs)`. JAX intermediate derived gradients remain deferred until a capped opt-in
+suffix-VJP implementation proves every attached boundary gradient with both perturbation and
+independent-reference oracles. tinygrad exposes `trace.derived_grads`, populated by
 `tl.backends.tinygrad.GradOptions` through a bracketed `DEV=PYTHON` leaf-gradient run, and can
 optionally expose exact unambiguous per-op records through `trace.intermediate_derived_grads` plus
 read-only `op.derived_grad`. These are not backward capture: `trace.log_backward(...)`,

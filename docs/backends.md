@@ -120,6 +120,11 @@ trace = tl.trace(fn, (params, jnp.ones((4, 3))), backend="jax", grad_options=gra
 trace.derived_grads["params.w"]
 ```
 
+JAX intermediate derived gradients are not public yet. Live JAX traces persist a
+capture-index/final-label and outvar-key/capture-index map for future suffix-VJP work, but
+`trace.intermediate_derived_grads` remains empty until a capped opt-in implementation passes the
+required perturbation and independent-reference gradient oracles for every attached boundary.
+
 The JAX backend rejects transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`), root
 capture from inside those transforms, unsupported nested-jaxpr primitives, callback effects,
 closed-over array constants for raw function-root callables, value-dependent `save=` predicates,

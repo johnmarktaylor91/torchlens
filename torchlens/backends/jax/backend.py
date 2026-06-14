@@ -414,6 +414,7 @@ class JAXBackend:
         trace.raw_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
         self._emit_equations(trace, result)
+        trace.jax_outvar_key_to_capture_index = dict(result.outvar_key_to_capture_index)
         self._mark_output_events(trace, result.outputs, output_leaf_paths)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
@@ -729,6 +730,7 @@ class JAXBackend:
             if event.output.tensor.payload is not None
         }
         label_by_capture_index: dict[int, str] = {}
+        capture_index_to_raw_op_label: dict[int, str] = {}
         for equation in result.equations:
             data_parents = tuple(
                 ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
@@ -780,8 +782,10 @@ class JAXBackend:
                 },
             )
             label_by_capture_index[equation.index] = event.label_raw
+            capture_index_to_raw_op_label[equation.index] = event.label_raw
             for value in equation.output_values:
                 label_by_value_id[id(value)] = event.label_raw
+        trace._jax_capture_index_to_raw_op_label = capture_index_to_raw_op_label
 
     def _append_event(
         self,
@@ -1418,6 +1422,12 @@ class JAXBackend:
             raw_to_final_op_label[label] = pass_label
 
         self._relabel_jax_graph_edges(trace, raw_to_final_op_label)
+        raw_by_capture_index = getattr(trace, "_jax_capture_index_to_raw_op_label", {})
+        trace.jax_capture_index_to_final_op_label = {
+            capture_index: raw_to_final_op_label[raw_label]
+            for capture_index, raw_label in raw_by_capture_index.items()
+            if raw_label in raw_to_final_op_label
+        }
         equivalent_labels_by_key: dict[str, set[str]] = {}
         for label in raw_labels:
             op_log = trace._raw_layer_dict[label]

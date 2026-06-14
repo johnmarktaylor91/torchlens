@@ -114,6 +114,23 @@ def test_jax_derived_grads_match_value_and_grad_oracle() -> None:
     assert trace.params["w"].has_grad
 
 
+def test_jax_intermediate_derived_grads_remain_deferred_with_leaf_grads() -> None:
+    """JAX should expose leaf derived grads without public intermediate T1 records."""
+
+    params = _params()
+    x = jnp.asarray([[1.0, -2.0, 0.5], [0.3, 0.1, -0.8]], dtype=jnp.float32)
+    trace = tl.trace(
+        cast(Any, _model),
+        (params, x),
+        backend="jax",
+        grad_options=GradOptions(params=params, loss_fn=_loss, input_grad_argnums=(0,)),
+    )
+
+    assert set(trace.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
+    assert len(trace.intermediate_derived_grads) == 0
+    assert not hasattr(trace, "jax_intermediate_derived_grads")
+
+
 def test_jax_derived_grads_allow_scalar_output_without_loss_fn() -> None:
     """Scalar raw outputs can be differentiated without an explicit loss_fn."""
 
