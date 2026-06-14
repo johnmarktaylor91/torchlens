@@ -101,7 +101,9 @@ _has_attached_image_processor = _hf_bridge._has_attached_image_processor
 _is_hf_image_input = _hf_bridge._is_hf_image_input
 _is_hf_multimodal_input = _hf_bridge._is_hf_multimodal_input
 _is_hf_text_input = _hf_bridge._is_hf_text_input
-_MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS = frozenset({"label", "func", "contains", "and", "or", "not"})
+_MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS = frozenset(
+    {"label", "func", "module", "contains", "in_module", "and", "or", "not"}
+)
 
 
 def list_logs() -> tuple[Trace, ...]:
@@ -169,6 +171,7 @@ def _trace_mlx_model(
     backward_ready: bool | MissingType,
     name: str | None | MissingType,
     module_filter: Callable[[Any], bool] | None | MissingType,
+    module_identity_mode: str | None | MissingType,
     verbose: bool | MissingType,
 ) -> Trace:
     """Dispatch an MLX module capture through the optional MLX backend.
@@ -221,6 +224,7 @@ def _trace_mlx_model(
         cache=MISSING,
         cache_dir=MISSING,
         module_filter=module_filter,
+        module_identity_mode=module_identity_mode,
         stop_after=MISSING,
         raise_on_nan=MISSING,
     )
@@ -292,6 +296,7 @@ def _trace_mlx_model(
             "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
         ),
         save_visualizations=capture_options.save_visualizations,
+        module_identity_mode=capture_options.module_identity_mode,
     )
     apply_static_label_save_policy(trace, save_predicate, backend_name="MLX")
     return trace
@@ -366,6 +371,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         backward_ready=kwargs["backward_ready"],
         name=kwargs["name"],
         module_filter=kwargs["module_filter"],
+        module_identity_mode=kwargs["module_identity_mode"],
         verbose=kwargs["verbose"],
     )
 

@@ -9,6 +9,7 @@ supports_payload_materialization = True
 supports_rng_replay = False
 supports_compile_capture = False
 payload_policy = "array_payloads"
+module_identity_modes = ("function_root", "object_module")
 
 __all__ = [
     "supports_backward_capture",
@@ -17,5 +18,6 @@ __all__ = [
     "supports_intervention",
     "supports_payload_materialization",
     "supports_rng_replay",
+    "module_identity_modes",
     "payload_policy",
 ]

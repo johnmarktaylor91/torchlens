@@ -502,7 +502,7 @@ def _make_root_only_log() -> Trace:
     return trace_fn(model, torch.randn(2, 5), random_seed=42)
 
 
-def _relabel_as_mlx_torch_module(trace: Trace) -> Trace:
+def _relabel_as_mlx_object_module(trace: Trace) -> Trace:
     """Relabel a torch trace as an MLX-style non-function-root trace.
 
     Parameters
@@ -513,11 +513,11 @@ def _relabel_as_mlx_torch_module(trace: Trace) -> Trace:
     Returns
     -------
     Trace
-        Same trace object routed through backend-neutral torch_module validation.
+        Same trace object routed through backend-neutral object_module validation.
     """
 
     trace.backend = "mlx"
-    trace.module_identity_mode = "torch_module"
+    trace.module_identity_mode = "object_module"
     trace.param_source = "native-module"
     return trace
 
@@ -773,7 +773,7 @@ def test_function_root_module_invariants_green_for_synthetic_backends(backend: s
 def test_non_function_root_drop_op_module_attribution_raises() -> None:
     """Dropping an op's module attribution fails before output validation matters."""
 
-    log = _relabel_as_mlx_torch_module(_make_clean_log())
+    log = _relabel_as_mlx_object_module(_make_clean_log())
     try:
         victim = next(layer for layer in log.layer_list if layer.module)
         victim.module = None
@@ -792,7 +792,7 @@ def test_non_function_root_drop_op_module_attribution_raises() -> None:
 def test_non_function_root_cyclic_address_parent_raises() -> None:
     """Cyclic module address_parent links fail module containment logic."""
 
-    log = _relabel_as_mlx_torch_module(_make_clean_log())
+    log = _relabel_as_mlx_object_module(_make_clean_log())
     try:
         root = log.modules["self"]
         child = log.modules["fc"]
@@ -810,7 +810,7 @@ def test_non_function_root_cyclic_address_parent_raises() -> None:
 def test_plain_non_function_root_unattributed_compute_op_raises() -> None:
     """A non-function-root trace with an unattributed compute op is invalid."""
 
-    log = _relabel_as_mlx_torch_module(_make_root_only_log())
+    log = _relabel_as_mlx_object_module(_make_root_only_log())
     try:
         with pytest.raises(MetadataInvariantError, match="module_attribution"):
             check_metadata_invariants(log)

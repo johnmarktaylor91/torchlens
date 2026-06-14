@@ -9,7 +9,7 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 | Backend | Capture | Validation | Payloads | Modules | Gradients |
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
-| `mlx` | Technical preview | Unsupported | Materialized forward array `.tlspec` payloads | `torch_module` compatibility mode | Unsupported |
+| `mlx` | Technical preview | Unsupported | Materialized forward array `.tlspec` payloads | `function_root`, object `object_module` | Unsupported |
 | `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads` only |
 | `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 
@@ -30,9 +30,9 @@ Declared future options:
 |---|---|
 | `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan`/`cond`/`while_loop` support `unroll` or `reject` |
 | `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
-| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad supports raw `function_root` and callable object `object_module` |
+| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad and MLX support raw `function_root` and callable object `object_module` |
 | `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX use `array_payloads` |
-| `save_preview` | Future non-torch save preview flag; JAX/tinygrad support static-label `save=`; MLX supports phase-A static labels (`tl.func`, `tl.label`, `tl.contains`) |
+| `save_preview` | Future non-torch save preview flag; JAX/tinygrad/MLX support static-label `save=` |
 
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.
@@ -57,14 +57,20 @@ were stripped. MLX supports a narrower static-label `save=` phase for `tl.func`,
 
 ## MLX Preview
 
-MLX is a technical-preview eager-dispatch backend. It supports forward capture and static-label
-`save=` for `tl.func(...)`, `tl.label(...)`, `tl.contains(...)`, and safe boolean composites with
-`&`, `|`, and `~`. Selective save is applied after full graph finalization: unsaved ops keep graph
-metadata but drop public activation payloads, while saved payloads remain live MLX arrays in memory
-and round-trip through portable `.tlspec` saves with `payload_policy="array_payloads"`.
+MLX is a technical-preview eager-dispatch backend. MLX `mlx.nn.Module` roots default to
+`module_identity_mode="object_module"` using MLX public `named_modules()` traversal, with shared
+module aliases represented by a deterministic primary address and `all_addresses`. Pass
+`module_identity_mode="function_root"` to force a root-only module surface. Python list-contained
+modules are attributed at addresses such as `layers.0`; TorchLens does not invent synthetic
+container modules for non-module list objects.
 
-MLX rejects `tl.module(...)` and `tl.in_module(...)` for `save=` because module hierarchy is
-required and not yet available on MLX. It also rejects `tl.output(...)`, `tl.where(...)`,
+MLX supports static-label `save=` for `tl.func(...)`, `tl.label(...)`, `tl.module(...)`,
+`tl.in_module(...)`, `tl.contains(...)`, and safe boolean composites with `&`, `|`, and `~`.
+Selective save is applied after full graph finalization: unsaved ops keep graph metadata but drop
+public activation payloads, while saved payloads remain live MLX arrays in memory and round-trip
+through portable `.tlspec` saves with `payload_policy="array_payloads"`.
+
+MLX rejects `tl.output(...)`, `tl.where(...)`,
 `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `intervene=`, `halt=`,
 streaming, `save_grads=`, `backward_ready=True`, and `tl.record(backend="mlx")`. MLX validation is
 currently unsupported, so selective save does not fabricate a replay pass. Portable MLX saves

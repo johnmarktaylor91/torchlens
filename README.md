@@ -106,6 +106,8 @@ Flax NNX modules use `module_identity_mode="pytree_module"`, while raw functions
 use `function_root`. The tinygrad backend captures UOp graphs, supports
 callable-object `object_module` hierarchy, and exposes T1 intermediate derived
 gradients through `trace.intermediate_derived_grads` / `op.derived_grad`.
+MLX `mlx.nn.Module` roots use object-discovered `object_module` hierarchy, with
+`function_root` available as an explicit root-only fallback.
 JAX/tinygrad/MLX portable saves use `payload_policy="array_payloads"` and loaded
 traces report replay as unavailable rather than as a false pass. PyTorch remains
 the full-feature backend: true backward capture, value-dependent predicates,
@@ -114,8 +116,7 @@ pinned and documented in [`docs/`](docs/); they are not yet drop-in for
 arbitrary models.)
 
 MLX preview traces support static-label `save=` for `tl.func`, `tl.label`,
-`tl.contains`, and boolean composites of those. Module selectors require module
-hierarchy data and are rejected on MLX until that preview grows module capture.
+`tl.module`, `tl.in_module`, `tl.contains`, and boolean composites of those.
 Portable MLX saves round-trip saved forward payloads as `mlx.core.array` values
 when the MLX runtime is installed.
 

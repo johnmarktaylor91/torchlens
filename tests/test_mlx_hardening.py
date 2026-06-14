@@ -363,11 +363,8 @@ def test_mlx_static_label_contains_and_composite_save_work() -> None:
 @pytest.mark.parametrize(
     ("selector", "pattern"),
     [
-        (tl.module("l1"), "module hierarchy required, not yet on MLX"),
-        (tl.in_module("l1"), "module hierarchy required, not yet on MLX"),
         (tl.output(0), "unsupported selector kind 'output'"),
         (tl.where(_always_true, name_hint="always"), "tl.where"),
-        (tl.func("relu") & tl.in_module("l1"), "module hierarchy required, not yet on MLX"),
     ],
 )
 @pytest.mark.optional
@@ -388,6 +385,8 @@ def test_mlx_capability_flags_match_materialized_contract() -> None:
     spec = get_backend_spec("mlx")
 
     assert spec.capabilities.payload_materialization is True
+    assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
+    assert spec.capabilities.trace_options == ("module_identity_mode",)
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
     assert capabilities.supports_payload_materialization is True

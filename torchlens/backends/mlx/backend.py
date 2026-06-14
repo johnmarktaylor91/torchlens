@@ -4,19 +4,26 @@ from __future__ import annotations
 
 import random
 import time
+from collections.abc import Iterator
+from collections import defaultdict
 from contextlib import AbstractContextManager, contextmanager
+from dataclasses import dataclass
 from dataclasses import replace
 from typing import Any, Callable, Literal, cast
 
 from ... import _state
 from ...backends import BackendName, BackendUnsupportedError
 from ...data_classes.layer import Layer
+from ...data_classes.module import ModuleAccessor
+from ...data_classes.param import Param, ParamAccessor
 from ...data_classes.trace import Trace
+from ...data_classes.trace import _init_module_hierarchy_data
 from ...fastlog.types import CaptureSpec
 from ...ir.buffer import CaptureEvents
 from ...ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
+    ModuleFrame,
     OpEvent,
     OutputRef,
     ParentEdge,
@@ -27,11 +34,38 @@ from ...ir.predicate import RecordContext, _DEFERRED_VALUE
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
 from ...postprocess._materialize import materialize_from_events
+from ...postprocess.finalization import _build_module_logs
+from ...postprocess.finalization import _build_root_module_log
 from ...quantities import Duration
 from . import capabilities
-from .model_prep import cleanup_model_session, prepare_model_once, prepare_model_session
+from .model_prep import (
+    MLXModuleTree,
+    cleanup_model_session,
+    discover_mlx_module_tree,
+    prepare_model_once,
+    prepare_model_session,
+)
 from .tensor_store import MLXTensorLabelStore
 from .wrappers import is_mlx_wrapped, unwrap_mlx, wrap_mlx
+
+
+@dataclass(frozen=True)
+class MLXParameterCandidate:
+    """One flattened MLX parameter candidate.
+
+    Parameters
+    ----------
+    address
+        Dotted parameter address.
+    value
+        MLX array value.
+    owner
+        Owning primary module address.
+    """
+
+    address: str
+    value: Any
+    owner: str
 
 
 class MLXBackend:
@@ -46,10 +80,10 @@ class MLXBackend:
         self.mx, self.nn = self._import_mlx()
         self.tensor_store = MLXTensorLabelStore()
 
-    def wrap(self, value: object) -> object:
+    def wrap(self, value: object, module_tree: MLXModuleTree | None = None) -> object:
         """Install MLX wrappers and return ``value`` unchanged."""
 
-        wrap_mlx(self)
+        wrap_mlx(self, module_tree=module_tree)
         return value
 
     def unwrap(self, value: object) -> object:
@@ -380,6 +414,7 @@ class MLXBackend:
         save_raw_output: str | bool = "small",
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool = False,
+        module_identity_mode: str | None = None,
     ) -> Trace:
         """Capture an MLX forward pass into a smoke-compatible Trace."""
 
@@ -387,6 +422,8 @@ class MLXBackend:
             raise BackendUnsupportedError("backward capture is not supported on the mlx backend")
         if output_device != "same":
             raise ValueError("MLX backend only supports output_device='same' in technical preview.")
+        module_tree = discover_mlx_module_tree(model)
+        use_object_module = _resolve_mlx_module_identity_mode(module_identity_mode, module_tree)
         trace = Trace(
             model_class_name=type(model).__name__,
             output_device=output_device,
@@ -422,6 +459,7 @@ class MLXBackend:
         trace.capture_events = CaptureEvents()
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
+        trace._mlx_module_stack = []
         trace._pre_forward_rng_states = None
         setattr(
             trace,
@@ -429,7 +467,7 @@ class MLXBackend:
             cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294),
         )
         self.tensor_store.clear()
-        self.wrap(model)
+        self.wrap(model, module_tree if use_object_module else None)
         self.prepare_model_session(trace, model)
         args = self._normalize_input_args(input_args)
         kwargs = {} if input_kwargs is None else dict(input_kwargs)
@@ -444,7 +482,25 @@ class MLXBackend:
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
-            self._finish_trace(trace)
+            if use_object_module and module_tree is not None:
+                trace.param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
+                trace.num_param_tensors = len(trace.param_logs)
+                trace.num_params = sum(param.num_params for param in trace.param_logs)
+                trace.num_params_trainable = sum(
+                    param.num_params for param in trace.param_logs if param.is_trainable
+                )
+                trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+                trace.param_source = "native-module"
+            else:
+                trace.param_logs = ParamAccessor({})
+                trace.num_param_tensors = 0
+                trace.num_params = 0
+                trace.num_params_trainable = 0
+                trace.num_params_frozen = 0
+                trace.param_source = "none"
+            self._finish_trace(trace, module_tree if use_object_module else None)
+            if hasattr(trace, "_mlx_module_stack"):
+                delattr(trace, "_mlx_module_stack")
             return trace
         finally:
             self.cleanup_model_session(trace, model)
@@ -458,6 +514,8 @@ class MLXBackend:
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
         output: object,
+        *,
+        module_stack: tuple[ModuleFrame, ...] | None = None,
     ) -> None:
         """Append one MLX operation event to ``trace``."""
 
@@ -482,7 +540,7 @@ class MLXBackend:
                 raw_output=output,
                 arg_copies=None,
                 kwarg_copies=None,
-                module_stack=(),
+                module_stack=module_stack or tuple(getattr(trace, "_mlx_module_stack", ())),
                 is_bottom_level_func=True,
                 func_call_id=func_call_id,
                 expected_output_count=len(outputs),
@@ -797,9 +855,23 @@ class MLXBackend:
                     trace.capture_events.live_index.replace(updated)
                     break
 
-    def _finish_trace(self, trace: Trace) -> None:
-        """Finalize a manually captured MLX Trace."""
+    def _finish_trace(self, trace: Trace, module_tree: MLXModuleTree | None = None) -> None:
+        """Finalize a manually captured MLX Trace.
 
+        Parameters
+        ----------
+        trace
+            Trace to finalize.
+        module_tree
+            Discovered object-module tree, if object-module mode is active.
+
+        Returns
+        -------
+        None
+            Trace accessors are populated in place.
+        """
+
+        seen_param_barcodes: set[str] = set()
         for raw_index, (label, op_log) in enumerate(trace._raw_layer_dict.items()):
             pass_label = f"{label}:1"
             op_log._label_raw = label
@@ -820,17 +892,164 @@ class MLXBackend:
             trace.layer_num_calls[label] = 1
             trace._lookup_keys_to_layer_num_dict[label] = raw_index
             trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
+            _attach_mlx_op_params(op_log, trace.param_logs, seen_param_barcodes)
+            for param in getattr(op_log, "_param_logs", []):
+                if op_log.label not in param.used_by_ops:
+                    param.used_by_ops.append(op_log.label)
+                if op_log.layer_label not in param.used_by_layers:
+                    param.used_by_layers.append(op_log.layer_label)
+                if op_log.layer_label not in trace.layers_with_params[param.barcode]:
+                    trace.layers_with_params[param.barcode].append(op_log.layer_label)
             layer_log = Layer(op_log)
             layer_log.ops[1] = op_log
             layer_log.call_labels.append(pass_label)
             trace.layer_logs[label] = layer_log
-        trace.num_ops = len(trace.layer_list)
+        trace.num_ops = sum(
+            1
+            for op_log in trace.layer_list
+            if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
+        )
         trace._layers_logged = True
         trace._layers_saved = True
         trace._tracing_finished = True
         trace.has_backward_pass = False
         trace.capture_end_time = time.time()
         trace.backend = cast(BackendName, self.name)
+        if module_tree is None:
+            trace.module_identity_mode = "function_root"
+            self._attach_function_root_module(trace)
+        else:
+            trace.module_identity_mode = "object_module"
+            self._attach_object_module_logs(trace, module_tree)
+
+    def _attach_object_module_logs(self, trace: Trace, tree: MLXModuleTree) -> None:
+        """Build public module logs for an MLX object-module trace.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving module accessors.
+        tree
+            Discovered MLX object-module tree.
+
+        Returns
+        -------
+        None
+            ``trace.modules`` is populated by the shared module-log builder.
+        """
+
+        trace._module_build_data = _init_module_hierarchy_data()
+        trace._module_forward_args = dict(tree.forward_args_by_call)
+        trace._module_metadata = tree.metadata
+        mbd = trace._module_build_data
+        for address, metadata in tree.metadata.items():
+            if address not in mbd["addresses"]:
+                mbd["addresses"].append(address)
+            mbd["module_types"][address] = str(metadata.get("class_name", ""))
+            mbd["module_training_modes"][address] = bool(metadata.get("training", False))
+            mbd["module_num_calls"][address] = max(1, tree.call_counts.get(address, 1))
+            for child_address in metadata.get("address_children", []):
+                if child_address not in mbd["module_children"][address]:
+                    mbd["module_children"][address].append(child_address)
+            if address != "self" and _nearest_metadata_parent(address, tree.metadata) == "self":
+                mbd["top_level_modules"].append(address)
+
+        for param in trace.param_logs:
+            owner = param.module_address
+            mbd["module_nparams"][owner] += param.num_params
+            if param.is_trainable:
+                mbd["module_nparams_trainable"][owner] += param.num_params
+            else:
+                mbd["module_nparams_frozen"][owner] += param.num_params
+
+        self._populate_object_module_build_data(trace)
+        _build_module_logs(trace)
+
+    def _populate_object_module_build_data(self, trace: Trace) -> None:
+        """Populate module hierarchy side channels from attributed MLX ops.
+
+        Parameters
+        ----------
+        trace
+            Trace whose finalized ops carry object-module tuples.
+
+        Returns
+        -------
+        None
+            ``trace._module_build_data`` is updated in place.
+        """
+
+        mbd = trace._module_build_data
+        seen_layers: dict[str, set[str]] = defaultdict(set)
+        seen_pass_layers: dict[str, set[str]] = defaultdict(set)
+        seen_module_ops: set[str] = set()
+        seen_top_level_ops: set[str] = set()
+        seen_pass_children: dict[str, set[str]] = defaultdict(set)
+        seen_addresses = set(mbd["addresses"])
+
+        for op_log in trace.layer_list:
+            normalized_calls = _mlx_op_module_calls(op_log.modules)
+            op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
+            op_log.module = op_log.modules[-1] if op_log.modules else None
+            parent_call_label: str | None = None
+            for module_index, (address, call_index) in enumerate(normalized_calls):
+                call_label = f"{address}:{call_index}"
+                if mbd["module_num_calls"][address] < call_index:
+                    mbd["module_num_calls"][address] = call_index
+                mbd["module_num_tensors"][address] += 1
+                mbd["module_call_index_tensors"][call_label] += 1
+                if op_log.layer_label not in seen_layers[address]:
+                    seen_layers[address].add(op_log.layer_label)
+                    mbd["module_layers"][address].append(op_log.layer_label)
+                if op_log.label not in seen_pass_layers[call_label]:
+                    seen_pass_layers[call_label].add(op_log.label)
+                    mbd["module_pass_layers"][call_label].append(op_log.label)
+                if address not in seen_addresses:
+                    seen_addresses.add(address)
+                    mbd["addresses"].append(address)
+                if call_label not in seen_module_ops:
+                    seen_module_ops.add(call_label)
+                    mbd["module_ops"].append(call_label)
+                if module_index == 0:
+                    if call_label not in seen_top_level_ops:
+                        seen_top_level_ops.add(call_label)
+                        mbd["top_level_module_ops"].append(call_label)
+                    if address != "self" and address not in mbd["top_level_modules"]:
+                        mbd["top_level_modules"].append(address)
+                elif parent_call_label is not None:
+                    if call_label not in seen_pass_children[parent_call_label]:
+                        seen_pass_children[parent_call_label].add(call_label)
+                        mbd["module_pass_children"][parent_call_label].append(call_label)
+                parent_call_label = call_label
+
+    def _attach_function_root_module(self, trace: Trace) -> None:
+        """Attach a function-root module accessor to ``trace``.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving the root module.
+
+        Returns
+        -------
+        None
+            ``trace.modules`` is populated with ``self``.
+        """
+
+        mbd = trace._module_build_data
+        mbd["top_level_modules"] = ["self"]
+        mbd["top_level_module_ops"] = ["self:1"]
+        trace._module_metadata = {
+            "self": {
+                "cls": None,
+                "class_name": trace.model_class_name,
+                "class_qualname": trace.model_class_qualname,
+                "all_addresses": ["self"],
+                "training": False,
+            }
+        }
+        root = _build_root_module_log(trace, {}, mbd)
+        trace._module_logs = ModuleAccessor({"self": root})
 
     def _iter_arrays(self, value: object) -> list[object]:
         """Return MLX arrays nested inside ``value``."""
@@ -880,6 +1099,400 @@ class MLXBackend:
         if size is not None and itemsize is not None:
             return int(size) * int(itemsize)
         return None
+
+
+def mlx_param_logs(tree: MLXModuleTree, trace: Trace) -> dict[str, Param]:
+    """Build TorchLens parameter logs from an MLX module parameter tree.
+
+    Parameters
+    ----------
+    tree
+        Discovered MLX object-module tree.
+    trace
+        Trace receiving the parameter logs.
+
+    Returns
+    -------
+    dict[str, Param]
+        Parameter logs keyed by primary parameter address.
+    """
+
+    param_logs: dict[str, Param] = {}
+    trainable_ids = {id(value) for _address, value in _iter_trainable_parameter_tree(tree.root)}
+    for candidate in _iter_mlx_parameter_candidates(tree):
+        existing_address = tree.param_address_by_id.get(id(candidate.value), candidate.address)
+        if existing_address in param_logs:
+            param = param_logs[existing_address]
+            if candidate.address not in param.all_addresses:
+                param.all_addresses.append(candidate.address)
+            if candidate.address not in param.co_parent_params:
+                param.co_parent_params.append(candidate.address)
+            for alias in tree.metadata.get(candidate.owner, {}).get(
+                "all_addresses", [candidate.owner]
+            ):
+                if alias not in param.all_module_addresses:
+                    param.all_module_addresses.append(alias)
+            continue
+        shape = tuple(getattr(candidate.value, "shape", ()))
+        dtype = str(getattr(candidate.value, "dtype", ""))
+        param = Param(
+            module_address=candidate.owner,
+            name=candidate.address.rsplit(".", 1)[-1],
+            shape=shape,
+            dtype=cast(Any, dtype),
+            num_params=_numel(shape),
+            param_memory=_nbytes(candidate.value) or 0,
+            trainable=id(candidate.value) in trainable_ids,
+            address=existing_address,
+            barcode=f"mlx:{existing_address}",
+            has_optimizer=None,
+        )
+        param.dtype_ref = DtypeRef(backend="mlx", name=dtype)
+        param.device_ref = DeviceRef.from_value(getattr(candidate.value, "device", None))
+        param.backend_address = f"object:{existing_address}"
+        param.resolver_status = "resolved"
+        param._param_ref = cast(Any, candidate.value)
+        param.source_trace = trace
+        param.all_module_addresses = list(
+            tree.metadata.get(candidate.owner, {}).get("all_addresses", [candidate.owner])
+        )
+        param_logs[existing_address] = param
+    return param_logs
+
+
+def _attach_mlx_op_params(
+    op_log: Any,
+    param_logs: ParamAccessor,
+    seen_param_barcodes: set[str],
+) -> None:
+    """Attach MLX module-owned parameters to a finalized op log.
+
+    Parameters
+    ----------
+    op_log
+        Op log being finalized.
+    param_logs
+        Trace parameter accessor.
+    seen_param_barcodes
+        Mutable set of parameter barcodes already attached to earlier ops.
+
+    Returns
+    -------
+    None
+        Parameter fields are updated in place.
+    """
+
+    module_calls = _mlx_op_module_calls(getattr(op_log, "modules", ()))
+    if not module_calls:
+        return
+    owner = module_calls[-1][0]
+    params = [
+        param
+        for param in param_logs
+        if param.module_address == owner and param.barcode not in seen_param_barcodes
+    ]
+    if not params:
+        return
+    op_log._param_logs = params
+    op_log._param_barcodes = [param.barcode for param in params]
+    op_log.param_shapes = [param.shape for param in params]
+    op_log.num_params = sum(param.num_params for param in params)
+    op_log.num_params_trainable = sum(param.num_params for param in params if param.is_trainable)
+    op_log.num_params_frozen = sum(param.num_params for param in params if not param.is_trainable)
+    op_log.param_memory = sum(int(param.param_memory) for param in params)
+    seen_param_barcodes.update(param.barcode for param in params)
+
+
+def _iter_mlx_parameter_candidates(tree: MLXModuleTree) -> list[MLXParameterCandidate]:
+    """Return flattened MLX parameter candidates with primary owners.
+
+    Parameters
+    ----------
+    tree
+        Discovered MLX object-module tree.
+
+    Returns
+    -------
+    list[MLXParameterCandidate]
+        Parameter candidates.
+    """
+
+    alias_to_primary = _alias_to_primary(tree)
+    candidates: list[MLXParameterCandidate] = []
+    for param_address, value in _iter_parameter_tree(tree.root):
+        owner_alias = param_address.rsplit(".", 1)[0] if "." in param_address else "self"
+        owner = alias_to_primary.get(owner_alias, owner_alias)
+        primary_param_address = _join_module_address(owner, param_address.rsplit(".", 1)[-1])
+        candidates.append(
+            MLXParameterCandidate(
+                address=primary_param_address,
+                value=value,
+                owner=owner,
+            )
+        )
+    return candidates
+
+
+def _iter_trainable_parameter_tree(model: object) -> list[tuple[str, Any]]:
+    """Return flattened MLX trainable parameter leaves.
+
+    Parameters
+    ----------
+    model
+        MLX module.
+
+    Returns
+    -------
+    list[tuple[str, Any]]
+        Trainable parameter addresses and arrays.
+    """
+
+    trainable_parameters = getattr(model, "trainable_parameters", None)
+    if not callable(trainable_parameters):
+        return []
+    return list(_flatten_parameter_tree(trainable_parameters(), ""))
+
+
+def _iter_parameter_tree(model: object) -> list[tuple[str, Any]]:
+    """Return flattened MLX parameter leaves.
+
+    Parameters
+    ----------
+    model
+        MLX module.
+
+    Returns
+    -------
+    list[tuple[str, Any]]
+        Parameter addresses and arrays.
+    """
+
+    parameters = getattr(model, "parameters", None)
+    if not callable(parameters):
+        return []
+    return list(_flatten_parameter_tree(parameters(), ""))
+
+
+def _flatten_parameter_tree(value: object, prefix: str) -> Iterator[tuple[str, Any]]:
+    """Yield array leaves from an MLX parameter tree.
+
+    Parameters
+    ----------
+    value
+        Parameter tree value.
+    prefix
+        Dotted address prefix.
+
+    Yields
+    ------
+    tuple[str, Any]
+        Parameter address and array.
+    """
+
+    if _is_mlx_array(value):
+        yield prefix, value
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child_prefix = _join_module_address(prefix, str(key)) if prefix else str(key)
+            yield from _flatten_parameter_tree(item, child_prefix)
+        return
+    if isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            child_prefix = _join_module_address(prefix, str(index)) if prefix else str(index)
+            yield from _flatten_parameter_tree(item, child_prefix)
+
+
+def _is_mlx_array(value: object) -> bool:
+    """Return whether ``value`` is an MLX array.
+
+    Parameters
+    ----------
+    value
+        Candidate object.
+
+    Returns
+    -------
+    bool
+        True when ``value`` is an MLX array.
+    """
+
+    try:
+        import mlx.core as mx
+    except ImportError:
+        return False
+    return isinstance(value, mx.array)
+
+
+def _alias_to_primary(tree: MLXModuleTree) -> dict[str, str]:
+    """Return module alias to primary address mapping.
+
+    Parameters
+    ----------
+    tree
+        Discovered MLX module tree.
+
+    Returns
+    -------
+    dict[str, str]
+        Alias-to-primary mapping.
+    """
+
+    aliases: dict[str, str] = {}
+    for primary, metadata in tree.metadata.items():
+        for alias in metadata.get("all_addresses", [primary]):
+            aliases[str(alias)] = primary
+    return aliases
+
+
+def _mlx_op_module_calls(value: Any) -> tuple[tuple[str, int], ...]:
+    """Normalize an op's raw module tuple list.
+
+    Parameters
+    ----------
+    value
+        Materialized op ``modules`` field.
+
+    Returns
+    -------
+    tuple[tuple[str, int], ...]
+        Normalized ``(address, call_index)`` pairs.
+    """
+
+    calls: list[tuple[str, int]] = []
+    for item in value:
+        if isinstance(item, tuple) and len(item) == 2:
+            address, call_index = item
+            calls.append((str(address), int(call_index)))
+            continue
+        text = str(item)
+        address, separator, index_text = text.rpartition(":")
+        if separator and index_text.isdigit():
+            calls.append((address, int(index_text)))
+    return tuple(calls)
+
+
+def _resolve_mlx_module_identity_mode(
+    value: str | None,
+    module_tree: MLXModuleTree | None,
+) -> bool:
+    """Return whether MLX should use object-module attribution.
+
+    Parameters
+    ----------
+    value
+        Public ``module_identity_mode`` value after missing normalization.
+    module_tree
+        Discovered MLX module tree, if any.
+
+    Returns
+    -------
+    bool
+        True when object-module mode should be used.
+    """
+
+    if value not in {None, "function_root", "object_module"}:
+        raise BackendUnsupportedError(
+            "MLX module_identity_mode must be None, 'function_root', or 'object_module'."
+        )
+    if value == "object_module" and module_tree is None:
+        raise BackendUnsupportedError(
+            "MLX module_identity_mode='object_module' requires an mlx.nn.Module object. "
+            "Raw callables use module_identity_mode='function_root'."
+        )
+    if value == "function_root":
+        return False
+    return module_tree is not None
+
+
+def _nearest_metadata_parent(address: str, metadata: dict[str, dict[str, Any]]) -> str | None:
+    """Return the closest existing parent address for ``address``.
+
+    Parameters
+    ----------
+    address
+        Child address.
+    metadata
+        Module metadata keyed by address.
+
+    Returns
+    -------
+    str | None
+        Parent address, or ``None`` for root.
+    """
+
+    if address == "self":
+        return None
+    parts = address.split(".")
+    while len(parts) > 1:
+        parts.pop()
+        candidate = ".".join(parts)
+        if candidate in metadata:
+            return candidate
+    return "self" if "self" in metadata else None
+
+
+def _join_module_address(parent: str, child_name: str) -> str:
+    """Return a TorchLens child module address.
+
+    Parameters
+    ----------
+    parent
+        Parent module address.
+    child_name
+        Child name.
+
+    Returns
+    -------
+    str
+        Joined module address.
+    """
+
+    return child_name if parent in {"", "self"} else f"{parent}.{child_name}"
+
+
+def _numel(shape: tuple[int, ...]) -> int:
+    """Return number of elements for ``shape``.
+
+    Parameters
+    ----------
+    shape
+        Tensor shape.
+
+    Returns
+    -------
+    int
+        Product of dimensions.
+    """
+
+    result = 1
+    for dim in shape:
+        result *= int(dim)
+    return result
+
+
+def _nbytes(value: object) -> int | None:
+    """Return MLX array memory in bytes.
+
+    Parameters
+    ----------
+    value
+        MLX array-like value.
+
+    Returns
+    -------
+    int | None
+        Memory in bytes, if known.
+    """
+
+    nbytes = getattr(value, "nbytes", None)
+    if nbytes is not None:
+        return int(nbytes)
+    size = getattr(value, "size", None)
+    itemsize = getattr(value, "itemsize", None)
+    if size is not None and itemsize is not None:
+        return int(size) * int(itemsize)
+    return None
 
 
 __all__ = ["MLXBackend"]

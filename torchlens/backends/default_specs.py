@@ -441,7 +441,8 @@ def register_default_backend_specs() -> None:
                 rng_replay=False,
                 payload_materialization=True,
                 streaming=False,
-                module_identity_modes=("torch_module",),
+                module_identity_modes=("function_root", "object_module"),
+                trace_options=("module_identity_mode",),
             ),
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
