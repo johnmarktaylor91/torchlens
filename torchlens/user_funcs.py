@@ -53,6 +53,7 @@ from ._literals import (
     VisRendererLiteral,
 )
 from .backends import BackendName, BackendSpec, BackendUnsupportedError, resolve_backend_spec
+from .backends._selective_save import apply_static_label_save_policy, reject_selector_outside_kinds
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 from .backends.torch._tl import get_tensor_label
 from .bridge import hf as _hf_bridge
@@ -100,6 +101,7 @@ _has_attached_image_processor = _hf_bridge._has_attached_image_processor
 _is_hf_image_input = _hf_bridge._is_hf_image_input
 _is_hf_multimodal_input = _hf_bridge._is_hf_multimodal_input
 _is_hf_text_input = _hf_bridge._is_hf_text_input
+_MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS = frozenset({"label", "func", "contains", "and", "or", "not"})
 
 
 def list_logs() -> tuple[Trace, ...]:
@@ -162,6 +164,7 @@ def _trace_mlx_model(
     hooks: Any | None | MissingType,
     capture: CaptureOptions | None,
     save: SaveOptions | None,
+    save_predicate: PredicateFn | BaseSelector | None,
     visualization: VisualizationOptions | None,
     backward_ready: bool | MissingType,
     name: str | None | MissingType,
@@ -290,6 +293,7 @@ def _trace_mlx_model(
         ),
         save_visualizations=capture_options.save_visualizations,
     )
+    apply_static_label_save_policy(trace, save_predicate, backend_name="MLX")
     return trace
 
 
@@ -309,11 +313,10 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
 
     save_options, save_predicate = _split_save_options_and_predicate(kwargs["save"])
     if save_predicate is not None:
-        raise BackendUnsupportedError(
-            "MLX backend does not support value-dependent trace(save=predicate) capture. "
-            "MLX lazy evaluation defers RecordContext.tensor_requires_grad, "
-            "is_scalar_bool, and bool_value without per-op mx.eval; use static save options "
-            "or the PyTorch backend for value-dependent predicates."
+        reject_selector_outside_kinds(
+            save_predicate,
+            allowed=_MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS,
+            backend_name="MLX",
         )
     if kwargs["intervene"] is not None:
         raise BackendUnsupportedError(
@@ -358,6 +361,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         hooks=kwargs["hooks"],
         capture=kwargs["capture"],
         save=save_options,
+        save_predicate=save_predicate,
         visualization=None,
         backward_ready=kwargs["backward_ready"],
         name=kwargs["name"],

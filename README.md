@@ -94,7 +94,7 @@ frameworks:
 | Forward capture + graph/metadata | ✅ | ✅ | ✅ | ✅ |
 | Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | object `object_module`; raw `function_root` | compatibility mode |
 | Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited |
-| Static-label `save=` | ✅ | ✅ | ✅ | — |
+| Static-label `save=` | ✅ | ✅ | ✅ | ✅ func/label/contains only |
 | Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | audit-only |
 | Gradients | full backward graph | leaf-level derived | leaf-level + T1 intermediate derived | — |
 | Interventions / halt / fastlog | ✅ | — | — | — |
@@ -112,6 +112,10 @@ the full-feature backend: true backward capture, value-dependent predicates,
 `intervene=`, `halt=`, and fastlog are torch-only for now. (Preview backends are
 pinned and documented in [`docs/`](docs/); they are not yet drop-in for
 arbitrary models.)
+
+MLX preview traces support static-label `save=` for `tl.func`, `tl.label`,
+`tl.contains`, and boolean composites of those. Module selectors require module
+hierarchy data and are rejected on MLX until that preview grows module capture.
 
 ```python
 log = tl.trace(torch_model, x)                  # PyTorch (default)

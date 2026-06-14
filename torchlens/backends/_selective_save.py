@@ -29,9 +29,63 @@ _STATIC_SELECTOR_KINDS = frozenset(
 )
 
 
+def reject_selector_outside_kinds(
+    predicate: Callable[[Any], Any] | BaseSelector,
+    *,
+    allowed: frozenset[str],
+    backend_name: str,
+) -> None:
+    """Reject selector trees containing kinds outside an explicit backend allowlist.
+
+    Parameters
+    ----------
+    predicate
+        Candidate public save predicate.
+    allowed
+        Selector kinds accepted by the backend, including any allowed boolean
+        composite kinds.
+    backend_name
+        Backend name used in diagnostic errors.
+
+    Returns
+    -------
+    None
+        Returns when the whole predicate tree is allowed.
+    """
+
+    if not isinstance(predicate, BaseSelector):
+        raise BackendUnsupportedError(
+            f"{backend_name} backend supports trace(save=...) only for static-label selectors "
+            "tl.func, tl.label, tl.contains and boolean composites (&, |, ~) of those. "
+            "Value-dependent predicates need concrete activation values at predicate time. "
+            "MLX lazy evaluation defers RecordContext.tensor_requires_grad, is_scalar_bool, "
+            "and bool_value without per-op evaluation; use the PyTorch backend for "
+            "value-dependent predicates."
+        )
+    unsupported = _first_selector_outside_kinds(predicate, allowed=allowed)
+    if unsupported is None:
+        return
+    if unsupported in {"module", "in_module"}:
+        raise BackendUnsupportedError(
+            f"{backend_name} backend cannot use trace(save=...) selector kind "
+            f"{unsupported!r}: module hierarchy required, not yet on {backend_name}."
+        )
+    if unsupported == "predicate":
+        raise BackendUnsupportedError(
+            f"{backend_name} backend does not support value-dependent trace(save=...) "
+            "predicates from tl.where. Static-label save= on this backend is limited to "
+            "tl.func, tl.label, tl.contains and boolean composites (&, |, ~) of those."
+        )
+    raise BackendUnsupportedError(
+        f"{backend_name} backend supports trace(save=...) only for static-label selectors "
+        "tl.func, tl.label, tl.contains and boolean composites (&, |, ~) of those; "
+        f"unsupported selector kind {unsupported!r}."
+    )
+
+
 def apply_static_label_save_policy(
     trace: Any,
-    predicate: Callable[[Any], bool] | BaseSelector | None,
+    predicate: Callable[[Any], Any] | BaseSelector | None,
     *,
     backend_name: str,
 ) -> None:
@@ -92,7 +146,7 @@ def pop_static_label_save_predicate(
     kwargs: dict[str, Any],
     *,
     backend_name: str,
-) -> Callable[[Any], bool] | BaseSelector | None:
+) -> Callable[[Any], Any] | BaseSelector | None:
     """Return the backend-neutral ``save=`` predicate from backend kwargs.
 
     Parameters
@@ -104,7 +158,7 @@ def pop_static_label_save_predicate(
 
     Returns
     -------
-    Callable[[Any], bool] | BaseSelector | None
+    Callable[[Any], Any] | BaseSelector | None
         Static-label save predicate, or ``None`` when no predicate was supplied.
     """
 
@@ -206,7 +260,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
 
 
 def _reject_non_static_save_predicate(
-    predicate: Callable[[Any], bool] | BaseSelector,
+    predicate: Callable[[Any], Any] | BaseSelector,
     *,
     backend_name: str,
 ) -> None:
@@ -270,4 +324,40 @@ def _first_non_static_selector(selector: SelectorLike) -> str | None:
         return _first_non_static_selector(left) or _first_non_static_selector(right)
     if isinstance(selector, NotSelector):
         return _first_non_static_selector(selector.selector)
+    return None
+
+
+def _first_selector_outside_kinds(
+    selector: SelectorLike,
+    *,
+    allowed: frozenset[str],
+) -> str | None:
+    """Return the first selector kind outside ``allowed`` in a selector tree.
+
+    Parameters
+    ----------
+    selector
+        Selector or target spec to classify.
+    allowed
+        Selector kinds accepted by the caller.
+
+    Returns
+    -------
+    str | None
+        Unsupported selector kind, or ``None`` if the whole tree is allowed.
+    """
+
+    if not isinstance(selector, BaseSelector):
+        return "target_spec"
+    kind = selector.selector_kind
+    if kind not in allowed:
+        return kind
+    if isinstance(selector, CompositeSelector):
+        left, right = selector.selectors
+        return _first_selector_outside_kinds(
+            left,
+            allowed=allowed,
+        ) or _first_selector_outside_kinds(right, allowed=allowed)
+    if isinstance(selector, NotSelector):
+        return _first_selector_outside_kinds(selector.selector, allowed=allowed)
     return None

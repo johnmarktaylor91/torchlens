@@ -32,7 +32,7 @@ Declared future options:
 | `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
 | `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad supports raw `function_root` and callable object `object_module` |
 | `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad use `array_payloads` |
-| `save_preview` | Future non-torch save preview flag; JAX/tinygrad already support static-label `save=` |
+| `save_preview` | Future non-torch save preview flag; JAX/tinygrad support static-label `save=`; MLX supports phase-A static labels (`tl.func`, `tl.label`, `tl.contains`) |
 
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.
@@ -52,7 +52,22 @@ For that reason, non-torch backends support static-label `save=` only. Value-dep
 `intervene=`, and `halt=` are rejected with typed backend errors instead of false partial traces or
 validation passes. Live JAX/tinygrad selective-save traces still run real replay validation through
 runtime-only hidden payloads; loaded traces report replay unavailable when those runtime captures
-were stripped.
+were stripped. MLX supports a narrower static-label `save=` phase for `tl.func`, `tl.label`,
+`tl.contains`, and boolean composites of those; MLX validation is currently unsupported.
+
+## MLX Preview
+
+MLX is a technical-preview eager-dispatch backend. It supports forward capture and static-label
+`save=` for `tl.func(...)`, `tl.label(...)`, `tl.contains(...)`, and safe boolean composites with
+`&`, `|`, and `~`. Selective save is applied after full graph finalization: unsaved ops keep graph
+metadata but drop public activation payloads, while saved payloads remain live MLX arrays in memory.
+
+MLX rejects `tl.module(...)` and `tl.in_module(...)` for `save=` because module hierarchy is
+required and not yet available on MLX. It also rejects `tl.output(...)`, `tl.where(...)`,
+`tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `intervene=`, `halt=`,
+streaming, `save_grads=`, `backward_ready=True`, and `tl.record(backend="mlx")`. MLX validation is
+currently unsupported, so selective save does not fabricate a replay pass. MLX `.tlspec` saves remain
+audit-only until the MLX payload codec lands.
 
 JAX preview traces accept raw callables shaped like `fn(params, *inputs)`. Parameter records are
 derived from the first pytree argument, so `Trace.param_source` is `"pytree-derived"` when tensor

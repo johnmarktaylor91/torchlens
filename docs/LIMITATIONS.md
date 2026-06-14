@@ -32,7 +32,10 @@ series; live validation and derived gradients require `DEV=PYTHON`; raw callable
 `function_root`, callable objects use `object_module` hierarchy with parameter records
 when discoverable, portable saves materialize `.tlspec` array payloads, and capture
 rejects mid-capture realization/mutation/TinyJit. JAX and tinygrad support static-label `save=`
-selectors after full graph capture; value-dependent save predicates, halt, intervention,
+selectors after full graph capture. MLX supports static-label `save=` only for `tl.func`,
+`tl.label`, `tl.contains`, and boolean composites of those; `tl.module` and `tl.in_module`
+are rejected because module hierarchy is required and not yet available on MLX. Value-dependent
+save predicates, halt, intervention,
 streaming, fastlog, and true backward capture remain PyTorch-only. Loaded non-torch traces cannot
 replay-validate because portable save strips runtime replay captures; inspect
 `trace.validation_replay_status` for the explicit unavailable status.

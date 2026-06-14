@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 import torchlens as tl
+from torchlens.backends import BackendUnsupportedError
 from torchlens.capture.projections import _event_from_record
 from torchlens.fastlog.storage_disk import _ctx_from_json, _ctx_to_json
 from torchlens.fastlog.types import CaptureSpec, RecordContext
@@ -173,5 +174,5 @@ def test_mlx_value_dependent_save_predicate_rejected_clearly() -> None:
 
             return self.linear(x)
 
-    with pytest.raises(NotImplementedError, match="value-dependent.*tensor_requires_grad"):
+    with pytest.raises(BackendUnsupportedError, match="Value-dependent.*tensor_requires_grad"):
         tl.trace(Tiny(), mx.ones((1, 2)), save=lambda ctx: bool(ctx.tensor_requires_grad))

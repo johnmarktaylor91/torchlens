@@ -94,6 +94,31 @@ def _assert_captured(trace: tl.Trace, expected_fragment: str) -> None:
     assert any(expected_fragment in label.lower() for label in trace.layer_labels)
 
 
+def _assert_static_save_summary(trace: tl.Trace, expected_func_names: set[str]) -> None:
+    """Assert that MLX static save filtering preserves metadata and refreshes counters."""
+
+    saved_ops = [op for op in trace.layer_list if op.has_saved_activation]
+    unsaved_ops = [op for op in trace.layer_list if not op.has_saved_activation]
+
+    assert saved_ops
+    assert {op.func_name for op in saved_ops} == expected_func_names
+    assert unsaved_ops
+    assert all(op.out is not None for op in saved_ops)
+    assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
+    assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
+    assert trace.num_saved_ops == len(saved_ops)
+    assert len(trace.saved_ops) == len(saved_ops)
+    assert int(trace.saved_activation_memory) == sum(
+        int(op.activation_memory or 0) for op in saved_ops
+    )
+
+
+def _always_true(_op: Any) -> bool:
+    """Return true for ``tl.where`` rejection tests."""
+
+    return True
+
+
 @pytest.mark.optional
 def test_mlx_intervention_ready_raises() -> None:
     """MLX capture rejects intervention metadata requests explicitly."""
@@ -173,6 +198,63 @@ def test_mlx_save_load_audit_only(tmp_path: Path) -> None:
         record["reason"] == "mlx_array_audit_null" for record in manifest["unsupported_tensors"]
     )
     assert all(op.out is None for op in loaded.layer_list)
+
+
+@pytest.mark.optional
+def test_mlx_static_func_save_filters_public_payloads(tmp_path: Path) -> None:
+    """MLX static ``tl.func`` save filters public payloads after full capture."""
+
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.func("relu"))
+
+    _assert_static_save_summary(trace, {"relu"})
+
+    bundle_path = tmp_path / "mlx-selective-audit.tlspec"
+    tl.save(trace, bundle_path)
+    manifest = tl.io.inspect_tlspec(bundle_path)
+
+    assert len(manifest["unsupported_tensors"]) == trace.num_saved_ops
+    assert all(
+        record["reason"] == "mlx_array_audit_null" for record in manifest["unsupported_tensors"]
+    )
+
+
+@pytest.mark.optional
+def test_mlx_static_label_contains_and_composite_save_work() -> None:
+    """MLX allows label, contains, and safe boolean composites for static save."""
+
+    label_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label("relu_1_3_raw:1"))
+    contains_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.contains("relu"))
+    composite_trace = tl.trace(
+        TinyMLP(),
+        _tiny_mlp_input(),
+        save=tl.func("linear") & ~tl.contains("linear_2"),
+    )
+
+    _assert_static_save_summary(label_trace, {"relu"})
+    _assert_static_save_summary(contains_trace, {"relu"})
+    _assert_static_save_summary(composite_trace, {"linear"})
+    assert list(composite_trace.saved_ops.keys()) == ["linear_1_2_raw:1"]
+
+
+@pytest.mark.parametrize(
+    ("selector", "pattern"),
+    [
+        (tl.module("l1"), "module hierarchy required, not yet on MLX"),
+        (tl.in_module("l1"), "module hierarchy required, not yet on MLX"),
+        (tl.output(0), "unsupported selector kind 'output'"),
+        (tl.where(_always_true, name_hint="always"), "tl.where"),
+        (tl.func("relu") & tl.in_module("l1"), "module hierarchy required, not yet on MLX"),
+    ],
+)
+@pytest.mark.optional
+def test_mlx_static_save_rejects_unsupported_selector_kinds(
+    selector: Any,
+    pattern: str,
+) -> None:
+    """MLX rejects selectors outside the static-label phase-A allowlist."""
+
+    with pytest.raises(BackendUnsupportedError, match=pattern):
+        tl.trace(TinyMLP(), _tiny_mlp_input(), save=selector)
 
 
 @pytest.mark.optional
