@@ -213,8 +213,75 @@ class CaptureBackend(Protocol):
         """Emit per-output operation events for an already-invoked function."""
         ...
 
-    def finalize_forward_session(self, session: object, trace_state: TraceBuildState) -> None:
-        """Finalize backend session state after forward postprocess materialization."""
+    def finalize_forward_session(
+        self,
+        session: object,
+        trace_state: TraceBuildState | None = None,
+    ) -> None:
+        """Finalize backend state after forward logging and before output extraction.
+
+        Parameters
+        ----------
+        session:
+            Active backend capture session.
+        trace_state:
+            Optional transient trace build state for backends that materialize
+            deferred payloads from event state at this seam.
+
+        Returns
+        -------
+        None
+            Backend-owned forward-session state is reconciled in place.
+
+        Notes
+        -----
+        This hook must run after the forward pass exits backend logging and
+        before final model outputs are extracted or marked. Torch registered
+        buffer reconciliation depends on this timing because buffer writes must
+        be validated before output-parent extraction observes final graph state.
+        """
+        ...
+
+    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+        """Clean up backend state after a halted forward capture.
+
+        Parameters
+        ----------
+        session:
+            Active backend capture session.
+        prepared_model:
+            Backend-prepared model object, or a backend-specific cleanup tuple.
+
+        Returns
+        -------
+        None
+            Session metadata is cleared in place.
+        """
+        ...
+
+    def cleanup_failed_forward_session(
+        self,
+        session: object,
+        prepared_model: object,
+        exc: Exception,
+    ) -> None:
+        """Clean up backend state after a failed forward capture.
+
+        Parameters
+        ----------
+        session:
+            Active backend capture session.
+        prepared_model:
+            Backend-prepared model object, or a backend-specific cleanup tuple.
+        exc:
+            Exception raised by the forward capture.
+
+        Returns
+        -------
+        None
+            Session metadata is cleared in place and exception diagnostics may
+            be attached to ``exc``.
+        """
         ...
 
 

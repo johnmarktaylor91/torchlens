@@ -37,7 +37,6 @@ from torch import nn
 
 from .. import _state
 from ..backends import CaptureBackend
-from ..backends.torch._tl import clear_meta
 from ..backends.torch.backend import TorchBackend
 from ..fastlog._halt import HaltSignal
 from ..quantities import Bytes, Duration
@@ -720,9 +719,7 @@ def run_and_log_inputs_through_model(
                 with _timed_phase(self, "dispatch:forward_model"):
                     outputs = model(*input_args, **input_kwargs)
 
-        from ..backends.torch.buffer_writes import reconcile_buffer_writes
-
-        reconcile_buffer_writes(self)
+        backend.finalize_forward_session(self)
 
         output_transform = getattr(self, "_output_transform", None)
         self.raw_output = output_transform(outputs) if output_transform is not None else None
@@ -759,33 +756,11 @@ def run_and_log_inputs_through_model(
             and getattr(self, "_halt_returns_partial_trace", False)
         ):
             return _finalize_halted_trace(self, halt_exc, model, input_tensors, postprocess)
-        _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
-        raw_layer_dict = getattr(self, "_raw_layer_dict", {})
-        for label in list(raw_layer_dict.keys()):
-            entry = raw_layer_dict.get(label)
-            if entry is not None and hasattr(entry, "out") and entry.out is not None:
-                clear_meta(entry.out)
+        _TORCH_BACKEND.cleanup_halted_forward_session(self, (model, input_tensors))
         raise
 
     except Exception as e:
-        # active_logging's __exit__ already turned off the toggle.
-        # Clean up model session state and strip TorchLens metadata from any
-        # partially-constructed tensor entries to avoid stale references (#110).
-        from ..partial import PartialTrace
-
-        try:
-            e.partial_log = PartialTrace.from_trace(self, e)  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
-        raw_layer_dict = getattr(self, "_raw_layer_dict", {})
-        for label in list(raw_layer_dict.keys()):
-            entry = raw_layer_dict.get(label)
-            if entry is not None and hasattr(entry, "out") and entry.out is not None:
-                clear_meta(entry.out)
-        print(
-            "************\nFeature extraction failed; returning model and environment to normal\n*************"
-        )
+        _TORCH_BACKEND.cleanup_failed_forward_session(self, (model, input_tensors), e)
         raise e
 
     finally:

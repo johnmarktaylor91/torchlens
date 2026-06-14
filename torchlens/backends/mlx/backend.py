@@ -550,6 +550,22 @@ class MLXBackend:
 
         cleanup_model_session(session, prepared_model)
 
+    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+        """Clean up MLX state after a halted forward capture."""
+
+        self.cleanup_model_session(session, prepared_model)
+
+    def cleanup_failed_forward_session(
+        self,
+        session: object,
+        prepared_model: object,
+        exc: Exception,
+    ) -> None:
+        """Clean up MLX state after a failed forward capture."""
+
+        del exc
+        self.cleanup_model_session(session, prepared_model)
+
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Return a context manager that enables MLX logging."""
 
@@ -791,9 +807,14 @@ class MLXBackend:
             events.append(event)
         return tuple(events)
 
-    def finalize_forward_session(self, session: object, trace_state: TraceBuildState) -> None:
+    def finalize_forward_session(
+        self,
+        session: object,
+        trace_state: TraceBuildState | None = None,
+    ) -> None:
         """Materialize deferred MLX payloads in a single batch."""
 
+        del trace_state
         payloads = getattr(session, "_mlx_saved_payloads", ())
         if payloads:
             cast(Any, self.mx).eval(*payloads)

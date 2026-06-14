@@ -20,7 +20,7 @@ from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.tensor_utils import safe_copy
 from . import _tl
 from .aliasing import detect_torch_alias_contract
-from .buffer_writes import uninstall_buffer_write_tracker
+from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
 from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
 from .ops import (
     _get_autograd_saved_stats_for_tensor,
@@ -409,9 +409,52 @@ class TorchBackend:
         )
         return ()
 
-    def finalize_forward_session(self, session: object, trace_state: TraceBuildState) -> None:
-        """Finalize torch backend session state after forward materialization."""
-        return None
+    def finalize_forward_session(
+        self,
+        session: object,
+        trace_state: TraceBuildState | None = None,
+    ) -> None:
+        """Run torch post-forward reconciliation before output extraction."""
+        del trace_state
+        reconcile_buffer_writes(cast("Trace", session))
+
+    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+        """Clean up torch metadata after a halted forward capture."""
+        self.cleanup_model_session(session, prepared_model)
+        raw_layer_dict = getattr(session, "_raw_layer_dict", {})
+        for label in list(raw_layer_dict.keys()):
+            entry = raw_layer_dict.get(label)
+            if entry is not None and hasattr(entry, "out") and entry.out is not None:
+                _tl.clear_meta(entry.out)
+
+    def cleanup_failed_forward_session(
+        self,
+        session: object,
+        prepared_model: object,
+        exc: Exception,
+    ) -> None:
+        """Attach partial trace diagnostics and clean up failed torch capture state."""
+        # active_logging's __exit__ already turned off the toggle.
+        # Clean up model session state and strip TorchLens metadata from any
+        # partially-constructed tensor entries to avoid stale references (#110).
+        from ...partial import PartialTrace
+
+        try:
+            exc.partial_log = PartialTrace.from_trace(  # type: ignore[attr-defined]
+                cast("Trace", session),
+                exc,
+            )
+        except Exception:
+            pass
+        self.cleanup_model_session(session, prepared_model)
+        raw_layer_dict = getattr(session, "_raw_layer_dict", {})
+        for label in list(raw_layer_dict.keys()):
+            entry = raw_layer_dict.get(label)
+            if entry is not None and hasattr(entry, "out") and entry.out is not None:
+                _tl.clear_meta(entry.out)
+        print(
+            "************\nFeature extraction failed; returning model and environment to normal\n*************"
+        )
 
 
 def _container_path_to_address(path: tuple[Any, ...]) -> str:
