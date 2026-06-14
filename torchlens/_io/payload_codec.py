@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import json
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 import numpy as np
 import torch
@@ -127,6 +127,7 @@ class JaxPayloadCodec:
 
     backend_name = "jax"
     codec_name = "numpy_safetensors_v1"
+    _PRNG_DTAG_TO_IMPL: ClassVar[dict[str, str]] = {"fry": "threefry2x32"}
 
     def can_encode(self, value: Any) -> bool:
         """Return whether ``value`` looks like a JAX array without importing JAX."""
@@ -152,12 +153,35 @@ class JaxPayloadCodec:
 
         if not self.can_encode(value):
             raise TypeError(f"jax codec cannot encode {type(value).__name__}.")
+        logical_dtype = str(getattr(value, "dtype", "unknown"))
+        if _is_jax_typed_prng_dtype(logical_dtype):
+            key_data = jax.device_get(jax.random.key_data(value))
+            array = np.asarray(key_data, dtype=np.uint32)
+            dtag = _jax_prng_dtag_from_dtype(logical_dtype)
+            impl = self._jax_prng_impl(value, logical_dtype)
+            _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
+            return EncodedArray(
+                array=np.ascontiguousarray(array),
+                logical_dtype=logical_dtype,
+                logical_device=_device_string(value),
+                codec_metadata=_json_ready_mapping(
+                    {
+                        "logical_shape": [int(dim) for dim in getattr(value, "shape", ())],
+                        "weak_type": getattr(value, "weak_type", None),
+                        "sharding": _maybe_string(getattr(value, "sharding", None)),
+                        "committed": getattr(value, "committed", None),
+                        "jax_prng_key_typed": True,
+                        "jax_prng_impl": impl,
+                        "jax_prng_dtag": dtag,
+                    }
+                ),
+            )
         host_value = jax.device_get(value)
         array = np.asarray(host_value)
         _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
         return EncodedArray(
             array=np.ascontiguousarray(array),
-            logical_dtype=str(getattr(value, "dtype", array.dtype)),
+            logical_dtype=logical_dtype,
             logical_device=_device_string(value),
             codec_metadata=_json_ready_mapping(
                 {
@@ -191,10 +215,14 @@ class JaxPayloadCodec:
 
         logical_dtype = str(_entry_field(entry, "logical_dtype") or array.dtype)
         if logical_dtype.startswith("key<"):
-            raise BackendRuntimeCompatibilityError(
-                "Portable JAX PRNG key dtype payloads are stored as raw transport data; "
-                "typed-key reconstruction is not supported by this runtime."
-            )
+            impl = self._jax_prng_impl_from_entry(entry, logical_dtype)
+            try:
+                return jax.random.wrap_key_data(jnp.asarray(array, dtype=jnp.uint32), impl=impl)
+            except (TypeError, ValueError, RuntimeError) as exc:
+                raise BackendRuntimeCompatibilityError(
+                    f"Portable JAX PRNG key impl {impl!r} is not supported by the installed "
+                    "jax runtime."
+                ) from exc
 
         dtype = getattr(jnp, logical_dtype, None)
         value = jnp.asarray(array, dtype=dtype) if dtype is not None else jnp.asarray(array)
@@ -228,6 +256,8 @@ class JaxPayloadCodec:
         if _jax_sharding_device_count(value) > 1:
             return "sharded JAX arrays are not supported by the payload codec"
         dtype = getattr(value, "dtype", None)
+        if dtype is not None and _is_jax_typed_prng_dtype(str(dtype)):
+            return None
         if dtype is not None and _dtype_string_is_object_like(str(dtype)):
             return f"object/string dtype {dtype} is not supported by the payload codec"
         try:
@@ -235,6 +265,51 @@ class JaxPayloadCodec:
         except (TypeError, ValueError, RuntimeError) as exc:
             return f"JAX array could not be copied to host: {exc}"
         return _unsupported_array_dtype_reason(array)
+
+    def _jax_prng_impl(self, value: Any, logical_dtype: str) -> str:
+        """Return the canonical PRNG implementation name for a typed key."""
+
+        try:
+            import jax
+
+            return str(jax.random.key_impl(value))
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            dtag = _maybe_string(getattr(value, "_impl", None))
+            if dtag is None:
+                dtag = _jax_prng_dtag_from_dtype(logical_dtype)
+            return self._jax_prng_impl_from_dtag(dtag)
+
+    def _jax_prng_impl_from_entry(self, entry: Any, logical_dtype: str) -> str:
+        """Resolve a canonical PRNG implementation name from manifest metadata."""
+
+        from ..backends.registry import BackendRuntimeCompatibilityError
+
+        codec_metadata = _entry_field(entry, "codec_metadata")
+        impl = None
+        dtag = None
+        if isinstance(codec_metadata, Mapping):
+            impl = codec_metadata.get("jax_prng_impl")
+            dtag = codec_metadata.get("jax_prng_dtag")
+        if isinstance(impl, str) and impl:
+            return impl
+        if not isinstance(dtag, str) or not dtag:
+            dtag = _jax_prng_dtag_from_dtype(logical_dtype)
+        try:
+            return self._jax_prng_impl_from_dtag(dtag)
+        except ValueError as exc:
+            raise BackendRuntimeCompatibilityError(
+                f"Portable JAX PRNG key impl/tag {dtag!r} is not supported."
+            ) from exc
+
+    def _jax_prng_impl_from_dtag(self, dtag: str | None) -> str:
+        """Map a JAX PRNG dtype display tag to a canonical implementation name."""
+
+        if dtag is None:
+            raise ValueError("missing JAX PRNG key dtype tag")
+        impl = self._PRNG_DTAG_TO_IMPL.get(dtag)
+        if impl is None:
+            raise ValueError(f"unsupported JAX PRNG key dtype tag {dtag!r}")
+        return impl
 
 
 class TinygradPayloadCodec:
@@ -542,10 +617,24 @@ def _transport_tensor_to_numpy(tensor: torch.Tensor, entry: Any) -> np.ndarray:
         array = transport.to(torch.float32).numpy()
     else:
         array = transport.numpy()
+    if _entry_has_typed_jax_prng_key(entry):
+        return array
     logical_shape = _logical_shape_from_metadata(_entry_field(entry, "codec_metadata"))
     if logical_shape is not None:
         return array.reshape(logical_shape)
     return array
+
+
+def _entry_has_typed_jax_prng_key(entry: Any) -> bool:
+    """Return whether an entry stores raw JAX typed PRNG key data."""
+
+    codec_metadata = _entry_field(entry, "codec_metadata")
+    if not isinstance(codec_metadata, Mapping):
+        return False
+    flag = codec_metadata.get("jax_prng_key_typed")
+    if isinstance(flag, str):
+        return flag.lower() == "true"
+    return flag is True
 
 
 def _logical_shape_from_metadata(codec_metadata: Any) -> tuple[int, ...] | None:
@@ -639,6 +728,20 @@ def _maybe_string(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _is_jax_typed_prng_dtype(dtype: str) -> bool:
+    """Return whether a dtype string names a JAX typed PRNG key."""
+
+    return dtype.startswith("key<")
+
+
+def _jax_prng_dtag_from_dtype(dtype: str) -> str | None:
+    """Return the display tag from a JAX typed PRNG key dtype string."""
+
+    if not _is_jax_typed_prng_dtype(dtype) or not dtype.endswith(">"):
+        return None
+    return dtype.removeprefix("key<").removesuffix(">")
 
 
 def _json_ready_mapping(values: dict[str, Any]) -> dict[str, Any]:

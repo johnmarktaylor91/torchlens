@@ -27,6 +27,7 @@ from torchlens.backends.jax import capabilities
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 lax = pytest.importorskip("jax.lax")
+random = pytest.importorskip("jax.random")
 
 
 pytestmark = pytest.mark.backend_jax
@@ -61,6 +62,61 @@ def _model(params: dict[str, Any], x: Any) -> Any:
     """
 
     return jnp.tanh(x @ params["w"] + params["b"])
+
+
+def _identity_key(_: None, key: Any) -> Any:
+    """Return a JAX PRNG key payload unchanged.
+
+    Parameters
+    ----------
+    _
+        Unused parameter placeholder.
+    key
+        JAX PRNG key payload.
+
+    Returns
+    -------
+    Any
+        Input key.
+    """
+
+    return key
+
+
+def _split_key(_: None, key: Any) -> Any:
+    """Return a batched typed-key array from a scalar JAX PRNG key.
+
+    Parameters
+    ----------
+    _
+        Unused parameter placeholder.
+    key
+        Scalar typed JAX PRNG key.
+
+    Returns
+    -------
+    Any
+        Split typed-key array.
+    """
+
+    return random.split(key, 4)
+
+
+def _sample_key_pair(key: Any) -> Any:
+    """Draw a deterministic two-value sample from a JAX PRNG key.
+
+    Parameters
+    ----------
+    key
+        Scalar typed JAX PRNG key.
+
+    Returns
+    -------
+    Any
+        Sample values drawn from ``key``.
+    """
+
+    return random.normal(key, (2,), dtype=jnp.float32)
 
 
 def _trace(**kwargs: Any) -> Any:
@@ -159,6 +215,28 @@ def _first_saved_op(trace: Any) -> Any:
     raise AssertionError("trace has no saved activation op")
 
 
+def _saved_op_by_func_name(trace: Any, func_name: str) -> Any:
+    """Return the first saved op with the requested function name.
+
+    Parameters
+    ----------
+    trace
+        Loaded or live trace to inspect.
+    func_name
+        Function name to match.
+
+    Returns
+    -------
+    Any
+        First matching saved op.
+    """
+
+    for op in trace.layer_list:
+        if op.func_name == func_name and op.has_saved_activation:
+            return op
+    raise AssertionError(f"trace has no saved {func_name!r} activation op")
+
+
 def test_jax_payload_codec_encodes_numpy_manifest_fields() -> None:
     """JAX payload codec should expose logical and transport metadata."""
 
@@ -252,17 +330,91 @@ def test_jax_codec_runtime_missing_loads_audit_only(
         loaded_op.out_ref.materialize()
 
 
-def test_jax_payload_codec_rejects_prng_key_dtype_reconstruction() -> None:
-    """JAX typed PRNG key dtype reconstruction should fail closed for now."""
+def test_jax_payload_codec_rejects_unknown_prng_key_dtype_tag() -> None:
+    """JAX typed PRNG key reconstruction should fail closed for unknown tags."""
 
     codec = get_payload_codec("jax")
-    with pytest.raises(BackendRuntimeCompatibilityError, match="PRNG key dtype"):
+    with pytest.raises(BackendRuntimeCompatibilityError, match="unknown"):
         codec.from_numpy(
             np.asarray([0, 0], dtype=np.uint32),
-            {"logical_dtype": "key<fry>", "logical_device": "TFRT_CPU_0"},
+            {
+                "logical_dtype": "key<unknown>",
+                "logical_device": "TFRT_CPU_0",
+                "codec_metadata": {"jax_prng_key_typed": True},
+            },
             map_location=None,
             strict_runtime=True,
         )
+
+
+def test_jax_typed_prng_scalar_key_tlspec_round_trips(tmp_path: Path) -> None:
+    """Scalar typed JAX PRNG keys should round-trip through public tlspec I/O."""
+
+    key = random.key(123)
+    trace = tl.trace(cast(Any, _identity_key), (None, key), backend="jax")
+    path = tmp_path / "jax_typed_prng_scalar.tlspec"
+
+    trace.save(path, level="portable")
+    loaded = tl.load(path)
+    loaded_key = _first_saved_op(loaded).out
+
+    assert str(loaded_key.dtype) == "key<fry>"
+    assert loaded_key.shape == ()
+    np.testing.assert_array_equal(
+        np.asarray(random.key_data(loaded_key)),
+        np.asarray(random.key_data(key)),
+    )
+    expected_sample = random.normal(key, (3,), dtype=jnp.float32)
+    loaded_sample = random.normal(loaded_key, (3,), dtype=jnp.float32)
+    np.testing.assert_allclose(np.asarray(loaded_sample), np.asarray(expected_sample))
+
+
+def test_jax_typed_prng_split_key_array_tlspec_round_trips(tmp_path: Path) -> None:
+    """Batched typed JAX PRNG keys should round-trip through public tlspec I/O."""
+
+    key = random.key(123)
+    trace = tl.trace(cast(Any, _split_key), (None, key), backend="jax")
+    expected_keys = random.split(key, 4)
+    path = tmp_path / "jax_typed_prng_split.tlspec"
+
+    trace.save(path, level="portable")
+    loaded = tl.load(path)
+    loaded_keys = _saved_op_by_func_name(loaded, "random_split").out
+
+    assert str(loaded_keys.dtype) == "key<fry>"
+    assert loaded_keys.shape == (4,)
+    np.testing.assert_array_equal(
+        np.asarray(random.key_data(loaded_keys)),
+        np.asarray(random.key_data(expected_keys)),
+    )
+    sample_fn = jax.vmap(_sample_key_pair)
+    np.testing.assert_allclose(
+        np.asarray(sample_fn(loaded_keys)),
+        np.asarray(sample_fn(expected_keys)),
+    )
+
+
+def test_jax_old_style_prng_key_tlspec_round_trips_as_uint32_array(tmp_path: Path) -> None:
+    """Old-style JAX PRNGKey arrays should remain ordinary uint32 array payloads."""
+
+    key = random.PRNGKey(123)
+    trace = tl.trace(cast(Any, _identity_key), (None, key), backend="jax")
+    path = tmp_path / "jax_old_style_prng_key.tlspec"
+
+    trace.save(path, level="portable")
+    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    loaded = tl.load(path)
+    loaded_key = _first_saved_op(loaded).out
+    input_entries = [
+        entry for entry in manifest["tensors"] if entry.get("label") == "input_1_1_raw:1"
+    ]
+
+    assert str(loaded_key.dtype) == "uint32"
+    assert loaded_key.shape == (2,)
+    np.testing.assert_array_equal(np.asarray(loaded_key), np.asarray(key))
+    assert input_entries
+    assert input_entries[0]["logical_dtype"] == "uint32"
+    assert "jax_prng_key_typed" not in input_entries[0]["codec_metadata"]
 
 
 def test_jax_payload_codec_strict_rejects_sharded_and_object_like_arrays() -> None:
