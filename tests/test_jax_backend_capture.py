@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections import OrderedDict
 from collections.abc import Callable
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -944,6 +946,54 @@ def test_jax_trace_rejects_save_shaping_kwargs() -> None:
 
     with pytest.raises(BackendUnsupportedError, match="full-save only"):
         _trace_jax(_mlp, (_params(), jnp.ones((2, 3))), layers_to_save=["tanh"])
+
+
+def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
+    """JAX static-label save should filter public payloads after full capture."""
+
+    trace = _trace_jax(
+        _mlp,
+        (_params(), jnp.ones((2, 3))),
+        save=tl.func("dot_general"),
+    )
+    saved_ops = list(trace.saved_ops)
+    unsaved_ops = [op for op in trace.layer_list if not op.has_saved_activation]
+
+    assert saved_ops
+    assert {op.func_name for op in saved_ops} == {"dot_general"}
+    assert unsaved_ops
+    assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
+    assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
+    assert trace.num_saved_ops == len(saved_ops)
+    assert int(trace.saved_activation_memory) == sum(
+        int(op.activation_memory or 0) for op in saved_ops
+    )
+    assert trace.validate_forward_pass([]) is True
+
+    path = tmp_path / "jax_selective_save.tlspec"
+    trace.save(path, level="portable")
+    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    out_entries = [entry for entry in manifest["body_index"] if entry.get("intended_use") == "out"]
+    loaded = tl.load(path)
+
+    assert len(out_entries) == trace.num_saved_ops
+    assert loaded.backend == "jax"
+    assert len(list(loaded.saved_ops)) == trace.num_saved_ops
+    assert [op.has_saved_activation for op in loaded.layer_list] == [
+        op.has_saved_activation for op in trace.layer_list
+    ]
+    assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
+
+
+def test_jax_value_dependent_save_predicate_rejected_with_b9_pointer() -> None:
+    """JAX should reject value-dependent save predicates until B9."""
+
+    with pytest.raises(BackendUnsupportedError, match="B9"):
+        _trace_jax(
+            _mlp,
+            (_params(), jnp.ones((2, 3))),
+            save=tl.where(lambda op: op.out is not None),
+        )
 
 
 def test_jax_trace_unrolls_scan_and_groups_body_iterations() -> None:

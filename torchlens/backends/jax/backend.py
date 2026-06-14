@@ -48,6 +48,8 @@ from ...postprocess.loop_grouping_adapter import (
 )
 from ...quantities import Bytes, Duration
 from ...validation.status import ValidationReplayStatus
+from .._selective_save import apply_static_label_save_policy
+from .._selective_save import pop_static_label_save_predicate
 from .jaxpr import (
     ALL_JAX_EQUATION_KINDS,
     JaxCaptureResult,
@@ -285,6 +287,7 @@ class JAXBackend:
             Captured JAX trace.
         """
 
+        save_predicate = pop_static_label_save_predicate(kwargs, backend_name="JAX")
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
         layers_to_save = _default_if_missing(layers_to_save, "all")
@@ -424,6 +427,7 @@ class JAXBackend:
         trace.jax_equation_captures = result.equations
         trace.jax_inlined_call_primitives = result.inlined_call_primitives
         trace.jax_static_argnums = static_argnums
+        apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
         return trace
 
     def validate_trace(
@@ -505,12 +509,20 @@ class JAXBackend:
             for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
                 if isinstance(label, str):
                     ops_by_label[label] = op
+        hidden_outputs_by_label: dict[str, tuple[Any, ...]] = {
+            label: value if isinstance(value, tuple) else (value,)
+            for label, value in getattr(trace, "_selective_save_hidden_payloads", {}).items()
+        }
         for capture, op in zip(captures, equation_ops):
             if capture.kind != _jax_op_capture_kind(op):
                 return False
-            inputs = _inputs_from_trace_graph(capture, op, ops_by_label)
+            inputs = _inputs_from_trace_graph(capture, op, ops_by_label, hidden_outputs_by_label)
             replayed = replay_equation(capture, inputs)
-            saved_outputs = _saved_op_outputs(op, len(replayed))
+            saved_outputs = _saved_op_outputs(
+                op,
+                len(replayed),
+                hidden_outputs_by_label=hidden_outputs_by_label,
+            )
             if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
                 return False
             if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
@@ -2704,6 +2716,7 @@ def _inputs_from_trace_graph(
     capture: JaxEquationCapture,
     op: Any,
     ops_by_label: Mapping[str, Any],
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
 ) -> tuple[Any, ...]:
     """Build replay inputs from the trace's recorded parent graph.
 
@@ -2715,6 +2728,8 @@ def _inputs_from_trace_graph(
         Materialized TorchLens operation for the equation.
     ops_by_label
         Materialized operations keyed by raw and final op labels.
+    hidden_outputs_by_label
+        Runtime-only replay outputs keyed by raw and final op labels.
 
     Returns
     -------
@@ -2732,11 +2747,16 @@ def _inputs_from_trace_graph(
         if not isinstance(position, int) or position < 0 or position >= len(inputs):
             raise ValueError(f"JAX trace parent arg position {position!r} is invalid.")
         parent_op = ops_by_label[parent_label]
-        inputs[position] = _saved_single_output(parent_op)
+        inputs[position] = _saved_single_output(parent_op, hidden_outputs_by_label)
     return tuple(inputs)
 
 
-def _saved_op_outputs(op: Any, expected_count: int) -> tuple[Any, ...]:
+def _saved_op_outputs(
+    op: Any,
+    expected_count: int,
+    *,
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
+) -> tuple[Any, ...]:
     """Return saved output payloads from a materialized JAX operation.
 
     Parameters
@@ -2745,6 +2765,8 @@ def _saved_op_outputs(op: Any, expected_count: int) -> tuple[Any, ...]:
         Materialized TorchLens operation.
     expected_count
         Number of primitive outputs expected by replay.
+    hidden_outputs_by_label
+        Runtime-only replay outputs keyed by raw and final op labels.
 
     Returns
     -------
@@ -2752,7 +2774,7 @@ def _saved_op_outputs(op: Any, expected_count: int) -> tuple[Any, ...]:
         Saved output payloads.
     """
 
-    output = _saved_single_output(op)
+    output = _saved_single_output(op, hidden_outputs_by_label)
     if expected_count == 1:
         return (output,)
     if not isinstance(output, tuple) or len(output) != expected_count:
@@ -2760,13 +2782,18 @@ def _saved_op_outputs(op: Any, expected_count: int) -> tuple[Any, ...]:
     return output
 
 
-def _saved_single_output(op: Any) -> Any:
+def _saved_single_output(
+    op: Any,
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]] | None = None,
+) -> Any:
     """Return one operation's saved payload, failing when it was dropped.
 
     Parameters
     ----------
     op
         Materialized TorchLens operation.
+    hidden_outputs_by_label
+        Runtime-only replay outputs keyed by raw and final op labels.
 
     Returns
     -------
@@ -2775,6 +2802,14 @@ def _saved_single_output(op: Any) -> Any:
     """
 
     if not getattr(op, "has_saved_activation", False):
+        for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
+            if (
+                isinstance(label, str)
+                and hidden_outputs_by_label
+                and label in hidden_outputs_by_label
+            ):
+                outputs = hidden_outputs_by_label[label]
+                return outputs[0] if len(outputs) == 1 else outputs
         raise ValueError("JAX validation requires every equation payload to be saved.")
     output = op.out
     if output is None:

@@ -261,6 +261,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "jax_equation_captures",
         "jax_inlined_call_primitives",
         "jax_static_argnums",
+        "_selective_save_hidden_payloads",
         "tinygrad_payload_policy",
         "tinygrad_uop_captures",
     }

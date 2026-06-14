@@ -484,7 +484,6 @@ def test_jax_rejects_callback_effects() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"save": tl.func("tanh")}, "full-save only.*save-shaping"),
         ({"layers_to_save": ["tanh"]}, "full-save only"),
         ({"lookback": 1}, "full-save only"),
         ({"intervene": tl.when(tl.func("tanh"), tl.zero_ablate())}, "full-save only"),
@@ -493,7 +492,7 @@ def test_jax_rejects_callback_effects() -> None:
     ),
 )
 def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -> None:
-    """Save-shaping and runtime mutation kwargs should fail before capture."""
+    """Unsupported save-shaping and runtime mutation kwargs should fail before capture."""
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         _trace(**kwargs)
@@ -527,11 +526,13 @@ def test_jax_record_backend_jax_rejected() -> None:
         )
 
 
-def test_jax_module_predicate_surfaces_rejected_for_capture() -> None:
-    """Module predicate capture should fail because JAX M1 has only function_root."""
+def test_jax_module_predicate_selects_function_root() -> None:
+    """Module predicate capture should select ops inside the function root."""
 
-    with pytest.raises(BackendUnsupportedError, match="full-save only.*save-shaping"):
-        _trace(save=tl.in_module("self"))
+    trace = _trace(save=tl.in_module("self"))
+
+    assert trace.num_saved_ops == len(trace.layer_list)
+    assert trace.validate_forward_pass([]) is True
 
 
 def test_jax_rejects_closed_over_array_params() -> None:

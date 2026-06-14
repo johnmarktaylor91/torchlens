@@ -160,17 +160,21 @@ derived gradients require `DEV=PYTHON` realized-copy payloads. The module mode i
 `function_root`, `Trace.param_source` is `"none"`, `.tlspec` save/load materializes array
 payloads through the tinygrad codec, and
 `tl.backends.tinygrad.GradOptions` populates leaf-level `trace.derived_grads` without enabling
-true backward capture. Selective save predicates, module predicates, intervention, halt,
-streaming, `save_grads=`, `backward_ready=True`, `tl.record(backend="tinygrad")`, mid-capture
-realize/assign/replace/setitem mutation, and TinyJit execution raise typed backend errors with
-workarounds.
+true backward capture. JAX and tinygrad static-label `save=` selectors are applied after full
+graph finalization; unsaved ops keep labels, shapes, dtype/device refs, edges, and module
+metadata, but public `out`/`out_ref` payloads are dropped and saved counters/blobs are recomputed.
+Value-dependent `save=` predicates, `followed_by`/`preceded_by` window selectors, intervention,
+halt, streaming, `save_grads=`, `backward_ready=True`, `tl.record(backend="tinygrad")`,
+mid-capture realize/assign/replace/setitem mutation, and TinyJit execution raise typed backend
+errors with workarounds.
 
 Loaded non-torch traces are payload-materialized but not replay-validation-capable. Portable save
 strips runtime-only replay captures (`jax_equation_captures` and `tinygrad_uop_captures`), so
 `Trace.validation_replay_status` reports `state="unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` for loaded JAX/tinygrad traces. Live JAX/tinygrad traces
-still run real replay and parent-perturbation validation. `Trace.payload_load_status` records load
-materialization outcomes such as `"loaded_device_best_effort"`, `"audit_only"`, and
+still run real replay and parent-perturbation validation, including selectively saved traces via
+runtime-only hidden replay payloads that do not survive portable save. `Trace.payload_load_status`
+records load materialization outcomes such as `"loaded_device_best_effort"`, `"audit_only"`, and
 `"audit_only_missing_runtime"`.
 
 ### Fastlog vs Full Capture

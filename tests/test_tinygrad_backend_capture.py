@@ -541,7 +541,7 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"save": tl.func("relu")}, "full-save only.*save-shaping"),
+        ({"save": tl.where(lambda op: op.out is not None)}, "B9"),
         ({"layers_to_save": ["relu"]}, "full-save only.*save shaping"),
         ({"lookback": 1}, "full-save only.*save-window"),
         ({"intervene": tl.when(tl.func("relu"), tl.zero_ablate())}, "full-save only"),
@@ -554,6 +554,39 @@ def test_tinygrad_save_shaping_rejected(kwargs: dict[str, Any], pattern: str) ->
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         _trace(**kwargs)
+
+
+def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
+    """tinygrad static-label save should filter public payloads after full capture."""
+
+    trace = _trace(save=tl.func("where"))
+    saved_ops = list(trace.saved_ops)
+    unsaved_ops = [op for op in trace.layer_list if not op.has_saved_activation]
+
+    assert saved_ops
+    assert {op.func_name for op in saved_ops} == {"where"}
+    assert unsaved_ops
+    assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
+    assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
+    assert trace.num_saved_ops == len(saved_ops)
+    assert int(trace.saved_activation_memory) == sum(
+        int(op.activation_memory or 0) for op in saved_ops
+    )
+    assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
+
+    path = tmp_path / "tinygrad_selective_save.tlspec"
+    trace.save(path, level="portable")
+    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    out_entries = [entry for entry in manifest["body_index"] if entry.get("intended_use") == "out"]
+    loaded = tl.load(path)
+
+    assert len(out_entries) == trace.num_saved_ops
+    assert loaded.backend == "tinygrad"
+    assert len(list(loaded.saved_ops)) == trace.num_saved_ops
+    assert [op.has_saved_activation for op in loaded.layer_list] == [
+        op.has_saved_activation for op in trace.layer_list
+    ]
+    assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
 @pytest.mark.parametrize(
@@ -583,11 +616,13 @@ def test_tinygrad_record_backend_rejected() -> None:
         tl.record(_tiny_block, Tensor([1.0, 2.0]), backend="tinygrad")
 
 
-def test_tinygrad_module_predicate_surfaces_rejected_for_function_root() -> None:
-    """Module predicate capture should fail because tinygrad only has function_root."""
+def test_tinygrad_module_predicate_selects_function_root() -> None:
+    """Module predicate capture should select ops inside the function root."""
 
-    with pytest.raises(BackendUnsupportedError, match="full-save only.*save-shaping"):
-        _trace(save=tl.in_module("self"))
+    trace = _trace(save=tl.in_module("self"))
+
+    assert trace.num_saved_ops == len(trace.layer_list)
+    assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
 
 
 def test_tinygrad_backward_ready_rejected() -> None:

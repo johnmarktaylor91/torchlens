@@ -41,6 +41,8 @@ from ...postprocess.finalization import _build_module_logs
 from ...postprocess.finalization import _build_root_module_log
 from ...quantities import Duration
 from ...validation.status import ValidationReplayStatus
+from .._selective_save import apply_static_label_save_policy
+from .._selective_save import pop_static_label_save_predicate
 
 _ACTIVE_TINYGRAD_MODULE_STACK: list["TinygradModuleFrame"] = []
 
@@ -317,6 +319,7 @@ class TinygradBackend:
             Captured tinygrad trace.
         """
 
+        save_predicate = pop_static_label_save_predicate(kwargs, backend_name="tinygrad")
         self._reject_extra_kwargs(kwargs)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
@@ -444,6 +447,7 @@ class TinygradBackend:
         self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
         trace.tinygrad_payload_policy = "dev_python_realized_copy"
+        apply_static_label_save_policy(trace, save_predicate, backend_name="tinygrad")
         if grad_options is not None:
             self._attach_derived_grads(
                 trace=trace,
@@ -1534,12 +1538,18 @@ class TinygradBackend:
         ops_by_raw_label = {
             getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", ())
         }
+        hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
         for capture in captures:
             op = ops_by_raw_label.get(capture.label_raw)
             if op is None:
                 return False
-            saved_output = _saved_single_output(op)
-            replayed = self._replay_uop_from_trace_graph(capture, op, ops_by_raw_label)
+            saved_output = _saved_single_output(op, hidden_outputs_by_label)
+            replayed = self._replay_uop_from_trace_graph(
+                capture,
+                op,
+                ops_by_raw_label,
+                hidden_outputs_by_label=hidden_outputs_by_label,
+            )
             if not _payloads_close(replayed, saved_output):
                 return False
             if not _parent_perturbations_change_output(
@@ -1547,6 +1557,7 @@ class TinygradBackend:
                 capture=capture,
                 op=op,
                 ops_by_raw_label=ops_by_raw_label,
+                hidden_outputs_by_label=hidden_outputs_by_label,
                 saved_output=saved_output,
             ):
                 return False
@@ -1558,6 +1569,7 @@ class TinygradBackend:
         op: Any,
         ops_by_raw_label: Mapping[str, Any],
         replacements: Mapping[int, Any] | None = None,
+        hidden_outputs_by_label: Mapping[str, Any] | None = None,
     ) -> Any:
         """Replay one captured UOp with inputs from materialized trace parents.
 
@@ -1571,6 +1583,8 @@ class TinygradBackend:
             Materialized operations keyed by raw label.
         replacements
             Optional UOp source-position replacements used by perturbation.
+        hidden_outputs_by_label
+            Runtime-only replay payloads keyed by raw op label.
 
         Returns
         -------
@@ -1592,7 +1606,7 @@ class TinygradBackend:
             if not isinstance(position, int) or position < 0 or position >= len(src):
                 raise ValueError(f"tinygrad trace parent arg position {position!r} is invalid.")
             parent_op = ops_by_raw_label[parent_label]
-            parent_value = _saved_single_output(parent_op)
+            parent_value = _saved_single_output(parent_op, hidden_outputs_by_label)
             if _source_matches_payload(src[position], parent_value):
                 src[position] = parent_value.uop
         for position, replacement in (replacements or {}).items():
@@ -3013,13 +3027,18 @@ def _payload_list(tensor: Any) -> Any:
     return tensor.tolist()
 
 
-def _saved_single_output(op: Any) -> Any:
+def _saved_single_output(
+    op: Any,
+    hidden_outputs_by_label: Mapping[str, Any] | None = None,
+) -> Any:
     """Return one operation's saved payload, failing when it was dropped.
 
     Parameters
     ----------
     op
         Materialized TorchLens operation.
+    hidden_outputs_by_label
+        Runtime-only replay payloads keyed by raw op label.
 
     Returns
     -------
@@ -3028,6 +3047,13 @@ def _saved_single_output(op: Any) -> Any:
     """
 
     if not getattr(op, "has_saved_activation", False):
+        label_raw = getattr(op, "_label_raw", None)
+        if (
+            isinstance(label_raw, str)
+            and hidden_outputs_by_label
+            and label_raw in hidden_outputs_by_label
+        ):
+            return hidden_outputs_by_label[label_raw]
         raise ValueError("tinygrad validation requires every replay payload to be saved.")
     output = op.out
     if output is None:
@@ -3041,6 +3067,7 @@ def _parent_perturbations_change_output(
     capture: TinygradUOpCapture,
     op: Any,
     ops_by_raw_label: Mapping[str, Any],
+    hidden_outputs_by_label: Mapping[str, Any],
     saved_output: Any,
 ) -> bool:
     """Return whether at least one recorded parent perturbation changes child output.
@@ -3055,6 +3082,8 @@ def _parent_perturbations_change_output(
         Materialized TorchLens operation for the UOp.
     ops_by_raw_label
         Materialized operations keyed by raw label.
+    hidden_outputs_by_label
+        Runtime-only replay payloads keyed by raw op label.
     saved_output
         Saved child output payload.
 
@@ -3073,7 +3102,7 @@ def _parent_perturbations_change_output(
     attempted = False
     for parent_label, positions in positions_by_parent.items():
         parent_op = ops_by_raw_label[parent_label]
-        parent_value = _saved_single_output(parent_op)
+        parent_value = _saved_single_output(parent_op, hidden_outputs_by_label)
         value_positions = tuple(
             position
             for position in positions
@@ -3090,6 +3119,7 @@ def _parent_perturbations_change_output(
                     op,
                     ops_by_raw_label,
                     replacements=replacements,
+                    hidden_outputs_by_label=hidden_outputs_by_label,
                 )
             except Exception:
                 continue

@@ -84,12 +84,15 @@ trace.derived_grads["params.w"]
 
 The JAX backend rejects transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`), root
 capture from inside those transforms, unsupported nested-jaxpr primitives, callback effects,
-closed-over array constants for raw function-root callables, selective save predicates,
-intervention, halt, streaming, `save_grads=`, and `tl.record(backend="jax")`. `lax.scan` is
+closed-over array constants for raw function-root callables, value-dependent `save=` predicates,
+`followed_by`/`preceded_by` window selectors, intervention, halt, streaming, `save_grads=`, and
+`tl.record(backend="jax")`. Static-label `save=` selectors such as `tl.func(...)`,
+`tl.label(...)`, `tl.contains(...)`, and module selectors are applied after full graph
+finalization: unsaved ops keep metadata but drop public activation payloads. `lax.scan` is
 unrolled by default with `jax_control_flow="unroll"` and guarded by
 `jax_max_control_flow_unroll`; pass `jax_control_flow="reject"` to preserve the earlier scan
 rejection behavior. Workarounds are to pass raw functions and explicit params/input leaves to
-full-save `tl.trace(..., backend="jax")`, or use the PyTorch backend for predicate capture,
+`tl.trace(..., backend="jax")`, or use the PyTorch backend for value-dependent predicate capture,
 intervention, sparse fastlog, and true backward graphs.
 
 JAX `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
@@ -97,7 +100,8 @@ forward and derived array payloads and load them back as `jax.Array` values. Run
 `jax_equation_captures` are stripped from portable artifacts, so loaded JAX traces expose
 `trace.validation_replay_status.state == "unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
-Live JAX traces still run real replay validation.
+Live JAX traces, including static-label selectively saved traces, still run real replay validation
+using runtime-only replay payloads that are separate from the public saved-activation surface.
 
 ## tinygrad Preview
 
@@ -151,15 +155,20 @@ the payload through read-only `op.derived_grad`. Ambiguous signature matches are
 attached, and `op.grads` / `trace.saved_grad_ops` remain true-backward-only.
 
 The tinygrad backend rejects mid-capture `Tensor.realize()`, `Tensor.assign()`,
-`Tensor.replace()`, setitem input mutation, TinyJit execution, selective save predicates,
-module predicates, intervention, halt, streaming, `save_grads=`, `backward_ready=True`, and
-`tl.record(backend="tinygrad")`. Workarounds are to return a pure lazy tinygrad expression from a
-raw callable and use full-save `tl.trace(..., backend="tinygrad")`, or use the PyTorch backend for
-predicate capture, intervention, sparse fastlog, and true backward graphs.
+`Tensor.replace()`, setitem input mutation, TinyJit execution, value-dependent `save=`
+predicates, `followed_by`/`preceded_by` window selectors, intervention, halt, streaming,
+`save_grads=`, `backward_ready=True`, and `tl.record(backend="tinygrad")`. Static-label `save=`
+selectors such as `tl.func(...)`, `tl.label(...)`, `tl.contains(...)`, and module selectors are
+applied after full graph finalization: unsaved ops keep metadata but drop public activation
+payloads. Workarounds are to return a pure lazy tinygrad expression from a raw callable and use
+`tl.trace(..., backend="tinygrad")`, or use the PyTorch backend for value-dependent predicate
+capture, intervention, sparse fastlog, and true backward graphs.
 
 tinygrad `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
 forward and derived array payloads and load them back as tinygrad `Tensor` values. Runtime-only
 `tinygrad_uop_captures` are stripped from portable artifacts, so loaded tinygrad traces expose
 `trace.validation_replay_status.state == "unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
-Live tinygrad traces still run real replay validation.
+Live tinygrad traces, including static-label selectively saved traces, still run real replay
+validation using runtime-only replay payloads that are separate from the public saved-activation
+surface.

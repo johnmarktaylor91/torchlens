@@ -29,10 +29,11 @@ pytree-derived params, materialized `.tlspec` array payloads, and derived gradie
 tinygrad is a UOp-snapshot functional preview pinned to the `tinygrad>=0.13,<0.14`
 series; live validation and derived gradients require `DEV=PYTHON`, function-root
 modules, materialized `.tlspec` array payloads, no parameter records, and no
-mid-capture realization/mutation/TinyJit. Loaded non-torch traces cannot replay-validate because
-portable save strips runtime replay captures; inspect `trace.validation_replay_status` for the
-explicit unavailable status. Fastlog, intervention, and true backward capture are PyTorch-only in
-the current registry.
+mid-capture realization/mutation/TinyJit. JAX and tinygrad support static-label `save=`
+selectors after full graph capture; value-dependent save predicates, halt, intervention,
+streaming, fastlog, and true backward capture remain PyTorch-only. Loaded non-torch traces cannot
+replay-validate because portable save strips runtime replay captures; inspect
+`trace.validation_replay_status` for the explicit unavailable status.
 
 If you hit a case we haven't listed, please
 [open an issue](https://github.com/johnmarktaylor91/torchlens/issues/new).

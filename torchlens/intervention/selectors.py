@@ -1172,6 +1172,10 @@ def _context_module_candidates(ctx: Any) -> tuple[str, ...]:
     address = getattr(ctx, "address", None)
     if address is not None:
         candidates.append(str(address))
+    source_trace = getattr(ctx, "source_trace", None)
+    if getattr(source_trace, "module_identity_mode", None) == "function_root":
+        candidates.append("self")
+        candidates.append("self:1")
     for frame in getattr(ctx, "module_stack", ()):
         frame_address = getattr(frame, "address", None)
         if frame_address is None and isinstance(frame, dict):
@@ -1186,8 +1190,31 @@ def _context_module_candidates(ctx: Any) -> tuple[str, ...]:
             candidates.append(f"{frame_address}:{frame_pass}")
     modules = getattr(ctx, "modules", ())
     module_ops = getattr(ctx, "output_of_module_calls", ())
-    candidates.extend(str(candidate) for candidate in tuple(modules) + tuple(module_ops))
+    candidates.extend(
+        _module_candidate_strings(candidate) for candidate in tuple(modules) + tuple(module_ops)
+    )
     return tuple(candidates)
+
+
+def _module_candidate_strings(candidate: Any) -> str:
+    """Return a selector-compatible module candidate string.
+
+    Parameters
+    ----------
+    candidate
+        Module candidate from an op, module call, or capture context.
+
+    Returns
+    -------
+    str
+        Address or pass-qualified address suitable for ``_module_pass_matches``.
+    """
+
+    if isinstance(candidate, tuple) and candidate and isinstance(candidate[0], str):
+        if len(candidate) > 1:
+            return f"{candidate[0]}:{candidate[1]}"
+        return candidate[0]
+    return str(candidate)
 
 
 def _sanitize_transform_kind(kind: object) -> str:
