@@ -1597,6 +1597,8 @@ class Op:
         if self.label not in records:
             return None
         record = records[self.label]
+        if record.provenance.get("status") != "exact":
+            return None
         return record.grad
 
     def grad_for(self, *, bwd: int) -> torch.Tensor:

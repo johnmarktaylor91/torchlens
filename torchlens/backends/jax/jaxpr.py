@@ -214,6 +214,8 @@ def interpret_closed_jaxpr_with_inlining(
     *,
     jax_control_flow: str = "unroll",
     jax_max_control_flow_unroll: int = 64,
+    tap_values_by_capture_output: Mapping[tuple[int, int], Any] | None = None,
+    replacement_values_by_capture_output: Mapping[tuple[int, int], Any] | None = None,
 ) -> JaxCaptureResult:
     """Interpret a closed jaxpr while inlining safe pure call primitives.
 
@@ -229,6 +231,12 @@ def interpret_closed_jaxpr_with_inlining(
         primitives into graph-visible equations.
     jax_max_control_flow_unroll
         Maximum supported static unroll length for one control-flow primitive.
+    tap_values_by_capture_output
+        Optional mapping from ``(capture_index, output_index)`` to zero-tap
+        values used only by a separate AD replay pass.
+    replacement_values_by_capture_output
+        Optional mapping from ``(capture_index, output_index)`` to boundary
+        replacement values used only by oracle replays.
 
     Returns
     -------
@@ -236,11 +244,41 @@ def interpret_closed_jaxpr_with_inlining(
         Final outputs and flattened equation captures.
     """
 
-    from jax._src import core
+    from jax.extend import core
 
     _assert_no_rejected_effects(closed_jaxpr)
     captures: list[JaxEquationCapture] = []
     inlined_calls: list[str] = []
+    tap_values = {} if tap_values_by_capture_output is None else tap_values_by_capture_output
+    replacement_values = (
+        {} if replacement_values_by_capture_output is None else replacement_values_by_capture_output
+    )
+
+    def rewrite_outputs(capture_index: int, outputs: tuple[Any, ...]) -> tuple[Any, ...]:
+        """Apply optional replay-only replacements and zero taps to outputs.
+
+        Parameters
+        ----------
+        capture_index
+            Flattened capture index for the equation outputs.
+        outputs
+            Primitive or synthetic capture outputs.
+
+        Returns
+        -------
+        tuple[Any, ...]
+            Outputs to write into the interpreter environment.
+        """
+
+        rewritten = list(outputs)
+        for output_index, output in enumerate(rewritten):
+            key = (capture_index, output_index)
+            if key in replacement_values:
+                output = replacement_values[key]
+            if key in tap_values:
+                output = _jax_zero_tap(output, tap_values[key])
+            rewritten[output_index] = output
+        return tuple(rewritten)
 
     def interpret_inner(
         inner: Any,
@@ -298,6 +336,7 @@ def interpret_closed_jaxpr_with_inlining(
                     interpret_inner=interpret_inner,
                     jax_max_control_flow_unroll=jax_max_control_flow_unroll,
                     control_capture_indices=control_capture_indices,
+                    rewrite_outputs=rewrite_outputs,
                 )
                 for var, value in zip(eqn.outvars, outputs):
                     _write_env(env, var, value, core)
@@ -366,6 +405,8 @@ def interpret_closed_jaxpr_with_inlining(
                 raise ValueError(f"unsupported nested jaxpr in primitive: {primitive_name}")
             result = eqn.primitive.bind(*inputs, **eqn.params)
             outputs = tuple(result if eqn.primitive.multiple_results else (result,))
+            capture_index = len(captures)
+            outputs = rewrite_outputs(capture_index, outputs)
             for var, value in zip(eqn.outvars, outputs):
                 _write_env(env, var, value, core)
             equation_module_stack = module_stack_from_eqn(eqn) or inherited_module_stack
@@ -465,6 +506,7 @@ def _interpret_scan(
     ],
     jax_max_control_flow_unroll: int,
     control_capture_indices: tuple[int, ...],
+    rewrite_outputs: Callable[[int, tuple[Any, ...]], tuple[Any, ...]],
 ) -> tuple[Any, ...]:
     """Unroll one ``lax.scan`` equation into synthetic and body captures.
 
@@ -488,6 +530,8 @@ def _interpret_scan(
         Maximum supported static scan length.
     control_capture_indices
         Synthetic decision capture indexes that control this scan site.
+    rewrite_outputs
+        Replay-only output replacement/tap hook shared with the parent interpreter.
 
     Returns
     -------
@@ -520,9 +564,11 @@ def _interpret_scan(
         physical_index = length - 1 - logical_index if reverse else logical_index
         x_slices = tuple(_slice_scan_leaf(value, physical_index) for value in xs_values)
         for xs_index, (xs_value, x_slice) in enumerate(zip(xs_values, x_slices)):
+            capture_index = len(captures)
+            (x_slice,) = rewrite_outputs(capture_index, (x_slice,))
             captures.append(
                 JaxEquationCapture(
-                    index=len(captures),
+                    index=capture_index,
                     kind="scan_read",
                     primitive="scan_read",
                     primitive_obj=None,
@@ -561,10 +607,12 @@ def _interpret_scan(
         sorted_indexed_values = tuple(sorted(indexed_values, key=lambda item: item[0]))
         ordered_values = tuple(value for _index, value in sorted_indexed_values)
         output = _stack_scan_outputs(ordered_values)
+        capture_index = len(captures)
+        (output,) = rewrite_outputs(capture_index, (output,))
         stack_outputs.append(output)
         captures.append(
             JaxEquationCapture(
-                index=len(captures),
+                index=capture_index,
                 kind="scan_stack",
                 primitive="scan_stack",
                 primitive_obj=None,
@@ -849,7 +897,7 @@ def reject_attributed_module_strict_control_flow(closed_jaxpr: Any) -> None:
         effects outside the B2a strict-mode surface.
     """
 
-    from jax._src import core
+    from jax.extend import core
 
     def visit(inner: Any) -> None:
         """Visit one closed-jaxpr frame."""
@@ -1338,7 +1386,7 @@ def _evaluate_closed_jaxpr_no_capture(closed_jaxpr: Any, args: Sequence[Any]) ->
         Concrete jaxpr outputs.
     """
 
-    from jax._src import core
+    from jax.extend import core
 
     env: dict[Any, Any] = {}
     for var, const in zip(closed_jaxpr.jaxpr.constvars, closed_jaxpr.consts):
@@ -1489,6 +1537,59 @@ def _stack_scan_outputs(values: Sequence[Any]) -> Any:
     import jax.numpy as jnp
 
     return jnp.stack(tuple(values), axis=0)
+
+
+def _jax_zero_tap(value: Any, delta: Any) -> Any:
+    """Return ``value`` exactly while exposing a unit cotangent for ``delta``.
+
+    Parameters
+    ----------
+    value
+        Forward value to preserve.
+    delta
+        Replay-only tap value differentiated by the auxiliary AD pass.
+
+    Returns
+    -------
+    Any
+        ``value`` with an identity JVP contribution from ``delta``.
+    """
+
+    return _jax_zero_tap_impl(value, delta)
+
+
+def _jax_zero_tap_jvp(primals: tuple[Any, Any], tangents: tuple[Any, Any]) -> tuple[Any, Any]:
+    """JVP rule for ``_jax_zero_tap_impl``.
+
+    Parameters
+    ----------
+    primals
+        Forward ``(value, delta)`` arguments.
+    tangents
+        Tangents corresponding to ``primals``.
+
+    Returns
+    -------
+    tuple[Any, Any]
+        Preserved primal value and summed value/delta tangents.
+    """
+
+    value, _delta = primals
+    value_dot, delta_dot = tangents
+    return value, value_dot + delta_dot
+
+
+try:
+    import jax
+
+    _jax_zero_tap_impl = jax.custom_jvp(lambda value, delta: value)
+    _jax_zero_tap_impl.defjvp(_jax_zero_tap_jvp)
+except Exception:  # pragma: no cover - import-time fallback for non-JAX environments.
+
+    def _jax_zero_tap_impl(value: Any, delta: Any) -> Any:
+        """Fallback zero-tap implementation when JAX is unavailable."""
+
+        return value
 
 
 def _read_env(env: Mapping[Any, Any], atom: Any, core: Any) -> Any:

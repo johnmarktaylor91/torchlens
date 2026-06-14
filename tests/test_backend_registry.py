@@ -222,6 +222,10 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     assert jax_spec.capabilities.validation_replay == jax_capabilities.supports_validation_replay
     assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
     assert jax_spec.capabilities.interventions == jax_capabilities.supports_intervention
+    assert (
+        jax_spec.capabilities.intermediate_derived_grads
+        == jax_capabilities.supports_intermediate_derived_grads
+    )
     assert jax_spec.capabilities.rng_replay == jax_capabilities.supports_rng_replay
     assert (
         jax_spec.capabilities.payload_materialization
@@ -241,6 +245,10 @@ def test_capability_sources_agree_for_preview_backends() -> None:
     )
     assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
     assert tinygrad_spec.capabilities.interventions == tinygrad_capabilities.supports_intervention
+    assert (
+        tinygrad_spec.capabilities.intermediate_derived_grads
+        == tinygrad_capabilities.supports_intermediate_derived_grads
+    )
     assert tinygrad_spec.capabilities.rng_replay == tinygrad_capabilities.supports_rng_replay
     assert (
         tinygrad_spec.capabilities.payload_materialization

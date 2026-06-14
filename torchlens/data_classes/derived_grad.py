@@ -99,4 +99,9 @@ class IntermediateDerivedGradAccessor(Accessor[IntermediateDerivedGradRecord]):
             Mapping from stable op labels to gradient records.
         """
 
-        super().__init__({} if records is None else records)
+        exact_records = {
+            key: record
+            for key, record in ({} if records is None else records).items()
+            if record.provenance.get("status") == "exact"
+        }
+        super().__init__(exact_records)

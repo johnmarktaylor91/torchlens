@@ -10,7 +10,7 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Technical preview | Unsupported | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads` only |
-| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads` only |
+| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 | `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 
 ## Public Option Spine
@@ -145,10 +145,14 @@ trace = tl.trace(fn, (params, jnp.ones((4, 3))), backend="jax", grad_options=gra
 trace.derived_grads["params.w"]
 ```
 
-JAX intermediate derived gradients are not public yet. Live JAX traces persist a
-capture-index/final-label and outvar-key/capture-index map for future suffix-VJP work, but
-`trace.intermediate_derived_grads` remains empty until a capped opt-in implementation passes the
-required perturbation and independent-reference gradient oracles for every attached boundary.
+Set `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to run JAX's separate
+zero-tap AD replay for saved op boundaries. The producer uses one all-tap `jax.grad` pass, then an
+O(k) oracle checks each attached boundary with an independent boundary-replacement VJP and finite
+difference. The hard cap fails explicit requests above `max_intermediate_grads`. Only records whose
+provenance has `status == "exact"` are exposed through `trace.intermediate_derived_grads` and
+read-only `op.derived_grad`; oracle failures and non-float/control outputs are skipped. If the
+producer cannot run on the installed JAX runtime, leaf `trace.derived_grads` remains intact and the
+intermediate accessor is empty.
 
 The JAX backend rejects transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`), root
 capture from inside those transforms, unsupported nested-jaxpr primitives, callback effects,

@@ -24,6 +24,7 @@ TRACE_OPTION_CAPABILITY_EPOCHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     ("epoch2_tinygrad_t1", ()),
     ("epoch3_codec_materialization", ("payload_policy", "save_preview")),
+    ("epoch4_intermediate_derived_grads", ()),
 )
 """Ordered public trace-option capability epochs.
 
@@ -117,6 +118,9 @@ class BackendCapabilities:
         Whether loaded payloads can materialize as runtime arrays.
     streaming:
         Whether streaming save is supported.
+    intermediate_derived_grads:
+        Whether the backend can derive exact op-level gradients outside true
+        backward capture.
     module_identity_modes:
         Supported module identity modes.
     save_levels:
@@ -133,6 +137,7 @@ class BackendCapabilities:
     rng_replay: bool
     payload_materialization: bool
     streaming: bool
+    intermediate_derived_grads: bool = False
     module_identity_modes: tuple[str, ...] = ("torch_module",)
     save_levels: tuple[str, ...] = ("audit", "executable_with_callables", "portable")
     trace_options: tuple[str, ...] = ()

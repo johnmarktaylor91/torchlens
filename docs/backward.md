@@ -143,12 +143,16 @@ detach it from engine interception and tensor-hook emission.
 
 MLX currently declares backward capture unsupported and raises tiered backend errors. Torch-only
 features such as autograd node records and live backward intervention remain out of reach unless
-another backend exposes hookable backward graphs. JAX exposes only `trace.derived_grads`,
-populated by `tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
-`fn(params, *inputs)`. MLX also exposes only `trace.derived_grads`, populated by
+another backend exposes hookable backward graphs. JAX exposes `trace.derived_grads`, populated by
+`tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
+`fn(params, *inputs)`, and can optionally expose exact saved-op records through
+`trace.intermediate_derived_grads` plus read-only `op.derived_grad` with
+`GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The JAX intermediate producer
+runs as a separate zero-tap AD replay and only exposes oracle-confirmed `status == "exact"`
+records. MLX exposes only `trace.derived_grads`, populated by
 `tl.backends.mlx.GradOptions` through a second pure `mx.value_and_grad` run that rebinds
 `mlx.nn.Module` params with `model.update(params)` and refuses records unless the AD-rerun raw
-output matches the captured output. JAX and MLX intermediate derived gradients remain deferred.
+output matches the captured output. MLX intermediate derived gradients remain deferred.
 tinygrad exposes `trace.derived_grads`, populated by `tl.backends.tinygrad.GradOptions` through a
 bracketed `DEV=PYTHON` leaf-gradient run, and can optionally expose exact unambiguous per-op
 records through `trace.intermediate_derived_grads` plus read-only `op.derived_grad`. These are not

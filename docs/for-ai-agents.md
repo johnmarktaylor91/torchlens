@@ -12,10 +12,11 @@ metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_so
 `resolver_status`.
 JAX leaf gradients are requested with `tl.backends.jax.GradOptions`; they are derived by a
 second functional AD run and never populate backward-pass or op-gradient surfaces.
-JAX intermediate derived gradients remain deferred: the live trace now keeps a
-`jax_capture_index_to_final_op_label` / `jax_outvar_key_to_capture_index` label-persistence index,
-but no public JAX `Trace.intermediate_derived_grads` records are exposed until a capped opt-in
-suffix-VJP path passes perturbation and independent-reference oracles.
+JAX intermediate derived gradients are requested with
+`GradOptions(intermediate_grads=True, max_intermediate_grads=...)`; they run a separate zero-tap AD
+replay plus per-boundary VJP and finite-difference oracle. Only `status == "exact"` records reach
+`Trace.intermediate_derived_grads` and `Op.derived_grad`; producer drift degrades to leaf grads plus
+an empty intermediate accessor.
 tinygrad leaf gradients use `tl.backends.tinygrad.GradOptions`; they are bracketed
 `DEV=PYTHON` leaf-gradient runs. tinygrad op-level intermediate derived gradients are requested
 with `GradOptions(intermediate_grads=True)` and are exposed only through

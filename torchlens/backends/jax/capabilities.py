@@ -7,6 +7,7 @@ from ..registry import JAX_TRACE_OPTIONS
 supports_backward_capture = False
 supports_fastlog = False
 supports_intervention = False
+supports_intermediate_derived_grads = True
 supports_payload_materialization = True
 supports_rng_replay = False
 supports_validation_replay = True
@@ -20,6 +21,7 @@ __all__ = [
     "supports_backward_capture",
     "supports_fastlog",
     "supports_intervention",
+    "supports_intermediate_derived_grads",
     "supports_payload_materialization",
     "supports_rng_replay",
     "supports_validation_replay",

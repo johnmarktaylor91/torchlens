@@ -17,7 +17,12 @@ from typing import Any, cast
 from ..._deprecations import MISSING, MissingType
 from ...backends import BackendName, BackendUnsupportedError
 from ...data_classes.layer import Layer
-from ...data_classes.derived_grad import DerivedGradAccessor, DerivedGradRecord
+from ...data_classes.derived_grad import (
+    DerivedGradAccessor,
+    DerivedGradRecord,
+    IntermediateDerivedGradAccessor,
+    IntermediateDerivedGradRecord,
+)
 from ...data_classes.module import ModuleAccessor
 from ...data_classes.param import Param, ParamAccessor
 from ...data_classes.trace import Trace
@@ -94,11 +99,19 @@ class GradOptions:
         Input-relative positional argument indexes to differentiate in addition
         to params. ``0`` refers to the first item after params, and translates to
         JAX argnum ``1``.
+    intermediate_grads
+        Whether to run the opt-in zero-tap AD replay for exact op-level
+        intermediate derived gradients.
+    max_intermediate_grads
+        Hard cap on saved op boundaries processed by the intermediate-gradient
+        producer and oracle.
     """
 
     params: Any
     loss_fn: Callable[[Any], Any] | None = None
     input_grad_argnums: tuple[int, ...] = ()
+    intermediate_grads: bool = False
+    max_intermediate_grads: int = 8
 
     def __init__(
         self,
@@ -106,6 +119,8 @@ class GradOptions:
         params: Any,
         loss_fn: Callable[[Any], Any] | None = None,
         input_grad_argnums: Sequence[int] = (),
+        intermediate_grads: bool = False,
+        max_intermediate_grads: int = 8,
     ) -> None:
         """Initialize JAX derived-gradient options.
 
@@ -118,11 +133,19 @@ class GradOptions:
             raw outputs.
         input_grad_argnums
             Input-relative argnums to differentiate.
+        intermediate_grads
+            Whether to expose exact op-level intermediate derived gradients.
+        max_intermediate_grads
+            Hard cap on saved op boundaries for the zero-tap producer and oracle.
         """
 
+        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
+            raise ValueError("max_intermediate_grads must be an integer >= 1")
         object.__setattr__(self, "params", params)
         object.__setattr__(self, "loss_fn", loss_fn)
         object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
+        object.__setattr__(self, "intermediate_grads", bool(intermediate_grads))
+        object.__setattr__(self, "max_intermediate_grads", max_intermediate_grads)
 
 
 @dataclass(frozen=True)
@@ -158,6 +181,37 @@ class _ExperimentalBoundaryVJPResult:
 
     records: Mapping[str, _ExperimentalBoundaryVJPRecord]
     skipped: Mapping[str, str]
+
+
+@dataclass(frozen=True)
+class _JaxIntermediateTapSpec:
+    """One JAX zero-tap boundary selected for an op output.
+
+    Parameters
+    ----------
+    op_label
+        Final TorchLens op label that owns the boundary.
+    layer_label
+        Final TorchLens layer label that owns the op.
+    capture_index
+        Flattened JAX capture index from the shipped label index.
+    output_index
+        Output position within the JAX equation capture.
+    value
+        Saved boundary value used to shape the zero tap.
+    aval
+        Human-readable abstract value.
+    dtype_ref
+        Backend-neutral dtype reference for the value.
+    """
+
+    op_label: str
+    layer_label: str
+    capture_index: int
+    output_index: int
+    value: Any
+    aval: str
+    dtype_ref: DtypeRef | None
 
 
 class JAXBackend:
@@ -428,16 +482,6 @@ class JAXBackend:
             self._attach_pytree_params(trace, module_tree)
         else:
             self._attach_params(trace, args[0] if args else None)
-        if grad_options is not None:
-            self._attach_derived_grads(
-                trace=trace,
-                model=model,
-                args=args,
-                static_argnums=static_argnums,
-                closed_jaxpr=closed_jaxpr,
-                captured_output=output,
-                grad_options=cast(GradOptions, grad_options),
-            )
         self._finish_trace(
             trace,
             module_tree if use_pytree_module else None,
@@ -448,6 +492,18 @@ class JAXBackend:
         trace.jax_inlined_call_primitives = result.inlined_call_primitives
         trace.jax_static_argnums = static_argnums
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
+        if grad_options is not None:
+            self._attach_derived_grads(
+                trace=trace,
+                model=model,
+                args=args,
+                static_argnums=static_argnums,
+                closed_jaxpr=closed_jaxpr,
+                captured_output=output,
+                grad_options=cast(GradOptions, grad_options),
+                jax_control_flow=cast(str, jax_control_flow),
+                jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
+            )
         return trace
 
     def validate_trace(
@@ -1247,6 +1303,8 @@ class JAXBackend:
         closed_jaxpr: Any,
         captured_output: Any,
         grad_options: GradOptions,
+        jax_control_flow: str,
+        jax_max_control_flow_unroll: int,
     ) -> None:
         """Compute and attach JAX leaf-level derived gradients.
 
@@ -1266,6 +1324,10 @@ class JAXBackend:
             Raw output from the captured forward function.
         grad_options
             Derived-gradient options.
+        jax_control_flow
+            Control-flow policy used by normal capture.
+        jax_max_control_flow_unroll
+            Control-flow unroll cap used by normal capture.
 
         Returns
         -------
@@ -1371,6 +1433,27 @@ class JAXBackend:
             )
         trace.derived_grads = DerivedGradAccessor(records)
         self._mirror_param_derived_grads(trace, records)
+        if grad_options.intermediate_grads:
+            try:
+                trace.intermediate_derived_grads = self._derive_intermediate_grads_zero_tap(
+                    trace=trace,
+                    closed_jaxpr=closed_jaxpr,
+                    args=args,
+                    static_argnums=static_argnums,
+                    captured_output=captured_output,
+                    grad_options=grad_options,
+                    fingerprint=fingerprint,
+                    jax_control_flow=jax_control_flow,
+                    jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                )
+            except BackendUnsupportedError:
+                raise
+            except Exception as exc:
+                trace.intermediate_derived_grads = IntermediateDerivedGradAccessor()
+                trace.jax_intermediate_derived_grad_status = {
+                    "status": "degraded",
+                    "reason": f"producer_error:{type(exc).__name__}",
+                }
 
     def _mirror_param_derived_grads(
         self, trace: Trace, records: Mapping[str, DerivedGradRecord]
@@ -1400,6 +1483,183 @@ class JAXBackend:
             param.grad_shape = tuple(getattr(record.grad, "shape", ()))
             param.grad_dtype = cast(Any, str(getattr(record.grad, "dtype", "")))
             param.gradient_memory = _nbytes(record.grad) or 0
+
+    def _derive_intermediate_grads_zero_tap(
+        self,
+        *,
+        trace: Trace,
+        closed_jaxpr: Any,
+        args: Sequence[Any],
+        static_argnums: Sequence[int],
+        captured_output: Any,
+        grad_options: GradOptions,
+        fingerprint: str,
+        jax_control_flow: str,
+        jax_max_control_flow_unroll: int,
+    ) -> IntermediateDerivedGradAccessor:
+        """Compute exact JAX op-level grads with a separate zero-tap AD replay.
+
+        Parameters
+        ----------
+        trace
+            Finalized trace whose saved ops define the attachment set.
+        closed_jaxpr
+            Captured forward closed jaxpr.
+        args
+            Normalized positional call arguments.
+        static_argnums
+            Declared static positional argument indexes.
+        captured_output
+            Raw output from normal capture.
+        grad_options
+            Derived-gradient options.
+        fingerprint
+            Leaf-gradient fingerprint shared in provenance.
+        jax_control_flow
+            Control-flow policy used by normal capture.
+        jax_max_control_flow_unroll
+            Control-flow unroll cap used by normal capture.
+
+        Returns
+        -------
+        IntermediateDerivedGradAccessor
+            Exact op-level records confirmed by producer, VJP, and finite difference.
+        """
+
+        import jax
+        import jax.numpy as jnp
+
+        specs = _jax_intermediate_tap_specs(trace)
+        if len(specs) > grad_options.max_intermediate_grads:
+            raise BackendUnsupportedError(
+                "JAX intermediate derived gradients are capped at "
+                f"{grad_options.max_intermediate_grads} saved boundaries; got {len(specs)}."
+            )
+        if not specs:
+            return IntermediateDerivedGradAccessor()
+
+        flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
+        _output_leaves, output_treedef = jax.tree.flatten(captured_output)
+        zero_taps = tuple(jnp.zeros_like(spec.value) for spec in specs)
+
+        def loss_from_taps(taps: tuple[Any, ...]) -> Any:
+            """Return scalar loss from one all-tap replay.
+
+            Parameters
+            ----------
+            taps
+                Flat zero-tap values aligned with ``specs``.
+
+            Returns
+            -------
+            Any
+                Scalar loss.
+            """
+
+            tap_values = {
+                (spec.capture_index, spec.output_index): tap for spec, tap in zip(specs, taps)
+            }
+            result = interpret_closed_jaxpr_with_inlining(
+                closed_jaxpr,
+                flat_args,
+                jax_control_flow=jax_control_flow,
+                jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                tap_values_by_capture_output=tap_values,
+            )
+            raw_output = jax.tree.unflatten(output_treedef, result.outputs)
+            loss = raw_output if grad_options.loss_fn is None else grad_options.loss_fn(raw_output)
+            if not _is_scalar_jax_value(loss):
+                raise ValueError("JAX intermediate derived gradients require a scalar loss.")
+            return loss
+
+        def loss_from_replacement(spec: _JaxIntermediateTapSpec, replacement: Any) -> Any:
+            """Return scalar loss after replacing one boundary value.
+
+            Parameters
+            ----------
+            spec
+                Boundary to replace.
+            replacement
+                Replacement value for the boundary output.
+
+            Returns
+            -------
+            Any
+                Scalar loss.
+            """
+
+            result = interpret_closed_jaxpr_with_inlining(
+                closed_jaxpr,
+                flat_args,
+                jax_control_flow=jax_control_flow,
+                jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                replacement_values_by_capture_output={
+                    (spec.capture_index, spec.output_index): replacement
+                },
+            )
+            raw_output = jax.tree.unflatten(output_treedef, result.outputs)
+            loss = raw_output if grad_options.loss_fn is None else grad_options.loss_fn(raw_output)
+            if not _is_scalar_jax_value(loss):
+                raise ValueError("JAX intermediate derived gradients require a scalar loss.")
+            return loss
+
+        producer_grads = jax.grad(loss_from_taps)(zero_taps)
+        replayed_output = _raw_output_from_replay(
+            closed_jaxpr=closed_jaxpr,
+            flat_args=flat_args,
+            output_treedef=output_treedef,
+            jax_control_flow=jax_control_flow,
+            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+        )
+        if not jax.tree.all(jax.tree.map(_values_close, replayed_output, captured_output)):
+            raise ValueError("JAX zero-tap replay raw output diverged from captured output.")
+
+        specs_by_label: dict[str, list[_JaxIntermediateTapSpec]] = defaultdict(list)
+        passed_by_label: dict[str, list[tuple[_JaxIntermediateTapSpec, Any]]] = defaultdict(list)
+        for tap_index, (spec, grad) in enumerate(zip(specs, producer_grads)):
+            specs_by_label[spec.op_label].append(spec)
+            if not _jax_intermediate_oracle_passes(
+                spec=spec,
+                tap_index=tap_index,
+                producer_grad=grad,
+                zero_taps=zero_taps,
+                loss_from_replacement=loss_from_replacement,
+            ):
+                continue
+            passed_by_label[spec.op_label].append((spec, grad))
+
+        records: dict[str, IntermediateDerivedGradRecord] = {}
+        for op_label, passed_specs in passed_by_label.items():
+            if len(passed_specs) != len(specs_by_label[op_label]):
+                continue
+            first_spec = passed_specs[0][0]
+            grad_payload = (
+                passed_specs[0][1]
+                if len(passed_specs) == 1
+                else tuple(grad for _spec, grad in passed_specs)
+            )
+            records[op_label] = IntermediateDerivedGradRecord(
+                op_label=op_label,
+                layer_label=first_spec.layer_label,
+                aval=(
+                    f"ShapedArray({tuple(getattr(grad_payload, 'shape', ()))}, "
+                    f"{getattr(grad_payload, 'dtype', None)})"
+                ),
+                dtype_ref=DtypeRef.from_value(getattr(grad_payload, "dtype", None)),
+                grad=grad_payload,
+                provenance={
+                    "backend": "jax",
+                    "kind": "intermediate_derived_gradient",
+                    "mechanism": "jax_zero_tap",
+                    "fingerprint": fingerprint,
+                    "loss_id": _callable_identity(grad_options.loss_fn),
+                    "save_predicate_id": "trace.saved_ops",
+                    "status": "exact",
+                    "oracle": "producer_all_tap+per_tap_vjp+finite_difference",
+                    "max_intermediate_grads": grad_options.max_intermediate_grads,
+                },
+            )
+        return IntermediateDerivedGradAccessor(records)
 
     def _finish_trace(
         self,
@@ -2713,6 +2973,213 @@ def _records_for_grad_tree(
             provenance=provenance,
         )
     return records
+
+
+def _jax_intermediate_tap_specs(trace: Trace) -> tuple[_JaxIntermediateTapSpec, ...]:
+    """Return saved, inexact JAX op outputs eligible for zero-tap gradients.
+
+    Parameters
+    ----------
+    trace
+        Finalized JAX trace with capture-index label maps.
+
+    Returns
+    -------
+    tuple[_JaxIntermediateTapSpec, ...]
+        Tap specs in deterministic capture/output order. Non-float/control
+        outputs and unsaved ops are skipped.
+    """
+
+    specs: list[_JaxIntermediateTapSpec] = []
+    capture_to_label = getattr(trace, "jax_capture_index_to_final_op_label", {})
+    captures = tuple(getattr(trace, "jax_equation_captures", ()))
+    for capture in sorted(captures, key=lambda item: item.index):
+        label = capture_to_label.get(capture.index)
+        if not isinstance(label, str) or label not in trace.op_labels:
+            continue
+        op = trace[label]
+        if not getattr(op, "has_saved_activation", False):
+            continue
+        if getattr(op, "is_input", False) or getattr(op, "is_output", False):
+            continue
+        for output_index, value in enumerate(capture.output_values):
+            if not _is_inexact_jax_array(value):
+                continue
+            specs.append(
+                _JaxIntermediateTapSpec(
+                    op_label=label,
+                    layer_label=op.layer_label,
+                    capture_index=capture.index,
+                    output_index=output_index,
+                    value=value,
+                    aval=(
+                        f"ShapedArray({tuple(getattr(value, 'shape', ()))}, "
+                        f"{getattr(value, 'dtype', None)})"
+                    ),
+                    dtype_ref=DtypeRef.from_value(getattr(value, "dtype", None)),
+                )
+            )
+    return tuple(specs)
+
+
+def _is_inexact_jax_array(value: Any) -> bool:
+    """Return whether ``value`` is a floating JAX array.
+
+    Parameters
+    ----------
+    value
+        Candidate boundary value.
+
+    Returns
+    -------
+    bool
+        True when the boundary can be differentiated by JAX AD.
+    """
+
+    import jax
+    import jax.numpy as jnp
+
+    return isinstance(value, jax.Array) and jnp.issubdtype(value.dtype, jnp.floating)
+
+
+def _raw_output_from_replay(
+    *,
+    closed_jaxpr: Any,
+    flat_args: Sequence[Any],
+    output_treedef: Any,
+    jax_control_flow: str,
+    jax_max_control_flow_unroll: int,
+) -> Any:
+    """Replay the closed jaxpr and rebuild the public raw output tree.
+
+    Parameters
+    ----------
+    closed_jaxpr
+        Closed jaxpr to replay.
+    flat_args
+        Dynamic argument leaves.
+    output_treedef
+        Output pytree definition from the captured raw output.
+    jax_control_flow
+        Control-flow policy used by normal capture.
+    jax_max_control_flow_unroll
+        Control-flow unroll cap used by normal capture.
+
+    Returns
+    -------
+    Any
+        Rebuilt raw output tree.
+    """
+
+    import jax
+
+    result = interpret_closed_jaxpr_with_inlining(
+        closed_jaxpr,
+        flat_args,
+        jax_control_flow=jax_control_flow,
+        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+    )
+    return jax.tree.unflatten(output_treedef, result.outputs)
+
+
+def _jax_intermediate_oracle_passes(
+    *,
+    spec: _JaxIntermediateTapSpec,
+    tap_index: int,
+    producer_grad: Any,
+    zero_taps: tuple[Any, ...],
+    loss_from_replacement: Callable[[_JaxIntermediateTapSpec, Any], Any],
+) -> bool:
+    """Return whether independent VJP and finite difference confirm a tap grad.
+
+    Parameters
+    ----------
+    spec
+        Boundary tap spec under validation.
+    tap_index
+        Position of ``spec`` in the flat all-tap tuple.
+    producer_grad
+        Gradient from the single all-tap producer pass.
+    zero_taps
+        All-zero tap tuple aligned with the producer specs.
+    loss_from_replacement
+        Scalar loss function that replaces one boundary value.
+
+    Returns
+    -------
+    bool
+        True only when the per-tap VJP and perturbation checks agree.
+    """
+
+    import jax
+    import jax.numpy as jnp
+
+    if tap_index < 0 or tap_index >= len(zero_taps):
+        return False
+
+    def replacement_loss(replacement: Any) -> Any:
+        """Return scalar loss with one boundary output replaced.
+
+        Parameters
+        ----------
+        replacement
+            Candidate boundary value.
+
+        Returns
+        -------
+        Any
+            Scalar loss.
+        """
+
+        return loss_from_replacement(spec, replacement)
+
+    loss, pullback = jax.vjp(replacement_loss, spec.value)
+    if not _is_scalar_jax_value(loss):
+        return False
+    (reference_grad,) = pullback(jnp.ones_like(loss))
+    if not _values_close(producer_grad, reference_grad):
+        return False
+    return _finite_difference_directional_check(
+        value=spec.value,
+        grad=producer_grad,
+        scalar_loss=replacement_loss,
+    )
+
+
+def _finite_difference_directional_check(
+    *,
+    value: Any,
+    grad: Any,
+    scalar_loss: Callable[[Any], Any],
+) -> bool:
+    """Check a gradient with a central finite difference along ``sign(grad)``.
+
+    Parameters
+    ----------
+    value
+        Boundary tap value.
+    grad
+        Candidate gradient for ``value``.
+    scalar_loss
+        Scalar loss as a function of one tap value.
+
+    Returns
+    -------
+    bool
+        True when finite difference agrees within dtype-scaled tolerance.
+    """
+
+    import jax.numpy as jnp
+
+    direction = jnp.sign(grad)
+    if not bool(jnp.any(direction)):
+        direction = jnp.ones_like(grad)
+    eps = jnp.asarray(1e-2 if value.dtype == jnp.float32 else 1e-4, dtype=value.dtype)
+    plus = scalar_loss(value + eps * direction)
+    minus = scalar_loss(value - eps * direction)
+    observed = (plus - minus) / (eps * jnp.asarray(2, dtype=value.dtype))
+    expected = jnp.sum(grad * direction)
+    return bool(jnp.allclose(observed, expected, rtol=5e-2, atol=5e-3))
 
 
 def _experimental_per_op_boundary_vjp_oracle(
