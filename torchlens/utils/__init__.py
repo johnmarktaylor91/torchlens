@@ -30,11 +30,13 @@ from .tensor_utils import (
     tensor_nanequal,
     safe_to,
     get_memory_amount,
+    copy_tensor_payload,
     safe_copy,
     print_override,
 )
 from .arg_handling import (
     _safe_copy_arg,
+    copy_arg_tree,
     safe_copy_args,
     safe_copy_kwargs,
     _model_expects_single_arg,
@@ -681,6 +683,8 @@ __all__ = [
     "_model_expects_single_arg",
     "_safe_copy_arg",
     "assign_to_sequence_or_dict",
+    "copy_arg_tree",
+    "copy_tensor_payload",
     "doctor",
     "ensure_iterable",
     "get_attr_values_from_tensor_list",

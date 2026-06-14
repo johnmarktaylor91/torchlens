@@ -424,8 +424,56 @@ def _copy_tensor_payload(
                 return torch.zeros(x.shape, dtype=torch.float32)
 
 
-def safe_copy(x: Any, detach_tensor: bool = False, save_mode: SaveMode = "copy") -> Any:
-    """Copy a tensor (or parameter) without triggering torchlens logging.
+def _clone_tensor_payload(
+    x: torch.Tensor | torch.nn.Parameter,
+    *,
+    detach_tensor: bool,
+    save_mode: SaveMode,
+) -> torch.Tensor | torch.nn.Parameter:
+    """Clone or retain one tensor payload without triggering TorchLens logging.
+
+    Parameters
+    ----------
+    x
+        Tensor or parameter to clone or retain.
+    detach_tensor
+        Whether to detach copied payloads from the autograd graph.
+    save_mode
+        Tensor retention mode. ``"copy"`` preserves historical clone behavior,
+        ``"reference"`` stores the source tensor, ``"view"`` stores the
+        graph-connected source tensor, and ``"cpu_async"`` copies to CPU.
+
+    Returns
+    -------
+    torch.Tensor | torch.nn.Parameter
+        Tensor payload with TorchLens raw label preserved, or a rewrapped
+        parameter payload for parameter inputs.
+    """
+    from .._state import pause_logging
+
+    with pause_logging():
+        if save_mode not in {"copy", "reference", "view", "cpu_async"}:
+            raise ValueError("save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'")
+        vals_tensor = _copy_tensor_payload(
+            x,
+            detach_tensor=detach_tensor,
+            save_mode=save_mode,
+        )
+        label = None if isinstance(x, torch.nn.Parameter) else get_tensor_label(x)
+        if label is not None:
+            set_tensor_label(vals_tensor, label)
+        if isinstance(x, torch.nn.Parameter):
+            return torch.nn.Parameter(vals_tensor)
+        return vals_tensor
+
+
+def copy_tensor_payload(
+    x: Any,
+    *,
+    save_mode: SaveMode = "copy",
+    detach_tensor: bool = False,
+) -> Any:
+    """Copy an output payload with tensor-clone and shallow non-tensor semantics.
 
     Uses ``pause_logging()`` so that ``.clone()``, ``.detach()``,
     ``.cpu()`` etc. don't get logged — these are all decorated tensor
@@ -437,44 +485,53 @@ def safe_copy(x: Any, detach_tensor: bool = False, save_mode: SaveMode = "copy")
     issues the way tensor wrappers do (see :func:`_safe_copy_arg` for the
     deeper discussion on why ``deepcopy`` is avoided).
 
-    Args:
-        x: Input value (tensor, parameter, or arbitrary object).
-        detach_tensor: If True, detach the saved payload from the autograd graph.
-            This is used when saving outs to avoid retaining the
-            full computational graph in memory.
-        save_mode: Tensor retention mode. ``"copy"`` preserves historical clone
-            behavior. ``"reference"`` stores the detached source tensor.
-            ``"view"`` stores the graph-connected source tensor.
-            ``"cpu_async"`` copies to CPU using ``non_blocking=True``.
+    Parameters
+    ----------
+    x
+        Input value, tensor, parameter, or arbitrary object.
+    save_mode
+        Tensor retention mode. ``"copy"`` preserves historical clone behavior.
+        ``"reference"`` stores the detached source tensor. ``"view"`` stores
+        the graph-connected source tensor. ``"cpu_async"`` copies to CPU using
+        ``non_blocking=True``.
+    detach_tensor
+        If True, detach the saved payload from the autograd graph. This is used
+        when saving outs to avoid retaining the full computational graph in
+        memory.
 
-    Returns:
-        A copy with the same values and dtype but independent storage.
+    Returns
+    -------
+    Any
+        Tensor payload copy/retention result, or a shallow copy for non-tensors.
     """
-    from .._state import pause_logging
 
     if isinstance(x, (torch.Tensor, torch.nn.Parameter)):
-        with pause_logging():
-            if save_mode not in {"copy", "reference", "view", "cpu_async"}:
-                raise ValueError(
-                    "save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'"
-                )
-            vals_tensor = _copy_tensor_payload(
-                x,
-                detach_tensor=detach_tensor,
-                save_mode=save_mode,
-            )
-            # Preserve the raw label so postprocessing can map this tensor
-            # back to its Trace entry.
-            label = None if isinstance(x, torch.nn.Parameter) else get_tensor_label(x)
-            if label is not None:
-                set_tensor_label(vals_tensor, label)
-            if isinstance(x, torch.nn.Parameter):
-                return torch.nn.Parameter(vals_tensor)
-            return vals_tensor
+        return _clone_tensor_payload(x, detach_tensor=detach_tensor, save_mode=save_mode)
     else:
         # Non-tensor: shallow copy is sufficient and avoids deepcopy's
         # circular-reference pitfalls.
         return copy.copy(x)
+
+
+def safe_copy(x: Any, detach_tensor: bool = False, save_mode: SaveMode = "copy") -> Any:
+    """Compatibility alias for :func:`copy_tensor_payload`.
+
+    Parameters
+    ----------
+    x
+        Input value, tensor, parameter, or arbitrary object.
+    detach_tensor
+        Whether tensor payloads should detach from autograd.
+    save_mode
+        Tensor retention mode.
+
+    Returns
+    -------
+    Any
+        Output-payload copy result.
+    """
+
+    return copy_tensor_payload(x, save_mode=save_mode, detach_tensor=detach_tensor)
 
 
 def print_override(t: torch.Tensor, func_name: str) -> str:

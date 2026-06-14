@@ -63,6 +63,7 @@ from ...utils.introspection import get_vars_of_type_from_obj, nested_getattr
 from ...utils.display import identity
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.hashing import make_random_barcode
+from ...utils.arg_handling import copy_arg_tree
 from ...utils.tensor_utils import print_override, safe_copy
 from .ops import (
     _walk_output_tensors_with_paths,
@@ -881,8 +882,8 @@ def torch_func_decorator(func: Callable[..., Any], func_name: str) -> Callable[.
 
         # Snapshot args before the call in case in-place ops mutate them.
         if trace.save_arg_values:
-            arg_copies = tuple([safe_copy(arg) for arg in args])
-            kwarg_copies = {k: safe_copy(v) for k, v in kwargs.items()}
+            arg_copies = tuple([copy_arg_tree(arg) for arg in args])
+            kwarg_copies = {k: copy_arg_tree(v) for k, v in kwargs.items()}
         else:
             arg_copies = args
             kwarg_copies = kwargs

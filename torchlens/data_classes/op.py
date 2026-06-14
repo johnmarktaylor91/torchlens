@@ -77,6 +77,7 @@ from ._state_adapter import state_items, state_restore
 from ..utils.tensor_utils import (
     SaveMode,
     concatenate_batch_tensors,
+    copy_tensor_payload,
     get_memory_amount,
     get_memory_amount_from_metadata,
     is_functorch_wrapped_tensor,
@@ -84,6 +85,7 @@ from ..utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
+from ..utils.arg_handling import copy_arg_tree
 from ..utils.display import tensor_stats_summary
 
 _LAYER_PASS_LOG_FIELD_ORDER_SET = frozenset(LAYER_PASS_LOG_FIELD_ORDER)
@@ -187,14 +189,9 @@ def _clear_property_backed_state_fields(state: dict[str, Any]) -> None:
 
 
 def _recursive_safe_copy(val: Any) -> Any:
-    """Deep-copy nested structures, cloning tensors instead of using copy.deepcopy (#44)."""
-    if isinstance(val, torch.Tensor):
-        return safe_copy(val)
-    elif isinstance(val, (list, tuple)):
-        return type(val)(_recursive_safe_copy(v) for v in val)
-    elif isinstance(val, dict):
-        return {k: _recursive_safe_copy(v) for k, v in val.items()}
-    return safe_copy(val)
+    """Compatibility alias for recursive input-argument copying."""
+
+    return copy_arg_tree(val)
 
 
 def _shape_or_none(value: Any) -> tuple[int, ...] | None:
@@ -2596,9 +2593,9 @@ class Op:
                 is_inplace=bool(self.is_inplace),
             )
             # Clone the tensor, optionally detaching from autograd graph.
-            raw_out = safe_copy(
+            raw_out = copy_tensor_payload(
                 t,
-                self.detach_saved_activations,
+                detach_tensor=self.detach_saved_activations,
                 save_mode=save_mode,
             )
             # Move to the user-requested output device if needed.
@@ -2686,10 +2683,10 @@ class Op:
         # Tensor args and kwargs:
         if save_arg_values:
             self.has_saved_args = True
-            self._internal_set("saved_args", [_recursive_safe_copy(arg) for arg in t_args])
+            self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])
             self._internal_set(
                 "saved_kwargs",
-                {k: _recursive_safe_copy(v) for k, v in t_kwargs.items()},
+                {k: copy_arg_tree(v) for k, v in t_kwargs.items()},
             )
         else:
             self._internal_set("saved_args", None)

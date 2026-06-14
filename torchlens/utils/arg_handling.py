@@ -13,9 +13,11 @@ from typing import Any, Optional, cast
 import torch
 from torch import nn
 
+from .tensor_utils import _clone_tensor_payload
 
-def _safe_copy_arg(arg: Any) -> Any:
-    """Copy a single argument safely, avoiding deepcopy on arbitrary objects.
+
+def copy_arg_tree(arg: Any) -> Any:
+    """Copy an input argument tree, cloning tensors and recursing built-in containers.
 
     Why not ``copy.deepcopy``?  Many third-party tensor wrappers hold
     circular references back to their parent modules.  ``deepcopy`` follows
@@ -33,20 +35,30 @@ def _safe_copy_arg(arg: Any) -> Any:
     model is on a different device, _fetch_label_move_input_tensors may
     mutate the wrapper's tensor attribute in-place.  This is acceptable
     because pre-fix such inputs caused an infinite hang.
+
+    Parameters
+    ----------
+    arg
+        Argument value to copy.
+
+    Returns
+    -------
+    Any
+        Argument copy with nested tensors cloned and custom objects preserved
+        by reference.
     """
     if isinstance(arg, torch.Tensor):
-        # .clone() copies the storage without deepcopy's reference traversal.
-        return arg.clone()
+        return _clone_tensor_payload(arg, detach_tensor=False, save_mode="copy")
     elif isinstance(arg, defaultdict):
         # defaultdict(factory, {k: v, ...}) — preserve the default_factory (#127).
         # A plain dict() constructor would lose default_factory.
-        copied = defaultdict(arg.default_factory, {k: _safe_copy_arg(v) for k, v in arg.items()})
+        copied = defaultdict(arg.default_factory, {k: copy_arg_tree(v) for k, v in arg.items()})
         return copied
     elif isinstance(arg, dict):
         # type(arg)({...}) preserves OrderedDict and other dict subclasses.
-        return type(arg)({k: _safe_copy_arg(v) for k, v in arg.items()})
+        return type(arg)({k: copy_arg_tree(v) for k, v in arg.items()})
     elif isinstance(arg, (list, tuple)):
-        copied = [_safe_copy_arg(item) for item in arg]  # type: ignore[assignment]
+        copied = [copy_arg_tree(item) for item in arg]  # type: ignore[assignment]
         # NamedTuples have _fields and need *args construction;
         # plain tuples/lists take an iterable.
         return type(arg)(*copied) if hasattr(type(arg), "_fields") else type(arg)(copied)
@@ -56,13 +68,30 @@ def _safe_copy_arg(arg: Any) -> Any:
         return arg
 
 
+def _safe_copy_arg(arg: Any) -> Any:
+    """Compatibility alias for :func:`copy_arg_tree`.
+
+    Parameters
+    ----------
+    arg
+        Argument value to copy.
+
+    Returns
+    -------
+    Any
+        Recursive input-argument copy result.
+    """
+
+    return copy_arg_tree(arg)
+
+
 def safe_copy_args(args: list[Any]) -> list[Any]:
     """Safely copy a list of positional arguments.
 
-    Each element is copied via :func:`_safe_copy_arg`: tensors are cloned,
+    Each element is copied via :func:`copy_arg_tree`: tensors are cloned,
     containers are recursed into, and everything else is passed by reference.
     """
-    return [_safe_copy_arg(arg) for arg in args]
+    return [copy_arg_tree(arg) for arg in args]
 
 
 def safe_copy_kwargs(kwargs: dict[Any, Any]) -> dict[Any, Any]:
@@ -70,7 +99,7 @@ def safe_copy_kwargs(kwargs: dict[Any, Any]) -> dict[Any, Any]:
 
     Same semantics as :func:`safe_copy_args` but for ``**kwargs``.
     """
-    return {key: _safe_copy_arg(val) for key, val in kwargs.items()}
+    return {key: copy_arg_tree(val) for key, val in kwargs.items()}
 
 
 def _model_expects_single_arg(model: nn.Module) -> Optional[bool]:
