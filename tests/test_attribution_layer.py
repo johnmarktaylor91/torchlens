@@ -105,6 +105,92 @@ class MultiInputCnn(nn.Module):
         return self.classifier(pooled)
 
 
+class SmoothLayerMlp(nn.Module):
+    """Smooth model with a named hidden layer for path-attribution tests."""
+
+    def __init__(self) -> None:
+        """Initialize deterministic double-precision layers."""
+
+        super().__init__()
+        self.hidden = nn.Linear(3, 4, bias=True, dtype=torch.float64)
+        self.output = nn.Linear(4, 2, bias=True, dtype=torch.float64)
+        with torch.no_grad():
+            self.hidden.weight.copy_(
+                torch.tensor(
+                    [
+                        [0.30, -0.20, 0.40],
+                        [-0.10, 0.50, 0.20],
+                        [0.60, 0.10, -0.30],
+                        [-0.40, 0.25, 0.35],
+                    ],
+                    dtype=torch.float64,
+                )
+            )
+            self.hidden.bias.copy_(torch.tensor([0.05, -0.10, 0.20, -0.15], dtype=torch.float64))
+            self.output.weight.copy_(
+                torch.tensor(
+                    [[0.40, -0.30, 0.20, 0.10], [-0.25, 0.35, 0.15, -0.45]], dtype=torch.float64
+                )
+            )
+            self.output.bias.copy_(torch.tensor([0.02, -0.03], dtype=torch.float64))
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        """Run the model.
+
+        Parameters
+        ----------
+        inputs
+            Input tensor with shape ``N, 3``.
+
+        Returns
+        -------
+        Tensor
+            Output tensor with shape ``N, 2``.
+        """
+
+        hidden = self.hidden(inputs)
+        return self.output(torch.tanh(hidden))
+
+
+class MultiInputSmoothLayerMlp(nn.Module):
+    """Smooth named-layer model that accepts multiple positional tensor inputs."""
+
+    def __init__(self) -> None:
+        """Initialize deterministic double-precision layers."""
+
+        super().__init__()
+        self.hidden = nn.Linear(2, 3, bias=True, dtype=torch.float64)
+        self.output = nn.Linear(3, 1, bias=False, dtype=torch.float64)
+        with torch.no_grad():
+            self.hidden.weight.copy_(
+                torch.tensor(
+                    [[0.25, -0.35], [0.45, 0.15], [-0.20, 0.55]],
+                    dtype=torch.float64,
+                )
+            )
+            self.hidden.bias.copy_(torch.tensor([0.10, -0.05, 0.15], dtype=torch.float64))
+            self.output.weight.copy_(torch.tensor([[0.60, -0.40, 0.30]], dtype=torch.float64))
+
+    def forward(self, first: Tensor, second: Tensor) -> Tensor:
+        """Run the model on two positional tensor inputs.
+
+        Parameters
+        ----------
+        first
+            First input tensor with shape ``N, 2``.
+        second
+            Second input tensor with shape ``N, 2``.
+
+        Returns
+        -------
+        Tensor
+            Output tensor with shape ``N, 1``.
+        """
+
+        hidden = self.hidden(first + 0.5 * second)
+        return self.output(torch.tanh(hidden))
+
+
 def test_grad_cam_upsamples_to_input_spatial_size_and_is_finite() -> None:
     """Grad-CAM returns a finite non-negative map at input spatial resolution."""
 
@@ -235,3 +321,118 @@ def test_layer_attribution_supports_tensor_kwargs_model_call() -> None:
     assert result.method == "layer_activation_x_grad"
     assert result.values.shape == (1, 2, 5, 5)
     assert torch.isfinite(result.values).all()
+
+
+def test_layer_integrated_gradients_completeness_and_shape() -> None:
+    """Layer Integrated Gradients sums to the target delta on a smooth path."""
+
+    model = SmoothLayerMlp()
+    inputs = torch.tensor([[0.60, -0.20, 0.40]], dtype=torch.float64)
+    baseline = torch.tensor([[-0.10, 0.05, 0.20]], dtype=torch.float64)
+
+    result = attribution.layer_integrated_gradients(
+        model,
+        inputs,
+        target=1,
+        layer="hidden",
+        baseline=baseline,
+        n_steps=512,
+    )
+
+    with torch.no_grad():
+        target_delta = model(inputs)[..., 1].sum() - model(baseline)[..., 1].sum()
+        expected_shape = model.hidden(inputs).shape
+    attribution_sum = result.values.sum()
+
+    assert result.method == "layer_integrated_gradients"
+    assert result.extra == {"layer": "hidden", "n_steps": 512}
+    assert result.values.shape == expected_shape
+    assert torch.isfinite(result.values).all()
+    torch.testing.assert_close(attribution_sum, target_delta, rtol=1e-3, atol=1e-4)
+
+
+def test_layer_conductance_completeness_and_shape() -> None:
+    """Layer Conductance sums to the target delta on a smooth path."""
+
+    model = SmoothLayerMlp()
+    inputs = torch.tensor([[0.45, -0.35, 0.25]], dtype=torch.float64)
+    baseline = torch.tensor([[-0.15, 0.10, 0.05]], dtype=torch.float64)
+
+    result = attribution.layer_conductance(
+        model,
+        inputs,
+        target=lambda output: output[..., 0].sum(),
+        layer="hidden",
+        baseline=baseline,
+        n_steps=512,
+    )
+
+    with torch.no_grad():
+        target_delta = model(inputs)[..., 0].sum() - model(baseline)[..., 0].sum()
+        expected_shape = model.hidden(inputs).shape
+    attribution_sum = result.values.sum()
+
+    assert result.method == "layer_conductance"
+    assert result.extra == {"layer": "hidden", "n_steps": 512}
+    assert result.values.shape == expected_shape
+    assert torch.isfinite(result.values).all()
+    torch.testing.assert_close(attribution_sum, target_delta, rtol=1e-3, atol=1e-4)
+
+
+def test_layer_path_methods_reject_bad_layer_name() -> None:
+    """Layer path methods reuse named-layer validation errors."""
+
+    model = SmoothLayerMlp()
+    inputs = torch.randn(1, 3, dtype=torch.float64)
+
+    with pytest.raises(
+        attribution.AttributionError,
+        match="layer 'missing' was not found; available conv-like layers include: hidden",
+    ):
+        attribution.layer_integrated_gradients(
+            model,
+            inputs,
+            target=0,
+            layer="missing",
+        )
+
+
+def test_layer_path_methods_support_multi_input_model_call() -> None:
+    """Layer path methods thread multiple positional tensors through the model call."""
+
+    model = MultiInputSmoothLayerMlp()
+    first = torch.tensor([[0.30, -0.60]], dtype=torch.float64)
+    second = torch.tensor([[0.20, 0.40]], dtype=torch.float64)
+    first_baseline = torch.tensor([[0.05, -0.10]], dtype=torch.float64)
+    second_baseline = torch.tensor([[-0.15, 0.05]], dtype=torch.float64)
+
+    lig_result = attribution.layer_integrated_gradients(
+        model,
+        (first, second),
+        target=lambda output: output.sum(),
+        layer="hidden",
+        baseline=(first_baseline, second_baseline),
+        n_steps=512,
+    )
+    conductance_result = attribution.layer_conductance(
+        model,
+        (first, second),
+        target=lambda output: output.sum(),
+        layer="hidden",
+        baseline=(first_baseline, second_baseline),
+        n_steps=512,
+    )
+
+    with torch.no_grad():
+        target_delta = model(first, second).sum() - model(first_baseline, second_baseline).sum()
+        expected_shape = model.hidden(first + 0.5 * second).shape
+
+    assert lig_result.values.shape == expected_shape
+    assert conductance_result.values.shape == expected_shape
+    torch.testing.assert_close(lig_result.values.sum(), target_delta, rtol=1e-3, atol=1e-4)
+    torch.testing.assert_close(
+        conductance_result.values.sum(),
+        target_delta,
+        rtol=1e-3,
+        atol=1e-4,
+    )

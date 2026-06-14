@@ -8,7 +8,12 @@ from torchlens.attribution._core import (
     saliency,
     smoothgrad,
 )
-from torchlens.attribution._layer import grad_cam, layer_attribution
+from torchlens.attribution._layer import (
+    grad_cam,
+    layer_attribution,
+    layer_conductance,
+    layer_integrated_gradients,
+)
 
 __all__ = [
     "AttributionError",
@@ -17,6 +22,8 @@ __all__ = [
     "input_x_grad",
     "integrated_gradients",
     "layer_attribution",
+    "layer_conductance",
+    "layer_integrated_gradients",
     "saliency",
     "smoothgrad",
 ]
