@@ -115,6 +115,9 @@ the full-feature backend: true backward capture, value-dependent predicates,
 `intervene=`, `halt=`, and fastlog are torch-only for now. (Preview backends are
 pinned and documented in [`docs/`](docs/); they are not yet drop-in for
 arbitrary models.)
+When future importer-owned regions are not per-op replayable, replay status can be
+`unverified`: the trace is materialized and replayable checks passed, but the status is
+not a pass and raises on boolean coercion.
 
 MLX preview traces support static-label `save=` for `tl.func`, `tl.label`,
 `tl.module`, `tl.in_module`, `tl.contains`, and boolean composites of those.

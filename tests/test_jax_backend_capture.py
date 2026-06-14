@@ -20,6 +20,13 @@ from torchlens.backends.jax.backend import (
 )
 from torchlens.intervention.types import EdgeUseRecord
 from torchlens.postprocess.graph_traversal import _remove_orphan_nodes
+from torchlens.validation.status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
+    ValidationReplayStatus,
+)
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -773,6 +780,8 @@ def test_jax_validation_fails_when_equation_output_is_corrupted() -> None:
     tanh_op._internal_set("out", tanh_op.out + jnp.asarray(0.5, dtype=tanh_op.out.dtype))
 
     assert trace.validate_forward_pass([], validate_metadata=False) is False
+    assert trace.validation_replay_status.state == "failed"
+    assert trace.validation_replay_status.state != "unverified"
 
 
 def test_jax_validation_fails_when_parent_edge_is_rewired_wrong() -> None:
@@ -929,6 +938,29 @@ def test_jax_validation_fails_when_saved_payload_is_dropped() -> None:
     tanh_op._internal_set("has_saved_activation", False)
 
     assert trace.validate_forward_pass([], validate_metadata=False) is False
+    assert trace.validation_replay_status.state == "failed"
+    assert trace.validation_replay_status.state != "unverified"
+
+
+def test_jax_validation_reports_synthetic_importer_region_as_unverified() -> None:
+    """Successful replay plus importer-owned synthetic regions folds to unverified."""
+
+    trace = _trace_jax(_mlp, (_params(), jnp.ones((2, 3))))
+    region_op = SimpleNamespace(layer_label="synthetic_region", annotations={})
+    trace.layer_list.append(region_op)
+    trace.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
+    region_op.annotations[REGION_REPLAY_CLASS_KEY] = REGION_REPLAY_CLASS
+    region_op.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
+
+    result = trace.validate_forward_pass([], validate_metadata=False)
+
+    assert isinstance(result, ValidationReplayStatus)
+    assert result.state == "unverified"
+    assert result.available is True
+    assert result.replayed_node_count > 0
+    assert result.unverified_node_count == 1
+    with pytest.raises(TypeError, match="not a boolean"):
+        bool(result)
 
 
 def test_jax_trace_accepts_s0j_extended_corpus_subset() -> None:

@@ -48,7 +48,11 @@ from ...postprocess.loop_grouping_adapter import (
     group_recurrent_nodes,
 )
 from ...quantities import Bytes, Duration
-from ...validation.status import ValidationReplayStatus
+from ...validation.status import (
+    ValidationReplaySource,
+    ValidationReplayStatus,
+    count_importer_region_annotations,
+)
 from .._selective_save import apply_static_label_save_policy
 from .._selective_save import pop_static_label_save_predicate
 from .jaxpr import (
@@ -482,19 +486,60 @@ class JAXBackend:
 
                 check_metadata_invariants(trace)
             passed = self._validate_jax_equations(trace)
+            status_result = self._validation_status_from_counts(trace, passed=passed)
         except Exception:
             passed = False
-        setattr(
-            trace,
-            "_validation_replay_status",
-            ValidationReplayStatus.result(
-                passed=passed,
+            status_result = ValidationReplayStatus.result(
+                passed=False,
                 backend="jax",
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
-            ),
+                failed_node_count=1,
+            )
+        setattr(
+            trace,
+            "_validation_replay_status",
+            status_result,
         )
-        return passed
+        return status_result if status_result.state == "unverified" else passed
+
+    def _validation_status_from_counts(
+        self,
+        trace: Trace,
+        *,
+        passed: bool,
+    ) -> ValidationReplayStatus:
+        """Build aggregate replay status from JAX replay and region counts.
+
+        Parameters
+        ----------
+        trace
+            Trace produced by this backend.
+        passed
+            Whether per-equation replay validation passed.
+
+        Returns
+        -------
+        ValidationReplayStatus
+            Failed status when replay failed, unverified status when all
+            replayed ops passed but importer-owned regions are present, and
+            passed status otherwise.
+        """
+
+        source: ValidationReplaySource = (
+            "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
+        )
+        payload_load_status = getattr(trace, "payload_load_status", None)
+        replayed_node_count = len(_jax_equation_ops(trace)) if passed else 0
+        unverified_node_count = count_importer_region_annotations(trace) if passed else 0
+        return ValidationReplayStatus.from_replay_counts(
+            backend="jax",
+            source=source,
+            replayed_node_count=replayed_node_count,
+            unverified_node_count=unverified_node_count,
+            failed_node_count=0 if passed else 1,
+            payload_load_status=payload_load_status,
+        )
 
     def _validate_jax_equations(self, trace: Trace) -> bool:
         """Validate JAX equation captures against materialized trace payloads.

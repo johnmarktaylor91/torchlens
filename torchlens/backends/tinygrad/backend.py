@@ -40,7 +40,11 @@ from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_module_logs
 from ...postprocess.finalization import _build_root_module_log
 from ...quantities import Duration
-from ...validation.status import ValidationReplayStatus
+from ...validation.status import (
+    ValidationReplaySource,
+    ValidationReplayStatus,
+    count_importer_region_annotations,
+)
 from .._selective_save import apply_static_label_save_policy
 from .._selective_save import pop_static_label_save_predicate
 
@@ -494,21 +498,62 @@ class TinygradBackend:
 
                 check_metadata_invariants(trace)
             passed = self._validate_uops(trace)
+            status_result = self._validation_status_from_counts(trace, passed=passed)
         except BackendUnsupportedError:
             raise
         except Exception:
             passed = False
-        setattr(
-            trace,
-            "_validation_replay_status",
-            ValidationReplayStatus.result(
-                passed=passed,
+            status_result = ValidationReplayStatus.result(
+                passed=False,
                 backend="tinygrad",
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
-            ),
+                failed_node_count=1,
+            )
+        setattr(
+            trace,
+            "_validation_replay_status",
+            status_result,
         )
-        return passed
+        return status_result if status_result.state == "unverified" else passed
+
+    def _validation_status_from_counts(
+        self,
+        trace: Trace,
+        *,
+        passed: bool,
+    ) -> ValidationReplayStatus:
+        """Build aggregate replay status from tinygrad replay and region counts.
+
+        Parameters
+        ----------
+        trace
+            Trace produced by this backend.
+        passed
+            Whether UOp replay validation passed.
+
+        Returns
+        -------
+        ValidationReplayStatus
+            Failed status when replay failed, unverified status when all
+            replayed ops passed but importer-owned regions are present, and
+            passed status otherwise.
+        """
+
+        source: ValidationReplaySource = (
+            "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
+        )
+        payload_load_status = getattr(trace, "payload_load_status", None)
+        replayed_node_count = len(getattr(trace, "tinygrad_uop_captures", ())) if passed else 0
+        unverified_node_count = count_importer_region_annotations(trace) if passed else 0
+        return ValidationReplayStatus.from_replay_counts(
+            backend="tinygrad",
+            source=source,
+            replayed_node_count=replayed_node_count,
+            unverified_node_count=unverified_node_count,
+            failed_node_count=0 if passed else 1,
+            payload_load_status=payload_load_status,
+        )
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
         """Capture then validate a tinygrad forward pass.

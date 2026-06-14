@@ -176,6 +176,9 @@ Multi-host or otherwise unaddressable sharded arrays fail closed during save.
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
 Live JAX traces, including static-label selectively saved traces, still run real replay validation
 using runtime-only replay payloads that are separate from the public saved-activation surface.
+Future importer-owned control-flow regions may report
+`trace.validation_replay_status.state == "unverified"` after all replayable boundary checks pass;
+that status means replay was partial, is available for inspection, and is not a validation pass.
 
 ## tinygrad Preview
 
@@ -247,3 +250,6 @@ forward and derived array payloads and load them back as tinygrad `Tensor` value
 Live tinygrad traces, including static-label selectively saved traces, still run real replay
 validation using runtime-only replay payloads that are separate from the public saved-activation
 surface.
+If a future importer marks a region as outside per-op replay, successful replayable checks fold to
+`trace.validation_replay_status.state == "unverified"` rather than `passed`; boolean coercion of
+that status raises so it cannot be mistaken for a pass or fail.

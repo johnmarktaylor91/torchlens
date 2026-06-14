@@ -43,6 +43,9 @@ save predicates, halt, intervention,
 streaming, fastlog, and true backward capture remain PyTorch-only. Loaded non-torch traces cannot
 replay-validate because portable save strips or lacks runtime replay captures; inspect
 `trace.validation_replay_status` for the explicit unavailable status.
+Importer-owned regions that are outside per-op replay can instead report
+`trace.validation_replay_status.state == "unverified"` after replayable checks pass. Treat that as
+partial validation, not as a pass; `bool(status)` raises for this state.
 
 If you hit a case we haven't listed, please
 [open an issue](https://github.com/johnmarktaylor91/torchlens/issues/new).

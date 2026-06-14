@@ -24,6 +24,13 @@ from torchlens.validation.core import (
     _copy_validation_args,
     MAX_PERTURB_ATTEMPTS,
 )
+from torchlens.validation.status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
+    ValidationReplayStatus,
+)
 from torchlens.utils.tensor_utils import tensor_nanequal
 
 
@@ -35,6 +42,60 @@ from torchlens.utils.tensor_utils import tensor_nanequal
 def test_validation_import_path():
     """from torchlens.validation import validate_saved_outs works."""
     assert callable(validate_from_subpkg)
+
+
+def test_validation_replay_unverified_status_semantics() -> None:
+    """Unverified replay status is available but never bool-coerced."""
+
+    status = ValidationReplayStatus.unverified(
+        backend="jax",
+        source="live",
+        reason="region_not_per_op_replayable",
+        message="synthetic partial replay",
+        replayed_node_count=3,
+        unverified_node_count=2,
+    )
+
+    assert status.state == "unverified"
+    assert status.available is True
+    assert status.replayed_node_count == 3
+    assert status.unverified_node_count == 2
+    assert status.failed_node_count == 0
+    with pytest.raises(TypeError, match="not a boolean"):
+        bool(status)
+
+
+def test_validation_replay_status_aggregate_fold() -> None:
+    """Aggregate replay status keeps failures dominant over unverified regions."""
+
+    mixed_status = ValidationReplayStatus.from_replay_counts(
+        backend="jax",
+        source="live",
+        replayed_node_count=4,
+        unverified_node_count=1,
+    )
+    failed_status = ValidationReplayStatus.from_replay_counts(
+        backend="jax",
+        source="live",
+        replayed_node_count=0,
+        unverified_node_count=3,
+        failed_node_count=2,
+    )
+    passed_status = ValidationReplayStatus.from_replay_counts(
+        backend="jax",
+        source="live",
+        replayed_node_count=4,
+        unverified_node_count=0,
+    )
+
+    assert mixed_status.state == "unverified"
+    assert mixed_status.replayed_node_count == 4
+    assert mixed_status.unverified_node_count == 1
+    assert failed_status.state == "failed"
+    assert failed_status.failed_node_count == 2
+    assert bool(failed_status) is False
+    assert passed_status.state == "passed"
+    assert bool(passed_status) is True
 
 
 @pytest.mark.smoke
@@ -569,6 +630,35 @@ def test_clean_log_ops_all_invariants():
     log = _make_clean_log()
     assert check_metadata_invariants(log) is True
     log.cleanup()
+
+
+def test_region_replay_annotation_on_plain_capture_fails_invariants() -> None:
+    """Plain captures may not launder replay regions without importer provenance."""
+
+    log = _make_clean_log()
+    try:
+        op = next(layer for layer in log.layer_list if not layer.is_input and not layer.is_output)
+        op.annotations[REGION_REPLAY_CLASS_KEY] = REGION_REPLAY_CLASS
+
+        with pytest.raises(MetadataInvariantError, match="region_replay_provenance"):
+            check_metadata_invariants(log)
+    finally:
+        log.cleanup()
+
+
+def test_region_replay_annotation_with_importer_provenance_passes_tripwire() -> None:
+    """Importer-owned synthetic region annotations satisfy the provenance invariant."""
+
+    log = _make_clean_log()
+    try:
+        op = next(layer for layer in log.layer_list if not layer.is_input and not layer.is_output)
+        log.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
+        op.annotations[REGION_REPLAY_CLASS_KEY] = REGION_REPLAY_CLASS
+        op.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
+
+        assert check_metadata_invariants(log) is True
+    finally:
+        log.cleanup()
 
 
 def test_clean_log_ops_as_method():

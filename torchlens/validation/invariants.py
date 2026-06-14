@@ -30,11 +30,13 @@ and raises ``MetadataInvariantError`` on the first failure.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 from ..errors._base import ValidationError
+from .status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
     from ..data_classes.layer import Layer
@@ -131,6 +133,7 @@ def _check_torch_metadata_invariants(trace: "Trace") -> bool:
 
     # --- Phase 1: structural invariants (A-L) ---
     _check_trace_self_consistency(trace)  # A
+    _check_region_replay_provenance(trace)
     _check_backward_graph_invariants(trace)  # T
     _check_special_layer_lists(trace)  # B
     _check_graph_topology(trace)  # C
@@ -172,6 +175,7 @@ def _check_backend_neutral_metadata_invariants(trace: "Trace") -> bool:
 
     _check_backend_identity_invariants(trace)
     _check_trace_self_consistency(trace)
+    _check_region_replay_provenance(trace)
     _check_non_torch_backward_inert(trace)
     _check_backend_neutral_accessor_refs(trace)
     _check_backend_neutral_module_mode_invariants(trace)
@@ -203,6 +207,40 @@ def _check_backend_neutral_module_mode_invariants(trace: "Trace") -> None:
     _check_module_hierarchy(trace)  # I
     _check_param_xrefs(trace)  # J
     _check_module_containment_logic(trace)  # Q
+
+
+def _check_region_replay_provenance(trace: "Trace") -> None:
+    """Check region replay annotations have importer-owned provenance.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose operation annotations should be checked.
+
+    Raises
+    ------
+    MetadataInvariantError
+        If an op is marked as a replay region without importer provenance on
+        both the trace and the op.
+    """
+
+    name = "region_replay_provenance"
+    trace_annotations = getattr(trace, "annotations", None)
+    if trace_annotations is not None and not isinstance(trace_annotations, Mapping):
+        trace_annotations = None
+    for layer in getattr(trace, "layer_list", ()):
+        op_annotations = getattr(layer, "annotations", None)
+        if op_annotations is not None and not isinstance(op_annotations, Mapping):
+            op_annotations = None
+        if not is_region_replay_annotation(op_annotations):
+            continue
+        if has_importer_region_provenance(trace_annotations, op_annotations):
+            continue
+        label = getattr(layer, "layer_label", getattr(layer, "label", type(layer).__name__))
+        raise MetadataInvariantError(
+            name,
+            f"Region replay annotation on '{label}' requires importer-owned provenance",
+        )
 
 
 def _check_function_root_module_invariants(trace: "Trace") -> None:

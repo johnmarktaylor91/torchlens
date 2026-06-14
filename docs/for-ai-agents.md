@@ -179,3 +179,5 @@ assert graph is not None
   materialize array payloads, but loaded traces cannot replay-validate stripped runtime captures;
   check `trace.validation_replay_status` (`ValidationReplayStatus`) and
   `trace.payload_load_status`.
+  A live importer-owned region can make replay status `unverified`: the trace is available and
+  replayable checks passed, but per-op replay is partial and `bool(status)` raises.
