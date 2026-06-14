@@ -45,6 +45,7 @@ from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_module_logs
 from ...postprocess.finalization import _build_root_module_log
 from ...quantities import Duration
+from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from . import capabilities
 from .model_prep import (
     MLXModuleTree,
@@ -833,10 +834,13 @@ class MLXBackend:
     ) -> Trace:
         """Capture an MLX forward pass into a smoke-compatible Trace."""
 
-        if save_grads:
-            raise BackendUnsupportedError("backward capture is not supported on the mlx backend")
-        if output_device != "same":
-            raise ValueError("MLX backend only supports output_device='same' in technical preview.")
+        reject_unsupported_trace_options(
+            {
+                "save_grads": save_grads,
+                "output_device": output_device,
+            },
+            MLX_PREVIEW_TRACE_OPTION_POLICY,
+        )
         module_tree = discover_mlx_module_tree(model)
         use_object_module = _resolve_mlx_module_identity_mode(module_identity_mode, module_tree)
         trace = Trace(

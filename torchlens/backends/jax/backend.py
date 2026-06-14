@@ -62,6 +62,10 @@ from ...validation.status import (
     ValidationReplayStatus,
     count_importer_region_annotations,
 )
+from .._options import JAX_EXTRA_KWARG_POLICY, JAX_PREVIEW_TRACE_OPTION_POLICY
+from .._options import default_if_missing as _default_if_missing
+from .._options import is_missing as _is_missing
+from .._options import reject_extra_trace_kwargs, reject_unsupported_trace_options
 from .._selective_save import apply_static_label_save_policy
 from .._selective_save import pop_static_label_save_predicate
 from .jaxpr import (
@@ -2444,51 +2448,12 @@ class JAXBackend:
             Returns when all options are supported.
         """
 
-        if options["input_kwargs"]:
-            raise BackendUnsupportedError(
-                "JAX backend preview supports positional args only. Pass keyword values as "
-                "explicit params/input leaves or declared static positional args."
-            )
-        if options["layers_to_save"] not in ("all", None):
-            raise BackendUnsupportedError(
-                "JAX backend preview is full-save only; save shaping is unsupported."
-            )
         if options["save_rng_states"]:
             raise BackendUnsupportedError(
                 "JAX backend preview requires explicit PRNG keys as params/input leaves; "
                 "save_rng_states and torch-style RNG replay are unsupported."
             )
-        rejected_true = (
-            "activation_transform",
-            "detach_saved_activations",
-            "save_grads",
-            "save_arg_values",
-            "save_code_context",
-            "backward_ready",
-            "module_filter",
-            "transform",
-            "layer_visualizers",
-            "save_visualizations",
-        )
-        for name in rejected_true:
-            if options[name]:
-                guidance = " Use tl.backends.jax.GradOptions for derived gradients."
-                if name not in {"save_grads", "backward_ready"}:
-                    guidance = " Use full-save JAX trace capture or the PyTorch backend."
-                raise BackendUnsupportedError(
-                    f"JAX backend preview does not support {name}; full-save forward capture "
-                    f"only.{guidance}"
-                )
-        if options["output_device"] != "same":
-            raise BackendUnsupportedError("JAX backend preview only supports output_device='same'.")
-        if not options["save_raw_activations"]:
-            raise BackendUnsupportedError(
-                "JAX backend preview is full-save only; save_raw_activations=False is unsupported."
-            )
-        if options["lookback"] != 0 or options["lookback_payload_policy"] != "metadata_only":
-            raise BackendUnsupportedError(
-                "JAX backend preview is full-save only; save-window shaping is unsupported."
-            )
+        reject_unsupported_trace_options(options, JAX_PREVIEW_TRACE_OPTION_POLICY)
 
     def _reject_extra_kwargs(self, kwargs: Mapping[str, Any]) -> None:
         """Reject unrecognized kwargs reaching the backend.
@@ -2504,73 +2469,7 @@ class JAXBackend:
             Returns when no extras are present.
         """
 
-        rejected = {
-            key: value
-            for key, value in kwargs.items()
-            if value is not None and not _is_missing(value)
-        }
-        if rejected:
-            names = ", ".join(sorted(rejected))
-            save_shaping = {
-                "halt",
-                "intervene",
-                "recipes",
-                "save",
-                "stop_after",
-                "storage",
-                "streaming",
-            }
-            if save_shaping & set(rejected):
-                raise BackendUnsupportedError(
-                    "JAX backend preview does not support runtime-mutation or stop-early "
-                    f"options: {names}. Static-label save= selectors are supported as "
-                    "post-finalization payload filters, but trace(intervene=...) and "
-                    "trace(halt=...) need predicate-time concrete values and mutation/partial "
-                    "replay semantics that jaxpr tracing does not expose through TorchLens' "
-                    "current public labels. Use an unfiltered tl.trace(..., backend='jax') "
-                    "call, static-label save= selectors, or the PyTorch backend for "
-                    "intervention, halt, streaming, and value-dependent predicates."
-                )
-            raise BackendUnsupportedError(
-                f"JAX backend preview does not support: {names}. "
-                "Use full-save JAX trace capture or the PyTorch backend for this surface."
-            )
-
-
-def _is_missing(value: object) -> bool:
-    """Return whether ``value`` is the public missing sentinel.
-
-    Parameters
-    ----------
-    value
-        Candidate value.
-
-    Returns
-    -------
-    bool
-        True when ``value`` is ``MISSING``.
-    """
-
-    return value is MISSING
-
-
-def _default_if_missing(value: Any, default: Any) -> Any:
-    """Return ``default`` when ``value`` is the public missing sentinel.
-
-    Parameters
-    ----------
-    value
-        Candidate value.
-    default
-        Default replacement.
-
-    Returns
-    -------
-    Any
-        Normalized value.
-    """
-
-    return default if _is_missing(value) else value
+        reject_extra_trace_kwargs(dict(kwargs), JAX_EXTRA_KWARG_POLICY)
 
 
 def _normalize_static_argnums(value: object, num_args: int) -> tuple[int, ...]:

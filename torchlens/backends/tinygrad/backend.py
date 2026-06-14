@@ -45,6 +45,10 @@ from ...validation.status import (
     ValidationReplayStatus,
     count_importer_region_annotations,
 )
+from .._options import TINYGRAD_EXTRA_KWARG_POLICY, TINYGRAD_PREVIEW_TRACE_OPTION_POLICY
+from .._options import default_if_missing as _default_if_missing
+from .._options import is_missing as _is_missing
+from .._options import reject_extra_trace_kwargs, reject_unsupported_trace_options
 from .._selective_save import apply_static_label_save_policy
 from .._selective_save import pop_static_label_save_predicate
 
@@ -1803,44 +1807,7 @@ class TinygradBackend:
             Returns when all options are supported.
         """
 
-        if options["input_kwargs"]:
-            raise BackendUnsupportedError("tinygrad backend preview supports positional args only.")
-        if options["layers_to_save"] not in ("all", None):
-            raise BackendUnsupportedError(
-                "tinygrad backend preview is full-save only; save shaping is unsupported."
-            )
-        rejected_true = (
-            "activation_transform",
-            "detach_saved_activations",
-            "save_grads",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
-            "backward_ready",
-            "module_filter",
-            "transform",
-            "layer_visualizers",
-            "save_visualizations",
-        )
-        for name in rejected_true:
-            if options[name]:
-                raise BackendUnsupportedError(
-                    f"tinygrad backend preview does not support {name}; "
-                    "full-save forward capture only."
-                )
-        if options["output_device"] != "same":
-            raise BackendUnsupportedError(
-                "tinygrad backend preview only supports output_device='same'."
-            )
-        if not options["save_raw_activations"]:
-            raise BackendUnsupportedError(
-                "tinygrad backend preview is full-save only; "
-                "save_raw_activations=False is unsupported."
-            )
-        if options["lookback"] != 0 or options["lookback_payload_policy"] != "metadata_only":
-            raise BackendUnsupportedError(
-                "tinygrad backend preview is full-save only; save-window shaping is unsupported."
-            )
+        reject_unsupported_trace_options(options, TINYGRAD_PREVIEW_TRACE_OPTION_POLICY)
 
     def _reject_extra_kwargs(self, kwargs: Mapping[str, Any]) -> None:
         """Reject unrecognized kwargs reaching the backend.
@@ -1856,23 +1823,7 @@ class TinygradBackend:
             Returns when no extras are present.
         """
 
-        rejected = {
-            key: value
-            for key, value in kwargs.items()
-            if value is not None and not _is_missing(value)
-        }
-        if rejected:
-            names = ", ".join(sorted(rejected))
-            raise BackendUnsupportedError(
-                "tinygrad backend preview does not support runtime-mutation or stop-early "
-                f"options: {names}. Static-label save= selectors are supported as "
-                "post-finalization payload filters, but trace(intervene=...) and "
-                "trace(halt=...) need predicate-time concrete values and a way to replace or "
-                "truncate lazy UOp descendants before realize(), which tinygrad does not expose "
-                "through a stable TorchLens surface. Use an unfiltered tl.trace(..., "
-                "backend='tinygrad') call, static-label save= selectors, or the PyTorch backend "
-                "for intervention, halt, streaming, and value-dependent predicates."
-            )
+        reject_extra_trace_kwargs(dict(kwargs), TINYGRAD_EXTRA_KWARG_POLICY)
 
 
 def discover_tinygrad_module_tree(model: Any) -> TinygradModuleTree | None:
@@ -2732,42 +2683,6 @@ class _reject_mid_capture_execution:
 
         tensor_module.run_linear = self.original_tensor_run_linear
         jit_module.run_linear = self.original_jit_run_linear
-
-
-def _is_missing(value: object) -> bool:
-    """Return whether ``value`` is the public missing sentinel.
-
-    Parameters
-    ----------
-    value
-        Candidate value.
-
-    Returns
-    -------
-    bool
-        True when ``value`` is ``MISSING``.
-    """
-
-    return value is MISSING
-
-
-def _default_if_missing(value: Any, default: Any) -> Any:
-    """Return ``default`` when ``value`` is the public missing sentinel.
-
-    Parameters
-    ----------
-    value
-        Candidate value.
-    default
-        Replacement for ``MISSING``.
-
-    Returns
-    -------
-    Any
-        ``default`` or ``value``.
-    """
-
-    return default if _is_missing(value) else value
 
 
 def _tree_leaves_with_paths(value: object, prefix: str = "") -> list[tuple[str, Any]]:
