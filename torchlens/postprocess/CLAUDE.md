@@ -15,7 +15,7 @@ eviction. Step order is load-bearing.
 | `ast_branches.py` | Step 5 support | AST indexing and branch-scope records for conditionals |
 | `control_flow.py` | 5-6 | Conditional attribution and buffer dedup |
 | `loop_detection.py` | 7 | Recurrent/loop grouping and shared-param grouping |
-| `labeling.py` | 8-11 | Final labels, renaming, removal, lookup keys, field ordering |
+| `labeling.py` | 8-11 | Final labels, renaming, lookup keys, retained layer lists, field ordering |
 | `finalization.py` | 12-19 | Undecorate, params, layers, modules, hash, streaming finalization/eviction |
 | `incremental.py` | fastlog enrichment | Adds module paths and param addresses to sparse recordings |
 
@@ -34,7 +34,7 @@ eviction. Step order is load-bearing.
 | 8 | `_map_raw_labels_to_final_labels` | Build raw-to-final label map |
 | 9 | `_log_final_info_for_layers` | Write final layer/module fields |
 | 10 | `_rename_model_history_layer_names` and `_trim_and_reorder_model_history_fields` | Rename global refs |
-| 11 | `_remove_unwanted_entries_and_log_remaining` | Apply save policy and lookup keys |
+| 11 | `_build_lookup_keys_and_finalize_retained_layers` | Build lookup keys and finalize retained layer lists |
 | 12 | `_undecorate_all_saved_tensors` | Strip TorchLens attrs from saved tensors |
 | 13 | `torch.cuda.empty_cache` | Optional CUDA cache clear |
 | 14 | `_log_time_elapsed` | Capture timing |

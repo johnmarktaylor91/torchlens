@@ -5,7 +5,7 @@
 - Module suffixes must already be present on `equivalence_class` before Step 7.
 - Step 7 must precede Step 8 because label mapping uses recurrent groups.
 - Step 9 must precede Step 11 because lookup keys depend on finalized module hierarchy info.
-- Step 10 must rename global refs before unwanted-entry removal.
+- Step 10 must rename global refs before lookup-key finalization.
 - Step 15.5 must precede Step 16 because `Module.layers` points to `Layer` keys.
 - Step 16.5 computes `graph_shape_hash` before `_set_tracing_finished` changes access behavior.
 - Steps 18-19 are only for streamed out bundles.
@@ -23,8 +23,8 @@ Capture-time op creation appends module-address information to `equivalence_clas
 so identical ops in different modules do not get loop-grouped together. Loop
 detection still rebuilds assignments after expansion to clear stale group references.
 
-## Step 11 Save Policy
-`_remove_unwanted_entries_and_log_remaining()` applies lookup-key construction while
+## Step 11 Lookup-Key Finalization
+`_build_lookup_keys_and_finalize_retained_layers()` applies lookup-key construction while
 preserving dependencies needed for replay/intervention when those modes request them.
 
 ## Steps 18-19 Streaming
@@ -34,7 +34,7 @@ training outs.
 
 ## Fast-Mode Postprocess
 `postprocess_fast()` only copies output outs from parents, trims/renames as needed,
-removes unwanted entries, undecorates tensors, builds `Layer` aggregates, and sets
+refreshes saved-output summaries, undecorates tensors, builds `Layer` aggregates, and sets
 pass-finished. It intentionally skips graph traversal, conditionals, loop detection, label
 mapping, and module building.
 

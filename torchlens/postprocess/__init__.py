@@ -10,7 +10,7 @@ split into thematic submodules:
 - loop_detection (Step 7): Identify repeated operations (loops/recurrence), assign
   same-layer groupings via BFS isomorphic subgraph expansion.
 - labeling (Steps 8-11): Generate final human-readable labels, rename all internal
-  references, trim/reorder fields, build lookup keys.
+  references, trim/reorder fields, build lookup keys, and finalize retained layer lists.
 - finalization (Steps 12-19): Undecorate saved tensors, log timing, finalize
   ParamLogs, build Layer/Module aggregates, mark pass as finished, then
   finalize any streamed bundle and optionally evict in-memory outs.
@@ -22,7 +22,7 @@ Step ordering invariants:
 - Step 8 MUST precede Step 9 (final info logging uses finalized labels).
 - Step 9 MUST precede Step 11 (lookup key generation needs module hierarchy data
   populated in Step 9).
-- Step 10 (rename) MUST precede Step 11 (cleanup uses renamed labels).
+- Step 10 (rename) MUST precede Step 11 (lookup keys use renamed labels).
 - Step 15.5 (_build_layer_logs) MUST precede Step 16 (_build_module_logs) because
   Module.layers references Layer keys.
 
@@ -64,7 +64,7 @@ from .graph_traversal import (
 from .labeling import (
     _log_final_info_for_layers,
     _map_raw_labels_to_final_labels,
-    _remove_unwanted_entries_and_log_remaining,
+    _build_lookup_keys_and_finalize_retained_layers,
     _rename_model_history_layer_names,
     _trim_and_reorder_model_history_fields,
 )
@@ -294,9 +294,9 @@ def postprocess(
         _rename_model_history_layer_names(self)
         _trim_and_reorder_model_history_fields(self)
 
-    # Step 11: Remove unsaved layers, build lookup key mappings
+    # Step 11: Build lookup keys and finalize retained layer lists
     with _vtimed(self, "  Step 11: Build lookup keys"):
-        _remove_unwanted_entries_and_log_remaining(self)
+        _build_lookup_keys_and_finalize_retained_layers(self)
         _warn_unattributed_tensor_args(self)
 
     # Step 12: Undecorate all saved tensors and remove saved grad_fns.
@@ -367,7 +367,7 @@ def postprocess_fast(self: "Trace") -> None:
     and labels. It only needs to:
     1. Copy out data from each output's parent tensor into the output node.
     2. Trim and reorder fields.
-    3. Remove unsaved layers and build lookup keys.
+    3. Build lookup keys and refresh saved-output summaries.
     4. Undecorate saved tensors.
     5. Build Layer aggregates.
     6. Mark the pass as finished.

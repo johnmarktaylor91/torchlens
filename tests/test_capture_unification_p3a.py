@@ -99,6 +99,32 @@ def test_trace_save_func_selector_keeps_only_matching_payloads() -> None:
         _ = unsaved.out
 
 
+def test_selective_save_keeps_unsaved_non_orphan_op_metadata() -> None:
+    """Selective save keeps unsaved non-orphan ops addressable with metadata."""
+
+    model = PredicateToy()
+    x = torch.randn(2, 4)
+    log = tl.trace(model, x, save=tl.func("relu"), random_seed=13)
+
+    unsaved = next(
+        op for op in log.layer_list if op.layer_type == "add" and not op.has_saved_activation
+    )
+    assert unsaved in log.layer_list
+    assert log.layer_dict_main_keys[unsaved.label] is unsaved
+    assert log.layer_dict_all_keys[unsaved.label] is unsaved
+    assert log[unsaved.label] is unsaved
+    assert unsaved.label in log.op_labels
+    assert unsaved.layer_label in log.layer_labels
+
+    assert unsaved.label
+    assert unsaved.parents
+    assert unsaved.children
+    assert unsaved.shape == (2, 4)
+    assert unsaved.dtype == torch.float32
+    with pytest.raises(ValueError, match="not saved"):
+        _ = unsaved.out
+
+
 def test_selective_save_oracle_matches_full_trace_for_recurrent_passes() -> None:
     """Selective-save payloads match full trace payloads, including recurrent ops."""
 

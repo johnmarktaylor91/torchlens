@@ -16,8 +16,8 @@ Step 10 (_rename_model_history_layer_names + _trim_and_reorder_model_history_fie
     Renames all raw labels (e.g., "cos_3_raw") to final labels in both Trace-level
     fields and Op fields, then reorders Trace fields into canonical order.
 
-Step 11 (_remove_unwanted_entries_and_log_remaining): Builds lookup key mappings (integer index, label,
-    module path, buffer/input/output address), and logs remaining layer metadata.
+Step 11 (_build_lookup_keys_and_finalize_retained_layers): Builds lookup key mappings (integer
+    index, label, module path, buffer/input/output address), and logs retained layer metadata.
 """
 
 from collections import defaultdict
@@ -113,7 +113,7 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
 def _log_final_info_for_layers(self: "Trace") -> None:
     """Step 9: Log final metadata for all layers and build module hierarchy.
 
-    Iterates through all layers (before unsaved ones are discarded in Step 11)
+    Iterates through all layers before Step 11 finalizes retained layer containers
     and computes:
     - Operation numbers (sequential, excluding input/buffer/output).
     - Replaces raw labels with final labels in each Op's fields.
@@ -565,7 +565,7 @@ def _log_module_hierarchy_info_for_layer(
             mbd["module_ops"].append(module_pass_nice_label)
 
 
-def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
+def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
     """Step 11: Build lookup keys and finalize retained layer lists.
 
     Parameters
@@ -621,55 +621,6 @@ def _remove_unwanted_entries_and_log_remaining(self: "Trace") -> None:
         self._layers_saved = True
     else:
         self._layers_saved = False
-
-
-def _labels_in_replay_ready_call_groups_to_retain(self: "Trace") -> set[str]:
-    """Return labels in same-call groups that must remain replay-addressable.
-
-    Args:
-        self: Trace being postprocessed.
-
-    Returns:
-        Labels to keep atomically even when their out was not saved.
-    """
-
-    if not getattr(self, "intervention_ready", False):
-        return set()
-
-    call_groups: dict[int, list[Op]] = defaultdict(list)
-    for layer_entry in self:
-        if getattr(layer_entry, "is_orphan", False):
-            continue
-        func_call_id = getattr(layer_entry, "func_call_id", None)
-        if func_call_id is not None:
-            call_groups[func_call_id].append(layer_entry)
-
-    labels_to_keep = {
-        layer_entry.layer_label
-        for layer_entry in self
-        if layer_entry.has_saved_activation and not getattr(layer_entry, "is_orphan", False)
-    }
-    label_to_entry = {layer_entry.layer_label: layer_entry for layer_entry in self}
-    changed = True
-    while changed:
-        changed = False
-        for layer_label in list(labels_to_keep):
-            layer_entry = label_to_entry.get(layer_label)
-            if layer_entry is None:
-                continue
-            dependency_labels = _replay_dependency_labels(layer_entry)
-            for dependency_label in dependency_labels:
-                if dependency_label in label_to_entry and dependency_label not in labels_to_keep:
-                    labels_to_keep.add(dependency_label)
-                    changed = True
-            func_call_id = getattr(layer_entry, "func_call_id", None)
-            if func_call_id is None:
-                continue
-            for sibling in call_groups[func_call_id]:
-                if sibling.layer_label not in labels_to_keep:
-                    labels_to_keep.add(sibling.layer_label)
-                    changed = True
-    return labels_to_keep
 
 
 def _replay_dependency_labels(layer_entry: Op) -> set[str]:
@@ -818,19 +769,6 @@ def _module_call_label(module_call: Any) -> str:
     return f"{module_name}:{module_pass}"
 
 
-def _trim_and_reorder_layer_entry_fields(layer_entry: Op) -> None:
-    """Keep the historical field-reorder hook as an intentional no-op.
-
-    Display and serialization order are derived from ``LAYER_PASS_LOG_FIELD_ORDER``
-    at export time, so mutating ``Op.__dict__`` insertion order here is unnecessary
-    and incompatible with future slot-backed ``Op`` instances.
-
-    Args:
-        layer_entry: Op whose fields were historically reordered.
-    """
-    del layer_entry
-
-
 def _rename_model_history_layer_names(self: "Trace") -> None:
     """Step 10: Rename raw labels to final labels in all Trace-level fields.
 
@@ -957,9 +895,8 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
 def _trim_and_reorder_model_history_fields(self: "Trace") -> None:
     """Reorder Trace fields into canonical display order.
 
-    Like ``_trim_and_reorder_layer_entry_fields``, this PRESERVES all fields.
-    Public fields listed in MODEL_LOG_FIELD_ORDER come first, followed by any
-    private fields (starting with ``_``) not already in the order list.
+    This PRESERVES all fields. Public fields listed in MODEL_LOG_FIELD_ORDER come first,
+    followed by any private fields (starting with ``_``) not already in the order list.
     """
     new_dir_dict = {}
     for field in MODEL_LOG_FIELD_ORDER:
