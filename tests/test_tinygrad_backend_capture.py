@@ -541,11 +541,14 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"save": tl.where(lambda op: op.out is not None)}, "B9"),
+        ({"save": tl.where(lambda op: op.out is not None)}, "concrete activation values"),
         ({"layers_to_save": ["relu"]}, "full-save only.*save shaping"),
         ({"lookback": 1}, "full-save only.*save-window"),
-        ({"intervene": tl.when(tl.func("relu"), tl.zero_ablate())}, "full-save only"),
-        ({"halt": tl.func("relu")}, "full-save only"),
+        (
+            {"intervene": tl.when(tl.func("relu"), tl.zero_ablate())},
+            "lazy UOp descendants.*intervention",
+        ),
+        ({"halt": tl.func("relu")}, "lazy UOp descendants.*halt"),
         ({"save_grads": True}, "save_grads.*full-save forward capture"),
     ),
 )

@@ -1998,10 +1998,14 @@ class JAXBackend:
             }
             if save_shaping & set(rejected):
                 raise BackendUnsupportedError(
-                    "JAX backend preview is full-save only and does not support "
-                    f"save-shaping or runtime-mutation options: {names}. "
-                    "Use an unfiltered tl.trace(..., backend='jax') call, or the PyTorch "
-                    "backend for predicate capture, intervention, halt, and streaming."
+                    "JAX backend preview does not support runtime-mutation or stop-early "
+                    f"options: {names}. Static-label save= selectors are supported as "
+                    "post-finalization payload filters, but trace(intervene=...) and "
+                    "trace(halt=...) need predicate-time concrete values and mutation/partial "
+                    "replay semantics that jaxpr tracing does not expose through TorchLens' "
+                    "current public labels. Use an unfiltered tl.trace(..., backend='jax') "
+                    "call, static-label save= selectors, or the PyTorch backend for "
+                    "intervention, halt, streaming, and value-dependent predicates."
                 )
             raise BackendUnsupportedError(
                 f"JAX backend preview does not support: {names}. "

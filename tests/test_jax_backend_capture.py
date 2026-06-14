@@ -985,10 +985,10 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
-def test_jax_value_dependent_save_predicate_rejected_with_b9_pointer() -> None:
-    """JAX should reject value-dependent save predicates until B9."""
+def test_jax_value_dependent_save_predicate_rejected_with_traced_value_blocker() -> None:
+    """JAX should reject value-dependent save predicates with the traced-value blocker."""
 
-    with pytest.raises(BackendUnsupportedError, match="B9"):
+    with pytest.raises(BackendUnsupportedError, match="concrete activation values"):
         _trace_jax(
             _mlp,
             (_params(), jnp.ones((2, 3))),

@@ -34,6 +34,23 @@ Declared future options:
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.
 
+## Predicate Control and Mutation
+
+PyTorch eager capture can evaluate a predicate while a concrete tensor value is flowing through
+the wrapped operation, then mutate that value or halt capture at the matching frontier. JAX and
+tinygrad do not expose the same point in the current TorchLens preview backends. JAX first builds a
+jaxpr over tracers and TorchLens labels are finalized after interpretation; a low-level primitive
+interpreter can replace a primitive by position, but that is not the public static-label
+`intervene=`/`halt=` contract. tinygrad builds a lazy UOp graph and concrete values appear only
+after `Tensor.realize()`/`Tensor.item()`, with no stable public API for replacing one internal UOp
+and rebuilding all descendants.
+
+For that reason, non-torch backends support static-label `save=` only. Value-dependent `save=`,
+`intervene=`, and `halt=` are rejected with typed backend errors instead of false partial traces or
+validation passes. Live JAX/tinygrad selective-save traces still run real replay validation through
+runtime-only hidden payloads; loaded traces report replay unavailable when those runtime captures
+were stripped.
+
 JAX preview traces accept raw callables shaped like `fn(params, *inputs)`. Parameter records are
 derived from the first pytree argument, so `Trace.param_source` is `"pytree-derived"` when tensor
 leaves are present and `"none"` otherwise. Raw callables use `module_identity_mode="function_root"`
@@ -86,7 +103,7 @@ trace.derived_grads["params.w"]
 The JAX backend rejects transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`), root
 capture from inside those transforms, unsupported nested-jaxpr primitives, callback effects,
 closed-over array constants for raw function-root callables, value-dependent `save=` predicates,
-`followed_by`/`preceded_by` window selectors, intervention, halt, streaming, `save_grads=`, and
+`followed_by`/`preceded_by` window selectors, `intervene=`, `halt=`, streaming, `save_grads=`, and
 `tl.record(backend="jax")`. Static-label `save=` selectors such as `tl.func(...)`,
 `tl.label(...)`, `tl.contains(...)`, and module selectors are applied after full graph
 finalization: unsaved ops keep metadata but drop public activation payloads. `lax.scan` is
@@ -157,7 +174,7 @@ attached, and `op.grads` / `trace.saved_grad_ops` remain true-backward-only.
 
 The tinygrad backend rejects mid-capture `Tensor.realize()`, `Tensor.assign()`,
 `Tensor.replace()`, setitem input mutation, TinyJit execution, value-dependent `save=`
-predicates, `followed_by`/`preceded_by` window selectors, intervention, halt, streaming,
+predicates, `followed_by`/`preceded_by` window selectors, `intervene=`, `halt=`, streaming,
 `save_grads=`, `backward_ready=True`, and `tl.record(backend="tinygrad")`. Static-label `save=`
 selectors such as `tl.func(...)`, `tl.label(...)`, `tl.contains(...)`, and module selectors are
 applied after full graph finalization: unsaved ops keep metadata but drop public activation

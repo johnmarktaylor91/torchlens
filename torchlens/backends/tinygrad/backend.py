@@ -1819,8 +1819,14 @@ class TinygradBackend:
         if rejected:
             names = ", ".join(sorted(rejected))
             raise BackendUnsupportedError(
-                "tinygrad backend preview is full-save only and does not support "
-                f"save-shaping or runtime-mutation options: {names}."
+                "tinygrad backend preview does not support runtime-mutation or stop-early "
+                f"options: {names}. Static-label save= selectors are supported as "
+                "post-finalization payload filters, but trace(intervene=...) and "
+                "trace(halt=...) need predicate-time concrete values and a way to replace or "
+                "truncate lazy UOp descendants before realize(), which tinygrad does not expose "
+                "through a stable TorchLens surface. Use an unfiltered tl.trace(..., "
+                "backend='tinygrad') call, static-label save= selectors, or the PyTorch backend "
+                "for intervention, halt, streaming, and value-dependent predicates."
             )
 
 

@@ -115,7 +115,10 @@ def pop_static_label_save_predicate(
         raise BackendUnsupportedError(
             f"{backend_name} backend supports trace(save=...) only for static-label selectors "
             "(for example tl.func, tl.label, tl.module, tl.in_module, or tl.contains). "
-            "Value-dependent predicates and runtime predicates are tracked for B9."
+            "Value-dependent predicates need concrete activation values at predicate time, "
+            "which traced/lazy non-torch captures do not expose without changing execution. "
+            "Use static-label save= selectors or the PyTorch backend for value-dependent "
+            "predicates, intervene=, and halt=."
         )
     _reject_non_static_save_predicate(save_value, backend_name=backend_name)
     return save_value
@@ -225,15 +228,21 @@ def _reject_non_static_save_predicate(
     if not isinstance(predicate, BaseSelector):
         raise BackendUnsupportedError(
             f"{backend_name} backend supports trace(save=...) only for static-label selectors. "
-            "Value-dependent predicates and runtime predicates are tracked for B9."
+            "Value-dependent predicates need concrete activation values at predicate time, "
+            "which traced/lazy non-torch captures do not expose without changing execution. "
+            "Use static-label save= selectors or the PyTorch backend for value-dependent "
+            "predicates, intervene=, and halt=."
         )
     unsupported = _first_non_static_selector(predicate)
     if unsupported is None:
         return
     raise BackendUnsupportedError(
         f"{backend_name} backend does not support value-dependent or runtime-mutation "
-        f"trace(save=...) predicates yet ({unsupported!r}). Static-label selectors are "
-        "supported; value-dependent predicates are tracked for B9."
+        f"trace(save=...) predicates ({unsupported!r}). Static-label save= selectors are "
+        "supported, but value-dependent predicates need concrete activation values at "
+        "predicate time, which traced/lazy non-torch captures do not expose without changing "
+        "execution. Use the PyTorch backend for value-dependent predicates, intervene=, and "
+        "halt=."
     )
 
 

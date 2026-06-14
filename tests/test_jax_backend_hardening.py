@@ -486,8 +486,11 @@ def test_jax_rejects_callback_effects() -> None:
     (
         ({"layers_to_save": ["tanh"]}, "full-save only"),
         ({"lookback": 1}, "full-save only"),
-        ({"intervene": tl.when(tl.func("tanh"), tl.zero_ablate())}, "full-save only"),
-        ({"halt": tl.func("tanh")}, "full-save only"),
+        (
+            {"intervene": tl.when(tl.func("tanh"), tl.zero_ablate())},
+            "intervene.*predicate-time concrete values",
+        ),
+        ({"halt": tl.func("tanh")}, "halt.*predicate-time concrete values"),
         ({"save_grads": True}, "GradOptions"),
     ),
 )

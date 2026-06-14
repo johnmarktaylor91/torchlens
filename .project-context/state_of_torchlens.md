@@ -166,7 +166,10 @@ metadata, but public `out`/`out_ref` payloads are dropped and saved counters/blo
 Value-dependent `save=` predicates, `followed_by`/`preceded_by` window selectors, intervention,
 halt, streaming, `save_grads=`, `backward_ready=True`, `tl.record(backend="tinygrad")`,
 mid-capture realize/assign/replace/setitem mutation, and TinyJit execution raise typed backend
-errors with workarounds.
+errors with workarounds. The B9 control/mutation spike kept JAX/tinygrad `intervene=` and
+`halt=` rejected: JAX can demonstrate primitive-position replacement inside a jaxpr interpreter,
+but TorchLens public labels and mutation/replay status are not available at that boundary; tinygrad
+has only a lazy UOp graph until realize and no stable descendant-rewrite API.
 
 Loaded non-torch traces are payload-materialized but not replay-validation-capable. Portable save
 strips runtime-only replay captures (`jax_equation_captures` and `tinygrad_uop_captures`), so
