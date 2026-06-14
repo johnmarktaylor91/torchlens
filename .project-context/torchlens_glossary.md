@@ -58,6 +58,7 @@ Deferred items are listed at the end instead of promoted as final API.
 - `jax_control_flow`: Public `trace()` option for JAX control-flow handling; `lax.scan`/`cond`/`while` can be unrolled for raw JAX function-root captures.
 - `jax_max_control_flow_unroll`: Public `trace()` option for the JAX control-flow unroll safety limit.
 - `payload_policy`: Backend payload codec/materialization policy. JAX and tinygrad portable writes use `"array_payloads"` for forward and derived array payloads, which is narrower than torch `"full"` payload portability.
+- `jax_sharding_*` codec metadata: Audit-only `.tlspec` manifest fields for fully addressable JAX array payloads. They describe saved sharding provenance with JSON primitives such as sharding kind, mesh axis names, partition spec strings, and device counts; load materializes values on the default/current device and does not reconstruct the saved topology.
 - `save_preview`: Declared public `trace()` option for future non-torch save preview flags; the `save=` kwarg itself supports static-label selectors on JAX/tinygrad.
 - `param_source`: Parameter-record source for the trace: `"native-module"`, `"pytree-derived"`, or `"none"`.
 - `FIELD_DEFAULTS`: Class-level defaults applied at initialization and cleanup.

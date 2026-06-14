@@ -133,6 +133,9 @@ intervention, sparse fastlog, and true backward graphs.
 
 JAX `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
 forward and derived array payloads and load them back as `jax.Array` values.
+Fully addressable single-host sharded arrays are saved as assembled host values; manifest
+`codec_metadata` may include `jax_sharding_*` audit fields such as sharding kind, mesh axis
+names, partition spec strings, and device counts, but load does not reconstruct that topology.
 `trace.payload_load_status` records load-time materialization state. Runtime-only
 `jax_equation_captures` are stripped from portable artifacts, so loaded JAX traces expose
 `ValidationReplayStatus` at `trace.validation_replay_status.state == "unavailable"` with reason

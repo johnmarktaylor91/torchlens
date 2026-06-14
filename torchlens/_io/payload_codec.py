@@ -153,7 +153,11 @@ class JaxPayloadCodec:
 
         if not self.can_encode(value):
             raise TypeError(f"jax codec cannot encode {type(value).__name__}.")
+        unaddressable_reason = _jax_unaddressable_reason(value)
+        if unaddressable_reason is not None:
+            raise TypeError(unaddressable_reason)
         logical_dtype = str(getattr(value, "dtype", "unknown"))
+        sharding_metadata = _jax_sharding_metadata(value)
         if _is_jax_typed_prng_dtype(logical_dtype):
             key_data = jax.device_get(jax.random.key_data(value))
             array = np.asarray(key_data, dtype=np.uint32)
@@ -168,11 +172,11 @@ class JaxPayloadCodec:
                     {
                         "logical_shape": [int(dim) for dim in getattr(value, "shape", ())],
                         "weak_type": getattr(value, "weak_type", None),
-                        "sharding": _maybe_string(getattr(value, "sharding", None)),
                         "committed": getattr(value, "committed", None),
                         "jax_prng_key_typed": True,
                         "jax_prng_impl": impl,
                         "jax_prng_dtag": dtag,
+                        **sharding_metadata,
                     }
                 ),
             )
@@ -187,8 +191,8 @@ class JaxPayloadCodec:
                 {
                     "logical_shape": [int(dim) for dim in array.shape],
                     "weak_type": getattr(value, "weak_type", None),
-                    "sharding": _maybe_string(getattr(value, "sharding", None)),
                     "committed": getattr(value, "committed", None),
+                    **sharding_metadata,
                 }
             ),
         )
@@ -251,10 +255,9 @@ class JaxPayloadCodec:
 
         if not self.can_encode(value):
             return f"jax codec cannot encode {type(value).__name__}"
-        if getattr(value, "is_fully_addressable", True) is False:
-            return "unaddressable JAX arrays are not supported by the payload codec"
-        if _jax_sharding_device_count(value) > 1:
-            return "sharded JAX arrays are not supported by the payload codec"
+        unaddressable_reason = _jax_unaddressable_reason(value)
+        if unaddressable_reason is not None:
+            return unaddressable_reason
         dtype = getattr(value, "dtype", None)
         if dtype is not None and _is_jax_typed_prng_dtype(str(dtype)):
             return None
@@ -671,7 +674,7 @@ def _resolve_jax_device(jax_module: Any, map_location: Any) -> Any | None:
     """Resolve a JAX device from a user map-location value when possible."""
 
     if not isinstance(map_location, str):
-        return map_location
+        return None
     requested = map_location.lower()
     try:
         devices = list(jax_module.devices())
@@ -762,6 +765,86 @@ def _json_ready_mapping(values: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
+def _jax_unaddressable_reason(value: Any) -> str | None:
+    """Return the strict-fail reason for JAX arrays that cannot be host-assembled."""
+
+    if getattr(value, "is_fully_addressable", True) is False:
+        return (
+            "JAX array payloads must be fully addressable to assemble host values; "
+            "multi-host or unaddressable sharded arrays are not supported by the payload codec"
+        )
+    return None
+
+
+def _jax_sharding_metadata(value: Any) -> dict[str, Any]:
+    """Return audit-only JSON primitive metadata for a JAX array sharding."""
+
+    sharding = getattr(value, "sharding", None)
+    if sharding is None:
+        return {}
+    metadata: dict[str, Any] = {
+        "jax_sharding_kind": type(sharding).__name__,
+        "jax_sharding_is_fully_addressable": getattr(value, "is_fully_addressable", None),
+        "jax_sharding_is_fully_replicated": getattr(value, "is_fully_replicated", None),
+        "jax_sharding_device_count": _jax_sharding_device_count(value),
+        "jax_sharding_addressable_device_count": _jax_sharding_addressable_device_count(sharding),
+        "jax_sharding_platforms": _jax_sharding_platforms(sharding),
+    }
+    mesh_metadata = _jax_named_sharding_mesh_metadata(sharding)
+    if mesh_metadata:
+        metadata.update(mesh_metadata)
+    partition_spec = _jax_sharding_partition_spec(sharding)
+    if partition_spec:
+        metadata["jax_sharding_partition_spec"] = partition_spec
+    return _json_ready_mapping(metadata)
+
+
+def _jax_named_sharding_mesh_metadata(sharding: Any) -> dict[str, Any]:
+    """Return audit metadata for a JAX ``NamedSharding`` mesh when present."""
+
+    mesh = getattr(sharding, "mesh", None)
+    if mesh is None:
+        return {}
+    axis_names = getattr(mesh, "axis_names", None)
+    shape = getattr(mesh, "shape", None)
+    metadata: dict[str, Any] = {}
+    if axis_names is not None:
+        metadata["jax_sharding_mesh_axis_names"] = [str(axis_name) for axis_name in axis_names]
+    if isinstance(shape, Mapping):
+        metadata["jax_sharding_mesh_shape_keys"] = [str(key) for key in shape.keys()]
+        metadata["jax_sharding_mesh_shape_values"] = [int(value) for value in shape.values()]
+    return metadata
+
+
+def _jax_sharding_partition_spec(sharding: Any) -> list[str]:
+    """Return the JAX partition spec as a list of primitive strings."""
+
+    spec = getattr(sharding, "spec", None)
+    if spec is None:
+        return []
+    parts = getattr(spec, "partitions", None)
+    if parts is None:
+        try:
+            parts = tuple(spec)
+        except TypeError:
+            return [str(spec)]
+    return [str(part) for part in parts]
+
+
+def _jax_sharding_platforms(sharding: Any) -> list[str]:
+    """Return sorted device platforms represented by a JAX sharding."""
+
+    devices = getattr(sharding, "device_set", None)
+    if devices is None:
+        devices = getattr(sharding, "addressable_devices", None)
+    if devices is None:
+        return []
+    try:
+        return sorted({str(getattr(device, "platform", "unknown")) for device in devices})
+    except TypeError:
+        return []
+
+
 def _jax_sharding_device_count(value: Any) -> int:
     """Return a best-effort JAX sharding device count."""
 
@@ -781,6 +864,18 @@ def _jax_sharding_device_count(value: Any) -> int:
         except TypeError:
             return 0
     return 0
+
+
+def _jax_sharding_addressable_device_count(sharding: Any) -> int:
+    """Return a best-effort JAX sharding addressable device count."""
+
+    addressable_devices = getattr(sharding, "addressable_devices", None)
+    if addressable_devices is None:
+        return 0
+    try:
+        return len(addressable_devices)
+    except TypeError:
+        return 0
 
 
 def _unsupported_array_dtype_reason(array: np.ndarray) -> str | None:

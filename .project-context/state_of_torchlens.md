@@ -135,7 +135,9 @@ loadable. Unified manifests currently support manifest schema v1 for torch write
 for backend-aware validation/loading preflight. Schema v2 adds `backend`, `backend_runtime`,
 nullable torch-specific fields, `payload_policy`, and non-torch codec metadata. JAX and tinygrad
 use `payload_policy="array_payloads"` to materialize forward/derived array payloads while staying
-narrower than torch's full payload contract.
+narrower than torch's full payload contract. Fully addressable JAX sharded arrays save as
+assembled host values; `jax_sharding_*` codec metadata is audit-only and is not used to recreate
+mesh or partition topology on load.
 
 ### Backend-Neutral Substrate
 `Trace.backend` is the public backend tag resolved by `BackendSpec`. Trace identity also records

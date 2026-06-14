@@ -83,6 +83,25 @@ def _identity_key(_: None, key: Any) -> Any:
     return key
 
 
+def _identity_array(_: None, value: Any) -> Any:
+    """Return a JAX array payload unchanged.
+
+    Parameters
+    ----------
+    _
+        Unused parameter placeholder.
+    value
+        JAX array payload.
+
+    Returns
+    -------
+    Any
+        Input array.
+    """
+
+    return value
+
+
 def _split_key(_: None, key: Any) -> Any:
     """Return a batched typed-key array from a scalar JAX PRNG key.
 
@@ -117,6 +136,26 @@ def _sample_key_pair(key: Any) -> Any:
     """
 
     return random.normal(key, (2,), dtype=jnp.float32)
+
+
+def _named_sharded_array() -> tuple[Any, np.ndarray, int]:
+    """Return a fully addressable NamedSharding array over local JAX devices.
+
+    Returns
+    -------
+    tuple[Any, np.ndarray, int]
+        Sharded JAX array, expected host values, and local device count.
+    """
+
+    from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+    local_devices = list(jax.local_devices())
+    device_count = len(local_devices)
+    host_value = np.arange(device_count * 4, dtype=np.float32).reshape(device_count, 4)
+    mesh = Mesh(np.asarray(local_devices), ("x",))
+    sharding = NamedSharding(mesh, PartitionSpec("x"))
+    sharded = jax.device_put(jnp.asarray(host_value), sharding)
+    return sharded, host_value, device_count
 
 
 def _trace(**kwargs: Any) -> Any:
@@ -417,21 +456,70 @@ def test_jax_old_style_prng_key_tlspec_round_trips_as_uint32_array(tmp_path: Pat
     assert "jax_prng_key_typed" not in input_entries[0]["codec_metadata"]
 
 
-def test_jax_payload_codec_strict_rejects_sharded_and_object_like_arrays() -> None:
+def test_jax_sharded_array_tlspec_round_trips_value_with_audit_metadata(
+    tmp_path: Path,
+) -> None:
+    """Fully addressable sharded JAX arrays should save/load by value."""
+
+    sharded, expected, device_count = _named_sharded_array()
+    trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
+    path = tmp_path / "jax_sharded_value.tlspec"
+    codec = get_payload_codec("jax")
+
+    assert isinstance(codec.validate_for_save(sharded, strict=True), Ok)
+
+    trace.save(path, level="portable")
+    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    loaded = tl.load(path)
+    loaded_array = _first_saved_op(loaded).out
+    sharded_entries = [
+        entry
+        for entry in manifest["body_index"]
+        if entry.get("codec_metadata", {}).get("jax_sharding_kind") == "NamedSharding"
+    ]
+
+    assert sharded_entries
+    metadata = sharded_entries[0]["codec_metadata"]
+    assert metadata["jax_sharding_mesh_axis_names"] == ["x"]
+    assert metadata["jax_sharding_partition_spec"] == ["x"]
+    assert metadata["jax_sharding_device_count"] == device_count
+    assert metadata["jax_sharding_addressable_device_count"] == device_count
+    assert metadata["jax_sharding_is_fully_addressable"] is True
+    assert loaded.backend == "jax"
+    assert isinstance(loaded_array, jax.Array)
+    assert loaded_array.shape == sharded.shape
+    assert loaded_array.dtype == sharded.dtype
+    np.testing.assert_array_equal(np.asarray(loaded_array), expected)
+
+
+def test_jax_sharded_array_default_load_does_not_recreate_sharding(
+    tmp_path: Path,
+) -> None:
+    """Sharding metadata should be audit-only and inert during default load."""
+
+    sharded, expected, _device_count = _named_sharded_array()
+    trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
+    path = tmp_path / "jax_sharded_default_load.tlspec"
+
+    trace.save(path, level="portable")
+    loaded = tl.load(path)
+    loaded_array = _first_saved_op(loaded).out
+
+    assert type(sharded.sharding).__name__ == "NamedSharding"
+    assert type(loaded_array.sharding).__name__ != "NamedSharding"
+    np.testing.assert_array_equal(np.asarray(loaded_array), expected)
+
+
+def test_jax_payload_codec_strict_rejects_unaddressable_and_object_like_arrays() -> None:
     """JAX codec strict validation should reject unsafe array payload forms."""
 
-    class _FakeSharding:
-        """Minimal sharding object with multiple devices."""
-
-        device_set = {"device0", "device1"}
-
-    class _FakeShardedJaxArray:
-        """Minimal JAX-shaped value for sharding rejection."""
+    class _FakeUnaddressableJaxArray:
+        """Minimal JAX-shaped value for unaddressable sharding rejection."""
 
         __module__ = "jax._src.array"
         dtype = "float32"
-        is_fully_addressable = True
-        sharding = _FakeSharding()
+        is_fully_addressable = False
+        sharding = None
 
     class _FakeObjectJaxArray:
         """Minimal JAX-shaped value for object dtype rejection."""
@@ -443,9 +531,13 @@ def test_jax_payload_codec_strict_rejects_sharded_and_object_like_arrays() -> No
 
     codec = get_payload_codec("jax")
 
-    sharded = codec.validate_for_save(_FakeShardedJaxArray(), strict=True)
-    assert isinstance(sharded, FailReason)
-    assert "sharded" in sharded.text
+    unaddressable_value = _FakeUnaddressableJaxArray()
+    unaddressable = codec.validate_for_save(unaddressable_value, strict=True)
+    assert isinstance(unaddressable, FailReason)
+    assert "fully addressable" in unaddressable.text
+    assert "multi-host or unaddressable" in unaddressable.text
+    with pytest.raises(TypeError, match="fully addressable"):
+        codec.to_numpy(unaddressable_value)
 
     object_like = codec.validate_for_save(_FakeObjectJaxArray(), strict=True)
     assert isinstance(object_like, FailReason)
