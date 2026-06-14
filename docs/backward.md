@@ -143,7 +143,7 @@ detach it from engine interception and tensor-hook emission.
 
 MLX currently declares backward capture unsupported and raises tiered backend errors. Torch-only
 features such as autograd node records and live backward intervention remain out of reach unless
-another backend exposes hookable backward graphs. JAX M1 exposes only `trace.derived_grads`,
+another backend exposes hookable backward graphs. JAX exposes only `trace.derived_grads`,
 populated by `tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
 `fn(params, *inputs)`. tinygrad exposes `trace.derived_grads`, populated by
 `tl.backends.tinygrad.GradOptions` through a bracketed `DEV=PYTHON` leaf-gradient run, and can

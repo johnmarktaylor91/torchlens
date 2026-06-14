@@ -24,12 +24,14 @@ module auto-routing. Explicit `backend="torch"`, `backend="jax"`, and
 `backend="tinygrad"` are supported; unknown, ambiguous, or mismatched backend
 selections fail before capture with typed backend registry errors. MLX remains a
 technical preview with limited capabilities. JAX is a jaxpr-first functional
-preview with full-save forward capture, live replay validation, function-root modules,
-pytree-derived params, materialized `.tlspec` array payloads, and derived gradients only.
+preview with full-save forward capture, live replay validation, raw `function_root`
+captures, Equinox/Flax NNX `pytree_module` hierarchy, pytree-derived params,
+materialized `.tlspec` array payloads, and derived gradients only.
 tinygrad is a UOp-snapshot functional preview pinned to the `tinygrad>=0.13,<0.14`
-series; live validation and derived gradients require `DEV=PYTHON`, function-root
-modules, materialized `.tlspec` array payloads, no parameter records, and no
-mid-capture realization/mutation/TinyJit. JAX and tinygrad support static-label `save=`
+series; live validation and derived gradients require `DEV=PYTHON`; raw callables use
+`function_root`, callable objects use `object_module` hierarchy with parameter records
+when discoverable, portable saves materialize `.tlspec` array payloads, and capture
+rejects mid-capture realization/mutation/TinyJit. JAX and tinygrad support static-label `save=`
 selectors after full graph capture; value-dependent save predicates, halt, intervention,
 streaming, fastlog, and true backward capture remain PyTorch-only. Loaded non-torch traces cannot
 replay-validate because portable save strips runtime replay captures; inspect

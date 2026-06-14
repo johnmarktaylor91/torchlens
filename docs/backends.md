@@ -17,7 +17,8 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 
 The public `tl.trace()` signature declares backend-growth options before their non-torch
 implementations land. Torch accepts these options as inert cache-key inputs so torch behavior stays
-unchanged. JAX now implements the control-flow policy knobs for `lax.scan`; tinygrad and
+unchanged. JAX now implements the control-flow policy knobs for `lax.scan`, `lax.cond`, and
+`lax.while_loop`; tinygrad and
 unimplemented option families reject explicit use with `BackendUnsupportedError` until the matching
 backend phase implements the capability.
 
@@ -25,11 +26,11 @@ Declared future options:
 
 | Option | Planned owner |
 |---|---|
-| `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan` supports `unroll` or `reject` |
-| `jax_max_control_flow_unroll` | JAX `lax.scan` unroll safety limit |
+| `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan`/`cond`/`while_loop` support `unroll` or `reject` |
+| `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
 | `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad supports raw `function_root` and callable object `object_module` |
-| `payload_policy` | Backend payload codec/materialization policy |
-| `save_preview` | Future non-torch `save=` preview semantics |
+| `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad use `array_payloads` |
+| `save_preview` | Future non-torch save preview flag; JAX/tinygrad already support static-label `save=` |
 
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.
@@ -114,9 +115,10 @@ rejection behavior. Workarounds are to pass raw functions and explicit params/in
 intervention, sparse fastlog, and true backward graphs.
 
 JAX `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
-forward and derived array payloads and load them back as `jax.Array` values. Runtime-only
+forward and derived array payloads and load them back as `jax.Array` values.
+`trace.payload_load_status` records load-time materialization state. Runtime-only
 `jax_equation_captures` are stripped from portable artifacts, so loaded JAX traces expose
-`trace.validation_replay_status.state == "unavailable"` with reason
+`ValidationReplayStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
 Live JAX traces, including static-label selectively saved traces, still run real replay validation
 using runtime-only replay payloads that are separate from the public saved-activation surface.
@@ -183,9 +185,10 @@ payloads. Workarounds are to return a pure lazy tinygrad expression from a raw c
 capture, intervention, sparse fastlog, and true backward graphs.
 
 tinygrad `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
-forward and derived array payloads and load them back as tinygrad `Tensor` values. Runtime-only
+forward and derived array payloads and load them back as tinygrad `Tensor` values.
+`trace.payload_load_status` records load-time materialization state. Runtime-only
 `tinygrad_uop_captures` are stripped from portable artifacts, so loaded tinygrad traces expose
-`trace.validation_replay_status.state == "unavailable"` with reason
+`ValidationReplayStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
 Live tinygrad traces, including static-label selectively saved traces, still run real replay
 validation using runtime-only replay payloads that are separate from the public saved-activation

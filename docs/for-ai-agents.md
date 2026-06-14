@@ -7,8 +7,9 @@ v2 spelling: `tl.trace(..., backend=None)`, predicate `save=...`, `intervene=...
 Backend note: `backend=None` preserves torch eager default plus MLX module auto-routing.
 `tl.record()`/fastlog and true backward capture are torch-only in backend v1. Backend-neutral
 metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_source`,
-`Trace.derived_grads`, `Trace.intermediate_derived_grads`, `dtype_ref`, `device_ref`,
-`backend_address`, and `resolver_status`.
+`Trace.derived_grads`, `Trace.intermediate_derived_grads`, `Trace.payload_load_status`,
+`Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and
+`resolver_status`.
 JAX leaf gradients are requested with `tl.backends.jax.GradOptions`; they are derived by a
 second functional AD run and never populate backward-pass or op-gradient surfaces.
 tinygrad leaf gradients use `tl.backends.tinygrad.GradOptions`; they are bracketed
@@ -163,4 +164,5 @@ assert graph is not None
 - Do not assume unsaved payloads can be read later. Re-trace with a wider `save=` predicate or use
   torch `tl.record(...).to_trace()` with the records you need. JAX/tinygrad `.tlspec` saves
   materialize array payloads, but loaded traces cannot replay-validate stripped runtime captures;
-  check `trace.validation_replay_status`.
+  check `trace.validation_replay_status` (`ValidationReplayStatus`) and
+  `trace.payload_load_status`.

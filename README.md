@@ -89,19 +89,29 @@ PyTorch-only. TorchLens captures eager-mode execution through a small backend
 protocol, so the same trace/inspect/validate workflow now runs on other
 frameworks:
 
-| Capability | PyTorch | MLX | JAX (preview) | tinygrad (preview) |
+| Capability | PyTorch | JAX (preview) | tinygrad (preview) | MLX (preview) |
 |---|:---:|:---:|:---:|:---:|
 | Forward capture + graph/metadata | ✅ | ✅ | ✅ | ✅ |
-| Replay + perturbation validation | ✅ | ✅ | ✅ | ✅ |
-| Gradients | full backward graph | — | leaf-level (derived) | leaf-level (bracketed) |
-| Interventions / fastlog | ✅ | — | — | — |
+| Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | object `object_module`; raw `function_root` | compatibility mode |
+| Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited |
+| Static-label `save=` | ✅ | ✅ | ✅ | — |
+| Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | audit-only |
+| Gradients | full backward graph | leaf-level derived | leaf-level + T1 intermediate derived | — |
+| Interventions / halt / fastlog | ✅ | — | — | — |
 
 The JAX backend is **jaxpr-first**: it captures the lowered jaxpr, so any
 spelling (operators, array methods, `jnp`/`lax` calls) is captured by
-construction, and every captured op is replay-validated — not a best-effort
-trace. Previews are forward-capture + honest validation + derived gradients;
-PyTorch remains the full-feature backend. (Preview backends are pinned and
-documented in [`docs/`](docs/); they are not yet drop-in for arbitrary models.)
+construction, and captured ops are replay-validated in live traces. Equinox and
+Flax NNX modules use `module_identity_mode="pytree_module"`, while raw functions
+use `function_root`. The tinygrad backend captures UOp graphs, supports
+callable-object `object_module` hierarchy, and exposes T1 intermediate derived
+gradients through `trace.intermediate_derived_grads` / `op.derived_grad`.
+JAX/tinygrad portable saves use `payload_policy="array_payloads"` and loaded
+traces report replay as unavailable rather than as a false pass. PyTorch remains
+the full-feature backend: true backward capture, value-dependent predicates,
+`intervene=`, `halt=`, and fastlog are torch-only for now. (Preview backends are
+pinned and documented in [`docs/`](docs/); they are not yet drop-in for
+arbitrary models.)
 
 ```python
 log = tl.trace(torch_model, x)                  # PyTorch (default)

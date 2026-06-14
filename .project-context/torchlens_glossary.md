@@ -17,11 +17,13 @@ All user-facing type, overall, pass, call, op, and creation indices are 1-based 
 Private storage names, dropped aliases, and underscore-prefixed locked names are omitted from the main entries.
 Deferred items are listed at the end instead of promoted as final API.
 ## Top-level vocabulary
-- `tl.trace(model, x, *, backend=None)`: Resolve a backend, run a captured forward pass, and return a `Trace`. `None` keeps torch eager capture as the default and MLX module auto-routing as a technical preview; explicit `backend="jax"` enables the JAX functional preview.
-- `BackendName`: Public backend identifier used by `backend=` and `Trace.backend`. Shipped names are `"torch"`, `"mlx"`, and `"jax"`; `"fake"` is test-only; `"tinygrad"` is reserved for funded preview work.
+- `tl.trace(model, x, *, backend=None)`: Resolve a backend, run a captured forward pass, and return a `Trace`. `None` keeps torch eager capture as the default and MLX module auto-routing as a technical preview; explicit `backend="jax"` and `backend="tinygrad"` enable their preview functional captures.
+- `BackendName`: Public backend identifier used by `backend=` and `Trace.backend`. Shipped names are `"torch"`, `"mlx"`, `"jax"`, and `"tinygrad"`; `"fake"` is test-only.
 - `BackendSpec`: Registry object owning backend resolution, capture entry, validation entry, serialization policy, capability flags, and canonical backend errors.
 - `Trace`: Top-level object for one captured model execution, including graph, tensors, modules, params, buffers, gradients, backend tag, and metadata.
-- `trace.derived_grads`: Backend-neutral accessor for leaf-level gradients derived outside true backward capture. In JAX M1 it is populated by a second `jax.value_and_grad` run and is the only JAX gradient surface.
+- `trace.derived_grads`: Backend-neutral accessor for leaf-level gradients derived outside true backward capture. JAX populates it through a second `jax.value_and_grad` run; tinygrad populates it through a bracketed `DEV=PYTHON` leaf-gradient run.
+- `trace.intermediate_derived_grads`: tinygrad-only accessor for exact unambiguous per-op gradients from the separate no-realize intermediate-gradient pass. It is not true backward capture and does not populate `trace.saved_grad_ops`.
+- `op.derived_grad`: tinygrad-only read-only convenience property for an Op's entry in `trace.intermediate_derived_grads`; `op.grads` remains true-backward-only and raises on non-torch traces.
 - `tl.backends.jax.GradOptions`: JAX preview options object passed to `tl.trace(..., backend="jax", grad_options=...)`; declares params, optional loss function, and input-relative gradient argnums.
 - `DtypeRef`: Backend-neutral dtype reference stored beside legacy dtype fields.
 - `DeviceRef`: Backend-neutral device reference stored beside legacy torch device fields when a backend exposes device metadata.
@@ -56,7 +58,7 @@ Deferred items are listed at the end instead of promoted as final API.
 - `jax_control_flow`: Public `trace()` option for JAX control-flow handling; `lax.scan`/`cond`/`while` can be unrolled for raw JAX function-root captures.
 - `jax_max_control_flow_unroll`: Public `trace()` option for the JAX control-flow unroll safety limit.
 - `payload_policy`: Backend payload codec/materialization policy. JAX and tinygrad portable writes use `"array_payloads"` for forward and derived array payloads, which is narrower than torch `"full"` payload portability.
-- `save_preview`: Declared public `trace()` option for future non-torch save preview flags; current non-torch preview backends still reject explicit use. The `save=` kwarg itself supports static-label selectors on JAX/tinygrad.
+- `save_preview`: Declared public `trace()` option for future non-torch save preview flags; the `save=` kwarg itself supports static-label selectors on JAX/tinygrad.
 - `param_source`: Parameter-record source for the trace: `"native-module"`, `"pytree-derived"`, or `"none"`.
 - `FIELD_DEFAULTS`: Class-level defaults applied at initialization and cleanup.
 - `FIELD_FORK_POLICY`: Class-level per-field policy for `fork()`.
@@ -291,6 +293,7 @@ Intervention method names are intentionally not promoted as final here; the audi
 - `memory`: Bytes used by `out`.
 - `memory_str`: Human-readable form of `memory`.
 - `grad`: Saved gradient of the Op output after backward, when available.
+- `derived_grad`: tinygrad-only derived intermediate gradient from `trace.intermediate_derived_grads`, when `GradOptions(intermediate_grads=True)` produced an exact unambiguous match. This is not a saved true-backward gradient.
 - `grad_shape`: Shape of `grad`.
 - `grad_dtype`: Dtype of `grad`.
 - `grad_memory`: Bytes used by `grad`.
@@ -1118,7 +1121,7 @@ These helpers operate during a backward pass. Mount-shape metadata: `bwd_hook`/`
 - `Trace.module_identity_mode`: Status field declaring whether module accessors expose torch modules, pytree-derived modules, object-discovered modules, or only a function root.
 - `Trace.param_source`: Status field declaring whether `Trace.params` comes from native module parameters, pytree-derived leaves, or no declared params.
 - `Trace.payload_load_status`: Load-time payload materialization status. Values include `"loaded"`, `"loaded_device_best_effort"`, `"audit_only"`, and `"audit_only_missing_runtime"`.
-- `Trace.validation_replay_status`: Machine-readable replay-validation status. Loaded JAX/tinygrad traces whose runtime replay captures were stripped report `state="unavailable"` and `reason="loaded_trace_runtime_capture_stripped"` instead of a pass/fail bool; live traces still run real replay validation, including static-label selectively saved traces via runtime-only hidden replay payloads.
+- `Trace.validation_replay_status`: `ValidationReplayStatus` machine-readable replay-validation status. Loaded JAX/tinygrad traces whose runtime replay captures were stripped report `state="unavailable"` and `reason="loaded_trace_runtime_capture_stripped"` instead of a pass/fail bool; live traces still run real replay validation, including static-label selectively saved traces via runtime-only hidden replay payloads.
 - `dtype_ref` / `device_ref`: Neutral mirror fields on tensor/parameter records. Torch keeps existing `dtype` and device-facing fields byte-stable; the mirrors let non-torch backends expose dtype/device metadata without torch objects.
 - `backend_address` / `resolver_status`: Neutral address metadata on records. `backend_address` stores the backend-native address or handle used by the builder; `resolver_status` records whether that address is currently resolved.
 - Backend canonical errors: `UnknownBackendError`, `BackendMismatchError`, `BackendAmbiguityError`, `BackendUnsupportedError`, `BackendPayloadUnsupportedError`, and `BackendRuntimeCompatibilityError`.
