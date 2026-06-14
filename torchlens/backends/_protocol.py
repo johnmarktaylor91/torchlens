@@ -66,6 +66,54 @@ class CaptureBackend(Protocol):
         """Capture backend autocast state for the current session."""
         ...
 
+    def log_source_tensor(
+        self,
+        session: object,
+        tensor: object,
+        source: str,
+        extra_address: str | None = None,
+    ) -> None:
+        """Log a backend source tensor in the active capture session.
+
+        Parameters
+        ----------
+        session:
+            Active backend capture session.
+        tensor:
+            Backend tensor value to log as a source.
+        source:
+            Source role, such as ``"input"`` or ``"buffer"``.
+        extra_address:
+            Optional backend-specific input or buffer address.
+
+        Returns
+        -------
+        None
+            The active capture session is updated in place.
+        """
+        ...
+
+    def extract_and_mark_outputs(
+        self,
+        session: object,
+        outputs: object,
+    ) -> tuple[list[Any], list[str]]:
+        """Extract final backend output tensors and mark output-parent events.
+
+        Parameters
+        ----------
+        session:
+            Active backend capture session.
+        outputs:
+            Raw model output object returned by the captured forward pass.
+
+        Returns
+        -------
+        tuple[list[Any], list[str]]
+            Output tensor leaves and their display addresses.
+        """
+        ...
+
     def build_record_context(
         self,
         session: object,

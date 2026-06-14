@@ -27,7 +27,6 @@ Key functions:
 """
 
 import inspect
-import dataclasses
 import random
 import time
 from collections import defaultdict
@@ -38,7 +37,7 @@ from torch import nn
 
 from .. import _state
 from ..backends import CaptureBackend
-from ..backends.torch._tl import clear_meta, get_tensor_label
+from ..backends.torch._tl import clear_meta
 from ..backends.torch.backend import TorchBackend
 from ..fastlog._halt import HaltSignal
 from ..quantities import Bytes, Duration
@@ -49,8 +48,6 @@ from ..utils.introspection import get_vars_of_type_from_obj, nested_assign
 from ..utils.rng import set_random_seed, log_current_rng_states, set_rng_from_saved_states
 from ..utils.arg_handling import safe_copy_args, safe_copy_kwargs, normalize_input_args
 from ..utils.tensor_utils import _is_cuda_available
-from ..backends.torch.sources import log_source_tensor
-from ..backends.torch.ops import _walk_output_tensors_with_paths
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _timed_phase, _vprint, _vtimed
 
@@ -404,73 +401,29 @@ def _extract_and_mark_outputs(
     self: "Trace",
     outputs: Any,
 ) -> tuple[list[torch.Tensor], list[str]]:
-    """Extract output tensors from model outputs, deduplicate, and mark in Trace.
+    """Extract output tensors from model outputs through the active backend.
 
-    Called AFTER the forward pass completes (outside ``active_logging``), so
-    operations here don't trigger logging.  Marks each output tensor's graph
-    entry as ``is_output_parent=True`` so postprocessing can identify them.
+    Called AFTER the forward pass completes (outside ``active_logging``). The
+    backend marks each output tensor's graph entry as ``is_output_parent=True``
+    so postprocessing can identify them.
 
-    Deduplication is by address string (not tensor identity) to handle cases
-    where the same tensor appears at multiple output positions.
+    Parameters
+    ----------
+    self:
+        Active trace.
+    outputs:
+        Raw model output object returned by the captured forward pass.
 
-    Returns:
-        (output_tensors, output_tensor_addresses)
+    Returns
+    -------
+    tuple[list[torch.Tensor], list[str]]
+        Output tensors and output tensor addresses.
     """
-    if getattr(self, "intervention_ready", False):
-        output_tensors_w_addresses_all = [
-            (tensor, _container_path_to_address(path), None)
-            for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs)
-        ]
-        output_specs_by_raw_label = {}
-        for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs):
-            _label_raw = get_tensor_label(tensor)
-            if _label_raw is not None:
-                output_specs_by_raw_label[_label_raw] = (
-                    path,
-                    container_spec,
-                )
-        setattr(self, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
-    else:
-        output_tensors_w_addresses_all = get_vars_of_type_from_obj(
-            outputs,
-            torch.Tensor,
-            search_depth=5,
-            return_addresses=True,
-            allow_repeats=True,
-        )
-    # Remove duplicate addresses (same tensor at multiple output positions).
-    addresses_seen = set()
-    output_tensors_w_addresses = []
-    for entry in output_tensors_w_addresses_all:
-        if entry[1] in addresses_seen:
-            continue
-        output_tensors_w_addresses.append(entry)
-        addresses_seen.add(entry[1])
-
-    output_tensors = [t for t, _, _ in output_tensors_w_addresses]
-    output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
-
-    for t in output_tensors:
-        # Only record output_layers during exhaustive pass; fast pass reuses the list.
-        # Defensive: user-injected output tensors (raw register_forward_hook
-        # returning a fresh tensor, intervention API replacements that don't
-        # propagate metadata, etc.) lack _tl labels. Skip them rather than
-        # crashing — they aren't in our graph but the experiment can continue.
-        _label_raw = get_tensor_label(t)
-        if _label_raw is None:
-            continue
-        if self.capture_mode in {"exhaustive", "predicate"}:
-            self.output_layers.append(_label_raw)
-            event = self.capture_events.op_event_by_label_raw.get(_label_raw)
-            if event is not None:
-                updated_event = dataclasses.replace(event, is_output_parent=True)
-                self.capture_events.op_event_by_label_raw[_label_raw] = updated_event
-                for index, existing_event in enumerate(self.capture_events.op_events):
-                    if existing_event.label_raw == _label_raw:
-                        self.capture_events.op_events[index] = updated_event
-                        break
-
-    return output_tensors, output_tensor_addresses
+    output_tensors, output_tensor_addresses = _TORCH_BACKEND.extract_and_mark_outputs(
+        self,
+        outputs,
+    )
+    return cast(list[torch.Tensor], output_tensors), output_tensor_addresses
 
 
 def _finalize_halted_trace(
@@ -527,33 +480,6 @@ def _finalize_halted_trace(
     _vprint(self, f"Postprocessing halted graph at {self.halt_frontier!r}...")
     self._postprocess(output_tensors, output_tensor_addresses)
     return frontier_output
-
-
-def _container_path_to_address(path: tuple[Any, ...]) -> str:
-    """Convert an output path tuple to TorchLens' display address string.
-
-    Parameters
-    ----------
-    path
-        Path components from path-aware output traversal.
-
-    Returns
-    -------
-    str
-        Dot-separated output address suffix.
-    """
-
-    parts: list[str] = []
-    for component in path:
-        if hasattr(component, "index"):
-            parts.append(str(component.index))
-        elif hasattr(component, "key"):
-            parts.append(str(component.key))
-        elif hasattr(component, "name"):
-            parts.append(str(component.name))
-        else:
-            parts.append(str(component))
-    return ".".join(parts)
 
 
 def run_and_log_inputs_through_model(
@@ -668,7 +594,7 @@ def run_and_log_inputs_through_model(
         _vprint(self, f"Running {self.capture_mode} forward pass...")
         with backend.active_logging(self):
             for i, t in enumerate(input_tensors):
-                log_source_tensor(self, t, "input", input_tensor_addresses[i])
+                backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
 
             if self.capture_mode == "predicate":
                 from ..backends.torch import module_stack as _mstack
@@ -815,7 +741,10 @@ def run_and_log_inputs_through_model(
             self.capture_end_time = time.time()
             return outputs
 
-        output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs)
+        output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(
+            self, outputs
+        )
+        output_tensors = cast(list[torch.Tensor], output_tensors_any)
 
         backend.cleanup_model_session(self, (model, input_tensors))
         _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")

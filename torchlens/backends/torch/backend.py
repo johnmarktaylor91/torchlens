@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, Mapping, cast
 
@@ -14,6 +15,7 @@ from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext
 from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ...ir.semantics import BackendSemantics, CapturePolicy
+from ...utils.introspection import get_vars_of_type_from_obj
 from ...utils.rng import log_current_autocast_state, log_current_rng_states
 from ...utils.tensor_utils import safe_copy
 from . import _tl
@@ -22,8 +24,10 @@ from .buffer_writes import uninstall_buffer_write_tracker
 from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
 from .ops import (
     _get_autograd_saved_stats_for_tensor,
+    _walk_output_tensors_with_paths,
     log_function_output_tensors,
 )
+from .sources import log_source_tensor as _log_source_tensor
 from .wrappers import unwrap_torch, wrap_torch
 
 if TYPE_CHECKING:
@@ -97,6 +101,116 @@ class TorchBackend:
     def snapshot_autocast(self, session: object) -> object:
         """Capture the current torch autocast state."""
         return log_current_autocast_state()
+
+    def log_source_tensor(
+        self,
+        session: object,
+        tensor: object,
+        source: str,
+        extra_address: str | None = None,
+    ) -> None:
+        """Log a torch source tensor in the active capture session.
+
+        Parameters
+        ----------
+        session:
+            Active trace.
+        tensor:
+            Torch tensor to log as a source.
+        source:
+            Source role, such as ``"input"`` or ``"buffer"``.
+        extra_address:
+            Optional input or buffer address.
+
+        Returns
+        -------
+        None
+            The trace is updated in place.
+        """
+
+        _log_source_tensor(
+            cast("Trace", session),
+            cast(torch.Tensor, tensor),
+            source,
+            extra_address,
+        )
+
+    def extract_and_mark_outputs(
+        self,
+        session: object,
+        outputs: object,
+    ) -> tuple[list[torch.Tensor], list[str]]:
+        """Extract torch output tensors, deduplicate them, and mark output parents.
+
+        Parameters
+        ----------
+        session:
+            Active trace.
+        outputs:
+            Raw model output object returned by the captured forward pass.
+
+        Returns
+        -------
+        tuple[list[torch.Tensor], list[str]]
+            Output tensors and their display addresses.
+        """
+
+        self_trace = cast("Trace", session)
+        if getattr(self_trace, "intervention_ready", False):
+            output_tensors_w_addresses_all = [
+                (tensor, _container_path_to_address(path), None)
+                for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs)
+            ]
+            output_specs_by_raw_label = {}
+            for tensor, path, container_spec in _walk_output_tensors_with_paths(outputs):
+                _label_raw = _tl.get_tensor_label(tensor)
+                if _label_raw is not None:
+                    output_specs_by_raw_label[_label_raw] = (
+                        path,
+                        container_spec,
+                    )
+            setattr(self_trace, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
+        else:
+            output_tensors_w_addresses_all = get_vars_of_type_from_obj(
+                outputs,
+                torch.Tensor,
+                search_depth=5,
+                return_addresses=True,
+                allow_repeats=True,
+            )
+        # Remove duplicate addresses (same tensor at multiple output positions).
+        addresses_seen = set()
+        output_tensors_w_addresses = []
+        for entry in output_tensors_w_addresses_all:
+            if entry[1] in addresses_seen:
+                continue
+            output_tensors_w_addresses.append(entry)
+            addresses_seen.add(entry[1])
+
+        output_tensors = [t for t, _, _ in output_tensors_w_addresses]
+        output_tensor_addresses = [addr for _, addr, _ in output_tensors_w_addresses]
+
+        for t in output_tensors:
+            # Only record output_layers during exhaustive pass; fast pass reuses the list.
+            # Defensive: user-injected output tensors (raw register_forward_hook
+            # returning a fresh tensor, intervention API replacements that don't
+            # propagate metadata, etc.) lack _tl labels. Skip them rather than
+            # crashing - they aren't in our graph but the experiment can continue.
+            _label_raw = _tl.get_tensor_label(t)
+            if _label_raw is None:
+                continue
+            if self_trace.capture_mode in {"exhaustive", "predicate"}:
+                self_trace.output_layers.append(_label_raw)
+                event = self_trace.capture_events.op_event_by_label_raw.get(_label_raw)
+                if event is not None:
+                    updated_event = dataclasses.replace(event, is_output_parent=True)
+                    self_trace.capture_events.op_event_by_label_raw[_label_raw] = updated_event
+                    for index, existing_event in enumerate(self_trace.capture_events.op_events):
+                        if existing_event.label_raw == _label_raw:
+                            self_trace.capture_events.op_events[index] = updated_event
+                            break
+
+        return output_tensors, output_tensor_addresses
 
     def build_record_context(
         self,
@@ -298,6 +412,33 @@ class TorchBackend:
     def finalize_forward_session(self, session: object, trace_state: TraceBuildState) -> None:
         """Finalize torch backend session state after forward materialization."""
         return None
+
+
+def _container_path_to_address(path: tuple[Any, ...]) -> str:
+    """Convert an output path tuple to TorchLens' display address string.
+
+    Parameters
+    ----------
+    path:
+        Path components from path-aware output traversal.
+
+    Returns
+    -------
+    str
+        Dot-separated output address suffix.
+    """
+
+    parts: list[str] = []
+    for component in path:
+        if hasattr(component, "index"):
+            parts.append(str(component.index))
+        elif hasattr(component, "key"):
+            parts.append(str(component.key))
+        elif hasattr(component, "name"):
+            parts.append(str(component.name))
+        else:
+            parts.append(str(component))
+    return ".".join(parts)
 
 
 __all__ = ["TorchBackend"]
