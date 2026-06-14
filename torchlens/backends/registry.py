@@ -5,12 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, TypeAlias
 
+from ._protocol import CaptureBackend
+
 
 BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "fake"] | str
 CanHandleFn: TypeAlias = Callable[[object, object, dict[Any, Any] | None], bool]
 CaptureTraceFn: TypeAlias = Callable[..., Any]
 ValidateEntryFn: TypeAlias = Callable[..., bool]
 ValidateTraceFn: TypeAlias = Callable[..., Any]
+CaptureBackendFactory: TypeAlias = Callable[[], CaptureBackend]
 
 
 TRACE_OPTION_CAPABILITY_EPOCHS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -183,6 +186,9 @@ class BackendSpec:
         Validation entry for an already-built trace.
     capabilities:
         Consolidated capability flags.
+    capture_backend:
+        Optional factory for the lower-level Protocol adapter used by shared
+        capture orchestration.
     serialization_policy:
         Backend-owned serialization policy.
     priority:
@@ -199,6 +205,7 @@ class BackendSpec:
     validate_entry: ValidateEntryFn
     validate_trace: ValidateTraceFn
     capabilities: BackendCapabilities
+    capture_backend: CaptureBackendFactory | None = None
     serialization_policy: SerializationPolicy = field(default_factory=SerializationPolicy)
     priority: int = 0
     coercible: bool = False

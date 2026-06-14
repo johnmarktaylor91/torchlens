@@ -114,6 +114,54 @@ class CaptureBackend(Protocol):
         """
         ...
 
+    def push_existing_module_frame(
+        self,
+        session: object,
+        module_stack: list[Any],
+        frame: object,
+    ) -> None:
+        """Push an existing backend module-stack frame.
+
+        Parameters
+        ----------
+        session:
+            Active backend capture session.
+        module_stack:
+            Mutable module-stack list owned by the active recording state.
+        frame:
+            Existing backend frame to push.
+
+        Returns
+        -------
+        None
+            The module stack is updated in place.
+        """
+        ...
+
+    def pop_module_frame(
+        self,
+        session: object,
+        module_stack: list[Any],
+        frame: object,
+    ) -> None:
+        """Pop and validate the current backend module-stack frame.
+
+        Parameters
+        ----------
+        session:
+            Active backend capture session.
+        module_stack:
+            Mutable module-stack list owned by the active recording state.
+        frame:
+            Expected top frame to pop.
+
+        Returns
+        -------
+        None
+            The module stack is updated in place.
+        """
+        ...
+
     def extract_and_mark_outputs(
         self,
         session: object,

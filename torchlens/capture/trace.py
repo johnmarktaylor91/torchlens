@@ -35,8 +35,13 @@ import torch
 from torch import nn
 
 from .. import _state
-from ..backends import CaptureBackend
-from ..backends.torch.backend import TorchBackend
+from ..backends import (
+    BackendName,
+    BackendUnsupportedError,
+    CaptureBackend,
+    get_backend_spec,
+    resolve_backend_spec,
+)
 from ..fastlog._halt import HaltSignal
 from ..quantities import Bytes, Duration
 
@@ -47,7 +52,58 @@ from ..utils.tensor_utils import _is_cuda_available
 from ..data_classes._lookup_keys import _give_user_feedback_about_lookup_key
 from ..utils.display import _timed_phase, _vprint
 
-_TORCH_BACKEND: CaptureBackend = TorchBackend()
+_ACTIVE_CAPTURE_BACKEND: CaptureBackend | None = None
+
+
+def _backend_name_for_trace(trace: "Trace") -> BackendName:
+    """Return the backend name recorded on a trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose backend should be used for shared capture orchestration.
+
+    Returns
+    -------
+    BackendName
+        Backend name stored on the trace, defaulting to the legacy torch name
+        for old or partially constructed trace objects.
+    """
+
+    return cast(BackendName, getattr(trace, "backend", "torch"))
+
+
+def _capture_backend_from_registry(
+    backend_name: BackendName,
+    model: object,
+    input_args: object,
+    input_kwargs: dict[Any, Any] | None,
+) -> CaptureBackend:
+    """Resolve a trace execution backend through the public backend registry.
+
+    Parameters
+    ----------
+    backend_name:
+        Explicit backend name recorded on the trace.
+    model:
+        Model or callable being captured.
+    input_args:
+        Public positional inputs.
+    input_kwargs:
+        Public keyword inputs.
+
+    Returns
+    -------
+    CaptureBackend
+        Lower-level Protocol adapter owned by the resolved backend spec.
+    """
+
+    spec = resolve_backend_spec(backend_name, model, input_args, input_kwargs)
+    if spec.capture_backend is None:
+        raise BackendUnsupportedError(
+            f"backend={spec.name!r} does not expose a shared capture Protocol adapter."
+        )
+    return spec.capture_backend()
 
 
 def _clear_saved_activation_dedup_caches(trace: "Trace") -> None:
@@ -262,7 +318,7 @@ def _fetch_label_move_input_tensors(
     input_kwargs: dict[Any, Any],
     model_device: object,
 ) -> tuple[list[Any], list[str]]:
-    """Delegate torch input tensor movement and source labeling to the backend.
+    """Delegate input tensor movement and source labeling to the active backend.
 
     Parameters
     ----------
@@ -281,7 +337,15 @@ def _fetch_label_move_input_tensors(
         Backend input tensor leaves and their source-address labels.
     """
 
-    return _TORCH_BACKEND.fetch_label_move_input_tensors(
+    backend = _ACTIVE_CAPTURE_BACKEND
+    if backend is None:
+        spec = get_backend_spec("torch")
+        if spec.capture_backend is None:
+            raise BackendUnsupportedError(
+                f"backend={spec.name!r} does not expose a shared capture Protocol adapter."
+            )
+        backend = spec.capture_backend()
+    return backend.fetch_label_move_input_tensors(
         None,
         input_args,
         input_arg_names,
@@ -293,6 +357,7 @@ def _fetch_label_move_input_tensors(
 def _extract_and_mark_outputs(
     self: "Trace",
     outputs: Any,
+    backend: CaptureBackend | None = None,
 ) -> tuple[list[torch.Tensor], list[str]]:
     """Extract output tensors from model outputs through the active backend.
 
@@ -306,13 +371,23 @@ def _extract_and_mark_outputs(
         Active trace.
     outputs:
         Raw model output object returned by the captured forward pass.
+    backend:
+        Active capture backend. When omitted, the backend is loaded from the
+        trace backend name through the registry.
 
     Returns
     -------
     tuple[list[torch.Tensor], list[str]]
         Output tensors and output tensor addresses.
     """
-    output_tensors, output_tensor_addresses = _TORCH_BACKEND.extract_and_mark_outputs(
+    if backend is None:
+        spec = get_backend_spec(str(_backend_name_for_trace(self)))
+        if spec.capture_backend is None:
+            raise BackendUnsupportedError(
+                f"backend={spec.name!r} does not expose a shared capture Protocol adapter."
+            )
+        backend = spec.capture_backend()
+    output_tensors, output_tensor_addresses = backend.extract_and_mark_outputs(
         self,
         outputs,
     )
@@ -321,6 +396,7 @@ def _extract_and_mark_outputs(
 
 def _finalize_halted_trace(
     self: "Trace",
+    backend: CaptureBackend,
     halt_exc: HaltSignal,
     model: nn.Module,
     input_tensors: list[torch.Tensor],
@@ -332,6 +408,8 @@ def _finalize_halted_trace(
     ----------
     self:
         Active trace.
+    backend:
+        Active capture backend.
     halt_exc:
         Halt signal raised by the predicate layer.
     model:
@@ -347,7 +425,7 @@ def _finalize_halted_trace(
         Halt-frontier output object when available.
     """
 
-    _TORCH_BACKEND.cleanup_model_session(self, (model, input_tensors))
+    backend.cleanup_model_session(self, (model, input_tensors))
     frontier_output = halt_exc.frontier_output
     if frontier_output is None:
         raw_layer_dict = getattr(self, "_raw_layer_dict", {})
@@ -369,7 +447,11 @@ def _finalize_halted_trace(
         self.capture_end_time = time.time()
         return frontier_output
 
-    output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, frontier_output)
+    output_tensors, output_tensor_addresses = _extract_and_mark_outputs(
+        self,
+        frontier_output,
+        backend,
+    )
     _vprint(self, f"Postprocessing halted graph at {self.halt_frontier!r}...")
     self._postprocess(output_tensors, output_tensor_addresses)
     return frontier_output
@@ -431,7 +513,12 @@ def run_and_log_inputs_through_model(
             combined = set(layer_nums_to_save) | output_parent_nums
             self._layer_nums_to_save = sorted(combined)
 
-    backend = _TORCH_BACKEND
+    backend = _capture_backend_from_registry(
+        _backend_name_for_trace(self),
+        model,
+        input_args,
+        input_kwargs,
+    )
     input_args, input_kwargs, input_arg_names, model_device = backend.setup_inputs_and_device(
         self,
         model,
@@ -443,10 +530,21 @@ def run_and_log_inputs_through_model(
     input_tensors: list[torch.Tensor] = []
 
     try:
-        (
-            input_tensors_any,
-            input_tensor_addresses,
-        ) = _fetch_label_move_input_tensors(input_args, input_arg_names, input_kwargs, model_device)
+        global _ACTIVE_CAPTURE_BACKEND
+        previous_capture_backend = _ACTIVE_CAPTURE_BACKEND
+        _ACTIVE_CAPTURE_BACKEND = backend
+        try:
+            (
+                input_tensors_any,
+                input_tensor_addresses,
+            ) = _fetch_label_move_input_tensors(
+                input_args,
+                input_arg_names,
+                input_kwargs,
+                model_device,
+            )
+        finally:
+            _ACTIVE_CAPTURE_BACKEND = previous_capture_backend
         input_tensors = cast(list[torch.Tensor], input_tensors_any)
         self._input_tensor_addresses = list(input_tensor_addresses)
 
@@ -492,7 +590,6 @@ def run_and_log_inputs_through_model(
                 backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
 
             if self.capture_mode == "predicate":
-                from ..backends.torch import module_stack as _mstack
                 from ..capture.predicates import (
                     _evaluate_halt,
                     _evaluate_keep_module,
@@ -513,7 +610,7 @@ def run_and_log_inputs_through_model(
                     pass_index=1,
                 )
                 skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
-                _mstack.push_existing_frame(state.module_stack, root_frame)
+                backend.push_existing_module_frame(self, state.module_stack, root_frame)
                 state.event_index += 1
                 enter_ctx = _build_record_context(
                     kind="module_enter",
@@ -610,7 +707,7 @@ def run_and_log_inputs_through_model(
                     finally:
                         if not halt_only:
                             state.append_context(exit_ctx)
-                        _mstack.pop_frame(state.module_stack, root_frame)
+                        backend.pop_module_frame(self, state.module_stack, root_frame)
             else:
                 with _timed_phase(self, "dispatch:forward_model"):
                     outputs = model(*input_args, **input_kwargs)
@@ -651,12 +748,19 @@ def run_and_log_inputs_through_model(
             and getattr(options, "halt", None) is not None
             and getattr(self, "_halt_returns_partial_trace", False)
         ):
-            return _finalize_halted_trace(self, halt_exc, model, input_tensors, postprocess)
-        _TORCH_BACKEND.cleanup_halted_forward_session(self, (model, input_tensors))
+            return _finalize_halted_trace(
+                self,
+                backend,
+                halt_exc,
+                model,
+                input_tensors,
+                postprocess,
+            )
+        backend.cleanup_halted_forward_session(self, (model, input_tensors))
         raise
 
     except Exception as e:
-        _TORCH_BACKEND.cleanup_failed_forward_session(self, (model, input_tensors), e)
+        backend.cleanup_failed_forward_session(self, (model, input_tensors), e)
         raise e
 
     finally:

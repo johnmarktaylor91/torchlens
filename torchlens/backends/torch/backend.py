@@ -11,6 +11,7 @@ import torch
 
 from ... import _state
 from ...data_classes.internal_types import FuncExecutionContext
+from ...fastlog.types import ModuleStackFrame
 from ...ir.events import OpEvent, TraceBuildState
 from ...ir.intervention import FireResult, FunctionEventInput
 from ...ir.predicate import RecordContext
@@ -24,6 +25,7 @@ from . import _tl
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
 from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
+from .module_stack import pop_frame, push_existing_frame
 from .ops import (
     _get_autograd_saved_stats_for_tensor,
     _walk_output_tensors_with_paths,
@@ -323,6 +325,32 @@ class TorchBackend:
             cast(torch.Tensor, tensor),
             source,
             extra_address,
+        )
+
+    def push_existing_module_frame(
+        self,
+        session: object,
+        module_stack: list[Any],
+        frame: object,
+    ) -> None:
+        """Push an existing torch module-stack frame."""
+        del session
+        push_existing_frame(
+            cast(list[ModuleStackFrame], module_stack),
+            cast(ModuleStackFrame, frame),
+        )
+
+    def pop_module_frame(
+        self,
+        session: object,
+        module_stack: list[Any],
+        frame: object,
+    ) -> None:
+        """Pop and validate the current torch module-stack frame."""
+        del session
+        pop_frame(
+            cast(list[ModuleStackFrame], module_stack),
+            cast(ModuleStackFrame, frame),
         )
 
     def extract_and_mark_outputs(

@@ -8,6 +8,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ._protocol import CaptureBackend
 from .registry import (
     BackendCapabilities,
     BackendSpec,
@@ -237,6 +238,20 @@ def _torch_capture_trace(*args: Any, **kwargs: Any) -> Any:
     from ..user_funcs import _trace_torch_model
 
     return _trace_torch_model(*args, **kwargs)
+
+
+def _torch_capture_backend() -> CaptureBackend:
+    """Return the torch Protocol adapter registered for shared capture orchestration.
+
+    Returns
+    -------
+    CaptureBackend
+        Torch capture backend implementing ``CaptureBackend``.
+    """
+
+    from .torch.backend import TorchBackend
+
+    return TorchBackend()
 
 
 def _mlx_capture_trace(*args: Any, **kwargs: Any) -> Any:
@@ -474,6 +489,7 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("torch_module",),
                 trace_options=TORCH_TRACE_OPTIONS,
             ),
+            capture_backend=_torch_capture_backend,
             serialization_policy=SerializationPolicy(
                 payload_policy="full",
                 body_format="safetensors",
