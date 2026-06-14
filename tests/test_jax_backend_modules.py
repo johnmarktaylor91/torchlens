@@ -16,6 +16,7 @@ from torchlens.validation.invariants import check_metadata_invariants
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 eqx = pytest.importorskip("equinox")
+nnx = pytest.importorskip("flax.nnx")
 
 pytestmark = pytest.mark.backend_jax
 
@@ -207,6 +208,122 @@ class WhileInsideEquinox(eqx.Module):
         return value
 
 
+class SimpleNnxMlp(nnx.Module):
+    """Tiny Flax NNX MLP with two direct Linear children."""
+
+    def __init__(self) -> None:
+        """Initialize deterministic linear layers."""
+
+        rngs = nnx.Rngs(20)
+        self.fc1 = nnx.Linear(3, 4, rngs=rngs)
+        self.fc2 = nnx.Linear(4, 2, rngs=rngs)
+
+    def __call__(self, x: Any) -> Any:
+        """Return the MLP output for ``x``."""
+
+        return self.fc2(jax.nn.relu(self.fc1(x)))
+
+
+class NestedNnxBlock(nnx.Module):
+    """Nested Flax NNX block with a Linear child and local activation."""
+
+    def __init__(self) -> None:
+        """Initialize the projection layer and scalar parameter."""
+
+        self.proj = nnx.Linear(3, 4, rngs=nnx.Rngs(21))
+        self.scale = nnx.Param(jnp.asarray(2.0, dtype=jnp.float32))
+
+    def __call__(self, x: Any) -> Any:
+        """Return projected and activated ``x``."""
+
+        return jnp.tanh(self.proj(x)) * self.scale[...]
+
+
+class NestedNnxMlp(nnx.Module):
+    """Flax NNX model with a user block nested under the root."""
+
+    def __init__(self) -> None:
+        """Initialize nested block and head layers."""
+
+        self.encoder = NestedNnxBlock()
+        self.head = nnx.Linear(4, 2, rngs=nnx.Rngs(22))
+
+    def __call__(self, x: Any) -> Any:
+        """Return nested-model output for ``x``."""
+
+        return self.head(self.encoder(x))
+
+
+class SharedNnxProjection(nnx.Module):
+    """Shared Flax NNX submodule used through two root addresses."""
+
+    def __init__(self) -> None:
+        """Initialize deterministic shared parameters."""
+
+        self.weight = nnx.Param(
+            jnp.asarray(
+                [[1.0, 0.0], [0.0, 1.0], [1.0, -1.0]],
+                dtype=jnp.float32,
+            )
+        )
+        self.bias = nnx.Param(jnp.asarray([0.25, -0.5], dtype=jnp.float32))
+
+    def __call__(self, x: Any) -> Any:
+        """Return a projected vector."""
+
+        return x @ self.weight[...] + self.bias[...]
+
+
+class SharedNnxMlp(nnx.Module):
+    """Flax NNX model with the same submodule instance at two paths."""
+
+    def __init__(self) -> None:
+        """Initialize both paths with one shared module instance."""
+
+        shared = SharedNnxProjection()
+        self.left = shared
+        self.right = shared
+
+    def __call__(self, x: Any) -> Any:
+        """Call the shared submodule through both aliases."""
+
+        return self.left(x) + self.right(x + 1.0)
+
+
+class JitInsideNnx(nnx.Module):
+    """Flax NNX module that calls ``jax.jit`` inside ``__call__``."""
+
+    def __init__(self) -> None:
+        """Initialize the core layer."""
+
+        self.core = nnx.Linear(3, 2, rngs=nnx.Rngs(23))
+
+    def __call__(self, x: Any) -> Any:
+        """Return output through an unsupported inner ``jax.jit``."""
+
+        def inner(y: Any) -> Any:
+            """Return the core layer output for ``y``."""
+
+            return self.core(y)
+
+        return jax.jit(inner)(x)
+
+
+class MutatingNnx(nnx.Module):
+    """Flax NNX module that rebinds state during ``__call__``."""
+
+    def __init__(self) -> None:
+        """Initialize a scalar parameter."""
+
+        self.bias = nnx.Param(jnp.asarray(0.0, dtype=jnp.float32))
+
+    def __call__(self, x: Any) -> Any:
+        """Mutate parameter state and return an output."""
+
+        self.bias.value = self.bias[...] + 1.0
+        return x + self.bias[...]
+
+
 def test_jax_equinox_simple_mlp_uses_pytree_module_hierarchy() -> None:
     """Simple Equinox modules should produce real pytree-module logs."""
 
@@ -222,6 +339,27 @@ def test_jax_equinox_simple_mlp_uses_pytree_module_hierarchy() -> None:
     assert trace.modules["fc1"].params
     assert {param.module_address for param in trace.modules["fc1"].params} == {"fc1"}
     assert trace.params["fc1.weight"].is_trainable is True
+    fc1_labels = trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
+    assert fc1_labels
+    assert all("fc1:1" in trace[label].modules for label in fc1_labels)
+    check_metadata_invariants(trace)
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_nnx_simple_mlp_uses_pytree_module_hierarchy() -> None:
+    """Simple Flax NNX modules should produce real pytree-module logs."""
+
+    model = SimpleNnxMlp()
+    trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    assert trace.module_identity_mode == "pytree_module"
+    assert [module.address for module in trace.modules] == ["self", "fc1", "fc2"]
+    assert set(trace.modules["self"].address_children) == {"fc1", "fc2"}
+    assert trace.modules["fc1"].address_parent == "self"
+    assert trace.modules["fc2"].address_parent == "self"
+    assert trace.modules["fc1"].params
+    assert {param.module_address for param in trace.modules["fc1"].params} == {"fc1"}
+    assert trace.params["fc1.kernel"].is_trainable is True
     fc1_labels = trace.resolve_sites(tl.in_module("fc1"), max_fanout=8).labels()
     assert fc1_labels
     assert all("fc1:1" in trace[label].modules for label in fc1_labels)
@@ -258,6 +396,36 @@ def test_jax_equinox_nested_modules_preserve_address_tree_and_selectors() -> Non
     assert trace.validate_forward_pass([]) is True
 
 
+def test_jax_nnx_nested_modules_preserve_address_tree_and_selectors() -> None:
+    """Nested Flax NNX modules should preserve parent/child addresses."""
+
+    model = NestedNnxMlp()
+    trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    assert trace.module_identity_mode == "pytree_module"
+    assert set(module.address for module in trace.modules) == {
+        "self",
+        "encoder",
+        "encoder.proj",
+        "head",
+    }
+    assert set(trace.modules["self"].address_children) == {"encoder", "head"}
+    assert trace.modules["encoder"].address_parent == "self"
+    assert trace.modules["encoder"].address_children == ["encoder.proj"]
+    assert trace.modules["encoder.proj"].address_parent == "encoder"
+    assert trace.modules["head"].params
+    assert {param.module_address for param in trace.modules["encoder.proj"].params} == {
+        "encoder.proj"
+    }
+    assert trace.params["encoder.scale"].module_address == "encoder"
+    proj_labels = trace.resolve_sites(tl.in_module("encoder.proj"), max_fanout=8).labels()
+    encoder_labels = trace.resolve_sites(tl.in_module("encoder"), max_fanout=8).labels()
+    assert set(proj_labels) < set(encoder_labels)
+    assert all("encoder.proj:1" in trace[label].modules for label in proj_labels)
+    check_metadata_invariants(trace)
+    assert trace.validate_forward_pass([]) is True
+
+
 def test_jax_equinox_shared_submodule_aliases_and_multicall() -> None:
     """Shared Equinox module instances should mirror torch alias semantics."""
 
@@ -279,6 +447,38 @@ def test_jax_equinox_shared_submodule_aliases_and_multicall() -> None:
     assert second_call.ops
     assert all(f"left:{call_index}" in trace.modules._pass_dict for call_index in (1, 2))
     assert all("left" in trace[op_label].modules[-1] for op_label in first_call.ops)
+
+    assert trace.modules["self"].address_children == ["left"]
+    assert {param.module_address for param in shared.params} == {"left"}
+    assert {tuple(param.all_module_addresses) for param in shared.params} == {("left", "right")}
+    assert {tuple(param.all_addresses) for param in shared.params} == {
+        ("left.weight", "right.weight"),
+        ("left.bias", "right.bias"),
+    }
+    check_metadata_invariants(trace)
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_nnx_shared_submodule_aliases_and_multicall() -> None:
+    """Shared Flax NNX module instances should mirror torch alias semantics."""
+
+    model = SharedNnxMlp()
+    trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    shared = trace.modules["left"]
+    assert trace.modules["right"] is shared
+    assert shared.address == "left"
+    assert shared.all_addresses == ["left", "right"]
+    assert shared.num_calls == 2
+    assert set(shared.ops.keys()) == {1, 2}
+    assert shared.call_labels == ["left:1", "left:2"]
+    first_call = shared.ops.get(1)
+    second_call = shared.ops.get(2)
+    assert first_call is not None
+    assert second_call is not None
+    assert first_call.ops
+    assert second_call.ops
+    assert all(f"left:{call_index}" in trace.modules._pass_dict for call_index in (1, 2))
 
     assert trace.modules["self"].address_children == ["left"]
     assert {param.module_address for param in shared.params} == {"left"}
@@ -327,6 +527,18 @@ def test_jax_raw_function_traces_remain_function_root() -> None:
     assert trace.validate_forward_pass([]) is True
 
 
+def test_jax_nnx_explicit_function_root_keeps_raw_callable_behavior() -> None:
+    """Explicit function-root mode should not auto-wrap NNX module constants."""
+
+    with pytest.raises(ValueError, match="closed-jaxpr constants"):
+        tl.trace(
+            SimpleNnxMlp(),
+            jnp.ones(3, dtype=jnp.float32),
+            backend="jax",
+            module_identity_mode="function_root",
+        )
+
+
 @pytest.mark.parametrize(
     ("model", "primitive_name"),
     (
@@ -347,6 +559,20 @@ def test_jax_equinox_pytree_module_strict_rejects_inner_transforms(
         tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
 
 
+def test_jax_nnx_pytree_module_strict_rejects_inner_jit() -> None:
+    """Strict NNX attribution should reject transform-hidden child boundaries."""
+
+    with pytest.raises(ValueError, match="pytree_module strict mode.*'jit'.*'self'"):
+        tl.trace(JitInsideNnx(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+
+def test_jax_nnx_pytree_module_rejects_state_rebinding() -> None:
+    """Strict NNX attribution should expose state rebinding as unsupported."""
+
+    with pytest.raises(BackendUnsupportedError, match="NNX state rebinding"):
+        tl.trace(MutatingNnx(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+
 def _pytree_surface_trace() -> Any:
     """Return a real Equinox pytree-module trace for surface tests.
 
@@ -357,6 +583,18 @@ def _pytree_surface_trace() -> Any:
     """
 
     return tl.trace(SimpleEquinoxMlp(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+
+def _nnx_surface_trace() -> Any:
+    """Return a real Flax NNX pytree-module trace for surface tests.
+
+    Returns
+    -------
+    Any
+        Captured TorchLens trace.
+    """
+
+    return tl.trace(SimpleNnxMlp(), jnp.ones(3, dtype=jnp.float32), backend="jax")
 
 
 def _assert_pytree_modules_surface(trace: Any, tmp_path: Path) -> None:
@@ -496,3 +734,27 @@ def test_jax_equinox_pytree_public_surface_matrix(
     """Assert executable public surfaces on a real Equinox pytree trace."""
 
     surface_assertion(_pytree_surface_trace(), tmp_path)
+
+
+@pytest.mark.parametrize(
+    "surface_assertion",
+    (
+        _assert_pytree_modules_surface,
+        _assert_pytree_module_children_surface,
+        _assert_pytree_module_params_surface,
+        _assert_pytree_forward_args_surface,
+        _assert_pytree_draw_surface,
+        _assert_pytree_tabular_and_summary_surface,
+        _assert_pytree_save_load_surface,
+        _assert_pytree_validate_surface,
+        _assert_pytree_grad_surface,
+        _assert_pytree_log_backward_surface,
+    ),
+)
+def test_jax_nnx_pytree_public_surface_matrix(
+    surface_assertion: Callable[[Any, Path], None],
+    tmp_path: Path,
+) -> None:
+    """Assert executable public surfaces on a real Flax NNX pytree trace."""
+
+    surface_assertion(_nnx_surface_trace(), tmp_path)

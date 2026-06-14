@@ -943,7 +943,7 @@ def _raise_attributed_strict_error(
     raise ValueError(
         "JAX pytree_module strict mode does not support "
         f"{primitive_name!r} inside attributed module {module_address!r}{detail}. "
-        "Move the transform/control-flow outside the Equinox module, capture the raw "
+        "Move the transform/control-flow outside the attributed module, capture the raw "
         "function_root callable, or wait for widened attribution support."
     )
 

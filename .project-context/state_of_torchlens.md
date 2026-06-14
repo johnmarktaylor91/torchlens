@@ -139,7 +139,7 @@ narrower than torch's full payload contract.
 
 ### Backend-Neutral Substrate
 `Trace.backend` is the public backend tag resolved by `BackendSpec`. Trace identity also records
-`module_identity_mode` (`torch_module`, Equinox/JAX `pytree_module`, or `function_root`) and
+`module_identity_mode` (`torch_module`, JAX `pytree_module`, `object_module`, or `function_root`) and
 `param_source` (`native-module`, `pytree-derived`, or `none`). Op, Layer, and Param records
 carry neutral `dtype_ref`, `device_ref`, `backend_address`, and `resolver_status` mirror fields
 beside existing torch-shaped fields so torch accessors stay stable while non-torch builders can

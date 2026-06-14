@@ -7,7 +7,8 @@ import inspect
 import json
 import time
 from collections import Counter, defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from functools import reduce
 from operator import mul
@@ -64,9 +65,13 @@ from .jaxpr import (
 )
 from .modules import (
     EquinoxModuleTree,
+    NnxModuleTree,
     discover_equinox_module_tree,
+    discover_nnx_module_tree,
     equinox_param_logs,
+    nnx_param_logs,
     scoped_equinox_module_calls,
+    scoped_nnx_module_calls,
 )
 
 
@@ -324,9 +329,11 @@ class JAXBackend:
         if not isinstance(jax_max_control_flow_unroll, int) or jax_max_control_flow_unroll < 1:
             raise ValueError("jax_max_control_flow_unroll must be an integer >= 1")
         eqx_tree = discover_equinox_module_tree(model)
+        nnx_tree = discover_nnx_module_tree(model) if eqx_tree is None else None
+        module_tree = eqx_tree or nnx_tree
         use_pytree_module = _resolve_jax_module_identity_mode(
             module_identity_mode,
-            eqx_tree,
+            module_tree,
         )
         if use_pytree_module and grad_options is not None:
             raise BackendUnsupportedError(
@@ -374,15 +381,23 @@ class JAXBackend:
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
         if use_pytree_module:
-            if eqx_tree is None:
-                raise AssertionError("pytree_module mode requires Equinox module metadata.")
-            with scoped_equinox_module_calls(eqx_tree):
-                closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+            if module_tree is None:
+                raise AssertionError("pytree_module mode requires JAX module metadata.")
+            try:
+                with _scoped_pytree_module_calls(module_tree):
+                    closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+            except Exception as exc:
+                _raise_nnx_trace_context_error(module_tree, exc)
+                raise
             reject_attributed_module_strict_control_flow(closed_jaxpr)
-            eqx_tree.call_counts.clear()
-            eqx_tree.forward_args_by_call.clear()
-            with scoped_equinox_module_calls(eqx_tree):
-                output = model(*args)
+            module_tree.call_counts.clear()
+            module_tree.forward_args_by_call.clear()
+            try:
+                with _scoped_pytree_module_calls(module_tree):
+                    output = model(*args)
+            except Exception as exc:
+                _raise_nnx_trace_context_error(module_tree, exc)
+                raise
         else:
             closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
             reject_undeclared_consts(closed_jaxpr)
@@ -403,9 +418,9 @@ class JAXBackend:
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
         if use_pytree_module:
-            if eqx_tree is None:
-                raise AssertionError("pytree_module mode requires Equinox module metadata.")
-            self._attach_equinox_params(trace, eqx_tree)
+            if module_tree is None:
+                raise AssertionError("pytree_module mode requires JAX module metadata.")
+            self._attach_pytree_params(trace, module_tree)
         else:
             self._attach_params(trace, args[0] if args else None)
         if grad_options is not None:
@@ -420,7 +435,7 @@ class JAXBackend:
             )
         self._finish_trace(
             trace,
-            eqx_tree if use_pytree_module else None,
+            module_tree if use_pytree_module else None,
             result.equations,
         )
         trace.jax_closed_jaxpr = closed_jaxpr
@@ -1139,15 +1154,19 @@ class JAXBackend:
         trace.num_layers_with_params = 0
         trace.param_source = "pytree-derived" if param_logs else "none"
 
-    def _attach_equinox_params(self, trace: Trace, tree: EquinoxModuleTree) -> None:
-        """Populate ``trace.params`` from an Equinox module pytree.
+    def _attach_pytree_params(
+        self,
+        trace: Trace,
+        tree: EquinoxModuleTree | NnxModuleTree,
+    ) -> None:
+        """Populate ``trace.params`` from a JAX module tree.
 
         Parameters
         ----------
         trace
             Trace receiving parameter metadata.
         tree
-            Discovered Equinox module tree.
+            Discovered Equinox or Flax NNX module tree.
 
         Returns
         -------
@@ -1155,7 +1174,10 @@ class JAXBackend:
             Trace parameter accessors and counters are updated.
         """
 
-        param_logs = equinox_param_logs(tree, trace)
+        if isinstance(tree, EquinoxModuleTree):
+            param_logs = equinox_param_logs(tree, trace)
+        else:
+            param_logs = nnx_param_logs(tree, trace)
         trace.param_logs = ParamAccessor(param_logs)
         trace.num_param_tensors = len(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
@@ -1333,7 +1355,7 @@ class JAXBackend:
     def _finish_trace(
         self,
         trace: Trace,
-        eqx_tree: EquinoxModuleTree | None = None,
+        module_tree: EquinoxModuleTree | NnxModuleTree | None = None,
         captures: Sequence[JaxEquationCapture] = (),
     ) -> None:
         """Finalize materialized JAX raw logs into public accessors.
@@ -1342,8 +1364,8 @@ class JAXBackend:
         ----------
         trace
             Trace to finalize.
-        eqx_tree
-            Optional Equinox module tree for pytree-module finalization.
+        module_tree
+            Optional JAX module tree for pytree-module finalization.
         captures
             Interpreted JAX equation captures in event order.
 
@@ -1436,8 +1458,8 @@ class JAXBackend:
             layer_log.backend_address = op_log.backend_address
             layer_log.resolver_status = op_log.resolver_status
 
-        if eqx_tree is not None:
-            self._attach_equinox_op_params(trace, eqx_tree, captures)
+        if module_tree is not None:
+            self._attach_pytree_op_params(trace, module_tree, captures)
 
         trace.op_equivalence_classes.clear()
         trace.op_equivalence_classes.update(equivalent_labels_by_key)
@@ -1466,28 +1488,28 @@ class JAXBackend:
         trace.has_backward_pass = False
         trace.capture_end_time = time.time()
         trace.backend = cast(BackendName, self.name)
-        if eqx_tree is None:
+        if module_tree is None:
             trace.module_identity_mode = "function_root"
             self._attach_function_root_module(trace)
         else:
             trace.module_identity_mode = "pytree_module"
-            self._attach_pytree_module_logs(trace, eqx_tree)
+            self._attach_pytree_module_logs(trace, module_tree)
         trace._tracing_finished = True
 
-    def _attach_equinox_op_params(
+    def _attach_pytree_op_params(
         self,
         trace: Trace,
-        tree: EquinoxModuleTree,
+        tree: EquinoxModuleTree | NnxModuleTree,
         captures: Sequence[JaxEquationCapture],
     ) -> None:
-        """Attach Equinox pytree parameters to primitive ops that consume them.
+        """Attach JAX module parameters to primitive ops that consume them.
 
         Parameters
         ----------
         trace
             Trace with finalized JAX op labels.
         tree
-            Discovered Equinox module tree.
+            Discovered Equinox or Flax NNX module tree.
         captures
             Interpreted JAX equation captures in event order.
 
@@ -1547,15 +1569,19 @@ class JAXBackend:
         trace.num_params_trainable = num_params_trainable
         trace.num_params_frozen = num_params - num_params_trainable
 
-    def _attach_pytree_module_logs(self, trace: Trace, tree: EquinoxModuleTree) -> None:
-        """Build public module logs for an Equinox pytree-module trace.
+    def _attach_pytree_module_logs(
+        self,
+        trace: Trace,
+        tree: EquinoxModuleTree | NnxModuleTree,
+    ) -> None:
+        """Build public module logs for a JAX pytree-module trace.
 
         Parameters
         ----------
         trace
             Trace receiving module accessors.
         tree
-            Discovered Equinox module tree.
+            Discovered Equinox or Flax NNX module tree.
 
         Returns
         -------
@@ -2064,7 +2090,7 @@ def _normalize_static_argnums(value: object, num_args: int) -> tuple[int, ...]:
 
 def _resolve_jax_module_identity_mode(
     value: object,
-    eqx_tree: EquinoxModuleTree | None,
+    module_tree: EquinoxModuleTree | NnxModuleTree | None,
 ) -> bool:
     """Return whether this JAX capture should use pytree-module attribution.
 
@@ -2072,8 +2098,8 @@ def _resolve_jax_module_identity_mode(
     ----------
     value
         Public ``module_identity_mode`` value after missing normalization.
-    eqx_tree
-        Discovered Equinox module tree, if the root callable is Equinox.
+    module_tree
+        Discovered JAX module tree, if the root callable is supported.
 
     Returns
     -------
@@ -2083,7 +2109,7 @@ def _resolve_jax_module_identity_mode(
     Raises
     ------
     BackendUnsupportedError
-        If ``pytree_module`` is requested for a non-Equinox root.
+        If ``pytree_module`` is requested for an unsupported root.
     ValueError
         If an unknown mode is requested.
     """
@@ -2092,14 +2118,78 @@ def _resolve_jax_module_identity_mode(
         raise ValueError(
             "JAX module_identity_mode must be None, 'function_root', or 'pytree_module'."
         )
-    if value == "pytree_module" and eqx_tree is None:
+    if value == "pytree_module" and module_tree is None:
         raise BackendUnsupportedError(
             "JAX module_identity_mode='pytree_module' requires an Equinox eqx.Module "
-            "root. Raw JAX callables use module_identity_mode='function_root'."
+            "or Flax NNX nnx.Module root. Raw JAX callables use "
+            "module_identity_mode='function_root'."
         )
     if value == "function_root":
         return False
-    return eqx_tree is not None
+    return module_tree is not None
+
+
+@contextmanager
+def _scoped_pytree_module_calls(
+    tree: EquinoxModuleTree | NnxModuleTree,
+) -> Iterator[None]:
+    """Wrap one supported JAX module tree with TorchLens named scopes.
+
+    Parameters
+    ----------
+    tree
+        Discovered Equinox or Flax NNX module tree.
+
+    Yields
+    ------
+    None
+        Control while module-call wrappers are installed.
+    """
+
+    if isinstance(tree, EquinoxModuleTree):
+        with scoped_equinox_module_calls(tree):
+            yield
+    else:
+        with scoped_nnx_module_calls(tree):
+            yield
+
+
+def _raise_nnx_trace_context_error(
+    tree: EquinoxModuleTree | NnxModuleTree,
+    exc: Exception,
+) -> None:
+    """Raise a stable TorchLens error for unsupported NNX trace-context failures.
+
+    Parameters
+    ----------
+    tree
+        Active JAX module tree.
+    exc
+        Exception raised by Flax/JAX tracing.
+
+    Returns
+    -------
+    None
+        Returns when ``exc`` is not the NNX trace-context failure this helper owns.
+
+    Raises
+    ------
+    BackendUnsupportedError
+        If an NNX module-mode capture hits Flax trace-context mutation limits.
+    """
+
+    if not isinstance(tree, NnxModuleTree):
+        return
+    if type(exc).__name__ != "TraceContextError":
+        return
+    if not type(exc).__module__.startswith("flax"):
+        return
+    raise BackendUnsupportedError(
+        "JAX pytree_module strict mode does not support Flax NNX state rebinding "
+        "or lifted transforms inside attributed modules. Move the mutation/transform "
+        "outside the module, capture a raw function_root callable, or wait for widened "
+        "NNX attribution support."
+    ) from exc
 
 
 def _jax_event_module_stack(module_stack: Sequence[str]) -> tuple[str, ...]:

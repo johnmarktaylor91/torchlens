@@ -10,7 +10,7 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Technical preview | Unsupported | Audit-only | `torch_module` compatibility mode | Unsupported |
-| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox `pytree_module` | `trace.derived_grads` only |
+| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads` only |
 | `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 
 ## Public Option Spine
@@ -27,7 +27,7 @@ Declared future options:
 |---|---|
 | `jax_control_flow` | JAX control-flow boundary or unroll policy; `lax.scan` supports `unroll` or `reject` |
 | `jax_max_control_flow_unroll` | JAX `lax.scan` unroll safety limit |
-| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox `pytree_module`; tinygrad supports raw `function_root` and callable object `object_module` |
+| `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad supports raw `function_root` and callable object `object_module` |
 | `payload_policy` | Backend payload codec/materialization policy |
 | `save_preview` | Future non-torch `save=` preview semantics |
 
@@ -39,12 +39,13 @@ derived from the first pytree argument, so `Trace.param_source` is `"pytree-deri
 leaves are present and `"none"` otherwise. Raw callables use `module_identity_mode="function_root"`
 and expose only the root `"self"` module.
 
-Equinox `eqx.Module` roots default to `module_identity_mode="pytree_module"`. TorchLens walks the
-module dataclass tree, attributes equations through `jax.named_scope`, builds real `Trace.modules`
-entries with `training=False`, and derives parameter owners from pytree array paths. B2a strict mode
-rejects `jax.jit`/`pjit`/`shard_map`, `lax.cond`, `lax.scan`, `lax.while_loop`, remat/custom-VJP,
-and callback effects inside attributed modules; move those transforms outside the module or capture a
-raw `function_root` callable until widened attribution lands.
+Equinox `eqx.Module` and Flax NNX `nnx.Module` roots default to
+`module_identity_mode="pytree_module"`. TorchLens walks the module tree, attributes equations through
+`jax.named_scope`, builds real `Trace.modules` entries with `training=False`, and derives parameter
+owners from path-keyed pytree/state leaves. B2a strict mode rejects
+`jax.jit`/`pjit`/`shard_map`, `lax.cond`, `lax.scan`, `lax.while_loop`, remat/custom-VJP, callback
+effects, and NNX state rebinding inside attributed modules; move those transforms outside the module
+or capture a raw `function_root` callable until widened attribution lands.
 
 tinygrad raw callables use `module_identity_mode="function_root"`. Callable object graphs with
 discoverable tinygrad module attributes default to `module_identity_mode="object_module"`; pass
