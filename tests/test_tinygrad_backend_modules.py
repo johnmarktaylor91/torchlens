@@ -5,10 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendPayloadUnsupportedError, BackendUnsupportedError
+from torchlens.backends import BackendUnsupportedError
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation.invariants import MetadataInvariantError
 
@@ -345,11 +346,24 @@ def test_tinygrad_object_module_public_surface_matrix(tmp_path: Path) -> None:
     assert loaded.backend == "tinygrad"
     assert loaded.module_identity_mode == "object_module"
     assert all(op.out is None for op in loaded.layer_list)
-    with pytest.raises(
-        BackendPayloadUnsupportedError, match="audit-only|materialized payloads"
-    ) as exc_info:
-        trace.save(tmp_path / "tinygrad_object_portable.tlspec")
-    assert "expected a tensor for portable blobification" not in str(exc_info.value)
+
+    portable_path = tmp_path / "tinygrad_object_portable.tlspec"
+    source_out = trace[trace.output_layers[0]].out
+    expected = source_out.numpy()
+    trace.save(portable_path)
+    loaded_portable = tl.load(portable_path)
+    loaded_out = loaded_portable[loaded_portable.output_layers[0]].out
+    assert loaded_portable.backend == "tinygrad"
+    assert loaded_portable.module_identity_mode == "object_module"
+    assert getattr(loaded_portable, "payload_load_status") == "loaded_device_best_effort"
+    assert isinstance(loaded_out, Tensor)
+    assert loaded_out.shape == expected.shape
+    assert str(loaded_out.dtype) == str(source_out.dtype)
+    np.testing.assert_allclose(loaded_out.numpy(), expected)
+    loaded_status = loaded_portable.validate_forward_pass([])
+    assert loaded_status is loaded_portable.validation_replay_status
+    assert loaded_status.state == "unavailable"
+    assert loaded_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
 def test_tinygrad_object_module_corruption_invariant_fails() -> None:

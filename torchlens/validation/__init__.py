@@ -18,6 +18,7 @@ from ..user_funcs import (
 from .core import validate_saved_outs as validate_trace_saved_outs
 from .consolidated import InterventionValidationReport, validate
 from .invariants import MetadataInvariantError, check_metadata_invariants
+from .status import ValidationReplayState, ValidationReplayStatus
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -555,6 +556,8 @@ def _require_str_enum(
 
 __all__ = [
     "InterventionValidationReport",
+    "ValidationReplayState",
+    "ValidationReplayStatus",
     "validate_backward_pass",
     "validate_batch_of_models_and_inputs",
     "validate",

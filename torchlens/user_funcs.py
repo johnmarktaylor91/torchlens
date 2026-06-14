@@ -3330,9 +3330,10 @@ def _validate_forward_pass_torch(
             save_rng_states=True,
         )
         # Step 3: Validate by replaying the forward pass from saved outs.
-        outs_are_valid = trace.validate_forward_pass(
+        validation_result = trace.validate_forward_pass(
             ground_truth_output_tensors, verbose, validate_metadata=validate_metadata
         )
+        outs_are_valid = validation_result if isinstance(validation_result, bool) else False
     finally:
         model.load_state_dict(state_dict)
         if trace is not None:

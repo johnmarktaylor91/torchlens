@@ -133,8 +133,9 @@ manifests. `io.detect_tlspec_format()` distinguishes unified and legacy formats.
 `validation.validate_tlspec()` validates unified manifests only; older 2.16 formats remain
 loadable. Unified manifests currently support manifest schema v1 for torch writes and schema v2
 for backend-aware validation/loading preflight. Schema v2 adds `backend`, `backend_runtime`,
-nullable torch-specific fields, `payload_policy`, and audit-only non-torch payload refusal before
-torch-shaped manifest parsing.
+nullable torch-specific fields, `payload_policy`, and non-torch codec metadata. JAX and tinygrad
+use `payload_policy="array_payloads"` to materialize forward/derived array payloads while staying
+narrower than torch's full payload contract.
 
 ### Backend-Neutral Substrate
 `Trace.backend` is the public backend tag resolved by `BackendSpec`. Trace identity also records
@@ -156,12 +157,21 @@ tinygrad M2 exposes a preview UOp-snapshot backend through explicit `backend="ti
 callables with positional tinygrad `Tensor` inputs. It is pinned to the `tinygrad>=0.13,<0.14`
 series and the runtime guard currently accepts `tinygrad==0.13.0`; live replay validation and
 derived gradients require `DEV=PYTHON` realized-copy payloads. The module mode is
-`function_root`, `Trace.param_source` is `"none"`, `.tlspec` save/load is audit-only, and
+`function_root`, `Trace.param_source` is `"none"`, `.tlspec` save/load materializes array
+payloads through the tinygrad codec, and
 `tl.backends.tinygrad.GradOptions` populates leaf-level `trace.derived_grads` without enabling
 true backward capture. Selective save predicates, module predicates, intervention, halt,
 streaming, `save_grads=`, `backward_ready=True`, `tl.record(backend="tinygrad")`, mid-capture
 realize/assign/replace/setitem mutation, and TinyJit execution raise typed backend errors with
 workarounds.
+
+Loaded non-torch traces are payload-materialized but not replay-validation-capable. Portable save
+strips runtime-only replay captures (`jax_equation_captures` and `tinygrad_uop_captures`), so
+`Trace.validation_replay_status` reports `state="unavailable"` with reason
+`"loaded_trace_runtime_capture_stripped"` for loaded JAX/tinygrad traces. Live JAX/tinygrad traces
+still run real replay and parent-perturbation validation. `Trace.payload_load_status` records load
+materialization outcomes such as `"loaded_device_best_effort"`, `"audit_only"`, and
+`"audit_only_missing_runtime"`.
 
 ### Fastlog vs Full Capture
 Full capture returns a faithful `Trace` and runs postprocess. Fastlog returns a sparse

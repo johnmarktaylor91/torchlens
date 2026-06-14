@@ -7,11 +7,11 @@ from ..registry import TINYGRAD_TRACE_OPTIONS
 supports_backward_capture = False
 supports_fastlog = False
 supports_intervention = False
-supports_payload_materialization = False
+supports_payload_materialization = True
 supports_rng_replay = False
 supports_validation_replay = True
 module_identity_modes = ("function_root", "object_module")
-payload_policy = "audit_only"
+payload_policy = "array_payloads"
 live_payload_policy = "dev_python_realized_copy"
 trace_options = TINYGRAD_TRACE_OPTIONS
 

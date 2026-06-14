@@ -56,6 +56,8 @@ class LazyActivationRef:
         Backend-native dtype string before transport conversion.
     logical_device:
         Backend-native device string before transport conversion.
+    codec_metadata:
+        Optional JSON-ready codec metadata.
     """
 
     blob_id: str
@@ -70,6 +72,7 @@ class LazyActivationRef:
     codec: str = "torch_safetensors_v1"
     logical_dtype: str | None = None
     logical_device: str | None = None
+    codec_metadata: dict[str, Any] | None = None
 
     def blob_path(self) -> Path:
         """Return the absolute path to the referenced blob file.

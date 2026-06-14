@@ -6,10 +6,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendPayloadUnsupportedError, BackendUnsupportedError
+from torchlens.backends import BackendUnsupportedError
 from torchlens.validation.invariants import check_metadata_invariants
 
 jax = pytest.importorskip("jax")
@@ -422,7 +423,7 @@ def _assert_pytree_tabular_and_summary_surface(trace: Any, tmp_path: Path) -> No
 
 
 def _assert_pytree_save_load_surface(trace: Any, tmp_path: Path) -> None:
-    """Assert audit-only save/load behavior."""
+    """Assert portable save/load materializes arrays with explicit replay status."""
 
     audit_path = tmp_path / "jax_pytree_audit.tlspec"
     trace.save(audit_path, level="audit")
@@ -431,9 +432,22 @@ def _assert_pytree_save_load_surface(trace: Any, tmp_path: Path) -> None:
     assert loaded.module_identity_mode == "pytree_module"
     assert all(op.out is None for op in loaded.layer_list)
 
-    with pytest.raises(BackendPayloadUnsupportedError, match="audit-only|materialize") as exc_info:
-        trace.save(tmp_path / "jax_pytree_portable.tlspec")
-    assert "expected a tensor for portable blobification" not in str(exc_info.value)
+    portable_path = tmp_path / "jax_pytree_portable.tlspec"
+    expected = np.asarray(trace[trace.output_layers[0]].out)
+    trace.save(portable_path)
+    loaded_portable = tl.load(portable_path)
+    loaded_out = loaded_portable[loaded_portable.output_layers[0]].out
+    assert loaded_portable.backend == "jax"
+    assert loaded_portable.module_identity_mode == "pytree_module"
+    assert getattr(loaded_portable, "payload_load_status") == "loaded_device_best_effort"
+    assert isinstance(loaded_out, jax.Array)
+    assert loaded_out.shape == expected.shape
+    assert str(loaded_out.dtype) == str(expected.dtype)
+    np.testing.assert_allclose(np.asarray(loaded_out), expected)
+    loaded_status = loaded_portable.validate_forward_pass([])
+    assert loaded_status is loaded_portable.validation_replay_status
+    assert loaded_status.state == "unavailable"
+    assert loaded_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
 def _assert_pytree_validate_surface(trace: Any, tmp_path: Path) -> None:

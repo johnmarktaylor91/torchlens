@@ -40,6 +40,7 @@ from ...postprocess._materialize import materialize_from_events
 from ...postprocess.finalization import _build_module_logs
 from ...postprocess.finalization import _build_root_module_log
 from ...quantities import Duration
+from ...validation.status import ValidationReplayStatus
 
 _ACTIVE_TINYGRAD_MODULE_STACK: list["TinygradModuleFrame"] = []
 
@@ -453,7 +454,12 @@ class TinygradBackend:
             )
         return trace
 
-    def validate_trace(self, trace: Trace, *_args: Any, **kwargs: Any) -> bool:
+    def validate_trace(
+        self,
+        trace: Trace,
+        *_args: Any,
+        **kwargs: Any,
+    ) -> bool | ValidationReplayStatus:
         """Validate a tinygrad trace using UOp replay and metadata invariants.
 
         Parameters
@@ -468,20 +474,37 @@ class TinygradBackend:
 
         Returns
         -------
-        bool
+        bool or ValidationReplayStatus
             True when replayed UOp payloads match saved live payload copies.
+            Loaded traces whose runtime capture was stripped return an explicit
+            unavailable status.
         """
 
+        status = trace.validation_replay_status
+        if not status.available:
+            setattr(trace, "_validation_replay_status", status)
+            return status
         try:
             if kwargs.get("validate_metadata", True):
                 from ...validation.invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
-            return self._validate_uops(trace)
+            passed = self._validate_uops(trace)
         except BackendUnsupportedError:
             raise
         except Exception:
-            return False
+            passed = False
+        setattr(
+            trace,
+            "_validation_replay_status",
+            ValidationReplayStatus.result(
+                passed=passed,
+                backend="tinygrad",
+                source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
+                payload_load_status=getattr(trace, "payload_load_status", None),
+            ),
+        )
+        return passed
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
         """Capture then validate a tinygrad forward pass.
@@ -499,7 +522,13 @@ class TinygradBackend:
 
         validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
-        return self.validate_trace(trace, validate_metadata=validate_metadata)
+        result = self.validate_trace(trace, validate_metadata=validate_metadata)
+        if not isinstance(result, bool):
+            raise BackendUnsupportedError(
+                "tinygrad validation entry unexpectedly produced a replay-unavailable status for "
+                "a freshly captured live trace."
+            )
+        return result
 
     def is_tensor(self, value: object) -> bool:
         """Return whether ``value`` is a tinygrad tensor.

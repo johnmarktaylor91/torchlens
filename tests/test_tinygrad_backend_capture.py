@@ -17,7 +17,6 @@ from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends import (
-    BackendPayloadUnsupportedError,
     BackendRuntimeCompatibilityError,
     BackendUnsupportedError,
     get_backend_spec,
@@ -434,16 +433,17 @@ def test_tinygrad_spec_registered() -> None:
     assert spec.capabilities.validation_replay is True
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
-    assert spec.capabilities.payload_materialization is False
+    assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
-    assert spec.serialization_policy.payload_policy == "audit_only"
+    assert spec.serialization_policy.payload_policy == "array_payloads"
+    assert spec.serialization_policy.body_format == "safetensors"
     assert capabilities.supports_backward_capture is False
     assert capabilities.supports_validation_replay is True
     assert capabilities.supports_fastlog is False
     assert capabilities.supports_intervention is False
-    assert capabilities.supports_payload_materialization is False
+    assert capabilities.supports_payload_materialization is True
     assert capabilities.module_identity_modes == ("function_root", "object_module")
-    assert capabilities.payload_policy == "audit_only"
+    assert capabilities.payload_policy == "array_payloads"
     assert capabilities.live_payload_policy == "dev_python_realized_copy"
     assert capabilities.trace_options == ("module_identity_mode", "grad_options")
 
@@ -769,6 +769,8 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
 
     assert trace.backend == "tinygrad"
     assert trace.validate_forward_pass([_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))]) is True
+    assert trace.validation_replay_status.state == "passed"
+    assert trace.validation_replay_status.source == "live"
     assert isinstance(trace.summary(), str)
     assert len(trace.to_pandas()) == len(trace.layer_list)
     assert trace.modules["self"].address == "self"
@@ -791,14 +793,30 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert loaded.backend == "tinygrad"
     assert loaded.param_source == "none"
     assert all(op.out is None for op in loaded.layer_list)
-    with pytest.raises(BackendUnsupportedError, match="audit-only|realized-copy"):
-        loaded.validate_forward_pass([_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))])
 
-    with pytest.raises(
-        BackendPayloadUnsupportedError, match="audit-only|materialized payloads"
-    ) as exc_info:
-        trace.save(tmp_path / "tinygrad_portable.tlspec")
-    assert "expected a tensor for portable blobification" not in str(exc_info.value)
+    portable_path = tmp_path / "tinygrad_portable.tlspec"
+    source_out = trace[trace.output_layers[0]].out
+    expected = source_out.numpy()
+    trace.save(portable_path)
+    loaded_portable = tl.load(portable_path)
+    loaded_out = loaded_portable[loaded_portable.output_layers[0]].out
+    assert loaded_portable.backend == "tinygrad"
+    assert getattr(loaded_portable, "payload_load_status") == "loaded_device_best_effort"
+    assert isinstance(loaded_out, Tensor)
+    assert loaded_out.shape == expected.shape
+    assert str(loaded_out.dtype) == str(source_out.dtype)
+    np.testing.assert_allclose(loaded_out.numpy(), expected)
+
+    loaded_status = loaded_portable.validate_forward_pass(
+        [_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))]
+    )
+    assert loaded_status is loaded_portable.validation_replay_status
+    assert loaded_status.state == "unavailable"
+    assert loaded_status.available is False
+    assert loaded_status.reason == "loaded_trace_runtime_capture_stripped"
+    assert loaded_status.payload_load_status == "loaded_device_best_effort"
+    with pytest.raises(TypeError, match="not a boolean"):
+        bool(loaded_status)
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.derived_grads"):

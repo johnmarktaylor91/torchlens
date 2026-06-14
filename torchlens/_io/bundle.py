@@ -1025,6 +1025,7 @@ def _scrub_trace_for_bundle(
         "_source_bundle_path",
         "_source_bundle_created_at",
         "payload_load_status",
+        "_validation_replay_status",
     ):
         if hasattr(trace, attr_name):
             transient_attrs[attr_name] = getattr(trace, attr_name)

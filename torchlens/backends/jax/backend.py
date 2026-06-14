@@ -47,6 +47,7 @@ from ...postprocess.loop_grouping_adapter import (
     group_recurrent_nodes,
 )
 from ...quantities import Bytes, Duration
+from ...validation.status import ValidationReplayStatus
 from .jaxpr import (
     ALL_JAX_EQUATION_KINDS,
     JaxCaptureResult,
@@ -425,7 +426,12 @@ class JAXBackend:
         trace.jax_static_argnums = static_argnums
         return trace
 
-    def validate_trace(self, trace: Trace, *_args: Any, **kwargs: Any) -> bool:
+    def validate_trace(
+        self,
+        trace: Trace,
+        *_args: Any,
+        **kwargs: Any,
+    ) -> bool | ValidationReplayStatus:
         """Validate a JAX trace with replay, perturbation, and invariants.
 
         Parameters
@@ -440,18 +446,35 @@ class JAXBackend:
 
         Returns
         -------
-        bool
+        bool or ValidationReplayStatus
             True when saved graph payloads replay and parent edges perturb.
+            Loaded traces whose runtime capture was stripped return an explicit
+            unavailable status.
         """
 
+        status = trace.validation_replay_status
+        if not status.available:
+            setattr(trace, "_validation_replay_status", status)
+            return status
         try:
             if kwargs.get("validate_metadata", True):
                 from ...validation.invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
-            return self._validate_jax_equations(trace)
+            passed = self._validate_jax_equations(trace)
         except Exception:
-            return False
+            passed = False
+        setattr(
+            trace,
+            "_validation_replay_status",
+            ValidationReplayStatus.result(
+                passed=passed,
+                backend="jax",
+                source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
+                payload_load_status=getattr(trace, "payload_load_status", None),
+            ),
+        )
+        return passed
 
     def _validate_jax_equations(self, trace: Trace) -> bool:
         """Validate JAX equation captures against materialized trace payloads.
@@ -512,7 +535,13 @@ class JAXBackend:
 
         validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
-        return self.validate_trace(trace, validate_metadata=validate_metadata)
+        result = self.validate_trace(trace, validate_metadata=validate_metadata)
+        if not isinstance(result, bool):
+            raise BackendUnsupportedError(
+                "JAX validation entry unexpectedly produced a replay-unavailable status for "
+                "a freshly captured live trace."
+            )
+        return result
 
     def is_tensor(self, value: object) -> bool:
         """Return whether ``value`` is a JAX array.

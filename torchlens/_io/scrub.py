@@ -256,6 +256,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_keep_outs_in_memory",
         "_out_sink",
         "_out_writer",
+        "_validation_replay_status",
         "jax_closed_jaxpr",
         "jax_equation_captures",
         "jax_inlined_call_primitives",

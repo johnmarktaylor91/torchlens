@@ -80,6 +80,7 @@ def cleanup(self: "Trace") -> None:
         "_source_bundle_manifest_sha256",
         "_source_bundle_path",
         "_source_bundle_created_at",
+        "_validation_replay_status",
     ]:
         if hasattr(self, attr):
             delattr(self, attr)

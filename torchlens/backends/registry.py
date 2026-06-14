@@ -10,7 +10,7 @@ BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "fake"] | st
 CanHandleFn: TypeAlias = Callable[[object, object, dict[Any, Any] | None], bool]
 CaptureTraceFn: TypeAlias = Callable[..., Any]
 ValidateEntryFn: TypeAlias = Callable[..., bool]
-ValidateTraceFn: TypeAlias = Callable[..., bool]
+ValidateTraceFn: TypeAlias = Callable[..., Any]
 
 
 TRACE_OPTION_CAPABILITY_EPOCHS: tuple[tuple[str, tuple[str, ...]], ...] = (

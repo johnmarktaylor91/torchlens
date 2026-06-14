@@ -183,15 +183,16 @@ def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
 
 
 def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: Path) -> None:
-    """Schema v2 should admit the array-payload vocabulary before capability flips."""
+    """Schema v2 admits the epoch-3 materialized array-payload vocabulary."""
 
     path = tmp_path / "array_payload_vocab.tlspec"
     _captured_log().save(path)
     manifest = _mlx_schema_v2_manifest(path)
+    manifest["body_format"] = "safetensors"
     manifest["payload_policy"] = {
         "policy": "array_payloads",
-        "materialization_supported": False,
-        "payload_kinds": [],
+        "materialization_supported": True,
+        "payload_kinds": ["out"],
     }
     manifest["body_index"][0].update(
         {

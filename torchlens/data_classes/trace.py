@@ -54,6 +54,7 @@ from typing import (
     TYPE_CHECKING,
     TextIO,
     Tuple,
+    Union,
     cast,
 )
 
@@ -68,6 +69,7 @@ if TYPE_CHECKING:
     from ..experimental.dagua._bridge import TorchLensRenderAudit
     from ..fastlog.types import ModuleStackFrame
     from ..intervention.types import FireRecord
+    from ..validation.status import ValidationReplayStatus
     from ..visualization.code_panel import CodePanelOption
     from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
@@ -137,6 +139,8 @@ from ._state_adapter import state_items, state_new, state_restore
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 
 _USE_STORED_TRANSFORM = object()
+_JAX_VALIDATION_REPLAY_BACKEND = "jax"
+_TINYGRAD_VALIDATION_REPLAY_BACKEND = "tinygrad"
 
 _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "trace_label": None,
@@ -362,6 +366,31 @@ def _init_module_hierarchy_data() -> dict[str, Any]:
         "module_code_contexts": {},
         "module_call_stacks": {},
     }
+
+
+def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
+    """Return whether loaded non-torch replay validation cannot run.
+
+    Parameters
+    ----------
+    trace:
+        Trace-like object being checked.
+
+    Returns
+    -------
+    bool
+        True for loaded JAX/tinygrad traces whose backend runtime replay
+        capture lists were stripped by portable save.
+    """
+
+    if not bool(getattr(trace, "_loaded_from_bundle", False)):
+        return False
+    backend = str(getattr(trace, "backend", "torch"))
+    if backend == _JAX_VALIDATION_REPLAY_BACKEND:
+        return not bool(getattr(trace, "jax_equation_captures", ()))
+    if backend == _TINYGRAD_VALIDATION_REPLAY_BACKEND:
+        return not bool(getattr(trace, "tinygrad_uop_captures", ()))
+    return False
 
 
 @dataclass
@@ -5374,7 +5403,7 @@ class Trace(CapturedRun):
         ground_truth_output_tensors: List[torch.Tensor],
         verbose: bool = False,
         validate_metadata: bool = True,
-    ) -> bool:
+    ) -> Union[bool, "ValidationReplayStatus"]:
         """Deprecated alias for :meth:`validate_forward_pass`.
 
         Parameters
@@ -5384,8 +5413,10 @@ class Trace(CapturedRun):
 
         Returns
         -------
-        bool
-            ``True`` if validation succeeds.
+        bool or ValidationReplayStatus
+            ``True`` if validation succeeds. Loaded non-torch traces whose
+            runtime replay captures were stripped return an explicit
+            unavailable status.
         """
         warn_deprecated_alias(
             "Trace.validate_saved_outs",
@@ -5402,7 +5433,7 @@ class Trace(CapturedRun):
         ground_truth_output_tensors: List[torch.Tensor],
         verbose: bool = False,
         validate_metadata: bool = True,
-    ) -> bool:
+    ) -> Union[bool, "ValidationReplayStatus"]:
         """Validate saved outs against ground-truth model outputs.
 
         Parameters
@@ -5413,8 +5444,10 @@ class Trace(CapturedRun):
 
         Returns
         -------
-        bool
-            ``True`` if validation succeeds.
+        bool or ValidationReplayStatus
+            ``True`` if validation succeeds. Loaded non-torch traces whose
+            runtime replay captures were stripped return an explicit
+            unavailable status instead of a pass/fail bool.
         """
         from ..backends import get_backend_spec
 
@@ -5425,6 +5458,34 @@ class Trace(CapturedRun):
             verbose=verbose,
             validate_metadata=validate_metadata,
         )
+
+    @property
+    def validation_replay_status(self) -> "ValidationReplayStatus":
+        """Return replay-validation availability or last completed result.
+
+        Returns
+        -------
+        ValidationReplayStatus
+            Status object distinguishing live replay validation from loaded
+            traces whose runtime replay captures were stripped during save.
+        """
+
+        from ..backends import get_backend_spec
+        from ..validation.status import ValidationReplayStatus
+
+        cached_status = getattr(self, "_validation_replay_status", None)
+        if isinstance(cached_status, ValidationReplayStatus):
+            return cached_status
+        backend = str(getattr(self, "backend", "torch"))
+        if _loaded_non_torch_validation_replay_unavailable(self):
+            return ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+                backend=backend,
+                payload_load_status=getattr(self, "payload_load_status", None),
+            )
+        spec = get_backend_spec(backend)
+        if not spec.capabilities.validation_replay:
+            return ValidationReplayStatus.unavailable_unsupported(backend=backend)
+        return ValidationReplayStatus.available_live(backend=backend)
 
     def replay(
         self,

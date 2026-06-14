@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import json
 from typing import Any, Protocol
 
 import numpy as np
@@ -160,6 +161,7 @@ class JaxPayloadCodec:
             logical_device=_device_string(value),
             codec_metadata=_json_ready_mapping(
                 {
+                    "logical_shape": [int(dim) for dim in array.shape],
                     "weak_type": getattr(value, "weak_type", None),
                     "sharding": _maybe_string(getattr(value, "sharding", None)),
                     "committed": getattr(value, "committed", None),
@@ -273,6 +275,7 @@ class TinygradPayloadCodec:
             logical_device=str(getattr(value, "device", "unknown")),
             codec_metadata=_json_ready_mapping(
                 {
+                    "logical_shape": [int(dim) for dim in array.shape],
                     "tinygrad_device": str(getattr(value, "device", "unknown")),
                     "source_type": type(value).__name__,
                 }
@@ -536,8 +539,43 @@ def _transport_tensor_to_numpy(tensor: torch.Tensor, entry: Any) -> np.ndarray:
     transport = tensor.detach().cpu().contiguous()
     logical_dtype = str(_entry_field(entry, "logical_dtype") or "")
     if logical_dtype in {"bfloat16", "jax.numpy.bfloat16"}:
-        return transport.to(torch.float32).numpy()
-    return transport.numpy()
+        array = transport.to(torch.float32).numpy()
+    else:
+        array = transport.numpy()
+    logical_shape = _logical_shape_from_metadata(_entry_field(entry, "codec_metadata"))
+    if logical_shape is not None:
+        return array.reshape(logical_shape)
+    return array
+
+
+def _logical_shape_from_metadata(codec_metadata: Any) -> tuple[int, ...] | None:
+    """Return logical shape metadata from a codec metadata mapping.
+
+    Parameters
+    ----------
+    codec_metadata:
+        Manifest codec metadata mapping.
+
+    Returns
+    -------
+    tuple[int, ...] or None
+        Logical shape when the metadata contains a valid list of integer
+        dimensions.
+    """
+
+    if not isinstance(codec_metadata, Mapping):
+        return None
+    logical_shape = codec_metadata.get("logical_shape")
+    if isinstance(logical_shape, str):
+        try:
+            logical_shape = json.loads(logical_shape)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(logical_shape, list):
+        return None
+    if not all(isinstance(dim, int) and not isinstance(dim, bool) for dim in logical_shape):
+        return None
+    return tuple(logical_shape)
 
 
 def _resolve_jax_device(jax_module: Any, map_location: Any) -> Any | None:
@@ -611,6 +649,10 @@ def _json_ready_mapping(values: dict[str, Any]) -> dict[str, Any]:
         if value is None:
             continue
         if isinstance(value, (str, int, float, bool)):
+            cleaned[key] = value
+        elif isinstance(value, list) and all(
+            isinstance(item, (str, int, float, bool)) for item in value
+        ):
             cleaned[key] = value
         else:
             cleaned[key] = str(value)

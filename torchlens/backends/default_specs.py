@@ -351,7 +351,7 @@ def _unsupported_validate_trace(*args: Any, **kwargs: Any) -> bool:
     raise BackendUnsupportedError("This backend does not support trace replay validation yet.")
 
 
-def _jax_validate_trace(*args: Any, **kwargs: Any) -> bool:
+def _jax_validate_trace(*args: Any, **kwargs: Any) -> Any:
     """Dispatch to JAX trace replay validation.
 
     Parameters
@@ -361,7 +361,7 @@ def _jax_validate_trace(*args: Any, **kwargs: Any) -> bool:
 
     Returns
     -------
-    bool
+    Any
         Validation result.
     """
 
@@ -370,7 +370,7 @@ def _jax_validate_trace(*args: Any, **kwargs: Any) -> bool:
     return JAXBackend().validate_trace(*args, **kwargs)
 
 
-def _tinygrad_validate_trace(*args: Any, **kwargs: Any) -> bool:
+def _tinygrad_validate_trace(*args: Any, **kwargs: Any) -> Any:
     """Dispatch to tinygrad trace replay validation.
 
     Parameters
@@ -380,7 +380,7 @@ def _tinygrad_validate_trace(*args: Any, **kwargs: Any) -> bool:
 
     Returns
     -------
-    bool
+    Any
         Validation result.
     """
 
@@ -466,14 +466,14 @@ def register_default_backend_specs() -> None:
                 fastlog=False,
                 interventions=False,
                 rng_replay=False,
-                payload_materialization=False,
+                payload_materialization=True,
                 streaming=False,
                 module_identity_modes=("function_root", "pytree_module"),
                 trace_options=JAX_TRACE_OPTIONS,
             ),
             serialization_policy=SerializationPolicy(
-                payload_policy="audit_only",
-                body_format="audit_only",
+                payload_policy="array_payloads",
+                body_format="safetensors",
                 manifest_schema_versions=(2,),
                 runtime_name="jax",
             ),
@@ -494,14 +494,14 @@ def register_default_backend_specs() -> None:
                 fastlog=False,
                 interventions=False,
                 rng_replay=False,
-                payload_materialization=False,
+                payload_materialization=True,
                 streaming=False,
                 module_identity_modes=("function_root", "object_module"),
                 trace_options=TINYGRAD_TRACE_OPTIONS,
             ),
             serialization_policy=SerializationPolicy(
-                payload_policy="audit_only",
-                body_format="audit_only",
+                payload_policy="array_payloads",
+                body_format="safetensors",
                 manifest_schema_versions=(2,),
                 runtime_name="tinygrad",
             ),

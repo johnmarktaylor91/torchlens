@@ -665,6 +665,7 @@ def _build_lazy_tensor_ref(
         codec=entry.codec or "torch_safetensors_v1",
         logical_dtype=entry.logical_dtype,
         logical_device=entry.logical_device,
+        codec_metadata=entry.codec_metadata,
     )
 
 

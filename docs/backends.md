@@ -10,8 +10,8 @@ preview, and explicit `backend="tinygrad"` enables the tinygrad preview.
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Technical preview | Unsupported | Audit-only | `torch_module` compatibility mode | Unsupported |
-| `jax` | Preview jaxpr-first functional capture | Per-equation replay and parent perturbation | Audit-only `.tlspec` save/load | `function_root`, Equinox `pytree_module` | `trace.derived_grads` only |
-| `tinygrad` | Preview UOp-snapshot functional capture | UOp replay and parent perturbation on live `DEV=PYTHON` payloads | Audit-only `.tlspec` save/load | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
+| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox `pytree_module` | `trace.derived_grads` only |
+| `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
 
 ## Public Option Spine
 
@@ -92,9 +92,12 @@ rejection behavior. Workarounds are to pass raw functions and explicit params/in
 full-save `tl.trace(..., backend="jax")`, or use the PyTorch backend for predicate capture,
 intervention, sparse fastlog, and true backward graphs.
 
-JAX `.tlspec` support is audit-only: `trace.save(path, level="audit")` persists metadata. Default
-materialized payload save fails with `BackendPayloadUnsupportedError` until a non-torch payload
-codec exists.
+JAX `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
+forward and derived array payloads and load them back as `jax.Array` values. Runtime-only
+`jax_equation_captures` are stripped from portable artifacts, so loaded JAX traces expose
+`trace.validation_replay_status.state == "unavailable"` with reason
+`"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
+Live JAX traces still run real replay validation.
 
 ## tinygrad Preview
 
@@ -154,6 +157,9 @@ module predicates, intervention, halt, streaming, `save_grads=`, `backward_ready
 raw callable and use full-save `tl.trace(..., backend="tinygrad")`, or use the PyTorch backend for
 predicate capture, intervention, sparse fastlog, and true backward graphs.
 
-tinygrad `.tlspec` support is audit-only: `trace.save(path, level="audit")` persists metadata.
-Loaded audit traces cannot replay-validate or materialize tinygrad payloads; default materialized
-payload save fails with `BackendPayloadUnsupportedError` until a tinygrad payload codec exists.
+tinygrad `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
+forward and derived array payloads and load them back as tinygrad `Tensor` values. Runtime-only
+`tinygrad_uop_captures` are stripped from portable artifacts, so loaded tinygrad traces expose
+`trace.validation_replay_status.state == "unavailable"` with reason
+`"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
+Live tinygrad traces still run real replay validation.
