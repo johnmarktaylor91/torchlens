@@ -257,6 +257,16 @@ SIBLING_ORDER_STRETCH_CAP = 4.5
 SIBLING_ORDER_EPSILON = 1e-9
 
 
+class GraphvizRenderError(RuntimeError):
+    """Raised when Graphviz fails to produce a usable rendered artifact."""
+
+
+_GRAPHVIZ_ESCAPE_HINT = (
+    "Try lowering dpi, rendering direct SVG with vis_fileformat='svg', or reducing the graph "
+    "with a node cap such as vis_call_depth."
+)
+
+
 def _view_rendered_file(filepath: str) -> None:
     """Open a rendered visualization file when a local viewer is available.
 
@@ -298,6 +308,127 @@ def _strip_render_extension(vis_outpath: str) -> str:
     ]:
         return ".".join(split_outpath[:-1])
     return vis_outpath
+
+
+def _decode_graphviz_stderr(error: subprocess.CalledProcessError) -> str:
+    """Return a readable stderr string from a Graphviz process failure.
+
+    Parameters
+    ----------
+    error:
+        Process error raised by ``subprocess.run(..., check=True)``.
+
+    Returns
+    -------
+    str
+        Decoded stderr text, or a fallback process summary when stderr is empty.
+    """
+
+    stderr = error.stderr
+    if isinstance(stderr, bytes):
+        decoded = stderr.decode(errors="replace")
+    elif stderr is None:
+        decoded = ""
+    else:
+        decoded = str(stderr)
+    decoded = decoded.strip()
+    if decoded:
+        return decoded
+    return f"Graphviz exited with status {error.returncode}."
+
+
+def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: str) -> None:
+    """Raise if Graphviz did not produce a non-empty rendered artifact.
+
+    Parameters
+    ----------
+    rendered_path:
+        Expected rendered artifact path.
+    source_path:
+        DOT source path that was passed to Graphviz.
+    graph_kind:
+        Human-readable graph type for the error message.
+
+    Raises
+    ------
+    GraphvizRenderError
+        If the output path is missing or zero bytes.
+    """
+
+    if not os.path.exists(rendered_path):
+        raise GraphvizRenderError(
+            f"Graphviz reported success for {graph_kind} rendering but did not create "
+            f"'{rendered_path}'. DOT source was saved to '{source_path}'. {_GRAPHVIZ_ESCAPE_HINT}"
+        )
+    if os.path.getsize(rendered_path) == 0:
+        raise GraphvizRenderError(
+            f"Graphviz reported success for {graph_kind} rendering but produced a zero-byte "
+            f"output file at '{rendered_path}'. DOT source was saved to '{source_path}'. "
+            f"{_GRAPHVIZ_ESCAPE_HINT}"
+        )
+
+
+def _raise_graphviz_timeout(
+    graph_kind: str,
+    node_description: str,
+    source_path: str,
+    timeout: int,
+    error: subprocess.TimeoutExpired,
+) -> None:
+    """Raise a typed Graphviz timeout error with mitigation guidance.
+
+    Parameters
+    ----------
+    graph_kind:
+        Human-readable graph type.
+    node_description:
+        Description of the rendered graph size.
+    source_path:
+        DOT source path that was passed to Graphviz.
+    timeout:
+        Render timeout in seconds.
+    error:
+        Original timeout exception.
+
+    Raises
+    ------
+    GraphvizRenderError
+        Always raised with actionable rendering guidance.
+    """
+
+    raise GraphvizRenderError(
+        f"Graphviz render timed out after {timeout}s for {graph_kind} with "
+        f"{node_description}. DOT source was saved to '{source_path}'. {_GRAPHVIZ_ESCAPE_HINT}"
+    ) from error
+
+
+def _raise_graphviz_failure(
+    graph_kind: str,
+    source_path: str,
+    error: subprocess.CalledProcessError,
+) -> None:
+    """Raise a typed Graphviz process failure with stderr and mitigation guidance.
+
+    Parameters
+    ----------
+    graph_kind:
+        Human-readable graph type.
+    source_path:
+        DOT source path that was passed to Graphviz.
+    error:
+        Original process failure.
+
+    Raises
+    ------
+    GraphvizRenderError
+        Always raised with Graphviz stderr and actionable rendering guidance.
+    """
+
+    stderr = _decode_graphviz_stderr(error)
+    raise GraphvizRenderError(
+        f"Graphviz failed while rendering {graph_kind}. DOT source was saved to "
+        f"'{source_path}'. Graphviz stderr: {stderr} {_GRAPHVIZ_ESCAPE_HINT}"
+    ) from error
 
 
 def _normalize_buffer_visibility(
@@ -1020,18 +1151,20 @@ def draw(
         else:
             cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
             subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+        _validate_rendered_output(rendered_path, source_path, "forward graph")
         if not vis_save_only:
             _view_rendered_file(rendered_path)
         _vprint(self, f"Graph saved to {vis_outpath}.{vis_fileformat}")
-    except subprocess.TimeoutExpired:
-        warnings.warn(
-            f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for graph with "
-            f"{self.num_tensors} nodes. DOT source saved to "
-            f"'{source_path}'. Consider using vis_node_placement='rank' or "
-            f"vis_call_depth to collapse modules."
+    except subprocess.TimeoutExpired as e:
+        _raise_graphviz_timeout(
+            "forward graph",
+            f"{self.num_tensors} nodes",
+            source_path,
+            _RENDER_TIMEOUT,
+            e,
         )
     except subprocess.CalledProcessError as e:
-        warnings.warn(f"Graphviz render failed: {e.stderr.decode()}")
+        _raise_graphviz_failure("forward graph", source_path, e)
     finally:
         import os
 
@@ -1340,16 +1473,20 @@ def render_backward_graph(
         else:
             cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
             subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+        _validate_rendered_output(rendered_path, source_path, "backward graph")
         if not vis_save_only:
             _view_rendered_file(rendered_path)
         _vprint(self, f"Backward graph saved to {vis_outpath}.{vis_fileformat}")
-    except subprocess.TimeoutExpired:
-        warnings.warn(
-            f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for backward graph with "
-            f"{self.num_grad_fns} grad_fn_handle nodes. DOT source saved to '{source_path}'."
+    except subprocess.TimeoutExpired as e:
+        _raise_graphviz_timeout(
+            "backward graph",
+            f"{self.num_grad_fns} grad_fn_handle nodes",
+            source_path,
+            _RENDER_TIMEOUT,
+            e,
         )
     except subprocess.CalledProcessError as e:
-        warnings.warn(f"Graphviz render failed: {e.stderr.decode()}")
+        _raise_graphviz_failure("backward graph", source_path, e)
     finally:
         import os
 
@@ -1514,16 +1651,20 @@ def render_combined_graph(
         rendered_path = f"{vis_outpath}.{vis_fileformat}"
         cmd = [dot.engine, f"-T{vis_fileformat}", "-o", rendered_path, source_path]
         subprocess.run(cmd, timeout=_RENDER_TIMEOUT, check=True, capture_output=True)
+        _validate_rendered_output(rendered_path, source_path, "combined graph")
         if not vis_save_only:
             _view_rendered_file(rendered_path)
         _vprint(self, f"Combined graph saved to {vis_outpath}.{vis_fileformat}")
-    except subprocess.TimeoutExpired:
-        warnings.warn(
-            f"Graphviz render timed out ({_RENDER_TIMEOUT}s) for combined graph with "
-            f"{self.num_tensors + self.num_grad_fns} nodes. DOT source saved to '{source_path}'."
+    except subprocess.TimeoutExpired as e:
+        _raise_graphviz_timeout(
+            "combined graph",
+            f"{self.num_tensors + self.num_grad_fns} nodes",
+            source_path,
+            _RENDER_TIMEOUT,
+            e,
         )
     except subprocess.CalledProcessError as e:
-        warnings.warn(f"Graphviz render failed: {e.stderr.decode()}")
+        _raise_graphviz_failure("combined graph", source_path, e)
     finally:
         if os.path.exists(source_path):
             os.remove(source_path)
