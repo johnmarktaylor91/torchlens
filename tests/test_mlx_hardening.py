@@ -13,7 +13,11 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError, get_backend_spec  # noqa: E402
+from torchlens.backends import (  # noqa: E402
+    BackendRuntimeCompatibilityError,
+    BackendUnsupportedError,
+    get_backend_spec,
+)
 import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 
 
@@ -134,6 +138,19 @@ def _assert_mlx_materialized_manifest(manifest: dict[str, Any], expected_kinds: 
     )
 
 
+def _assert_mlx_array_equal(
+    actual: mx.array,
+    expected: tuple[np.ndarray, tuple[int, ...], str],
+) -> None:
+    """Assert that an MLX array matches expected value, shape, and dtype metadata."""
+
+    expected_value, expected_shape, expected_dtype = expected
+    assert isinstance(actual, mx.array)
+    assert tuple(actual.shape) == expected_shape
+    assert str(actual.dtype) == expected_dtype
+    np.testing.assert_allclose(np.asarray(actual), expected_value)
+
+
 def _always_true(_op: Any) -> bool:
     """Return true for ``tl.where`` rejection tests."""
 
@@ -208,7 +225,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
 
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     expected_outs = {
-        op.layer_label: np.asarray(op.out)
+        op.layer_label: (np.asarray(op.out), tuple(op.out.shape), str(op.out.dtype))
         for op in trace.layer_list
         if op.has_saved_activation and op.out is not None
     }
@@ -225,7 +242,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     assert loaded_saved_ops
     assert all(isinstance(op.out, mx.array) for op in loaded_saved_ops)
     for op in loaded_saved_ops:
-        np.testing.assert_allclose(np.asarray(op.out), expected_outs[op.layer_label])
+        _assert_mlx_array_equal(op.out, expected_outs[op.layer_label])
 
     status = loaded.validate_forward_pass([])
     assert status is loaded.validation_replay_status
@@ -235,6 +252,72 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     assert status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
+
+
+@pytest.mark.optional
+def test_mlx_save_load_lazy_ref_materializes_public_payloads(tmp_path: Path) -> None:
+    """MLX lazy public loads should defer array decode until ``out_ref.materialize``."""
+
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input())
+    expected_outs = {
+        op.layer_label: (np.asarray(op.out), tuple(op.out.shape), str(op.out.dtype))
+        for op in trace.layer_list
+        if op.has_saved_activation and op.out is not None
+    }
+    bundle_path = tmp_path / "mlx-lazy-materialized.tlspec"
+
+    tl.save(trace, bundle_path)
+    loaded = tl.load(bundle_path, lazy=True)
+    manifest = tl.io.inspect_tlspec(bundle_path)
+
+    assert loaded.backend == "mlx"
+    assert getattr(loaded, "payload_load_status") == "loaded_device_best_effort"
+    _assert_mlx_materialized_manifest(manifest, {"out"})
+    loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+    assert loaded_saved_ops
+    for op in loaded_saved_ops:
+        assert op.out is None
+        assert op.out_ref is not None
+        assert op.out_ref.logical_backend == "mlx"
+        materialized = op.out_ref.materialize()
+        _assert_mlx_array_equal(materialized, expected_outs[op.layer_label])
+
+
+@pytest.mark.optional
+def test_mlx_save_load_missing_runtime_falls_back_to_audit_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing MLX runtime during load should preserve metadata and lazy refs."""
+
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input())
+    bundle_path = tmp_path / "mlx-missing-runtime.tlspec"
+
+    tl.save(trace, bundle_path)
+
+    def _missing_mlx_runtime() -> Any:
+        """Pretend ``mlx.core`` is unavailable during payload decode."""
+
+        raise BackendRuntimeCompatibilityError("mlx-runtime-missing: mlx runtime unavailable")
+
+    monkeypatch.setattr("torchlens._io.payload_codec._import_mlx_core", _missing_mlx_runtime)
+
+    loaded = tl.load(bundle_path)
+    loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+
+    assert loaded.backend == "mlx"
+    assert getattr(loaded, "payload_load_status") == "audit_only_missing_runtime"
+    assert loaded_saved_ops
+    for op in loaded_saved_ops:
+        assert op.out is None
+        assert op.out_ref is not None
+        assert op.shape is not None
+        assert op.dtype_ref is not None
+        with pytest.raises(
+            BackendRuntimeCompatibilityError,
+            match="mlx-runtime-missing",
+        ):
+            op.out_ref.materialize()
 
 
 @pytest.mark.optional

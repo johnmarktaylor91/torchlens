@@ -133,9 +133,10 @@ manifests. `io.detect_tlspec_format()` distinguishes unified and legacy formats.
 `validation.validate_tlspec()` validates unified manifests only; older 2.16 formats remain
 loadable. Unified manifests currently support manifest schema v1 for torch writes and schema v2
 for backend-aware validation/loading preflight. Schema v2 adds `backend`, `backend_runtime`,
-nullable torch-specific fields, `payload_policy`, and non-torch codec metadata. JAX and tinygrad
-use `payload_policy="array_payloads"` to materialize forward/derived array payloads while staying
-narrower than torch's full payload contract. Fully addressable JAX sharded arrays save as
+nullable torch-specific fields, `payload_policy`, and non-torch codec metadata. JAX, tinygrad, and
+MLX use `payload_policy="array_payloads"` to materialize non-torch array payloads while staying
+narrower than torch's full payload contract; MLX currently covers saved forward arrays. Fully
+addressable JAX sharded arrays save as
 assembled host values; `jax_sharding_*` codec metadata is audit-only and is not used to recreate
 mesh or partition topology on load.
 
@@ -162,7 +163,7 @@ derived gradients require `DEV=PYTHON` realized-copy payloads. The module mode i
 `function_root`, `Trace.param_source` is `"none"`, `.tlspec` save/load materializes array
 payloads through the tinygrad codec, and
 `tl.backends.tinygrad.GradOptions` populates leaf-level `trace.derived_grads` without enabling
-true backward capture. JAX and tinygrad static-label `save=` selectors are applied after full
+true backward capture. JAX, tinygrad, and MLX static-label `save=` selectors are applied after full
 graph finalization; unsaved ops keep labels, shapes, dtype/device refs, edges, and module
 metadata, but public `out`/`out_ref` payloads are dropped and saved counters/blobs are recomputed.
 Value-dependent `save=` predicates, `followed_by`/`preceded_by` window selectors, intervention,
@@ -173,14 +174,20 @@ errors with workarounds. The B9 control/mutation spike kept JAX/tinygrad `interv
 but TorchLens public labels and mutation/replay status are not available at that boundary; tinygrad
 has only a lazy UOp graph until realize and no stable descendant-rewrite API.
 
+MLX static-label `save=` supports `tl.func`, `tl.label`, `tl.contains`, and safe boolean composites
+of those selectors; module and output selectors remain rejected until MLX module hierarchy lands.
+Portable MLX saves use `payload_policy="array_payloads"` and round-trip saved forward payloads as
+`mlx.core.array` values, while older schema-v2 `body_format="audit_only"` bundles still load as
+metadata-only.
+
 Loaded non-torch traces are payload-materialized but not replay-validation-capable. Portable save
-strips runtime-only replay captures (`jax_equation_captures` and `tinygrad_uop_captures`), so
-`Trace.validation_replay_status` reports `state="unavailable"` with reason
-`"loaded_trace_runtime_capture_stripped"` for loaded JAX/tinygrad traces. Live JAX/tinygrad traces
-still run real replay and parent-perturbation validation, including selectively saved traces via
-runtime-only hidden replay payloads that do not survive portable save. `Trace.payload_load_status`
-records load materialization outcomes such as `"loaded_device_best_effort"`, `"audit_only"`, and
-`"audit_only_missing_runtime"`.
+strips runtime-only replay captures (`jax_equation_captures` and `tinygrad_uop_captures`), and MLX
+has no replay-validation implementation, so `Trace.validation_replay_status` reports
+`state="unavailable"` with reason `"loaded_trace_runtime_capture_stripped"` for loaded JAX,
+tinygrad, and MLX traces. Live JAX/tinygrad traces still run real replay and parent-perturbation
+validation, including selectively saved traces via runtime-only hidden replay payloads that do not
+survive portable save. `Trace.payload_load_status` records load materialization outcomes such as
+`"loaded_device_best_effort"`, `"audit_only"`, and `"audit_only_missing_runtime"`.
 
 ### Fastlog vs Full Capture
 Full capture returns a faithful `Trace` and runs postprocess. Fastlog returns a sparse

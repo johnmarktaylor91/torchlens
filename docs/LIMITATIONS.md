@@ -23,7 +23,9 @@ Backend note: `backend=None` preserves current PyTorch eager capture and MLX
 module auto-routing. Explicit `backend="torch"`, `backend="jax"`, and
 `backend="tinygrad"` are supported; unknown, ambiguous, or mismatched backend
 selections fail before capture with typed backend registry errors. MLX remains a
-technical preview with limited capabilities. JAX is a jaxpr-first functional
+technical preview with limited capabilities, static-label save support for
+`tl.func`/`tl.label`/`tl.contains`, and materialized `.tlspec` forward array
+payloads. JAX is a jaxpr-first functional
 preview with full-save forward capture, live replay validation, raw `function_root`
 captures, Equinox/Flax NNX `pytree_module` hierarchy, pytree-derived params,
 materialized `.tlspec` array payloads, and derived gradients only.
@@ -31,13 +33,13 @@ tinygrad is a UOp-snapshot functional preview pinned to the `tinygrad>=0.13,<0.1
 series; live validation and derived gradients require `DEV=PYTHON`; raw callables use
 `function_root`, callable objects use `object_module` hierarchy with parameter records
 when discoverable, portable saves materialize `.tlspec` array payloads, and capture
-rejects mid-capture realization/mutation/TinyJit. JAX and tinygrad support static-label `save=`
-selectors after full graph capture. MLX supports static-label `save=` only for `tl.func`,
+rejects mid-capture realization/mutation/TinyJit. JAX, tinygrad, and MLX support static-label `save=`
+selectors after full graph capture. MLX supports that surface only for `tl.func`,
 `tl.label`, `tl.contains`, and boolean composites of those; `tl.module` and `tl.in_module`
 are rejected because module hierarchy is required and not yet available on MLX. Value-dependent
 save predicates, halt, intervention,
 streaming, fastlog, and true backward capture remain PyTorch-only. Loaded non-torch traces cannot
-replay-validate because portable save strips runtime replay captures; inspect
+replay-validate because portable save strips or lacks runtime replay captures; inspect
 `trace.validation_replay_status` for the explicit unavailable status.
 
 If you hit a case we haven't listed, please

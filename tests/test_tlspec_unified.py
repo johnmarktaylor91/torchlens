@@ -492,6 +492,38 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
+@pytest.mark.smoke
+def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path) -> None:
+    """Old MLX audit-only schema-v2 bundles should still load metadata-only."""
+
+    path = tmp_path / "mlx_old_audit_only.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_schema_v2_manifest(path)
+    manifest["unsupported_tensors"].append(
+        {
+            "label": "relu_1_2_raw:1",
+            "kind": "out",
+            "reason": "mlx_array_audit_null",
+        }
+    )
+    _write_manifest(path, manifest)
+
+    validate_tlspec(path)
+    loaded = tl.load(path)
+    saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
+
+    assert isinstance(loaded, tl.Trace)
+    assert loaded.backend == "mlx"
+    assert getattr(loaded, "payload_load_status") == "audit_only"
+    assert saved_ops
+    assert all(op.out is None and op.out_ref is None for op in saved_ops)
+    assert all(op.shape is not None and op.dtype_ref is not None for op in saved_ops)
+    assert any(
+        record["reason"] == "mlx_array_audit_null"
+        for record in _read_manifest(path)["unsupported_tensors"]
+    )
+
+
 @pytest.mark.optional
 def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> None:
     """Public MLX portable saves write codec-backed safetensors body entries."""

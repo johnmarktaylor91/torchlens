@@ -95,7 +95,7 @@ frameworks:
 | Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | object `object_module`; raw `function_root` | compatibility mode |
 | Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited |
 | Static-label `save=` | ✅ | ✅ | ✅ | ✅ func/label/contains only |
-| Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | audit-only |
+| Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | forward arrays |
 | Gradients | full backward graph | leaf-level derived | leaf-level + T1 intermediate derived | — |
 | Interventions / halt / fastlog | ✅ | — | — | — |
 
@@ -106,7 +106,7 @@ Flax NNX modules use `module_identity_mode="pytree_module"`, while raw functions
 use `function_root`. The tinygrad backend captures UOp graphs, supports
 callable-object `object_module` hierarchy, and exposes T1 intermediate derived
 gradients through `trace.intermediate_derived_grads` / `op.derived_grad`.
-JAX/tinygrad portable saves use `payload_policy="array_payloads"` and loaded
+JAX/tinygrad/MLX portable saves use `payload_policy="array_payloads"` and loaded
 traces report replay as unavailable rather than as a false pass. PyTorch remains
 the full-feature backend: true backward capture, value-dependent predicates,
 `intervene=`, `halt=`, and fastlog are torch-only for now. (Preview backends are
@@ -116,6 +116,8 @@ arbitrary models.)
 MLX preview traces support static-label `save=` for `tl.func`, `tl.label`,
 `tl.contains`, and boolean composites of those. Module selectors require module
 hierarchy data and are rejected on MLX until that preview grows module capture.
+Portable MLX saves round-trip saved forward payloads as `mlx.core.array` values
+when the MLX runtime is installed.
 
 ```python
 log = tl.trace(torch_model, x)                  # PyTorch (default)

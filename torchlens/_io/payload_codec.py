@@ -823,7 +823,7 @@ def _import_mlx_core() -> Any:
         import mlx.core as mx
     except ImportError as exc:
         raise BackendRuntimeCompatibilityError(
-            "Portable MLX payload materialization requires the mlx runtime."
+            "mlx-runtime-missing: Portable MLX payload materialization requires the mlx runtime."
         ) from exc
     return mx
 
